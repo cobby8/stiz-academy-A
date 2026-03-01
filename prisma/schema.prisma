@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  INSTRUCTOR
+  PARENT
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  phone     String?
+  role      Role     @default(PARENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students  Student[] // For parents
+  classes   Class[]   // For instructors
+}
+
+model Student {
+  id        String   @id @default(uuid())
+  name      String
+  birthDate DateTime
+  gender    String?
+  parentId  String
+  parent    User     @relation(fields: [parentId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrollments Enrollment[]
+  attendances Attendance[]
+  payments    Payment[]
+}
+
+model Program {
+  id          String   @id @default(uuid())
+  name        String   // e.g., "정규 클래스 (취미/기초)"
+  targetAge   String?  // e.g., "초등/중등"
+  frequency   String?  // e.g., "주 1회/2회"
+  description String?  // e.g., "농구를 처음 접하는 아이들이 흥미를 느끼고 기초 체력과 기본기를 다지는 클래스입니다."
+  price       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  classes     Class[]
+}
+
+model Class {
+  id          String   @id @default(uuid())
+  programId   String
+  program     Program  @relation(fields: [programId], references: [id])
+  instructorId String?
+  instructor  User?    @relation(fields: [instructorId], references: [id])
+  name        String   // e.g., "초등 저학년 A반"
+  dayOfWeek   String   // e.g., "Mon", "Tue", etc.
+  startTime   String   // e.g., "15:00"
+  endTime     String   // e.g., "16:00"
+  location    String?  // e.g., "A코트", "메인구장"
+  capacity    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  enrollments Enrollment[]
+  sessions    Session[]
+}
+
+model Enrollment {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  status    String   @default("ACTIVE") // ACTIVE, CANCELLED, PAUSED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, classId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendances Attendance[]
+}
+
+model Attendance {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  status    String   // PRESENT, ABSENT, LATE, EXCUSED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, studentId])
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  amount    Int
+  status    String   // PENDING, COMPLETED, FAILED
+  dueDate   DateTime
+  paidDate  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Shuttle Bus system
+model Route {
+  id        String   @id @default(uuid())
+  name      String
+  driverName String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stops     Stop[]
+}
+
+model Stop {
+  id        String   @id @default(uuid())
+  routeId   String
+  route     Route    @relation(fields: [routeId], references: [id])
+  name      String
+  time      String   // e.g., "14:30"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Academy General Settings (Singleton-like)
+model AcademySettings {
+  id                 String   @id @default("singleton")
+  introductionTitle  String?  @default("다산신도시 No.1 스티즈농구교실")
+  introductionText   String?  // Main welcome text
+  shuttleInfoText    String?  // Text explaining shuttle bus service
+  contactPhone       String?
+  address            String?
+  
+  // Visual Builder JSON Data
+  pageDesignJSON     String?  @db.Text
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// Coaches / Instructors Profile
+model Coach {
+  id          String   @id @default(uuid())
+  name        String
+  role        String   // e.g., "대표 원장", "수석 코치"
+  description String?  // Short bio or achievements
+  imageUrl    String?  // Profile picture URL (optional)
+  order       Int      @default(0) // Control display order
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

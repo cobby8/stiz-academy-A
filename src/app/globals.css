@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-orange-50: #fff7ed;
+  --color-brand-orange-500: #f97316;
+  --color-brand-orange-600: #ea580c;
+
+  --color-brand-navy-800: #1e3a8a;
+  --color-brand-navy-900: #1e3a8a;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #111827;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Utilities for sporty feel */
+@layer utilities {
+  .skew-bg {
+    transform: skewY(-3deg);
+  }
+
+  .unskew-content {
+    transform: skewY(3deg);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+
+/* Tiptap Editor Styles */
+.ProseMirror {
+  outline: none;
+  min-height: 120px;
+}
+
+.ProseMirror p {
+  margin: 0;
+}
+
+.ProseMirror h1 {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Alignments */
+.ProseMirror p[style*="text-align: right"] {
+  text-align: right;
+}
+
+.ProseMirror p[style*="text-align: center"] {
+  text-align: center;
+}
+
+.ProseMirror h1[style*="text-align: center"],
+.ProseMirror h2[style*="text-align: center"],
+.ProseMirror h3[style*="text-align: center"] {
+  text-align: center;
+}
+
+/* Images */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0 auto;
+}
+
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 3px solid var(--color-brand-orange-500);
+}

@@ -1,0 +1,48 @@
+{
+  "name": "temp_app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@craftjs/core": "^0.2.12",
+    "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.98.0",
+    "@tiptap/extension-color": "^3.20.0",
+    "@tiptap/extension-dropcursor": "^3.20.0",
+    "@tiptap/extension-font-family": "^3.20.0",
+    "@tiptap/extension-image": "^3.20.0",
+    "@tiptap/extension-text-align": "^3.20.0",
+    "@tiptap/extension-text-style": "^3.20.0",
+    "@tiptap/extension-underline": "^3.20.0",
+    "@tiptap/pm": "^3.20.0",
+    "@tiptap/react": "^3.20.0",
+    "@tiptap/starter-kit": "^3.20.0",
+    "lucide-react": "^0.575.0",
+    "lzutf8": "^0.6.3",
+    "next": "16.1.6",
+    "re-resizable": "^6.11.2",
+    "react": "19.2.3",
+    "react-contenteditable": "^3.3.7",
+    "react-dom": "19.2.3",
+    "react-image-crop": "^11.0.10",
+    "react-quill": "^2.0.0",
+    "react-rnd": "^10.5.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv-cli": "^11.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -11,6 +11,7 @@
   "dependencies": {
     "@craftjs/core": "^0.2.12",
     "@prisma/client": "^5.22.0",
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",
     "@tiptap/extension-color": "^3.20.0",
     "@tiptap/extension-dropcursor": "^3.20.0",
@@ -30,7 +31,6 @@
     "react-contenteditable": "^3.3.7",
     "react-dom": "19.2.3",
     "react-image-crop": "^11.0.10",
-    "react-quill": "^2.0.0",
     "react-rnd": "^10.5.2"
   },
   "devDependencies": {

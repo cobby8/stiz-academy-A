@@ -124,7 +124,7 @@ export default function LandingPageClient({
                             <ul className="space-y-2 text-sm text-gray-400">
                                 <li><Link href="/login" className="hover:text-brand-orange-500">학부모 로그인</Link></li>
                                 <li><Link href="/signup" className="hover:text-brand-orange-500">원생 가입안내</Link></li>
-                                <li><Link href="/admin" className="hover:text-gray-100">원장님 로그인 (관리자)</Link></li>
+                                <li><Link href="/login" className="hover:text-gray-100">원장님 로그인 (관리자)</Link></li>
                                 <li><Link href="#" className="hover:text-gray-100">개인정보처리방침</Link></li>
                             </ul>
                         </div>

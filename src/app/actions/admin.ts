@@ -23,11 +23,14 @@ export async function createProgram(data: {
     description?: string;
     price: number;
 }) {
-    await prisma.program.create({
-        data,
-    });
-    revalidatePath("/admin/programs");
-    revalidatePath("/");
+    try {
+        await prisma.program.create({ data });
+        revalidatePath("/admin/programs");
+        revalidatePath("/");
+    } catch (e) {
+        console.error("Failed to create program:", e);
+        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+    }
 }
 
 export async function deleteProgram(id: string) {
@@ -67,9 +70,14 @@ export async function createClass(data: {
     location?: string;
     capacity: number;
 }) {
-    await prisma.class.create({ data });
-    revalidatePath("/admin/classes");
-    revalidatePath("/");
+    try {
+        await prisma.class.create({ data });
+        revalidatePath("/admin/classes");
+        revalidatePath("/");
+    } catch (e) {
+        console.error("Failed to create class:", e);
+        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+    }
 }
 
 export async function deleteClass(id: string) {
@@ -108,16 +116,18 @@ export async function updateAcademySettings(data: {
     introductionTitle?: string;
     introductionText?: string;
 }) {
-    await prisma.academySettings.upsert({
-        where: { id: "singleton" },
-        update: data,
-        create: {
-            id: "singleton",
-            ...data
-        }
-    });
-    revalidatePath("/admin/settings");
-    revalidatePath("/", "layout");
+    try {
+        await prisma.academySettings.upsert({
+            where: { id: "singleton" },
+            update: data,
+            create: { id: "singleton", ...data }
+        });
+        revalidatePath("/admin/settings");
+        revalidatePath("/", "layout");
+    } catch (e) {
+        console.error("Failed to update academy settings:", e);
+        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+    }
 }
 
 // Coaches
@@ -138,9 +148,14 @@ export async function createCoach(data: {
     imageUrl?: string;
     order?: number;
 }) {
-    await prisma.coach.create({ data });
-    revalidatePath("/admin/settings");
-    revalidatePath("/", "layout");
+    try {
+        await prisma.coach.create({ data });
+        revalidatePath("/admin/settings");
+        revalidatePath("/", "layout");
+    } catch (e) {
+        console.error("Failed to create coach:", e);
+        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+    }
 }
 
 export async function deleteCoach(id: string) {
@@ -172,17 +187,22 @@ export async function createAnnualEvent(data: {
     description?: string;
     category?: string;
 }) {
-    await prisma.annualEvent.create({
-        data: {
-            title: data.title,
-            date: new Date(data.date),
-            endDate: data.endDate ? new Date(data.endDate) : undefined,
-            description: data.description,
-            category: data.category || "일반",
-        },
-    });
-    revalidatePath("/admin/annual-events");
-    revalidatePath("/annual");
+    try {
+        await prisma.annualEvent.create({
+            data: {
+                title: data.title,
+                date: new Date(data.date),
+                endDate: data.endDate ? new Date(data.endDate) : undefined,
+                description: data.description,
+                category: data.category || "일반",
+            },
+        });
+        revalidatePath("/admin/annual-events");
+        revalidatePath("/annual");
+    } catch (e) {
+        console.error("Failed to create annual event:", e);
+        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+    }
 }
 
 export async function deleteAnnualEvent(id: string) {

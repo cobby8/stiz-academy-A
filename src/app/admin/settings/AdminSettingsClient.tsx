@@ -17,29 +17,45 @@ import lz from "lzutf8";
 export default function AdminSettingsClient({ initialSettings, coaches, fetchError }: { initialSettings: any, coaches: any[], fetchError: boolean }) {
     const [activeTab, setActiveTab] = useState<"builder" | "settings">("settings");
     const [deviceWidth, setDeviceWidth] = useState<"mobile" | "pc">("mobile");
+    const [actionError, setActionError] = useState<string | null>(null);
 
     // Form submission wrapper for basic settings
     async function saveBasicSettings(formData: FormData) {
-        const data: any = {};
-        formData.forEach((value, key) => {
-            if (typeof value === "string") data[key] = value;
-        });
-        await updateAcademySettings(data);
-        alert("기본 정보가 저장되었습니다.");
+        setActionError(null);
+        try {
+            const data: any = {};
+            formData.forEach((value, key) => {
+                if (typeof value === "string") data[key] = value;
+            });
+            await updateAcademySettings(data);
+            alert("기본 정보가 저장되었습니다.");
+        } catch (e: any) {
+            setActionError(e.message || "저장 중 오류가 발생했습니다.");
+        }
     }
 
     async function addCoach(formData: FormData) {
-        const name = formData.get("name") as string;
-        const role = formData.get("role") as string;
-        const description = formData.get("description") as string;
-        const imageUrl = formData.get("imageUrl") as string;
-        const order = parseInt(formData.get("order") as string) || 0;
-        if (!name || !role) return;
-        await createCoach({ name, role, description, imageUrl, order });
+        setActionError(null);
+        try {
+            const name = formData.get("name") as string;
+            const role = formData.get("role") as string;
+            const description = formData.get("description") as string;
+            const imageUrl = formData.get("imageUrl") as string;
+            const order = parseInt(formData.get("order") as string) || 0;
+            if (!name || !role) return;
+            await createCoach({ name, role, description, imageUrl, order });
+        } catch (e: any) {
+            setActionError(e.message || "강사 추가 중 오류가 발생했습니다.");
+        }
     }
 
     async function handleDeleteCoach(formData: FormData) {
-        await deleteCoach(formData.get("id") as string);
+        setActionError(null);
+        try {
+            await deleteCoach(formData.get("id") as string);
+        } catch (e: any) {
+            setActionError(e.message || "삭제 중 오류가 발생했습니다.");
+        }
     }
 
     // Default template if JSON is null
@@ -57,6 +73,12 @@ export default function AdminSettingsClient({ initialSettings, coaches, fetchErr
             {fetchError && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm shrink-0">
                     데이터베이스 연결에 문제가 발생했습니다. 새 스키마 동기화(db push)가 필요합니다.
+                </div>
+            )}
+            {actionError && (
+                <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-4 text-sm shrink-0 flex justify-between items-center">
+                    <span>⚠ {actionError}</span>
+                    <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold ml-4">✕</button>
                 </div>
             )}
 

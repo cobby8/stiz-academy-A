@@ -32,13 +32,21 @@ export default async function AdminAnnualEventsPage() {
         const description = formData.get("description") as string;
         const category = formData.get("category") as string;
         if (!title || !date) return;
-        await createAnnualEvent({ title, date, endDate: endDate || undefined, description, category });
+        try {
+            await createAnnualEvent({ title, date, endDate: endDate || undefined, description, category });
+        } catch (e) {
+            console.error("addEvent failed:", e);
+        }
     }
 
     async function removeEvent(formData: FormData) {
         "use server";
         const id = formData.get("id") as string;
-        if (id) await deleteAnnualEvent(id);
+        try {
+            if (id) await deleteAnnualEvent(id);
+        } catch (e) {
+            console.error("removeEvent failed:", e);
+        }
     }
 
     return (

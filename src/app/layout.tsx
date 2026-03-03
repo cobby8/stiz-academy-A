@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "스티즈농구교실 다산점 | 스마트 학원 관리",
@@ -16,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${inter.variable} antialiased selection:bg-brand-orange-500 selection:text-white`}>
+      <body className="antialiased selection:bg-brand-orange-500 selection:text-white">
         {children}
       </body>
     </html>

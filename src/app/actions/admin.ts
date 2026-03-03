@@ -7,9 +7,13 @@ const prisma = new PrismaClient();
 
 // Programs
 export async function getPrograms() {
-    return await prisma.program.findMany({
-        orderBy: { createdAt: "desc" },
-    });
+    try {
+        return await prisma.program.findMany({
+            orderBy: { createdAt: "desc" },
+        });
+    } catch (e) {
+        return [];
+    }
 }
 
 export async function createProgram(data: {
@@ -42,12 +46,16 @@ export async function deleteProgram(id: string) {
 
 // Classes (Schedules)
 export async function getClasses() {
-    return await prisma.class.findMany({
-        include: {
-            program: true,
-        },
-        orderBy: { createdAt: "desc" },
-    });
+    try {
+        return await prisma.class.findMany({
+            include: {
+                program: true,
+            },
+            orderBy: { createdAt: "desc" },
+        });
+    } catch (e) {
+        return [];
+    }
 }
 
 export async function createClass(data: {

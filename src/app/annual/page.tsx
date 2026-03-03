@@ -47,6 +47,7 @@ export default async function AnnualPage() {
             description: e.description,
             category: e.category,
             isAllDay: e.isAllDay,
+            url: e.url,
             source: "google" as const,
         })),
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());

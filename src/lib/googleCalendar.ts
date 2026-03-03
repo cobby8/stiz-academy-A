@@ -8,6 +8,7 @@ export interface GoogleCalendarEvent {
     description?: string;
     category: string;
     isAllDay: boolean;
+    url?: string;
     source: "google";
 }
 
@@ -72,6 +73,7 @@ export async function fetchGoogleCalendarEvents(icsUrl: string): Promise<GoogleC
                 description: event.description,
                 category: inferCategory(summary, event.description),
                 isAllDay,
+                url: (event as any).url || undefined,
                 source: "google",
             });
         }

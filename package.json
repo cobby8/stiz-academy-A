@@ -26,6 +26,7 @@
     "lucide-react": "^0.575.0",
     "lzutf8": "^0.6.3",
     "next": "16.1.6",
+    "node-ical": "^0.25.4",
     "re-resizable": "^6.11.2",
     "react": "19.2.3",
     "react-contenteditable": "^3.3.7",

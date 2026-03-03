@@ -208,6 +208,26 @@ export default function AdminSettingsClient({ initialSettings, coaches, fetchErr
                             </div>
                         </section>
 
+                        {/* 구글 캘린더 연동 */}
+                        <section className="pt-6 border-t border-gray-100">
+                            <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 pb-2 mb-2 inline-block">
+                                구글 캘린더 연동
+                            </h2>
+                            <p className="text-sm text-gray-500 mb-4">
+                                구글 캘린더의 공개 ICS 주소를 입력하면 연간일정표에 자동으로 반영됩니다. (1시간 주기 갱신)
+                            </p>
+                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 text-xs text-blue-700">
+                                <strong>ICS 주소 확인 방법:</strong> 구글 캘린더 → 캘린더 설정 → &quot;캘린더 통합&quot; → &quot;iCal 형식의 공개 주소&quot; 복사
+                            </div>
+                            <input
+                                name="googleCalendarIcsUrl"
+                                type="url"
+                                defaultValue={initialSettings?.googleCalendarIcsUrl || ""}
+                                placeholder="https://calendar.google.com/calendar/ical/...@group.calendar.google.com/public/basic.ics"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                            />
+                        </section>
+
                         <div className="pt-4 border-t border-gray-100 flex justify-end">
                             <ConfirmSubmitButton confirmMessage="변경 사항을 저장하시겠습니까?" className="bg-brand-orange-500 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-orange-600 transition shadow">
                                 저장하기

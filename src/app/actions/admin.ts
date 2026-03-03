@@ -115,6 +115,7 @@ export async function updateAcademySettings(data: {
     address?: string;
     introductionTitle?: string;
     introductionText?: string;
+    googleCalendarIcsUrl?: string;
 }) {
     try {
         await prisma.academySettings.upsert({

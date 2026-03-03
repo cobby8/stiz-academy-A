@@ -1,5 +1,8 @@
 import { getAnnualEvents, getAcademySettings } from "@/app/actions/admin";
+import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
 import PublicPageLayout from "@/components/PublicPageLayout";
+
+export const revalidate = 3600; // 1시간마다 구글 캘린더 재조회
 
 export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점" };
 
@@ -19,22 +22,32 @@ function formatDate(date: Date): string {
 }
 
 export default async function AnnualPage() {
-    const events = await getAnnualEvents() as any[];
-    const settings = await getAcademySettings() as any;
-    const phone = settings.contactPhone || "010-0000-0000";
+    const [dbEvents, settings] = await Promise.all([
+        getAnnualEvents() as Promise<any[]>,
+        getAcademySettings() as Promise<any>,
+    ]);
 
-    // Group events by month
+    const phone = settings.contactPhone || "010-0000-0000";
+    const icsUrl = settings.googleCalendarIcsUrl as string | null;
+
+    // 구글 캘린더 이벤트 fetch (ICS URL이 설정된 경우)
+    const googleEvents = icsUrl ? await fetchGoogleCalendarEvents(icsUrl) : [];
+
+    // DB 이벤트 + 구글 캘린더 이벤트 합산 후 날짜순 정렬
+    const allEvents = [
+        ...dbEvents.map((e: any) => ({ ...e, source: "db" })),
+        ...googleEvents,
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // 월별 그룹핑
     const eventsByMonth: Record<number, any[]> = {};
-    events.forEach((event) => {
-        const month = new Date(event.date).getMonth(); // 0-indexed
+    allEvents.forEach((event) => {
+        const month = new Date(event.date).getMonth();
         if (!eventsByMonth[month]) eventsByMonth[month] = [];
         eventsByMonth[month].push(event);
     });
 
-    const activeMonths = Object.keys(eventsByMonth)
-        .map(Number)
-        .sort((a, b) => a - b);
-
+    const activeMonths = Object.keys(eventsByMonth).map(Number).sort((a, b) => a - b);
     const categories = Object.keys(CATEGORY_STYLES);
 
     return (
@@ -51,14 +64,22 @@ export default async function AnnualPage() {
             {/* Legend */}
             <section className="py-6 bg-white border-b border-gray-100">
                 <div className="max-w-4xl mx-auto px-4">
-                    <div className="flex flex-wrap gap-3 items-center">
-                        <span className="text-sm font-bold text-gray-500 mr-1">구분:</span>
-                        {categories.map((cat) => (
-                            <div key={cat} className="flex items-center gap-1.5">
-                                <span className={`w-3 h-3 rounded-full ${CATEGORY_STYLES[cat].dot}`}></span>
-                                <span className="text-sm text-gray-700">{cat}</span>
+                    <div className="flex flex-wrap gap-3 items-center justify-between">
+                        <div className="flex flex-wrap gap-3 items-center">
+                            <span className="text-sm font-bold text-gray-500 mr-1">구분:</span>
+                            {categories.map((cat) => (
+                                <div key={cat} className="flex items-center gap-1.5">
+                                    <span className={`w-3 h-3 rounded-full ${CATEGORY_STYLES[cat].dot}`}></span>
+                                    <span className="text-sm text-gray-700">{cat}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {icsUrl && googleEvents.length > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5C3.89 3 3 3.9 3 5v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 16H5V8h14v11z"/></svg>
+                                구글 캘린더 연동 중 ({googleEvents.length}개)
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
             </section>
@@ -66,7 +87,7 @@ export default async function AnnualPage() {
             {/* Events List */}
             <section className="py-14 bg-gray-50">
                 <div className="max-w-4xl mx-auto px-4">
-                    {events.length === 0 ? (
+                    {allEvents.length === 0 ? (
                         <div className="text-center py-20 bg-white rounded-2xl border border-gray-200 text-gray-400">
                             <div className="text-5xl mb-4">📅</div>
                             <p className="text-lg font-medium">등록된 일정이 없습니다.</p>
@@ -107,6 +128,12 @@ export default async function AnnualPage() {
                                                                 {event.category || "일반"}
                                                             </span>
                                                             <h3 className="font-bold text-gray-900">{event.title}</h3>
+                                                            {event.source === "google" && (
+                                                                <span className="text-xs text-gray-400 flex items-center gap-0.5">
+                                                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5C3.89 3 3 3.9 3 5v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 16H5V8h14v11z"/></svg>
+                                                                    구글 캘린더
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         {event.description && (
                                                             <p className="text-sm text-gray-600">{event.description}</p>

@@ -157,6 +157,9 @@ model AcademySettings {
   // Visual Builder JSON Data
   pageDesignJSON     String?  @db.Text
 
+  // Google Calendar ICS URL for annual events sync
+  googleCalendarIcsUrl String?
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }

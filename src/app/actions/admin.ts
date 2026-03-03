@@ -97,6 +97,8 @@ export async function updateAcademySettings(data: {
     pageDesignJSON?: string;
     contactPhone?: string;
     address?: string;
+    introductionTitle?: string;
+    introductionText?: string;
 }) {
     await prisma.academySettings.upsert({
         where: { id: "singleton" },
@@ -141,5 +143,47 @@ export async function deleteCoach(id: string) {
     } catch (e) {
         console.error("Failed to delete coach:", e);
         throw new Error("Failed to delete coach");
+    }
+}
+
+// Annual Events (연간일정표)
+export async function getAnnualEvents() {
+    try {
+        return await prisma.annualEvent.findMany({
+            orderBy: { date: "asc" },
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+export async function createAnnualEvent(data: {
+    title: string;
+    date: string;
+    endDate?: string;
+    description?: string;
+    category?: string;
+}) {
+    await prisma.annualEvent.create({
+        data: {
+            title: data.title,
+            date: new Date(data.date),
+            endDate: data.endDate ? new Date(data.endDate) : undefined,
+            description: data.description,
+            category: data.category || "일반",
+        },
+    });
+    revalidatePath("/admin/annual-events");
+    revalidatePath("/annual");
+}
+
+export async function deleteAnnualEvent(id: string) {
+    try {
+        await prisma.annualEvent.delete({ where: { id } });
+        revalidatePath("/admin/annual-events");
+        revalidatePath("/annual");
+    } catch (e) {
+        console.error("Failed to delete annual event:", e);
+        throw new Error("Failed to delete annual event");
     }
 }

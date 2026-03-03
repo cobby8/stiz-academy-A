@@ -1,136 +1,339 @@
 "use client";
 
-import { MapPin } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { Editor, Frame } from "@craftjs/core";
-import { ContainerNode, TextNode, ImageNode, ProgramsWidget, ScheduleWidget, CoachesWidget } from "@/components/builder/nodes";
-import { LandingPageDataContext } from "@/components/builder/LandingPageDataContext";
-import lz from "lzutf8";
+import { MapPin, Phone, ChevronRight, Calendar, Clock, Users, Award } from "lucide-react";
+
+const DAY_LABELS: Record<string, string> = {
+    Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일"
+};
 
 export default function LandingPageClient({
     initialSettings,
     programs,
     classes,
     displayCoaches,
-    daysInfo
 }: {
-    initialSettings: any,
-    programs: any[],
-    classes: any[],
-    displayCoaches: any[],
-    daysInfo: any[]
+    initialSettings: any;
+    programs: any[];
+    classes: any[];
+    displayCoaches: any[];
+    daysInfo: any[];
 }) {
     const settings = initialSettings || {};
-
-    let defaultJson = "";
-    if (settings.pageDesignJSON) {
-        try {
-            defaultJson = lz.decompress(lz.decodeBase64(settings.pageDesignJSON));
-        } catch (e) {
-            console.error("Failed to parse design JSON");
-        }
-    }
+    const phone = settings.contactPhone || "010-0000-0000";
+    const address = settings.address || "";
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-900 selection:bg-brand-orange-500 selection:text-white pb-20">
+        <div className="min-h-screen bg-white text-gray-900">
 
             {/* Top Utility Bar */}
             <div className="bg-brand-navy-900 text-white text-xs py-2 hidden md:block">
                 <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
-                    <span>{settings.contactPhone ? `상담문의: ${settings.contactPhone}` : "평일 13:00~21:00 / 토 09:00~18:00 (일요일, 공휴일 휴무)"}</span>
-                    <div className="flex gap-4">
-                        <Link href="/login" className="hover:text-brand-orange-500 transition">회원가입/로그인</Link>
-                    </div>
+                    <span className="text-gray-300">평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)</span>
+                    <span>상담문의: {phone}</span>
                 </div>
             </div>
 
-            {/* Main Navigation */}
+            {/* Navigation */}
             <header className="bg-white sticky top-0 z-50 shadow-sm border-b border-gray-100">
-                <div className="max-w-6xl mx-auto px-4 py-4 md:py-5 flex items-center justify-between">
-                    <Link href="/" className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 leading-none">
-                        <Image src="/stiz-logo.png" alt="STIZ" width={220} height={55} className="h-12 sm:h-14 w-auto object-contain" priority />
-                        <span className="font-extrabold text-2xl text-brand-navy-900 tracking-tight sm:ml-1 mt-1">다산점</span>
+                <div className="max-w-6xl mx-auto px-4 py-3 md:py-4 flex items-center justify-between">
+                    <Link href="/" className="flex items-center gap-2 sm:gap-3">
+                        <Image src="/stiz-logo.png" alt="STIZ" width={180} height={45} className="h-10 sm:h-12 w-auto object-contain" priority />
+                        <span className="font-extrabold text-lg sm:text-xl text-brand-navy-900">다산점</span>
                     </Link>
 
-                    {/* Desktop Nav */}
-                    <nav className="hidden md:flex items-center gap-8 font-bold text-gray-700">
-                        <Link href="#about" className="hover:text-brand-orange-500 transition">학원소개</Link>
-                        <Link href="#programs" className="hover:text-brand-orange-500 transition">프로그램안내</Link>
-                        <Link href="#schedule" className="hover:text-brand-orange-500 transition">시간표/수강료</Link>
-                        <Link href="/login" className="hover:text-brand-orange-500 transition">스마트출결</Link>
+                    <nav className="hidden md:flex items-center gap-6 font-bold text-sm text-gray-700">
+                        <Link href="/about" className="hover:text-brand-orange-500 transition-colors">학원소개</Link>
+                        <Link href="/programs" className="hover:text-brand-orange-500 transition-colors">프로그램안내</Link>
+                        <Link href="/schedule" className="hover:text-brand-orange-500 transition-colors">수업시간표</Link>
+                        <Link href="/annual" className="hover:text-brand-orange-500 transition-colors">연간일정표</Link>
+                        <Link href="/programs#tuition" className="hover:text-brand-orange-500 transition-colors">수강료안내</Link>
                     </nav>
 
-                    {/* Action Button */}
-                    <div className="flex items-center gap-3">
-                        <Link href="/login" className="bg-brand-navy-900 text-white px-5 py-2.5 rounded text-sm font-bold hover:bg-blue-900 transition-colors shadow-sm hidden sm:inline-block">
-                            학부모 마이페이지
-                        </Link>
-                    </div>
+                    <a
+                        href={`tel:${phone.replace(/-/g, "")}`}
+                        className="bg-brand-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors shadow-sm"
+                    >
+                        📞 전화문의
+                    </a>
                 </div>
+
+                {/* Mobile Nav */}
+                <nav className="md:hidden flex overflow-x-auto gap-1 px-4 pb-3 text-sm font-bold border-t border-gray-100">
+                    {[
+                        { href: "/about", label: "학원소개" },
+                        { href: "/programs", label: "프로그램" },
+                        { href: "/schedule", label: "수업시간표" },
+                        { href: "/annual", label: "연간일정" },
+                        { href: "/programs#tuition", label: "수강료" },
+                    ].map((item) => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className="shrink-0 px-3 py-1.5 rounded-full text-gray-600 hover:bg-gray-100 hover:text-brand-navy-900 transition-colors whitespace-nowrap"
+                        >
+                            {item.label}
+                        </Link>
+                    ))}
+                </nav>
             </header>
 
-            {/* MAIN CONTENT = Craft.js Dynamic Visual Builder Frame */}
-            <main className="w-full bg-white min-h-[800px]">
-                {!defaultJson ? (
-                    <div className="py-32 text-center flex flex-col items-center justify-center">
-                        <h2 className="text-2xl font-bold text-gray-400 mb-4">학원 홈페이지가 준비 중입니다.</h2>
-                        <p className="text-gray-500">관리자 페이지에서 디자인 빌더를 통해 콘텐츠를 구성해주세요.</p>
+            {/* Hero Section */}
+            <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-20 md:py-32 relative overflow-hidden">
+                <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute right-0 top-0 w-[500px] h-[500px] border-[40px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3"></div>
+                    <div className="absolute left-0 bottom-0 w-80 h-80 border-[30px] border-brand-orange-500/20 rounded-full -translate-x-1/3 translate-y-1/3"></div>
+                    <div className="absolute right-1/4 bottom-1/4 w-32 h-32 bg-brand-orange-500/10 rounded-full blur-xl"></div>
+                </div>
+
+                <div className="max-w-6xl mx-auto px-4 relative">
+                    <div className="max-w-2xl">
+                        <div className="inline-block bg-brand-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider shadow">
+                            다산신도시 No.1 농구 전문 학원
+                        </div>
+                        <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight tracking-tight">
+                            {settings.introductionTitle || "스티즈 농구교실"}
+                        </h1>
+                        <p className="text-lg text-blue-100 mb-10 leading-relaxed max-w-xl">
+                            {settings.introductionText ||
+                                "아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다."}
+                        </p>
+                        <div className="flex flex-wrap gap-4">
+                            <a
+                                href={`tel:${phone.replace(/-/g, "")}`}
+                                className="bg-brand-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-4 rounded-xl transition-colors shadow-lg text-base"
+                            >
+                                {phone} 상담전화
+                            </a>
+                            <Link
+                                href="/programs"
+                                className="bg-white/10 hover:bg-white/20 text-white font-bold px-8 py-4 rounded-xl transition-colors border border-white/30 text-base"
+                            >
+                                프로그램 보기
+                            </Link>
+                        </div>
                     </div>
-                ) : (
-                    <LandingPageDataContext.Provider value={{ programs, classes, displayCoaches, daysInfo, isEditor: false }}>
-                        <Editor resolver={{ ContainerNode, TextNode, ImageNode, ProgramsWidget, ScheduleWidget, CoachesWidget }} enabled={false}>
-                            <Frame data={defaultJson}>
-                                {/* Backup element if empty string but won't be used since data is passed */}
-                                <div />
-                            </Frame>
-                        </Editor>
-                    </LandingPageDataContext.Provider>
-                )}
-            </main>
+                </div>
+            </section>
+
+            {/* Quick Navigation Cards */}
+            <section className="py-12 md:py-16 bg-gray-50">
+                <div className="max-w-6xl mx-auto px-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                        {[
+                            {
+                                icon: <Award className="w-7 h-7" />,
+                                title: "학원소개",
+                                desc: "코치진·시설·특장점",
+                                href: "/about",
+                                bg: "bg-blue-50",
+                                color: "text-blue-700",
+                            },
+                            {
+                                icon: <Users className="w-7 h-7" />,
+                                title: "프로그램안내",
+                                desc: "수준별 맞춤 클래스",
+                                href: "/programs",
+                                bg: "bg-orange-50",
+                                color: "text-brand-orange-500",
+                            },
+                            {
+                                icon: <Clock className="w-7 h-7" />,
+                                title: "수업시간표",
+                                desc: "요일별 수업 시간",
+                                href: "/schedule",
+                                bg: "bg-green-50",
+                                color: "text-green-700",
+                            },
+                            {
+                                icon: <Calendar className="w-7 h-7" />,
+                                title: "연간일정표",
+                                desc: "대회·방학·행사 일정",
+                                href: "/annual",
+                                bg: "bg-purple-50",
+                                color: "text-purple-700",
+                            },
+                        ].map((card) => (
+                            <Link
+                                key={card.href}
+                                href={card.href}
+                                className="bg-white rounded-2xl p-5 md:p-6 shadow-sm border border-gray-100 hover:shadow-md hover:-translate-y-1 transition-all group text-center"
+                            >
+                                <div className={`${card.bg} ${card.color} w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform`}>
+                                    {card.icon}
+                                </div>
+                                <h3 className="font-bold text-gray-900 text-sm md:text-base mb-1">{card.title}</h3>
+                                <p className="text-xs text-gray-500 hidden md:block">{card.desc}</p>
+                                <div className="mt-2 text-brand-orange-500 text-xs font-bold flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    자세히 보기 <ChevronRight className="w-3 h-3" />
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* Programs Preview */}
+            {programs.length > 0 && (
+                <section className="py-12 md:py-16 bg-white">
+                    <div className="max-w-6xl mx-auto px-4">
+                        <div className="text-center mb-10">
+                            <h2 className="text-3xl font-black text-brand-navy-900 mb-2">프로그램 안내</h2>
+                            <p className="text-gray-500">아이의 수준과 목표에 맞는 프로그램을 선택하세요</p>
+                        </div>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {programs.slice(0, 3).map((program) => (
+                                <div
+                                    key={program.id}
+                                    className="border border-gray-200 rounded-2xl p-6 hover:border-brand-orange-500 hover:shadow-md transition-all"
+                                >
+                                    {program.targetAge && (
+                                        <div className="text-brand-orange-500 text-xs font-bold uppercase mb-2">
+                                            {program.targetAge}
+                                        </div>
+                                    )}
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{program.name}</h3>
+                                    {program.frequency && (
+                                        <p className="text-sm text-gray-500 mb-3">{program.frequency}</p>
+                                    )}
+                                    {program.description && (
+                                        <p className="text-sm text-gray-600 leading-relaxed mb-4 line-clamp-2">
+                                            {program.description}
+                                        </p>
+                                    )}
+                                    <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
+                                        <span className="text-2xl font-black text-brand-navy-900">
+                                            {program.price.toLocaleString()}원
+                                        </span>
+                                        <span className="text-xs text-gray-400">/월</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-center mt-8">
+                            <Link
+                                href="/programs"
+                                className="inline-flex items-center gap-2 border border-gray-300 rounded-xl px-6 py-3 text-gray-700 font-bold hover:border-brand-navy-900 hover:bg-gray-50 transition"
+                            >
+                                전체 프로그램 보기 <ChevronRight className="w-4 h-4" />
+                            </Link>
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {/* Schedule Preview */}
+            {classes.length > 0 && (
+                <section className="py-12 md:py-16 bg-gray-50">
+                    <div className="max-w-6xl mx-auto px-4">
+                        <div className="text-center mb-10">
+                            <h2 className="text-3xl font-black text-brand-navy-900 mb-2">이번 주 수업시간표</h2>
+                            <p className="text-gray-500">요일별 수업 시간을 확인하세요</p>
+                        </div>
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-brand-navy-900 text-white">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left font-bold">클래스</th>
+                                            <th className="px-4 py-3 text-left font-bold">프로그램</th>
+                                            <th className="px-4 py-3 text-left font-bold">요일</th>
+                                            <th className="px-4 py-3 text-left font-bold">시간</th>
+                                            {classes[0]?.location && <th className="px-4 py-3 text-left font-bold">장소</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {classes.slice(0, 5).map((cls) => (
+                                            <tr key={cls.id} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3 font-medium text-gray-900">{cls.name}</td>
+                                                <td className="px-4 py-3 text-gray-600">{cls.program?.name || "-"}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded">
+                                                        {DAY_LABELS[cls.dayOfWeek] || cls.dayOfWeek}요일
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                                                    {cls.startTime} ~ {cls.endTime}
+                                                </td>
+                                                {cls.location && <td className="px-4 py-3 text-gray-500">{cls.location}</td>}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="text-center mt-6">
+                            <Link
+                                href="/schedule"
+                                className="inline-flex items-center gap-2 border border-gray-300 rounded-xl px-6 py-3 text-gray-700 font-bold hover:border-brand-navy-900 hover:bg-white transition"
+                            >
+                                전체 시간표 보기 <ChevronRight className="w-4 h-4" />
+                            </Link>
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {/* CTA Banner */}
+            <section className="bg-brand-orange-500 py-16 text-white">
+                <div className="max-w-4xl mx-auto px-4 text-center">
+                    <h2 className="text-3xl font-black mb-4">수강 문의 및 체험 수업 신청</h2>
+                    <p className="text-orange-100 mb-8 text-lg">
+                        아이에게 딱 맞는 클래스를 찾아드립니다. 지금 바로 문의해 주세요.
+                    </p>
+                    <a
+                        href={`tel:${phone.replace(/-/g, "")}`}
+                        className="inline-block bg-white text-brand-orange-500 font-black text-xl px-12 py-4 rounded-2xl hover:bg-orange-50 transition shadow-lg"
+                    >
+                        📞 {phone}
+                    </a>
+                </div>
+            </section>
 
             {/* Footer */}
-            <footer className="bg-gray-900 text-gray-300 pt-16 pb-8 border-t-8 border-brand-orange-500 w-full mt-20">
+            <footer className="bg-gray-900 text-gray-300 pt-12 pb-8 border-t-4 border-brand-orange-500">
                 <div className="max-w-6xl mx-auto px-4">
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-                        <div className="col-span-1 lg:col-span-2">
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="bg-white px-4 py-3 rounded-xl inline-flex items-center justify-center">
-                                    <Image src="/stiz-logo.png" alt="STIZ BASKETBALL CLUB" width={180} height={45} className="h-10 sm:h-12 w-auto object-contain" />
-                                </div>
-                                <span className="font-extrabold text-2xl text-white">다산점</span>
+                    <div className="grid md:grid-cols-3 gap-8 mb-8">
+                        <div>
+                            <div className="bg-white px-4 py-2.5 rounded-lg inline-flex items-center justify-center mb-4">
+                                <Image src="/stiz-logo.png" alt="STIZ" width={140} height={35} className="h-9 w-auto object-contain" />
                             </div>
-                            <p className="text-gray-400 mb-6 text-sm leading-relaxed max-w-sm">
-                                아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다. 스마트 학원 관리 시스템을 통해 학부모님과 투명하게 소통합니다.
+                            <p className="text-sm text-gray-400 leading-relaxed">
+                                아이들이 농구를 통해 협동심과<br />건강한 체력을 기를 수 있도록 지도합니다.
                             </p>
                         </div>
 
                         <div>
                             <h4 className="text-white font-bold mb-4">학원 정보</h4>
                             <ul className="space-y-2 text-sm text-gray-400">
-                                <li className="flex items-start gap-2">
-                                    <MapPin className="w-4 h-4 mt-0.5 text-gray-500 shrink-0" />
-                                    <span>{settings.address || "경기도 남양주시 다산동 스티즈 체육관"}</span>
-                                </li>
+                                {address && (
+                                    <li className="flex items-start gap-2">
+                                        <MapPin className="w-4 h-4 mt-0.5 text-gray-500 shrink-0" />
+                                        <span>{address}</span>
+                                    </li>
+                                )}
                                 <li className="flex items-center gap-2">
-                                    <svg className="w-4 h-4 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                                    <span>상담문의: {settings.contactPhone || "010-0000-0000"}</span>
+                                    <Phone className="w-4 h-4 text-gray-500 shrink-0" />
+                                    <span>{phone}</span>
                                 </li>
+                                <li className="text-xs text-gray-500 mt-1">평일 13:00~21:00 / 토 09:00~18:00</li>
                             </ul>
                         </div>
 
                         <div>
                             <h4 className="text-white font-bold mb-4">바로가기</h4>
                             <ul className="space-y-2 text-sm text-gray-400">
-                                <li><Link href="/login" className="hover:text-brand-orange-500">학부모 로그인</Link></li>
-                                <li><Link href="/signup" className="hover:text-brand-orange-500">원생 가입안내</Link></li>
-                                <li><Link href="/login" className="hover:text-gray-100">원장님 로그인 (관리자)</Link></li>
-                                <li><Link href="#" className="hover:text-gray-100">개인정보처리방침</Link></li>
+                                <li><Link href="/about" className="hover:text-white transition-colors">학원소개</Link></li>
+                                <li><Link href="/programs" className="hover:text-white transition-colors">프로그램안내</Link></li>
+                                <li><Link href="/schedule" className="hover:text-white transition-colors">수업시간표</Link></li>
+                                <li><Link href="/annual" className="hover:text-white transition-colors">연간일정표</Link></li>
+                                <li><Link href="/programs#tuition" className="hover:text-white transition-colors">수강료안내</Link></li>
                             </ul>
                         </div>
                     </div>
 
-                    <div className="pt-8 border-t border-gray-800 text-center text-sm text-gray-500">
+                    <div className="border-t border-gray-800 pt-6 text-center text-xs text-gray-500">
                         <p>© 2026 STIZ Basketball Academy. All rights reserved.</p>
                     </div>
                 </div>

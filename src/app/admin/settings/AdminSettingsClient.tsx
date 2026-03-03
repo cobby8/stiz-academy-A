@@ -15,7 +15,7 @@ import { LandingPageDataContext } from "@/components/builder/LandingPageDataCont
 import lz from "lzutf8";
 
 export default function AdminSettingsClient({ initialSettings, coaches, fetchError }: { initialSettings: any, coaches: any[], fetchError: boolean }) {
-    const [activeTab, setActiveTab] = useState<"builder" | "settings">("builder");
+    const [activeTab, setActiveTab] = useState<"builder" | "settings">("settings");
     const [deviceWidth, setDeviceWidth] = useState<"mobile" | "pc">("mobile");
 
     // Form submission wrapper for basic settings
@@ -63,16 +63,16 @@ export default function AdminSettingsClient({ initialSettings, coaches, fetchErr
             {/* Tab Navigation */}
             <div className="flex bg-white border-b border-gray-200 shrink-0">
                 <button
-                    onClick={() => setActiveTab("builder")}
-                    className={`px-6 py-4 font-bold text-sm border-b-2 transition ${activeTab === 'builder' ? 'border-brand-orange-500 text-brand-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
-                >
-                    홈페이지 시각 디자인 빌더
-                </button>
-                <button
                     onClick={() => setActiveTab("settings")}
                     className={`px-6 py-4 font-bold text-sm border-b-2 transition ${activeTab === 'settings' ? 'border-brand-orange-500 text-brand-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
                 >
-                    공통 연락처 및 강사 관리
+                    학원 소개 및 연락처
+                </button>
+                <button
+                    onClick={() => setActiveTab("builder")}
+                    className={`px-6 py-4 font-bold text-sm border-b-2 transition ${activeTab === 'builder' ? 'border-brand-orange-500 text-brand-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+                >
+                    고급: 시각 디자인 빌더
                 </button>
             </div>
 
@@ -123,25 +123,72 @@ export default function AdminSettingsClient({ initialSettings, coaches, fetchErr
 
             {/* Tab: Settings */}
             <div className={`flex-1 overflow-y-auto p-8 bg-gray-50 ${activeTab === 'settings' ? 'block' : 'hidden'}`}>
-                <div className="max-w-3xl mx-auto space-y-12 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+                <div className="max-w-3xl mx-auto space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
 
-                    <form action={saveBasicSettings} className="space-y-6">
+                    <form action={saveBasicSettings} className="space-y-8">
+                        {/* 학원 소개 */}
                         <section>
-                            <h2 className="text-xl font-bold text-brand-navy-900 border-b border-gray-200 pb-2 mb-6">학원 공통 연락처 (디자인 외 전역 요소)</h2>
+                            <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 pb-2 mb-6 inline-block">
+                                학원 소개 문구
+                            </h2>
+                            <p className="text-sm text-gray-500 mb-4">홈페이지 메인 화면과 학원소개 페이지에 표시됩니다.</p>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">대표 전화번호</label>
-                                    <input name="contactPhone" type="text" defaultValue={initialSettings?.contactPhone || ""} placeholder="010-0000-0000" className="w-full border border-gray-300 rounded-md p-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition" />
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">메인 타이틀</label>
+                                    <input
+                                        name="introductionTitle"
+                                        type="text"
+                                        defaultValue={initialSettings?.introductionTitle || ""}
+                                        placeholder="예: 다산신도시 No.1 스티즈농구교실"
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition"
+                                    />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">오시는 길 (주소)</label>
-                                    <input name="address" type="text" defaultValue={initialSettings?.address || ""} className="w-full border border-gray-300 rounded-md p-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition" />
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">학원 소개 문구 (원장 인사말)</label>
+                                    <textarea
+                                        name="introductionText"
+                                        rows={6}
+                                        defaultValue={initialSettings?.introductionText || ""}
+                                        placeholder="안녕하세요, 스티즈 농구교실 다산점입니다.&#10;&#10;저희 학원은 아이들이 농구를 통해..."
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition resize-none"
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">줄바꿈이 그대로 반영됩니다.</p>
                                 </div>
                             </div>
                         </section>
+
+                        {/* 연락처 */}
+                        <section className="pt-6 border-t border-gray-100">
+                            <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 pb-2 mb-6 inline-block">
+                                연락처 및 위치
+                            </h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">대표 전화번호</label>
+                                    <input
+                                        name="contactPhone"
+                                        type="text"
+                                        defaultValue={initialSettings?.contactPhone || ""}
+                                        placeholder="010-0000-0000"
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">오시는 길 (주소)</label>
+                                    <input
+                                        name="address"
+                                        type="text"
+                                        defaultValue={initialSettings?.address || ""}
+                                        placeholder="경기도 남양주시 다산동 ..."
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition"
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
                         <div className="pt-4 border-t border-gray-100 flex justify-end">
-                            <ConfirmSubmitButton confirmMessage="연락처 정보를 저장하시겠습니까?" className="bg-brand-orange-500 text-white px-6 py-2 rounded-md font-bold hover:bg-orange-600 transition shadow">
-                                기본 정보 저장하기
+                            <ConfirmSubmitButton confirmMessage="변경 사항을 저장하시겠습니까?" className="bg-brand-orange-500 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-orange-600 transition shadow">
+                                저장하기
                             </ConfirmSubmitButton>
                         </div>
                     </form>

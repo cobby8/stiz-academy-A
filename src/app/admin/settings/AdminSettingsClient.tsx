@@ -80,7 +80,11 @@ export default function AdminSettingsClient({
 }) {
     const [actionError, setActionError] = useState<string | null>(null);
     const [bodyFont, setBodyFont] = useState<string>(initialSettings?.siteBodyFont || "system");
-    const [headingFont, setHeadingFont] = useState<string>(initialSettings?.siteHeadingFont || "same-as-body");
+    const [headingFont, setHeadingFont] = useState<string>(
+        HEADING_FONT_OPTIONS.some(f => f.key === initialSettings?.siteHeadingFont)
+            ? initialSettings.siteHeadingFont
+            : "same-as-body"
+    );
     const [introText, setIntroText] = useState<string>(initialSettings?.introductionText || "");
 
     const bodyFontCss = BODY_FONT_OPTIONS.find(f => f.key === bodyFont)?.css ?? "";

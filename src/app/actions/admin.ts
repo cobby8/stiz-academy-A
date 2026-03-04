@@ -129,6 +129,7 @@ export async function updateAcademySettings(data: {
             create: { id: "singleton", ...data }
         });
         revalidatePath("/admin/settings");
+        revalidatePath("/");
         revalidatePath("/about");
         revalidatePath("/", "layout");
     } catch (e) {

@@ -28,6 +28,9 @@ export interface SerializedEvent {
     isAllDay: boolean;
     url?: string;
     source: "db" | "google";
+    // "n월 개강/종강/주차" 이벤트: 실제 날짜와 관계없이 n월 섹션에 표시
+    academicYear?:  number;
+    academicMonth?: number;
 }
 
 interface Props {
@@ -54,17 +57,22 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
         return () => clearInterval(id);
     }, [router]);
 
+    /* ── 이벤트의 "표시 연도/월" 결정 ──
+     * "n월 개강/종강/주차" 이벤트는 academicYear/Month를 우선 사용해 n월 섹션에 표시 */
+    const displayYearOf  = (ev: SerializedEvent) => ev.academicYear  ?? new Date(ev.date).getUTCFullYear();
+    const displayMonthOf = (ev: SerializedEvent) => ev.academicMonth ?? new Date(ev.date).getUTCMonth();
+
     /* ── 연도 목록 ── */
     const availableYears = useMemo(() => {
         const s = new Set<number>();
-        allEvents.forEach(e => s.add(new Date(e.date).getFullYear()));
+        allEvents.forEach(e => s.add(displayYearOf(e)));
         s.add(currentYear);
         return Array.from(s).sort((a, b) => b - a);
     }, [allEvents, currentYear]);
 
     /* ── 선택 연도 필터 ── */
     const filteredEvents = useMemo(
-        () => allEvents.filter(e => new Date(e.date).getFullYear() === selectedYear),
+        () => allEvents.filter(e => displayYearOf(e) === selectedYear),
         [allEvents, selectedYear],
     );
 
@@ -72,9 +80,8 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
     const byMonthDate = useMemo(() => {
         const g: Record<number, Record<string, SerializedEvent[]>> = {};
         filteredEvents.forEach(ev => {
-            const d   = new Date(ev.date);
-            const mon = d.getMonth();
-            const key = ev.date.slice(0, 10);
+            const mon = displayMonthOf(ev);
+            const key = ev.date.slice(0, 10); // 실제 날짜 (날짜 헤더에 표시됨)
             if (!g[mon])      g[mon]      = {};
             if (!g[mon][key]) g[mon][key] = [];
             g[mon][key].push(ev);

@@ -52,17 +52,28 @@ export default async function AnnualPage() {
             isAllDay: true,
             source: "db" as const,
         })),
-        ...googleEvents.map((e) => ({
-            id: e.id,
-            title: e.title,
-            date: e.date.toISOString(),
-            endDate: e.endDate?.toISOString(),
-            description: e.description,
-            category: e.category,
-            isAllDay: e.isAllDay,
-            url: e.url,
-            source: "google" as const,
-        })),
+        ...googleEvents.map((e) => {
+            // "n월 개강/종강/n주차" 이벤트는 제목의 n월을 수강월로 사용 (실제 날짜와 무관)
+            const academicRE = OPEN_RE.test(e.title) ? OPEN_RE
+                             : CLOSE_RE.test(e.title) ? CLOSE_RE
+                             : WEEK_START_RE.test(e.title) ? WEEK_START_RE
+                             : null;
+            const parsed = academicRE ? parseAcademicYearMonth(e.title, academicRE, e.date) : null;
+            return {
+                id: e.id,
+                title: e.title,
+                date: e.date.toISOString(),
+                endDate: e.endDate?.toISOString(),
+                description: e.description,
+                category: e.category,
+                isAllDay: e.isAllDay,
+                url: e.url,
+                source: "google" as const,
+                // 수강월이 실제 달과 다른 경우에만 설정 (클라이언트 그룹핑용)
+                academicYear:  parsed?.academicYear,
+                academicMonth: parsed?.academicMonth,
+            };
+        }),
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // ── 서버에서 월별 수업일자 계산 ──────────────────────────────────
@@ -80,14 +91,16 @@ export default async function AnnualPage() {
     const yearlySchedules: Record<number, Record<number, Record<number, string[]>>> = {};
 
     if (classDays.length > 0) {
-        // 1. "학원 휴무" 이벤트 날짜 수집 (다일 이벤트 포함)
+        // 1. "학원 휴무" 이벤트 날짜 수집 (다일 이벤트 포함, UTC 기준)
         const closedDateSet = new Set<string>();
         for (const ev of allEvents) {
             if (!CLOSED_RE.test(ev.title)) continue;
             const start = new Date(ev.date);
             const end   = ev.endDate ? new Date(ev.endDate) : new Date(start);
-            for (const cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
-                closedDateSet.add(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`);
+            const cur   = new Date(start);
+            while (cur.getTime() <= end.getTime()) {
+                closedDateSet.add(`${cur.getUTCFullYear()}-${String(cur.getUTCMonth()+1).padStart(2,"0")}-${String(cur.getUTCDate()).padStart(2,"0")}`);
+                cur.setUTCDate(cur.getUTCDate() + 1);
             }
         }
 

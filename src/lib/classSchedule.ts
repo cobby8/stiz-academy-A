@@ -49,9 +49,15 @@ export function parseAcademicYearMonth(
     if (!m) return null;
 
     const academicMonth = parseInt(m[1]) - 1; // 0-indexed
-    const eventMonth    = eventDate.getUTCMonth(); // UTC 기준 (normalizeAllDayDate와 일치)
+    const eventMonth    = eventDate.getUTCMonth();
     const eventYear     = eventDate.getUTCFullYear();
-    const academicYear  = academicMonth < eventMonth ? eventYear + 1 : eventYear;
+
+    // 이벤트 날짜와 수강월의 차이로 연도를 결정
+    // diff > 6  : 이벤트가 수강월보다 훨씬 뒤 → 수강월은 다음 해 (예: "1월 개강" on 12월)
+    // diff < -6 : 이벤트가 수강월보다 훨씬 앞 → 수강월은 이전 해 (예: "12월 종강" on 1월)
+    // 그 외     : 같은 해 (예: "9월 종강" on 10월, "4월 개강" on 3월)
+    const diff = eventMonth - academicMonth;
+    const academicYear = diff > 6 ? eventYear + 1 : diff < -6 ? eventYear - 1 : eventYear;
 
     return { academicYear, academicMonth };
 }

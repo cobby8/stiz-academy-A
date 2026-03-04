@@ -24,6 +24,12 @@ export default async function AnnualPage() {
     const phone = settings.contactPhone || "010-0000-0000";
     const icsUrl = settings.googleCalendarIcsUrl as string | null;
 
+    // 수업 요일 파싱 ("1,3" → [1, 3])
+    const classDays: number[] = ((settings.classDays as string | null) ?? "")
+        .split(",")
+        .map(Number)
+        .filter(n => !isNaN(n) && n >= 0 && n <= 6);
+
     // 구글 캘린더 이벤트 fetch
     const googleEvents = icsUrl ? await fetchGoogleCalendarEvents(icsUrl) : [];
 
@@ -81,7 +87,7 @@ export default async function AnnualPage() {
             </section>
 
             {/* Events (Client Component - handles year filter) */}
-            <AnnualEventsClient allEvents={allEvents} />
+            <AnnualEventsClient allEvents={allEvents} classDays={classDays} />
 
             {/* CTA */}
             <section className="bg-brand-navy-900 text-white py-14">

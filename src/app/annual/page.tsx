@@ -12,7 +12,7 @@ import {
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
 
-export const revalidate = 300; // 5분마다 구글 캘린더 재조회
+export const dynamic = "force-dynamic"; // router.refresh() 호출 시 항상 최신 데이터 반환
 
 export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점" };
 

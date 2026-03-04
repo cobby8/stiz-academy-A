@@ -26,12 +26,14 @@ export default async function AboutPage() {
                     </h2>
                     {/* introductionText가 HTML이면 그대로 렌더링, 아니면 plain text로 표시 */}
                     {settings.introductionText?.startsWith("<") ? (
+                        /* HTML (RichTextEditor로 저장한 경우) */
                         <div
-                            className="prose prose-lg max-w-none text-gray-700 leading-loose"
+                            className="rich-content"
                             dangerouslySetInnerHTML={{ __html: settings.introductionText }}
                         />
                     ) : (
-                        <div className="prose max-w-none text-gray-700 leading-loose text-lg whitespace-pre-line">
+                        /* plain text (기존 데이터) */
+                        <div className="text-gray-700 leading-loose text-lg whitespace-pre-line">
                             {settings.introductionText ||
                                 "안녕하세요, 스티즈 농구교실 다산점입니다.\n\n저희 학원은 아이들이 농구를 통해 협동심, 책임감, 그리고 건강한 체력을 기를 수 있도록 최선을 다해 지도하고 있습니다.\n\n전문 코치진과 체계적인 커리큘럼으로 아이들의 가능성을 이끌어 드리겠습니다."}
                         </div>

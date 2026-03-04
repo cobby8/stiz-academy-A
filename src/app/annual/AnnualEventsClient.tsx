@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import EventDetailPanel from "./EventDetailPanel";
-import { getMonthClassSchedule, WEEK_START_RE, DAY_NAMES } from "@/lib/classSchedule";
+import { DAY_NAMES } from "@/lib/classSchedule";
 
 const CATEGORY_STYLES: Record<string, { bg: string; text: string; dot: string; border: string }> = {
     대회:     { bg: "bg-red-50",    text: "text-red-700",    dot: "bg-red-500",    border: "border-red-200"    },
@@ -29,14 +29,15 @@ export interface SerializedEvent {
 
 interface Props {
     allEvents: SerializedEvent[];
-    classDays: number[]; // e.g. [1, 3] = 월·수
+    classDays: number[];
+    // 서버에서 계산된 월별 수업일자: { 월(0-11): { 요일(0-6): [날짜, ...] } }
+    monthSchedules: Record<number, Record<number, number[]>>;
 }
 
-export default function AnnualEventsClient({ allEvents, classDays }: Props) {
+export default function AnnualEventsClient({ allEvents, classDays, monthSchedules }: Props) {
     const currentYear = new Date().getFullYear();
     const [selectedYear, setSelectedYear] = useState(currentYear);
     const [selectedEvent, setSelectedEvent] = useState<SerializedEvent | null>(null);
-    // months whose "수업일자 확인" panel is open
     const [openScheduleMonths, setOpenScheduleMonths] = useState<Set<number>>(new Set());
 
     /* ── 연도 목록 ── */
@@ -57,29 +58,15 @@ export default function AnnualEventsClient({ allEvents, classDays }: Props) {
     const byMonthDate = useMemo(() => {
         const g: Record<number, Record<string, SerializedEvent[]>> = {};
         filteredEvents.forEach(ev => {
-            const d    = new Date(ev.date);
-            const mon  = d.getMonth();          // 0–11
-            const key  = ev.date.slice(0, 10); // "YYYY-MM-DD"
+            const d   = new Date(ev.date);
+            const mon = d.getMonth();
+            const key = ev.date.slice(0, 10);
             if (!g[mon])      g[mon]      = {};
             if (!g[mon][key]) g[mon][key] = [];
             g[mon][key].push(ev);
         });
         return g;
     }, [filteredEvents]);
-
-    /* ── month → { dayOfWeek: [date,...] } ── */
-    const monthSchedules = useMemo(() => {
-        if (classDays.length === 0) return {} as Record<number, Record<number, number[]>>;
-        const out: Record<number, Record<number, number[]>> = {};
-        Object.entries(byMonthDate).forEach(([mStr, dateMap]) => {
-            const mon = Number(mStr);
-            const weekStarts = Object.values(dateMap).flat()
-                .filter(ev => WEEK_START_RE.test(ev.title));
-            if (weekStarts.length > 0)
-                out[mon] = getMonthClassSchedule(weekStarts, classDays);
-        });
-        return out;
-    }, [byMonthDate, classDays]);
 
     const activeMonths = Object.keys(byMonthDate).map(Number).sort((a, b) => a - b);
 
@@ -130,7 +117,7 @@ export default function AnnualEventsClient({ allEvents, classDays }: Props) {
                                 const schedule = monthSchedules[mon];
                                 const hasSchedule = !!schedule &&
                                     classDays.some(d => (schedule[d]?.length ?? 0) > 0);
-                                const isOpen   = openScheduleMonths.has(mon);
+                                const isOpen     = openScheduleMonths.has(mon);
                                 const sortedKeys = Object.keys(dateMap).sort();
 
                                 return (
@@ -221,25 +208,18 @@ export default function AnnualEventsClient({ allEvents, classDays }: Props) {
                                                                         onClick={() => setSelectedEvent(ev)}
                                                                         className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 active:bg-gray-100 transition group"
                                                                     >
-                                                                        {/* 카테고리 배지 */}
                                                                         <span className={`flex items-center gap-1.5 text-xs font-bold px-2 py-0.5 rounded-full border shrink-0 ${cat.bg} ${cat.text} ${cat.border}`}>
                                                                             <span className={`w-1.5 h-1.5 rounded-full ${cat.dot}`} />
                                                                             {ev.category || "일반"}
                                                                         </span>
-
-                                                                        {/* 제목 */}
                                                                         <span className="flex-1 text-sm font-bold text-gray-900 truncate">
                                                                             {ev.title}
                                                                         </span>
-
-                                                                        {/* 설명 미리보기 (데스크톱) */}
                                                                         {ev.description && (
                                                                             <span className="hidden sm:block text-xs text-gray-400 truncate max-w-[180px]">
                                                                                 {ev.description}
                                                                             </span>
                                                                         )}
-
-                                                                        {/* 화살표 */}
                                                                         <span className="text-gray-300 group-hover:text-gray-500 transition text-lg shrink-0 leading-none">
                                                                             ›
                                                                         </span>

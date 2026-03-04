@@ -1,5 +1,6 @@
 import { getAnnualEvents, getAcademySettings, getClasses } from "@/app/actions/admin";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
+import { getMonthClassSchedule, WEEK_START_RE } from "@/lib/classSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
 
@@ -15,6 +16,9 @@ const CATEGORY_STYLES: Record<string, { dot: string }> = {
     일반: { dot: "bg-gray-400" },
 };
 
+// Class.dayOfWeek("Mon","Tue"…) → JS getDay() 숫자
+const DOW_MAP: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+
 export default async function AnnualPage() {
     const [dbEvents, settings, classes] = await Promise.all([
         getAnnualEvents() as Promise<any[]>,
@@ -24,20 +28,6 @@ export default async function AnnualPage() {
 
     const phone = settings.contactPhone || "010-0000-0000";
     const icsUrl = settings.googleCalendarIcsUrl as string | null;
-
-    // Class 레코드의 dayOfWeek("Mon","Tue"…)에서 수업 요일 자동 도출
-    const DOW_MAP: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
-    const classDaysFromClasses: number[] = [
-        ...new Set(classes.map((c: any) => DOW_MAP[c.dayOfWeek]).filter((n: number) => n !== undefined))
-    ].sort((a, b) => a - b);
-
-    // 클래스가 없을 때만 설정값 폴백
-    const classDays: number[] = classDaysFromClasses.length > 0
-        ? classDaysFromClasses
-        : ((settings.classDays as string | null) ?? "")
-            .split(",")
-            .map(Number)
-            .filter((n: number) => !isNaN(n) && n >= 0 && n <= 6);
 
     // 구글 캘린더 이벤트 fetch
     const googleEvents = icsUrl ? await fetchGoogleCalendarEvents(icsUrl) : [];
@@ -51,7 +41,7 @@ export default async function AnnualPage() {
             endDate: e.endDate ? (e.endDate as Date).toISOString() : undefined,
             description: e.description ?? undefined,
             category: e.category || "일반",
-            isAllDay: true, // DB 이벤트는 종일 처리
+            isAllDay: true,
             source: "db" as const,
         })),
         ...googleEvents.map((e) => ({
@@ -66,6 +56,37 @@ export default async function AnnualPage() {
             source: "google" as const,
         })),
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // ── 서버에서 월별 수업일자 계산 ──────────────────────────────────
+    // 1. Class 레코드에서 수업 요일(숫자) 도출
+    const classDays: number[] = [
+        ...new Set(
+            classes
+                .map((c: any) => DOW_MAP[c.dayOfWeek])
+                .filter((n: number | undefined) => n !== undefined)
+        ),
+    ].sort((a, b) => a - b);
+
+    // 2. 구글 캘린더의 "n월 n주차 시작" 이벤트를 월별로 그룹핑
+    // monthSchedules: { 월(0-11): { 요일(0-6): [날짜, ...] } }
+    const monthSchedules: Record<number, Record<number, number[]>> = {};
+
+    if (classDays.length > 0) {
+        // 월별로 week-start 이벤트 수집
+        const weekStartsByMonth: Record<number, { date: string }[]> = {};
+        for (const ev of allEvents) {
+            if (!WEEK_START_RE.test(ev.title)) continue;
+            const mon = new Date(ev.date).getMonth(); // 0-11
+            if (!weekStartsByMonth[mon]) weekStartsByMonth[mon] = [];
+            weekStartsByMonth[mon].push({ date: ev.date });
+        }
+
+        // 월별로 수업일자 계산
+        for (const [monStr, weekStarts] of Object.entries(weekStartsByMonth)) {
+            const mon = Number(monStr);
+            monthSchedules[mon] = getMonthClassSchedule(weekStarts, classDays);
+        }
+    }
 
     const categories = Object.keys(CATEGORY_STYLES);
 
@@ -95,8 +116,12 @@ export default async function AnnualPage() {
                 </div>
             </section>
 
-            {/* Events (Client Component - handles year filter) */}
-            <AnnualEventsClient allEvents={allEvents} classDays={classDays} />
+            {/* Events (Client Component - handles year filter, schedule toggle) */}
+            <AnnualEventsClient
+                allEvents={allEvents}
+                classDays={classDays}
+                monthSchedules={monthSchedules}
+            />
 
             {/* CTA */}
             <section className="bg-brand-navy-900 text-white py-14">

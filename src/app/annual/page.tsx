@@ -59,9 +59,6 @@ export default async function AnnualPage() {
 
     // ── 서버에서 월별 수업일자 계산 ──────────────────────────────────
     // 1. Class 레코드에서 수업 요일(숫자) 도출
-    const rawDayOfWeeks = classes.map((c: any) => c.dayOfWeek);
-    console.log("[annual] classes.length:", classes.length, "| dayOfWeeks:", rawDayOfWeeks);
-
     const classDays: number[] = [
         ...new Set(
             classes
@@ -70,33 +67,32 @@ export default async function AnnualPage() {
         ),
     ].sort((a, b) => a - b);
 
-    console.log("[annual] classDays:", classDays);
-
-    // 2. 구글 캘린더의 "n월 n주차 시작" 이벤트를 월별로 그룹핑
-    // monthSchedules: { 월(0-11): { 요일(0-6): [날짜, ...] } }
-    const monthSchedules: Record<number, Record<number, number[]>> = {};
+    // 2. 구글 캘린더의 "n월 n주차 시작" 이벤트를 연도+월별로 그룹핑
+    // yearlySchedules: { 연도: { 월(0-11): { 요일(0-6): [날짜, ...] } } }
+    const yearlySchedules: Record<number, Record<number, Record<number, number[]>>> = {};
 
     if (classDays.length > 0) {
-        // 월별로 week-start 이벤트 수집
-        const weekStartsByMonth: Record<number, { date: string }[]> = {};
+        // 연도+월별로 week-start 이벤트 수집
+        const weekStartsByYearMonth: Record<string, { date: string }[]> = {};
         for (const ev of allEvents) {
             if (!WEEK_START_RE.test(ev.title)) continue;
-            const mon = new Date(ev.date).getMonth(); // 0-11
-            if (!weekStartsByMonth[mon]) weekStartsByMonth[mon] = [];
-            weekStartsByMonth[mon].push({ date: ev.date });
+            const d    = new Date(ev.date);
+            const year = d.getFullYear();
+            const mon  = d.getMonth(); // 0-11
+            const key  = `${year}-${mon}`;
+            if (!weekStartsByYearMonth[key]) weekStartsByYearMonth[key] = [];
+            weekStartsByYearMonth[key].push({ date: ev.date });
         }
 
-        // 월별로 수업일자 계산
-        for (const [monStr, weekStarts] of Object.entries(weekStartsByMonth)) {
-            const mon = Number(monStr);
-            monthSchedules[mon] = getMonthClassSchedule(weekStarts, classDays);
+        // 연도+월별로 수업일자 계산
+        for (const [key, weekStarts] of Object.entries(weekStartsByYearMonth)) {
+            const [yearStr, monStr] = key.split("-");
+            const year = Number(yearStr);
+            const mon  = Number(monStr);
+            if (!yearlySchedules[year]) yearlySchedules[year] = {};
+            yearlySchedules[year][mon] = getMonthClassSchedule(weekStarts, classDays);
         }
     }
-
-    // 주차 시작 이벤트 찾기 디버그
-    const weekStartTitles = allEvents.filter(e => WEEK_START_RE.test(e.title)).map(e => e.title);
-    console.log("[annual] weekStart events found:", weekStartTitles.length, weekStartTitles.slice(0, 5));
-    console.log("[annual] monthSchedules keys:", Object.keys(monthSchedules));
 
     const categories = Object.keys(CATEGORY_STYLES);
 
@@ -126,16 +122,11 @@ export default async function AnnualPage() {
                 </div>
             </section>
 
-            {/* 임시 디버그 패널 - 확인 후 삭제 */}
-            <div className="bg-yellow-100 border border-yellow-400 text-yellow-900 text-xs font-mono p-3 mx-4 mt-4 rounded">
-                <b>[DEBUG]</b> classes: {classes.length}개 | classDays: [{classDays.join(",")}] | monthSchedules keys: [{Object.keys(monthSchedules).join(",")}] | weekStart events: {allEvents.filter(e => WEEK_START_RE.test(e.title)).length}개
-            </div>
-
             {/* Events (Client Component - handles year filter, schedule toggle) */}
             <AnnualEventsClient
                 allEvents={allEvents}
                 classDays={classDays}
-                monthSchedules={monthSchedules}
+                yearlySchedules={yearlySchedules}
             />
 
             {/* CTA */}

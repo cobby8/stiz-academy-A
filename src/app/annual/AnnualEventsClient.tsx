@@ -30,11 +30,11 @@ export interface SerializedEvent {
 interface Props {
     allEvents: SerializedEvent[];
     classDays: number[];
-    // 서버에서 계산된 월별 수업일자: { 월(0-11): { 요일(0-6): [날짜, ...] } }
-    monthSchedules: Record<number, Record<number, number[]>>;
+    // 서버에서 계산된 연도별·월별 수업일자: { 연도: { 월(0-11): { 요일(0-6): [날짜, ...] } } }
+    yearlySchedules: Record<number, Record<number, Record<number, number[]>>>;
 }
 
-export default function AnnualEventsClient({ allEvents, classDays, monthSchedules }: Props) {
+export default function AnnualEventsClient({ allEvents, classDays, yearlySchedules }: Props) {
     const currentYear = new Date().getFullYear();
     const [selectedYear, setSelectedYear] = useState(currentYear);
     const [selectedEvent, setSelectedEvent] = useState<SerializedEvent | null>(null);
@@ -114,7 +114,7 @@ export default function AnnualEventsClient({ allEvents, classDays, monthSchedule
                         <div className="space-y-10">
                             {activeMonths.map(mon => {
                                 const dateMap  = byMonthDate[mon];
-                                const schedule = monthSchedules[mon];
+                                const schedule = yearlySchedules[selectedYear]?.[mon];
                                 const hasSchedule = !!schedule &&
                                     classDays.some(d => (schedule[d]?.length ?? 0) > 0);
                                 const isOpen     = openScheduleMonths.has(mon);

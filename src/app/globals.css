@@ -150,10 +150,7 @@ h1, h2, h3, h4, h5, h6 {
   text-decoration: underline !important;
 }
 
-/* 인라인 color 스타일이 항상 적용되도록 */
-.rich-content span[style] {
-  color: inherit; /* 기본값 - inline style="color:..." 가 덮어씀 */
-}
+/* span의 inline style="color:..." 은 CSS보다 우선순위가 높아 별도 규칙 불필요 */
 
 .rich-content h1 {
   font-size: 1.875rem;

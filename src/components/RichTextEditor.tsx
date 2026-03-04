@@ -9,11 +9,14 @@ import { TextAlign } from '@tiptap/extension-text-align'
 import Image from '@tiptap/extension-image'
 import Dropcursor from '@tiptap/extension-dropcursor'
 import { FontSize } from './extensions/FontSize'
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { ImageIcon } from 'lucide-react'
 
 export default function RichTextEditor({ value, onChange, name, placeholder }: { value: string, onChange?: (val: string) => void, name?: string, placeholder?: string }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    // 마지막으로 에디터가 직접 emit한 HTML을 추적 (외부 value 변경과 구분하기 위해)
+    const lastEmittedHTML = useRef<string>("");
+
     const editor = useEditor({
         extensions: [
             StarterKit,
@@ -31,7 +34,9 @@ export default function RichTextEditor({ value, onChange, name, placeholder }: {
         content: value,
         immediatelyRender: false,
         onUpdate: ({ editor }) => {
-            onChange?.(editor.getHTML());
+            const html = editor.getHTML();
+            lastEmittedHTML.current = html;
+            onChange?.(html);
         },
         editorProps: {
             handleDrop: (view, event, slice, moved) => {
@@ -74,12 +79,20 @@ export default function RichTextEditor({ value, onChange, name, placeholder }: {
         }
     };
 
-    // Update editor content when value prop changes externally (initial load)
+    // 외부 value가 변경됐을 때만 에디터 내용을 업데이트.
+    // 사용자가 직접 편집해서 생긴 value 변경(= lastEmittedHTML과 동일)은 무시.
     useEffect(() => {
-        if (editor && value && editor.getHTML() !== value && !editor.isFocused) {
-            editor.commands.setContent(value);
+        if (!editor || editor.isFocused) return;
+        // 내가 방금 emit한 HTML과 같으면 → 사용자 편집 결과 → 무시
+        if (lastEmittedHTML.current && value === lastEmittedHTML.current) return;
+        // 외부 변경(초기 로드 포함): 에디터 내용이 다를 때만 setContent
+        const editorHTML = editor.getHTML();
+        if (value !== editorHTML) {
+            editor.commands.setContent(value || "", false);
+            // 정규화된 HTML을 lastEmittedHTML에 기록해 다음 비교에 사용
+            lastEmittedHTML.current = editor.getHTML();
         }
-    }, [value, editor]);
+    }, [editor, value]);
 
     if (!editor) {
         return <div className="border border-gray-300 rounded-md p-4 min-h-[150px] bg-gray-50 flex items-center justify-center text-sm text-gray-400">에디터 로딩중...</div>;

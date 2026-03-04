@@ -95,10 +95,18 @@ export default function LandingPageClient({
                         <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight tracking-tight">
                             {settings.introductionTitle || "스티즈 농구교실"}
                         </h1>
-                        <p className="text-lg text-blue-100 mb-10 leading-relaxed max-w-xl">
-                            {settings.introductionText ||
-                                "아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다."}
-                        </p>
+                        {/* introductionText: Tiptap HTML이면 그대로, plain text면 <br>로 변환 */}
+                        <div
+                            className="text-blue-100 text-lg mb-10 leading-relaxed max-w-xl [&_strong]:font-bold [&_em]:italic [&_p]:mb-1.5 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold"
+                            dangerouslySetInnerHTML={{
+                                __html: (() => {
+                                    const t = settings.introductionText;
+                                    if (!t) return "아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다.";
+                                    if (t.includes("<")) return t;
+                                    return t.replace(/\n/g, "<br>");
+                                })()
+                            }}
+                        />
                         <div className="flex flex-wrap gap-4">
                             <a
                                 href={`tel:${phone.replace(/-/g, "")}`}

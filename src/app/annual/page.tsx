@@ -1,4 +1,4 @@
-import { getAnnualEvents, getAcademySettings } from "@/app/actions/admin";
+import { getAnnualEvents, getAcademySettings, getClasses } from "@/app/actions/admin";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
@@ -16,19 +16,28 @@ const CATEGORY_STYLES: Record<string, { dot: string }> = {
 };
 
 export default async function AnnualPage() {
-    const [dbEvents, settings] = await Promise.all([
+    const [dbEvents, settings, classes] = await Promise.all([
         getAnnualEvents() as Promise<any[]>,
         getAcademySettings() as Promise<any>,
+        getClasses() as Promise<any[]>,
     ]);
 
     const phone = settings.contactPhone || "010-0000-0000";
     const icsUrl = settings.googleCalendarIcsUrl as string | null;
 
-    // 수업 요일 파싱 ("1,3" → [1, 3])
-    const classDays: number[] = ((settings.classDays as string | null) ?? "")
-        .split(",")
-        .map(Number)
-        .filter(n => !isNaN(n) && n >= 0 && n <= 6);
+    // Class 레코드의 dayOfWeek("Mon","Tue"…)에서 수업 요일 자동 도출
+    const DOW_MAP: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+    const classDaysFromClasses: number[] = [
+        ...new Set(classes.map((c: any) => DOW_MAP[c.dayOfWeek]).filter((n: number) => n !== undefined))
+    ].sort((a, b) => a - b);
+
+    // 클래스가 없을 때만 설정값 폴백
+    const classDays: number[] = classDaysFromClasses.length > 0
+        ? classDaysFromClasses
+        : ((settings.classDays as string | null) ?? "")
+            .split(",")
+            .map(Number)
+            .filter((n: number) => !isNaN(n) && n >= 0 && n <= 6);
 
     // 구글 캘린더 이벤트 fetch
     const googleEvents = icsUrl ? await fetchGoogleCalendarEvents(icsUrl) : [];

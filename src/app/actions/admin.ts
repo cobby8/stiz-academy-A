@@ -73,6 +73,7 @@ export async function createClass(data: {
     try {
         await prisma.class.create({ data });
         revalidatePath("/admin/classes");
+        revalidatePath("/schedule");
         revalidatePath("/");
     } catch (e) {
         console.error("Failed to create class:", e);
@@ -84,6 +85,7 @@ export async function deleteClass(id: string) {
     try {
         await prisma.class.delete({ where: { id } });
         revalidatePath("/admin/classes");
+        revalidatePath("/schedule");
         revalidatePath("/");
     } catch (e) {
         console.error("Failed to delete class:", e);

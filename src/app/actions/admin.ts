@@ -129,6 +129,7 @@ export async function updateAcademySettings(data: {
             create: { id: "singleton", ...data }
         });
         revalidatePath("/admin/settings");
+        revalidatePath("/about");
         revalidatePath("/", "layout");
     } catch (e) {
         console.error("Failed to update academy settings:", e);

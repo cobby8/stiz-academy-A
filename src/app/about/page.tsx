@@ -1,6 +1,7 @@
 import { getAcademySettings, getCoaches } from "@/app/actions/admin";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "학원소개 | STIZ 농구교실 다산점" };
 
 export default async function AboutPage() {
@@ -24,20 +25,21 @@ export default async function AboutPage() {
                     <h2 className="text-2xl font-black text-brand-navy-900 mb-6 pb-3 border-b-2 border-brand-orange-500 inline-block">
                         원장 인사말
                     </h2>
-                    {/* introductionText가 HTML이면 그대로 렌더링, 아니면 plain text로 표시 */}
-                    {settings.introductionText?.startsWith("<") ? (
-                        /* HTML (RichTextEditor로 저장한 경우) */
-                        <div
-                            className="rich-content"
-                            dangerouslySetInnerHTML={{ __html: settings.introductionText }}
-                        />
-                    ) : (
-                        /* plain text (기존 데이터) */
-                        <div className="text-gray-700 leading-loose text-lg whitespace-pre-line">
-                            {settings.introductionText ||
-                                "안녕하세요, 스티즈 농구교실 다산점입니다.\n\n저희 학원은 아이들이 농구를 통해 협동심, 책임감, 그리고 건강한 체력을 기를 수 있도록 최선을 다해 지도하고 있습니다.\n\n전문 코치진과 체계적인 커리큘럼으로 아이들의 가능성을 이끌어 드리겠습니다."}
-                        </div>
-                    )}
+                    {/* RichTextEditor(Tiptap) HTML 또는 기존 plain text 모두 처리 */}
+                    <div
+                        className="rich-content"
+                        dangerouslySetInnerHTML={{
+                            __html: (() => {
+                                const text = settings.introductionText;
+                                if (!text) {
+                                    return "<p>안녕하세요, 스티즈 농구교실 다산점입니다.</p><p>저희 학원은 아이들이 농구를 통해 협동심, 책임감, 그리고 건강한 체력을 기를 수 있도록 최선을 다해 지도하고 있습니다.</p><p>전문 코치진과 체계적인 커리큘럼으로 아이들의 가능성을 이끌어 드리겠습니다.</p>";
+                                }
+                                // HTML이면 그대로, plain text면 줄바꿈→<br>
+                                if (text.includes("<")) return text;
+                                return text.replace(/\n/g, "<br>");
+                            })()
+                        }}
+                    />
                 </div>
             </section>
 

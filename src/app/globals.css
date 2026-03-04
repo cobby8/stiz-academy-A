@@ -187,16 +187,4 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 0.5rem;
 }
 
-.rich-content p[style*="text-align: center"],
-.rich-content h1[style*="text-align: center"],
-.rich-content h2[style*="text-align: center"],
-.rich-content h3[style*="text-align: center"] {
-  text-align: center;
-}
-
-.rich-content p[style*="text-align: right"],
-.rich-content h1[style*="text-align: right"],
-.rich-content h2[style*="text-align: right"],
-.rich-content h3[style*="text-align: right"] {
-  text-align: right;
-}
+/* 텍스트 정렬은 Tiptap이 inline style="text-align: ..." 로 직접 처리 */

@@ -36,11 +36,16 @@ function normalizeAllDayDate(d: Date): Date {
 
 export async function fetchGoogleCalendarEvents(icsUrl: string): Promise<GoogleCalendarEvent[]> {
     try {
-        const events = await ical.async.fromURL(icsUrl);
+        // node-ical.async.fromURL은 HTTP 캐시를 제어할 수 없으므로
+        // fetch로 ICS 텍스트를 직접 가져온 후 동기 파서로 처리
+        const res = await fetch(icsUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error(`ICS fetch failed: ${res.status}`);
+        const icsText = await res.text();
+        const events = ical.sync.parseICS(icsText) as Record<string, any>;
         const result: GoogleCalendarEvent[] = [];
 
         for (const key in events) {
-            const event = events[key];
+            const event = events[key] as any;
             if (event.type !== "VEVENT") continue;
 
             const summary = event.summary || "제목 없음";

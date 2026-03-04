@@ -3,17 +3,13 @@
  *
  * Utilities for calculating class dates from "n월 n주차 시작" calendar events.
  *
- * Logic:
- *  1. The event title is matched against WEEK_START_RE to identify week-start markers.
- *  2. The event's date is treated as the beginning of that class week.
- *  3. For each configured class day (0=Sun … 6=Sat), we find the nearest
- *     occurrence of that weekday on or after the event date within the same 7-day window.
- *  4. Aggregating across all "n주차 시작" events in a month gives the full
- *     monthly class schedule grouped by weekday.
+ * Key principle: The "n월" in the event title defines the ACADEMIC month,
+ * regardless of what calendar date the event actually falls on.
+ * (e.g. "4월 1주차 시작" on March 31 → that week belongs to April's schedule)
  */
 
 /** Matches titles like "1월 1주차 시작", "3월 2주차", "10월 4주차 수업" */
-export const WEEK_START_RE = /(\d{1,2})월\s*(\d{1})주차/;
+export const WEEK_START_RE = /(\d{1,2})월\s*(\d{1,2})주차/;
 
 /** Korean weekday names indexed by JS Date.getDay() (0 = 일, 1 = 월, …, 6 = 토) */
 export const DAY_NAMES: Record<number, string> = {
@@ -27,58 +23,87 @@ export const DAY_NAMES: Record<number, string> = {
 };
 
 /**
- * Given a week-start date and configured class days, returns each class day's
- * calendar date within the 7-day window starting from weekStartDate.
+ * Parse the academic month (0-indexed) and event year from a week-start event.
+ * Academic year = event's calendar year, except when academic month < event month
+ * (e.g. "1월 1주차" on December 28 → academic year = event year + 1).
+ */
+export function parseAcademicYearMonth(
+    title: string,
+    eventDate: Date,
+): { academicYear: number; academicMonth: number } | null {
+    const m = WEEK_START_RE.exec(title);
+    if (!m) return null;
+
+    const academicMonth = parseInt(m[1]) - 1; // 0-indexed (0=Jan)
+    const eventMonth    = eventDate.getMonth();
+    const eventYear     = eventDate.getFullYear();
+
+    // If the academic month is earlier in the year than the event month,
+    // the event belongs to the next calendar year's academic period.
+    const academicYear = academicMonth < eventMonth ? eventYear + 1 : eventYear;
+
+    return { academicYear, academicMonth };
+}
+
+/**
+ * Given a week-start event date and configured class days, returns each class day's
+ * full ISO date (YYYY-MM-DD) within the same Mon–Sun week as the event.
  *
- * Example: weekStartDate = 2025-01-05 (Sun), classDays = [1, 3]
- *   → [{ day: 1, date: 6 }, { day: 3, date: 8 }]  (Mon 6th, Wed 8th)
+ * Example: weekStartDate = 2026-03-31 (Tue), classDays = [1, 2]
+ *   → [{ day: 1, isoDate: "2026-03-30" }, { day: 2, isoDate: "2026-03-31" }]
  */
 function getWeekDates(
     weekStartDate: Date,
     classDays: number[],
-): { day: number; date: number }[] {
+): { day: number; isoDate: string }[] {
     const start = new Date(weekStartDate);
     start.setHours(0, 0, 0, 0);
-    const startDow = start.getDay(); // 0–6
+
+    // Find the Monday of this week (Mon = first day of week)
+    const dow = start.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const toMonday = dow === 0 ? -6 : 1 - dow;
+    const weekMonday = new Date(start);
+    weekMonday.setDate(start.getDate() + toMonday);
 
     return classDays.map((classDay) => {
-        let diff = classDay - startDow;
-        if (diff < 0) diff += 7; // wrap to next week if needed
-        const d = new Date(start);
-        d.setDate(start.getDate() + diff);
-        return { day: classDay, date: d.getDate() };
+        // Offset from Monday: Mon=0, Tue=1, ..., Sat=5, Sun=6
+        const offset = classDay === 0 ? 6 : classDay - 1;
+        const d = new Date(weekMonday);
+        d.setDate(weekMonday.getDate() + offset);
+
+        const yyyy = d.getFullYear();
+        const mm   = String(d.getMonth() + 1).padStart(2, "0");
+        const dd   = String(d.getDate()).padStart(2, "0");
+        return { day: classDay, isoDate: `${yyyy}-${mm}-${dd}` };
     });
 }
 
 /**
- * Given all "n주차 시작" events in a month (as objects with a `date` ISO string)
- * and the configured class days, returns a map of weekday → sorted date numbers.
+ * Given all "n주차 시작" events in one academic month (as objects with a `date` ISO string)
+ * and the configured class days, returns a map of weekday → sorted ISO date strings.
  *
- * Example result: { 1: [6, 13, 20, 27], 3: [8, 15, 22, 29] }
- *   → 월요일 수업: 6, 13, 20, 27일 / 수요일 수업: 8, 15, 22, 29일
- *
- * Months with fewer than 4 weeks (e.g. Feb with Lunar New Year) are handled
- * automatically — only events actually present in the calendar are counted.
+ * Example result: { 1: ["2026-04-06","2026-04-13","2026-04-20","2026-03-30"],
+ *                   2: ["2026-03-31","2026-04-07","2026-04-14","2026-04-21"] }
  */
 export function getMonthClassSchedule(
     weekStartEvents: { date: string }[],
     classDays: number[],
-): Record<number, number[]> {
-    const schedule: Record<number, Set<number>> = {};
+): Record<number, string[]> {
+    const schedule: Record<number, Set<string>> = {};
     for (const day of classDays) {
         schedule[day] = new Set();
     }
 
     for (const event of weekStartEvents) {
         const weekDates = getWeekDates(new Date(event.date), classDays);
-        for (const { day, date } of weekDates) {
-            schedule[day]?.add(date);
+        for (const { day, isoDate } of weekDates) {
+            schedule[day]?.add(isoDate);
         }
     }
 
-    const result: Record<number, number[]> = {};
+    const result: Record<number, string[]> = {};
     for (const day of classDays) {
-        result[day] = Array.from(schedule[day]).sort((a, b) => a - b);
+        result[day] = Array.from(schedule[day]).sort();
     }
     return result;
 }

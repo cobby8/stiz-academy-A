@@ -30,8 +30,8 @@ export interface SerializedEvent {
 interface Props {
     allEvents: SerializedEvent[];
     classDays: number[];
-    // 서버에서 계산된 연도별·월별 수업일자: { 연도: { 월(0-11): { 요일(0-6): [날짜, ...] } } }
-    yearlySchedules: Record<number, Record<number, Record<number, number[]>>>;
+    // 서버에서 계산된 수강 연도별·수강월별 수업일자: { 연도: { 수강월(0-11): { 요일(0-6): [ISO날짜, ...] } } }
+    yearlySchedules: Record<number, Record<number, Record<number, string[]>>>;
 }
 
 export default function AnnualEventsClient({ allEvents, classDays, yearlySchedules }: Props) {
@@ -163,7 +163,14 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                                 </span>
                                                                 <span className="text-sm text-blue-100 tracking-wide">
                                                                     {dates.length > 0
-                                                                        ? dates.map(d => `${d}일`).join(",  ")
+                                                                        ? dates.map(iso => {
+                                                                            const d = new Date(iso);
+                                                                            const dMon = d.getMonth();
+                                                                            // 수강월과 다른 달인 경우 "M/D" 표시, 같은 달이면 "D일"
+                                                                            return dMon !== mon
+                                                                                ? `${dMon + 1}/${d.getDate()}`
+                                                                                : `${d.getDate()}일`;
+                                                                        }).join(",  ")
                                                                         : <span className="text-blue-400 italic text-xs">수업 없음</span>
                                                                     }
                                                                 </span>

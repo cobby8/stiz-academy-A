@@ -1,6 +1,6 @@
 import { getAnnualEvents, getAcademySettings, getClasses } from "@/app/actions/admin";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
-import { getMonthClassSchedule, WEEK_START_RE } from "@/lib/classSchedule";
+import { getMonthClassSchedule, parseAcademicYearMonth, WEEK_START_RE } from "@/lib/classSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
 
@@ -67,25 +67,24 @@ export default async function AnnualPage() {
         ),
     ].sort((a, b) => a - b);
 
-    // 2. 구글 캘린더의 "n월 n주차 시작" 이벤트를 연도+월별로 그룹핑
-    // yearlySchedules: { 연도: { 월(0-11): { 요일(0-6): [날짜, ...] } } }
-    const yearlySchedules: Record<number, Record<number, Record<number, number[]>>> = {};
+    // 2. 이벤트 제목의 "n월"을 수강월로 사용해 그룹핑
+    //    (캘린더상 날짜와 무관 — "4월 1주차 시작"이 3/31이어도 4월 수강일로 분류)
+    // yearlySchedules: { 연도: { 수강월(0-11): { 요일(0-6): [ISO날짜, ...] } } }
+    const yearlySchedules: Record<number, Record<number, Record<number, string[]>>> = {};
 
     if (classDays.length > 0) {
-        // 연도+월별로 week-start 이벤트 수집
-        const weekStartsByYearMonth: Record<string, { date: string }[]> = {};
+        // 수강 연도+월별로 week-start 이벤트 수집
+        const weekStartsByAcademicYM: Record<string, { date: string }[]> = {};
         for (const ev of allEvents) {
-            if (!WEEK_START_RE.test(ev.title)) continue;
-            const d    = new Date(ev.date);
-            const year = d.getFullYear();
-            const mon  = d.getMonth(); // 0-11
-            const key  = `${year}-${mon}`;
-            if (!weekStartsByYearMonth[key]) weekStartsByYearMonth[key] = [];
-            weekStartsByYearMonth[key].push({ date: ev.date });
+            const parsed = parseAcademicYearMonth(ev.title, new Date(ev.date));
+            if (!parsed) continue;
+            const key = `${parsed.academicYear}-${parsed.academicMonth}`;
+            if (!weekStartsByAcademicYM[key]) weekStartsByAcademicYM[key] = [];
+            weekStartsByAcademicYM[key].push({ date: ev.date });
         }
 
-        // 연도+월별로 수업일자 계산
-        for (const [key, weekStarts] of Object.entries(weekStartsByYearMonth)) {
+        // 수강 연도+월별로 수업일자 계산
+        for (const [key, weekStarts] of Object.entries(weekStartsByAcademicYM)) {
             const [yearStr, monStr] = key.split("-");
             const year = Number(yearStr);
             const mon  = Number(monStr);

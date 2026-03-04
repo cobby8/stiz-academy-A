@@ -24,11 +24,9 @@ export default function AdminSettingsClient({ initialSettings, coaches, fetchErr
         setActionError(null);
         try {
             const data: any = {};
-            // classDays is multi-value (checkboxes) — handle separately
             formData.forEach((value, key) => {
-                if (key !== "classDays" && typeof value === "string") data[key] = value;
+                if (typeof value === "string") data[key] = value;
             });
-            data.classDays = formData.getAll("classDays").join(",");
             await updateAcademySettings(data);
             alert("기본 정보가 저장되었습니다.");
         } catch (e: any) {
@@ -208,45 +206,6 @@ export default function AdminSettingsClient({ initialSettings, coaches, fetchErr
                                     />
                                 </div>
                             </div>
-                        </section>
-
-                        {/* 수업 요일 설정 */}
-                        <section className="pt-6 border-t border-gray-100">
-                            <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 pb-2 mb-2 inline-block">
-                                수업 요일 설정
-                            </h2>
-                            <p className="text-sm text-gray-500 mb-4">
-                                연간일정표에서 <strong>"n월 n주차 시작"</strong> 이벤트를 기준으로 월별 수업일자를 자동 계산하는 데 사용됩니다.
-                            </p>
-                            {(() => {
-                                const savedDays = (initialSettings?.classDays as string | null)
-                                    ?.split(",").map(Number).filter(Boolean) ?? [];
-                                return (
-                                    <div className="flex flex-wrap gap-4">
-                                        {[
-                                            { day: 1, label: "월요일" },
-                                            { day: 2, label: "화요일" },
-                                            { day: 3, label: "수요일" },
-                                            { day: 4, label: "목요일" },
-                                            { day: 5, label: "금요일" },
-                                            { day: 6, label: "토요일" },
-                                        ].map(({ day, label }) => (
-                                            <label key={day} className="flex items-center gap-2 cursor-pointer select-none group">
-                                                <input
-                                                    type="checkbox"
-                                                    name="classDays"
-                                                    value={String(day)}
-                                                    defaultChecked={savedDays.includes(day)}
-                                                    className="w-4 h-4 accent-brand-orange-500 cursor-pointer"
-                                                />
-                                                <span className="text-sm font-bold text-gray-700 group-hover:text-gray-900 transition">
-                                                    {label}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
                         </section>
 
                         {/* 구글 캘린더 연동 */}

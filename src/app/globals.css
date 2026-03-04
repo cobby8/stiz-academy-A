@@ -17,9 +17,15 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* --font-body는 layout.tsx에서 DB 설정에 따라 주입됩니다 */
+  font-family: var(--font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+/* 제목에는 --font-heading 적용 (관리자 설정에서 선택한 폰트) */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading, var(--font-body, -apple-system, sans-serif));
 }
 
 /* Event detail panel animations */

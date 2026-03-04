@@ -59,6 +59,9 @@ export default async function AnnualPage() {
 
     // ── 서버에서 월별 수업일자 계산 ──────────────────────────────────
     // 1. Class 레코드에서 수업 요일(숫자) 도출
+    const rawDayOfWeeks = classes.map((c: any) => c.dayOfWeek);
+    console.log("[annual] classes.length:", classes.length, "| dayOfWeeks:", rawDayOfWeeks);
+
     const classDays: number[] = [
         ...new Set(
             classes
@@ -66,6 +69,8 @@ export default async function AnnualPage() {
                 .filter((n: number | undefined) => n !== undefined)
         ),
     ].sort((a, b) => a - b);
+
+    console.log("[annual] classDays:", classDays);
 
     // 2. 구글 캘린더의 "n월 n주차 시작" 이벤트를 월별로 그룹핑
     // monthSchedules: { 월(0-11): { 요일(0-6): [날짜, ...] } }
@@ -87,6 +92,11 @@ export default async function AnnualPage() {
             monthSchedules[mon] = getMonthClassSchedule(weekStarts, classDays);
         }
     }
+
+    // 주차 시작 이벤트 찾기 디버그
+    const weekStartTitles = allEvents.filter(e => WEEK_START_RE.test(e.title)).map(e => e.title);
+    console.log("[annual] weekStart events found:", weekStartTitles.length, weekStartTitles.slice(0, 5));
+    console.log("[annual] monthSchedules keys:", Object.keys(monthSchedules));
 
     const categories = Object.keys(CATEGORY_STYLES);
 
@@ -115,6 +125,11 @@ export default async function AnnualPage() {
                     </div>
                 </div>
             </section>
+
+            {/* 임시 디버그 패널 - 확인 후 삭제 */}
+            <div className="bg-yellow-100 border border-yellow-400 text-yellow-900 text-xs font-mono p-3 mx-4 mt-4 rounded">
+                <b>[DEBUG]</b> classes: {classes.length}개 | classDays: [{classDays.join(",")}] | monthSchedules keys: [{Object.keys(monthSchedules).join(",")}] | weekStart events: {allEvents.filter(e => WEEK_START_RE.test(e.title)).length}개
+            </div>
 
             {/* Events (Client Component - handles year filter, schedule toggle) */}
             <AnnualEventsClient

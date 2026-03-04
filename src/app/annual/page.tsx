@@ -131,15 +131,16 @@ export default async function AnnualPage() {
             const year = Number(yearStr), mon = Number(monStr);
             if (!yearlySchedules[year]) yearlySchedules[year] = {};
 
+            const allWeekdays = [1, 2, 3, 4, 5, 6]; // 월~토
             if (openByAYM[key] && closeByAYM[key]) {
                 // 방식 A: 개강~종강 범위 기반 (공휴일 자동 제외)
                 yearlySchedules[year][mon] = computeClassDatesFromRange(
-                    openByAYM[key], closeByAYM[key], classDays, closedDateSet,
+                    openByAYM[key], closeByAYM[key], allWeekdays, closedDateSet,
                 );
             } else if (weekStartsByAYM[key]) {
                 // 방식 B: n주차 시작 이벤트 기반 (fallback)
                 yearlySchedules[year][mon] = getMonthClassSchedule(
-                    weekStartsByAYM[key], classDays, closedDateSet,
+                    weekStartsByAYM[key], allWeekdays, closedDateSet,
                 );
             }
         }

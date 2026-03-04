@@ -142,7 +142,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                 const dateMap  = byMonthDate[mon];
                                 const schedule = yearlySchedules[selectedYear]?.[mon];
                                 const hasSchedule = !!schedule &&
-                                    classDays.some(d => (schedule[d]?.length ?? 0) > 0);
+                                    Object.values(schedule).some(dates => dates.length > 0);
                                 const isOpen     = openScheduleMonths.has(mon);
                                 const sortedKeys = Object.keys(dateMap).sort();
 
@@ -177,28 +177,26 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                         {isOpen && schedule && (
                                             <div className="mb-4 bg-brand-navy-900 text-white rounded-xl px-5 py-4">
                                                 <p className="text-[11px] font-bold text-blue-300 mb-3 uppercase tracking-wide">
-                                                    {mon + 1}월 수업일자 &nbsp;·&nbsp; {classDays.map(d => DAY_NAMES[d]).join(" · ")} 기준
+                                                    {mon + 1}월 수업일자
                                                 </p>
                                                 <div className="space-y-1.5">
-                                                    {classDays.map(day => {
+                                                    {[1, 2, 3, 4, 5, 6].map(day => {
                                                         const dates = schedule[day] ?? [];
+                                                        if (dates.length === 0) return null;
                                                         return (
                                                             <div key={day} className="flex items-baseline gap-3">
                                                                 <span className="text-sm font-black w-5 shrink-0 text-white">
                                                                     {DAY_NAMES[day]}
                                                                 </span>
                                                                 <span className="text-sm text-blue-100 tracking-wide">
-                                                                    {dates.length > 0
-                                                                        ? dates.map(iso => {
-                                                                            const d = new Date(iso);
-                                                                            const dMon = d.getUTCMonth();
-                                                                            // 수강월과 다른 달인 경우 "M/D" 표시, 같은 달이면 "D일"
-                                                                            return dMon !== mon
-                                                                                ? `${dMon + 1}/${d.getUTCDate()}`
-                                                                                : `${d.getUTCDate()}일`;
-                                                                        }).join(",  ")
-                                                                        : <span className="text-blue-400 italic text-xs">수업 없음</span>
-                                                                    }
+                                                                    {dates.map(iso => {
+                                                                        const d = new Date(iso);
+                                                                        const dMon = d.getUTCMonth();
+                                                                        // 수강월과 다른 달인 경우 "M/D" 표시, 같은 달이면 "D일"
+                                                                        return dMon !== mon
+                                                                            ? `${dMon + 1}/${d.getUTCDate()}`
+                                                                            : `${d.getUTCDate()}일`;
+                                                                    }).join(",  ")}
                                                                 </span>
                                                             </div>
                                                         );

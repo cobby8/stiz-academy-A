@@ -184,11 +184,11 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                                     {dates.length > 0
                                                                         ? dates.map(iso => {
                                                                             const d = new Date(iso);
-                                                                            const dMon = d.getMonth();
+                                                                            const dMon = d.getUTCMonth();
                                                                             // 수강월과 다른 달인 경우 "M/D" 표시, 같은 달이면 "D일"
                                                                             return dMon !== mon
-                                                                                ? `${dMon + 1}/${d.getDate()}`
-                                                                                : `${d.getDate()}일`;
+                                                                                ? `${dMon + 1}/${d.getUTCDate()}`
+                                                                                : `${d.getUTCDate()}일`;
                                                                         }).join(",  ")
                                                                         : <span className="text-blue-400 italic text-xs">수업 없음</span>
                                                                     }
@@ -205,9 +205,10 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                             {sortedKeys.map(dateKey => {
                                                 const events = dateMap[dateKey];
                                                 const d   = new Date(dateKey);
-                                                const mo  = d.getMonth() + 1;
-                                                const day = d.getDate();
-                                                const dow = DOW_KO[d.getDay()];
+                                                // UTC 메서드 사용 — 날짜가 UTC 자정으로 정규화되어 있으므로
+                                                const mo  = d.getUTCMonth() + 1;
+                                                const day = d.getUTCDate();
+                                                const dow = DOW_KO[d.getUTCDay()];
 
                                                 return (
                                                     <div
@@ -240,6 +241,15 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                                         </span>
                                                                         <span className="flex-1 text-sm font-bold text-gray-900 truncate">
                                                                             {ev.title}
+                                                                            {/* 다일 이벤트: "~ M월 D일" 기간 표시 */}
+                                                                            {ev.endDate && (() => {
+                                                                                const e = new Date(ev.endDate);
+                                                                                return (
+                                                                                    <span className="ml-1.5 text-xs font-semibold text-gray-400">
+                                                                                        ~ {e.getUTCMonth() + 1}월 {e.getUTCDate()}일
+                                                                                    </span>
+                                                                                );
+                                                                            })()}
                                                                         </span>
                                                                         {ev.description && (
                                                                             <span className="hidden sm:block text-xs text-gray-400 truncate max-w-[180px]">

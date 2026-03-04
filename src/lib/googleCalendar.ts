@@ -22,10 +22,16 @@ function inferCategory(summary: string, description?: string): string {
     return "일반";
 }
 
-function isSameDay(a: Date, b: Date): boolean {
-    return a.getFullYear() === b.getFullYear() &&
-           a.getMonth() === b.getMonth() &&
-           a.getDate() === b.getDate();
+/**
+ * node-ical은 VALUE=DATE 종일 이벤트를 "로컬 자정" Date로 파싱합니다.
+ * 서버가 KST(UTC+9)이면 "2026-03-03T00:00:00+09:00" = "2026-03-02T15:00:00Z"가 되어
+ * toISOString()으로 변환 시 하루 앞당겨지는 버그가 발생합니다.
+ *
+ * 이 함수는 로컬 날짜 성분(getFullYear/Month/Date)을 그대로 읽어
+ * UTC 자정 Date로 정규화합니다. 어떤 서버 시간대에서도 올바른 날짜를 보장합니다.
+ */
+function normalizeAllDayDate(d: Date): Date {
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 
 export async function fetchGoogleCalendarEvents(icsUrl: string): Promise<GoogleCalendarEvent[]> {
@@ -48,17 +54,20 @@ export async function fetchGoogleCalendarEvents(icsUrl: string): Promise<GoogleC
             // 종일 여부: datetype이 'date'이면 종일 이벤트
             const isAllDay = (event as any).datetype === "date";
 
+            // 종일 이벤트는 로컬 날짜를 UTC 자정으로 정규화 (시간대 버그 방지)
+            const startDate = isAllDay ? normalizeAllDayDate(new Date(start)) : new Date(start);
+
             let endDate: Date | undefined;
             if (end) {
                 if (isAllDay) {
                     // ICS 종일 이벤트의 DTEND는 실제 마지막 날 + 1일 (exclusive)
-                    // 예: 3월 5일 종일 → DTEND = 3월 6일
-                    // 예: 3월 5~7일 종일 → DTEND = 3월 8일
-                    const endAdjusted = new Date(end);
-                    endAdjusted.setDate(endAdjusted.getDate() - 1);
-                    // 조정된 endDate가 startDate와 같으면 단일 종일 이벤트 → endDate 표시 안 함
-                    if (!isSameDay(endAdjusted, new Date(start))) {
-                        endDate = endAdjusted;
+                    // 예: 3월 5~7일 종일 → DTEND = 3월 8일 → 표시는 3월 7일까지
+                    const raw = new Date(end);
+                    raw.setDate(raw.getDate() - 1); // exclusive → inclusive
+                    const adjusted = normalizeAllDayDate(raw);
+                    // 시작일과 같으면 단일 종일 이벤트 → endDate 표시 안 함
+                    if (adjusted.getTime() !== startDate.getTime()) {
+                        endDate = adjusted;
                     }
                 } else {
                     endDate = new Date(end);
@@ -68,7 +77,7 @@ export async function fetchGoogleCalendarEvents(icsUrl: string): Promise<GoogleC
             result.push({
                 id: `gcal-${key}`,
                 title: summary,
-                date: new Date(start),
+                date: startDate,
                 endDate,
                 description: event.description,
                 category: inferCategory(summary, event.description),

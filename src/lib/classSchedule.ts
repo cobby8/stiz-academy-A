@@ -31,9 +31,9 @@ export const DAY_NAMES: Record<number, string> = {
     0: "일", 1: "월", 2: "화", 3: "수", 4: "목", 5: "금", 6: "토",
 };
 
-/** YYYY-MM-DD 문자열 생성 */
+/** YYYY-MM-DD 문자열 생성 (UTC 기준 — normalizeAllDayDate로 정규화된 날짜와 일치) */
 function toISO(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -49,8 +49,8 @@ export function parseAcademicYearMonth(
     if (!m) return null;
 
     const academicMonth = parseInt(m[1]) - 1; // 0-indexed
-    const eventMonth    = eventDate.getMonth();
-    const eventYear     = eventDate.getFullYear();
+    const eventMonth    = eventDate.getUTCMonth(); // UTC 기준 (normalizeAllDayDate와 일치)
+    const eventYear     = eventDate.getUTCFullYear();
     const academicYear  = academicMonth < eventMonth ? eventYear + 1 : eventYear;
 
     return { academicYear, academicMonth };
@@ -71,16 +71,17 @@ export function computeClassDatesFromRange(
     const result: Record<number, string[]> = {};
     for (const d of classDays) result[d] = [];
 
-    const cur = new Date(startIso + "T00:00:00");
-    const end = new Date(endIso   + "T00:00:00");
+    const cur = new Date(startIso + "T00:00:00Z");
+    const end = new Date(endIso   + "T00:00:00Z");
 
     while (cur <= end) {
-        const dow = cur.getDay();
-        if (classDays.includes(dow)) {
+        const dow = cur.getUTCDay(); // UTC 기준 요일 (0=일 … 6=토)
+        // 일요일(0)은 기본 휴무 — classDays에 없어도 항상 제외
+        if (dow !== 0 && classDays.includes(dow)) {
             const iso = toISO(cur);
             if (!closedDateSet.has(iso)) result[dow].push(iso);
         }
-        cur.setDate(cur.getDate() + 1);
+        cur.setUTCDate(cur.getUTCDate() + 1);
     }
 
     return result;
@@ -92,21 +93,22 @@ function getWeekDates(
     weekStartDate: Date,
     classDays: number[],
 ): { day: number; isoDate: string }[] {
-    const start = new Date(weekStartDate);
-    start.setHours(0, 0, 0, 0);
-
-    // 이벤트가 속한 주의 월요일 계산
-    const dow      = start.getDay();
+    // UTC 기준으로 처리 (normalizeAllDayDate로 정규화된 UTC 자정 Date 사용)
+    const dow      = weekStartDate.getUTCDay(); // 0=일, 1=월, …, 6=토
     const toMonday = dow === 0 ? -6 : 1 - dow;
-    const weekMon  = new Date(start);
-    weekMon.setDate(start.getDate() + toMonday);
 
-    return classDays.map((classDay) => {
-        const offset = classDay === 0 ? 6 : classDay - 1; // Mon=0 offset
-        const d = new Date(weekMon);
-        d.setDate(weekMon.getDate() + offset);
-        return { day: classDay, isoDate: toISO(d) };
-    });
+    // 이벤트가 속한 주의 월요일 (UTC)
+    const weekMon = new Date(weekStartDate);
+    weekMon.setUTCDate(weekStartDate.getUTCDate() + toMonday);
+
+    return classDays
+        .filter(classDay => classDay !== 0) // 일요일(0) 항상 제외
+        .map((classDay) => {
+            const offset = classDay - 1; // Mon=0, Tue=1, ..., Sat=5
+            const d = new Date(weekMon);
+            d.setUTCDate(weekMon.getUTCDate() + offset);
+            return { day: classDay, isoDate: toISO(d) };
+        });
 }
 
 /**

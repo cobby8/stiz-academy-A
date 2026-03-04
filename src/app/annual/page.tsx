@@ -1,10 +1,18 @@
 import { getAnnualEvents, getAcademySettings, getClasses } from "@/app/actions/admin";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
-import { getMonthClassSchedule, parseAcademicYearMonth, WEEK_START_RE } from "@/lib/classSchedule";
+import {
+    getMonthClassSchedule,
+    computeClassDatesFromRange,
+    parseAcademicYearMonth,
+    WEEK_START_RE,
+    OPEN_RE,
+    CLOSE_RE,
+    CLOSED_RE,
+} from "@/lib/classSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
 
-export const revalidate = 3600; // 1시간마다 구글 캘린더 재조회
+export const revalidate = 300; // 5분마다 구글 캘린더 재조회
 
 export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점" };
 
@@ -67,29 +75,60 @@ export default async function AnnualPage() {
         ),
     ].sort((a, b) => a - b);
 
-    // 2. 이벤트 제목의 "n월"을 수강월로 사용해 그룹핑
-    //    (캘린더상 날짜와 무관 — "4월 1주차 시작"이 3/31이어도 4월 수강일로 분류)
-    // yearlySchedules: { 연도: { 수강월(0-11): { 요일(0-6): [ISO날짜, ...] } } }
+    // ── 수업일자 계산 (두 방식 모두 지원) ────────────────────────────────────
+    // yearlySchedules: { 수강연도: { 수강월(0-11): { 요일(0-6): [ISO날짜...] } } }
     const yearlySchedules: Record<number, Record<number, Record<number, string[]>>> = {};
 
     if (classDays.length > 0) {
-        // 수강 연도+월별로 week-start 이벤트 수집
-        const weekStartsByAcademicYM: Record<string, { date: string }[]> = {};
+        // 1. "학원 휴무" 이벤트 날짜 수집 (다일 이벤트 포함)
+        const closedDateSet = new Set<string>();
         for (const ev of allEvents) {
-            const parsed = parseAcademicYearMonth(ev.title, new Date(ev.date));
-            if (!parsed) continue;
-            const key = `${parsed.academicYear}-${parsed.academicMonth}`;
-            if (!weekStartsByAcademicYM[key]) weekStartsByAcademicYM[key] = [];
-            weekStartsByAcademicYM[key].push({ date: ev.date });
+            if (!CLOSED_RE.test(ev.title)) continue;
+            const start = new Date(ev.date);
+            const end   = ev.endDate ? new Date(ev.endDate) : new Date(start);
+            for (const cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+                closedDateSet.add(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`);
+            }
         }
 
-        // 수강 연도+월별로 수업일자 계산
-        for (const [key, weekStarts] of Object.entries(weekStartsByAcademicYM)) {
+        // 2. "n월 개강 / n월 종강" 이벤트 수집 → 방식 A (범위 기반)
+        const openByAYM:  Record<string, string> = {}; // key → ISO 개강일
+        const closeByAYM: Record<string, string> = {}; // key → ISO 종강일
+        for (const ev of allEvents) {
+            for (const [re, store] of [[OPEN_RE, openByAYM], [CLOSE_RE, closeByAYM]] as const) {
+                const parsed = parseAcademicYearMonth(ev.title, re, new Date(ev.date));
+                if (parsed) store[`${parsed.academicYear}-${parsed.academicMonth}`] = ev.date.slice(0, 10);
+            }
+        }
+
+        // 3. "n월 n주차 시작" 이벤트 수집 → 방식 B (fallback)
+        const weekStartsByAYM: Record<string, { date: string }[]> = {};
+        for (const ev of allEvents) {
+            const parsed = parseAcademicYearMonth(ev.title, WEEK_START_RE, new Date(ev.date));
+            if (!parsed) continue;
+            const key = `${parsed.academicYear}-${parsed.academicMonth}`;
+            if (!weekStartsByAYM[key]) weekStartsByAYM[key] = [];
+            weekStartsByAYM[key].push({ date: ev.date });
+        }
+
+        // 4. 두 방식을 합쳐서 yearlySchedules 계산
+        const allKeys = new Set([...Object.keys(openByAYM), ...Object.keys(weekStartsByAYM)]);
+        for (const key of allKeys) {
             const [yearStr, monStr] = key.split("-");
-            const year = Number(yearStr);
-            const mon  = Number(monStr);
+            const year = Number(yearStr), mon = Number(monStr);
             if (!yearlySchedules[year]) yearlySchedules[year] = {};
-            yearlySchedules[year][mon] = getMonthClassSchedule(weekStarts, classDays);
+
+            if (openByAYM[key] && closeByAYM[key]) {
+                // 방식 A: 개강~종강 범위 기반 (공휴일 자동 제외)
+                yearlySchedules[year][mon] = computeClassDatesFromRange(
+                    openByAYM[key], closeByAYM[key], classDays, closedDateSet,
+                );
+            } else if (weekStartsByAYM[key]) {
+                // 방식 B: n주차 시작 이벤트 기반 (fallback)
+                yearlySchedules[year][mon] = getMonthClassSchedule(
+                    weekStartsByAYM[key], classDays, closedDateSet,
+                );
+            }
         }
     }
 

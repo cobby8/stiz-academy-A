@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import EventDetailPanel from "./EventDetailPanel";
 import { DAY_NAMES } from "@/lib/classSchedule";
+
+const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5분
 
 const CATEGORY_STYLES: Record<string, { bg: string; text: string; dot: string; border: string }> = {
     대회:     { bg: "bg-red-50",    text: "text-red-700",    dot: "bg-red-500",    border: "border-red-200"    },
@@ -35,10 +38,21 @@ interface Props {
 }
 
 export default function AnnualEventsClient({ allEvents, classDays, yearlySchedules }: Props) {
+    const router      = useRouter();
     const currentYear = new Date().getFullYear();
-    const [selectedYear, setSelectedYear] = useState(currentYear);
-    const [selectedEvent, setSelectedEvent] = useState<SerializedEvent | null>(null);
+    const [selectedYear, setSelectedYear]           = useState(currentYear);
+    const [selectedEvent, setSelectedEvent]         = useState<SerializedEvent | null>(null);
     const [openScheduleMonths, setOpenScheduleMonths] = useState<Set<number>>(new Set());
+    const [lastSynced, setLastSynced]               = useState<Date>(() => new Date());
+
+    // 5분마다 서버 컴포넌트 재조회 (구글 캘린더 자동 동기화)
+    useEffect(() => {
+        const id = setInterval(() => {
+            router.refresh();
+            setLastSynced(new Date());
+        }, SYNC_INTERVAL_MS);
+        return () => clearInterval(id);
+    }, [router]);
 
     /* ── 연도 목록 ── */
     const availableYears = useMemo(() => {
@@ -83,8 +97,9 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
             <section className="py-14 bg-gray-50">
                 <div className="max-w-4xl mx-auto px-4">
 
-                    {/* 연도 선택 */}
-                    <div className="flex items-center gap-3 mb-8 flex-wrap">
+                    {/* 연도 선택 + 동기화 시각 */}
+                    <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-sm font-bold text-gray-500">연도 선택:</span>
                         <div className="flex gap-2 flex-wrap">
                             {availableYears.map(year => (
@@ -101,6 +116,10 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                 </button>
                             ))}
                         </div>
+                        </div>
+                        <span className="text-xs text-gray-400 shrink-0">
+                            🔄 {lastSynced.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 동기화
+                        </span>
                     </div>
 
                     {/* 일정 없음 */}

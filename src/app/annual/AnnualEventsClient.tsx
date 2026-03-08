@@ -42,11 +42,18 @@ interface Props {
 
 export default function AnnualEventsClient({ allEvents, classDays, yearlySchedules }: Props) {
     const router      = useRouter();
-    const currentYear = new Date().getFullYear();
-    const [selectedYear, setSelectedYear]           = useState(currentYear);
-    const [selectedEvent, setSelectedEvent]         = useState<SerializedEvent | null>(null);
+    const today       = useMemo(() => new Date(), []);
+    const currentYear = today.getFullYear();
+    const thisMonth   = today.getMonth();
+    const nextMonth   = (thisMonth + 1) % 12;
+
+    const [selectedYear, setSelectedYear]             = useState(currentYear);
+    const [selectedEvent, setSelectedEvent]           = useState<SerializedEvent | null>(null);
     const [openScheduleMonths, setOpenScheduleMonths] = useState<Set<number>>(new Set());
-    const [lastSynced, setLastSynced]               = useState<Date>(() => new Date());
+    const [openMonths, setOpenMonths]                 = useState<Set<number>>(
+        () => new Set([thisMonth, nextMonth])
+    );
+    const [lastSynced, setLastSynced]                 = useState<Date>(() => new Date());
 
     // 5분마다 서버 컴포넌트 재조회 (구글 캘린더 자동 동기화)
     useEffect(() => {
@@ -56,6 +63,24 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
         }, SYNC_INTERVAL_MS);
         return () => clearInterval(id);
     }, [router]);
+
+    // 연도 변경 시 openMonths 리셋: 당해 연도 → 이번달+다음달만, 다른 연도 → 전체 펼침
+    useEffect(() => {
+        if (selectedYear === currentYear) {
+            setOpenMonths(new Set([thisMonth, nextMonth]));
+        } else {
+            setOpenMonths(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
+        }
+        setOpenScheduleMonths(new Set());
+    }, [selectedYear, currentYear, thisMonth, nextMonth]);
+
+    function toggleMonth(mon: number) {
+        setOpenMonths(prev => {
+            const next = new Set(prev);
+            next.has(mon) ? next.delete(mon) : next.add(mon);
+            return next;
+        });
+    }
 
     /* ── 이벤트의 "표시 연도/월" 결정 ──
      * "n월 개강/종강/주차" 이벤트는 academicYear/Month를 우선 사용해 n월 섹션에 표시 */
@@ -139,42 +164,89 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                     ) : (
                         <div className="space-y-10">
                             {activeMonths.map(mon => {
-                                const dateMap  = byMonthDate[mon];
-                                const schedule = yearlySchedules[selectedYear]?.[mon];
+                                const dateMap     = byMonthDate[mon];
+                                const schedule    = yearlySchedules[selectedYear]?.[mon];
                                 const hasSchedule = !!schedule &&
                                     Object.values(schedule).some(dates => dates.length > 0);
-                                const isOpen     = openScheduleMonths.has(mon);
-                                const sortedKeys = Object.keys(dateMap).sort();
+                                const isScheduleOpen = openScheduleMonths.has(mon);
+                                const isMonthOpen    = openMonths.has(mon);
+                                const sortedKeys  = Object.keys(dateMap).sort();
+                                const eventCount  = Object.values(dateMap).flat().length;
+                                // 현재 월/다음 달 여부 (선택 연도가 올해인 경우만 표시)
+                                const isThisMonth = selectedYear === currentYear && mon === thisMonth;
+                                const isNextMonth = selectedYear === currentYear && mon === nextMonth;
 
                                 return (
                                     <div key={mon}>
-                                        {/* ── 월 헤더 ── */}
-                                        <div className="flex items-center gap-3 mb-3">
+                                        {/* ── 월 헤더 (클릭으로 접기/펼치기) ── */}
+                                        <button
+                                            onClick={() => toggleMonth(mon)}
+                                            className="w-full flex items-center gap-3 mb-3 group text-left"
+                                        >
                                             <h2 className="text-xl font-black text-brand-navy-900 flex items-center gap-2">
-                                                <span className="w-8 h-8 bg-brand-navy-900 text-white rounded-full flex items-center justify-center text-sm font-black">
+                                                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition ${
+                                                    isMonthOpen
+                                                        ? "bg-brand-navy-900 text-white"
+                                                        : "bg-gray-200 text-gray-600 group-hover:bg-brand-navy-900/70 group-hover:text-white"
+                                                }`}>
                                                     {mon + 1}
                                                 </span>
-                                                {MONTH_NAMES[mon]}
+                                                <span className={isMonthOpen ? "text-brand-navy-900" : "text-gray-500"}>
+                                                    {MONTH_NAMES[mon]}
+                                                </span>
                                             </h2>
 
-                                            {/* 수업일자 확인 버튼 */}
-                                            {hasSchedule && (
+                                            {/* 이번 달 / 다음 달 뱃지 */}
+                                            {isThisMonth && (
+                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand-orange-500 text-white leading-none">
+                                                    이번 달
+                                                </span>
+                                            )}
+                                            {isNextMonth && (
+                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 leading-none">
+                                                    다음 달
+                                                </span>
+                                            )}
+
+                                            {/* 접혔을 때 이벤트 수 요약 */}
+                                            {!isMonthOpen && (
+                                                <span className="text-xs text-gray-400 font-medium">
+                                                    일정 {eventCount}개
+                                                </span>
+                                            )}
+
+                                            {/* 펼침/접힘 화살표 */}
+                                            <span className={`ml-auto text-gray-400 text-sm transition-transform duration-200 ${isMonthOpen ? "rotate-180" : ""}`}>
+                                                ▼
+                                            </span>
+                                        </button>
+
+                                        {/* ── 접혔을 때 구분선 ── */}
+                                        {!isMonthOpen && (
+                                            <div className="border-b border-gray-200 mb-6" />
+                                        )}
+
+                                        {isMonthOpen && (
+                                        <>
+                                        {/* ── 수업일자 확인 버튼 ── */}
+                                        {hasSchedule && (
+                                            <div className="mb-3">
                                                 <button
-                                                    onClick={() => toggleSchedule(mon)}
+                                                    onClick={e => { e.stopPropagation(); toggleSchedule(mon); }}
                                                     className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition ${
-                                                        isOpen
+                                                        isScheduleOpen
                                                             ? "bg-brand-navy-900 text-white border-brand-navy-900"
                                                             : "bg-white text-brand-navy-900 border-brand-navy-900/40 hover:border-brand-navy-900 hover:bg-gray-50"
                                                     }`}
                                                 >
                                                     수업일자 확인
-                                                    <span className="text-[10px]">{isOpen ? "▲" : "▼"}</span>
+                                                    <span className="text-[10px]">{isScheduleOpen ? "▲" : "▼"}</span>
                                                 </button>
-                                            )}
-                                        </div>
+                                            </div>
+                                        )}
 
                                         {/* ── 수업일자 패널 ── */}
-                                        {isOpen && schedule && (
+                                        {isScheduleOpen && schedule && (
                                             <div className="mb-4 bg-brand-navy-900 text-white rounded-xl px-5 py-4">
                                                 <p className="text-[11px] font-bold text-blue-300 mb-3 uppercase tracking-wide">
                                                     {mon + 1}월 수업일자
@@ -206,7 +278,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                         )}
 
                                         {/* ── 날짜별 이벤트 그룹 ── */}
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 mb-6">
                                             {sortedKeys.map(dateKey => {
                                                 const events = dateMap[dateKey];
                                                 const d   = new Date(dateKey);
@@ -272,6 +344,8 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                 );
                                             })}
                                         </div>
+                                        </>
+                                        )}
                                     </div>
                                 );
                             })}

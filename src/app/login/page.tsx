@@ -1,66 +1,166 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { login, signup } from "@/app/actions/auth";
 
 export default function LoginPage() {
-    return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                <div className="p-8 pb-6 border-b border-gray-100 bg-brand-navy-900 text-center relative">
-                    <Link href="/" className="absolute left-6 top-6 text-white/70 hover:text-white transition">
-                        <ArrowLeft className="w-6 h-6" />
-                    </Link>
-                    <div className="w-12 h-12 bg-brand-orange-500 rounded-xl mx-auto flex items-center justify-center font-black italic text-white text-xl shadow-lg mb-4">
-                        STIZ
-                    </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">학부모 로그인</h1>
-                    <p className="text-brand-orange-50 text-sm opacity-80">우리아이 스마트 학원 관리 시스템</p>
-                </div>
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-                <div className="p-8">
-                    <form className="space-y-6">
-                        <div>
-                            <label htmlFor="phone" className="block text-sm font-bold text-gray-700 mb-2">휴대폰 번호</label>
-                            <input
-                                type="tel"
-                                id="phone"
-                                name="phone"
-                                placeholder="010-0000-0000"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange-500 focus:bg-white transition text-gray-900"
-                                required
-                            />
-                        </div>
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setLoading(true);
 
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <label htmlFor="password" className="block text-sm font-bold text-gray-700">비밀번호</label>
-                                <Link href="#" className="text-sm font-medium text-brand-orange-500 hover:text-brand-orange-600">비밀번호 찾기</Link>
-                            </div>
-                            <input
-                                type="password"
-                                id="password"
-                                name="password"
-                                placeholder="비밀번호를 입력해주세요"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange-500 focus:bg-white transition text-gray-900"
-                                required
-                            />
-                        </div>
+    try {
+      const action = mode === "login" ? login : signup;
+      const result = await action(formData);
+      if (result?.error) {
+        setError(result.error);
+      }
+    } catch {
+      // redirect는 에러로 throw됨 — 정상 동작
+    } finally {
+      setLoading(false);
+    }
+  }
 
-                        <div className="pt-2">
-                            <Link
-                                href="/mypage"
-                                className="w-full block text-center py-4 px-4 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold rounded-lg transition-colors shadow-md shadow-brand-orange-500/20"
-                            >
-                                로그인
-                            </Link>
-                        </div>
-                    </form>
-
-                    <div className="mt-8 text-center text-sm text-gray-500">
-                        아직 STIZ 스마트 시스템 회원이 아니신가요? <br />
-                        <Link href="/signup" className="text-brand-navy-900 font-bold hover:underline mt-2 inline-block">신규 원생 가입 후 이용 가능합니다</Link>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        {/* 로고 & 타이틀 */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-2xl mb-4">
+            <span className="text-white text-2xl font-bold">S</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            스티즈농구교실
+          </h1>
+          <p className="text-gray-500 mt-1">관리자 시스템</p>
         </div>
-    );
+
+        {/* 카드 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+          {/* 탭 */}
+          <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setError(null);
+              }}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                mode === "login"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              로그인
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signup");
+                setError(null);
+              }}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                mode === "signup"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              회원가입
+            </button>
+          </div>
+
+          {/* 에러 메시지 */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* 폼 */}
+          <form action={handleSubmit} className="space-y-4">
+            {mode === "signup" && (
+              <div>
+                <label
+                  htmlFor="name"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  이름
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  placeholder="홍길동"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
+                />
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                이메일
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="admin@example.com"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                비밀번호
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={6}
+                placeholder="6자 이상"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
+              />
+            </div>
+
+            {mode === "signup" && (
+              <input type="hidden" name="role" value="ADMIN" />
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading
+                ? "처리 중..."
+                : mode === "login"
+                  ? "로그인"
+                  : "회원가입"}
+            </button>
+          </form>
+        </div>
+
+        {/* 하단 링크 */}
+        <div className="text-center mt-6">
+          <a href="/" className="text-sm text-gray-500 hover:text-gray-700">
+            홈페이지로 돌아가기
+          </a>
+        </div>
+      </div>
+    </div>
+  );
 }

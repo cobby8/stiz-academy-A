@@ -25,13 +25,21 @@ export default async function AdminClassesPage() {
 
         if (!programId || !name || !dayOfWeek) return;
 
-        await createClass({ programId, name, dayOfWeek, startTime, endTime, location, capacity });
+        try {
+            await createClass({ programId, name, dayOfWeek, startTime, endTime, location, capacity });
+        } catch (e) {
+            console.error("addClass failed:", e);
+        }
     }
 
     async function removeClass(formData: FormData) {
         "use server";
         const id = formData.get("id") as string;
-        if (id) await deleteClass(id);
+        try {
+            if (id) await deleteClass(id);
+        } catch (e) {
+            console.error("removeClass failed:", e);
+        }
     }
 
     const days = [

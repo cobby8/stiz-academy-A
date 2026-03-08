@@ -1,6 +1,8 @@
 import { getPrograms, getClasses, getAcademySettings, getCoaches } from "@/app/actions/admin";
 import LandingPageClient from "./LandingPageClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   let programs: any[] = [];
   let classes: any[] = [];

@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@craftjs/core": "^0.2.12",
     "@prisma/client": "^5.22.0",
+    "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",
     "@tiptap/extension-color": "^3.20.0",
     "@tiptap/extension-dropcursor": "^3.20.0",
@@ -25,12 +27,12 @@
     "lucide-react": "^0.575.0",
     "lzutf8": "^0.6.3",
     "next": "16.1.6",
+    "node-ical": "^0.25.4",
     "re-resizable": "^6.11.2",
     "react": "19.2.3",
     "react-contenteditable": "^3.3.7",
     "react-dom": "19.2.3",
     "react-image-crop": "^11.0.10",
-    "react-quill": "^2.0.0",
     "react-rnd": "^10.5.2"
   },
   "devDependencies": {
@@ -41,6 +43,7 @@
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "playwright": "^1.58.2",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
     "typescript": "^5"

@@ -22,13 +22,21 @@ export default async function AdminProgramsPage() {
 
         if (!name) return;
 
-        await createProgram({ name, targetAge, frequency, description, price });
+        try {
+            await createProgram({ name, targetAge, frequency, description, price });
+        } catch (e) {
+            console.error("addProgram failed:", e);
+        }
     }
 
     async function removeProgram(formData: FormData) {
         "use server";
         const id = formData.get("id") as string;
-        if (id) await deleteProgram(id);
+        try {
+            if (id) await deleteProgram(id);
+        } catch (e) {
+            console.error("removeProgram failed:", e);
+        }
     }
 
     return (

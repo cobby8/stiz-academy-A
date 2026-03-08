@@ -1,4 +1,5 @@
 import { getAnnualEvents, createAnnualEvent, deleteAnnualEvent } from "@/app/actions/admin";
+import DeleteEventButton from "./DeleteEventButton";
 
 const CATEGORIES = ["일반", "대회", "방학", "특별행사", "정기행사"];
 
@@ -154,18 +155,7 @@ export default async function AdminAnnualEventsPage() {
                                     <p className="text-sm text-gray-400 mt-0.5">{event.description}</p>
                                 )}
                             </div>
-                            <form action={removeEvent} className="shrink-0">
-                                <input type="hidden" name="id" value={event.id} />
-                                <button
-                                    type="submit"
-                                    className="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg text-sm font-medium transition border border-red-200 hover:border-red-300"
-                                    onClick={(e) => {
-                                        if (!confirm("이 일정을 삭제하시겠습니까?")) e.preventDefault();
-                                    }}
-                                >
-                                    삭제
-                                </button>
-                            </form>
+                            <DeleteEventButton action={removeEvent} eventId={event.id} />
                         </li>
                     ))}
                 </ul>

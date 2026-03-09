@@ -1,4 +1,4 @@
-import { getAnnualEvents, getAcademySettings, getClasses } from "@/app/actions/admin";
+import { getAcademySettings, getClasses } from "@/app/actions/admin";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
 import {
     getMonthClassSchedule,
@@ -29,8 +29,7 @@ const CATEGORY_STYLES: Record<string, { dot: string }> = {
 const DOW_MAP: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
 
 export default async function AnnualPage() {
-    const [dbEvents, settings, classes] = await Promise.all([
-        getAnnualEvents() as Promise<any[]>,
+    const [settings, classes] = await Promise.all([
         getAcademySettings() as Promise<any>,
         getClasses() as Promise<any[]>,
     ]);
@@ -43,16 +42,6 @@ export default async function AnnualPage() {
 
     // 직렬화 (Date → ISO string) 후 클라이언트에 전달
     const allEvents: SerializedEvent[] = [
-        ...dbEvents.map((e: any) => ({
-            id: e.id,
-            title: e.title,
-            date: (e.date as Date).toISOString(),
-            endDate: e.endDate ? (e.endDate as Date).toISOString() : undefined,
-            description: e.description ?? undefined,
-            category: e.category || "일반",
-            isAllDay: true,
-            source: "db" as const,
-        })),
         ...googleEvents.map((e) => {
             // "n월 개강/종강/n주차" 이벤트는 제목의 n월을 수강월로 사용 (실제 날짜와 무관)
             const academicRE = OPEN_RE.test(e.title) ? OPEN_RE

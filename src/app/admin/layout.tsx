@@ -55,7 +55,6 @@ export default function AdminLayout({
                     <NavItem href="/admin/settings" active={pathname.startsWith("/admin/settings")} icon="🏫" label="학원 소개 관리" />
                     <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램·수강료" />
                     <NavItem href="/admin/classes" active={pathname.startsWith("/admin/classes")} icon="🕐" label="수업시간표 관리" />
-                    <NavItem href="/admin/annual-events" active={pathname.startsWith("/admin/annual-events")} icon="📅" label="연간일정표 관리" />
 
                     <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">학원 운영 관리</p>
                     <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />

@@ -172,18 +172,6 @@ model AcademySettings {
   updatedAt          DateTime @updatedAt
 }
 
-// Annual Events (연간일정표)
-model AnnualEvent {
-  id          String    @id @default(uuid())
-  title       String
-  date        DateTime
-  endDate     DateTime?
-  description String?
-  category    String?   @default("일반") // 예: "대회", "방학", "특별행사", "정기행사", "일반"
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
 // Coaches / Instructors Profile
 model Coach {
   id          String   @id @default(uuid())

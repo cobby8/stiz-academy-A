@@ -12,7 +12,8 @@ import {
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
 
-export const dynamic = "force-dynamic"; // router.refresh() 호출 시 항상 최신 데이터 반환
+// ISR: 5분 캐시 (Vercel 엣지 CDN 서빙). admin revalidatePath("/annual") 호출 시 즉각 무효화.
+export const revalidate = 300;
 
 export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점" };
 

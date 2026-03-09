@@ -58,7 +58,7 @@ async function fetchViaCalendarAPI(
         `?key=${apiKey}&singleEvents=true&maxResults=2500` +
         `&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
 
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, { next: { revalidate: 300 } });
     if (!res.ok) {
         const body = await res.text();
         throw new Error(`Google Calendar API ${res.status}: ${body.slice(0, 200)}`);
@@ -111,7 +111,7 @@ async function fetchViaCalendarAPI(
 
 /** ICS 파싱 방식 (fallback) */
 async function fetchViaICS(icsUrl: string): Promise<GoogleCalendarEvent[]> {
-    const res = await fetch(icsUrl, { cache: "no-store" });
+    const res = await fetch(icsUrl, { next: { revalidate: 300 } });
     if (!res.ok) throw new Error(`ICS fetch failed: ${res.status}`);
     const icsText = await res.text();
     const events = ical.sync.parseICS(icsText) as Record<string, any>;

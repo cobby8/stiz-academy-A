@@ -1,54 +1,66 @@
-import { getClasses, getAcademySettings } from "@/lib/queries";
+import { getAcademySettings, getClassSlotOverrides } from "@/lib/queries";
+import { fetchSheetSchedule } from "@/lib/googleSheetsSchedule";
+import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
-export const revalidate = 60;
+export const revalidate = 300;
 export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점" };
 
-const DAYS = [
-    { value: "Mon", label: "월요일" },
-    { value: "Tue", label: "화요일" },
-    { value: "Wed", label: "수요일" },
-    { value: "Thu", label: "목요일" },
-    { value: "Fri", label: "금요일" },
-    { value: "Sat", label: "토요일" },
-    { value: "Sun", label: "일요일" },
-];
+const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const DAY_COLORS: Record<string, string> = {
-    Mon: "bg-blue-50 border-blue-200",
-    Tue: "bg-green-50 border-green-200",
-    Wed: "bg-yellow-50 border-yellow-200",
-    Thu: "bg-purple-50 border-purple-200",
-    Fri: "bg-red-50 border-red-200",
-    Sat: "bg-orange-50 border-orange-200",
+const DAY_BG: Record<string, string> = {
+    Mon: "bg-blue-600",  Tue: "bg-green-600",  Wed: "bg-yellow-500",
+    Thu: "bg-purple-600", Fri: "bg-red-500",   Sat: "bg-brand-orange-500",
+    Sun: "bg-gray-500",
+};
+const DAY_CARD_BG: Record<string, string> = {
+    Mon: "bg-blue-50 border-blue-200",  Tue: "bg-green-50 border-green-200",
+    Wed: "bg-yellow-50 border-yellow-200", Thu: "bg-purple-50 border-purple-200",
+    Fri: "bg-red-50 border-red-200",    Sat: "bg-orange-50 border-orange-200",
     Sun: "bg-gray-50 border-gray-200",
 };
 
-const DAY_BADGE: Record<string, string> = {
-    Mon: "bg-blue-600",
-    Tue: "bg-green-600",
-    Wed: "bg-yellow-500",
-    Thu: "bg-purple-600",
-    Fri: "bg-red-600",
-    Sat: "bg-brand-orange-500",
-    Sun: "bg-gray-500",
-};
-
 export default async function SchedulePage() {
-    const [classes, settings] = await Promise.all([
-        getClasses(),
-        getAcademySettings() as Promise<any>,
-    ]);
+    const settings = await getAcademySettings() as any;
     const phone = settings.contactPhone || "010-0000-0000";
+    const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
 
-    // Group classes by day of week
-    const classesByDay = DAYS.reduce((acc, day) => {
-        acc[day.value] = classes.filter((c: any) => c.dayOfWeek === day.value)
-            .sort((a: any, b: any) => a.startTime.localeCompare(b.startTime));
+    const [rawSlots, overridesList] = await Promise.all([
+        sheetUrl ? fetchSheetSchedule(sheetUrl) : Promise.resolve([]),
+        getClassSlotOverrides(),
+    ]);
+
+    // overrides map: slotKey → override record
+    const overrideMap = Object.fromEntries(overridesList.map((o: any) => [o.slotKey, o]));
+
+    // Merge: apply overrides, filter hidden
+    const slots: (SheetClassSlot & {
+        displayLabel: string;
+        note: string | null;
+        capacity: number;
+        isFull: boolean;
+    })[] = rawSlots
+        .filter((s: SheetClassSlot) => !(overrideMap[s.slotKey]?.isHidden))
+        .map((s: SheetClassSlot) => {
+            const ov = overrideMap[s.slotKey];
+            const capacity: number = ov?.capacity ?? 12;
+            return {
+                ...s,
+                displayLabel: ov?.label || `${s.dayLabel} ${s.period}교시`,
+                note: ov?.note || null,
+                capacity,
+                isFull: s.enrolled >= capacity,
+            };
+        });
+
+    // Group by day
+    const byDay = DAY_ORDER.reduce<Record<string, typeof slots>>((acc, d) => {
+        acc[d] = slots.filter((s) => s.dayKey === d).sort((a, b) => a.period - b.period);
         return acc;
-    }, {} as Record<string, any[]>);
+    }, {});
+    const activeDays = DAY_ORDER.filter((d) => byDay[d].length > 0);
 
-    const activeDays = DAYS.filter((day) => classesByDay[day.value].length > 0);
+    const hasData = slots.length > 0;
 
     return (
         <PublicPageLayout>
@@ -64,7 +76,7 @@ export default async function SchedulePage() {
             {/* Schedule Grid */}
             <section className="py-14 bg-gray-50">
                 <div className="max-w-5xl mx-auto px-4">
-                    {classes.length === 0 ? (
+                    {!hasData ? (
                         <div className="text-center py-20 text-gray-400 bg-white rounded-2xl border border-gray-200">
                             <div className="text-5xl mb-4">📅</div>
                             <p className="text-lg font-medium">시간표를 준비 중입니다.</p>
@@ -72,36 +84,74 @@ export default async function SchedulePage() {
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {activeDays.map((day) => (
-                                <div key={day.value} className={`rounded-2xl border ${DAY_COLORS[day.value]} overflow-hidden`}>
-                                    <div className={`${DAY_BADGE[day.value]} text-white px-5 py-3 flex items-center gap-3`}>
-                                        <span className="font-black text-lg">{day.label}</span>
+                            {activeDays.map((dayKey) => (
+                                <div
+                                    key={dayKey}
+                                    className={`rounded-2xl border ${DAY_CARD_BG[dayKey]} overflow-hidden`}
+                                >
+                                    {/* Day header */}
+                                    <div className={`${DAY_BG[dayKey]} text-white px-5 py-3 flex items-center gap-3`}>
+                                        <span className="font-black text-lg">{byDay[dayKey][0].dayLabel}</span>
                                         <span className="text-white/70 text-sm font-medium">
-                                            {classesByDay[day.value].length}개 클래스
+                                            {byDay[dayKey].length}개 클래스
                                         </span>
                                     </div>
                                     <div className="p-4">
                                         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                            {classesByDay[day.value].map((cls: any) => (
-                                                <div key={cls.id} className="bg-white rounded-xl p-4 shadow-sm border border-white/80">
-                                                    <h4 className="font-bold text-gray-900 mb-1">{cls.name}</h4>
-                                                    {cls.program?.name && (
-                                                        <p className="text-xs text-brand-orange-500 font-bold mb-2">{cls.program.name}</p>
+                                            {byDay[dayKey].map((slot) => (
+                                                <div
+                                                    key={slot.slotKey}
+                                                    className="bg-white rounded-xl p-4 shadow-sm border border-white/80 relative"
+                                                >
+                                                    {/* 마감 badge */}
+                                                    {slot.isFull && (
+                                                        <span className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                                                            마감
+                                                        </span>
                                                     )}
-                                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                        <span>⏰</span>
-                                                        <span className="font-medium">{cls.startTime} ~ {cls.endTime}</span>
+
+                                                    {/* Label */}
+                                                    <h4 className="font-bold text-gray-900 mb-2 pr-10 text-sm">
+                                                        {slot.displayLabel}
+                                                    </h4>
+
+                                                    {/* Time */}
+                                                    <div className="flex items-center gap-1.5 text-sm text-gray-700 mb-1">
+                                                        <span className="text-gray-400">⏰</span>
+                                                        <span className="font-semibold">
+                                                            {slot.startTime} ~ {slot.endTime}
+                                                        </span>
                                                     </div>
-                                                    {cls.location && (
-                                                        <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                                                            <span>📍</span>
-                                                            <span>{cls.location}</span>
+
+                                                    {/* Grade range */}
+                                                    {slot.gradeRange && (
+                                                        <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
+                                                            <span className="text-gray-400">🎓</span>
+                                                            <span>{slot.gradeRange}</span>
                                                         </div>
                                                     )}
-                                                    {cls.capacity && (
-                                                        <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
-                                                            정원 {cls.capacity}명
+
+                                                    {/* Enrollment */}
+                                                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+                                                        <span className="text-xs text-gray-400">
+                                                            {slot.enrolled}/{slot.capacity}명
+                                                        </span>
+                                                        {/* Enrollment bar */}
+                                                        <div className="flex-1 mx-2 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all ${
+                                                                    slot.isFull ? "bg-red-400" : "bg-brand-orange-500"
+                                                                }`}
+                                                                style={{ width: `${Math.min(100, (slot.enrolled / slot.capacity) * 100)}%` }}
+                                                            />
                                                         </div>
+                                                    </div>
+
+                                                    {/* Note */}
+                                                    {slot.note && (
+                                                        <p className="text-xs text-brand-orange-600 mt-2 font-medium">
+                                                            📌 {slot.note}
+                                                        </p>
                                                     )}
                                                 </div>
                                             ))}
@@ -113,57 +163,6 @@ export default async function SchedulePage() {
                     )}
                 </div>
             </section>
-
-            {/* All classes table (alternate view) */}
-            {classes.length > 0 && (
-                <section className="py-14 bg-white">
-                    <div className="max-w-5xl mx-auto px-4">
-                        <h2 className="text-2xl font-black text-brand-navy-900 mb-8 text-center">전체 시간표 (표 보기)</h2>
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-brand-navy-900 text-white">
-                                        <tr>
-                                            <th className="px-5 py-4 text-left font-bold">클래스명</th>
-                                            <th className="px-5 py-4 text-left font-bold">프로그램</th>
-                                            <th className="px-5 py-4 text-left font-bold">요일</th>
-                                            <th className="px-5 py-4 text-left font-bold">시간</th>
-                                            <th className="px-5 py-4 text-left font-bold">장소</th>
-                                            <th className="px-5 py-4 text-center font-bold">정원</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {[...classes]
-                                            .sort((a: any, b: any) => {
-                                                const dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-                                                const da = dayOrder.indexOf(a.dayOfWeek);
-                                                const db = dayOrder.indexOf(b.dayOfWeek);
-                                                if (da !== db) return da - db;
-                                                return a.startTime.localeCompare(b.startTime);
-                                            })
-                                            .map((cls: any) => (
-                                                <tr key={cls.id} className="hover:bg-gray-50">
-                                                    <td className="px-5 py-3.5 font-medium text-gray-900">{cls.name}</td>
-                                                    <td className="px-5 py-3.5 text-gray-600">{cls.program?.name || "-"}</td>
-                                                    <td className="px-5 py-3.5">
-                                                        <span className={`inline-block text-white text-xs font-bold px-2 py-0.5 rounded ${DAY_BADGE[cls.dayOfWeek] || "bg-gray-400"}`}>
-                                                            {DAYS.find((d) => d.value === cls.dayOfWeek)?.label || cls.dayOfWeek}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-5 py-3.5 text-gray-600 whitespace-nowrap">
-                                                        {cls.startTime} ~ {cls.endTime}
-                                                    </td>
-                                                    <td className="px-5 py-3.5 text-gray-500">{cls.location || "-"}</td>
-                                                    <td className="px-5 py-3.5 text-center text-gray-600">{cls.capacity}명</td>
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            )}
 
             {/* CTA */}
             <section className="bg-brand-navy-900 text-white py-14">

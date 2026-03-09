@@ -273,6 +273,34 @@ export default function AdminSettingsClient({
                         />
                     </section>
 
+                    {/* ── 구글시트 시간표 ──────────────────────────────────── */}
+                    <section className="pt-6 border-t border-gray-100">
+                        <SectionHeader title="구글시트 시간표 연동" />
+                        <AppliesTo pages={["수업시간표 페이지"]} />
+
+                        <div className="bg-green-50 border border-green-100 rounded-lg p-3 mb-4 text-xs text-green-800">
+                            <strong>URL 확인 방법:</strong> 구글시트 열기 → 주소창 URL 복사 (
+                            <code className="bg-green-100 px-1 rounded">spreadsheets/d/…/edit?gid=…</code> 형태 그대로)
+                            <br />
+                            <strong>시트가 &quot;링크가 있는 모든 사용자 - 뷰어&quot; 공개 설정이어야 합니다.</strong>
+                        </div>
+                        <input
+                            name="googleSheetsScheduleUrl"
+                            type="url"
+                            defaultValue={initialSettings?.googleSheetsScheduleUrl || ""}
+                            placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                        />
+                        {initialSettings?.googleSheetsScheduleUrl && (
+                            <p className="text-xs text-green-700 mt-2 font-medium">
+                                ✓ 연동됨 —{" "}
+                                <a href="/admin/schedule" className="underline hover:text-green-900">
+                                    슬롯별 설정 편집 →
+                                </a>
+                            </p>
+                        )}
+                    </section>
+
                     {/* 저장 */}
                     <div className="pt-4 border-t border-gray-100 flex justify-end">
                         <ConfirmSubmitButton

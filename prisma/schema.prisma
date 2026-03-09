@@ -160,6 +160,9 @@ model AcademySettings {
   // Google Calendar ICS URL for annual events sync
   googleCalendarIcsUrl String?
 
+  // Google Sheets URL for schedule data sync
+  googleSheetsScheduleUrl String?
+
   // Class days of week for schedule calculation (comma-separated JS getDay values: 0=Sun,1=Mon,...,6=Sat)
   // e.g. "1,3" = 월·수, "2,4,6" = 화·목·토
   classDays            String?
@@ -170,6 +173,18 @@ model AcademySettings {
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+// Per-slot admin overrides for the Google Sheets schedule
+model ClassSlotOverride {
+  id        String   @id @default(uuid())
+  slotKey   String   @unique  // "{dayKey}-{period}" e.g., "Mon-4"
+  label     String?           // Custom display label (default: auto "월요일 4교시")
+  note      String?           // Additional note shown to visitors
+  isHidden  Boolean  @default(false)
+  capacity  Int      @default(12)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Coaches / Instructors Profile

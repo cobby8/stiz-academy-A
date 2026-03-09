@@ -43,6 +43,16 @@ export const getClasses = cache(async () => {
     }
 });
 
+export const getClassSlotOverrides = cache(async () => {
+    try {
+        return await prisma.classSlotOverride.findMany({
+            orderBy: { slotKey: "asc" },
+        });
+    } catch {
+        return [];
+    }
+});
+
 export const getCoaches = cache(async () => {
     try {
         return await prisma.coach.findMany({

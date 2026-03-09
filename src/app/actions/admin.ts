@@ -73,6 +73,7 @@ export async function updateAcademySettings(data: {
     introductionTitle?: string;
     introductionText?: string;
     googleCalendarIcsUrl?: string;
+    googleSheetsScheduleUrl?: string;
     classDays?: string;
     siteBodyFont?: string;
     siteHeadingFont?: string;
@@ -86,6 +87,7 @@ export async function updateAcademySettings(data: {
         revalidatePath("/admin/settings");
         revalidatePath("/");
         revalidatePath("/about");
+        revalidatePath("/schedule");
         revalidatePath("/", "layout");
     } catch (e) {
         console.error("Failed to update academy settings:", e);

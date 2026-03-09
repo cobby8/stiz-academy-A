@@ -27,6 +27,11 @@ interface Coach {
     imageUrl: string | null;
 }
 
+interface Program {
+    id: string;
+    name: string;
+}
+
 interface Override {
     slotKey: string;
     label: string | null;
@@ -36,6 +41,7 @@ interface Override {
     coachId: string | null;
     startTimeOverride?: string | null;
     endTimeOverride?: string | null;
+    programId?: string | null;
 }
 
 interface SlotState {
@@ -46,6 +52,7 @@ interface SlotState {
     coachId: string;
     startTimeOverride: string;
     endTimeOverride: string;
+    programId: string;
     dirty: boolean;
     saved: boolean;
     error: string | null;
@@ -64,6 +71,7 @@ interface CustomSlot {
     isHidden: boolean;
     coachId: string | null;
     coach: Coach | null;
+    programId: string | null;
 }
 
 interface CustomSlotForm {
@@ -77,10 +85,11 @@ interface CustomSlotForm {
     note: string;
     isHidden: boolean;
     coachId: string;
+    programId: string;
 }
 
 function defaultCustomSlotForm(): CustomSlotForm {
-    return { dayKey: "Mon", startTime: "14:00", endTime: "15:00", label: "", gradeRange: "", enrolled: 0, capacity: 12, note: "", isHidden: false, coachId: "" };
+    return { dayKey: "Mon", startTime: "14:00", endTime: "15:00", label: "", gradeRange: "", enrolled: 0, capacity: 12, note: "", isHidden: false, coachId: "", programId: "" };
 }
 
 function buildInitialState(overrides: Override[]): Record<string, SlotState> {
@@ -94,6 +103,7 @@ function buildInitialState(overrides: Override[]): Record<string, SlotState> {
             coachId: o.coachId ?? "",
             startTimeOverride: o.startTimeOverride ?? "",
             endTimeOverride: o.endTimeOverride ?? "",
+            programId: o.programId ?? "",
             dirty: false,
             saved: false,
             error: null,
@@ -103,7 +113,7 @@ function buildInitialState(overrides: Override[]): Record<string, SlotState> {
 }
 
 function defaultSlotState(): SlotState {
-    return { label: "", note: "", isHidden: false, capacity: 12, coachId: "", startTimeOverride: "", endTimeOverride: "", dirty: false, saved: false, error: null };
+    return { label: "", note: "", isHidden: false, capacity: 12, coachId: "", startTimeOverride: "", endTimeOverride: "", programId: "", dirty: false, saved: false, error: null };
 }
 
 const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white";
@@ -115,12 +125,14 @@ export default function ScheduleAdminClient({
     coaches,
     customSlots: initialCustomSlots,
     hasSheetUrl,
+    programs,
 }: {
     slots: SheetClassSlot[];
     overrides: Override[];
     coaches: Coach[];
     customSlots: CustomSlot[];
     hasSheetUrl: boolean;
+    programs: Program[];
 }) {
     const router = useRouter();
     const [stateMap, setStateMap] = useState<Record<string, SlotState>>(() => buildInitialState(overrides));
@@ -159,6 +171,7 @@ export default function ScheduleAdminClient({
                     coachId: s.coachId || null,
                     startTimeOverride: s.startTimeOverride || null,
                     endTimeOverride: s.endTimeOverride || null,
+                    programId: s.programId || null,
                 });
                 setStateMap((prev) => ({
                     ...prev,
@@ -188,6 +201,7 @@ export default function ScheduleAdminClient({
                     note: newCustomForm.note.trim() || undefined,
                     isHidden: newCustomForm.isHidden,
                     coachId: newCustomForm.coachId || null,
+                    programId: newCustomForm.programId || null,
                 });
                 setNewCustomForm(defaultCustomSlotForm());
                 setIsAddingCustom(false);
@@ -203,7 +217,8 @@ export default function ScheduleAdminClient({
         setEditCustomForm({
             dayKey: cs.dayKey, startTime: cs.startTime, endTime: cs.endTime,
             label: cs.label, gradeRange: cs.gradeRange ?? "", enrolled: cs.enrolled,
-            capacity: cs.capacity, note: cs.note ?? "", isHidden: cs.isHidden, coachId: cs.coachId ?? "",
+            capacity: cs.capacity, note: cs.note ?? "", isHidden: cs.isHidden,
+            coachId: cs.coachId ?? "", programId: cs.programId ?? "",
         });
     }
 
@@ -217,6 +232,7 @@ export default function ScheduleAdminClient({
                     gradeRange: editCustomForm.gradeRange.trim() || null, enrolled: editCustomForm.enrolled,
                     capacity: editCustomForm.capacity, note: editCustomForm.note.trim() || null,
                     isHidden: editCustomForm.isHidden, coachId: editCustomForm.coachId || null,
+                    programId: editCustomForm.programId || null,
                 });
                 setEditingCustomId(null);
                 router.refresh();
@@ -381,6 +397,18 @@ export default function ScheduleAdminClient({
                                                 <p className="text-xs text-amber-600 mt-1">등록된 코치가 없습니다. <a href="/admin/coaches" className="underline">코치 추가 →</a></p>
                                             )}
                                         </div>
+
+                                        {programs.length > 0 && (
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-bold text-gray-600 mb-1">
+                                                    프로그램 분류<span className="font-normal text-gray-400 ml-1">(공개 시간표 프로그램 필터에 사용됩니다)</span>
+                                                </label>
+                                                <select value={s.programId} onChange={(e) => update(slot.slotKey, { programId: e.target.value })} className={INPUT}>
+                                                    <option value="">-- 프로그램 미설정 --</option>
+                                                    {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center justify-between">
@@ -420,7 +448,7 @@ export default function ScheduleAdminClient({
                                 {editingCustomId === cs.id ? (
                                     <div>
                                         <p className="text-sm font-bold text-gray-700 mb-3">수업 수정</p>
-                                        <CustomSlotFormFields form={editCustomForm} onChange={setEditCustomForm} coaches={coaches} />
+                                        <CustomSlotFormFields form={editCustomForm} onChange={setEditCustomForm} coaches={coaches} programs={programs} />
                                         <div className="flex gap-2 mt-4">
                                             <button onClick={() => handleUpdateCustom(cs.id)} disabled={customPending || !editCustomForm.label.trim()} className="bg-brand-navy-900 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40">
                                                 {customPending ? "저장 중..." : "저장"}
@@ -474,7 +502,7 @@ export default function ScheduleAdminClient({
                         <span className="font-bold text-gray-700 text-sm">새 수업 추가</span>
                     </div>
                     <div className="p-5">
-                        <CustomSlotFormFields form={newCustomForm} onChange={setNewCustomForm} coaches={coaches} />
+                        <CustomSlotFormFields form={newCustomForm} onChange={setNewCustomForm} coaches={coaches} programs={programs} />
                         <div className="flex gap-2 mt-4">
                             <button
                                 onClick={handleAddCustom}
@@ -501,10 +529,12 @@ function CustomSlotFormFields({
     form,
     onChange,
     coaches,
+    programs,
 }: {
     form: CustomSlotForm;
     onChange: (f: CustomSlotForm) => void;
     coaches: Coach[];
+    programs: Program[];
 }) {
     const DAY_OPTIONS = [
         { key: "Mon", label: "월요일" }, { key: "Tue", label: "화요일" },
@@ -553,6 +583,15 @@ function CustomSlotFormFields({
                     {coaches.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.role})</option>)}
                 </select>
             </div>
+            {programs.length > 0 && (
+                <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">프로그램 분류</label>
+                    <select value={form.programId} onChange={(e) => p({ programId: e.target.value })} className={INPUT}>
+                        <option value="">-- 프로그램 미설정 --</option>
+                        {programs.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+                    </select>
+                </div>
+            )}
             <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-gray-600 mb-1">메모 / 특이사항</label>
                 <input type="text" value={form.note} onChange={(e) => p({ note: e.target.value })} placeholder="예: 이번 주 보강 있음" className={INPUT} />

@@ -1,4 +1,4 @@
-import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots } from "@/lib/queries";
+import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms } from "@/lib/queries";
 import { fetchSheetSchedule } from "@/lib/googleSheetsSchedule";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
@@ -37,17 +37,25 @@ type MergedSlot = {
     capacity: number;
     isFull: boolean;
     coach: { name: string; role: string; imageUrl: string | null } | null;
+    programId: string | null;
 };
 
-export default async function SchedulePage() {
+export default async function SchedulePage({
+    searchParams,
+}: {
+    searchParams: Promise<{ program?: string }>;
+}) {
+    const { program: filterProgramId } = await searchParams;
+
     const settings = await getAcademySettings() as any;
     const phone = settings.contactPhone || "010-0000-0000";
     const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
 
-    const [rawSlots, overridesList, customSlotsList] = await Promise.all([
+    const [rawSlots, overridesList, customSlotsList, programs] = await Promise.all([
         sheetUrl ? fetchSheetSchedule(sheetUrl) : Promise.resolve([]),
         getClassSlotOverrides(),
         getCustomClassSlots(),
+        getPrograms(),
     ]);
 
     // overrides map: slotKey → override record
@@ -72,6 +80,7 @@ export default async function SchedulePage() {
                 capacity,
                 isFull: s.enrolled >= capacity,
                 coach: ov?.coach ?? null,
+                programId: ov?.programId ?? null,
             };
         });
 
@@ -91,10 +100,14 @@ export default async function SchedulePage() {
             capacity: cs.capacity,
             isFull: cs.enrolled >= cs.capacity,
             coach: cs.coach ?? null,
+            programId: cs.programId ?? null,
         }));
 
-    // Merge all and group by day, sorted by startTime
-    const allSlots = [...sheetMerged, ...customMerged];
+    // Merge all, then apply program filter
+    let allSlots = [...sheetMerged, ...customMerged];
+    if (filterProgramId) {
+        allSlots = allSlots.filter((s) => s.programId === filterProgramId);
+    }
 
     const byDay = DAY_ORDER.reduce<Record<string, MergedSlot[]>>((acc, d) => {
         acc[d] = allSlots
@@ -105,6 +118,7 @@ export default async function SchedulePage() {
     const activeDays = DAY_ORDER.filter((d) => byDay[d].length > 0);
 
     const hasData = allSlots.length > 0;
+    const selectedProgram = (programs as any[]).find((p) => p.id === filterProgramId);
 
     return (
         <PublicPageLayout>
@@ -117,13 +131,49 @@ export default async function SchedulePage() {
                 </div>
             </div>
 
+            {/* Program Filter Tabs */}
+            {(programs as any[]).length > 0 && (
+                <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+                    <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap gap-2 items-center">
+                        <a
+                            href="/schedule"
+                            className={`text-sm font-bold px-4 py-1.5 rounded-full transition ${!filterProgramId ? "bg-brand-navy-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                        >
+                            전체
+                        </a>
+                        {(programs as any[]).map((p) => (
+                            <a
+                                key={p.id}
+                                href={`/schedule?program=${p.id}`}
+                                className={`text-sm font-bold px-4 py-1.5 rounded-full transition ${filterProgramId === p.id ? "bg-brand-navy-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                            >
+                                {p.name}
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Schedule Grid */}
             <section className="py-14 bg-gray-50">
                 <div className="max-w-5xl mx-auto px-4">
+                    {filterProgramId && selectedProgram && (
+                        <div className="mb-6 bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+                            <div>
+                                <p className="text-xs text-gray-400 mb-0.5">프로그램 필터</p>
+                                <p className="font-bold text-gray-900">{selectedProgram.name}</p>
+                            </div>
+                            <a href="/schedule" className="text-sm text-gray-500 hover:text-gray-700 font-medium underline">
+                                전체 보기
+                            </a>
+                        </div>
+                    )}
                     {!hasData ? (
                         <div className="text-center py-20 text-gray-400 bg-white rounded-2xl border border-gray-200">
                             <div className="text-5xl mb-4">📅</div>
-                            <p className="text-lg font-medium">시간표를 준비 중입니다.</p>
+                            <p className="text-lg font-medium">
+                                {filterProgramId ? "해당 프로그램의 수업이 없습니다." : "시간표를 준비 중입니다."}
+                            </p>
                             <p className="text-sm mt-2">문의: {phone}</p>
                         </div>
                     ) : (

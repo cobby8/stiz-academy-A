@@ -13,6 +13,7 @@ export async function upsertClassSlotOverride(
         coachId?: string | null;
         startTimeOverride?: string | null;
         endTimeOverride?: string | null;
+        programId?: string | null;
     }
 ) {
     try {
@@ -51,6 +52,7 @@ export async function createCustomSlot(data: {
     note?: string;
     isHidden?: boolean;
     coachId?: string | null;
+    programId?: string | null;
 }) {
     try {
         await prisma.customClassSlot.create({ data });
@@ -75,6 +77,7 @@ export async function updateCustomSlot(
         note?: string | null;
         isHidden?: boolean;
         coachId?: string | null;
+        programId?: string | null;
     }
 ) {
     try {

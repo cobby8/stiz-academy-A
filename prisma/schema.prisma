@@ -43,16 +43,19 @@ model Student {
 }
 
 model Program {
-  id          String   @id @default(uuid())
-  name        String   // e.g., "정규 클래스 (취미/기초)"
-  targetAge   String?  // e.g., "초등/중등"
-  frequency   String?  // e.g., "주 1회/2회"
-  description String?  // e.g., "농구를 처음 접하는 아이들이 흥미를 느끼고 기초 체력과 기본기를 다지는 클래스입니다."
-  price       Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid())
+  name            String
+  targetAge       String?
+  frequency       String?  // Legacy free-text (kept for backwards compat)
+  weeklyFrequency String?  // "주1회" | "주2회" | "주3회" | "매일반"
+  description     String?
+  price           Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  classes     Class[]
+  classes          Class[]
+  slotOverrides    ClassSlotOverride[]
+  customClassSlots CustomClassSlot[]
 }
 
 model Class {
@@ -178,15 +181,17 @@ model AcademySettings {
 // Per-slot admin overrides for the Google Sheets schedule
 model ClassSlotOverride {
   id                String   @id @default(uuid())
-  slotKey           String   @unique  // "{dayKey}-{period}" e.g., "Mon-4"
-  label             String?           // Custom display label (default: auto "월요일 4교시")
-  note              String?           // Additional note shown to visitors
+  slotKey           String   @unique
+  label             String?
+  note              String?
   isHidden          Boolean  @default(false)
   capacity          Int      @default(12)
-  startTimeOverride String?           // Override auto-calculated start time e.g. "14:30"
-  endTimeOverride   String?           // Override auto-calculated end time e.g. "15:25"
+  startTimeOverride String?
+  endTimeOverride   String?
   coachId           String?
   coach             Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  programId         String?
+  program           Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
@@ -194,17 +199,19 @@ model ClassSlotOverride {
 // Custom class slots not sourced from Google Sheets
 model CustomClassSlot {
   id         String   @id @default(uuid())
-  dayKey     String   // "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun"
-  startTime  String   // "14:00"
-  endTime    String   // "15:00"
-  label      String   // Required display label
-  gradeRange String?  // e.g., "초4~중1"
+  dayKey     String
+  startTime  String
+  endTime    String
+  label      String
+  gradeRange String?
   enrolled   Int      @default(0)
   capacity   Int      @default(12)
   note       String?
   isHidden   Boolean  @default(false)
   coachId    String?
   coach      Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  programId  String?
+  program    Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }

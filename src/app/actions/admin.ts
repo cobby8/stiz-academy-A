@@ -6,28 +6,46 @@ import { prisma } from "@/lib/prisma";
 export async function createProgram(data: {
     name: string;
     targetAge?: string;
-    frequency?: string;
+    weeklyFrequency?: string;
     description?: string;
     price: number;
 }) {
     try {
         await prisma.program.create({ data });
         revalidatePath("/admin/programs");
-        revalidatePath("/");
+        revalidatePath("/programs");
+        revalidatePath("/schedule");
     } catch (e) {
         console.error("Failed to create program:", e);
         throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
     }
 }
 
+export async function updateProgram(id: string, data: {
+    name: string;
+    targetAge?: string;
+    weeklyFrequency?: string;
+    description?: string;
+    price: number;
+}) {
+    try {
+        await prisma.program.update({ where: { id }, data });
+        revalidatePath("/admin/programs");
+        revalidatePath("/programs");
+        revalidatePath("/schedule");
+    } catch (e) {
+        console.error("Failed to update program:", e);
+        throw new Error("프로그램 수정 실패");
+    }
+}
+
 export async function deleteProgram(id: string) {
-    // First, delete related classes if any
-    // But for simple implementation, wait, Prisma doesn't cascade by default unless specified. Let's just catch error or safely delete.
     try {
         await prisma.class.deleteMany({ where: { programId: id } });
         await prisma.program.delete({ where: { id } });
         revalidatePath("/admin/programs");
-        revalidatePath("/");
+        revalidatePath("/programs");
+        revalidatePath("/schedule");
     } catch (e) {
         console.error("Failed to delete program:", e);
         throw new Error("Failed to delete program");

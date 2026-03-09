@@ -1,4 +1,4 @@
-import { getAcademySettings, getClassSlotOverrides, getCoaches, getCustomClassSlots } from "@/lib/queries";
+import { getAcademySettings, getClassSlotOverrides, getCoaches, getCustomClassSlots, getPrograms } from "@/lib/queries";
 import { fetchSheetScheduleAdmin } from "@/lib/googleSheetsSchedule";
 import ScheduleAdminClient from "./ScheduleAdminClient";
 
@@ -6,11 +6,12 @@ export default async function AdminSchedulePage() {
     const settings = await getAcademySettings() as any;
     const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
 
-    const [slots, overrides, coaches, customSlots] = await Promise.all([
+    const [slots, overrides, coaches, customSlots, programs] = await Promise.all([
         sheetUrl ? fetchSheetScheduleAdmin(sheetUrl) : Promise.resolve([]),
         getClassSlotOverrides(),
         getCoaches(),
         getCustomClassSlots(),
+        getPrograms(),
     ]);
 
     return (
@@ -20,6 +21,7 @@ export default async function AdminSchedulePage() {
             coaches={coaches as any[]}
             customSlots={customSlots as any[]}
             hasSheetUrl={!!sheetUrl}
+            programs={programs as any[]}
         />
     );
 }

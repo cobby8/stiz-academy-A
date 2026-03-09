@@ -1,12 +1,14 @@
-import { getAcademySettings, getCoaches } from "@/app/actions/admin";
+import { getAcademySettings, getCoaches } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 export const metadata = { title: "학원소개 | STIZ 농구교실 다산점" };
 
 export default async function AboutPage() {
-    const settings = await getAcademySettings() as any;
-    const coaches = await getCoaches();
+    const [settings, coaches] = await Promise.all([
+        getAcademySettings() as Promise<any>,
+        getCoaches(),
+    ]);
 
     return (
         <PublicPageLayout>

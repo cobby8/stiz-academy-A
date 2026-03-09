@@ -1,4 +1,4 @@
-import { getAcademySettings, getCoaches } from "@/app/actions/admin";
+import { getAcademySettings, getCoaches } from "@/lib/queries";
 import AdminSettingsClient from "./AdminSettingsClient";
 
 export default async function AdminSettingsPage() {

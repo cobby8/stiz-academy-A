@@ -1,6 +1,7 @@
-import { getPrograms, getAcademySettings } from "@/app/actions/admin";
+import { getPrograms, getAcademySettings } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
+export const revalidate = 60;
 export const metadata = { title: "프로그램·수강료 안내 | STIZ 농구교실 다산점" };
 
 const FREQ_COLORS: Record<string, string> = {
@@ -10,8 +11,10 @@ const FREQ_COLORS: Record<string, string> = {
 };
 
 export default async function ProgramsPage() {
-    const programs = await getPrograms();
-    const settings = await getAcademySettings() as any;
+    const [programs, settings] = await Promise.all([
+        getPrograms(),
+        getAcademySettings() as Promise<any>,
+    ]);
     const phone = settings.contactPhone || "010-0000-0000";
 
     return (

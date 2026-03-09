@@ -1,4 +1,5 @@
-import { getPrograms, createProgram, deleteProgram } from "@/app/actions/admin";
+import { getPrograms } from "@/lib/queries";
+import { createProgram, deleteProgram } from "@/app/actions/admin";
 import { revalidatePath } from "next/cache";
 
 export default async function AdminProgramsPage() {

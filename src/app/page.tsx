@@ -1,7 +1,7 @@
-import { getPrograms, getClasses, getAcademySettings, getCoaches } from "@/app/actions/admin";
+import { getPrograms, getClasses, getAcademySettings, getCoaches } from "@/lib/queries";
 import LandingPageClient from "./LandingPageClient";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default async function Home() {
   let programs: any[] = [];
@@ -10,10 +10,12 @@ export default async function Home() {
   let coaches: any[] = [];
 
   try {
-    programs = await getPrograms();
-    classes = await getClasses();
-    settings = await getAcademySettings();
-    coaches = await getCoaches();
+    [programs, classes, settings, coaches] = await Promise.all([
+      getPrograms(),
+      getClasses(),
+      getAcademySettings(),
+      getCoaches(),
+    ]);
   } catch (e) {
     console.error("Failed to load data for landing page:", e);
   }

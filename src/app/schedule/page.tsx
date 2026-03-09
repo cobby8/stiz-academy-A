@@ -1,6 +1,7 @@
-import { getClasses, getAcademySettings } from "@/app/actions/admin";
+import { getClasses, getAcademySettings } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
+export const revalidate = 60;
 export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점" };
 
 const DAYS = [
@@ -34,8 +35,10 @@ const DAY_BADGE: Record<string, string> = {
 };
 
 export default async function SchedulePage() {
-    const classes = await getClasses();
-    const settings = await getAcademySettings() as any;
+    const [classes, settings] = await Promise.all([
+        getClasses(),
+        getAcademySettings() as Promise<any>,
+    ]);
     const phone = settings.contactPhone || "010-0000-0000";
 
     // Group classes by day of week

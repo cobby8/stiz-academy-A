@@ -1,4 +1,4 @@
-import { getAcademySettings, getClasses } from "@/app/actions/admin";
+import { getAcademySettings, getClasses } from "@/lib/queries";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
 import {
     getMonthClassSchedule,

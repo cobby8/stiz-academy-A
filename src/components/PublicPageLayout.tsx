@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { MapPin, Phone } from "lucide-react";
-import { getAcademySettings } from "@/app/actions/admin";
+import { getAcademySettings } from "@/lib/queries";
 
 export default async function PublicPageLayout({ children }: { children: React.ReactNode }) {
     const settings = await getAcademySettings();

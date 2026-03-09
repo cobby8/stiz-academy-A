@@ -3,17 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
-// Programs
-export async function getPrograms() {
-    try {
-        return await prisma.program.findMany({
-            orderBy: { createdAt: "desc" },
-        });
-    } catch (e) {
-        return [];
-    }
-}
-
 export async function createProgram(data: {
     name: string;
     targetAge?: string;
@@ -42,20 +31,6 @@ export async function deleteProgram(id: string) {
     } catch (e) {
         console.error("Failed to delete program:", e);
         throw new Error("Failed to delete program");
-    }
-}
-
-// Classes (Schedules)
-export async function getClasses() {
-    try {
-        return await prisma.class.findMany({
-            include: {
-                program: true,
-            },
-            orderBy: { createdAt: "desc" },
-        });
-    } catch (e) {
-        return [];
     }
 }
 
@@ -91,24 +66,6 @@ export async function deleteClass(id: string) {
     }
 }
 
-// Academy Settings
-export async function getAcademySettings() {
-    try {
-        const settings = await prisma.academySettings.findUnique({
-            where: { id: "singleton" }
-        });
-
-        if (!settings) throw new Error("Not found");
-        return settings;
-    } catch (e) {
-        return {
-            pageDesignJSON: null,
-            contactPhone: "010-0000-0000",
-            address: "다산신도시 체육관",
-        };
-    }
-}
-
 export async function updateAcademySettings(data: {
     pageDesignJSON?: string;
     contactPhone?: string;
@@ -133,17 +90,6 @@ export async function updateAcademySettings(data: {
     } catch (e) {
         console.error("Failed to update academy settings:", e);
         throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
-    }
-}
-
-// Coaches
-export async function getCoaches() {
-    try {
-        return await prisma.coach.findMany({
-            orderBy: { order: "asc" }
-        });
-    } catch (e) {
-        return [];
     }
 }
 

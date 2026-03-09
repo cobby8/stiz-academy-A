@@ -109,22 +109,66 @@ export async function createCoach(data: {
 }) {
     try {
         await prisma.coach.create({ data });
-        revalidatePath("/admin/settings");
-        revalidatePath("/", "layout");
+        revalidatePath("/admin/coaches");
+        revalidatePath("/admin/schedule");
+        revalidatePath("/about");
+        revalidatePath("/schedule");
     } catch (e) {
         console.error("Failed to create coach:", e);
         throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
     }
 }
 
+export async function updateCoach(id: string, data: {
+    name: string;
+    role: string;
+    description?: string;
+    imageUrl?: string;
+}) {
+    try {
+        await prisma.coach.update({ where: { id }, data });
+        revalidatePath("/admin/coaches");
+        revalidatePath("/admin/schedule");
+        revalidatePath("/about");
+        revalidatePath("/schedule");
+    } catch (e) {
+        console.error("Failed to update coach:", e);
+        throw new Error("코치 정보 수정 실패");
+    }
+}
+
 export async function deleteCoach(id: string) {
     try {
         await prisma.coach.delete({ where: { id } });
-        revalidatePath("/admin/settings");
-        revalidatePath("/", "layout");
+        revalidatePath("/admin/coaches");
+        revalidatePath("/admin/schedule");
+        revalidatePath("/about");
+        revalidatePath("/schedule");
     } catch (e) {
         console.error("Failed to delete coach:", e);
         throw new Error("Failed to delete coach");
+    }
+}
+
+export async function moveCoach(id: string, direction: "up" | "down") {
+    try {
+        const coaches = await prisma.coach.findMany({ orderBy: { order: "asc" } });
+        const idx = coaches.findIndex((c) => c.id === id);
+        if (idx === -1) return;
+        const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= coaches.length) return;
+        const a = coaches[idx];
+        const b = coaches[swapIdx];
+        await prisma.$transaction([
+            prisma.coach.update({ where: { id: a.id }, data: { order: b.order } }),
+            prisma.coach.update({ where: { id: b.id }, data: { order: a.order } }),
+        ]);
+        revalidatePath("/admin/coaches");
+        revalidatePath("/about");
+        revalidatePath("/schedule");
+    } catch (e) {
+        console.error("Failed to move coach:", e);
+        throw new Error("순서 변경 실패");
     }
 }
 

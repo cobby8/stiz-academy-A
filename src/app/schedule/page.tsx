@@ -39,6 +39,7 @@ export default async function SchedulePage() {
         note: string | null;
         capacity: number;
         isFull: boolean;
+        coach: { name: string; role: string; imageUrl: string | null } | null;
     })[] = rawSlots
         .filter((s: SheetClassSlot) => !(overrideMap[s.slotKey]?.isHidden))
         .map((s: SheetClassSlot) => {
@@ -50,6 +51,7 @@ export default async function SchedulePage() {
                 note: ov?.note || null,
                 capacity,
                 isFull: s.enrolled >= capacity,
+                coach: ov?.coach ?? null,
             };
         });
 
@@ -101,60 +103,63 @@ export default async function SchedulePage() {
                                             {byDay[dayKey].map((slot) => (
                                                 <div
                                                     key={slot.slotKey}
-                                                    className="bg-white rounded-xl p-4 shadow-sm border border-white/80 relative"
+                                                    className="bg-white rounded-xl p-4 shadow-sm border border-white/80"
                                                 >
-                                                    {/* Label */}
-                                                    <h4 className="font-bold text-gray-900 mb-2 text-sm">
-                                                        {slot.displayLabel}
-                                                    </h4>
-
-                                                    {/* Time */}
-                                                    <div className="flex items-center gap-1.5 text-sm text-gray-700 mb-1">
-                                                        <span className="text-gray-400">⏰</span>
-                                                        <span className="font-semibold">
-                                                            {slot.startTime} ~ {slot.endTime}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Grade range */}
-                                                    {slot.gradeRange && (
-                                                        <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
-                                                            <span className="text-gray-400">🎓</span>
-                                                            <span>{slot.gradeRange}</span>
+                                                    <div className="flex gap-3">
+                                                        {/* Left: slot info */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="font-bold text-gray-900 mb-2 text-sm">
+                                                                {slot.displayLabel}
+                                                            </h4>
+                                                            <div className="flex items-center gap-1.5 text-sm text-gray-700 mb-1">
+                                                                <span className="text-gray-400">⏰</span>
+                                                                <span className="font-semibold">{slot.startTime} ~ {slot.endTime}</span>
+                                                            </div>
+                                                            {slot.gradeRange && (
+                                                                <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
+                                                                    <span className="text-gray-400">🎓</span>
+                                                                    <span>{slot.gradeRange}</span>
+                                                                </div>
+                                                            )}
+                                                            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2">
+                                                                {slot.isFull ? (
+                                                                    <span className="shrink-0 text-[10px] bg-red-500 text-white font-black px-2 py-0.5 rounded-full">마감</span>
+                                                                ) : slot.enrolled > 10 ? (
+                                                                    <span className="shrink-0 text-[10px] bg-brand-orange-500 text-white font-black px-2 py-0.5 rounded-full">마감임박</span>
+                                                                ) : null}
+                                                                <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full rounded-full transition-all ${slot.isFull ? "bg-red-400" : slot.enrolled > 10 ? "bg-brand-orange-500" : "bg-green-400"}`}
+                                                                        style={{ width: `${Math.min(100, (slot.enrolled / slot.capacity) * 100)}%` }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            {slot.note && (
+                                                                <p className="text-xs text-brand-orange-600 mt-2 font-medium">📌 {slot.note}</p>
+                                                            )}
                                                         </div>
-                                                    )}
 
-                                                    {/* Enrollment: badge + gauge bar */}
-                                                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2">
-                                                        {slot.isFull ? (
-                                                            <span className="shrink-0 text-[10px] bg-red-500 text-white font-black px-2 py-0.5 rounded-full">
-                                                                마감
-                                                            </span>
-                                                        ) : slot.enrolled > 10 ? (
-                                                            <span className="shrink-0 text-[10px] bg-brand-orange-500 text-white font-black px-2 py-0.5 rounded-full">
-                                                                마감임박
-                                                            </span>
-                                                        ) : null}
-                                                        <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                                            <div
-                                                                className={`h-full rounded-full transition-all ${
-                                                                    slot.isFull
-                                                                        ? "bg-red-400"
-                                                                        : slot.enrolled > 10
-                                                                        ? "bg-brand-orange-500"
-                                                                        : "bg-green-400"
-                                                                }`}
-                                                                style={{ width: `${Math.min(100, (slot.enrolled / slot.capacity) * 100)}%` }}
-                                                            />
-                                                        </div>
+                                                        {/* Right: Coach */}
+                                                        {slot.coach && (
+                                                            <div className="shrink-0 flex flex-col items-center gap-1 pt-0.5 w-[58px]">
+                                                                {slot.coach.imageUrl ? (
+                                                                    <img
+                                                                        src={slot.coach.imageUrl}
+                                                                        alt={slot.coach.name}
+                                                                        className="w-11 h-11 rounded-full object-cover border-2 border-gray-100"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-11 h-11 rounded-full bg-gray-200 flex items-center justify-center text-lg">🏀</div>
+                                                                )}
+                                                                <p className="text-[11px] font-bold text-gray-800 text-center leading-tight truncate w-full">
+                                                                    {slot.coach.name}
+                                                                </p>
+                                                                <p className="text-[10px] text-gray-400 text-center leading-tight truncate w-full">
+                                                                    {slot.coach.role}
+                                                                </p>
+                                                            </div>
+                                                        )}
                                                     </div>
-
-                                                    {/* Note */}
-                                                    {slot.note && (
-                                                        <p className="text-xs text-brand-orange-600 mt-2 font-medium">
-                                                            📌 {slot.note}
-                                                        </p>
-                                                    )}
                                                 </div>
                                             ))}
                                         </div>

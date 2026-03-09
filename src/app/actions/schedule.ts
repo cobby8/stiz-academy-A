@@ -10,6 +10,7 @@ export async function upsertClassSlotOverride(
         note?: string;
         isHidden?: boolean;
         capacity?: number;
+        coachId?: string | null;
     }
 ) {
     try {

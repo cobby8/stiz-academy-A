@@ -183,6 +183,8 @@ model ClassSlotOverride {
   note      String?           // Additional note shown to visitors
   isHidden  Boolean  @default(false)
   capacity  Int      @default(12)
+  coachId   String?
+  coach     Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -192,9 +194,11 @@ model Coach {
   id          String   @id @default(uuid())
   name        String
   role        String   // e.g., "대표 원장", "수석 코치"
-  description String?  // Short bio or achievements
-  imageUrl    String?  // Profile picture URL (optional)
+  description String?  @db.Text  // Bio / career details (multi-line)
+  imageUrl    String?  // Profile picture URL
   order       Int      @default(0) // Control display order
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  slots       ClassSlotOverride[]
 }

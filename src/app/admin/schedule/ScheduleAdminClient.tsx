@@ -14,12 +14,20 @@ const DAY_COLOR: Record<string, string> = {
     Thu: "bg-purple-600", Fri: "bg-red-500", Sat: "bg-brand-orange-500", Sun: "bg-gray-500",
 };
 
+interface Coach {
+    id: string;
+    name: string;
+    role: string;
+    imageUrl: string | null;
+}
+
 interface Override {
     slotKey: string;
     label: string | null;
     note: string | null;
     isHidden: boolean;
     capacity: number;
+    coachId: string | null;
 }
 
 interface SlotState {
@@ -27,6 +35,7 @@ interface SlotState {
     note: string;
     isHidden: boolean;
     capacity: number;
+    coachId: string;  // "" = 미배정
     dirty: boolean;
     saved: boolean;
     error: string | null;
@@ -40,6 +49,7 @@ function buildInitialState(overrides: Override[]): Record<string, SlotState> {
             note: o.note ?? "",
             isHidden: o.isHidden,
             capacity: o.capacity,
+            coachId: o.coachId ?? "",
             dirty: false,
             saved: false,
             error: null,
@@ -49,22 +59,26 @@ function buildInitialState(overrides: Override[]): Record<string, SlotState> {
 }
 
 function defaultSlotState(): SlotState {
-    return { label: "", note: "", isHidden: false, capacity: 12, dirty: false, saved: false, error: null };
+    return { label: "", note: "", isHidden: false, capacity: 12, coachId: "", dirty: false, saved: false, error: null };
 }
 
 export default function ScheduleAdminClient({
     slots,
     overrides,
+    coaches,
     hasSheetUrl,
 }: {
     slots: SheetClassSlot[];
     overrides: Override[];
+    coaches: Coach[];
     hasSheetUrl: boolean;
 }) {
     const [stateMap, setStateMap] = useState<Record<string, SlotState>>(
         () => buildInitialState(overrides)
     );
     const [pending, startTransition] = useTransition();
+
+    const coachMap = Object.fromEntries(coaches.map((c) => [c.id, c]));
 
     function getState(slotKey: string): SlotState {
         return stateMap[slotKey] ?? defaultSlotState();
@@ -86,6 +100,7 @@ export default function ScheduleAdminClient({
                     note: s.note || undefined,
                     isHidden: s.isHidden,
                     capacity: s.capacity,
+                    coachId: s.coachId || null,
                 });
                 setStateMap((prev) => ({
                     ...prev,
@@ -100,24 +115,23 @@ export default function ScheduleAdminClient({
         });
     }
 
-    // Group slots by day
     const byDay = DAY_ORDER.reduce<Record<string, SheetClassSlot[]>>((acc, d) => {
         acc[d] = slots.filter((s) => s.dayKey === d).sort((a, b) => a.period - b.period);
         return acc;
     }, {});
-
     const activeDays = DAY_ORDER.filter((d) => byDay[d].length > 0);
+
+    const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white";
 
     return (
         <div className="space-y-8">
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">시간표 관리</h1>
                 <p className="text-gray-500 text-sm">
-                    학년·인원은 구글시트에서 자동 동기화됩니다. 레이블·메모·숨김·정원은 직접 편집할 수 있습니다.
+                    학년·인원은 구글시트에서 자동 동기화됩니다. 레이블·메모·숨김·정원·코치는 직접 편집할 수 있습니다.
                 </p>
             </div>
 
-            {/* Sheet URL 미설정 경고 */}
             {!hasSheetUrl && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800">
                     <p className="font-bold mb-1">⚠ 구글시트 URL이 설정되지 않았습니다.</p>
@@ -130,7 +144,6 @@ export default function ScheduleAdminClient({
                 </div>
             )}
 
-            {/* 슬롯 없음 (URL 있지만 데이터 없음) */}
             {hasSheetUrl && slots.length === 0 && (
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-10 text-center text-gray-500">
                     <p className="text-lg font-medium mb-1">시트에서 수업 데이터를 찾을 수 없습니다.</p>
@@ -138,10 +151,8 @@ export default function ScheduleAdminClient({
                 </div>
             )}
 
-            {/* 요일별 슬롯 편집 */}
             {activeDays.map((dayKey) => (
                 <div key={dayKey} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    {/* Day header */}
                     <div className={`${DAY_COLOR[dayKey]} text-white px-5 py-3 flex items-center gap-3`}>
                         <span className="font-black text-lg">{DAY_LABEL[dayKey]}</span>
                         <span className="text-white/70 text-sm">{byDay[dayKey].length}개 수업</span>
@@ -150,6 +161,7 @@ export default function ScheduleAdminClient({
                     <div className="divide-y divide-gray-100">
                         {byDay[dayKey].map((slot) => {
                             const s = getState(slot.slotKey);
+                            const assignedCoach = s.coachId ? coachMap[s.coachId] : null;
                             return (
                                 <div key={slot.slotKey} className="p-5">
                                     {/* Read-only info */}
@@ -166,14 +178,24 @@ export default function ScheduleAdminClient({
                                             </span>
                                         )}
                                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                                            slot.enrolled >= (s.capacity ?? 12)
+                                            slot.enrolled >= s.capacity
                                                 ? "bg-red-100 text-red-700"
                                                 : "bg-green-50 text-green-700"
                                         }`}>
-                                            {slot.enrolled}/{s.capacity ?? 12}명
-                                            {slot.enrolled >= (s.capacity ?? 12) && " 마감"}
+                                            {slot.enrolled}/{s.capacity}명
+                                            {slot.enrolled >= s.capacity && " 마감"}
                                         </span>
                                         <span className="text-xs text-gray-400 font-mono">{slot.slotKey}</span>
+
+                                        {/* 배정된 코치 미리보기 */}
+                                        {assignedCoach && (
+                                            <span className="flex items-center gap-1.5 text-xs text-gray-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full">
+                                                {assignedCoach.imageUrl && (
+                                                    <img src={assignedCoach.imageUrl} className="w-4 h-4 rounded-full object-cover" alt="" />
+                                                )}
+                                                {assignedCoach.name}
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Editable fields */}
@@ -188,7 +210,7 @@ export default function ScheduleAdminClient({
                                                 value={s.label}
                                                 onChange={(e) => update(slot.slotKey, { label: e.target.value })}
                                                 placeholder={`${slot.dayLabel} ${slot.period}교시`}
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white"
+                                                className={INPUT}
                                             />
                                         </div>
                                         <div>
@@ -201,7 +223,7 @@ export default function ScheduleAdminClient({
                                                 max={50}
                                                 value={s.capacity}
                                                 onChange={(e) => update(slot.slotKey, { capacity: parseInt(e.target.value) || 12 })}
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white"
+                                                className={INPUT}
                                             />
                                         </div>
                                         <div className="md:col-span-2">
@@ -213,8 +235,42 @@ export default function ScheduleAdminClient({
                                                 value={s.note}
                                                 onChange={(e) => update(slot.slotKey, { note: e.target.value })}
                                                 placeholder="예: 이번 주 보강 있음, 코치 변경 예정"
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white"
+                                                className={INPUT}
                                             />
+                                        </div>
+
+                                        {/* 코치 선택 */}
+                                        <div className="md:col-span-2">
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">
+                                                담당 코치 <span className="font-normal text-gray-400">(공개 시간표 카드에 표시됩니다)</span>
+                                            </label>
+                                            <div className="flex items-center gap-3">
+                                                <select
+                                                    value={s.coachId}
+                                                    onChange={(e) => update(slot.slotKey, { coachId: e.target.value })}
+                                                    className={INPUT + " flex-1"}
+                                                >
+                                                    <option value="">-- 코치 미배정 --</option>
+                                                    {coaches.map((c) => (
+                                                        <option key={c.id} value={c.id}>
+                                                            {c.name} ({c.role})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                {s.coachId && coachMap[s.coachId]?.imageUrl && (
+                                                    <img
+                                                        src={coachMap[s.coachId].imageUrl!}
+                                                        alt=""
+                                                        className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0"
+                                                    />
+                                                )}
+                                            </div>
+                                            {coaches.length === 0 && (
+                                                <p className="text-xs text-amber-600 mt-1">
+                                                    등록된 코치가 없습니다.{" "}
+                                                    <a href="/admin/coaches" className="underline">코치 추가 →</a>
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -231,9 +287,7 @@ export default function ScheduleAdminClient({
                                         </label>
 
                                         <div className="flex items-center gap-3">
-                                            {s.error && (
-                                                <span className="text-xs text-red-500">{s.error}</span>
-                                            )}
+                                            {s.error && <span className="text-xs text-red-500">{s.error}</span>}
                                             {s.saved && !s.dirty && (
                                                 <span className="text-xs text-green-600 font-medium">✓ 저장됨</span>
                                             )}

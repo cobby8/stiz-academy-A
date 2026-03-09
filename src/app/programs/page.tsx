@@ -4,30 +4,62 @@ import PublicPageLayout from "@/components/PublicPageLayout";
 export const revalidate = 60;
 export const metadata = { title: "프로그램·수강료 안내 | STIZ 농구교실 다산점" };
 
-function getShuttleFee(freq: string | null | undefined): string | null {
-    if (freq === "주1회") return "10,000원 / 월";
-    if (freq === "주2회") return "15,000원 / 월";
-    if (freq === "주3회" || freq === "매일반") return "20,000원 / 월";
-    return null;
+const DAY_OPTIONS: Record<string, string> = {
+    Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
+};
+const WEEKEND = new Set(["Sat", "Sun"]);
+const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const FREQ_TIERS = [
+    { key: "priceWeek1" as const, label: "주 1회", autoShuttle: 10000 },
+    { key: "priceWeek2" as const, label: "주 2회", autoShuttle: 15000 },
+    { key: "priceWeek3" as const, label: "주 3회", autoShuttle: 20000 },
+    { key: "priceDaily" as const, label: "매일반", autoShuttle: 20000 },
+];
+
+type Program = {
+    id: string;
+    name: string;
+    targetAge: string | null;
+    weeklyFrequency: string | null;
+    frequency: string | null;
+    description: string | null;
+    price: number;
+    days: string | null;
+    priceWeek1: number | null;
+    priceWeek2: number | null;
+    priceWeek3: number | null;
+    priceDaily: number | null;
+    shuttleFeeOverride: number | null;
+};
+
+function isWeekendOnly(days: string[]): boolean {
+    return days.length > 0 && days.every((d) => WEEKEND.has(d));
 }
 
-const FREQ_COLORS: Record<string, string> = {
-    "주1회": "bg-green-100 text-green-700",
-    "주2회": "bg-blue-100 text-blue-700",
-    "주3회": "bg-purple-100 text-purple-700",
-    "매일반": "bg-red-100 text-red-700",
-};
+function getShuttleFeeDisplay(
+    shuttleFeeOverride: number | null | undefined,
+    freqKey: typeof FREQ_TIERS[number]["key"],
+    weekend: boolean,
+): string | null {
+    if (weekend) return null;
+    if (shuttleFeeOverride === 0) return null;
+    if (shuttleFeeOverride != null && shuttleFeeOverride > 0)
+        return shuttleFeeOverride.toLocaleString() + "원";
+    const tier = FREQ_TIERS.find((t) => t.key === freqKey);
+    return tier ? tier.autoShuttle.toLocaleString() + "원" : null;
+}
 
 export default async function ProgramsPage() {
     const [programs, settings] = await Promise.all([
-        getPrograms(),
+        getPrograms() as Promise<Program[]>,
         getAcademySettings() as Promise<any>,
     ]);
     const phone = settings.contactPhone || "010-0000-0000";
 
     return (
         <PublicPageLayout>
-            {/* Page Hero */}
+            {/* Hero */}
             <div className="bg-brand-navy-900 text-white py-14">
                 <div className="max-w-4xl mx-auto px-4">
                     <p className="text-brand-orange-500 text-sm font-bold uppercase mb-2">PROGRAMS</p>
@@ -36,7 +68,7 @@ export default async function ProgramsPage() {
                 </div>
             </div>
 
-            {/* Programs List */}
+            {/* Programs list */}
             <section className="py-14 bg-white">
                 <div className="max-w-4xl mx-auto px-4">
                     {programs.length === 0 ? (
@@ -48,13 +80,17 @@ export default async function ProgramsPage() {
                     ) : (
                         <div className="space-y-6">
                             {programs.map((program, i) => {
+                                const days = program.days
+                                    ? DAY_ORDER.filter((d) => program.days!.split(",").includes(d))
+                                    : [];
+                                const weekend = isWeekendOnly(days);
+                                const tiers = FREQ_TIERS.filter((t) => program[t.key] != null);
                                 const freq = program.weeklyFrequency || program.frequency;
-                                const shuttleFee = getShuttleFee(program.weeklyFrequency);
+
                                 return (
-                                    <div
-                                        key={program.id}
-                                        className="border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow"
-                                    >
+                                    <div key={program.id}
+                                        className="border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
+                                        {/* Header */}
                                         <div className="bg-gray-50 px-6 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-gray-200">
                                             <div className="flex items-center gap-3">
                                                 <span className="bg-brand-navy-900 text-white text-xs font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0">
@@ -68,36 +104,80 @@ export default async function ProgramsPage() {
                                                         {program.targetAge}
                                                     </span>
                                                 )}
-                                                {freq && (
-                                                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${FREQ_COLORS[freq] || "bg-gray-100 text-gray-600"}`}>
-                                                        {freq}
-                                                    </span>
+                                                {/* Frequency badges */}
+                                                {tiers.length === 0 && freq && (
+                                                    <span className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">{freq}</span>
                                                 )}
+                                                {tiers.map((t) => (
+                                                    <span key={t.key} className="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">{t.label}</span>
+                                                ))}
+                                                {/* Day badges */}
+                                                {days.map((d) => (
+                                                    <span key={d} className={`text-xs font-bold px-2.5 py-1 rounded-full ${WEEKEND.has(d) ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"}`}>
+                                                        {DAY_OPTIONS[d]}요일
+                                                    </span>
+                                                ))}
                                             </div>
                                         </div>
-                                        <div className="p-6 flex flex-col sm:flex-row gap-6 items-start sm:items-center justify-between">
-                                            <div className="flex-1 min-w-0">
-                                                {program.description ? (
-                                                    <p className="text-gray-600 leading-relaxed">{program.description}</p>
-                                                ) : (
-                                                    <p className="text-gray-400 text-sm">상세 설명은 문의해 주세요.</p>
-                                                )}
-                                                {shuttleFee && (
-                                                    <p className="text-sm text-blue-600 mt-2 font-medium">🚌 셔틀비: {shuttleFee}</p>
-                                                )}
-                                            </div>
-                                            <div className="shrink-0 flex flex-col items-end gap-3">
-                                                <div className="text-right">
-                                                    <p className="text-xs text-gray-400 mb-1">월 수강료</p>
-                                                    <p className="text-3xl font-black text-brand-navy-900">
-                                                        {program.price.toLocaleString()}
-                                                        <span className="text-base font-normal text-gray-500">원</span>
-                                                    </p>
+
+                                        <div className="p-6 flex flex-col gap-4">
+                                            {program.description && (
+                                                <p className="text-gray-600 leading-relaxed">{program.description}</p>
+                                            )}
+
+                                            {/* Pricing table or single price */}
+                                            {tiers.length > 0 ? (
+                                                <div className="overflow-hidden rounded-xl border border-gray-200">
+                                                    <table className="w-full text-sm">
+                                                        <thead className="bg-brand-navy-900 text-white">
+                                                            <tr>
+                                                                <th className="px-4 py-2.5 text-left font-bold">수업 빈도</th>
+                                                                <th className="px-4 py-2.5 text-right font-bold">월 수강료</th>
+                                                                <th className="px-4 py-2.5 text-right font-bold">셔틀비</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100">
+                                                            {tiers.map((t) => {
+                                                                const fee = getShuttleFeeDisplay(program.shuttleFeeOverride, t.key, weekend);
+                                                                return (
+                                                                    <tr key={t.key} className="hover:bg-gray-50">
+                                                                        <td className="px-4 py-3 font-semibold text-gray-800">{t.label}</td>
+                                                                        <td className="px-4 py-3 text-right font-bold text-brand-navy-900">
+                                                                            {Number(program[t.key]).toLocaleString()}원
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right text-blue-600 font-medium">
+                                                                            {fee ? fee : <span className="text-gray-400 font-normal">운행 없음</span>}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
                                                 </div>
-                                                <a
-                                                    href={`/schedule?program=${program.id}`}
-                                                    className="text-sm font-bold text-brand-orange-500 hover:text-orange-600 border border-brand-orange-500/50 hover:border-brand-orange-500 px-3 py-1.5 rounded-lg transition"
-                                                >
+                                            ) : (
+                                                <div className="flex flex-wrap items-center gap-6">
+                                                    <div>
+                                                        <p className="text-xs text-gray-400 mb-0.5">월 수강료</p>
+                                                        <p className="text-3xl font-black text-brand-navy-900">
+                                                            {program.price.toLocaleString()}
+                                                            <span className="text-base font-normal text-gray-500">원</span>
+                                                        </p>
+                                                    </div>
+                                                    {weekend ? (
+                                                        <p className="text-sm text-orange-600 font-medium">🚌 셔틀 운행 없음</p>
+                                                    ) : program.shuttleFeeOverride === 0 ? (
+                                                        <p className="text-sm text-gray-400">셔틀 없음</p>
+                                                    ) : program.shuttleFeeOverride != null && program.shuttleFeeOverride > 0 ? (
+                                                        <p className="text-sm text-blue-600 font-medium">
+                                                            🚌 셔틀비 {program.shuttleFeeOverride.toLocaleString()}원
+                                                        </p>
+                                                    ) : null}
+                                                </div>
+                                            )}
+
+                                            <div className="flex justify-end">
+                                                <a href={`/schedule?program=${program.id}`}
+                                                    className="text-sm font-bold text-brand-orange-500 hover:text-orange-600 border border-brand-orange-500/50 hover:border-brand-orange-500 px-3 py-1.5 rounded-lg transition">
                                                     시간표 보기 →
                                                 </a>
                                             </div>
@@ -110,7 +190,7 @@ export default async function ProgramsPage() {
                 </div>
             </section>
 
-            {/* Tuition Info */}
+            {/* Tuition summary table */}
             <section id="tuition" className="py-14 bg-gray-50 scroll-mt-20">
                 <div className="max-w-4xl mx-auto px-4">
                     <h2 className="text-2xl font-black text-brand-navy-900 mb-8 text-center">수강료 안내</h2>
@@ -123,25 +203,51 @@ export default async function ProgramsPage() {
                                         <th className="px-5 py-4 text-left font-bold">프로그램</th>
                                         <th className="px-5 py-4 text-left font-bold">대상</th>
                                         <th className="px-5 py-4 text-left font-bold">수업 빈도</th>
-                                        <th className="px-5 py-4 text-left font-bold">셔틀비</th>
                                         <th className="px-5 py-4 text-right font-bold">월 수강료</th>
+                                        <th className="px-5 py-4 text-right font-bold">셔틀비</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {programs.map((program) => {
+                                    {programs.flatMap((program) => {
+                                        const days = program.days ? program.days.split(",") : [];
+                                        const weekend = isWeekendOnly(days);
+                                        const tiers = FREQ_TIERS.filter((t) => program[t.key] != null);
                                         const freq = program.weeklyFrequency || program.frequency;
-                                        const shuttleFee = getShuttleFee(program.weeklyFrequency);
-                                        return (
+
+                                        if (tiers.length > 0) {
+                                            return tiers.map((t, ti) => {
+                                                const fee = getShuttleFeeDisplay(program.shuttleFeeOverride, t.key, weekend);
+                                                return (
+                                                    <tr key={`${program.id}-${t.key}`} className="hover:bg-gray-50">
+                                                        <td className="px-5 py-4 font-medium text-gray-900">
+                                                            {ti === 0 ? program.name : ""}
+                                                        </td>
+                                                        <td className="px-5 py-4 text-gray-600">
+                                                            {ti === 0 ? (program.targetAge || "-") : ""}
+                                                        </td>
+                                                        <td className="px-5 py-4 text-gray-600">{t.label}</td>
+                                                        <td className="px-5 py-4 text-right font-bold text-brand-navy-900">
+                                                            {Number(program[t.key]).toLocaleString()}원
+                                                        </td>
+                                                        <td className="px-5 py-4 text-right text-blue-600 font-medium">
+                                                            {fee || <span className="text-gray-400 font-normal">운행 없음</span>}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            });
+                                        }
+
+                                        return [(
                                             <tr key={program.id} className="hover:bg-gray-50">
                                                 <td className="px-5 py-4 font-medium text-gray-900">{program.name}</td>
                                                 <td className="px-5 py-4 text-gray-600">{program.targetAge || "-"}</td>
                                                 <td className="px-5 py-4 text-gray-600">{freq || "-"}</td>
-                                                <td className="px-5 py-4 text-blue-600 font-medium">{shuttleFee || "운행 없음"}</td>
                                                 <td className="px-5 py-4 text-right font-bold text-brand-navy-900">
                                                     {program.price.toLocaleString()}원
                                                 </td>
+                                                <td className="px-5 py-4 text-right text-gray-400">-</td>
                                             </tr>
-                                        );
+                                        )];
                                     })}
                                 </tbody>
                             </table>
@@ -168,10 +274,8 @@ export default async function ProgramsPage() {
                 <div className="max-w-4xl mx-auto px-4 text-center">
                     <h2 className="text-2xl font-black mb-4">수강 신청 및 문의</h2>
                     <p className="text-orange-100 mb-6">궁금한 점은 전화로 문의해 주세요. 친절하게 안내해 드립니다.</p>
-                    <a
-                        href={`tel:${phone.replace(/-/g, "")}`}
-                        className="inline-block bg-white text-brand-orange-500 font-black text-lg px-10 py-4 rounded-xl hover:bg-orange-50 transition shadow"
-                    >
+                    <a href={`tel:${phone.replace(/-/g, "")}`}
+                        className="inline-block bg-white text-brand-orange-500 font-black text-lg px-10 py-4 rounded-xl hover:bg-orange-50 transition shadow">
                         📞 {phone}
                     </a>
                 </div>

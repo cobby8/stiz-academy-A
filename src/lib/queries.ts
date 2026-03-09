@@ -37,7 +37,29 @@ export const getPrograms = cache(async () => {
             orderBy: { createdAt: "desc" },
         });
     } catch {
-        return [];
+        // Prisma failed (likely schema mismatch) — try raw SQL with original columns
+        try {
+            const rows = await prisma.$queryRaw<any[]>`
+                SELECT
+                    id, name, "targetAge", frequency, "weeklyFrequency",
+                    description, price, "createdAt", "updatedAt"
+                FROM "Program" ORDER BY "createdAt" DESC
+            `;
+            return rows.map((r: any) => ({
+                ...r,
+                price: Number(r.price ?? 0),
+                targetAge: r.targetage ?? r.targetAge ?? null,
+                weeklyFrequency: r.weeklyfrequency ?? r.weeklyFrequency ?? null,
+                days: null,
+                priceWeek1: null,
+                priceWeek2: null,
+                priceWeek3: null,
+                priceDaily: null,
+                shuttleFeeOverride: null,
+            }));
+        } catch {
+            return [];
+        }
     }
 });
 

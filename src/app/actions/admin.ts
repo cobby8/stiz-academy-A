@@ -3,40 +3,54 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
-export async function createProgram(data: {
+type ProgramData = {
     name: string;
     targetAge?: string;
     weeklyFrequency?: string;
     description?: string;
     price: number;
-}) {
+    days?: string | null;
+    priceWeek1?: number | null;
+    priceWeek2?: number | null;
+    priceWeek3?: number | null;
+    priceDaily?: number | null;
+    shuttleFeeOverride?: number | null;
+};
+
+export async function createProgram(data: ProgramData) {
     try {
         await prisma.program.create({ data });
-        revalidatePath("/admin/programs");
-        revalidatePath("/programs");
-        revalidatePath("/schedule");
-    } catch (e) {
-        console.error("Failed to create program:", e);
-        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+    } catch {
+        // New columns may not exist yet — retry with only original fields
+        try {
+            const { days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, ...original } = data;
+            await prisma.program.create({ data: original });
+        } catch (e) {
+            console.error("Failed to create program:", e);
+            throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+        }
     }
+    revalidatePath("/admin/programs");
+    revalidatePath("/programs");
+    revalidatePath("/schedule");
 }
 
-export async function updateProgram(id: string, data: {
-    name: string;
-    targetAge?: string;
-    weeklyFrequency?: string;
-    description?: string;
-    price: number;
-}) {
+export async function updateProgram(id: string, data: ProgramData) {
     try {
         await prisma.program.update({ where: { id }, data });
-        revalidatePath("/admin/programs");
-        revalidatePath("/programs");
-        revalidatePath("/schedule");
-    } catch (e) {
-        console.error("Failed to update program:", e);
-        throw new Error("프로그램 수정 실패");
+    } catch {
+        // New columns may not exist yet — retry with only original fields
+        try {
+            const { days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, ...original } = data;
+            await prisma.program.update({ where: { id }, data: original });
+        } catch (e) {
+            console.error("Failed to update program:", e);
+            throw new Error("프로그램 수정 실패");
+        }
     }
+    revalidatePath("/admin/programs");
+    revalidatePath("/programs");
+    revalidatePath("/schedule");
 }
 
 export async function deleteProgram(id: string) {

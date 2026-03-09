@@ -43,15 +43,21 @@ model Student {
 }
 
 model Program {
-  id              String   @id @default(uuid())
-  name            String
-  targetAge       String?
-  frequency       String?  // Legacy free-text (kept for backwards compat)
-  weeklyFrequency String?  // "주1회" | "주2회" | "주3회" | "매일반"
-  description     String?
-  price           Int
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  name               String
+  targetAge          String?
+  frequency          String?  // Legacy free-text (kept for backwards compat)
+  weeklyFrequency    String?  // "주1회" | "주2회" | "주3회" | "매일반" (primary display badge)
+  description        String?
+  price              Int      // Fallback/default price
+  days               String?  // Comma-separated day keys: "Mon,Tue,Wed"
+  priceWeek1         Int?     // 주1회 수강료
+  priceWeek2         Int?     // 주2회 수강료
+  priceWeek3         Int?     // 주3회 수강료
+  priceDaily         Int?     // 매일반 수강료
+  shuttleFeeOverride Int?     // null=auto, 0=no shuttle (weekend), >0=custom amount
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   classes          Class[]
   slotOverrides    ClassSlotOverride[]

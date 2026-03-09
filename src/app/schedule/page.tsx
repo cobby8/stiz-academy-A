@@ -103,15 +103,8 @@ export default async function SchedulePage() {
                                                     key={slot.slotKey}
                                                     className="bg-white rounded-xl p-4 shadow-sm border border-white/80 relative"
                                                 >
-                                                    {/* 마감 badge */}
-                                                    {slot.isFull && (
-                                                        <span className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                                                            마감
-                                                        </span>
-                                                    )}
-
                                                     {/* Label */}
-                                                    <h4 className="font-bold text-gray-900 mb-2 pr-10 text-sm">
+                                                    <h4 className="font-bold text-gray-900 mb-2 text-sm">
                                                         {slot.displayLabel}
                                                     </h4>
 
@@ -131,16 +124,25 @@ export default async function SchedulePage() {
                                                         </div>
                                                     )}
 
-                                                    {/* Enrollment */}
-                                                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
-                                                        <span className="text-xs text-gray-400">
-                                                            {slot.enrolled}/{slot.capacity}명
-                                                        </span>
-                                                        {/* Enrollment bar */}
-                                                        <div className="flex-1 mx-2 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                                    {/* Enrollment: badge + gauge bar */}
+                                                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2">
+                                                        {slot.isFull ? (
+                                                            <span className="shrink-0 text-[10px] bg-red-500 text-white font-black px-2 py-0.5 rounded-full">
+                                                                마감
+                                                            </span>
+                                                        ) : slot.enrolled > 10 ? (
+                                                            <span className="shrink-0 text-[10px] bg-brand-orange-500 text-white font-black px-2 py-0.5 rounded-full">
+                                                                마감임박
+                                                            </span>
+                                                        ) : null}
+                                                        <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
                                                             <div
                                                                 className={`h-full rounded-full transition-all ${
-                                                                    slot.isFull ? "bg-red-400" : "bg-brand-orange-500"
+                                                                    slot.isFull
+                                                                        ? "bg-red-400"
+                                                                        : slot.enrolled > 10
+                                                                        ? "bg-brand-orange-500"
+                                                                        : "bg-green-400"
                                                                 }`}
                                                                 style={{ width: `${Math.min(100, (slot.enrolled / slot.capacity) * 100)}%` }}
                                                             />

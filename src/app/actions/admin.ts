@@ -79,10 +79,15 @@ export async function updateAcademySettings(data: {
     siteHeadingFont?: string;
 }) {
     try {
+        // Empty URL fields → don't overwrite existing value in DB
+        const payload = { ...data };
+        if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
+        if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
+
         await prisma.academySettings.upsert({
             where: { id: "singleton" },
-            update: data,
-            create: { id: "singleton", ...data }
+            update: payload,
+            create: { id: "singleton", ...payload }
         });
         revalidatePath("/admin/settings");
         revalidatePath("/");

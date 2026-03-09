@@ -34,8 +34,8 @@ interface Override {
     isHidden: boolean;
     capacity: number;
     coachId: string | null;
-    startTimeOverride: string | null;
-    endTimeOverride: string | null;
+    startTimeOverride?: string | null;
+    endTimeOverride?: string | null;
 }
 
 interface SlotState {
@@ -106,6 +106,9 @@ function defaultSlotState(): SlotState {
     return { label: "", note: "", isHidden: false, capacity: 12, coachId: "", startTimeOverride: "", endTimeOverride: "", dirty: false, saved: false, error: null };
 }
 
+const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white";
+const TIME_INPUT = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white";
+
 export default function ScheduleAdminClient({
     slots,
     overrides,
@@ -122,6 +125,8 @@ export default function ScheduleAdminClient({
     const router = useRouter();
     const [stateMap, setStateMap] = useState<Record<string, SlotState>>(() => buildInitialState(overrides));
     const [pending, startTransition] = useTransition();
+
+    // Custom slot state
     const [isAddingCustom, setIsAddingCustom] = useState(false);
     const [newCustomForm, setNewCustomForm] = useState<CustomSlotForm>(defaultCustomSlotForm);
     const [editingCustomId, setEditingCustomId] = useState<string | null>(null);
@@ -195,7 +200,11 @@ export default function ScheduleAdminClient({
 
     function startEditCustom(cs: CustomSlot) {
         setEditingCustomId(cs.id);
-        setEditCustomForm({ dayKey: cs.dayKey, startTime: cs.startTime, endTime: cs.endTime, label: cs.label, gradeRange: cs.gradeRange ?? "", enrolled: cs.enrolled, capacity: cs.capacity, note: cs.note ?? "", isHidden: cs.isHidden, coachId: cs.coachId ?? "" });
+        setEditCustomForm({
+            dayKey: cs.dayKey, startTime: cs.startTime, endTime: cs.endTime,
+            label: cs.label, gradeRange: cs.gradeRange ?? "", enrolled: cs.enrolled,
+            capacity: cs.capacity, note: cs.note ?? "", isHidden: cs.isHidden, coachId: cs.coachId ?? "",
+        });
     }
 
     function handleUpdateCustom(id: string) {
@@ -203,16 +212,11 @@ export default function ScheduleAdminClient({
         startCustomTransition(async () => {
             try {
                 await updateCustomSlot(id, {
-                    dayKey: editCustomForm.dayKey,
-                    startTime: editCustomForm.startTime,
-                    endTime: editCustomForm.endTime,
-                    label: editCustomForm.label.trim(),
-                    gradeRange: editCustomForm.gradeRange.trim() || null,
-                    enrolled: editCustomForm.enrolled,
-                    capacity: editCustomForm.capacity,
-                    note: editCustomForm.note.trim() || null,
-                    isHidden: editCustomForm.isHidden,
-                    coachId: editCustomForm.coachId || null,
+                    dayKey: editCustomForm.dayKey, startTime: editCustomForm.startTime,
+                    endTime: editCustomForm.endTime, label: editCustomForm.label.trim(),
+                    gradeRange: editCustomForm.gradeRange.trim() || null, enrolled: editCustomForm.enrolled,
+                    capacity: editCustomForm.capacity, note: editCustomForm.note.trim() || null,
+                    isHidden: editCustomForm.isHidden, coachId: editCustomForm.coachId || null,
                 });
                 setEditingCustomId(null);
                 router.refresh();
@@ -240,16 +244,22 @@ export default function ScheduleAdminClient({
     }, {});
     const activeDays = DAY_ORDER.filter((d) => byDay[d].length > 0);
 
-    const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white";
-    const TIME_INPUT = "border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white";
-
     return (
         <div className="space-y-8">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">수업시간표 관리</h1>
-                <p className="text-gray-500 text-sm">
-                    학년·인원은 구글시트에서 자동 동기화됩니다. 레이블·메모·시간·숨김·정원·코치는 직접 편집할 수 있습니다.
-                </p>
+            {/* Page header with + button top-right */}
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">수업시간표 관리</h1>
+                    <p className="text-gray-500 text-sm">
+                        학년·인원은 구글시트에서 자동 동기화됩니다. 레이블·시간·메모·정원·코치는 직접 편집할 수 있습니다.
+                    </p>
+                </div>
+                <button
+                    onClick={() => { setNewCustomForm(defaultCustomSlotForm()); setIsAddingCustom(true); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }}
+                    className="shrink-0 bg-white border border-gray-300 text-gray-800 text-sm font-bold px-4 py-2 rounded-xl hover:bg-gray-50 shadow-sm transition flex items-center gap-1.5"
+                >
+                    <span className="text-brand-orange-500">+</span> 수업 추가
+                </button>
             </div>
 
             {!hasSheetUrl && (
@@ -271,14 +281,13 @@ export default function ScheduleAdminClient({
                 </div>
             )}
 
-            {/* Sheet-synced slots */}
+            {/* ── 구글시트 연동 수업 ── */}
             {activeDays.map((dayKey) => (
                 <div key={dayKey} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className={`${DAY_COLOR[dayKey]} text-white px-5 py-3 flex items-center gap-3`}>
                         <span className="font-black text-lg">{DAY_LABEL[dayKey]}</span>
                         <span className="text-white/70 text-sm">{byDay[dayKey].length}개 수업</span>
                     </div>
-
                     <div className="divide-y divide-gray-100">
                         {byDay[dayKey].map((slot) => {
                             const s = getState(slot.slotKey);
@@ -287,7 +296,8 @@ export default function ScheduleAdminClient({
                             const displayEnd = s.endTimeOverride || slot.endTime;
                             return (
                                 <div key={slot.slotKey} className="p-5">
-                                    <div className="flex flex-wrap items-center gap-3 mb-4">
+                                    {/* Read-only info row */}
+                                    <div className="flex flex-wrap items-center gap-2 mb-4">
                                         <span className="bg-gray-100 text-gray-700 text-xs font-bold px-2.5 py-1 rounded-full">
                                             {slot.period}교시
                                         </span>
@@ -314,10 +324,11 @@ export default function ScheduleAdminClient({
                                         )}
                                     </div>
 
+                                    {/* Editable fields */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                                         <div>
                                             <label className="block text-xs font-bold text-gray-600 mb-1">
-                                                표시 레이블<span className="font-normal text-gray-400 ml-1">(비워두면 "요일 n교시" 자동 생성)</span>
+                                                표시 레이블<span className="font-normal text-gray-400 ml-1">(비워두면 "요일 n교시" 자동)</span>
                                             </label>
                                             <input type="text" value={s.label} onChange={(e) => update(slot.slotKey, { label: e.target.value })} placeholder={`${slot.dayLabel} ${slot.period}교시`} className={INPUT} />
                                         </div>
@@ -326,14 +337,14 @@ export default function ScheduleAdminClient({
                                             <input type="number" min={1} max={50} value={s.capacity} onChange={(e) => update(slot.slotKey, { capacity: parseInt(e.target.value) || 12 })} className={INPUT} />
                                         </div>
 
-                                        {/* Time override */}
+                                        {/* Time overrides */}
                                         <div>
                                             <label className="block text-xs font-bold text-gray-600 mb-1">
                                                 시작 시간 조정<span className="font-normal text-gray-400 ml-1">(기본: {slot.startTime})</span>
                                             </label>
                                             <div className="flex items-center gap-2">
                                                 <input type="time" value={s.startTimeOverride} onChange={(e) => update(slot.slotKey, { startTimeOverride: e.target.value })} className={TIME_INPUT + " flex-1"} />
-                                                {s.startTimeOverride && <button type="button" onClick={() => update(slot.slotKey, { startTimeOverride: "" })} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">✕</button>}
+                                                {s.startTimeOverride && <button type="button" onClick={() => update(slot.slotKey, { startTimeOverride: "" })} className="text-xs text-gray-400 hover:text-gray-600 shrink-0 px-1">✕</button>}
                                             </div>
                                         </div>
                                         <div>
@@ -342,17 +353,21 @@ export default function ScheduleAdminClient({
                                             </label>
                                             <div className="flex items-center gap-2">
                                                 <input type="time" value={s.endTimeOverride} onChange={(e) => update(slot.slotKey, { endTimeOverride: e.target.value })} className={TIME_INPUT + " flex-1"} />
-                                                {s.endTimeOverride && <button type="button" onClick={() => update(slot.slotKey, { endTimeOverride: "" })} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">✕</button>}
+                                                {s.endTimeOverride && <button type="button" onClick={() => update(slot.slotKey, { endTimeOverride: "" })} className="text-xs text-gray-400 hover:text-gray-600 shrink-0 px-1">✕</button>}
                                             </div>
                                         </div>
 
                                         <div className="md:col-span-2">
-                                            <label className="block text-xs font-bold text-gray-600 mb-1">메모 / 특이사항<span className="font-normal text-gray-400 ml-1">(공개 시간표에 표시됩니다)</span></label>
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">
+                                                메모 / 특이사항<span className="font-normal text-gray-400 ml-1">(공개 시간표에 표시됩니다)</span>
+                                            </label>
                                             <input type="text" value={s.note} onChange={(e) => update(slot.slotKey, { note: e.target.value })} placeholder="예: 이번 주 보강 있음, 코치 변경 예정" className={INPUT} />
                                         </div>
 
                                         <div className="md:col-span-2">
-                                            <label className="block text-xs font-bold text-gray-600 mb-1">담당 코치<span className="font-normal text-gray-400 ml-1">(공개 시간표 카드에 표시됩니다)</span></label>
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">
+                                                담당 코치<span className="font-normal text-gray-400 ml-1">(공개 시간표 카드에 표시됩니다)</span>
+                                            </label>
                                             <div className="flex items-center gap-3">
                                                 <select value={s.coachId} onChange={(e) => update(slot.slotKey, { coachId: e.target.value })} className={INPUT + " flex-1"}>
                                                     <option value="">-- 코치 미배정 --</option>
@@ -362,7 +377,9 @@ export default function ScheduleAdminClient({
                                                     <img src={coachMap[s.coachId].imageUrl!} alt="" className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0" />
                                                 )}
                                             </div>
-                                            {coaches.length === 0 && <p className="text-xs text-amber-600 mt-1">등록된 코치가 없습니다. <a href="/admin/coaches" className="underline">코치 추가 →</a></p>}
+                                            {coaches.length === 0 && (
+                                                <p className="text-xs text-amber-600 mt-1">등록된 코치가 없습니다. <a href="/admin/coaches" className="underline">코치 추가 →</a></p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -374,7 +391,11 @@ export default function ScheduleAdminClient({
                                         <div className="flex items-center gap-3">
                                             {s.error && <span className="text-xs text-red-500">{s.error}</span>}
                                             {s.saved && !s.dirty && <span className="text-xs text-green-600 font-medium">✓ 저장됨</span>}
-                                            <button onClick={() => save(slot)} disabled={pending || !s.dirty} className="bg-brand-navy-900 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                                            <button
+                                                onClick={() => save(slot)}
+                                                disabled={pending || !s.dirty}
+                                                className="bg-brand-navy-900 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
                                                 {pending ? "저장 중..." : "저장"}
                                             </button>
                                         </div>
@@ -386,45 +407,20 @@ export default function ScheduleAdminClient({
                 </div>
             ))}
 
-            {/* Custom Slots Section */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-gray-700 text-white px-5 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="font-black text-lg">직접 추가 수업</span>
-                        <span className="text-white/70 text-sm">구글시트에 없는 수업을 직접 등록합니다</span>
+            {/* ── 추가 수업 (직접 등록) ── */}
+            {(initialCustomSlots.length > 0 || isAddingCustom) && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                        <span className="font-bold text-gray-700 text-sm">추가 수업</span>
+                        <span className="text-xs text-gray-400">{initialCustomSlots.length}개</span>
                     </div>
-                    {!isAddingCustom && (
-                        <button onClick={() => { setNewCustomForm(defaultCustomSlotForm()); setIsAddingCustom(true); }} className="bg-white text-gray-800 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 transition">
-                            + 수업 추가
-                        </button>
-                    )}
-                </div>
-
-                {isAddingCustom && (
-                    <div className="p-5 border-b border-gray-200 bg-blue-50">
-                        <p className="text-sm font-bold text-blue-800 mb-3">새 수업 추가</p>
-                        <CustomSlotFormFields form={newCustomForm} onChange={setNewCustomForm} coaches={coaches} INPUT={INPUT} TIME_INPUT={TIME_INPUT} />
-                        <div className="flex gap-2 mt-4">
-                            <button onClick={handleAddCustom} disabled={customPending || !newCustomForm.label.trim()} className="bg-brand-navy-900 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40">
-                                {customPending ? "저장 중..." : "저장"}
-                            </button>
-                            <button onClick={() => setIsAddingCustom(false)} className="bg-white border border-gray-300 text-gray-600 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition">
-                                취소
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {initialCustomSlots.length === 0 && !isAddingCustom ? (
-                    <div className="p-10 text-center text-gray-400 text-sm">직접 추가된 수업이 없습니다. 위 버튼으로 수업을 추가하세요.</div>
-                ) : (
                     <div className="divide-y divide-gray-100">
                         {initialCustomSlots.map((cs) => (
                             <div key={cs.id} className="p-5">
                                 {editingCustomId === cs.id ? (
                                     <div>
                                         <p className="text-sm font-bold text-gray-700 mb-3">수업 수정</p>
-                                        <CustomSlotFormFields form={editCustomForm} onChange={setEditCustomForm} coaches={coaches} INPUT={INPUT} TIME_INPUT={TIME_INPUT} />
+                                        <CustomSlotFormFields form={editCustomForm} onChange={setEditCustomForm} coaches={coaches} />
                                         <div className="flex gap-2 mt-4">
                                             <button onClick={() => handleUpdateCustom(cs.id)} disabled={customPending || !editCustomForm.label.trim()} className="bg-brand-navy-900 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40">
                                                 {customPending ? "저장 중..." : "저장"}
@@ -435,7 +431,7 @@ export default function ScheduleAdminClient({
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-wrap items-center gap-3">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span className={`text-xs font-bold text-white px-2.5 py-1 rounded-full ${DAY_COLOR[cs.dayKey] || "bg-gray-500"}`}>
                                             {DAY_LABEL[cs.dayKey] || cs.dayKey}
                                         </span>
@@ -451,10 +447,10 @@ export default function ScheduleAdminClient({
                                         )}
                                         {cs.isHidden && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">숨김</span>}
                                         {cs.note && <span className="text-xs text-brand-orange-600">📌 {cs.note}</span>}
-                                        <div className="ml-auto flex items-center gap-2">
+                                        <div className="ml-auto flex items-center gap-3">
                                             <button onClick={() => startEditCustom(cs)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">수정</button>
                                             {deletingCustomId === cs.id ? (
-                                                <span className="flex items-center gap-1">
+                                                <span className="flex items-center gap-1.5">
                                                     <button onClick={() => handleDeleteCustom(cs.id)} disabled={customPending} className="text-xs text-red-600 hover:text-red-800 font-bold">확인</button>
                                                     <span className="text-gray-300">/</span>
                                                     <button onClick={() => setDeletingCustomId(null)} className="text-xs text-gray-500 hover:text-gray-700">취소</button>
@@ -468,8 +464,35 @@ export default function ScheduleAdminClient({
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* Add custom slot form (appears at bottom when + button clicked) */}
+            {isAddingCustom && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100">
+                        <span className="font-bold text-gray-700 text-sm">새 수업 추가</span>
+                    </div>
+                    <div className="p-5">
+                        <CustomSlotFormFields form={newCustomForm} onChange={setNewCustomForm} coaches={coaches} />
+                        <div className="flex gap-2 mt-4">
+                            <button
+                                onClick={handleAddCustom}
+                                disabled={customPending || !newCustomForm.label.trim()}
+                                className="bg-brand-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-5 py-2 rounded-lg transition disabled:opacity-40"
+                            >
+                                {customPending ? "저장 중..." : "저장"}
+                            </button>
+                            <button
+                                onClick={() => setIsAddingCustom(false)}
+                                className="bg-white border border-gray-300 text-gray-600 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition"
+                            >
+                                취소
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -478,14 +501,10 @@ function CustomSlotFormFields({
     form,
     onChange,
     coaches,
-    INPUT,
-    TIME_INPUT,
 }: {
     form: CustomSlotForm;
     onChange: (f: CustomSlotForm) => void;
     coaches: Coach[];
-    INPUT: string;
-    TIME_INPUT: string;
 }) {
     const DAY_OPTIONS = [
         { key: "Mon", label: "월요일" }, { key: "Tue", label: "화요일" },

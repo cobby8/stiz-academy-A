@@ -63,3 +63,14 @@ export const getCoaches = cache(async () => {
         return [];
     }
 });
+
+export const getCustomClassSlots = cache(async () => {
+    try {
+        return await prisma.customClassSlot.findMany({
+            include: { coach: true },
+            orderBy: [{ dayKey: "asc" }, { startTime: "asc" }],
+        });
+    } catch {
+        return [];
+    }
+});

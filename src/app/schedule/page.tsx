@@ -1,4 +1,4 @@
-import { getAcademySettings, getClassSlotOverrides } from "@/lib/queries";
+import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots } from "@/lib/queries";
 import { fetchSheetSchedule } from "@/lib/googleSheetsSchedule";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
@@ -7,6 +7,10 @@ export const revalidate = 300;
 export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점" };
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_KEY_TO_LABEL: Record<string, string> = {
+    Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일",
+    Fri: "금요일", Sat: "토요일", Sun: "일요일",
+};
 
 const DAY_BG: Record<string, string> = {
     Mon: "bg-blue-600",  Tue: "bg-green-600",  Wed: "bg-yellow-500",
@@ -20,33 +24,49 @@ const DAY_CARD_BG: Record<string, string> = {
     Sun: "bg-gray-50 border-gray-200",
 };
 
+type MergedSlot = {
+    slotKey: string;
+    dayKey: string;
+    dayLabel: string;
+    startTime: string;
+    endTime: string;
+    gradeRange: string;
+    enrolled: number;
+    displayLabel: string;
+    note: string | null;
+    capacity: number;
+    isFull: boolean;
+    coach: { name: string; role: string; imageUrl: string | null } | null;
+};
+
 export default async function SchedulePage() {
     const settings = await getAcademySettings() as any;
     const phone = settings.contactPhone || "010-0000-0000";
     const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
 
-    const [rawSlots, overridesList] = await Promise.all([
+    const [rawSlots, overridesList, customSlotsList] = await Promise.all([
         sheetUrl ? fetchSheetSchedule(sheetUrl) : Promise.resolve([]),
         getClassSlotOverrides(),
+        getCustomClassSlots(),
     ]);
 
     // overrides map: slotKey → override record
     const overrideMap = Object.fromEntries(overridesList.map((o: any) => [o.slotKey, o]));
 
-    // Merge: apply overrides, filter hidden
-    const slots: (SheetClassSlot & {
-        displayLabel: string;
-        note: string | null;
-        capacity: number;
-        isFull: boolean;
-        coach: { name: string; role: string; imageUrl: string | null } | null;
-    })[] = rawSlots
+    // Merge sheet slots: apply overrides, filter hidden
+    const sheetMerged: MergedSlot[] = rawSlots
         .filter((s: SheetClassSlot) => !(overrideMap[s.slotKey]?.isHidden))
         .map((s: SheetClassSlot) => {
             const ov = overrideMap[s.slotKey];
             const capacity: number = ov?.capacity ?? 12;
             return {
-                ...s,
+                slotKey: s.slotKey,
+                dayKey: s.dayKey,
+                dayLabel: s.dayLabel,
+                startTime: ov?.startTimeOverride || s.startTime,
+                endTime: ov?.endTimeOverride || s.endTime,
+                gradeRange: s.gradeRange,
+                enrolled: s.enrolled,
                 displayLabel: ov?.label || `${s.dayLabel} ${s.period}교시`,
                 note: ov?.note || null,
                 capacity,
@@ -55,14 +75,36 @@ export default async function SchedulePage() {
             };
         });
 
-    // Group by day
-    const byDay = DAY_ORDER.reduce<Record<string, typeof slots>>((acc, d) => {
-        acc[d] = slots.filter((s) => s.dayKey === d).sort((a, b) => a.period - b.period);
+    // Custom slots: filter hidden, convert to MergedSlot shape
+    const customMerged: MergedSlot[] = (customSlotsList as any[])
+        .filter((cs) => !cs.isHidden)
+        .map((cs) => ({
+            slotKey: `custom-${cs.id}`,
+            dayKey: cs.dayKey,
+            dayLabel: DAY_KEY_TO_LABEL[cs.dayKey] || cs.dayKey,
+            startTime: cs.startTime,
+            endTime: cs.endTime,
+            gradeRange: cs.gradeRange || "",
+            enrolled: cs.enrolled,
+            displayLabel: cs.label,
+            note: cs.note || null,
+            capacity: cs.capacity,
+            isFull: cs.enrolled >= cs.capacity,
+            coach: cs.coach ?? null,
+        }));
+
+    // Merge all and group by day, sorted by startTime
+    const allSlots = [...sheetMerged, ...customMerged];
+
+    const byDay = DAY_ORDER.reduce<Record<string, MergedSlot[]>>((acc, d) => {
+        acc[d] = allSlots
+            .filter((s) => s.dayKey === d)
+            .sort((a, b) => a.startTime.localeCompare(b.startTime));
         return acc;
     }, {});
     const activeDays = DAY_ORDER.filter((d) => byDay[d].length > 0);
 
-    const hasData = slots.length > 0;
+    const hasData = allSlots.length > 0;
 
     return (
         <PublicPageLayout>

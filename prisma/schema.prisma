@@ -177,16 +177,36 @@ model AcademySettings {
 
 // Per-slot admin overrides for the Google Sheets schedule
 model ClassSlotOverride {
-  id        String   @id @default(uuid())
-  slotKey   String   @unique  // "{dayKey}-{period}" e.g., "Mon-4"
-  label     String?           // Custom display label (default: auto "월요일 4교시")
-  note      String?           // Additional note shown to visitors
-  isHidden  Boolean  @default(false)
-  capacity  Int      @default(12)
-  coachId   String?
-  coach     Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(uuid())
+  slotKey           String   @unique  // "{dayKey}-{period}" e.g., "Mon-4"
+  label             String?           // Custom display label (default: auto "월요일 4교시")
+  note              String?           // Additional note shown to visitors
+  isHidden          Boolean  @default(false)
+  capacity          Int      @default(12)
+  startTimeOverride String?           // Override auto-calculated start time e.g. "14:30"
+  endTimeOverride   String?           // Override auto-calculated end time e.g. "15:25"
+  coachId           String?
+  coach             Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Custom class slots not sourced from Google Sheets
+model CustomClassSlot {
+  id         String   @id @default(uuid())
+  dayKey     String   // "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun"
+  startTime  String   // "14:00"
+  endTime    String   // "15:00"
+  label      String   // Required display label
+  gradeRange String?  // e.g., "초4~중1"
+  enrolled   Int      @default(0)
+  capacity   Int      @default(12)
+  note       String?
+  isHidden   Boolean  @default(false)
+  coachId    String?
+  coach      Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // Coaches / Instructors Profile
@@ -201,4 +221,5 @@ model Coach {
   updatedAt   DateTime @updatedAt
 
   slots       ClassSlotOverride[]
+  customSlots CustomClassSlot[]
 }

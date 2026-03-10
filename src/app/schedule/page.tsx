@@ -3,6 +3,8 @@ import { fetchSheetSchedule } from "@/lib/googleSheetsSchedule";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
+export const dynamic = "force-dynamic";
+
 export const revalidate = 300;
 export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점" };
 

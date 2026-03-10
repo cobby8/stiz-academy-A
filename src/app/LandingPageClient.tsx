@@ -206,7 +206,7 @@ export default function LandingPageClient({
                                         <p className="text-sm text-gray-500 mb-3">{program.frequency}</p>
                                     )}
                                     {program.description && (
-                                        <p className="text-sm text-gray-600 leading-relaxed mb-4 line-clamp-2">
+                                        <p className="text-sm text-gray-600 leading-relaxed mb-4 line-clamp-2 whitespace-pre-line">
                                             {program.description}
                                         </p>
                                     )}

@@ -85,7 +85,7 @@ export default async function AboutPage() {
                                         {coach.role}
                                     </span>
                                     {coach.description && (
-                                        <p className="text-sm text-gray-600 leading-relaxed">{coach.description}</p>
+                                        <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{coach.description}</p>
                                     )}
                                 </div>
                             ))}

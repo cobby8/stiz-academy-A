@@ -2,7 +2,7 @@ import { getPrograms, getAcademySettings } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
 export const revalidate = 60;
-export const metadata = { title: "프로그램·수강료 안내 | STIZ 농구교실 다산점" };
+export const metadata = { title: "프로그램 안내 | STIZ 농구교실 다산점" };
 
 const DAY_OPTIONS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -56,6 +56,7 @@ export default async function ProgramsPage() {
         getAcademySettings() as Promise<any>,
     ]);
     const phone = settings.contactPhone || "010-0000-0000";
+    const termsOfService: string | null = settings.termsOfService ?? null;
 
     return (
         <PublicPageLayout>
@@ -122,7 +123,7 @@ export default async function ProgramsPage() {
 
                                         <div className="p-6 flex flex-col gap-4">
                                             {program.description && (
-                                                <p className="text-gray-600 leading-relaxed">{program.description}</p>
+                                                <p className="text-gray-600 leading-relaxed whitespace-pre-line">{program.description}</p>
                                             )}
 
                                             {/* Pricing table or single price */}
@@ -190,84 +191,17 @@ export default async function ProgramsPage() {
                 </div>
             </section>
 
-            {/* Tuition summary table */}
-            <section id="tuition" className="py-14 bg-gray-50 scroll-mt-20">
-                <div className="max-w-4xl mx-auto px-4">
-                    <h2 className="text-2xl font-black text-brand-navy-900 mb-8 text-center">수강료 안내</h2>
-
-                    {programs.length > 0 ? (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead className="bg-brand-navy-900 text-white">
-                                    <tr>
-                                        <th className="px-5 py-4 text-left font-bold">프로그램</th>
-                                        <th className="px-5 py-4 text-left font-bold">대상</th>
-                                        <th className="px-5 py-4 text-left font-bold">수업 빈도</th>
-                                        <th className="px-5 py-4 text-right font-bold">월 수강료</th>
-                                        <th className="px-5 py-4 text-right font-bold">셔틀비</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {programs.flatMap((program) => {
-                                        const days = program.days ? program.days.split(",") : [];
-                                        const weekend = isWeekendOnly(days);
-                                        const tiers = FREQ_TIERS.filter((t) => program[t.key] != null);
-                                        const freq = program.weeklyFrequency || program.frequency;
-
-                                        if (tiers.length > 0) {
-                                            return tiers.map((t, ti) => {
-                                                const fee = getShuttleFeeDisplay(program.shuttleFeeOverride, t.key, weekend);
-                                                return (
-                                                    <tr key={`${program.id}-${t.key}`} className="hover:bg-gray-50">
-                                                        <td className="px-5 py-4 font-medium text-gray-900">
-                                                            {ti === 0 ? program.name : ""}
-                                                        </td>
-                                                        <td className="px-5 py-4 text-gray-600">
-                                                            {ti === 0 ? (program.targetAge || "-") : ""}
-                                                        </td>
-                                                        <td className="px-5 py-4 text-gray-600">{t.label}</td>
-                                                        <td className="px-5 py-4 text-right font-bold text-brand-navy-900">
-                                                            {Number(program[t.key]).toLocaleString()}원
-                                                        </td>
-                                                        <td className="px-5 py-4 text-right text-blue-600 font-medium">
-                                                            {fee || <span className="text-gray-400 font-normal">운행 없음</span>}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            });
-                                        }
-
-                                        return [(
-                                            <tr key={program.id} className="hover:bg-gray-50">
-                                                <td className="px-5 py-4 font-medium text-gray-900">{program.name}</td>
-                                                <td className="px-5 py-4 text-gray-600">{program.targetAge || "-"}</td>
-                                                <td className="px-5 py-4 text-gray-600">{freq || "-"}</td>
-                                                <td className="px-5 py-4 text-right font-bold text-brand-navy-900">
-                                                    {program.price.toLocaleString()}원
-                                                </td>
-                                                <td className="px-5 py-4 text-right text-gray-400">-</td>
-                                            </tr>
-                                        )];
-                                    })}
-                                </tbody>
-                            </table>
+            {/* Terms of Service */}
+            {termsOfService && (
+                <section id="terms" className="py-14 bg-gray-50 scroll-mt-20">
+                    <div className="max-w-4xl mx-auto px-4">
+                        <h2 className="text-2xl font-black text-brand-navy-900 mb-8 text-center">이용약관</h2>
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{termsOfService}</p>
                         </div>
-                    ) : (
-                        <div className="bg-white rounded-2xl p-10 text-center text-gray-400 border border-gray-200">
-                            수강료 정보를 준비 중입니다.
-                        </div>
-                    )}
-
-                    <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
-                        <p className="font-bold mb-1">📌 수강료 안내 사항</p>
-                        <ul className="space-y-1 text-blue-600">
-                            <li>• 수강료는 매월 초에 납부하셔야 합니다.</li>
-                            <li>• 형제·자매 등록 시 할인 혜택이 있습니다. 문의해 주세요.</li>
-                            <li>• 체험 수업은 무료로 진행됩니다.</li>
-                        </ul>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
 
             {/* CTA */}
             <section className="bg-brand-orange-500 text-white py-14">

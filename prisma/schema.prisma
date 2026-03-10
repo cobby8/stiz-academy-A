@@ -50,6 +50,7 @@ model Program {
   weeklyFrequency    String?  // "주1회" | "주2회" | "주3회" | "매일반" (primary display badge)
   description        String?
   price              Int      // Fallback/default price
+  order              Int      @default(0)  // Display sort order
   days               String?  // Comma-separated day keys: "Mon,Tue,Wed"
   priceWeek1         Int?     // 주1회 수강료
   priceWeek2         Int?     // 주2회 수강료
@@ -162,7 +163,7 @@ model AcademySettings {
   shuttleInfoText    String?  // Text explaining shuttle bus service
   contactPhone       String?
   address            String?
-  
+  termsOfService     String?  @db.Text  // Program terms of service content
   // Visual Builder JSON Data
   pageDesignJSON     String?  @db.Text
 

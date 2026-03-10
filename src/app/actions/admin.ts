@@ -53,6 +53,25 @@ export async function updateProgram(id: string, data: ProgramData) {
     revalidatePath("/schedule");
 }
 
+export async function reorderPrograms(orderedIds: string[]) {
+    try {
+        await prisma.$transaction(
+            orderedIds.map((id, index) =>
+                prisma.program.update({ where: { id }, data: { order: index } })
+            )
+        );
+    } catch {
+        // order column may not exist yet — try raw SQL
+        try {
+            for (let i = 0; i < orderedIds.length; i++) {
+                await prisma.$executeRaw`UPDATE "Program" SET "order" = ${i} WHERE id = ${orderedIds[i]}`;
+            }
+        } catch {}
+    }
+    revalidatePath("/admin/programs");
+    revalidatePath("/programs");
+}
+
 export async function deleteProgram(id: string) {
     try {
         await prisma.class.deleteMany({ where: { programId: id } });
@@ -109,6 +128,7 @@ export async function updateAcademySettings(data: {
     classDays?: string;
     siteBodyFont?: string;
     siteHeadingFont?: string;
+    termsOfService?: string;
 }) {
     try {
         // Empty URL fields → don't overwrite existing value in DB

@@ -53,7 +53,7 @@ export default function AdminLayout({
                 <nav className="p-4 space-y-1 flex-1">
                     <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">홈페이지 콘텐츠</p>
                     <NavItem href="/admin/settings" active={pathname.startsWith("/admin/settings")} icon="🏫" label="학원 소개 관리" />
-                    <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램·수강료" />
+                    <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램·이용약관" />
                     <NavItem href="/admin/coaches" active={pathname.startsWith("/admin/coaches")} icon="👤" label="코치/강사진 관리" />
                     <NavItem href="/admin/schedule" active={pathname.startsWith("/admin/schedule")} icon="📅" label="수업시간표 관리" />
 

@@ -34,7 +34,7 @@ export const getAcademySettings = cache(async () => {
 export const getPrograms = cache(async () => {
     try {
         return await prisma.program.findMany({
-            orderBy: { createdAt: "desc" },
+            orderBy: [{ order: "asc" }, { createdAt: "desc" }],
         });
     } catch {
         // Prisma failed (likely schema mismatch) — try raw SQL with original columns
@@ -48,6 +48,7 @@ export const getPrograms = cache(async () => {
             return rows.map((r: any) => ({
                 ...r,
                 price: Number(r.price ?? 0),
+                order: 0,
                 targetAge: r.targetage ?? r.targetAge ?? null,
                 weeklyFrequency: r.weeklyfrequency ?? r.weeklyFrequency ?? null,
                 days: null,

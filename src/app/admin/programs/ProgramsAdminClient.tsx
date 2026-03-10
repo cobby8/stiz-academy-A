@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createProgram, updateProgram, deleteProgram } from "@/app/actions/admin";
+import { createProgram, updateProgram, deleteProgram, reorderPrograms, updateAcademySettings } from "@/app/actions/admin";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -388,8 +388,18 @@ function ProgramFormFields({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function ProgramsAdminClient({ programs: initialPrograms }: { programs: Program[] }) {
+export default function ProgramsAdminClient({
+    programs: initialPrograms,
+    termsOfService: initialTerms,
+}: {
+    programs: Program[];
+    termsOfService: string | null;
+}) {
     const router = useRouter();
+    // Programs list with local state for optimistic drag-and-drop reorder
+    const [programs, setPrograms] = useState(initialPrograms);
+    useEffect(() => { setPrograms(initialPrograms); }, [initialPrograms]);
+
     const [addForm, setAddForm] = useState<ProgramForm>(emptyForm);
     const [editId, setEditId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<ProgramForm>(emptyForm);
@@ -397,6 +407,59 @@ export default function ProgramsAdminClient({ programs: initialPrograms }: { pro
     const [addPending, startAddTransition] = useTransition();
     const [editPending, startEditTransition] = useTransition();
     const [deletePending, startDeleteTransition] = useTransition();
+
+    // Drag-and-drop state
+    const dragIdRef = useRef<string | null>(null);
+    const [dragOverId, setDragOverId] = useState<string | null>(null);
+    const [reorderPending, startReorderTransition] = useTransition();
+
+    function handleDragStart(e: React.DragEvent, id: string) {
+        dragIdRef.current = id;
+        e.dataTransfer.effectAllowed = "move";
+    }
+    function handleDragOver(e: React.DragEvent, id: string) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setDragOverId(id);
+    }
+    function handleDrop(e: React.DragEvent, targetId: string) {
+        e.preventDefault();
+        setDragOverId(null);
+        const fromId = dragIdRef.current;
+        dragIdRef.current = null;
+        if (!fromId || fromId === targetId) return;
+        const fromIdx = programs.findIndex((p) => p.id === fromId);
+        const toIdx = programs.findIndex((p) => p.id === targetId);
+        if (fromIdx === -1 || toIdx === -1) return;
+        const next = [...programs];
+        const [moved] = next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, moved);
+        setPrograms(next); // optimistic
+        startReorderTransition(async () => {
+            try { await reorderPrograms(next.map((p) => p.id)); } catch {}
+        });
+    }
+    function handleDragEnd() {
+        dragIdRef.current = null;
+        setDragOverId(null);
+    }
+
+    // Terms of service state
+    const [terms, setTerms] = useState(initialTerms ?? "");
+    const [termsSaved, setTermsSaved] = useState(false);
+    const [termsPending, startTermsTransition] = useTransition();
+
+    function saveTerms() {
+        startTermsTransition(async () => {
+            try {
+                await updateAcademySettings({ termsOfService: terms });
+                setTermsSaved(true);
+                setTimeout(() => setTermsSaved(false), 2000);
+            } catch (e: any) {
+                alert(e.message || "저장 실패");
+            }
+        });
+    }
 
     function handleAdd() {
         if (!addForm.name.trim()) return;
@@ -439,7 +502,7 @@ export default function ProgramsAdminClient({ programs: initialPrograms }: { pro
     return (
         <div className="space-y-8">
             <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">프로그램(커리큘럼) 관리</h1>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">프로그램·이용약관 관리</h1>
                 <p className="text-gray-500">학원에서 운영하는 교육 프로그램을 등록하고 관리합니다.</p>
             </div>
 
@@ -473,17 +536,26 @@ export default function ProgramsAdminClient({ programs: initialPrograms }: { pro
 
             {/* Program List */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <h2 className="text-lg font-bold text-gray-900 p-6 border-b border-gray-100 bg-gray-50/50">
-                    등록된 프로그램 목록
-                </h2>
+                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-4">
+                    <h2 className="text-lg font-bold text-gray-900">등록된 프로그램 목록</h2>
+                    <p className="text-xs text-gray-400">⠿ 핸들을 잡고 드래그하여 순서 변경</p>
+                </div>
                 <ul className="divide-y divide-gray-100">
-                    {initialPrograms.length === 0 && (
+                    {programs.length === 0 && (
                         <li className="p-8 text-center text-gray-500">등록된 프로그램이 없습니다.</li>
                     )}
-                    {initialPrograms.map((program, i) => (
-                        <li key={program.id} className="p-6 hover:bg-gray-50/50 transition">
+                    {programs.map((program, i) => (
+                        <li
+                            key={program.id}
+                            draggable={editId !== program.id}
+                            onDragStart={(e) => handleDragStart(e, program.id)}
+                            onDragOver={(e) => handleDragOver(e, program.id)}
+                            onDrop={(e) => handleDrop(e, program.id)}
+                            onDragEnd={handleDragEnd}
+                            className={`transition ${dragOverId === program.id ? "bg-blue-50 border-blue-300" : "hover:bg-gray-50/50"}`}
+                        >
                             {editId === program.id ? (
-                                <div>
+                                <div className="p-6">
                                     <p className="text-sm font-bold text-blue-700 mb-3">수정 중...</p>
                                     <ProgramFormFields
                                         form={editForm} onChange={setEditForm}
@@ -493,19 +565,58 @@ export default function ProgramsAdminClient({ programs: initialPrograms }: { pro
                                     />
                                 </div>
                             ) : (
-                                <ProgramCardInline
-                                    program={program} index={i}
-                                    onEdit={() => { setEditId(program.id); setEditForm(programToForm(program)); }}
-                                    onDelete={() => handleDelete(program.id)}
-                                    isDeleting={deletingId === program.id}
-                                    deletePending={deletePending}
-                                    onSetDeleting={() => setDeletingId(program.id)}
-                                    onCancelDelete={() => setDeletingId(null)}
-                                />
+                                <div className="flex items-start gap-0">
+                                    {/* Drag handle */}
+                                    <div
+                                        className="flex-shrink-0 w-10 flex items-center justify-center self-stretch cursor-grab text-gray-300 hover:text-gray-500 select-none border-r border-gray-100"
+                                        title="드래그하여 순서 변경"
+                                    >
+                                        <span className="text-xl leading-none">⠿</span>
+                                    </div>
+                                    <div className="flex-1 p-5">
+                                        <ProgramCardInline
+                                            program={program} index={i}
+                                            onEdit={() => { setEditId(program.id); setEditForm(programToForm(program)); }}
+                                            onDelete={() => handleDelete(program.id)}
+                                            isDeleting={deletingId === program.id}
+                                            deletePending={deletePending}
+                                            onSetDeleting={() => setDeletingId(program.id)}
+                                            onCancelDelete={() => setDeletingId(null)}
+                                        />
+                                    </div>
+                                </div>
                             )}
                         </li>
                     ))}
                 </ul>
+            </div>
+
+            {/* Terms of Service editor */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900">이용약관 관리</h2>
+                        <p className="text-sm text-gray-500 mt-0.5">프로그램 안내 페이지 하단에 표시됩니다.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {termsSaved && <span className="text-xs text-green-600 font-medium">✓ 저장됨</span>}
+                        <button
+                            onClick={saveTerms}
+                            disabled={termsPending}
+                            className="bg-brand-navy-900 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40"
+                        >
+                            {termsPending ? "저장 중..." : "저장"}
+                        </button>
+                    </div>
+                </div>
+                <textarea
+                    value={terms}
+                    onChange={(e) => { setTerms(e.target.value); setTermsSaved(false); }}
+                    rows={12}
+                    placeholder={`예시:\n제1조 (목적)\n본 약관은 STIZ 농구교실 다산점(이하 '학원')이 제공하는 교육 서비스 이용에 관한 기본적인 사항을 규정합니다.\n\n제2조 (수강료 및 환불)\n• 수강료는 매월 초에 납부합니다.\n• 개인 사정으로 인한 환불은 규정에 따릅니다.`}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white resize-y font-mono leading-relaxed"
+                />
+                <p className="text-xs text-gray-400 mt-2">엔터키로 줄바꿈이 프론트에 그대로 적용됩니다.</p>
             </div>
         </div>
     );
@@ -591,7 +702,7 @@ function ProgramCardInline({
                 )}
 
                 {program.description && (
-                    <p className="text-sm text-gray-500 mt-2">{program.description}</p>
+                    <p className="text-sm text-gray-500 mt-2 whitespace-pre-line">{program.description}</p>
                 )}
             </div>
 

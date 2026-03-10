@@ -130,26 +130,36 @@ export async function updateAcademySettings(data: {
     siteHeadingFont?: string;
     termsOfService?: string;
 }) {
-    try {
-        // Empty URL fields → don't overwrite existing value in DB
-        const payload = { ...data };
-        if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
-        if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
+    // Empty URL fields → don't overwrite existing value in DB
+    const payload = { ...data };
+    if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
+    if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
 
+    try {
         await prisma.academySettings.upsert({
             where: { id: "singleton" },
             update: payload,
             create: { id: "singleton", ...payload }
         });
-        revalidatePath("/admin/settings");
-        revalidatePath("/");
-        revalidatePath("/about");
-        revalidatePath("/schedule");
-        revalidatePath("/", "layout");
-    } catch (e) {
-        console.error("Failed to update academy settings:", e);
-        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+    } catch {
+        // termsOfService column may not exist yet in DB — retry without it
+        try {
+            const { termsOfService, ...payloadWithoutNew } = payload;
+            await prisma.academySettings.upsert({
+                where: { id: "singleton" },
+                update: payloadWithoutNew,
+                create: { id: "singleton", ...payloadWithoutNew }
+            });
+        } catch (e) {
+            console.error("Failed to update academy settings:", e);
+            throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
+        }
     }
+    revalidatePath("/admin/settings");
+    revalidatePath("/");
+    revalidatePath("/about");
+    revalidatePath("/schedule");
+    revalidatePath("/", "layout");
 }
 
 export async function createCoach(data: {

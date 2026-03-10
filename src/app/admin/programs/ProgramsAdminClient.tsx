@@ -400,6 +400,7 @@ export default function ProgramsAdminClient({
     const [programs, setPrograms] = useState(initialPrograms);
     useEffect(() => { setPrograms(initialPrograms); }, [initialPrograms]);
 
+    const [showAddModal, setShowAddModal] = useState(false);
     const [addForm, setAddForm] = useState<ProgramForm>(emptyForm);
     const [editId, setEditId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<ProgramForm>(emptyForm);
@@ -467,6 +468,7 @@ export default function ProgramsAdminClient({
             try {
                 await createProgram(formToData(addForm));
                 setAddForm(emptyForm());
+                setShowAddModal(false);
                 router.refresh();
             } catch (e: any) {
                 alert(e.message || "저장 실패");
@@ -501,10 +503,52 @@ export default function ProgramsAdminClient({
 
     return (
         <div className="space-y-8">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">프로그램·이용약관 관리</h1>
-                <p className="text-gray-500">학원에서 운영하는 교육 프로그램을 등록하고 관리합니다.</p>
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">프로그램·이용약관 관리</h1>
+                    <p className="text-gray-500">학원에서 운영하는 교육 프로그램을 등록하고 관리합니다.</p>
+                </div>
+                <button
+                    onClick={() => { setAddForm(emptyForm()); setShowAddModal(true); }}
+                    className="flex-shrink-0 flex items-center gap-2 bg-brand-orange-500 hover:bg-orange-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm"
+                >
+                    <span className="text-lg leading-none">+</span>
+                    프로그램 등록
+                </button>
             </div>
+
+            {/* Add Program Modal */}
+            {showAddModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={() => !addPending && setShowAddModal(false)}
+                    />
+                    {/* Dialog */}
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
+                            <h2 className="text-lg font-bold text-gray-900">새 프로그램 등록</h2>
+                            <button
+                                type="button"
+                                onClick={() => setShowAddModal(false)}
+                                disabled={addPending}
+                                className="text-gray-400 hover:text-gray-600 transition text-xl leading-none px-1"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <ProgramFormFields
+                                form={addForm} onChange={setAddForm}
+                                onSubmit={handleAdd}
+                                onCancel={() => setShowAddModal(false)}
+                                submitLabel="저장하기" pending={addPending}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Shuttle fee reference */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -523,15 +567,6 @@ export default function ProgramsAdminClient({
                         </div>
                     ))}
                 </div>
-            </div>
-
-            {/* Add Form */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">새 프로그램 등록</h2>
-                <ProgramFormFields
-                    form={addForm} onChange={setAddForm}
-                    onSubmit={handleAdd} submitLabel="저장하기" pending={addPending}
-                />
             </div>
 
             {/* Program List */}

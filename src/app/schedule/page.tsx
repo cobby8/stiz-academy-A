@@ -1,5 +1,5 @@
 import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms, getSheetSlotCache } from "@/lib/queries";
-import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
+import { fetchSheetSchedule, type SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
 // 구글 시트 데이터는 SheetSlotCache(DB)에서 읽음 → 외부 HTTP 의존 없음.
@@ -58,7 +58,17 @@ export default async function SchedulePage({
     ]);
 
     const phone = (settings as any).contactPhone || "010-0000-0000";
-    const rawSlots: SheetClassSlot[] = cachedSlots ?? [];
+    const sheetUrl = (settings as any).googleSheetsScheduleUrl as string | null | undefined;
+
+    // DB 캐시가 비어있으면 Google Sheets에서 직접 읽기 (폴백)
+    let rawSlots: SheetClassSlot[] = cachedSlots ?? [];
+    if (rawSlots.length === 0 && sheetUrl) {
+        try {
+            rawSlots = await fetchSheetSchedule(sheetUrl);
+        } catch {
+            rawSlots = [];
+        }
+    }
 
     // overrides map: slotKey → override record
     const overrideMap = Object.fromEntries(overridesList.map((o: any) => [o.slotKey, o]));

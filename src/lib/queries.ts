@@ -55,35 +55,27 @@ export const getAcademySettings = cache(async () => {
 });
 
 export const getPrograms = cache(async () => {
+    // Use $queryRawUnsafe (simple query protocol) for PgBouncer transaction mode compatibility
     try {
-        return await prisma.program.findMany({
-            orderBy: [{ order: "asc" }, { createdAt: "desc" }],
-        });
-    } catch {
-        // Prisma failed (likely schema mismatch) — try raw SQL with original columns
-        try {
-            const rows = await prisma.$queryRaw<any[]>`
-                SELECT
-                    id, name, "targetAge", frequency, "weeklyFrequency",
-                    description, price, "createdAt", "updatedAt"
-                FROM "Program" ORDER BY "createdAt" DESC
-            `;
-            return rows.map((r: any) => ({
-                ...r,
-                price: Number(r.price ?? 0),
-                order: 0,
-                targetAge: r.targetage ?? r.targetAge ?? null,
-                weeklyFrequency: r.weeklyfrequency ?? r.weeklyFrequency ?? null,
-                days: null,
-                priceWeek1: null,
-                priceWeek2: null,
-                priceWeek3: null,
-                priceDaily: null,
-                shuttleFeeOverride: null,
-            }));
-        } catch {
-            return [];
-        }
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, "targetAge", frequency, "weeklyFrequency", description,
+                    price, "order", days, "priceWeek1", "priceWeek2", "priceWeek3",
+                    "priceDaily", "shuttleFeeOverride", "createdAt", "updatedAt"
+             FROM "Program" ORDER BY "order" ASC, "createdAt" DESC`
+        );
+        return rows.map((r: any) => ({
+            ...r,
+            price: Number(r.price ?? 0),
+            order: Number(r.order ?? 0),
+            priceWeek1: r.priceWeek1 != null ? Number(r.priceWeek1) : null,
+            priceWeek2: r.priceWeek2 != null ? Number(r.priceWeek2) : null,
+            priceWeek3: r.priceWeek3 != null ? Number(r.priceWeek3) : null,
+            priceDaily: r.priceDaily != null ? Number(r.priceDaily) : null,
+            shuttleFeeOverride: r.shuttleFeeOverride != null ? Number(r.shuttleFeeOverride) : null,
+        }));
+    } catch (e) {
+        console.error("[getPrograms] failed:", e);
+        return [];
     }
 });
 
@@ -99,144 +91,95 @@ export const getClasses = cache(async () => {
 });
 
 export const getClassSlotOverrides = cache(async () => {
-    // Try full Prisma query first (works after DB migration)
     try {
-        return await prisma.classSlotOverride.findMany({
-            include: { coach: true },
-            orderBy: { slotKey: "asc" },
-        });
-    } catch {
-        // Prisma failed (likely new columns not yet in DB) — raw SQL fallback with original columns
-    }
-    try {
-        const rows = await prisma.$queryRaw<any[]>`
-            SELECT
-                cso.id,
-                cso."slotKey",
-                cso.label,
-                cso.note,
-                cso."isHidden",
-                cso.capacity,
-                cso."coachId",
-                cso."createdAt",
-                cso."updatedAt",
-                c.id          AS c_id,
-                c.name        AS c_name,
-                c.role        AS c_role,
-                c."imageUrl"  AS c_imageurl,
-                c.description AS c_desc,
-                c."order"     AS c_order
-            FROM "ClassSlotOverride" cso
-            LEFT JOIN "Coach" c ON cso."coachId" = c.id
-            ORDER BY cso."slotKey" ASC
-        `;
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                cso.id, cso."slotKey", cso.label, cso.note, cso."isHidden", cso.capacity,
+                cso."startTimeOverride", cso."endTimeOverride",
+                cso."coachId", cso."programId", cso."createdAt", cso."updatedAt",
+                c.id AS c_id, c.name AS c_name, c.role AS c_role,
+                c."imageUrl" AS c_imageurl, c.description AS c_desc, c."order" AS c_order
+             FROM "ClassSlotOverride" cso
+             LEFT JOIN "Coach" c ON cso."coachId" = c.id
+             ORDER BY cso."slotKey" ASC`
+        );
         return rows.map((r: any) => ({
             id: r.id,
-            slotKey: r.slotkey ?? r.slotKey,
+            slotKey: r.slotKey ?? r.slotkey,
             label: r.label ?? null,
             note: r.note ?? null,
-            isHidden: r.ishidden ?? r.isHidden ?? false,
+            isHidden: r.isHidden ?? r.ishidden ?? false,
             capacity: Number(r.capacity ?? 12),
-            coachId: r.coachid ?? r.coachId ?? null,
-            startTimeOverride: null,
-            endTimeOverride: null,
-            programId: null,
-            createdAt: r.createdat ?? r.createdAt,
-            updatedAt: r.updatedat ?? r.updatedAt,
+            coachId: r.coachId ?? r.coachid ?? null,
+            startTimeOverride: r.startTimeOverride ?? r.starttimeoverride ?? null,
+            endTimeOverride: r.endTimeOverride ?? r.endtimeoverride ?? null,
+            programId: r.programId ?? r.programid ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
             coach: r.c_id ? {
-                id: r.c_id,
-                name: r.c_name,
-                role: r.c_role,
-                imageUrl: r.c_imageurl ?? null,
-                description: r.c_desc ?? null,
+                id: r.c_id, name: r.c_name, role: r.c_role,
+                imageUrl: r.c_imageurl ?? null, description: r.c_desc ?? null,
                 order: Number(r.c_order ?? 0),
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                slots: [],
-                customSlots: [],
+                createdAt: new Date(), updatedAt: new Date(), slots: [], customSlots: [],
             } : null,
         }));
-    } catch {
+    } catch (e) {
+        console.error("[getClassSlotOverrides] failed:", e);
         return [];
     }
 });
 
 export const getCoaches = cache(async () => {
     try {
-        return await prisma.coach.findMany({
-            orderBy: { order: "asc" },
-        });
-    } catch {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, role, description, "imageUrl", "order", "createdAt", "updatedAt"
+             FROM "Coach" ORDER BY "order" ASC`
+        );
+        return rows.map((r: any) => ({ ...r, order: Number(r.order ?? 0) }));
+    } catch (e) {
+        console.error("[getCoaches] failed:", e);
         return [];
     }
 });
 
 export const getCustomClassSlots = cache(async () => {
     try {
-        return await prisma.customClassSlot.findMany({
-            include: { coach: true },
-            orderBy: [{ dayKey: "asc" }, { startTime: "asc" }],
-        });
-    } catch {
-        // Prisma failed (likely schema mismatch) — raw SQL fallback
-    }
-    try {
-        const rows = await prisma.$queryRaw<any[]>`
-            SELECT
-                cs.id,
-                cs."dayKey",
-                cs."startTime",
-                cs."endTime",
-                cs.label,
-                cs."gradeRange",
-                cs.enrolled,
-                cs.capacity,
-                cs.note,
-                cs."isHidden",
-                cs."coachId",
-                cs."programId",
-                cs."createdAt",
-                cs."updatedAt",
-                c.id          AS c_id,
-                c.name        AS c_name,
-                c.role        AS c_role,
-                c."imageUrl"  AS c_imageurl,
-                c.description AS c_desc,
-                c."order"     AS c_order
-            FROM "CustomClassSlot" cs
-            LEFT JOIN "Coach" c ON cs."coachId" = c.id
-            ORDER BY cs."dayKey" ASC, cs."startTime" ASC
-        `;
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                cs.id, cs."dayKey", cs."startTime", cs."endTime", cs.label,
+                cs."gradeRange", cs.enrolled, cs.capacity, cs.note, cs."isHidden",
+                cs."coachId", cs."programId", cs."createdAt", cs."updatedAt",
+                c.id AS c_id, c.name AS c_name, c.role AS c_role,
+                c."imageUrl" AS c_imageurl, c.description AS c_desc, c."order" AS c_order
+             FROM "CustomClassSlot" cs
+             LEFT JOIN "Coach" c ON cs."coachId" = c.id
+             ORDER BY cs."dayKey" ASC, cs."startTime" ASC`
+        );
         return rows.map((r: any) => ({
             id: r.id,
-            dayKey: r.daykey ?? r.dayKey,
-            startTime: r.starttime ?? r.startTime,
-            endTime: r.endtime ?? r.endTime,
+            dayKey: r.dayKey ?? r.daykey,
+            startTime: r.startTime ?? r.starttime,
+            endTime: r.endTime ?? r.endtime,
             label: r.label ?? "",
-            gradeRange: r.graderange ?? r.gradeRange ?? null,
+            gradeRange: r.gradeRange ?? r.graderange ?? null,
             enrolled: Number(r.enrolled ?? 0),
             capacity: Number(r.capacity ?? 12),
             note: r.note ?? null,
-            isHidden: r.ishidden ?? r.isHidden ?? false,
-            coachId: r.coachid ?? r.coachId ?? null,
-            programId: r.programid ?? r.programId ?? null,
-            createdAt: r.createdat ?? r.createdAt,
-            updatedAt: r.updatedat ?? r.updatedAt,
+            isHidden: r.isHidden ?? r.ishidden ?? false,
+            coachId: r.coachId ?? r.coachid ?? null,
+            programId: r.programId ?? r.programid ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
             coach: r.c_id ? {
-                id: r.c_id,
-                name: r.c_name,
-                role: r.c_role,
-                imageUrl: r.c_imageurl ?? null,
-                description: r.c_desc ?? null,
+                id: r.c_id, name: r.c_name, role: r.c_role,
+                imageUrl: r.c_imageurl ?? null, description: r.c_desc ?? null,
                 order: Number(r.c_order ?? 0),
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                slots: [],
-                customSlots: [],
+                createdAt: new Date(), updatedAt: new Date(), slots: [], customSlots: [],
             } : null,
             program: null,
         }));
-    } catch {
+    } catch (e) {
+        console.error("[getCustomClassSlots] failed:", e);
         return [];
     }
 });

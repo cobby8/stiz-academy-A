@@ -22,7 +22,7 @@ export async function GET() {
         prisma.coach.findMany({ orderBy: { order: "asc" } }),
         prisma.classSlotOverride.findMany({ orderBy: { slotKey: "asc" } }),
         prisma.customClassSlot.findMany({ orderBy: [{ dayKey: "asc" }, { startTime: "asc" }] }),
-        prisma.route.findMany({ include: { stops: { orderBy: { order: "asc" } } } }),
+        prisma.route.findMany({ include: { stops: { orderBy: { createdAt: "asc" } } } }),
     ]);
 
     const backup = {

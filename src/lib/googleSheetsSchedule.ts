@@ -213,12 +213,12 @@ export async function fetchSheetSchedule(sheetUrl: string): Promise<SheetClassSl
     }
 }
 
-/** 관리자 페이지용: 항상 최신 데이터 (캐시 없음) */
+/** 관리자 페이지용: 30초 캐시 (수정 후 revalidatePath 로 즉시 무효화됨) */
 export async function fetchSheetScheduleAdmin(sheetUrl: string): Promise<SheetClassSlot[]> {
     const csvUrl = extractCsvUrl(sheetUrl);
     if (!csvUrl) return [];
     try {
-        const res = await fetch(csvUrl, { cache: "no-store" });
+        const res = await fetch(csvUrl, { next: { revalidate: 30 } });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return parseSheetCSV(await res.text());
     } catch (e) {

@@ -2,7 +2,7 @@ import { getAcademySettings, getClassSlotOverrides, getCoaches, getCustomClassSl
 import { fetchSheetScheduleAdmin } from "@/lib/googleSheetsSchedule";
 import ScheduleAdminClient from "./ScheduleAdminClient";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function AdminSchedulePage() {
     const settings = await getAcademySettings() as any;

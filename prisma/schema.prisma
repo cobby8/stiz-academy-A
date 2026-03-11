@@ -209,6 +209,8 @@ model ClassSlotOverride {
   program           Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  @@index([coachId])
 }
 
 // Custom class slots not sourced from Google Sheets
@@ -229,6 +231,9 @@ model CustomClassSlot {
   program    Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([dayKey, startTime])
+  @@index([coachId])
 }
 
 // Coaches / Instructors Profile

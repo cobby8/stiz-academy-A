@@ -149,6 +149,18 @@ function BackupButtons() {
         finally { setBusy(false); }
     }
 
+    async function handleBackupNow() {
+        if (!confirm("지금 즉시 클라우드에 백업하시겠습니까?")) return;
+        setBusy(true);
+        setMsg(null);
+        try {
+            const res = await fetch("/api/admin/backup-now", { method: "POST" });
+            const data = await res.json();
+            data.success ? show(`저장 완료 (${data.filename?.slice(12, 27)})`, true) : show(`오류: ${data.error}`, false);
+        } catch { show("백업 실패", false); }
+        finally { setBusy(false); }
+    }
+
     return (
         <div className="px-4 py-2 space-y-1">
             <a
@@ -171,6 +183,22 @@ function BackupButtons() {
                 <span className="text-xl">☁️</span>
                 <span>최신 자동백업 복원</span>
             </button>
+            <button
+                onClick={handleBackupNow}
+                disabled={busy}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
+            >
+                <span className="text-xl">☁️</span>
+                <span>지금 클라우드에 저장</span>
+            </button>
+            <a
+                href="/api/admin/export-seed"
+                download="seed-data.ts"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+            >
+                <span className="text-xl">🌱</span>
+                <span>seed 내보내기</span>
+            </a>
             {msg && <p className={`text-xs px-4 py-1 break-all ${ok ? "text-green-400" : "text-yellow-400"}`}>{msg}</p>}
         </div>
     );

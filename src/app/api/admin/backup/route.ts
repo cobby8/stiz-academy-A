@@ -7,6 +7,15 @@ function replacer(_: string, v: unknown) {
     return typeof v === "bigint" ? Number(v) : v;
 }
 
+async function safeQuery<T = any>(sql: string): Promise<T[]> {
+    try {
+        return await prisma.$queryRawUnsafe<T[]>(sql);
+    } catch (e) {
+        console.warn(`[backup] table query failed (may not exist): ${sql.slice(0, 60)}`, (e as Error).message);
+        return [];
+    }
+}
+
 // GET /api/admin/backup — download full DB snapshot as JSON
 export async function GET() {
     try {
@@ -19,13 +28,13 @@ export async function GET() {
             routes,
             stops,
         ] = await Promise.all([
-            prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`),
-            prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Program" ORDER BY "order" ASC, "createdAt" DESC`),
-            prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Coach" ORDER BY "order" ASC`),
-            prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "ClassSlotOverride" ORDER BY "slotKey" ASC`),
-            prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "CustomClassSlot" ORDER BY "dayKey" ASC, "startTime" ASC`),
-            prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Route"`),
-            prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Stop" ORDER BY "createdAt" ASC`),
+            safeQuery(`SELECT * FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`),
+            safeQuery(`SELECT * FROM "Program" ORDER BY "order" ASC, "createdAt" DESC`),
+            safeQuery(`SELECT * FROM "Coach" ORDER BY "order" ASC`),
+            safeQuery(`SELECT * FROM "ClassSlotOverride" ORDER BY "slotKey" ASC`),
+            safeQuery(`SELECT * FROM "CustomClassSlot" ORDER BY "dayKey" ASC, "startTime" ASC`),
+            safeQuery(`SELECT * FROM "Route"`),
+            safeQuery(`SELECT * FROM "Stop" ORDER BY "createdAt" ASC`),
         ]);
 
         // Attach stops to routes

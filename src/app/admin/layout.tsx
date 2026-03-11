@@ -111,7 +111,9 @@ export default function AdminLayout({
 
 function BackupButtons() {
     const [restoring, setRestoring] = useState(false);
+    const [seeding, setSeeding] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [msgType, setMsgType] = useState<"success" | "error">("success");
 
     function handleDownload() {
         window.location.href = "/api/admin/backup";
@@ -140,14 +142,42 @@ function BackupButtons() {
                     .map(([k, v]) => `${k}: ${v}`)
                     .join(", ");
                 setMessage(`복원 완료 (${detail})`);
+                setMsgType("success");
             } else {
                 setMessage(`오류: ${data.error}`);
+                setMsgType("error");
             }
         } catch {
             setMessage("파일 파싱 오류");
+            setMsgType("error");
         } finally {
             setRestoring(false);
             e.target.value = "";
+        }
+    }
+
+    async function handleSeedRestore() {
+        if (!confirm("seed-data.ts 에 저장된 프로그램 데이터를 복원하시겠습니까?")) return;
+        setSeeding(true);
+        setMessage(null);
+        try {
+            const res = await fetch("/api/admin/seed", { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+                const detail = Object.entries(data.results as Record<string, string>)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(" / ");
+                setMessage(`씨드 복원: ${detail}`);
+                setMsgType("success");
+            } else {
+                setMessage(`씨드 오류: ${data.error}`);
+                setMsgType("error");
+            }
+        } catch {
+            setMessage("씨드 복원 실패");
+            setMsgType("error");
+        } finally {
+            setSeeding(false);
         }
     }
 
@@ -165,8 +195,16 @@ function BackupButtons() {
                 <span>{restoring ? "복원 중..." : "백업으로 복원"}</span>
                 <input type="file" accept=".json" className="hidden" onChange={handleRestore} disabled={restoring} />
             </label>
+            <button
+                onClick={handleSeedRestore}
+                disabled={seeding}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${seeding ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
+            >
+                <span className="text-xl">🌱</span>
+                <span>{seeding ? "복원 중..." : "시드 데이터 복원"}</span>
+            </button>
             {message && (
-                <p className="text-xs px-4 py-1 text-green-400 break-all">{message}</p>
+                <p className={`text-xs px-4 py-1 break-all ${msgType === "success" ? "text-green-400" : "text-red-400"}`}>{message}</p>
             )}
         </div>
     );

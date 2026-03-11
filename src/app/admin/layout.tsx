@@ -67,6 +67,7 @@ export default function AdminLayout({
 
                     <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
                     <BackupButtons />
+                    <CloudBackupPanel />
                 </nav>
 
                 {/* 사용자 정보 + 로그아웃 */}
@@ -205,6 +206,167 @@ function BackupButtons() {
             </button>
             {message && (
                 <p className={`text-xs px-4 py-1 break-all ${msgType === "success" ? "text-green-400" : "text-red-400"}`}>{message}</p>
+            )}
+        </div>
+    );
+}
+
+type CloudFile = { filename: string; size: number; createdAt: string | null };
+
+function CloudBackupPanel() {
+    const [open, setOpen] = useState(false);
+    const [files, setFiles] = useState<CloudFile[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState<string | null>(null);
+    const [statusType, setStatusType] = useState<"ok" | "err">("ok");
+
+    async function load() {
+        setLoading(true);
+        try {
+            const res = await fetch("/api/admin/cloud-backups");
+            const data = await res.json();
+            setFiles(data.files ?? []);
+        } catch {
+            setFiles([]);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleNow() {
+        setLoading(true);
+        setStatus(null);
+        try {
+            const res = await fetch("/api/cron/backup");
+            const data = await res.json();
+            if (data.success) {
+                setStatus(`저장됨: ${data.filename}`);
+                setStatusType("ok");
+                await load();
+            } else {
+                setStatus(`오류: ${data.error}`);
+                setStatusType("err");
+            }
+        } catch (e) {
+            setStatus(`실패: ${e}`);
+            setStatusType("err");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleRestore(filename: string) {
+        if (!confirm(`"${filename}" 스냅샷으로 DB를 복원하시겠습니까?\n현재 데이터에 덮어씁니다.`)) return;
+        setLoading(true);
+        setStatus(null);
+        try {
+            const res = await fetch("/api/admin/cloud-backups", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                const detail = Object.entries(data.results as Record<string, string>)
+                    .map(([k, v]) => `${k}:${v}`)
+                    .join(" ");
+                setStatus(`복원 완료 — ${detail}`);
+                setStatusType("ok");
+            } else {
+                setStatus(`오류: ${data.error}`);
+                setStatusType("err");
+            }
+        } catch (e) {
+            setStatus(`실패: ${e}`);
+            setStatusType("err");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleDelete(filename: string) {
+        if (!confirm(`"${filename}" 백업 파일을 삭제하시겠습니까?`)) return;
+        try {
+            await fetch("/api/admin/cloud-backups", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename }),
+            });
+            await load();
+        } catch {}
+    }
+
+    function fmt(iso: string | null) {
+        if (!iso) return "-";
+        const d = new Date(iso);
+        return d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function fmtSize(bytes: number) {
+        if (!bytes) return "-";
+        return bytes < 1024 ? `${bytes}B` : `${(bytes / 1024).toFixed(1)}KB`;
+    }
+
+    return (
+        <div className="px-4 py-1">
+            <button
+                onClick={() => { setOpen((o) => !o); if (!open) load(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors text-left"
+            >
+                <span className="text-xl">☁️</span>
+                <span>클라우드 백업 이력</span>
+                <span className="ml-auto text-xs opacity-50">{open ? "▲" : "▼"}</span>
+            </button>
+            {open && (
+                <div className="mt-1 bg-white/5 rounded-lg p-3 space-y-2">
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleNow}
+                            disabled={loading}
+                            className="flex-1 text-xs bg-brand-orange-500 hover:bg-brand-orange-600 text-white px-2 py-1.5 rounded font-medium disabled:opacity-50"
+                        >
+                            {loading ? "처리 중..." : "지금 백업"}
+                        </button>
+                        <button
+                            onClick={load}
+                            disabled={loading}
+                            className="text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded"
+                        >
+                            새로고침
+                        </button>
+                    </div>
+                    {status && (
+                        <p className={`text-xs break-all ${statusType === "ok" ? "text-green-400" : "text-red-400"}`}>{status}</p>
+                    )}
+                    {files.length === 0 && !loading && (
+                        <p className="text-xs text-gray-500">저장된 백업 없음</p>
+                    )}
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {files.map((f) => (
+                            <div key={f.filename} className="flex items-center justify-between gap-1 text-xs text-gray-300 bg-white/5 px-2 py-1.5 rounded">
+                                <div className="min-w-0">
+                                    <div className="font-mono truncate">{fmt(f.createdAt)}</div>
+                                    <div className="text-gray-500">{fmtSize(f.size)}</div>
+                                </div>
+                                <div className="flex gap-1 flex-shrink-0">
+                                    <button
+                                        onClick={() => handleRestore(f.filename)}
+                                        className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"
+                                    >
+                                        복원
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(f.filename)}
+                                        className="px-2 py-0.5 bg-red-700 hover:bg-red-800 text-white rounded text-xs"
+                                    >
+                                        삭제
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-xs text-gray-600">매일 자정 자동 저장 · 30일 보관</p>
+                </div>
             )}
         </div>
     );

@@ -5,5 +5,11 @@
     "src/app/**/*": {
       "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/backup",
+      "schedule": "0 15 * * *"
+    }
+  ]
 }

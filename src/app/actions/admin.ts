@@ -2,6 +2,50 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+
+// ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
+// build 시 prisma generate 는 실행되지만 prisma db push 가 실패할 경우,
+// 새 Prisma 클라이언트가 기존 DB에 없는 컬럼을 RETURNING 절에 포함시켜
+// 모든 upsert 가 실패하는 문제를 방지한다.
+async function ensureAcademySettingsColumns() {
+    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "termsOfService" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialTitle" TEXT DEFAULT '체험수업 안내'`;
+    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialContent" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialFormUrl" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "enrollTitle" TEXT DEFAULT '수강신청 안내'`;
+    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "enrollContent" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "enrollFormUrl" TEXT`;
+}
+
+// ── Prisma 모델 클라이언트 없이 raw SQL 로 upsert (RETURNING 우회) ──────────────
+// Prisma 클라이언트가 스키마 불일치 상태일 때 안전하게 기존 컬럼을 업데이트한다.
+const ALLOWED_SETTINGS_COLUMNS = [
+    'introductionTitle', 'introductionText', 'shuttleInfoText',
+    'contactPhone', 'address', 'termsOfService', 'pageDesignJSON',
+    'googleCalendarIcsUrl', 'googleSheetsScheduleUrl', 'classDays',
+    'siteBodyFont', 'siteHeadingFont',
+    'trialTitle', 'trialContent', 'trialFormUrl',
+    'enrollTitle', 'enrollContent', 'enrollFormUrl',
+] as const;
+
+async function rawUpsertAcademySettings(payload: Record<string, any>) {
+    // singleton 행이 없으면 생성
+    await prisma.$executeRaw`
+        INSERT INTO "AcademySettings" (id, "createdAt", "updatedAt")
+        VALUES ('singleton', NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING
+    `;
+    const entries = Object.entries(payload).filter(
+        ([k, v]) => (ALLOWED_SETTINGS_COLUMNS as readonly string[]).includes(k) && v !== undefined
+    );
+    if (entries.length === 0) return;
+    // 컬럼명은 자체 allowlist 에서만 오므로 Prisma.raw 사용이 안전함
+    const setClauses = entries.map(([k, v]) => Prisma.sql`${Prisma.raw(`"${k}"`)} = ${v}`);
+    await prisma.$executeRaw(
+        Prisma.sql`UPDATE "AcademySettings" SET ${Prisma.join(setClauses, ', ')}, "updatedAt" = NOW() WHERE id = 'singleton'`
+    );
+}
 
 type ProgramData = {
     name: string;
@@ -136,11 +180,19 @@ export async function updateAcademySettings(data: {
     enrollContent?: string;
     enrollFormUrl?: string;
 }) {
-    // Empty URL fields → don't overwrite existing value in DB
+    // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음
     const payload = { ...data };
     if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
     if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
 
+    // Step 1: 누락 컬럼 자동 추가 (prisma db push 없이도 스키마 일치 보장)
+    try {
+        await ensureAcademySettingsColumns();
+    } catch {
+        // DB 비가용 시 무시 — Step 2/3 에서 처리
+    }
+
+    // Step 2: Prisma 정상 경로 (컬럼이 존재하면 성공)
     try {
         await prisma.academySettings.upsert({
             where: { id: "singleton" },
@@ -148,14 +200,10 @@ export async function updateAcademySettings(data: {
             create: { id: "singleton", ...payload }
         });
     } catch {
-        // New columns may not exist yet in DB — retry without them progressively
+        // Step 3: Prisma 모델 클라이언트가 여전히 실패하면 raw SQL 로 직접 업데이트
+        // (Prisma RETURNING 절이 누락 컬럼을 참조하는 문제를 완전히 우회)
         try {
-            const { termsOfService, trialTitle, trialContent, trialFormUrl, enrollTitle, enrollContent, enrollFormUrl, ...payloadCore } = payload;
-            await prisma.academySettings.upsert({
-                where: { id: "singleton" },
-                update: payloadCore,
-                create: { id: "singleton", ...payloadCore }
-            });
+            await rawUpsertAcademySettings(payload);
         } catch (e) {
             console.error("Failed to update academy settings:", e);
             throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");

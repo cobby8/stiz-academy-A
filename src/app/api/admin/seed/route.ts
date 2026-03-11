@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { PROGRAMS, CLASS_SLOT_OVERRIDES } from "../../../../../prisma/seed-data";
+import { PROGRAMS, CLASS_SLOT_OVERRIDES, TERMS_OF_SERVICE } from "../../../../../prisma/seed-data";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +96,26 @@ export async function POST() {
         results.classSlotOverrides = `${restored}/${CLASS_SLOT_OVERRIDES.length}개 복원됨`;
     } else {
         results.classSlotOverrides = "seed-data.ts 에 슬롯 데이터가 없습니다";
+    }
+
+    // Restore Terms of Service
+    if (typeof TERMS_OF_SERVICE === "string" && TERMS_OF_SERVICE.length > 0) {
+        try {
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "AcademySettings" (id, "termsOfService", "createdAt", "updatedAt")
+                 VALUES ('singleton', $1, NOW(), NOW())
+                 ON CONFLICT (id) DO UPDATE SET
+                     "termsOfService" = EXCLUDED."termsOfService",
+                     "updatedAt" = NOW()`,
+                TERMS_OF_SERVICE,
+            );
+            results.termsOfService = "이용약관 복원됨";
+        } catch (e) {
+            console.error("[seed] termsOfService failed:", e);
+            results.termsOfService = `실패: ${e}`;
+        }
+    } else {
+        results.termsOfService = "seed-data.ts 에 이용약관 데이터가 없습니다";
     }
 
     return NextResponse.json({ success: true, results, seedFile: "prisma/seed-data.ts" });

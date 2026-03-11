@@ -508,13 +508,23 @@ export default function ProgramsAdminClient({
                     <h1 className="text-2xl font-bold text-gray-900 mb-2">프로그램·이용약관 관리</h1>
                     <p className="text-gray-500">학원에서 운영하는 교육 프로그램을 등록하고 관리합니다.</p>
                 </div>
-                <button
-                    onClick={() => { setAddForm(emptyForm()); setShowAddModal(true); }}
-                    className="flex-shrink-0 flex items-center gap-2 bg-brand-orange-500 hover:bg-orange-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm"
-                >
-                    <span className="text-lg leading-none">+</span>
-                    프로그램 등록
-                </button>
+                <div className="flex items-center gap-2">
+                    <a
+                        href="/api/admin/export-seed"
+                        download="seed-data.ts"
+                        title="현재 DB 데이터를 seed-data.ts 코드로 내보냅니다. 다운로드 후 prisma/seed-data.ts에 붙여넣고 git push 하세요."
+                        className="flex-shrink-0 flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm px-3 py-2.5 rounded-xl transition"
+                    >
+                        ↓ 시드 내보내기
+                    </a>
+                    <button
+                        onClick={() => { setAddForm(emptyForm()); setShowAddModal(true); }}
+                        className="flex-shrink-0 flex items-center gap-2 bg-brand-orange-500 hover:bg-orange-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm"
+                    >
+                        <span className="text-lg leading-none">+</span>
+                        프로그램 등록
+                    </button>
+                </div>
             </div>
 
             {/* Add Program Modal */}

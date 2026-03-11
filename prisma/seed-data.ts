@@ -77,7 +77,7 @@ export const PROGRAMS: SeedProgram[] = [
 /**
  * ClassSlotOverride 시드 (수업별 코치/시간 배정)
  *
- * /api/admin/backup 에서 classSlotOverrides 배열을 복사해 붙여넣으세요.
+ * 관리자 → "시드 데이터 내보내기" 버튼 → 생성된 코드를 붙여넣으세요.
  */
 export const CLASS_SLOT_OVERRIDES: any[] = [
     // 예시:
@@ -94,3 +94,10 @@ export const CLASS_SLOT_OVERRIDES: any[] = [
     //     programId: "...", // 프로그램 UUID
     // },
 ];
+
+/**
+ * 이용약관 (AcademySettings.termsOfService)
+ *
+ * 관리자 → "시드 데이터 내보내기" 버튼 → 생성된 코드를 붙여넣으세요.
+ */
+export const TERMS_OF_SERVICE: string | null = null;

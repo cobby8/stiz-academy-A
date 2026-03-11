@@ -34,10 +34,9 @@ export async function syncSheetSlots(): Promise<{ synced: number; syncedAt: stri
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "SheetSlotCache" (id, "slotsJson", "syncedAt")
-             VALUES ('singleton', $1, $2)
-             ON CONFLICT (id) DO UPDATE SET "slotsJson" = $1, "syncedAt" = $2`,
-            slotsJson,
-            now
+             VALUES ('singleton', $1, now())
+             ON CONFLICT (id) DO UPDATE SET "slotsJson" = $1, "syncedAt" = now()`,
+            slotsJson
         );
     } catch (e) {
         return { error: `DB 저장 실패: ${(e as Error).message}` };

@@ -38,7 +38,7 @@ export default function AdminLayout({
         <div className="min-h-screen bg-gray-50 flex">
             {/* Sidebar */}
             <aside className="w-64 bg-brand-navy-900 text-white flex-shrink-0 fixed h-full z-10 transition-transform flex flex-col">
-                <div className="p-6 border-b border-white/10 flex items-center gap-3">
+                <div className="p-6 border-b border-white/10 flex items-center gap-3 flex-shrink-0">
                     <div className="bg-white px-3 py-2 rounded-md flex items-center justify-center">
                         <Image
                             src="/stiz-logo.png"
@@ -70,7 +70,7 @@ export default function AdminLayout({
                 </nav>
 
                 {/* 사용자 정보 + 로그아웃 */}
-                <div className="p-4 border-t border-white/10">
+                <div className="p-4 border-t border-white/10 flex-shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-brand-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                             {userName.charAt(0) || "A"}

@@ -5,6 +5,7 @@
  */
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
 export const getAcademySettings = cache(async () => {
     // Try Prisma first, then raw SQL fallback (in case schema mismatch affects Prisma)
@@ -181,5 +182,19 @@ export const getCustomClassSlots = cache(async () => {
     } catch (e) {
         console.error("[getCustomClassSlots] failed:", e);
         return [];
+    }
+});
+
+/** Google Sheets 동기화 캐시 조회 (SheetSlotCache 테이블 싱글턴 row) */
+export const getSheetSlotCache = cache(async (): Promise<SheetClassSlot[] | null> => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "slotsJson" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`
+        );
+        if (!rows[0]) return null;
+        const json = rows[0].slotsJson ?? rows[0].slotsjson ?? "[]";
+        return JSON.parse(json) as SheetClassSlot[];
+    } catch {
+        return null;
     }
 });

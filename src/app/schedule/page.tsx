@@ -1,11 +1,9 @@
-import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms } from "@/lib/queries";
-import { fetchSheetSchedule } from "@/lib/googleSheetsSchedule";
+import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms, getSheetSlotCache } from "@/lib/queries";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
-// searchParams 사용으로 페이지는 이미 동적 렌더링됨.
-// force-dynamic 을 제거해야 fetchSheetSchedule 의 next.revalidate=300 캐시가 실제로 동작함.
-// (force-dynamic 상태에서는 모든 fetch 가 no-store 로 강제되어 매 요청마다 구글시트를 호출함)
+// 구글 시트 데이터는 SheetSlotCache(DB)에서 읽음 → 외부 HTTP 의존 없음.
+// 동기화: 관리자 수동(사이드바 "시트 동기화") 또는 Vercel Cron(/api/cron/sync-schedule)
 export const revalidate = 300;
 export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점" };
 
@@ -50,16 +48,17 @@ export default async function SchedulePage({
 }) {
     const { program: filterProgramId } = await searchParams;
 
-    const settings = await getAcademySettings() as any;
-    const phone = settings.contactPhone || "010-0000-0000";
-    const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
-
-    const [rawSlots, overridesList, customSlotsList, programs] = await Promise.all([
-        sheetUrl ? fetchSheetSchedule(sheetUrl) : Promise.resolve([]),
+    // 5개 DB 쿼리 완전 병렬화 — 외부 HTTP 없음
+    const [settings, cachedSlots, overridesList, customSlotsList, programs] = await Promise.all([
+        getAcademySettings(),
+        getSheetSlotCache(),
         getClassSlotOverrides(),
         getCustomClassSlots(),
         getPrograms(),
     ]);
+
+    const phone = (settings as any).contactPhone || "010-0000-0000";
+    const rawSlots: SheetClassSlot[] = cachedSlots ?? [];
 
     // overrides map: slotKey → override record
     const overrideMap = Object.fromEntries(overridesList.map((o: any) => [o.slotKey, o]));

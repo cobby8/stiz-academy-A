@@ -250,3 +250,11 @@ model Coach {
   slots       ClassSlotOverride[]
   customSlots CustomClassSlot[]
 }
+
+// Google Sheets 시간표 동기화 캐시 (싱글턴)
+// /api/cron/sync-schedule 또는 관리자 수동 동기화 시 갱신
+model SheetSlotCache {
+  id        String   @id @default("singleton")
+  slotsJson String   @db.Text  // JSON: SheetClassSlot[]
+  syncedAt  DateTime @updatedAt
+}

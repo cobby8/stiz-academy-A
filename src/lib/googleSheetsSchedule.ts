@@ -213,6 +213,20 @@ export async function fetchSheetSchedule(sheetUrl: string): Promise<SheetClassSl
     }
 }
 
+/** 동기화 전용: 캐시 없이 항상 최신 데이터를 가져옴 (cron/sync-schedule에서 사용) */
+export async function fetchSheetScheduleNoCache(sheetUrl: string): Promise<SheetClassSlot[]> {
+    const csvUrl = extractCsvUrl(sheetUrl);
+    if (!csvUrl) return [];
+    try {
+        const res = await fetch(csvUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return parseSheetCSV(await res.text());
+    } catch (e) {
+        console.error("[fetchSheetScheduleNoCache]", e);
+        return [];
+    }
+}
+
 /** 관리자 페이지용: 30초 캐시 (수정 후 revalidatePath 로 즉시 무효화됨) */
 export async function fetchSheetScheduleAdmin(sheetUrl: string): Promise<SheetClassSlot[]> {
     const csvUrl = extractCsvUrl(sheetUrl);

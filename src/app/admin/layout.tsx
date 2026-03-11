@@ -161,8 +161,27 @@ function BackupButtons() {
         finally { setBusy(false); }
     }
 
+    async function handleSyncSchedule() {
+        setBusy(true);
+        setMsg(null);
+        try {
+            const res = await fetch("/api/admin/sync-schedule", { method: "POST" });
+            const data = await res.json();
+            data.success ? show(`시트 동기화 완료 (${data.synced}개 슬롯)`, true) : show(`오류: ${data.error}`, false);
+        } catch { show("동기화 실패", false); }
+        finally { setBusy(false); }
+    }
+
     return (
         <div className="px-4 py-2 space-y-1">
+            <button
+                onClick={handleSyncSchedule}
+                disabled={busy}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
+            >
+                <span className="text-xl">🔄</span>
+                <span>시트 동기화</span>
+            </button>
             <a
                 href="/api/admin/backup"
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"

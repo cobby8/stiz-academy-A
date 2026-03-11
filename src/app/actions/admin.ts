@@ -4,14 +4,29 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
+// $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
+// $executeRaw 태그드 템플릿은 prepared statement(extended protocol)를 사용해 PgBouncer가 차단
 async function ensureAcademySettingsColumns() {
-    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "termsOfService" TEXT`;
-    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialTitle" TEXT DEFAULT '체험수업 안내'`;
-    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialContent" TEXT`;
-    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialFormUrl" TEXT`;
-    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "enrollTitle" TEXT DEFAULT '수강신청 안내'`;
-    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "enrollContent" TEXT`;
-    await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "enrollFormUrl" TEXT`;
+    const columns: [string, string][] = [
+        ["googleSheetsScheduleUrl", "TEXT"],
+        ["googleCalendarIcsUrl", "TEXT"],
+        ["termsOfService", "TEXT"],
+        ["trialTitle", "TEXT DEFAULT '체험수업 안내'"],
+        ["trialContent", "TEXT"],
+        ["trialFormUrl", "TEXT"],
+        ["enrollTitle", "TEXT DEFAULT '수강신청 안내'"],
+        ["enrollContent", "TEXT"],
+        ["enrollFormUrl", "TEXT"],
+    ];
+    for (const [col, type] of columns) {
+        try {
+            await prisma.$executeRawUnsafe(
+                `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${col}" ${type}`
+            );
+        } catch (e) {
+            console.warn(`[DDL] column "${col}" ensure failed:`, (e as Error).message);
+        }
+    }
 }
 
 // ── Prisma 모델 클라이언트 없이 raw SQL 로 upsert (RETURNING 우회) ──────────────
@@ -25,13 +40,11 @@ const ALLOWED_SETTINGS_COLUMNS = [
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
-    // singleton 행이 없으면 생성
-    await prisma.$executeRaw`
-        INSERT INTO "AcademySettings" (id, "createdAt", "updatedAt")
-        VALUES ('singleton', NOW(), NOW())
-        ON CONFLICT (id) DO NOTHING
-    `;
-    // 컬럼별 개별 UPDATE — 존재하지 않는 컬럼은 예외를 무시하고 건너뜀
+    // singleton 행이 없으면 생성 — $executeRawUnsafe: simple query protocol (PgBouncer 호환)
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "AcademySettings" (id, "createdAt", "updatedAt") VALUES ('singleton', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`
+    );
+    // 컬럼별 개별 UPDATE
     for (const col of ALLOWED_SETTINGS_COLUMNS) {
         if (payload[col] === undefined) continue;
         try {
@@ -39,8 +52,9 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
                 `UPDATE "AcademySettings" SET "${col}" = $1, "updatedAt" = NOW() WHERE id = 'singleton'`,
                 payload[col]
             );
-        } catch {
-            // 해당 컬럼이 DB에 아직 없으면 조용히 건너뜀
+        } catch (e) {
+            // 컬럼이 DB에 아직 없는 경우 — 로깅 후 건너뜀 (다른 컬럼 저장은 계속)
+            console.error(`[rawUpsert] column "${col}" save failed:`, (e as Error).message);
         }
     }
 }
@@ -183,7 +197,14 @@ export async function updateAcademySettings(data: {
     if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
     if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
 
-    // raw SQL 로 직접 저장 (Prisma RETURNING 절의 누락 컬럼 문제 완전 우회)
+    // Step 1: 누락 컬럼 자동 추가 ($executeRawUnsafe = simple protocol → PgBouncer 통과)
+    try {
+        await ensureAcademySettingsColumns();
+    } catch (e) {
+        console.warn("[settings] DDL step failed:", (e as Error).message);
+    }
+
+    // Step 2: raw SQL 로 직접 저장 (Prisma RETURNING 절의 누락 컬럼 문제 완전 우회)
     try {
         await rawUpsertAcademySettings(payload);
     } catch (e) {

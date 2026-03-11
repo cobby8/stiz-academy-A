@@ -45,26 +45,6 @@ export default async function AboutPage() {
                 </div>
             </section>
 
-            {/* Features */}
-            <section className="py-14 bg-gray-50">
-                <div className="max-w-4xl mx-auto px-4">
-                    <h2 className="text-2xl font-black text-brand-navy-900 mb-10 text-center">스티즈만의 특별함</h2>
-                    <div className="grid md:grid-cols-3 gap-6">
-                        {[
-                            { emoji: "🏀", title: "전문 코치진", desc: "현역·전직 선수 출신의 전문 코치가 아이 한 명 한 명에게 맞춤 지도" },
-                            { emoji: "📋", title: "체계적 커리큘럼", desc: "수준별·연령별 맞춤 커리큘럼으로 기초부터 심화까지 단계적 성장" },
-                            { emoji: "❤️", title: "안전한 환경", desc: "아이들의 안전을 최우선으로 하는 깨끗하고 안전한 수업 환경" },
-                        ].map((f) => (
-                            <div key={f.title} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
-                                <div className="text-4xl mb-4">{f.emoji}</div>
-                                <h3 className="font-bold text-gray-900 mb-2">{f.title}</h3>
-                                <p className="text-sm text-gray-600 leading-relaxed">{f.desc}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
             {/* Coaches */}
             {coaches.length > 0 && (
                 <section className="py-14 bg-white">

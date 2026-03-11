@@ -8,6 +8,7 @@ import {
     updateCustomSlot,
     deleteCustomSlot,
 } from "@/app/actions/schedule";
+import { updateAcademySettings } from "@/app/actions/admin";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -125,6 +126,7 @@ export default function ScheduleAdminClient({
     coaches,
     customSlots: initialCustomSlots,
     hasSheetUrl,
+    sheetUrl,
     programs,
 }: {
     slots: SheetClassSlot[];
@@ -132,11 +134,37 @@ export default function ScheduleAdminClient({
     coaches: Coach[];
     customSlots: CustomSlot[];
     hasSheetUrl: boolean;
+    sheetUrl: string | null;
     programs: Program[];
 }) {
     const router = useRouter();
     const [stateMap, setStateMap] = useState<Record<string, SlotState>>(() => buildInitialState(overrides));
     const [pending, startTransition] = useTransition();
+
+    // Google Sheets modal state
+    const [showSheetModal, setShowSheetModal] = useState(false);
+    const [sheetUrlInput, setSheetUrlInput] = useState(sheetUrl || "");
+    const [sheetSaving, setSheetSaving] = useState(false);
+    const [sheetSaved, setSheetSaved] = useState(false);
+    const [sheetError, setSheetError] = useState<string | null>(null);
+
+    async function handleSaveSheetUrl() {
+        setSheetSaving(true);
+        setSheetError(null);
+        try {
+            await updateAcademySettings({ googleSheetsScheduleUrl: sheetUrlInput });
+            setSheetSaved(true);
+            setTimeout(() => {
+                setShowSheetModal(false);
+                setSheetSaved(false);
+                router.refresh();
+            }, 800);
+        } catch (e: any) {
+            setSheetError(e.message || "저장 실패");
+        } finally {
+            setSheetSaving(false);
+        }
+    }
 
     // Custom slot state
     const [isAddingCustom, setIsAddingCustom] = useState(false);
@@ -262,7 +290,7 @@ export default function ScheduleAdminClient({
 
     return (
         <div className="space-y-8">
-            {/* Page header with + button top-right */}
+            {/* Page header */}
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 mb-1">수업시간표 관리</h1>
@@ -270,22 +298,33 @@ export default function ScheduleAdminClient({
                         학년·인원은 구글시트에서 자동 동기화됩니다. 레이블·시간·메모·정원·코치는 직접 편집할 수 있습니다.
                     </p>
                 </div>
-                <button
-                    onClick={() => { setNewCustomForm(defaultCustomSlotForm()); setIsAddingCustom(true); }}
-                    className="shrink-0 bg-white border border-gray-300 text-gray-800 text-sm font-bold px-4 py-2 rounded-xl hover:bg-gray-50 shadow-sm transition flex items-center gap-1.5"
-                >
-                    <span className="text-brand-orange-500">+</span> 수업 추가
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                    <button
+                        onClick={() => { setSheetUrlInput(sheetUrl || ""); setShowSheetModal(true); }}
+                        className={`bg-white border text-sm font-bold px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 ${hasSheetUrl ? "border-green-300 text-green-800 hover:bg-green-50" : "border-amber-300 text-amber-800 hover:bg-amber-50"}`}
+                    >
+                        🔗 구글시트 연동{hasSheetUrl ? " ✓" : " 설정"}
+                    </button>
+                    <button
+                        onClick={() => { setNewCustomForm(defaultCustomSlotForm()); setIsAddingCustom(true); }}
+                        className="bg-white border border-gray-300 text-gray-800 text-sm font-bold px-4 py-2 rounded-xl hover:bg-gray-50 shadow-sm transition flex items-center gap-1.5"
+                    >
+                        <span className="text-brand-orange-500">+</span> 수업 추가
+                    </button>
+                </div>
             </div>
 
             {!hasSheetUrl && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800">
                     <p className="font-bold mb-1">⚠ 구글시트 URL이 설정되지 않았습니다.</p>
                     <p>
-                        <a href="/admin/settings" className="underline font-medium hover:text-amber-900">
-                            학원 소개 관리 → 구글시트 시간표 연동
-                        </a>
-                        에서 URL을 먼저 입력해 주세요.
+                        <button
+                            onClick={() => setShowSheetModal(true)}
+                            className="underline font-medium hover:text-amber-900"
+                        >
+                            구글시트 연동 설정
+                        </button>
+                        을 눌러 URL을 먼저 입력해 주세요.
                     </p>
                 </div>
             )}
@@ -491,6 +530,62 @@ export default function ScheduleAdminClient({
                                 )}
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Google Sheets URL modal */}
+            {showSheetModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowSheetModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <span className="font-bold text-gray-800 text-base">🔗 구글시트 연동관리</span>
+                            <button onClick={() => setShowSheetModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+                                <p className="font-bold mb-1">URL 확인 방법</p>
+                                <p>구글시트 열기 → 주소창 URL 복사</p>
+                                <p className="mt-1 font-mono bg-green-100 px-2 py-1 rounded">spreadsheets/d/…/edit?gid=… 형태 그대로</p>
+                                <p className="mt-1 font-bold">시트가 "링크가 있는 모든 사용자 - 뷰어" 공개 설정이어야 합니다.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">구글시트 URL</label>
+                                <input
+                                    type="url"
+                                    value={sheetUrlInput}
+                                    onChange={(e) => setSheetUrlInput(e.target.value)}
+                                    placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…"
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500"
+                                />
+                            </div>
+                            {sheetError && (
+                                <p className="text-sm text-red-600 font-medium">⚠ {sheetError}</p>
+                            )}
+                            <div className="flex gap-2 pt-1">
+                                <button
+                                    onClick={handleSaveSheetUrl}
+                                    disabled={sheetSaving}
+                                    className="bg-brand-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition disabled:opacity-40 flex items-center gap-2"
+                                >
+                                    {sheetSaving ? "저장 중..." : sheetSaved ? "✓ 저장됨" : "저장"}
+                                </button>
+                                <button
+                                    onClick={() => setShowSheetModal(false)}
+                                    className="bg-white border border-gray-300 text-gray-600 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-50 transition"
+                                >
+                                    취소
+                                </button>
+                                {sheetUrlInput && (
+                                    <button
+                                        onClick={() => setSheetUrlInput("")}
+                                        className="ml-auto text-xs text-red-400 hover:text-red-600 font-medium"
+                                    >
+                                        URL 초기화
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

@@ -23,6 +23,7 @@ export default async function AdminSchedulePage() {
             coaches={coaches as any[]}
             customSlots={customSlots as any[]}
             hasSheetUrl={!!sheetUrl}
+            sheetUrl={sheetUrl ?? null}
             programs={programs as any[]}
         />
     );

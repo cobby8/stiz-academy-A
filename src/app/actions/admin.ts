@@ -183,32 +183,16 @@ export async function updateAcademySettings(data: {
     if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
     if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
 
-    // Step 1: 누락 컬럼 자동 추가 (prisma db push 없이도 스키마 일치 보장)
+    // raw SQL 로 직접 저장 (Prisma RETURNING 절의 누락 컬럼 문제 완전 우회)
     try {
-        await ensureAcademySettingsColumns();
-    } catch {
-        // DB 비가용 시 무시 — Step 2/3 에서 처리
-    }
-
-    // Step 2: Prisma 정상 경로 (컬럼이 존재하면 성공)
-    try {
-        await prisma.academySettings.upsert({
-            where: { id: "singleton" },
-            update: payload,
-            create: { id: "singleton", ...payload }
-        });
-    } catch {
-        // Step 3: Prisma 모델 클라이언트가 여전히 실패하면 raw SQL 로 직접 업데이트
-        // (Prisma RETURNING 절이 누락 컬럼을 참조하는 문제를 완전히 우회)
-        try {
-            await rawUpsertAcademySettings(payload);
-        } catch (e) {
-            console.error("Failed to update academy settings:", e);
-            throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
-        }
+        await rawUpsertAcademySettings(payload);
+    } catch (e) {
+        console.error("Failed to update academy settings:", e);
+        throw new Error("설정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
     revalidatePath("/admin/settings");
     revalidatePath("/admin/apply");
+    revalidatePath("/admin/schedule");
     revalidatePath("/");
     revalidatePath("/about");
     revalidatePath("/schedule");

@@ -3,8 +3,9 @@ import { fetchSheetSchedule } from "@/lib/googleSheetsSchedule";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
-export const dynamic = "force-dynamic";
-
+// searchParams 사용으로 페이지는 이미 동적 렌더링됨.
+// force-dynamic 을 제거해야 fetchSheetSchedule 의 next.revalidate=300 캐시가 실제로 동작함.
+// (force-dynamic 상태에서는 모든 fetch 가 no-store 로 강제되어 매 요청마다 구글시트를 호출함)
 export const revalidate = 300;
 export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점" };
 

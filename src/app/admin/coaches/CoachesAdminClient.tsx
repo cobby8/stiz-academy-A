@@ -123,6 +123,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
     const router = useRouter();
     const [pending, startTransition] = useTransition();
     const [coaches, setCoaches] = useState<Coach[]>(initialCoaches);
+    const [showAddModal, setShowAddModal] = useState(false);
     const [addForm, setAddForm] = useState<FormState>(defaultForm());
     const [addError, setAddError] = useState<string | null>(null);
     const [editId, setEditId] = useState<string | null>(null);
@@ -157,6 +158,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                     order: maxOrder + 1,
                 });
                 setAddForm(defaultForm());
+                setShowAddModal(false);
                 router.refresh();
             } catch (e: any) {
                 setAddError(e.message ?? "추가 실패");
@@ -255,72 +257,88 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
 
     return (
         <div className="space-y-8">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">코치/강사진 관리</h1>
-                <p className="text-gray-500 text-sm">학원소개 페이지 코치진 소개 및 시간표 코치 배정에 사용됩니다.</p>
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">코치/강사진 관리</h1>
+                    <p className="text-gray-500 text-sm">학원소개 페이지 코치진 소개 및 시간표 코치 배정에 사용됩니다.</p>
+                </div>
+                <button
+                    onClick={() => { setAddForm(defaultForm()); setAddError(null); setShowAddModal(true); }}
+                    className="shrink-0 bg-white border border-gray-300 text-gray-800 text-sm font-bold px-4 py-2 rounded-xl hover:bg-gray-50 shadow-sm transition flex items-center gap-1.5"
+                >
+                    <span className="text-brand-orange-500">+</span> 강사 추가
+                </button>
             </div>
 
-            {/* ── 추가 폼 ─────────────────────────────────────────────────── */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-base font-bold text-gray-800 mb-5">코치 추가</h2>
-
-                {addError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">
-                        {addError}
-                    </div>
-                )}
-
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">이름 *</label>
-                            <input
-                                type="text"
-                                value={addForm.name}
-                                onChange={(e) => patchAdd({ name: e.target.value })}
-                                placeholder="예: 홍길동"
-                                className={INPUT}
-                            />
+            {/* 강사 추가 모달 */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAddModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <span className="font-bold text-gray-800 text-base">강사 추가</span>
+                            <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">직책 *</label>
-                            <input
-                                type="text"
-                                value={addForm.role}
-                                onChange={(e) => patchAdd({ role: e.target.value })}
-                                placeholder="예: 원장, 수석코치"
-                                className={INPUT}
-                            />
+                        <div className="p-6 space-y-4">
+                            {addError && (
+                                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                                    {addError}
+                                </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">이름 *</label>
+                                    <input
+                                        type="text"
+                                        value={addForm.name}
+                                        onChange={(e) => patchAdd({ name: e.target.value })}
+                                        placeholder="예: 홍길동"
+                                        className={INPUT}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">직책 *</label>
+                                    <input
+                                        type="text"
+                                        value={addForm.role}
+                                        onChange={(e) => patchAdd({ role: e.target.value })}
+                                        placeholder="예: 원장, 수석코치"
+                                        className={INPUT}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    약력 / 소개
+                                    <span className="text-gray-400 font-normal ml-1">(경력·자격·한줄 소개 등 자유롭게 기입)</span>
+                                </label>
+                                <textarea
+                                    value={addForm.description}
+                                    onChange={(e) => patchAdd({ description: e.target.value })}
+                                    placeholder={"예:\nWKBL 선수 출신 (2010~2018)\n서울대학교 체육교육과 졸업\n대한농구협회 지도자 2급 자격증"}
+                                    rows={4}
+                                    className={TEXTAREA}
+                                />
+                            </div>
+                            <ImageUploadField form={addForm} onChange={patchAdd} />
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => setShowAddModal(false)}
+                                    className="px-4 py-2.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={handleAdd}
+                                    disabled={pending || !addForm.name.trim() || !addForm.role.trim()}
+                                    className="bg-brand-navy-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-gray-800 transition disabled:opacity-40"
+                                >
+                                    {pending ? "처리 중..." : "추가하기"}
+                                </button>
+                            </div>
                         </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">
-                            약력 / 소개
-                            <span className="text-gray-400 font-normal ml-1">(경력·자격·한줄 소개 등 자유롭게 기입)</span>
-                        </label>
-                        <textarea
-                            value={addForm.description}
-                            onChange={(e) => patchAdd({ description: e.target.value })}
-                            placeholder={"예:\nWKBL 선수 출신 (2010~2018)\n서울대학교 체육교육과 졸업\n대한농구협회 지도자 2급 자격증"}
-                            rows={4}
-                            className={TEXTAREA}
-                        />
-                    </div>
-
-                    <ImageUploadField form={addForm} onChange={patchAdd} />
-
-                    <div className="flex justify-end pt-2">
-                        <button
-                            onClick={handleAdd}
-                            disabled={pending || !addForm.name.trim() || !addForm.role.trim()}
-                            className="bg-brand-navy-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-gray-800 transition disabled:opacity-40"
-                        >
-                            {pending ? "처리 중..." : "추가하기"}
-                        </button>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* ── 코치 목록 ────────────────────────────────────────────────── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

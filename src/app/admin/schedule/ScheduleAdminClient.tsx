@@ -271,7 +271,7 @@ export default function ScheduleAdminClient({
                     </p>
                 </div>
                 <button
-                    onClick={() => { setNewCustomForm(defaultCustomSlotForm()); setIsAddingCustom(true); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }}
+                    onClick={() => { setNewCustomForm(defaultCustomSlotForm()); setIsAddingCustom(true); }}
                     className="shrink-0 bg-white border border-gray-300 text-gray-800 text-sm font-bold px-4 py-2 rounded-xl hover:bg-gray-50 shadow-sm transition flex items-center gap-1.5"
                 >
                     <span className="text-brand-orange-500">+</span> 수업 추가
@@ -495,28 +495,31 @@ export default function ScheduleAdminClient({
                 </div>
             )}
 
-            {/* Add custom slot form (appears at bottom when + button clicked) */}
+            {/* Add custom slot modal */}
             {isAddingCustom && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-100">
-                        <span className="font-bold text-gray-700 text-sm">새 수업 추가</span>
-                    </div>
-                    <div className="p-5">
-                        <CustomSlotFormFields form={newCustomForm} onChange={setNewCustomForm} coaches={coaches} programs={programs} />
-                        <div className="flex gap-2 mt-4">
-                            <button
-                                onClick={handleAddCustom}
-                                disabled={customPending || !newCustomForm.label.trim()}
-                                className="bg-brand-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-5 py-2 rounded-lg transition disabled:opacity-40"
-                            >
-                                {customPending ? "저장 중..." : "저장"}
-                            </button>
-                            <button
-                                onClick={() => setIsAddingCustom(false)}
-                                className="bg-white border border-gray-300 text-gray-600 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 transition"
-                            >
-                                취소
-                            </button>
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsAddingCustom(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                            <span className="font-bold text-gray-800 text-base">새 수업 추가</span>
+                            <button onClick={() => setIsAddingCustom(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+                        </div>
+                        <div className="p-6">
+                            <CustomSlotFormFields form={newCustomForm} onChange={setNewCustomForm} coaches={coaches} programs={programs} />
+                            <div className="flex gap-2 mt-5">
+                                <button
+                                    onClick={handleAddCustom}
+                                    disabled={customPending || !newCustomForm.label.trim()}
+                                    className="bg-brand-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition disabled:opacity-40"
+                                >
+                                    {customPending ? "저장 중..." : "저장"}
+                                </button>
+                                <button
+                                    onClick={() => setIsAddingCustom(false)}
+                                    className="bg-white border border-gray-300 text-gray-600 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-50 transition"
+                                >
+                                    취소
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

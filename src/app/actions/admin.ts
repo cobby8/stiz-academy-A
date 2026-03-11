@@ -234,3 +234,17 @@ export async function moveCoach(id: string, direction: "up" | "down") {
     }
 }
 
+export async function reorderCoaches(ids: string[]) {
+    try {
+        await prisma.$transaction(
+            ids.map((id, index) => prisma.coach.update({ where: { id }, data: { order: index } }))
+        );
+        revalidatePath("/admin/coaches");
+        revalidatePath("/about");
+        revalidatePath("/schedule");
+    } catch (e) {
+        console.error("Failed to reorder coaches:", e);
+        throw new Error("순서 변경 실패");
+    }
+}
+

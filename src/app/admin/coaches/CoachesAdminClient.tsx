@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createCoach, updateCoach, deleteCoach, moveCoach } from "@/app/actions/admin";
+import { createCoach, updateCoach, deleteCoach, reorderCoaches } from "@/app/actions/admin";
 
 interface Coach {
     id: string;
@@ -122,12 +122,17 @@ function ImageUploadField({
 export default function CoachesAdminClient({ initialCoaches }: { initialCoaches: Coach[] }) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
+    const [coaches, setCoaches] = useState<Coach[]>(initialCoaches);
     const [addForm, setAddForm] = useState<FormState>(defaultForm());
     const [addError, setAddError] = useState<string | null>(null);
     const [editId, setEditId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<FormState>(defaultForm());
     const [editError, setEditError] = useState<string | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+    // Drag state
+    const dragIndex = useRef<number | null>(null);
+    const [dragOver, setDragOver] = useState<number | null>(null);
 
     function patchAdd(patch: Partial<FormState>) {
         setAddForm((f) => ({ ...f, ...patch }));
@@ -143,9 +148,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
             try {
                 let imageUrl = addForm.imageUrl;
                 if (addForm.imageFile) imageUrl = await uploadImage(addForm.imageFile);
-                const maxOrder = initialCoaches.length > 0
-                    ? Math.max(...initialCoaches.map((c) => c.order))
-                    : 0;
+                const maxOrder = coaches.length > 0 ? Math.max(...coaches.map((c) => c.order)) : 0;
                 await createCoach({
                     name: addForm.name.trim(),
                     role: addForm.role.trim(),
@@ -197,6 +200,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
             try {
                 await deleteCoach(id);
                 setDeleteConfirm(null);
+                setCoaches((prev) => prev.filter((c) => c.id !== id));
                 router.refresh();
             } catch (e: any) {
                 alert(e.message ?? "삭제 실패");
@@ -204,15 +208,46 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
         });
     }
 
-    async function handleMove(id: string, dir: "up" | "down") {
+    // ── Drag & Drop handlers ──────────────────────────────────────────────
+    function onDragStart(e: React.DragEvent, index: number) {
+        dragIndex.current = index;
+        e.dataTransfer.effectAllowed = "move";
+    }
+
+    function onDragOver(e: React.DragEvent, index: number) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setDragOver(index);
+    }
+
+    function onDrop(e: React.DragEvent, dropIndex: number) {
+        e.preventDefault();
+        const from = dragIndex.current;
+        if (from === null || from === dropIndex) {
+            dragIndex.current = null;
+            setDragOver(null);
+            return;
+        }
+        const next = [...coaches];
+        const [moved] = next.splice(from, 1);
+        next.splice(dropIndex, 0, moved);
+        setCoaches(next);
+        dragIndex.current = null;
+        setDragOver(null);
         startTransition(async () => {
             try {
-                await moveCoach(id, dir);
+                await reorderCoaches(next.map((c) => c.id));
                 router.refresh();
             } catch (e: any) {
                 alert(e.message ?? "순서 변경 실패");
+                setCoaches(initialCoaches);
             }
         });
+    }
+
+    function onDragEnd() {
+        dragIndex.current = null;
+        setDragOver(null);
     }
 
     const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 transition";
@@ -291,38 +326,41 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                     <h2 className="text-base font-bold text-gray-800">
-                        등록된 코치 <span className="text-brand-orange-500">{initialCoaches.length}명</span>
+                        등록된 코치 <span className="text-brand-orange-500">{coaches.length}명</span>
                     </h2>
-                    <p className="text-xs text-gray-400">↑↓ 버튼으로 노출 순서를 변경할 수 있습니다</p>
+                    <p className="text-xs text-gray-400">드래그로 순서를 변경할 수 있습니다</p>
                 </div>
 
-                {initialCoaches.length === 0 && (
+                {coaches.length === 0 && (
                     <div className="p-10 text-center text-gray-400 text-sm">등록된 코치가 없습니다.</div>
                 )}
 
                 <ul className="divide-y divide-gray-100">
-                    {initialCoaches.map((coach, i) => (
-                        <li key={coach.id}>
+                    {coaches.map((coach, i) => (
+                        <li
+                            key={coach.id}
+                            draggable
+                            onDragStart={(e) => onDragStart(e, i)}
+                            onDragOver={(e) => onDragOver(e, i)}
+                            onDrop={(e) => onDrop(e, i)}
+                            onDragEnd={onDragEnd}
+                            className={`transition-colors ${dragOver === i ? "bg-orange-50 border-t-2 border-t-brand-orange-400" : ""}`}
+                        >
                             {/* 기본 행 */}
                             <div className="flex items-center gap-4 px-6 py-4">
-                                {/* 순서 버튼 */}
-                                <div className="flex flex-col gap-1 shrink-0">
-                                    <button
-                                        onClick={() => handleMove(coach.id, "up")}
-                                        disabled={pending || i === 0}
-                                        className="w-7 h-7 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-xs font-bold"
-                                        title="위로"
-                                    >
-                                        ↑
-                                    </button>
-                                    <button
-                                        onClick={() => handleMove(coach.id, "down")}
-                                        disabled={pending || i === initialCoaches.length - 1}
-                                        className="w-7 h-7 rounded border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 flex items-center justify-center text-xs font-bold"
-                                        title="아래로"
-                                    >
-                                        ↓
-                                    </button>
+                                {/* 드래그 핸들 */}
+                                <div
+                                    className="shrink-0 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors select-none"
+                                    title="드래그하여 순서 변경"
+                                >
+                                    <svg width="16" height="20" viewBox="0 0 16 20" fill="currentColor">
+                                        <circle cx="5" cy="4" r="1.5" />
+                                        <circle cx="11" cy="4" r="1.5" />
+                                        <circle cx="5" cy="10" r="1.5" />
+                                        <circle cx="11" cy="10" r="1.5" />
+                                        <circle cx="5" cy="16" r="1.5" />
+                                        <circle cx="11" cy="16" r="1.5" />
+                                    </svg>
                                 </div>
 
                                 {/* 사진 */}

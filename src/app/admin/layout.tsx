@@ -63,6 +63,9 @@ export default function AdminLayout({
                     <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
                     <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/결제" />
                     <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
+
+                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
+                    <BackupButtons />
                 </nav>
 
                 {/* 사용자 정보 + 로그아웃 */}
@@ -101,6 +104,69 @@ export default function AdminLayout({
                     {children}
                 </div>
             </main>
+        </div>
+    );
+}
+
+function BackupButtons() {
+    const [restoring, setRestoring] = useState(false);
+    const [message, setMessage] = useState<string | null>(null);
+
+    function handleDownload() {
+        window.location.href = "/api/admin/backup";
+    }
+
+    async function handleRestore(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!confirm(`"${file.name}" 파일로 데이터를 복원하시겠습니까?\n기존 데이터에 덮어씁니다.`)) {
+            e.target.value = "";
+            return;
+        }
+        setRestoring(true);
+        setMessage(null);
+        try {
+            const text = await file.text();
+            const json = JSON.parse(text);
+            const res = await fetch("/api/admin/backup", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(json),
+            });
+            const data = await res.json();
+            if (data.success) {
+                const detail = Object.entries(data.results as Record<string, string>)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(", ");
+                setMessage(`복원 완료 (${detail})`);
+            } else {
+                setMessage(`오류: ${data.error}`);
+            }
+        } catch {
+            setMessage("파일 파싱 오류");
+        } finally {
+            setRestoring(false);
+            e.target.value = "";
+        }
+    }
+
+    return (
+        <div className="px-4 py-2 space-y-2">
+            <button
+                onClick={handleDownload}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors text-left"
+            >
+                <span className="text-xl">💾</span>
+                <span>DB 백업 다운로드</span>
+            </button>
+            <label className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left cursor-pointer ${restoring ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
+                <span className="text-xl">📂</span>
+                <span>{restoring ? "복원 중..." : "백업으로 복원"}</span>
+                <input type="file" accept=".json" className="hidden" onChange={handleRestore} disabled={restoring} />
+            </label>
+            {message && (
+                <p className="text-xs px-4 py-1 text-green-400 break-all">{message}</p>
+            )}
         </div>
     );
 }

@@ -10,6 +10,11 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+// Allow GET so it can be triggered directly from the browser address bar
+export async function GET() {
+    return POST();
+}
+
 export async function POST() {
     const results: Record<string, string> = {};
 

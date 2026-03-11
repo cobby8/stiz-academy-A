@@ -36,6 +36,12 @@ export const getAcademySettings = cache(async () => {
                 siteBodyFont: r.siteBodyFont ?? r.sitebodyfont ?? "system",
                 siteHeadingFont: r.siteHeadingFont ?? r.siteheadingfont ?? "system",
                 termsOfService: r.termsOfService ?? r.termsofservice ?? null,
+                trialTitle: r.trialTitle ?? r.trialtitle ?? "체험수업 안내",
+                trialContent: r.trialContent ?? r.trialcontent ?? null,
+                trialFormUrl: r.trialFormUrl ?? r.trialformurl ?? null,
+                enrollTitle: r.enrollTitle ?? r.enrolltitle ?? "수강신청 안내",
+                enrollContent: r.enrollContent ?? r.enrollcontent ?? null,
+                enrollFormUrl: r.enrollFormUrl ?? r.enrollformurl ?? null,
             } as any;
         }
     } catch {

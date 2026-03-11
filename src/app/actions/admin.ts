@@ -129,6 +129,12 @@ export async function updateAcademySettings(data: {
     siteBodyFont?: string;
     siteHeadingFont?: string;
     termsOfService?: string;
+    trialTitle?: string;
+    trialContent?: string;
+    trialFormUrl?: string;
+    enrollTitle?: string;
+    enrollContent?: string;
+    enrollFormUrl?: string;
 }) {
     // Empty URL fields → don't overwrite existing value in DB
     const payload = { ...data };
@@ -142,13 +148,13 @@ export async function updateAcademySettings(data: {
             create: { id: "singleton", ...payload }
         });
     } catch {
-        // termsOfService column may not exist yet in DB — retry without it
+        // New columns may not exist yet in DB — retry without them progressively
         try {
-            const { termsOfService, ...payloadWithoutNew } = payload;
+            const { termsOfService, trialTitle, trialContent, trialFormUrl, enrollTitle, enrollContent, enrollFormUrl, ...payloadCore } = payload;
             await prisma.academySettings.upsert({
                 where: { id: "singleton" },
-                update: payloadWithoutNew,
-                create: { id: "singleton", ...payloadWithoutNew }
+                update: payloadCore,
+                create: { id: "singleton", ...payloadCore }
             });
         } catch (e) {
             console.error("Failed to update academy settings:", e);
@@ -156,9 +162,11 @@ export async function updateAcademySettings(data: {
         }
     }
     revalidatePath("/admin/settings");
+    revalidatePath("/admin/apply");
     revalidatePath("/");
     revalidatePath("/about");
     revalidatePath("/schedule");
+    revalidatePath("/apply");
     revalidatePath("/", "layout");
 }
 

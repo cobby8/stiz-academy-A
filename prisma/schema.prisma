@@ -181,6 +181,14 @@ model AcademySettings {
   siteBodyFont         String?  @default("system")
   siteHeadingFont      String?  @default("system")
 
+  // 체험/수강신청 페이지 콘텐츠 및 구글폼 연동
+  trialTitle           String?  @default("체험수업 안내")
+  trialContent         String?  @db.Text
+  trialFormUrl         String?
+  enrollTitle          String?  @default("수강신청 안내")
+  enrollContent        String?  @db.Text
+  enrollFormUrl        String?
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }

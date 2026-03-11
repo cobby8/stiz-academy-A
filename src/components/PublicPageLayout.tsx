@@ -31,6 +31,7 @@ export default async function PublicPageLayout({ children }: { children: React.R
                         <Link href="/programs" className="hover:text-brand-orange-500 transition-colors">프로그램안내</Link>
                         <Link href="/schedule" className="hover:text-brand-orange-500 transition-colors">수업시간표</Link>
                         <Link href="/annual" className="hover:text-brand-orange-500 transition-colors">연간일정표</Link>
+                        <Link href="/apply" className="hover:text-brand-orange-500 transition-colors">체험/수강신청</Link>
                     </nav>
 
                     <a
@@ -48,6 +49,7 @@ export default async function PublicPageLayout({ children }: { children: React.R
                         { href: "/programs", label: "프로그램" },
                         { href: "/schedule", label: "수업시간표" },
                         { href: "/annual", label: "연간일정" },
+                        { href: "/apply", label: "체험/수강신청" },
                     ].map((item) => (
                         <Link
                             key={item.href}
@@ -102,6 +104,7 @@ export default async function PublicPageLayout({ children }: { children: React.R
                                 <li><Link href="/programs" className="hover:text-white transition-colors">프로그램안내</Link></li>
                                 <li><Link href="/schedule" className="hover:text-white transition-colors">수업시간표</Link></li>
                                 <li><Link href="/annual" className="hover:text-white transition-colors">연간일정표</Link></li>
+                                <li><Link href="/apply" className="hover:text-white transition-colors">체험/수강신청</Link></li>
                             </ul>
                         </div>
                     </div>

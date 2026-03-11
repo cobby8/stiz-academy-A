@@ -74,17 +74,28 @@ type ProgramData = {
 };
 
 export async function createProgram(data: ProgramData) {
+    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride } = data;
+    // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
-        await prisma.program.create({ data });
-    } catch {
-        // New columns may not exist yet — retry with only original fields
-        try {
-            const { days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, ...original } = data;
-            await prisma.program.create({ data: original });
-        } catch (e) {
-            console.error("Failed to create program:", e);
-            throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
-        }
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Program" (id, "name", "targetAge", "weeklyFrequency", "description", "price", "days", "priceWeek1", "priceWeek2", "priceWeek3", "priceDaily", "shuttleFeeOverride", "order", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+               (SELECT COALESCE(MAX("order"), -1) + 1 FROM "Program"), now(), now())`,
+            name,
+            targetAge ?? null,
+            weeklyFrequency ?? null,
+            description ?? null,
+            price,
+            days ?? null,
+            priceWeek1 ?? null,
+            priceWeek2 ?? null,
+            priceWeek3 ?? null,
+            priceDaily ?? null,
+            shuttleFeeOverride ?? null,
+        );
+    } catch (e) {
+        console.error("Failed to create program:", e);
+        throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
     }
     revalidatePath("/admin/programs");
     revalidatePath("/programs");
@@ -92,17 +103,40 @@ export async function createProgram(data: ProgramData) {
 }
 
 export async function updateProgram(id: string, data: ProgramData) {
+    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride } = data;
+    // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
-        await prisma.program.update({ where: { id }, data });
-    } catch {
-        // New columns may not exist yet — retry with only original fields
-        try {
-            const { days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, ...original } = data;
-            await prisma.program.update({ where: { id }, data: original });
-        } catch (e) {
-            console.error("Failed to update program:", e);
-            throw new Error("프로그램 수정 실패");
-        }
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Program" SET
+               "name" = $1,
+               "targetAge" = $2,
+               "weeklyFrequency" = $3,
+               "description" = $4,
+               "price" = $5,
+               "days" = $6,
+               "priceWeek1" = $7,
+               "priceWeek2" = $8,
+               "priceWeek3" = $9,
+               "priceDaily" = $10,
+               "shuttleFeeOverride" = $11,
+               "updatedAt" = now()
+             WHERE id = $12`,
+            name,
+            targetAge ?? null,
+            weeklyFrequency ?? null,
+            description ?? null,
+            price,
+            days ?? null,
+            priceWeek1 ?? null,
+            priceWeek2 ?? null,
+            priceWeek3 ?? null,
+            priceDaily ?? null,
+            shuttleFeeOverride ?? null,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update program:", e);
+        throw new Error("프로그램 수정 실패");
     }
     revalidatePath("/admin/programs");
     revalidatePath("/programs");

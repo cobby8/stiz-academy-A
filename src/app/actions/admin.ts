@@ -2,12 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
-// build 시 prisma generate 는 실행되지만 prisma db push 가 실패할 경우,
-// 새 Prisma 클라이언트가 기존 DB에 없는 컬럼을 RETURNING 절에 포함시켜
-// 모든 upsert 가 실패하는 문제를 방지한다.
 async function ensureAcademySettingsColumns() {
     await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "termsOfService" TEXT`;
     await prisma.$executeRaw`ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialTitle" TEXT DEFAULT '체험수업 안내'`;
@@ -19,7 +15,6 @@ async function ensureAcademySettingsColumns() {
 }
 
 // ── Prisma 모델 클라이언트 없이 raw SQL 로 upsert (RETURNING 우회) ──────────────
-// Prisma 클라이언트가 스키마 불일치 상태일 때 안전하게 기존 컬럼을 업데이트한다.
 const ALLOWED_SETTINGS_COLUMNS = [
     'introductionTitle', 'introductionText', 'shuttleInfoText',
     'contactPhone', 'address', 'termsOfService', 'pageDesignJSON',
@@ -36,14 +31,18 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
         VALUES ('singleton', NOW(), NOW())
         ON CONFLICT (id) DO NOTHING
     `;
-    const entries = Object.entries(payload).filter(
-        ([k, v]) => (ALLOWED_SETTINGS_COLUMNS as readonly string[]).includes(k) && v !== undefined
+    // allowlist 필터링
+    const fields = (ALLOWED_SETTINGS_COLUMNS as readonly string[]).filter(
+        (col) => payload[col] !== undefined
     );
-    if (entries.length === 0) return;
-    // 컬럼명은 자체 allowlist 에서만 오므로 Prisma.raw 사용이 안전함
-    const setClauses = entries.map(([k, v]) => Prisma.sql`${Prisma.raw(`"${k}"`)} = ${v}`);
-    await prisma.$executeRaw(
-        Prisma.sql`UPDATE "AcademySettings" SET ${Prisma.join(setClauses, ', ')}, "updatedAt" = NOW() WHERE id = 'singleton'`
+    if (fields.length === 0) return;
+    // 컬럼명은 내부 allowlist 에서만 — $executeRawUnsafe 로 단일 UPDATE
+    // 값은 $1, $2, ... 파라미터로 안전하게 바인딩
+    const setClause = fields.map((col, i) => `"${col}" = $${i + 1}`).join(', ');
+    const values = fields.map((col) => payload[col]);
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AcademySettings" SET ${setClause}, "updatedAt" = NOW() WHERE id = 'singleton'`,
+        ...values
     );
 }
 

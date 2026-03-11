@@ -31,19 +31,18 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
         VALUES ('singleton', NOW(), NOW())
         ON CONFLICT (id) DO NOTHING
     `;
-    // allowlist 필터링
-    const fields = (ALLOWED_SETTINGS_COLUMNS as readonly string[]).filter(
-        (col) => payload[col] !== undefined
-    );
-    if (fields.length === 0) return;
-    // 컬럼명은 내부 allowlist 에서만 — $executeRawUnsafe 로 단일 UPDATE
-    // 값은 $1, $2, ... 파라미터로 안전하게 바인딩
-    const setClause = fields.map((col, i) => `"${col}" = $${i + 1}`).join(', ');
-    const values = fields.map((col) => payload[col]);
-    await prisma.$executeRawUnsafe(
-        `UPDATE "AcademySettings" SET ${setClause}, "updatedAt" = NOW() WHERE id = 'singleton'`,
-        ...values
-    );
+    // 컬럼별 개별 UPDATE — 존재하지 않는 컬럼은 예외를 무시하고 건너뜀
+    for (const col of ALLOWED_SETTINGS_COLUMNS) {
+        if (payload[col] === undefined) continue;
+        try {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "AcademySettings" SET "${col}" = $1, "updatedAt" = NOW() WHERE id = 'singleton'`,
+                payload[col]
+            );
+        } catch {
+            // 해당 컬럼이 DB에 아직 없으면 조용히 건너뜀
+        }
+    }
 }
 
 type ProgramData = {

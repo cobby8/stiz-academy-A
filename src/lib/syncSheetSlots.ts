@@ -1,0 +1,46 @@
+/**
+ * Google Sheets → SheetSlotCache DB 동기화 공유 로직
+ *
+ * 두 곳에서 호출됨:
+ *  - GET  /api/cron/sync-schedule  (Vercel Cron, CRON_SECRET 인증)
+ *  - POST /api/admin/sync-schedule (관리자 수동 동기화)
+ */
+
+import { prisma } from "@/lib/prisma";
+import { fetchSheetScheduleNoCache } from "@/lib/googleSheetsSchedule";
+
+export async function syncSheetSlots(): Promise<{ synced: number; syncedAt: string } | { error: string }> {
+    // 1. 구글 시트 URL 조회
+    let sheetUrl: string | null = null;
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "googleSheetsScheduleUrl" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+        );
+        sheetUrl = rows[0]?.googleSheetsScheduleUrl ?? rows[0]?.googlesheetsscheduleurl ?? null;
+    } catch (e) {
+        return { error: `설정 조회 실패: ${(e as Error).message}` };
+    }
+
+    if (!sheetUrl) {
+        return { error: "구글 시트 URL이 설정되지 않았습니다. /admin/settings에서 먼저 설정하세요." };
+    }
+
+    // 2. 구글 시트 CSV 파싱 (캐시 없이 최신 데이터)
+    const slots = await fetchSheetScheduleNoCache(sheetUrl);
+
+    // 3. SheetSlotCache 테이블에 upsert
+    const slotsJson = JSON.stringify(slots);
+    const now = new Date().toISOString();
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "SheetSlotCache" (id, "slotsJson", "syncedAt")
+             VALUES ('singleton', $1, now())
+             ON CONFLICT (id) DO UPDATE SET "slotsJson" = $1, "syncedAt" = now()`,
+            slotsJson
+        );
+    } catch (e) {
+        return { error: `DB 저장 실패: ${(e as Error).message}` };
+    }
+
+    return { synced: slots.length, syncedAt: now };
+}

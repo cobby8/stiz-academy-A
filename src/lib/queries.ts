@@ -1,0 +1,201 @@
+/**
+ * 순수 DB 조회 함수들 (mutations 제외)
+ * react.cache() 로 감싸 동일 요청 내 중복 DB 호출을 자동 제거 (request-level memoization)
+ * "use server" 없음 — 일반 서버 모듈로 import 가능
+ */
+import { cache } from "react";
+import { prisma } from "@/lib/prisma";
+import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
+
+export const getAcademySettings = cache(async () => {
+    // Try Prisma first, then raw SQL fallback (in case schema mismatch affects Prisma)
+    try {
+        const settings = await prisma.academySettings.findUnique({
+            where: { id: "singleton" },
+        });
+        if (settings) return settings;
+    } catch {
+        // Prisma query failed — try raw SQL
+    }
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT * FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1
+        `;
+        if (rows[0]) {
+            const r = rows[0];
+            return {
+                id: r.id,
+                introductionTitle: r.introductionTitle ?? r.introductiontitle ?? null,
+                introductionText: r.introductionText ?? r.introductiontext ?? null,
+                shuttleInfoText: r.shuttleInfoText ?? r.shuttleinfotext ?? null,
+                contactPhone: r.contactPhone ?? r.contactphone ?? null,
+                address: r.address ?? null,
+                pageDesignJSON: r.pageDesignJSON ?? r.pagedesignjson ?? null,
+                googleCalendarIcsUrl: r.googleCalendarIcsUrl ?? r.googlecalendaricsurl ?? null,
+                googleSheetsScheduleUrl: r.googleSheetsScheduleUrl ?? r.googlesheetsscheduleurl ?? null,
+                classDays: r.classDays ?? r.classdays ?? null,
+                siteBodyFont: r.siteBodyFont ?? r.sitebodyfont ?? "system",
+                siteHeadingFont: r.siteHeadingFont ?? r.siteheadingfont ?? "system",
+                termsOfService: r.termsOfService ?? r.termsofservice ?? null,
+                trialTitle: r.trialTitle ?? r.trialtitle ?? "체험수업 안내",
+                trialContent: r.trialContent ?? r.trialcontent ?? null,
+                trialFormUrl: r.trialFormUrl ?? r.trialformurl ?? null,
+                enrollTitle: r.enrollTitle ?? r.enrolltitle ?? "수강신청 안내",
+                enrollContent: r.enrollContent ?? r.enrollcontent ?? null,
+                enrollFormUrl: r.enrollFormUrl ?? r.enrollformurl ?? null,
+                youtubeUrl: r.youtubeUrl ?? r.youtubeurl ?? null,
+            } as any;
+        }
+    } catch {
+        // Both failed — return safe fallback
+    }
+    return {
+        pageDesignJSON: null,
+        contactPhone: "010-0000-0000",
+        address: "다산신도시 체육관",
+    } as any;
+});
+
+export const getPrograms = cache(async () => {
+    // Use $queryRawUnsafe (simple query protocol) for PgBouncer transaction mode compatibility
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, "targetAge", frequency, "weeklyFrequency", description,
+                    price, "order", days, "priceWeek1", "priceWeek2", "priceWeek3",
+                    "priceDaily", "shuttleFeeOverride", "createdAt", "updatedAt"
+             FROM "Program" ORDER BY "order" ASC, "createdAt" DESC`
+        );
+        return rows.map((r: any) => ({
+            ...r,
+            price: Number(r.price ?? 0),
+            order: Number(r.order ?? 0),
+            priceWeek1: r.priceWeek1 != null ? Number(r.priceWeek1) : null,
+            priceWeek2: r.priceWeek2 != null ? Number(r.priceWeek2) : null,
+            priceWeek3: r.priceWeek3 != null ? Number(r.priceWeek3) : null,
+            priceDaily: r.priceDaily != null ? Number(r.priceDaily) : null,
+            shuttleFeeOverride: r.shuttleFeeOverride != null ? Number(r.shuttleFeeOverride) : null,
+        }));
+    } catch (e) {
+        console.error("[getPrograms] failed:", e);
+        return [];
+    }
+});
+
+export const getClasses = cache(async () => {
+    try {
+        return await prisma.class.findMany({
+            include: { program: true },
+            orderBy: { createdAt: "desc" },
+        });
+    } catch {
+        return [];
+    }
+});
+
+export const getClassSlotOverrides = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                cso.id, cso."slotKey", cso.label, cso.note, cso."isHidden", cso.capacity,
+                cso."startTimeOverride", cso."endTimeOverride",
+                cso."coachId", cso."programId", cso."createdAt", cso."updatedAt",
+                c.id AS c_id, c.name AS c_name, c.role AS c_role,
+                c."imageUrl" AS c_imageurl, c.description AS c_desc, c."order" AS c_order
+             FROM "ClassSlotOverride" cso
+             LEFT JOIN "Coach" c ON cso."coachId" = c.id
+             ORDER BY cso."slotKey" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            slotKey: r.slotKey ?? r.slotkey,
+            label: r.label ?? null,
+            note: r.note ?? null,
+            isHidden: r.isHidden ?? r.ishidden ?? false,
+            capacity: Number(r.capacity ?? 12),
+            coachId: r.coachId ?? r.coachid ?? null,
+            startTimeOverride: r.startTimeOverride ?? r.starttimeoverride ?? null,
+            endTimeOverride: r.endTimeOverride ?? r.endtimeoverride ?? null,
+            programId: r.programId ?? r.programid ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            coach: r.c_id ? {
+                id: r.c_id, name: r.c_name, role: r.c_role,
+                imageUrl: r.c_imageurl ?? null, description: r.c_desc ?? null,
+                order: Number(r.c_order ?? 0),
+                createdAt: new Date(), updatedAt: new Date(), slots: [], customSlots: [],
+            } : null,
+        }));
+    } catch (e) {
+        console.error("[getClassSlotOverrides] failed:", e);
+        return [];
+    }
+});
+
+export const getCoaches = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, role, description, "imageUrl", "order", "createdAt", "updatedAt"
+             FROM "Coach" ORDER BY "order" ASC`
+        );
+        return rows.map((r: any) => ({ ...r, order: Number(r.order ?? 0) }));
+    } catch (e) {
+        console.error("[getCoaches] failed:", e);
+        return [];
+    }
+});
+
+export const getCustomClassSlots = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                cs.id, cs."dayKey", cs."startTime", cs."endTime", cs.label,
+                cs."gradeRange", cs.enrolled, cs.capacity, cs.note, cs."isHidden",
+                cs."coachId", cs."programId", cs."createdAt", cs."updatedAt",
+                c.id AS c_id, c.name AS c_name, c.role AS c_role,
+                c."imageUrl" AS c_imageurl, c.description AS c_desc, c."order" AS c_order
+             FROM "CustomClassSlot" cs
+             LEFT JOIN "Coach" c ON cs."coachId" = c.id
+             ORDER BY cs."dayKey" ASC, cs."startTime" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            dayKey: r.dayKey ?? r.daykey,
+            startTime: r.startTime ?? r.starttime,
+            endTime: r.endTime ?? r.endtime,
+            label: r.label ?? "",
+            gradeRange: r.gradeRange ?? r.graderange ?? null,
+            enrolled: Number(r.enrolled ?? 0),
+            capacity: Number(r.capacity ?? 12),
+            note: r.note ?? null,
+            isHidden: r.isHidden ?? r.ishidden ?? false,
+            coachId: r.coachId ?? r.coachid ?? null,
+            programId: r.programId ?? r.programid ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            coach: r.c_id ? {
+                id: r.c_id, name: r.c_name, role: r.c_role,
+                imageUrl: r.c_imageurl ?? null, description: r.c_desc ?? null,
+                order: Number(r.c_order ?? 0),
+                createdAt: new Date(), updatedAt: new Date(), slots: [], customSlots: [],
+            } : null,
+            program: null,
+        }));
+    } catch (e) {
+        console.error("[getCustomClassSlots] failed:", e);
+        return [];
+    }
+});
+
+/** Google Sheets 동기화 캐시 조회 (SheetSlotCache 테이블 싱글턴 row) */
+export const getSheetSlotCache = cache(async (): Promise<SheetClassSlot[] | null> => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "slotsJson" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`
+        );
+        if (!rows[0]) return null;
+        const json = rows[0].slotsJson ?? rows[0].slotsjson ?? "[]";
+        return JSON.parse(json) as SheetClassSlot[];
+    } catch {
+        return null;
+    }
+});

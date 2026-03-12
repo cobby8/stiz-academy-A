@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { MapPin, Phone } from "lucide-react";
-import { getAcademySettings } from "@/app/actions/admin";
+import { getAcademySettings } from "@/lib/queries";
 
 export default async function PublicPageLayout({ children }: { children: React.ReactNode }) {
     const settings = await getAcademySettings();
@@ -27,11 +27,11 @@ export default async function PublicPageLayout({ children }: { children: React.R
                     </Link>
 
                     <nav className="hidden md:flex items-center gap-6 font-bold text-sm text-gray-700">
-                        <Link href="/about" className="hover:text-brand-orange-500 transition-colors">학원소개</Link>
+                        <Link href="/about" className="hover:text-brand-orange-500 transition-colors">학원/멤버소개</Link>
                         <Link href="/programs" className="hover:text-brand-orange-500 transition-colors">프로그램안내</Link>
                         <Link href="/schedule" className="hover:text-brand-orange-500 transition-colors">수업시간표</Link>
                         <Link href="/annual" className="hover:text-brand-orange-500 transition-colors">연간일정표</Link>
-                        <Link href="/programs#tuition" className="hover:text-brand-orange-500 transition-colors">수강료안내</Link>
+                        <Link href="/apply" className="hover:text-brand-orange-500 transition-colors">체험/수강신청</Link>
                     </nav>
 
                     <a
@@ -45,11 +45,11 @@ export default async function PublicPageLayout({ children }: { children: React.R
                 {/* Mobile Nav */}
                 <nav className="md:hidden flex overflow-x-auto gap-1 px-4 pb-3 text-sm font-bold">
                     {[
-                        { href: "/about", label: "학원소개" },
+                        { href: "/about", label: "학원/멤버소개" },
                         { href: "/programs", label: "프로그램" },
                         { href: "/schedule", label: "수업시간표" },
                         { href: "/annual", label: "연간일정" },
-                        { href: "/programs#tuition", label: "수강료" },
+                        { href: "/apply", label: "체험/수강신청" },
                     ].map((item) => (
                         <Link
                             key={item.href}
@@ -100,11 +100,11 @@ export default async function PublicPageLayout({ children }: { children: React.R
                         <div>
                             <h4 className="text-white font-bold mb-4">바로가기</h4>
                             <ul className="space-y-2 text-sm text-gray-400">
-                                <li><Link href="/about" className="hover:text-white transition-colors">학원소개</Link></li>
+                                <li><Link href="/about" className="hover:text-white transition-colors">학원/멤버소개</Link></li>
                                 <li><Link href="/programs" className="hover:text-white transition-colors">프로그램안내</Link></li>
                                 <li><Link href="/schedule" className="hover:text-white transition-colors">수업시간표</Link></li>
                                 <li><Link href="/annual" className="hover:text-white transition-colors">연간일정표</Link></li>
-                                <li><Link href="/programs#tuition" className="hover:text-white transition-colors">수강료안내</Link></li>
+                                <li><Link href="/apply" className="hover:text-white transition-colors">체험/수강신청</Link></li>
                             </ul>
                         </div>
                     </div>

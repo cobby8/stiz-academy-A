@@ -2,23 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Phone, ChevronRight, Calendar, Clock, Users, Award } from "lucide-react";
+import { MapPin, Phone, Calendar, Clock, Users, Award, ChevronRight } from "lucide-react";
 
-const DAY_LABELS: Record<string, string> = {
-    Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일"
-};
 
 export default function LandingPageClient({
     initialSettings,
-    programs,
-    classes,
-    displayCoaches,
 }: {
     initialSettings: any;
-    programs: any[];
-    classes: any[];
-    displayCoaches: any[];
-    daysInfo: any[];
 }) {
     const settings = initialSettings || {};
     const phone = settings.contactPhone || "010-0000-0000";
@@ -44,11 +34,11 @@ export default function LandingPageClient({
                     </Link>
 
                     <nav className="hidden md:flex items-center gap-6 font-bold text-sm text-gray-700">
-                        <Link href="/about" className="hover:text-brand-orange-500 transition-colors">학원소개</Link>
+                        <Link href="/about" className="hover:text-brand-orange-500 transition-colors">학원/멤버소개</Link>
                         <Link href="/programs" className="hover:text-brand-orange-500 transition-colors">프로그램안내</Link>
                         <Link href="/schedule" className="hover:text-brand-orange-500 transition-colors">수업시간표</Link>
                         <Link href="/annual" className="hover:text-brand-orange-500 transition-colors">연간일정표</Link>
-                        <Link href="/programs#tuition" className="hover:text-brand-orange-500 transition-colors">수강료안내</Link>
+                        <Link href="/apply" className="hover:text-brand-orange-500 transition-colors">체험/수강신청</Link>
                     </nav>
 
                     <a
@@ -62,11 +52,11 @@ export default function LandingPageClient({
                 {/* Mobile Nav */}
                 <nav className="md:hidden flex overflow-x-auto gap-1 px-4 pb-3 text-sm font-bold border-t border-gray-100">
                     {[
-                        { href: "/about", label: "학원소개" },
+                        { href: "/about", label: "학원/멤버소개" },
                         { href: "/programs", label: "프로그램" },
                         { href: "/schedule", label: "수업시간표" },
                         { href: "/annual", label: "연간일정" },
-                        { href: "/programs#tuition", label: "수강료" },
+                        { href: "/apply", label: "체험/수강신청" },
                     ].map((item) => (
                         <Link
                             key={item.href}
@@ -132,7 +122,7 @@ export default function LandingPageClient({
                         {[
                             {
                                 icon: <Award className="w-7 h-7" />,
-                                title: "학원소개",
+                                title: "학원/멤버소개",
                                 desc: "코치진·시설·특장점",
                                 href: "/about",
                                 bg: "bg-blue-50",
@@ -182,120 +172,53 @@ export default function LandingPageClient({
                 </div>
             </section>
 
-            {/* Programs Preview */}
-            {programs.length > 0 && (
-                <section className="py-12 md:py-16 bg-white">
-                    <div className="max-w-6xl mx-auto px-4">
-                        <div className="text-center mb-10">
-                            <h2 className="text-3xl font-black text-brand-navy-900 mb-2">프로그램 안내</h2>
-                            <p className="text-gray-500">아이의 수준과 목표에 맞는 프로그램을 선택하세요</p>
-                        </div>
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-                            {programs.slice(0, 3).map((program) => (
-                                <div
-                                    key={program.id}
-                                    className="border border-gray-200 rounded-2xl p-6 hover:border-brand-orange-500 hover:shadow-md transition-all"
-                                >
-                                    {program.targetAge && (
-                                        <div className="text-brand-orange-500 text-xs font-bold uppercase mb-2">
-                                            {program.targetAge}
-                                        </div>
-                                    )}
-                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{program.name}</h3>
-                                    {program.frequency && (
-                                        <p className="text-sm text-gray-500 mb-3">{program.frequency}</p>
-                                    )}
-                                    {program.description && (
-                                        <p className="text-sm text-gray-600 leading-relaxed mb-4 line-clamp-2">
-                                            {program.description}
-                                        </p>
-                                    )}
-                                    <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                                        <span className="text-2xl font-black text-brand-navy-900">
-                                            {program.price.toLocaleString()}원
-                                        </span>
-                                        <span className="text-xs text-gray-400">/월</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="text-center mt-8">
-                            <Link
-                                href="/programs"
-                                className="inline-flex items-center gap-2 border border-gray-300 rounded-xl px-6 py-3 text-gray-700 font-bold hover:border-brand-navy-900 hover:bg-gray-50 transition"
-                            >
-                                전체 프로그램 보기 <ChevronRight className="w-4 h-4" />
-                            </Link>
-                        </div>
-                    </div>
-                </section>
-            )}
-
-            {/* Schedule Preview */}
-            {classes.length > 0 && (
-                <section className="py-12 md:py-16 bg-gray-50">
-                    <div className="max-w-6xl mx-auto px-4">
-                        <div className="text-center mb-10">
-                            <h2 className="text-3xl font-black text-brand-navy-900 mb-2">이번 주 수업시간표</h2>
-                            <p className="text-gray-500">요일별 수업 시간을 확인하세요</p>
-                        </div>
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-brand-navy-900 text-white">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left font-bold">클래스</th>
-                                            <th className="px-4 py-3 text-left font-bold">프로그램</th>
-                                            <th className="px-4 py-3 text-left font-bold">요일</th>
-                                            <th className="px-4 py-3 text-left font-bold">시간</th>
-                                            {classes[0]?.location && <th className="px-4 py-3 text-left font-bold">장소</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {classes.slice(0, 5).map((cls) => (
-                                            <tr key={cls.id} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 font-medium text-gray-900">{cls.name}</td>
-                                                <td className="px-4 py-3 text-gray-600">{cls.program?.name || "-"}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded">
-                                                        {DAY_LABELS[cls.dayOfWeek] || cls.dayOfWeek}요일
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                                                    {cls.startTime} ~ {cls.endTime}
-                                                </td>
-                                                {cls.location && <td className="px-4 py-3 text-gray-500">{cls.location}</td>}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+            {/* YouTube Video Section */}
+            {settings.youtubeUrl && (() => {
+                const raw = settings.youtubeUrl as string;
+                // iframe embed 코드 붙여넣기 지원: src="..." 에서 URL 추출
+                const srcMatch = raw.match(/src=["']([^"']+)["']/);
+                const url = srcMatch ? srcMatch[1] : raw;
+                const match = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
+                const videoId = match?.[1];
+                if (!videoId) return null;
+                return (
+                    <section className="py-12 md:py-16 bg-white">
+                        <div className="max-w-4xl mx-auto px-4">
+                            <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200 aspect-video">
+                                <iframe
+                                    src={`https://www.youtube.com/embed/${videoId}?rel=0`}
+                                    title="STIZ 농구교실 소개"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                    className="w-full h-full"
+                                />
                             </div>
                         </div>
-                        <div className="text-center mt-6">
-                            <Link
-                                href="/schedule"
-                                className="inline-flex items-center gap-2 border border-gray-300 rounded-xl px-6 py-3 text-gray-700 font-bold hover:border-brand-navy-900 hover:bg-white transition"
-                            >
-                                전체 시간표 보기 <ChevronRight className="w-4 h-4" />
-                            </Link>
-                        </div>
-                    </div>
-                </section>
-            )}
+                    </section>
+                );
+            })()}
 
             {/* CTA Banner */}
             <section className="bg-brand-orange-500 py-16 text-white">
                 <div className="max-w-4xl mx-auto px-4 text-center">
-                    <h2 className="text-3xl font-black mb-4">수강 문의 및 체험 수업 신청</h2>
+                    <h2 className="text-3xl font-black mb-4">수강 문의 / 체험 신청</h2>
                     <p className="text-orange-100 mb-8 text-lg">
                         아이에게 딱 맞는 클래스를 찾아드립니다. 지금 바로 문의해 주세요.
                     </p>
-                    <a
-                        href={`tel:${phone.replace(/-/g, "")}`}
-                        className="inline-block bg-white text-brand-orange-500 font-black text-xl px-12 py-4 rounded-2xl hover:bg-orange-50 transition shadow-lg"
-                    >
-                        📞 {phone}
-                    </a>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <a
+                            href={`tel:${phone.replace(/-/g, "")}`}
+                            className="inline-block bg-white text-brand-orange-500 font-black text-xl px-12 py-4 rounded-2xl hover:bg-orange-50 transition shadow-lg"
+                        >
+                            📞 전화문의
+                        </a>
+                        <Link
+                            href="/apply"
+                            className="inline-block bg-brand-navy-900 text-white font-black text-xl px-12 py-4 rounded-2xl hover:bg-blue-900 transition shadow-lg"
+                        >
+                            체험/수강신청
+                        </Link>
+                    </div>
                 </div>
             </section>
 
@@ -332,11 +255,11 @@ export default function LandingPageClient({
                         <div>
                             <h4 className="text-white font-bold mb-4">바로가기</h4>
                             <ul className="space-y-2 text-sm text-gray-400">
-                                <li><Link href="/about" className="hover:text-white transition-colors">학원소개</Link></li>
+                                <li><Link href="/about" className="hover:text-white transition-colors">학원/멤버소개</Link></li>
                                 <li><Link href="/programs" className="hover:text-white transition-colors">프로그램안내</Link></li>
                                 <li><Link href="/schedule" className="hover:text-white transition-colors">수업시간표</Link></li>
                                 <li><Link href="/annual" className="hover:text-white transition-colors">연간일정표</Link></li>
-                                <li><Link href="/programs#tuition" className="hover:text-white transition-colors">수강료안내</Link></li>
+                                <li><Link href="/apply" className="hover:text-white transition-colors">체험/수강신청</Link></li>
                             </ul>
                         </div>
                     </div>

@@ -15,7 +15,7 @@ import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
 // ISR: 5분 캐시 (Vercel 엣지 CDN 서빙). admin revalidatePath("/annual") 호출 시 즉각 무효화.
 export const revalidate = 300;
 
-export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점" };
+export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점 연간 행사 일정. 대회·방학·특별행사 및 정기 일정 안내." };
 
 const CATEGORY_STYLES: Record<string, { dot: string }> = {
     대회: { dot: "bg-red-500" },

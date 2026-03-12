@@ -3,7 +3,7 @@ import { getAcademySettings, getCoaches } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
 export const revalidate = 60;
-export const metadata = { title: "학원/멤버소개 | STIZ 농구교실 다산점" };
+export const metadata = { title: "학원/멤버소개 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점의 원장 인사말, 전문 코치진, 시설을 소개합니다." };
 
 export default async function AboutPage() {
     const [settings, coaches] = await Promise.all([

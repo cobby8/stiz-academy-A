@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
@@ -148,9 +149,11 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                                                         {slot.coach && (
                                                             <div className="shrink-0 flex flex-col items-center gap-1 pt-0.5 w-[58px]">
                                                                 {slot.coach.imageUrl ? (
-                                                                    <img
+                                                                    <Image
                                                                         src={slot.coach.imageUrl}
                                                                         alt={slot.coach.name}
+                                                                        width={44}
+                                                                        height={44}
                                                                         className="w-11 h-11 rounded-full object-cover border-2 border-gray-100"
                                                                     />
                                                                 ) : (

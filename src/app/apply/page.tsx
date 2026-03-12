@@ -3,7 +3,7 @@ import PublicPageLayout from "@/components/PublicPageLayout";
 import ApplyPageClient from "./ApplyPageClient";
 
 export const revalidate = 60;
-export const metadata = { title: "체험/수강신청 | STIZ 농구교실 다산점" };
+export const metadata = { title: "체험/수강신청 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점 체험 수업 신청 및 수강 신청 안내. 지금 바로 신청하세요." };
 
 export default async function ApplyPage() {
     const settings = (await getAcademySettings()) as any;

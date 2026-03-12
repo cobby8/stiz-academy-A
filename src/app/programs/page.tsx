@@ -2,7 +2,7 @@ import { getPrograms, getAcademySettings } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
 export const revalidate = 60;
-export const metadata = { title: "프로그램 안내 | STIZ 농구교실 다산점" };
+export const metadata = { title: "프로그램 안내 | STIZ 농구교실 다산점", description: "유아·초등·중등 수준별 맞춤 농구 클래스. 주 1~3회, 매일반 선택 가능. 수강료 및 셔틀버스 안내." };
 
 const DAY_OPTIONS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",

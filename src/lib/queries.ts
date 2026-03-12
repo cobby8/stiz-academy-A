@@ -43,6 +43,7 @@ export const getAcademySettings = cache(async () => {
                 enrollTitle: r.enrollTitle ?? r.enrolltitle ?? "수강신청 안내",
                 enrollContent: r.enrollContent ?? r.enrollcontent ?? null,
                 enrollFormUrl: r.enrollFormUrl ?? r.enrollformurl ?? null,
+                youtubeUrl: r.youtubeUrl ?? r.youtubeurl ?? null,
             } as any;
         }
     } catch {

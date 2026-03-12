@@ -189,6 +189,9 @@ model AcademySettings {
   enrollContent        String?  @db.Text
   enrollFormUrl        String?
 
+  // 메인페이지 유튜브 영상 URL 또는 iframe 코드
+  youtubeUrl           String?  @db.Text
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }

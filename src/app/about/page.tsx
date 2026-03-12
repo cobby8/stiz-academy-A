@@ -1,8 +1,9 @@
+import Image from "next/image";
 import { getAcademySettings, getCoaches } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
 export const revalidate = 60;
-export const metadata = { title: "학원소개 | STIZ 농구교실 다산점" };
+export const metadata = { title: "학원/멤버소개 | STIZ 농구교실 다산점" };
 
 export default async function AboutPage() {
     const [settings, coaches] = await Promise.all([
@@ -16,7 +17,7 @@ export default async function AboutPage() {
             <div className="bg-brand-navy-900 text-white py-14">
                 <div className="max-w-4xl mx-auto px-4">
                     <p className="text-brand-orange-500 text-sm font-bold uppercase mb-2">ABOUT US</p>
-                    <h1 className="text-4xl font-black mb-3">학원소개</h1>
+                    <h1 className="text-4xl font-black mb-3">학원/멤버소개</h1>
                     <p className="text-blue-200">스티즈 농구교실 다산점을 소개합니다.</p>
                 </div>
             </div>
@@ -55,7 +56,7 @@ export default async function AboutPage() {
                                 <div key={coach.id} className="text-center">
                                     <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-100 mx-auto mb-4 border-4 border-brand-orange-500/30">
                                         {coach.imageUrl ? (
-                                            <img src={coach.imageUrl} alt={coach.name} className="w-full h-full object-cover" />
+                                            <Image src={coach.imageUrl} alt={coach.name} width={96} height={96} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-3xl">🏀</div>
                                         )}

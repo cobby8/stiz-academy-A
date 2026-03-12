@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
 // $executeRaw 태그드 템플릿은 prepared statement(extended protocol)를 사용해 PgBouncer가 차단
+let _columnsEnsured = false;
 export async function ensureAcademySettingsColumns() {
+    if (_columnsEnsured) return;
     const columns: [string, string][] = [
         ["googleSheetsScheduleUrl", "TEXT"],
         ["googleCalendarIcsUrl", "TEXT"],
@@ -28,6 +30,7 @@ export async function ensureAcademySettingsColumns() {
             console.warn(`[DDL] column "${col}" ensure failed:`, (e as Error).message);
         }
     }
+    _columnsEnsured = true;
 }
 
 // ── Prisma 모델 클라이언트 없이 raw SQL 로 upsert (RETURNING 우회) ──────────────
@@ -178,7 +181,7 @@ export async function reorderPrograms(orderedIds: string[]) {
         // order column may not exist yet — try raw SQL
         try {
             for (let i = 0; i < orderedIds.length; i++) {
-                await prisma.$executeRaw`UPDATE "Program" SET "order" = ${i} WHERE id = ${orderedIds[i]}`;
+                await prisma.$executeRawUnsafe(`UPDATE "Program" SET "order" = ${i} WHERE id = '${orderedIds[i]}'`);
             }
         } catch {}
     }
@@ -342,8 +345,11 @@ export async function moveCoach(id: string, direction: "up" | "down") {
 
 export async function reorderCoaches(ids: string[]) {
     try {
-        await prisma.$transaction(
-            ids.map((id, index) => prisma.coach.update({ where: { id }, data: { order: index } }))
+        if (ids.length === 0) return;
+        const cases = ids.map((id, index) => `WHEN '${id}' THEN ${index}`).join(" ");
+        const inList = ids.map((id) => `'${id}'`).join(", ");
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Coach" SET "order" = CASE id ${cases} END WHERE id IN (${inList})`
         );
         revalidatePath("/admin/coaches");
         revalidatePath("/about");

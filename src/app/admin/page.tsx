@@ -18,7 +18,7 @@ async function getSystemStatus() {
     try {
         const supabase = createAdminClient();
         const { data: allFiles } = await supabase.storage.from("backups").list("", {
-            limit: 200,
+            limit: 50,
             sortBy: { column: "created_at", order: "desc" },
         });
         if (allFiles?.[0]?.created_at) {

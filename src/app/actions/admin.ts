@@ -42,35 +42,40 @@ const ALLOWED_SETTINGS_COLUMNS = [
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
-    // singleton 행이 없으면 생성 — $executeRawUnsafe: simple query protocol (PgBouncer 호환)
+    // singleton 행이 없으면 생성
     await prisma.$executeRawUnsafe(
         `INSERT INTO "AcademySettings" (id, "createdAt", "updatedAt") VALUES ('singleton', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`
     );
-    // 컬럼별 개별 UPDATE — 컬럼이 없으면 그 자리에서 ADD COLUMN 후 재시도 (DDL 선제 실행 불필요)
-    for (const col of ALLOWED_SETTINGS_COLUMNS) {
-        if (payload[col] === undefined) continue;
+
+    const colsToUpdate = ALLOWED_SETTINGS_COLUMNS.filter(col => payload[col] !== undefined);
+    if (colsToUpdate.length === 0) return;
+
+    const values = colsToUpdate.map(col => payload[col]);
+
+    // 단일 배치 UPDATE: 19개 개별 쿼리(~1,400ms) → 쿼리 1개(~75ms)
+    // 신규 컬럼 없을 때까지 재시도 (최대 컬럼 수)
+    for (let attempt = 0; attempt <= colsToUpdate.length; attempt++) {
+        const setClauses = colsToUpdate.map((col, i) => `"${col}" = $${i + 1}`).join(", ");
         try {
             await prisma.$executeRawUnsafe(
-                `UPDATE "AcademySettings" SET "${col}" = $1, "updatedAt" = NOW() WHERE id = 'singleton'`,
-                payload[col]
+                `UPDATE "AcademySettings" SET ${setClauses}, "updatedAt" = NOW() WHERE id = 'singleton'`,
+                ...values
             );
+            return; // 성공
         } catch (e) {
             const msg = (e as Error).message ?? "";
-            if (msg.includes("column") && msg.includes("does not exist")) {
-                // 신규 컬럼 — ALTER TABLE 후 재시도 (한 번만 실행됨)
+            // PostgreSQL: column "X" of relation "Y" does not exist
+            const missingCol = msg.match(/column "([^"]+)" of relation/)?.[1];
+            if (missingCol) {
+                // 해당 컬럼만 추가 후 재시도
                 try {
                     await prisma.$executeRawUnsafe(
-                        `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${col}" TEXT`
+                        `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${missingCol}" TEXT`
                     );
-                    await prisma.$executeRawUnsafe(
-                        `UPDATE "AcademySettings" SET "${col}" = $1, "updatedAt" = NOW() WHERE id = 'singleton'`,
-                        payload[col]
-                    );
-                } catch (e2) {
-                    console.error(`[rawUpsert] column "${col}" add+save failed:`, (e2 as Error).message);
-                }
+                } catch {}
             } else {
-                console.error(`[rawUpsert] column "${col}" save failed:`, msg);
+                console.error("[rawUpsert] batch update failed:", msg);
+                throw e;
             }
         }
     }

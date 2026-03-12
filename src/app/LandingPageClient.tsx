@@ -201,16 +201,24 @@ export default function LandingPageClient({
             {/* CTA Banner */}
             <section className="bg-brand-orange-500 py-16 text-white">
                 <div className="max-w-4xl mx-auto px-4 text-center">
-                    <h2 className="text-3xl font-black mb-4">수강 문의 및 체험 수업 신청</h2>
+                    <h2 className="text-3xl font-black mb-4">수강 문의 / 체험 신청</h2>
                     <p className="text-orange-100 mb-8 text-lg">
                         아이에게 딱 맞는 클래스를 찾아드립니다. 지금 바로 문의해 주세요.
                     </p>
-                    <a
-                        href={`tel:${phone.replace(/-/g, "")}`}
-                        className="inline-block bg-white text-brand-orange-500 font-black text-xl px-12 py-4 rounded-2xl hover:bg-orange-50 transition shadow-lg"
-                    >
-                        📞 {phone}
-                    </a>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <a
+                            href={`tel:${phone.replace(/-/g, "")}`}
+                            className="inline-block bg-white text-brand-orange-500 font-black text-xl px-12 py-4 rounded-2xl hover:bg-orange-50 transition shadow-lg"
+                        >
+                            📞 전화문의
+                        </a>
+                        <Link
+                            href="/apply"
+                            className="inline-block bg-brand-navy-900 text-white font-black text-xl px-12 py-4 rounded-2xl hover:bg-blue-900 transition shadow-lg"
+                        >
+                            체험/수강신청
+                        </Link>
+                    </div>
                 </div>
             </section>
 

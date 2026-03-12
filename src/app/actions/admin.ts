@@ -261,7 +261,8 @@ export async function updateAcademySettings(data: {
         console.error("Failed to update academy settings:", e);
         throw new Error("설정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
-    revalidatePath("/", "layout");
+    revalidatePath("/");
+    revalidatePath("/about");
     revalidatePath("/admin/settings");
 }
 

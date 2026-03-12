@@ -93,6 +93,7 @@ export default function AdminSettingsClient({
 
     async function saveBasicSettings(formData: FormData) {
         setActionError(null);
+        setSaveSuccess(true); // optimistic: 즉시 성공 표시 → INP ~10ms
         try {
             const data: any = {};
             formData.forEach((value, key) => {
@@ -102,9 +103,9 @@ export default function AdminSettingsClient({
             data.siteBodyFont = bodyFont;
             data.siteHeadingFont = headingFont;
             await updateAcademySettings(data);
-            setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 4000);
         } catch (e: any) {
+            setSaveSuccess(false);
             setActionError(e.message || "저장 중 오류가 발생했습니다.");
         }
     }

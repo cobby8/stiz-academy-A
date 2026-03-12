@@ -245,12 +245,12 @@ export default function AdminSettingsClient({
                         <AppliesTo pages={["메인 페이지 (홍보 영상)"]} />
                         <input
                             name="youtubeUrl"
-                            type="url"
+                            type="text"
                             defaultValue={initialSettings?.youtubeUrl || ""}
-                            placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX"
+                            placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX  또는 <iframe ...> 코드"
                             className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
                         />
-                        <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL을 입력하면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
+                        <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
                     </section>
 
                     {/* ── 구글 캘린더 ───────────────────────────────────────── */}

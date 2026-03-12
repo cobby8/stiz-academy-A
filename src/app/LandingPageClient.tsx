@@ -174,7 +174,10 @@ export default function LandingPageClient({
 
             {/* YouTube Video Section */}
             {settings.youtubeUrl && (() => {
-                const url = settings.youtubeUrl as string;
+                const raw = settings.youtubeUrl as string;
+                // iframe embed 코드 붙여넣기 지원: src="..." 에서 URL 추출
+                const srcMatch = raw.match(/src=["']([^"']+)["']/);
+                const url = srcMatch ? srcMatch[1] : raw;
                 const match = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
                 const videoId = match?.[1];
                 if (!videoId) return null;

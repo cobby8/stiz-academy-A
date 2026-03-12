@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
 // $executeRaw 태그드 템플릿은 prepared statement(extended protocol)를 사용해 PgBouncer가 차단
-async function ensureAcademySettingsColumns() {
+export async function ensureAcademySettingsColumns() {
     const columns: [string, string][] = [
         ["googleSheetsScheduleUrl", "TEXT"],
         ["googleCalendarIcsUrl", "TEXT"],
@@ -79,6 +79,8 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
             }
         }
     }
+    // 루프 종료까지 return 없음 = 모든 재시도 실패
+    throw new Error("설정 컬럼 추가 후에도 저장에 실패했습니다. DB 스키마를 확인해 주세요.");
 }
 
 type ProgramData = {

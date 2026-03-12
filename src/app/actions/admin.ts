@@ -46,7 +46,7 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
     await prisma.$executeRawUnsafe(
         `INSERT INTO "AcademySettings" (id, "createdAt", "updatedAt") VALUES ('singleton', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`
     );
-    // 컬럼별 개별 UPDATE
+    // 컬럼별 개별 UPDATE — 컬럼이 없으면 그 자리에서 ADD COLUMN 후 재시도 (DDL 선제 실행 불필요)
     for (const col of ALLOWED_SETTINGS_COLUMNS) {
         if (payload[col] === undefined) continue;
         try {
@@ -55,8 +55,23 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
                 payload[col]
             );
         } catch (e) {
-            // 컬럼이 DB에 아직 없는 경우 — 로깅 후 건너뜀 (다른 컬럼 저장은 계속)
-            console.error(`[rawUpsert] column "${col}" save failed:`, (e as Error).message);
+            const msg = (e as Error).message ?? "";
+            if (msg.includes("column") && msg.includes("does not exist")) {
+                // 신규 컬럼 — ALTER TABLE 후 재시도 (한 번만 실행됨)
+                try {
+                    await prisma.$executeRawUnsafe(
+                        `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${col}" TEXT`
+                    );
+                    await prisma.$executeRawUnsafe(
+                        `UPDATE "AcademySettings" SET "${col}" = $1, "updatedAt" = NOW() WHERE id = 'singleton'`,
+                        payload[col]
+                    );
+                } catch (e2) {
+                    console.error(`[rawUpsert] column "${col}" add+save failed:`, (e2 as Error).message);
+                }
+            } else {
+                console.error(`[rawUpsert] column "${col}" save failed:`, msg);
+            }
         }
     }
 }
@@ -227,20 +242,14 @@ export async function updateAcademySettings(data: {
     enrollTitle?: string;
     enrollContent?: string;
     enrollFormUrl?: string;
+    youtubeUrl?: string;
 }) {
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음
     const payload = { ...data };
     if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
     if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
 
-    // Step 1: 누락 컬럼 자동 추가 ($executeRawUnsafe = simple protocol → PgBouncer 통과)
-    try {
-        await ensureAcademySettingsColumns();
-    } catch (e) {
-        console.warn("[settings] DDL step failed:", (e as Error).message);
-    }
-
-    // Step 2: raw SQL 로 직접 저장 (Prisma RETURNING 절의 누락 컬럼 문제 완전 우회)
+    // raw SQL 로 직접 저장 — 누락 컬럼은 rawUpsertAcademySettings 내부에서 lazily 추가
     try {
         await rawUpsertAcademySettings(payload);
     } catch (e) {

@@ -77,6 +77,7 @@ export default function AdminSettingsClient({
     fetchError: boolean;
 }) {
     const [actionError, setActionError] = useState<string | null>(null);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [bodyFont, setBodyFont] = useState<string>(initialSettings?.siteBodyFont || "system");
     const [headingFont, setHeadingFont] = useState<string>(
         HEADING_FONT_OPTIONS.some(f => f.key === initialSettings?.siteHeadingFont)
@@ -101,7 +102,8 @@ export default function AdminSettingsClient({
             data.siteBodyFont = bodyFont;
             data.siteHeadingFont = headingFont;
             await updateAcademySettings(data);
-            alert("저장되었습니다. 폰트 변경은 새로고침 후 반영됩니다.");
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 4000);
         } catch (e: any) {
             setActionError(e.message || "저장 중 오류가 발생했습니다.");
         }
@@ -112,6 +114,12 @@ export default function AdminSettingsClient({
             {fetchError && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm">
                     데이터베이스 연결에 문제가 발생했습니다. 새 스키마 동기화(db push)가 필요합니다.
+                </div>
+            )}
+            {saveSuccess && (
+                <div className="bg-green-50 text-green-700 p-4 rounded-lg font-medium border border-green-200 mb-4 text-sm flex justify-between items-center">
+                    <span>✓ 저장되었습니다. 폰트 변경은 새로고침 후 반영됩니다.</span>
+                    <button onClick={() => setSaveSuccess(false)} className="text-green-400 hover:text-green-600 font-bold ml-4">✕</button>
                 </div>
             )}
             {actionError && (

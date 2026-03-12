@@ -230,6 +230,20 @@ export default function AdminSettingsClient({
                         </div>
                     </section>
 
+                    {/* ── 유튜브 영상 ───────────────────────────────────────── */}
+                    <section className="pt-6 border-t border-gray-100">
+                        <SectionHeader title="메인페이지 유튜브 영상" />
+                        <AppliesTo pages={["메인 페이지 (홍보 영상)"]} />
+                        <input
+                            name="youtubeUrl"
+                            type="url"
+                            defaultValue={initialSettings?.youtubeUrl || ""}
+                            placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                        />
+                        <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL을 입력하면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
+                    </section>
+
                     {/* ── 구글 캘린더 ───────────────────────────────────────── */}
                     <section className="pt-6 border-t border-gray-100">
                         <SectionHeader title="구글 캘린더 연동" />

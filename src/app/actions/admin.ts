@@ -17,6 +17,7 @@ async function ensureAcademySettingsColumns() {
         ["enrollTitle", "TEXT DEFAULT '수강신청 안내'"],
         ["enrollContent", "TEXT"],
         ["enrollFormUrl", "TEXT"],
+        ["youtubeUrl", "TEXT"],
     ];
     for (const [col, type] of columns) {
         try {
@@ -37,6 +38,7 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'siteBodyFont', 'siteHeadingFont',
     'trialTitle', 'trialContent', 'trialFormUrl',
     'enrollTitle', 'enrollContent', 'enrollFormUrl',
+    'youtubeUrl',
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Phone, Calendar, Clock, Users, Award } from "lucide-react";
+import { MapPin, Phone, Calendar, Clock, Users, Award, ChevronRight } from "lucide-react";
 
 
 export default function LandingPageClient({

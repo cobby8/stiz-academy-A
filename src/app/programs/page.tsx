@@ -1,4 +1,5 @@
 import { getPrograms, getAcademySettings } from "@/lib/queries";
+import Image from "next/image";
 import PublicPageLayout from "@/components/PublicPageLayout";
 
 export const revalidate = 60;
@@ -31,6 +32,7 @@ type Program = {
     priceWeek3: number | null;
     priceDaily: number | null;
     shuttleFeeOverride: number | null;
+    imageUrl: string | null;
 };
 
 function isWeekendOnly(days: string[]): boolean {
@@ -91,6 +93,18 @@ export default async function ProgramsPage() {
                                 return (
                                     <div key={program.id}
                                         className="border border-gray-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
+                                        {/* Image */}
+                                        {program.imageUrl && (
+                                            <div className="relative aspect-[3/1] bg-gray-100">
+                                                <Image
+                                                    src={program.imageUrl}
+                                                    alt={program.name}
+                                                    fill
+                                                    className="object-cover"
+                                                    sizes="(max-width: 768px) 100vw, 768px"
+                                                />
+                                            </div>
+                                        )}
                                         {/* Header */}
                                         <div className="bg-gray-50 px-6 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-gray-200">
                                             <div className="flex items-center gap-3">

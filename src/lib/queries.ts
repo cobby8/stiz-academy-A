@@ -47,6 +47,7 @@ export const getAcademySettings = cache(async () => {
                 philosophyText: r.philosophyText ?? r.philosophytext ?? null,
                 facilitiesText: r.facilitiesText ?? r.facilitiestext ?? null,
                 facilitiesImagesJSON: r.facilitiesImagesJSON ?? r.facilitiesimagesjson ?? null,
+                galleryImagesJSON: r.galleryImagesJSON ?? r.galleryimagesjson ?? null,
             } as any;
         }
     } catch {
@@ -65,7 +66,7 @@ export const getPrograms = cache(async () => {
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT id, name, "targetAge", frequency, "weeklyFrequency", description,
                     price, "order", days, "priceWeek1", "priceWeek2", "priceWeek3",
-                    "priceDaily", "shuttleFeeOverride", "createdAt", "updatedAt"
+                    "priceDaily", "shuttleFeeOverride", "imageUrl", "createdAt", "updatedAt"
              FROM "Program" ORDER BY "order" ASC, "createdAt" DESC`
         );
         return rows.map((r: any) => ({
@@ -77,6 +78,7 @@ export const getPrograms = cache(async () => {
             priceWeek3: r.priceWeek3 != null ? Number(r.priceWeek3) : null,
             priceDaily: r.priceDaily != null ? Number(r.priceDaily) : null,
             shuttleFeeOverride: r.shuttleFeeOverride != null ? Number(r.shuttleFeeOverride) : null,
+            imageUrl: r.imageUrl ?? r.imageurl ?? null,
         }));
     } catch (e) {
         console.error("[getPrograms] failed:", e);

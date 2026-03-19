@@ -23,6 +23,7 @@ export async function ensureAcademySettingsColumns() {
         ["philosophyText", "TEXT"],
         ["facilitiesText", "TEXT"],
         ["facilitiesImagesJSON", "TEXT"],
+        ["galleryImagesJSON", "TEXT"],
     ];
     for (const [col, type] of columns) {
         try {
@@ -48,6 +49,7 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'philosophyText',
     'facilitiesText',
     'facilitiesImagesJSON',
+    'galleryImagesJSON',
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
@@ -104,15 +106,16 @@ type ProgramData = {
     priceWeek3?: number | null;
     priceDaily?: number | null;
     shuttleFeeOverride?: number | null;
+    imageUrl?: string | null;
 };
 
 export async function createProgram(data: ProgramData) {
-    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride } = data;
+    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl } = data;
     // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
         await prisma.$executeRawUnsafe(
-            `INSERT INTO "Program" (id, "name", "targetAge", "weeklyFrequency", "description", "price", "days", "priceWeek1", "priceWeek2", "priceWeek3", "priceDaily", "shuttleFeeOverride", "order", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+            `INSERT INTO "Program" (id, "name", "targetAge", "weeklyFrequency", "description", "price", "days", "priceWeek1", "priceWeek2", "priceWeek3", "priceDaily", "shuttleFeeOverride", "imageUrl", "order", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
                (SELECT COALESCE(MAX("order"), -1) + 1 FROM "Program"), now(), now())`,
             name,
             targetAge ?? null,
@@ -125,6 +128,7 @@ export async function createProgram(data: ProgramData) {
             priceWeek3 ?? null,
             priceDaily ?? null,
             shuttleFeeOverride ?? null,
+            imageUrl ?? null,
         );
     } catch (e) {
         console.error("Failed to create program:", e);
@@ -136,7 +140,7 @@ export async function createProgram(data: ProgramData) {
 }
 
 export async function updateProgram(id: string, data: ProgramData) {
-    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride } = data;
+    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl } = data;
     // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
         await prisma.$executeRawUnsafe(
@@ -152,8 +156,9 @@ export async function updateProgram(id: string, data: ProgramData) {
                "priceWeek3" = $9,
                "priceDaily" = $10,
                "shuttleFeeOverride" = $11,
+               "imageUrl" = $12,
                "updatedAt" = now()
-             WHERE id = $12`,
+             WHERE id = $13`,
             name,
             targetAge ?? null,
             weeklyFrequency ?? null,
@@ -165,6 +170,7 @@ export async function updateProgram(id: string, data: ProgramData) {
             priceWeek3 ?? null,
             priceDaily ?? null,
             shuttleFeeOverride ?? null,
+            imageUrl ?? null,
             id,
         );
     } catch (e) {
@@ -296,6 +302,7 @@ export async function updateAcademySettings(data: {
     philosophyText?: string;
     facilitiesText?: string;
     facilitiesImagesJSON?: string;
+    galleryImagesJSON?: string;
 }) {
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음
     const payload = { ...data };

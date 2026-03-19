@@ -46,6 +46,7 @@ interface Program {
     priceWeek3: number | null;
     priceDaily: number | null;
     shuttleFeeOverride: number | null;
+    imageUrl: string | null;
 }
 
 interface ProgramForm {
@@ -60,6 +61,7 @@ interface ProgramForm {
     priceDaily: string;
     shuttleFeeMode: "auto" | "manual";
     shuttleFeeManual: string;
+    imageUrl: string;
 }
 
 function emptyForm(): ProgramForm {
@@ -68,6 +70,7 @@ function emptyForm(): ProgramForm {
         days: [],
         priceWeek1: "", priceWeek2: "", priceWeek3: "", priceDaily: "",
         shuttleFeeMode: "auto", shuttleFeeManual: "",
+        imageUrl: "",
     };
 }
 
@@ -94,6 +97,7 @@ function programToForm(p: Program): ProgramForm {
         priceDaily: p.priceDaily != null ? String(p.priceDaily) : "",
         shuttleFeeMode,
         shuttleFeeManual,
+        imageUrl: (p as any).imageUrl ?? "",
     };
 }
 
@@ -133,6 +137,7 @@ function formToData(form: ProgramForm) {
         priceWeek3,
         priceDaily,
         shuttleFeeOverride,
+        imageUrl: form.imageUrl.trim() || null,
     };
 }
 
@@ -363,6 +368,18 @@ function ProgramFormFields({
                     rows={2}
                     placeholder="기초 체력과 기본기를 다지는 클래스입니다."
                     className={INPUT}
+                />
+            </div>
+
+            {/* Row 6: Image URL */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">프로그램 이미지 URL</label>
+                <input
+                    type="url"
+                    value={form.imageUrl}
+                    onChange={(e) => p({ imageUrl: e.target.value })}
+                    placeholder="https://... (Supabase Storage 또는 외부 이미지)"
+                    className={INPUT + " font-mono text-xs"}
                 />
             </div>
 

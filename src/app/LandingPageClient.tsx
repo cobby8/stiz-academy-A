@@ -198,6 +198,38 @@ export default function LandingPageClient({
                 );
             })()}
 
+            {/* Photo Gallery */}
+            {(() => {
+                let galleryImages: string[] = [];
+                try {
+                    if (settings.galleryImagesJSON) galleryImages = JSON.parse(settings.galleryImagesJSON);
+                } catch {}
+                if (galleryImages.length === 0) return null;
+                return (
+                    <section className="py-12 md:py-16 bg-gray-50">
+                        <div className="max-w-6xl mx-auto px-4">
+                            <div className="text-center mb-8">
+                                <p className="text-brand-orange-500 text-sm font-bold uppercase mb-2">GALLERY</p>
+                                <h2 className="text-3xl font-black text-brand-navy-900">학원 활동 사진</h2>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {galleryImages.map((url, i) => (
+                                    <div key={i} className="aspect-square relative rounded-xl overflow-hidden bg-gray-200 group">
+                                        <Image
+                                            src={url}
+                                            alt={`학원 활동 사진 ${i + 1}`}
+                                            fill
+                                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                );
+            })()}
+
             {/* CTA Banner */}
             <section className="bg-brand-orange-500 py-16 text-white">
                 <div className="max-w-4xl mx-auto px-4 text-center">

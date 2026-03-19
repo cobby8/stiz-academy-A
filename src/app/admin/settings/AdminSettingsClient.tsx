@@ -93,6 +93,12 @@ export default function AdminSettingsClient({
         } catch {}
         return [];
     });
+    const [galleryImages, setGalleryImages] = useState<string[]>(() => {
+        try {
+            if (initialSettings?.galleryImagesJSON) return JSON.parse(initialSettings.galleryImagesJSON);
+        } catch {}
+        return [];
+    });
 
     const bodyFontCss = BODY_FONT_OPTIONS.find(f => f.key === bodyFont)?.css ?? "";
     const headingFontCss = headingFont === "same-as-body"
@@ -111,6 +117,7 @@ export default function AdminSettingsClient({
             data.philosophyText = philosophyText;
             data.facilitiesText = facilitiesText;
             data.facilitiesImagesJSON = JSON.stringify(facilityImages.filter(u => u.trim()));
+            data.galleryImagesJSON = JSON.stringify(galleryImages.filter(u => u.trim()));
             data.siteBodyFont = bodyFont;
             data.siteHeadingFont = headingFont;
             await updateAcademySettings(data);
@@ -287,6 +294,44 @@ export default function AdminSettingsClient({
                                 </button>
                             </div>
                         </div>
+                    </section>
+
+                    {/* ── 포토갤러리 ──────────────────────────────────────── */}
+                    <section className="pt-6 border-t border-gray-100">
+                        <SectionHeader title="포토 갤러리" />
+                        <AppliesTo pages={["홈페이지 (메인 랜딩)"]} />
+                        <p className="text-xs text-gray-400 mb-2">
+                            홈페이지에 표시할 학원 활동 사진 URL을 입력합니다. 비워두면 갤러리 섹션이 숨겨집니다.
+                        </p>
+                        {galleryImages.map((url, i) => (
+                            <div key={i} className="flex gap-2 mb-2">
+                                <input
+                                    type="url"
+                                    value={url}
+                                    onChange={(e) => {
+                                        const next = [...galleryImages];
+                                        next[i] = e.target.value;
+                                        setGalleryImages(next);
+                                    }}
+                                    placeholder="https://..."
+                                    className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setGalleryImages(galleryImages.filter((_, j) => j !== i))}
+                                    className="text-red-400 hover:text-red-600 px-2 font-bold text-lg"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setGalleryImages([...galleryImages, ""])}
+                            className="text-sm text-brand-orange-500 font-bold hover:underline"
+                        >
+                            + 사진 URL 추가
+                        </button>
                     </section>
 
                     {/* ── 연락처 ───────────────────────────────────────────── */}

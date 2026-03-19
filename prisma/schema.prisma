@@ -51,6 +51,7 @@ model Program {
   priceDaily         Int?
   shuttleFeeOverride Int?
   weeklyFrequency    String?
+  imageUrl           String?
   classes            Class[]
   slotOverrides      ClassSlotOverride[]
   customClassSlots   CustomClassSlot[]

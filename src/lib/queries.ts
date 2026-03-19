@@ -430,6 +430,109 @@ export const getPayments = cache(async (year?: number, month?: number) => {
     }
 });
 
+/** 마이페이지: 학부모(User)의 자녀 목록 + 수강/출결/수납 요약 */
+export async function getMyPageData(userEmail: string) {
+    try {
+        // 학부모 User 조회
+        const users = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, email, phone FROM "User" WHERE email = $1 LIMIT 1`,
+            userEmail
+        );
+        if (!users[0]) return null;
+        const parent = users[0];
+
+        // 자녀 목록
+        const students = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, "birthDate", gender FROM "Student" WHERE "parentId" = $1 ORDER BY "createdAt" ASC`,
+            parent.id
+        );
+
+        // 각 자녀별 수강/출결/수납 정보
+        const children = await Promise.all(
+            students.map(async (s: any) => {
+                const studentId = s.id;
+
+                // 수강 중인 반
+                const enrollments = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT e.id, e.status, c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                            p.name AS program_name
+                     FROM "Enrollment" e
+                     JOIN "Class" c ON e."classId" = c.id
+                     LEFT JOIN "Program" p ON c."programId" = p.id
+                     WHERE e."studentId" = $1 AND e.status = 'ACTIVE'`,
+                    studentId
+                );
+
+                // 이번 달 출결
+                const now = new Date();
+                const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+                const attendances = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT a.status, se.date
+                     FROM "Attendance" a
+                     JOIN "Session" se ON a."sessionId" = se.id
+                     WHERE a."studentId" = $1 AND se.date >= $2::timestamp
+                     ORDER BY se.date DESC`,
+                    studentId, monthStart
+                );
+
+                // 최근 수납
+                const payments = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT id, amount, status, "dueDate", "paidDate"
+                     FROM "Payment" WHERE "studentId" = $1
+                     ORDER BY "dueDate" DESC LIMIT 5`,
+                    studentId
+                );
+
+                return {
+                    id: studentId,
+                    name: s.name,
+                    birthDate: s.birthDate ?? s.birthdate,
+                    gender: s.gender,
+                    enrollments: enrollments.map((e: any) => ({
+                        id: e.id,
+                        status: e.status,
+                        className: e.class_name,
+                        dayOfWeek: e.dayOfWeek ?? e.dayofweek,
+                        startTime: e.startTime ?? e.starttime,
+                        endTime: e.endTime ?? e.endtime,
+                        programName: e.program_name,
+                    })),
+                    attendance: {
+                        total: attendances.length,
+                        present: attendances.filter((a: any) => a.status === "PRESENT").length,
+                        absent: attendances.filter((a: any) => a.status === "ABSENT").length,
+                        late: attendances.filter((a: any) => a.status === "LATE").length,
+                        records: attendances.map((a: any) => ({
+                            status: a.status,
+                            date: a.date,
+                        })),
+                    },
+                    payments: payments.map((p: any) => ({
+                        id: p.id,
+                        amount: Number(p.amount),
+                        status: p.status,
+                        dueDate: p.dueDate ?? p.duedate,
+                        paidDate: p.paidDate ?? p.paiddate ?? null,
+                    })),
+                };
+            })
+        );
+
+        return {
+            parent: {
+                id: parent.id,
+                name: parent.name,
+                email: parent.email,
+                phone: parent.phone,
+            },
+            children,
+        };
+    } catch (e) {
+        console.error("[getMyPageData] failed:", e);
+        return null;
+    }
+}
+
 /** Google Sheets 동기화 캐시 조회 (SheetSlotCache 테이블 싱글턴 row) */
 export const getSheetSlotCache = cache(async (): Promise<SheetClassSlot[] | null> => {
     try {

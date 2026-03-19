@@ -215,6 +215,17 @@
     - 대기중 요청 미니 목록
   - 사이드바에 "학부모 요청" 메뉴 추가
 
+### 보안 패치 — API 인증 + SQL 인젝션 수정 + PgBouncer 호환 (2026-03-20)
+- 커밋: `e7651f3`
+- 변경 파일: 14개 파일, +312줄 -54줄
+- 내용:
+  - **[보안]** `/api/admin/*` 전체 9개 API (16개 핸들러)에 Supabase Auth 인증 체크 추가
+  - **[보안]** DELETE `/api/push`에 인증 체크 추가
+  - **[보안]** SQL 인젝션 취약점 2건 수정 (reorderPrograms, reorderCoaches) → 파라미터 바인딩
+  - **[안정성]** Prisma ORM 메서드 6곳 → `$executeRawUnsafe`/`$queryRawUnsafe` 전환 (PgBouncer 호환)
+  - **[안정성]** `getAcademySettings`에서 `findUnique` + `$queryRaw` 태그드 템플릿 제거 → raw SQL 단일 쿼리
+  - **[버그]** `getAllRequests` statusFilter 미적용 버그 수정
+
 ---
 
 ## 6. 랠리즈 대비 기능 현황 (2026-03-20 기준)

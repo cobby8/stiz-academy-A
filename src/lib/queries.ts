@@ -454,7 +454,7 @@ export async function getMyPageData(userEmail: string) {
 
                 // 수강 중인 반
                 const enrollments = await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT e.id, e.status, c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                    `SELECT e.id, e."classId", e.status, c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
                             p.name AS program_name
                      FROM "Enrollment" e
                      JOIN "Class" c ON e."classId" = c.id
@@ -490,6 +490,7 @@ export async function getMyPageData(userEmail: string) {
                     gender: s.gender,
                     enrollments: enrollments.map((e: any) => ({
                         id: e.id,
+                        classId: e.classId ?? e.classid,
                         status: e.status,
                         className: e.class_name,
                         dayOfWeek: e.dayOfWeek ?? e.dayofweek,
@@ -529,6 +530,423 @@ export async function getMyPageData(userEmail: string) {
         };
     } catch (e) {
         console.error("[getMyPageData] failed:", e);
+        return null;
+    }
+}
+
+// ── 갤러리 조회 ──────────────────────────────────────────────────────────────
+export const getGalleryPosts = cache(async (options?: { limit?: number; publicOnly?: boolean }) => {
+    const limit = options?.limit ?? 50;
+    const publicFilter = options?.publicOnly ? `WHERE g."isPublic" = true` : "";
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT g.id, g."classId", g.title, g.caption, g."mediaJSON",
+                    g."isPublic", g."createdAt", g."updatedAt",
+                    c.name AS class_name
+             FROM "GalleryPost" g
+             LEFT JOIN "Class" c ON g."classId" = c.id
+             ${publicFilter}
+             ORDER BY g."createdAt" DESC
+             LIMIT $1`,
+            limit
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            classId: r.classId ?? r.classid ?? null,
+            title: r.title ?? null,
+            caption: r.caption ?? null,
+            mediaJSON: r.mediaJSON ?? r.mediajson ?? "[]",
+            isPublic: r.isPublic ?? r.ispublic ?? true,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            className: r.class_name ?? null,
+        }));
+    } catch (e) {
+        console.error("[getGalleryPosts] failed:", e);
+        return [];
+    }
+});
+
+/** 특정 classId 목록에 해당하는 갤러리 (마이페이지용) */
+export async function getGalleryByClassIds(classIds: string[], limit = 20) {
+    if (classIds.length === 0) return [];
+    try {
+        const placeholders = classIds.map((_, i) => `$${i + 1}`).join(", ");
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT g.id, g."classId", g.title, g.caption, g."mediaJSON",
+                    g."createdAt", c.name AS class_name
+             FROM "GalleryPost" g
+             LEFT JOIN "Class" c ON g."classId" = c.id
+             WHERE g."classId" IN (${placeholders})
+             ORDER BY g."createdAt" DESC
+             LIMIT $${classIds.length + 1}`,
+            ...classIds, limit
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            classId: r.classId ?? r.classid ?? null,
+            title: r.title ?? null,
+            caption: r.caption ?? null,
+            mediaJSON: r.mediaJSON ?? r.mediajson ?? "[]",
+            createdAt: r.createdAt ?? r.createdat,
+            className: r.class_name ?? null,
+        }));
+    } catch (e) {
+        console.error("[getGalleryByClassIds] failed:", e);
+        return [];
+    }
+}
+
+// ── 공지사항 조회 ────────────────────────────────────────────────────────────
+export const getNotices = cache(async (options?: { limit?: number }) => {
+    const limit = options?.limit ?? 50;
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, title, content, "targetType", "targetClassIds",
+                    "attachmentsJSON", "isPinned", "createdAt", "updatedAt"
+             FROM "Notice"
+             ORDER BY "isPinned" DESC, "createdAt" DESC
+             LIMIT $1`,
+            limit
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            content: r.content,
+            targetType: r.targetType ?? r.targettype ?? "ALL",
+            targetClassIds: r.targetClassIds ?? r.targetclassids ?? null,
+            attachmentsJSON: r.attachmentsJSON ?? r.attachmentsjson ?? null,
+            isPinned: r.isPinned ?? r.ispinned ?? false,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getNotices] failed:", e);
+        return [];
+    }
+});
+
+export const getNoticeById = cache(async (id: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, title, content, "targetType", "targetClassIds",
+                    "attachmentsJSON", "isPinned", "createdAt", "updatedAt"
+             FROM "Notice" WHERE id = $1 LIMIT 1`,
+            id
+        );
+        if (!rows[0]) return null;
+        const r = rows[0];
+        return {
+            id: r.id,
+            title: r.title,
+            content: r.content,
+            targetType: r.targetType ?? r.targettype ?? "ALL",
+            targetClassIds: r.targetClassIds ?? r.targetclassids ?? null,
+            attachmentsJSON: r.attachmentsJSON ?? r.attachmentsjson ?? null,
+            isPinned: r.isPinned ?? r.ispinned ?? false,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        };
+    } catch (e) {
+        console.error("[getNoticeById] failed:", e);
+        return null;
+    }
+});
+
+/** 특정 classId 목록에 해당하는 공지 (마이페이지용) - 전체 공지 포함 */
+export async function getNoticesByClassIds(classIds: string[], limit = 20) {
+    try {
+        // 전체 공지 OR 해당 반 공지
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, title, content, "targetType", "targetClassIds",
+                    "attachmentsJSON", "isPinned", "createdAt"
+             FROM "Notice"
+             WHERE "targetType" = 'ALL'
+                OR "targetType" = 'CLASS'
+             ORDER BY "isPinned" DESC, "createdAt" DESC
+             LIMIT $1`,
+            limit
+        );
+        // 클라이언트 필터: CLASS 타입이면 해당 classId 포함 여부 확인
+        return rows
+            .filter((r: any) => {
+                const type = r.targetType ?? r.targettype ?? "ALL";
+                if (type === "ALL") return true;
+                const ids = (r.targetClassIds ?? r.targetclassids ?? "").split(",").map((s: string) => s.trim());
+                return classIds.some(cid => ids.includes(cid));
+            })
+            .map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                content: r.content,
+                targetType: r.targetType ?? r.targettype ?? "ALL",
+                attachmentsJSON: r.attachmentsJSON ?? r.attachmentsjson ?? null,
+                isPinned: r.isPinned ?? r.ispinned ?? false,
+                createdAt: r.createdAt ?? r.createdat,
+            }));
+    } catch (e) {
+        console.error("[getNoticesByClassIds] failed:", e);
+        return [];
+    }
+}
+
+// ── 경영 대시보드 통계 ──────────────────────────────────────────────────────
+export const getDashboardExtendedStats = cache(async () => {
+    try {
+        const now = new Date();
+        const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}-01`;
+        const thisMonthEnd = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, "0")}-01`;
+
+        // 이번 달 매출 (납부 완료)
+        const revenueRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COALESCE(SUM(amount), 0)::int AS total
+             FROM "Payment" WHERE status = 'PAID'
+             AND "paidDate" >= $1::timestamp AND "paidDate" < $2::timestamp`,
+            thisMonth, thisMonthEnd
+        );
+        const thisMonthRevenue = Number(revenueRows[0]?.total ?? 0);
+
+        // 지난 달 매출
+        const lastRevRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COALESCE(SUM(amount), 0)::int AS total
+             FROM "Payment" WHERE status = 'PAID'
+             AND "paidDate" >= $1::timestamp AND "paidDate" < $2::timestamp`,
+            lastMonthStr, thisMonth
+        );
+        const lastMonthRevenue = Number(lastRevRows[0]?.total ?? 0);
+
+        // 이번 달 출석률
+        const attRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*)::int AS total,
+                    COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present
+             FROM "Attendance" a
+             JOIN "Session" se ON a."sessionId" = se.id
+             WHERE se.date >= $1::timestamp AND se.date < $2::timestamp`,
+            thisMonth, thisMonthEnd
+        );
+        const attTotal = Number(attRows[0]?.total ?? 0);
+        const attPresent = Number(attRows[0]?.present ?? 0);
+        const attendanceRate = attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0;
+
+        // 미납 건수/금액
+        const unpaidRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*)::int AS cnt, COALESCE(SUM(amount), 0)::int AS total
+             FROM "Payment" WHERE status IN ('PENDING', 'OVERDUE')`
+        );
+        const unpaidCount = Number(unpaidRows[0]?.cnt ?? 0);
+        const unpaidAmount = Number(unpaidRows[0]?.total ?? 0);
+
+        // 최근 6개월 매출 추이
+        const monthlyRevenue: { month: string; amount: number }[] = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+            const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+            const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-01`;
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT COALESCE(SUM(amount), 0)::int AS total
+                 FROM "Payment" WHERE status = 'PAID'
+                 AND "paidDate" >= $1::timestamp AND "paidDate" < $2::timestamp`,
+                start, endStr
+            );
+            monthlyRevenue.push({
+                month: `${d.getMonth() + 1}월`,
+                amount: Number(rows[0]?.total ?? 0),
+            });
+        }
+
+        // 최근 6개월 출석률 추이
+        const monthlyAttendance: { month: string; rate: number }[] = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+            const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+            const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-01`;
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT COUNT(*)::int AS total,
+                        COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present
+                 FROM "Attendance" a
+                 JOIN "Session" se ON a."sessionId" = se.id
+                 WHERE se.date >= $1::timestamp AND se.date < $2::timestamp`,
+                start, endStr
+            );
+            const t = Number(rows[0]?.total ?? 0);
+            const p = Number(rows[0]?.present ?? 0);
+            monthlyAttendance.push({
+                month: `${d.getMonth() + 1}월`,
+                rate: t > 0 ? Math.round((p / t) * 100) : 0,
+            });
+        }
+
+        // 프로그램별 원생 수
+        const programStudents = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT p.name, COUNT(DISTINCT e."studentId")::int AS cnt
+             FROM "Program" p
+             LEFT JOIN "Class" c ON c."programId" = p.id
+             LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+             GROUP BY p.id, p.name, p."order"
+             ORDER BY p."order" ASC`
+        );
+
+        return {
+            thisMonthRevenue,
+            lastMonthRevenue,
+            attendanceRate,
+            unpaidCount,
+            unpaidAmount,
+            monthlyRevenue,
+            monthlyAttendance,
+            programStudents: programStudents.map((r: any) => ({
+                name: r.name,
+                count: Number(r.cnt ?? 0),
+            })),
+        };
+    } catch (e) {
+        console.error("[getDashboardExtendedStats] failed:", e);
+        return {
+            thisMonthRevenue: 0, lastMonthRevenue: 0, attendanceRate: 0,
+            unpaidCount: 0, unpaidAmount: 0,
+            monthlyRevenue: [], monthlyAttendance: [], programStudents: [],
+        };
+    }
+});
+
+// ── 원생 상세 활동 현황 ─────────────────────────────────────────────────────
+export async function getStudentActivity(studentId: string) {
+    try {
+        // 원생 기본 + 학부모 정보
+        const sRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT s.id, s.name, s."birthDate", s.gender, s.memo, s."parentId",
+                    s."createdAt", s."updatedAt",
+                    u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email
+             FROM "Student" s
+             LEFT JOIN "User" u ON s."parentId" = u.id
+             WHERE s.id = $1`,
+            studentId
+        );
+        if (!sRows[0]) return null;
+        const r = sRows[0];
+
+        // 수강 내역
+        const enrollments = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT e.id, e."classId", e.status, e."createdAt",
+                    c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                    p.name AS program_name
+             FROM "Enrollment" e
+             LEFT JOIN "Class" c ON e."classId" = c.id
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             WHERE e."studentId" = $1
+             ORDER BY e."createdAt" DESC`,
+            studentId
+        );
+
+        // 전체 출결 기록 (최근 50건)
+        const attendances = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT a.id, a.status, se.date, c.name AS class_name
+             FROM "Attendance" a
+             JOIN "Session" se ON a."sessionId" = se.id
+             JOIN "Class" c ON se."classId" = c.id
+             WHERE a."studentId" = $1
+             ORDER BY se.date DESC LIMIT 50`,
+            studentId
+        );
+
+        // 전체 수납 기록
+        const payments = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, amount, status, "dueDate", "paidDate", "createdAt"
+             FROM "Payment" WHERE "studentId" = $1
+             ORDER BY "dueDate" DESC`,
+            studentId
+        );
+
+        // 출석 통계
+        const attStats = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*)::int AS total,
+                    COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present,
+                    COUNT(CASE WHEN a.status = 'ABSENT' THEN 1 END)::int AS absent,
+                    COUNT(CASE WHEN a.status = 'LATE' THEN 1 END)::int AS late,
+                    COUNT(CASE WHEN a.status = 'EXCUSED' THEN 1 END)::int AS excused
+             FROM "Attendance" a
+             WHERE a."studentId" = $1`,
+            studentId
+        );
+
+        // 관련 갤러리 (수강 반의 사진)
+        const classIds = enrollments.map((e: any) => e.classId ?? e.classid).filter(Boolean);
+        let galleryPosts: any[] = [];
+        if (classIds.length > 0) {
+            const placeholders = classIds.map((_: any, i: number) => `$${i + 1}`).join(", ");
+            galleryPosts = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT id, title, "mediaJSON", "createdAt"
+                 FROM "GalleryPost"
+                 WHERE "classId" IN (${placeholders})
+                 ORDER BY "createdAt" DESC LIMIT 6`,
+                ...classIds
+            );
+        }
+
+        const stats = attStats[0] || {};
+        return {
+            student: {
+                id: r.id,
+                name: r.name,
+                birthDate: r.birthDate ?? r.birthdate,
+                gender: r.gender ?? null,
+                memo: r.memo ?? null,
+                parentId: r.parentId ?? r.parentid,
+                createdAt: r.createdAt ?? r.createdat,
+                parent: {
+                    name: r.parent_name ?? null,
+                    phone: r.parent_phone ?? null,
+                    email: r.parent_email ?? null,
+                },
+            },
+            enrollments: enrollments.map((e: any) => ({
+                id: e.id,
+                classId: e.classId ?? e.classid,
+                status: e.status,
+                createdAt: e.createdAt ?? e.createdat,
+                className: e.class_name,
+                dayOfWeek: e.dayOfWeek ?? e.dayofweek,
+                startTime: e.startTime ?? e.starttime,
+                endTime: e.endTime ?? e.endtime,
+                programName: e.program_name,
+            })),
+            attendances: attendances.map((a: any) => ({
+                id: a.id,
+                status: a.status,
+                date: a.date,
+                className: a.class_name,
+            })),
+            payments: payments.map((p: any) => ({
+                id: p.id,
+                amount: Number(p.amount),
+                status: p.status,
+                dueDate: p.dueDate ?? p.duedate,
+                paidDate: p.paidDate ?? p.paiddate ?? null,
+                createdAt: p.createdAt ?? p.createdat,
+            })),
+            attendanceStats: {
+                total: Number(stats.total ?? 0),
+                present: Number(stats.present ?? 0),
+                absent: Number(stats.absent ?? 0),
+                late: Number(stats.late ?? 0),
+                excused: Number(stats.excused ?? 0),
+                rate: Number(stats.total ?? 0) > 0
+                    ? Math.round((Number(stats.present ?? 0) / Number(stats.total ?? 0)) * 100)
+                    : 0,
+            },
+            galleryPosts: galleryPosts.map((g: any) => ({
+                id: g.id,
+                title: g.title ?? null,
+                mediaJSON: g.mediaJSON ?? g.mediajson ?? "[]",
+                createdAt: g.createdAt ?? g.createdat,
+            })),
+        };
+    } catch (e) {
+        console.error("[getStudentActivity] failed:", e);
         return null;
     }
 }

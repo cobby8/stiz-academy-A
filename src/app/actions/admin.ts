@@ -525,6 +525,19 @@ export async function createStudent(data: {
     revalidatePath("/admin");
 }
 
+export async function updateStudentMemo(id: string, memo: string) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Student" SET memo = $1, "updatedAt" = NOW() WHERE id = $2`,
+            memo || null, id,
+        );
+    } catch (e) {
+        console.error("Failed to update student memo:", e);
+        throw new Error("메모 저장 실패");
+    }
+    revalidatePath("/admin/students");
+}
+
 export async function updateStudent(id: string, data: {
     name: string;
     birthDate: string;
@@ -691,5 +704,148 @@ export async function deletePayment(id: string) {
         throw new Error("수납 기록 삭제 실패");
     }
     revalidatePath("/admin/finance");
+}
+
+// ── 갤러리 관리 ──────────────────────────────────────────────────────────────
+export async function createGalleryPost(data: {
+    classId?: string | null;
+    title?: string | null;
+    caption?: string | null;
+    mediaJSON: string;
+    isPublic?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "GalleryPost" (id, "classId", title, caption, "mediaJSON", "isPublic", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())`,
+            data.classId || null,
+            data.title || null,
+            data.caption || null,
+            data.mediaJSON,
+            data.isPublic !== false,
+        );
+    } catch (e) {
+        console.error("Failed to create gallery post:", e);
+        throw new Error("갤러리 게시물 생성 실패");
+    }
+    revalidatePath("/admin/gallery");
+    revalidatePath("/gallery");
+    revalidatePath("/mypage");
+    revalidatePath("/");
+}
+
+export async function updateGalleryPost(id: string, data: {
+    classId?: string | null;
+    title?: string | null;
+    caption?: string | null;
+    mediaJSON?: string;
+    isPublic?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "GalleryPost" SET "classId" = $1, title = $2, caption = $3,
+             "mediaJSON" = $4, "isPublic" = $5, "updatedAt" = NOW() WHERE id = $6`,
+            data.classId || null,
+            data.title || null,
+            data.caption || null,
+            data.mediaJSON || "[]",
+            data.isPublic !== false,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update gallery post:", e);
+        throw new Error("갤러리 게시물 수정 실패");
+    }
+    revalidatePath("/admin/gallery");
+    revalidatePath("/gallery");
+    revalidatePath("/mypage");
+    revalidatePath("/");
+}
+
+export async function deleteGalleryPost(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "GalleryPost" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete gallery post:", e);
+        throw new Error("갤러리 게시물 삭제 실패");
+    }
+    revalidatePath("/admin/gallery");
+    revalidatePath("/gallery");
+    revalidatePath("/mypage");
+    revalidatePath("/");
+}
+
+// ── 공지사항 관리 ────────────────────────────────────────────────────────────
+export async function createNotice(data: {
+    title: string;
+    content: string;
+    targetType?: string;
+    targetClassIds?: string | null;
+    attachmentsJSON?: string | null;
+    isPinned?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Notice" (id, title, content, "targetType", "targetClassIds", "attachmentsJSON", "isPinned", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+            data.title,
+            data.content,
+            data.targetType || "ALL",
+            data.targetClassIds || null,
+            data.attachmentsJSON || null,
+            data.isPinned || false,
+        );
+    } catch (e) {
+        console.error("Failed to create notice:", e);
+        throw new Error("공지사항 생성 실패");
+    }
+    revalidatePath("/admin/notices");
+    revalidatePath("/notices");
+    revalidatePath("/mypage");
+    revalidatePath("/");
+}
+
+export async function updateNotice(id: string, data: {
+    title: string;
+    content: string;
+    targetType?: string;
+    targetClassIds?: string | null;
+    attachmentsJSON?: string | null;
+    isPinned?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Notice" SET title = $1, content = $2, "targetType" = $3,
+             "targetClassIds" = $4, "attachmentsJSON" = $5, "isPinned" = $6, "updatedAt" = NOW()
+             WHERE id = $7`,
+            data.title,
+            data.content,
+            data.targetType || "ALL",
+            data.targetClassIds || null,
+            data.attachmentsJSON || null,
+            data.isPinned || false,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update notice:", e);
+        throw new Error("공지사항 수정 실패");
+    }
+    revalidatePath("/admin/notices");
+    revalidatePath("/notices");
+    revalidatePath("/mypage");
+    revalidatePath("/");
+}
+
+export async function deleteNotice(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "Notice" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete notice:", e);
+        throw new Error("공지사항 삭제 실패");
+    }
+    revalidatePath("/admin/notices");
+    revalidatePath("/notices");
+    revalidatePath("/mypage");
+    revalidatePath("/");
 }
 

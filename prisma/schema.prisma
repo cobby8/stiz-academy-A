@@ -25,6 +25,7 @@ model Student {
   name        String
   birthDate   DateTime
   gender      String?
+  memo        String?
   parentId    String
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -235,6 +236,35 @@ model AnnualEvent {
   category    String?   @default("일반")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime
+}
+
+model GalleryPost {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  classId   String?
+  title     String?
+  caption   String?
+  mediaJSON String   @default("[]")
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([classId])
+  @@index([createdAt])
+}
+
+model Notice {
+  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  title           String
+  content         String
+  targetType      String   @default("ALL")
+  targetClassIds  String?
+  attachmentsJSON String?
+  isPinned        Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([createdAt])
+  @@index([targetType])
 }
 
 enum Role {

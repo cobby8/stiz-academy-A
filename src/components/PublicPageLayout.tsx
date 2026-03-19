@@ -31,6 +31,8 @@ export default async function PublicPageLayout({ children }: { children: React.R
                         <Link href="/programs" className="hover:text-brand-orange-500 transition-colors">프로그램안내</Link>
                         <Link href="/schedule" className="hover:text-brand-orange-500 transition-colors">수업시간표</Link>
                         <Link href="/annual" className="hover:text-brand-orange-500 transition-colors">연간일정표</Link>
+                        <Link href="/gallery" className="hover:text-brand-orange-500 transition-colors">포토갤러리</Link>
+                        <Link href="/notices" className="hover:text-brand-orange-500 transition-colors">공지사항</Link>
                         <Link href="/apply" className="hover:text-brand-orange-500 transition-colors">체험/수강신청</Link>
                     </nav>
 
@@ -49,6 +51,8 @@ export default async function PublicPageLayout({ children }: { children: React.R
                         { href: "/programs", label: "프로그램" },
                         { href: "/schedule", label: "수업시간표" },
                         { href: "/annual", label: "연간일정" },
+                        { href: "/gallery", label: "갤러리" },
+                        { href: "/notices", label: "공지사항" },
                         { href: "/apply", label: "체험/수강신청" },
                     ].map((item) => (
                         <Link
@@ -104,6 +108,8 @@ export default async function PublicPageLayout({ children }: { children: React.R
                                 <li><Link href="/programs" className="hover:text-white transition-colors">프로그램안내</Link></li>
                                 <li><Link href="/schedule" className="hover:text-white transition-colors">수업시간표</Link></li>
                                 <li><Link href="/annual" className="hover:text-white transition-colors">연간일정표</Link></li>
+                                <li><Link href="/gallery" className="hover:text-white transition-colors">포토갤러리</Link></li>
+                                <li><Link href="/notices" className="hover:text-white transition-colors">공지사항</Link></li>
                                 <li><Link href="/apply" className="hover:text-white transition-colors">체험/수강신청</Link></li>
                             </ul>
                         </div>

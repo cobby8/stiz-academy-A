@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck, CreditCard } from "lucide-react";
+import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip } from "lucide-react";
+import Link from "next/link";
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -31,6 +32,7 @@ type ChildData = {
     gender: string | null;
     enrollments: {
         id: string;
+        classId: string;
         className: string;
         dayOfWeek: string;
         startTime: string;
@@ -53,12 +55,35 @@ type ChildData = {
     }[];
 };
 
+type GalleryItem = {
+    id: string;
+    title: string | null;
+    caption: string | null;
+    mediaJSON: string;
+    createdAt: Date | string;
+    className: string | null;
+};
+
+type NoticeItem = {
+    id: string;
+    title: string;
+    content: string;
+    targetType: string;
+    isPinned: boolean;
+    createdAt: Date | string;
+    attachmentsJSON: string | null;
+};
+
 type MyPageData = {
     parent: { id: string; name: string; email: string; phone: string | null };
     children: ChildData[];
 };
 
-export default function MyPageClient({ data }: { data: MyPageData }) {
+export default function MyPageClient({ data, gallery = [], notices = [] }: {
+    data: MyPageData;
+    gallery?: GalleryItem[];
+    notices?: NoticeItem[];
+}) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const child = data.children[selectedIdx];
 
@@ -230,6 +255,64 @@ export default function MyPageClient({ data }: { data: MyPageData }) {
                     <CalendarCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">아직 수강/출결/수납 데이터가 없습니다.</p>
                     <p className="text-sm mt-1">학원에서 반 배정 후 데이터가 표시됩니다.</p>
+                </div>
+            )}
+
+            {/* 공지사항 섹션 */}
+            {notices.length > 0 && (
+                <div>
+                    <div className="flex items-center justify-between mb-3 px-1">
+                        <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                            <Bell size={18} className="text-brand-orange-500" /> 공지사항
+                        </h2>
+                        <Link href="/notices" className="text-xs text-brand-orange-500 hover:underline">전체보기</Link>
+                    </div>
+                    <div className="space-y-2">
+                        {notices.slice(0, 5).map(n => (
+                            <Link key={n.id} href={`/notices/${n.id}`}
+                                className="block bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm text-gray-900 truncate">{n.title}</p>
+                                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{n.content}</p>
+                                    </div>
+                                    <span className="text-xs text-gray-400 flex-shrink-0 ml-3">
+                                        {new Date(n.createdAt).toLocaleDateString("ko-KR")}
+                                    </span>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* 갤러리 섹션 */}
+            {gallery.length > 0 && (
+                <div>
+                    <div className="flex items-center justify-between mb-3 px-1">
+                        <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                            <ImageIcon size={18} className="text-brand-orange-500" /> 수업 사진
+                        </h2>
+                        <Link href="/gallery" className="text-xs text-brand-orange-500 hover:underline">전체보기</Link>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        {gallery.slice(0, 6).map(g => {
+                            let media: { url: string; type: string }[] = [];
+                            try { media = JSON.parse(g.mediaJSON); } catch {}
+                            const first = media[0];
+                            if (!first) return null;
+                            return (
+                                <Link key={g.id} href="/gallery"
+                                    className="aspect-square rounded-xl overflow-hidden bg-gray-100 relative group">
+                                    {first.type === "image" ? (
+                                        <img src={first.url} alt={g.title || ""} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                    ) : (
+                                        <video src={first.url} className="w-full h-full object-cover" muted />
+                                    )}
+                                </Link>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
         </div>

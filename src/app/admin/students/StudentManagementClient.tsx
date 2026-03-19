@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
     createStudent,
     updateStudent,
@@ -303,7 +304,9 @@ export default function StudentManagementClient({
                                 {filtered.map((s) => (
                                     <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-5 py-3.5">
-                                            <span className="font-bold text-gray-900">{s.name}</span>
+                                            <Link href={`/admin/students/${s.id}`} className="font-bold text-gray-900 hover:text-brand-orange-500 transition-colors">
+                                                {s.name}
+                                            </Link>
                                         </td>
                                         <td className="px-5 py-3.5 text-sm text-gray-600">
                                             <span className="font-medium">{calcAge(s.birthDate)}세</span>

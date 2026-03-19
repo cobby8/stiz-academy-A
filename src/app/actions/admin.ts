@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { sendPushToUser } from "@/lib/pushNotification";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
@@ -655,11 +656,22 @@ export async function saveAttendance(classId: string, date: string, records: { s
                 sessionId, rec.studentId, rec.status
             );
         }
+        // 출결 완료 알림 → 학부모에게 전송
+        const studentIds = records.map(r => r.studentId);
+        const dateStr = new Date(date).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+        await notifyParentsOfStudents(
+            studentIds,
+            "ATTENDANCE",
+            "출결 확인",
+            `${dateStr} 출결이 기록되었습니다.`,
+            "/mypage",
+        );
     } catch (e) {
         console.error("Failed to save attendance:", e);
         throw new Error("출결 저장 실패");
     }
     revalidatePath("/admin/attendance");
+    revalidatePath("/mypage");
 }
 
 // ── 수납 관리 ──────────────────────────────────────────────────────────────────
@@ -675,11 +687,22 @@ export async function createPayment(data: {
              VALUES (gen_random_uuid()::text, $1, $2, $3, $4::timestamp, NOW(), NOW())`,
             data.studentId, data.amount, data.status || "PENDING", data.dueDate,
         );
+
+        // 수납 안내 알림 → 해당 학부모
+        const amountStr = data.amount.toLocaleString("ko-KR");
+        await notifyParentsOfStudents(
+            [data.studentId],
+            "PAYMENT",
+            "수납 안내",
+            `${amountStr}원 수납 요청이 등록되었습니다.`,
+            "/mypage",
+        );
     } catch (e) {
         console.error("Failed to create payment:", e);
         throw new Error("수납 기록 생성 실패");
     }
     revalidatePath("/admin/finance");
+    revalidatePath("/mypage");
 }
 
 export async function updatePaymentStatus(id: string, status: string) {
@@ -795,6 +818,13 @@ export async function createNotice(data: {
             data.attachmentsJSON || null,
             data.isPinned || false,
         );
+        // 공지 작성 알림 → 모든 학부모에게
+        await notifyAllParents(
+            "NOTICE",
+            "새 공지사항",
+            data.title,
+            "/notices",
+        );
     } catch (e) {
         console.error("Failed to create notice:", e);
         throw new Error("공지사항 생성 실패");
@@ -847,5 +877,96 @@ export async function deleteNotice(id: string) {
     revalidatePath("/notices");
     revalidatePath("/mypage");
     revalidatePath("/");
+}
+
+// ── 알림 시스템 ──────────────────────────────────────────────────────────────
+
+// 알림 생성 (내부 헬퍼 — 다른 액션에서 호출)
+// DB에 인앱 알림 저장 + 푸시 알림도 동시 발송
+async function createNotificationRecord(data: {
+    userId: string;
+    type: string;      // ATTENDANCE, NOTICE, PAYMENT
+    title: string;
+    message: string;
+    linkUrl?: string;
+}) {
+    try {
+        // 1. DB에 인앱 알림 저장
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Notification" (id, "userId", type, title, message, "linkUrl", "isRead", "createdAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, false, NOW())`,
+            data.userId, data.type, data.title, data.message, data.linkUrl || null,
+        );
+        // 2. 푸시 알림 발송 (실패해도 무시)
+        sendPushToUser(data.userId, {
+            title: data.title,
+            body: data.message,
+            url: data.linkUrl || "/mypage",
+            tag: data.type,
+        }).catch(() => {});
+    } catch (e) {
+        console.error("Failed to create notification:", e);
+    }
+}
+
+// 특정 학생들의 학부모에게 일괄 알림
+async function notifyParentsOfStudents(studentIds: string[], type: string, title: string, message: string, linkUrl?: string) {
+    try {
+        if (studentIds.length === 0) return;
+        const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(",");
+        const parents = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT DISTINCT "parentId" FROM "Student" WHERE id IN (${placeholders})`,
+            ...studentIds,
+        );
+        for (const p of parents) {
+            const parentId = p.parentId ?? p.parentid;
+            if (parentId) {
+                await createNotificationRecord({ userId: parentId, type, title, message, linkUrl });
+            }
+        }
+    } catch (e) {
+        console.error("Failed to notify parents:", e);
+    }
+}
+
+// 모든 학부모에게 알림 (공지사항 등)
+async function notifyAllParents(type: string, title: string, message: string, linkUrl?: string) {
+    try {
+        const parents = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE role = 'PARENT'`
+        );
+        for (const p of parents) {
+            await createNotificationRecord({ userId: p.id, type, title, message, linkUrl });
+        }
+    } catch (e) {
+        console.error("Failed to notify all parents:", e);
+    }
+}
+
+// 알림 읽음 처리
+export async function markNotificationRead(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Notification" SET "isRead" = true WHERE id = $1`, id
+        );
+    } catch (e) {
+        console.error("Failed to mark notification read:", e);
+        throw new Error("알림 읽음 처리 실패");
+    }
+    revalidatePath("/mypage");
+}
+
+// 모든 알림 읽음 처리
+export async function markAllNotificationsRead(userId: string) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Notification" SET "isRead" = true WHERE "userId" = $1 AND "isRead" = false`,
+            userId,
+        );
+    } catch (e) {
+        console.error("Failed to mark all notifications read:", e);
+        throw new Error("알림 전체 읽음 처리 실패");
+    }
+    revalidatePath("/mypage");
 }
 

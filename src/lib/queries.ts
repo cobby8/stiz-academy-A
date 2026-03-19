@@ -964,3 +964,44 @@ export const getSheetSlotCache = cache(async (): Promise<SheetClassSlot[] | null
         return null;
     }
 });
+
+// ── 알림 조회 ─────────────────────────────────────────────────────────────────
+// userId 기준으로 알림 목록 조회 (최신순, 최대 50개)
+export const getNotifications = cache(async (userId: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, "userId", type, title, message, "linkUrl", "isRead", "createdAt"
+             FROM "Notification"
+             WHERE "userId" = $1
+             ORDER BY "createdAt" DESC
+             LIMIT 50`,
+            userId
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            userId: r.userId ?? r.userid,
+            type: r.type,
+            title: r.title,
+            message: r.message,
+            linkUrl: r.linkUrl ?? r.linkurl ?? null,
+            isRead: r.isRead ?? r.isread ?? false,
+            createdAt: r.createdAt ?? r.createdat,
+        }));
+    } catch {
+        return [];
+    }
+});
+
+// 읽지 않은 알림 개수
+export const getUnreadNotificationCount = cache(async (userId: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*)::int as count FROM "Notification"
+             WHERE "userId" = $1 AND "isRead" = false`,
+            userId
+        );
+        return rows[0]?.count ?? 0;
+    } catch {
+        return 0;
+    }
+});

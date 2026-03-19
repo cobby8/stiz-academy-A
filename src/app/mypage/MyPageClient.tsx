@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip } from "lucide-react";
+import { useState, useTransition, useEffect } from "react";
+import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip, Check, CheckCheck, BellRing, BellOff } from "lucide-react";
 import Link from "next/link";
+import { markNotificationRead, markAllNotificationsRead } from "@/app/actions/admin";
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -74,17 +75,87 @@ type NoticeItem = {
     attachmentsJSON: string | null;
 };
 
+type NotificationItem = {
+    id: string;
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+    linkUrl: string | null;
+    isRead: boolean;
+    createdAt: Date | string;
+};
+
 type MyPageData = {
     parent: { id: string; name: string; email: string; phone: string | null };
     children: ChildData[];
 };
 
-export default function MyPageClient({ data, gallery = [], notices = [] }: {
+export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0 }: {
     data: MyPageData;
     gallery?: GalleryItem[];
     notices?: NoticeItem[];
+    notifications?: NotificationItem[];
+    unreadCount?: number;
 }) {
     const [selectedIdx, setSelectedIdx] = useState(0);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [isPending, startTransition] = useTransition();
+    // 푸시 알림 상태
+    const [pushSupported, setPushSupported] = useState(false);
+    const [pushEnabled, setPushEnabled] = useState(false);
+    const [pushLoading, setPushLoading] = useState(false);
+
+    // 브라우저 푸시 지원 여부 및 현재 구독 상태 확인
+    useEffect(() => {
+        if ("serviceWorker" in navigator && "PushManager" in window) {
+            setPushSupported(true);
+            navigator.serviceWorker.ready.then(reg => {
+                reg.pushManager.getSubscription().then(sub => {
+                    setPushEnabled(!!sub);
+                });
+            });
+            // Service Worker 등록
+            navigator.serviceWorker.register("/sw.js").catch(() => {});
+        }
+    }, []);
+
+    // 푸시 알림 구독/해제 토글
+    async function togglePush() {
+        setPushLoading(true);
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const existing = await reg.pushManager.getSubscription();
+
+            if (existing) {
+                // 구독 해제
+                await existing.unsubscribe();
+                await fetch("/api/push", {
+                    method: "DELETE",
+                    body: JSON.stringify({ endpoint: existing.endpoint }),
+                });
+                setPushEnabled(false);
+            } else {
+                // 구독 등록
+                const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+                if (!vapidKey) throw new Error("VAPID 키 없음");
+                const sub = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+                });
+                await fetch("/api/push", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ subscription: sub.toJSON() }),
+                });
+                setPushEnabled(true);
+            }
+        } catch (e) {
+            console.error("Push toggle error:", e);
+            alert("알림 설정에 실패했습니다. 브라우저 알림 권한을 확인해주세요.");
+        }
+        setPushLoading(false);
+    }
     const child = data.children[selectedIdx];
 
     const enrollSummary = child.enrollments
@@ -145,6 +216,113 @@ export default function MyPageClient({ data, gallery = [], notices = [] }: {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* 알림 토글 버튼 */}
+            <div>
+                <button
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="bg-brand-orange-50 p-2 rounded-full">
+                            <Bell className="w-5 h-5 text-brand-orange-500" />
+                        </div>
+                        <span className="font-bold text-gray-900">알림</span>
+                        {unreadCount > 0 && (
+                            <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                                {unreadCount}
+                            </span>
+                        )}
+                    </div>
+                    <span className="text-gray-400 text-sm">{showNotifications ? "접기" : "펼치기"}</span>
+                </button>
+
+                {showNotifications && (
+                    <div className="mt-2 bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                        {/* 상단 바: 푸시 설정 + 전체 읽음 */}
+                        <div className="px-4 py-2 border-b border-gray-50 flex items-center justify-between">
+                            {/* 푸시 알림 토글 */}
+                            {pushSupported && (
+                                <button
+                                    onClick={togglePush}
+                                    disabled={pushLoading}
+                                    className={`text-xs flex items-center gap-1 px-2.5 py-1 rounded-full transition ${
+                                        pushEnabled
+                                            ? "bg-green-100 text-green-700"
+                                            : "bg-gray-100 text-gray-500 hover:bg-orange-50 hover:text-brand-orange-500"
+                                    }`}
+                                >
+                                    {pushLoading ? "..." : pushEnabled ? (
+                                        <><BellRing size={13} /> 푸시 ON</>
+                                    ) : (
+                                        <><BellOff size={13} /> 푸시 OFF</>
+                                    )}
+                                </button>
+                            )}
+                            {!pushSupported && <span />}
+                            {unreadCount > 0 && (
+                                <button
+                                    onClick={() => startTransition(() => markAllNotificationsRead(data.parent.id))}
+                                    disabled={isPending}
+                                    className="text-xs text-brand-orange-500 hover:underline flex items-center gap-1"
+                                >
+                                    <CheckCheck size={14} /> 모두 읽음
+                                </button>
+                            )}
+                        </div>
+
+                        {notifications.length === 0 ? (
+                            <div className="p-8 text-center text-gray-400 text-sm">
+                                알림이 없습니다
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
+                                {notifications.map(n => (
+                                    <div
+                                        key={n.id}
+                                        className={`px-4 py-3 flex items-start gap-3 ${!n.isRead ? "bg-orange-50/50" : ""}`}
+                                    >
+                                        {/* 알림 타입 아이콘 */}
+                                        <div className={`mt-0.5 p-1.5 rounded-full flex-shrink-0 ${
+                                            n.type === "ATTENDANCE" ? "bg-green-100 text-green-600" :
+                                            n.type === "PAYMENT" ? "bg-red-100 text-red-600" :
+                                            "bg-blue-100 text-blue-600"
+                                        }`}>
+                                            {n.type === "ATTENDANCE" ? <CalendarCheck size={14} /> :
+                                             n.type === "PAYMENT" ? <CreditCard size={14} /> :
+                                             <Bell size={14} />}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm ${!n.isRead ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                                                {n.title}
+                                            </p>
+                                            <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {new Date(n.createdAt).toLocaleDateString("ko-KR", {
+                                                    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+                                                })}
+                                            </p>
+                                        </div>
+
+                                        {/* 읽음 처리 버튼 */}
+                                        {!n.isRead && (
+                                            <button
+                                                onClick={() => startTransition(() => markNotificationRead(n.id))}
+                                                disabled={isPending}
+                                                className="text-gray-400 hover:text-brand-orange-500 p-1 flex-shrink-0"
+                                                title="읽음 처리"
+                                            >
+                                                <Check size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Payment Alert */}
@@ -317,4 +495,16 @@ export default function MyPageClient({ data, gallery = [], notices = [] }: {
             )}
         </div>
     );
+}
+
+// VAPID 공개키를 Uint8Array로 변환 (Web Push API에 필요)
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
 }

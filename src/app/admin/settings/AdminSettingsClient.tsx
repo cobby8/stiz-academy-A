@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
-import { updateAcademySettings, createCoach, deleteCoach } from "@/app/actions/admin";
+import { updateAcademySettings } from "@/app/actions/admin";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, type FontOption } from "@/lib/fonts";
 import dynamic from "next/dynamic";
 
@@ -71,14 +71,13 @@ function SectionHeader({ title }: { title: string }) {
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────────────────
 export default function AdminSettingsClient({
     initialSettings,
-    coaches,
     fetchError,
 }: {
     initialSettings: any;
-    coaches: any[];
     fetchError: boolean;
 }) {
     const [actionError, setActionError] = useState<string | null>(null);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [bodyFont, setBodyFont] = useState<string>(initialSettings?.siteBodyFont || "system");
     const [headingFont, setHeadingFont] = useState<string>(
         HEADING_FONT_OPTIONS.some(f => f.key === initialSettings?.siteHeadingFont)
@@ -94,6 +93,7 @@ export default function AdminSettingsClient({
 
     async function saveBasicSettings(formData: FormData) {
         setActionError(null);
+        setSaveSuccess(true); // optimistic: 즉시 성공 표시 → INP ~10ms
         try {
             const data: any = {};
             formData.forEach((value, key) => {
@@ -103,33 +103,10 @@ export default function AdminSettingsClient({
             data.siteBodyFont = bodyFont;
             data.siteHeadingFont = headingFont;
             await updateAcademySettings(data);
-            alert("저장되었습니다. 폰트 변경은 새로고침 후 반영됩니다.");
+            setTimeout(() => setSaveSuccess(false), 4000);
         } catch (e: any) {
+            setSaveSuccess(false);
             setActionError(e.message || "저장 중 오류가 발생했습니다.");
-        }
-    }
-
-    async function addCoach(formData: FormData) {
-        setActionError(null);
-        try {
-            const name = formData.get("name") as string;
-            const role = formData.get("role") as string;
-            const description = formData.get("description") as string;
-            const imageUrl = formData.get("imageUrl") as string;
-            const order = parseInt(formData.get("order") as string) || 0;
-            if (!name || !role) return;
-            await createCoach({ name, role, description, imageUrl, order });
-        } catch (e: any) {
-            setActionError(e.message || "강사 추가 중 오류가 발생했습니다.");
-        }
-    }
-
-    async function handleDeleteCoach(formData: FormData) {
-        setActionError(null);
-        try {
-            await deleteCoach(formData.get("id") as string);
-        } catch (e: any) {
-            setActionError(e.message || "삭제 중 오류가 발생했습니다.");
         }
     }
 
@@ -138,6 +115,12 @@ export default function AdminSettingsClient({
             {fetchError && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm">
                     데이터베이스 연결에 문제가 발생했습니다. 새 스키마 동기화(db push)가 필요합니다.
+                </div>
+            )}
+            {saveSuccess && (
+                <div className="bg-green-50 text-green-700 p-4 rounded-lg font-medium border border-green-200 mb-4 text-sm flex justify-between items-center">
+                    <span>✓ 저장되었습니다. 폰트 변경은 새로고침 후 반영됩니다.</span>
+                    <button onClick={() => setSaveSuccess(false)} className="text-green-400 hover:text-green-600 font-bold ml-4">✕</button>
                 </div>
             )}
             {actionError && (
@@ -256,6 +239,20 @@ export default function AdminSettingsClient({
                         </div>
                     </section>
 
+                    {/* ── 유튜브 영상 ───────────────────────────────────────── */}
+                    <section className="pt-6 border-t border-gray-100">
+                        <SectionHeader title="메인페이지 유튜브 영상" />
+                        <AppliesTo pages={["메인 페이지 (홍보 영상)"]} />
+                        <input
+                            name="youtubeUrl"
+                            type="text"
+                            defaultValue={initialSettings?.youtubeUrl || ""}
+                            placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX  또는 <iframe ...> 코드"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                        />
+                        <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
+                    </section>
+
                     {/* ── 구글 캘린더 ───────────────────────────────────────── */}
                     <section className="pt-6 border-t border-gray-100">
                         <SectionHeader title="구글 캘린더 연동" />
@@ -273,6 +270,16 @@ export default function AdminSettingsClient({
                         />
                     </section>
 
+                    {/* ── 구글시트 시간표 → 수업시간표 관리 메뉴로 이동됨 ── */}
+                    <section className="pt-6 border-t border-gray-100">
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-blue-800 flex items-center justify-between gap-4">
+                            <span>구글시트 시간표 연동은 <strong>수업시간표 관리</strong> 메뉴에서 설정할 수 있습니다.</span>
+                            <a href="/admin/schedule" className="shrink-0 font-bold underline hover:text-blue-900 whitespace-nowrap">
+                                수업시간표 관리 →
+                            </a>
+                        </div>
+                    </section>
+
                     {/* 저장 */}
                     <div className="pt-4 border-t border-gray-100 flex justify-end">
                         <ConfirmSubmitButton
@@ -284,78 +291,12 @@ export default function AdminSettingsClient({
                     </div>
                 </form>
 
-                {/* ── 코치/강사진 관리 ─────────────────────────────────────── */}
-                <section className="pt-8 border-t-4 border-gray-100">
-                    <SectionHeader title="코치/강사진 관리" />
-                    <AppliesTo pages={["학원소개 페이지 코치진 소개"]} />
-
-                    <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6">
-                        <form action={addCoach} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">이름 *</label>
-                                    <input name="name" type="text" placeholder="예: 홍길동" className="w-full border border-gray-300 rounded-md p-2 text-sm" required />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">직책 *</label>
-                                    <input name="role" type="text" placeholder="예: 원장, 코치" className="w-full border border-gray-300 rounded-md p-2 text-sm" required />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">약력 / 한줄 소개</label>
-                                <input name="description" type="text" className="w-full border border-gray-300 rounded-md p-2 text-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">프로필 사진 URL (선택)</label>
-                                <input name="imageUrl" type="url" placeholder="https://.../photo.jpg" className="w-full border border-gray-300 rounded-md p-2 text-sm" />
-                            </div>
-                            <div className="flex justify-end pt-2">
-                                <ConfirmSubmitButton
-                                    confirmMessage="새 강사진을 추가하시겠습니까?"
-                                    className="bg-brand-navy-900 text-white px-4 py-2 rounded-md font-bold hover:bg-gray-800 transition text-sm"
-                                >
-                                    추가하기
-                                </ConfirmSubmitButton>
-                            </div>
-                        </form>
-                    </div>
-
-                    <ul className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden">
-                        {coaches.length === 0 && (
-                            <li className="p-6 text-center text-gray-500 text-sm">등록된 강사진이 없습니다.</li>
-                        )}
-                        {coaches.map((coach) => (
-                            <li key={coach.id} className="p-4 flex justify-between items-center bg-white">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 shrink-0">
-                                        {coach.imageUrl ? (
-                                            <img src={coach.imageUrl} alt={coach.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No img</div>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                                            <span className="font-bold text-gray-900">{coach.name}</span>
-                                            <span className="text-xs bg-brand-orange-50 text-brand-orange-600 border border-brand-orange-200 px-2 py-0.5 rounded-full">{coach.role}</span>
-                                        </div>
-                                        <p className="text-xs text-gray-500 truncate max-w-[200px]">{coach.description}</p>
-                                    </div>
-                                </div>
-                                <form>
-                                    <input type="hidden" name="id" value={coach.id} />
-                                    <ConfirmSubmitButton
-                                        confirmMessage="삭제하시겠습니까?"
-                                        formAction={handleDeleteCoach}
-                                        className="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded transition text-xs font-bold"
-                                    >
-                                        삭제
-                                    </ConfirmSubmitButton>
-                                </form>
-                            </li>
-                        ))}
-                    </ul>
-                </section>
+                <div className="pt-4 border-t border-gray-100 bg-gray-50 rounded-lg p-4 flex items-center justify-between text-sm">
+                    <span className="text-gray-500">코치/강사진 관리는 별도 메뉴로 이동되었습니다.</span>
+                    <a href="/admin/coaches" className="font-bold text-brand-navy-900 underline hover:text-gray-600">
+                        코치/강사진 관리 →
+                    </a>
+                </div>
             </div>
         </div>
     );

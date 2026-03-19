@@ -1,4 +1,5 @@
-import { getPrograms, getClasses, createClass, deleteClass } from "@/app/actions/admin";
+import { getPrograms, getClasses } from "@/lib/queries";
+import { createClass, deleteClass } from "@/app/actions/admin";
 
 export default async function AdminClassesPage() {
     let programs: any[] = [];

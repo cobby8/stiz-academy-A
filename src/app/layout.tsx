@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { getAcademySettings } from "@/app/actions/admin";
+import { getAcademySettings } from "@/lib/queries";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, getFontCss } from "@/lib/fonts";
 
 export const metadata: Metadata = {

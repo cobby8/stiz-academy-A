@@ -1,4 +1,4 @@
-import { getAnnualEvents, getAcademySettings, getClasses } from "@/app/actions/admin";
+import { getAcademySettings, getClasses } from "@/lib/queries";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
 import {
     getMonthClassSchedule,
@@ -12,9 +12,10 @@ import {
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnnualEventsClient, { SerializedEvent } from "./AnnualEventsClient";
 
-export const dynamic = "force-dynamic"; // router.refresh() 호출 시 항상 최신 데이터 반환
+// ISR: 5분 캐시 (Vercel 엣지 CDN 서빙). admin revalidatePath("/annual") 호출 시 즉각 무효화.
+export const revalidate = 300;
 
-export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점" };
+export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점 연간 행사 일정. 대회·방학·특별행사 및 정기 일정 안내." };
 
 const CATEGORY_STYLES: Record<string, { dot: string }> = {
     대회: { dot: "bg-red-500" },
@@ -28,8 +29,7 @@ const CATEGORY_STYLES: Record<string, { dot: string }> = {
 const DOW_MAP: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
 
 export default async function AnnualPage() {
-    const [dbEvents, settings, classes] = await Promise.all([
-        getAnnualEvents() as Promise<any[]>,
+    const [settings, classes] = await Promise.all([
         getAcademySettings() as Promise<any>,
         getClasses() as Promise<any[]>,
     ]);
@@ -42,16 +42,6 @@ export default async function AnnualPage() {
 
     // 직렬화 (Date → ISO string) 후 클라이언트에 전달
     const allEvents: SerializedEvent[] = [
-        ...dbEvents.map((e: any) => ({
-            id: e.id,
-            title: e.title,
-            date: (e.date as Date).toISOString(),
-            endDate: e.endDate ? (e.endDate as Date).toISOString() : undefined,
-            description: e.description ?? undefined,
-            category: e.category || "일반",
-            isAllDay: true,
-            source: "db" as const,
-        })),
         ...googleEvents.map((e) => {
             // "n월 개강/종강/n주차" 이벤트는 제목의 n월을 수강월로 사용 (실제 날짜와 무관)
             const academicRE = OPEN_RE.test(e.title) ? OPEN_RE

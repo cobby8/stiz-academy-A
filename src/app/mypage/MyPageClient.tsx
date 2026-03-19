@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip, Check, CheckCheck, BellRing, BellOff, Send, MessageSquare, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip, Check, CheckCheck, BellRing, BellOff, Send, MessageSquare, Clock, CheckCircle2, XCircle, Star } from "lucide-react";
 import Link from "next/link";
 import { markNotificationRead, markAllNotificationsRead, createParentRequest } from "@/app/actions/admin";
 
@@ -101,6 +101,28 @@ type RequestItem = {
     studentName: string;
 };
 
+// 코치가 작성한 학습 피드백 항목 타입
+type FeedbackItem = {
+    id: string;
+    studentId: string;
+    sessionDate: Date | string | null;
+    category: string;
+    title: string;
+    content: string;
+    rating: number | null;
+    createdAt: Date | string;
+    coachName: string | null;
+    studentName: string | null;
+};
+
+// 피드백 카테고리별 라벨과 색상
+const FB_CATEGORIES: Record<string, { label: string; color: string }> = {
+    SKILL: { label: "기술", color: "bg-blue-100 text-blue-700" },
+    ATTITUDE: { label: "태도", color: "bg-green-100 text-green-700" },
+    PHYSICAL: { label: "체력", color: "bg-purple-100 text-purple-700" },
+    GENERAL: { label: "종합", color: "bg-gray-100 text-gray-700" },
+};
+
 type MyPageData = {
     parent: { id: string; name: string; email: string; phone: string | null };
     children: ChildData[];
@@ -120,13 +142,14 @@ const REQUEST_STATUS: Record<string, { label: string; color: string; icon: typeo
     REJECTED: { label: "반려", color: "bg-red-100 text-red-700", icon: XCircle },
 };
 
-export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [] }: {
+export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [] }: {
     data: MyPageData;
     gallery?: GalleryItem[];
     notices?: NoticeItem[];
     notifications?: NotificationItem[];
     unreadCount?: number;
     myRequests?: RequestItem[];
+    feedbacks?: FeedbackItem[];
 }) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -137,6 +160,8 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
     const [reqType, setReqType] = useState("ABSENCE");
     const [reqContent, setReqContent] = useState("");
     const [reqDate, setReqDate] = useState("");
+    // 피드백 카드 펼치기 상태 (클릭한 피드백 ID 저장)
+    const [expandedFbId, setExpandedFbId] = useState<string | null>(null);
     // 푸시 알림 상태
     const [pushSupported, setPushSupported] = useState(false);
     const [pushEnabled, setPushEnabled] = useState(false);
@@ -647,6 +672,66 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                 </div>
                             </Link>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* 학습 피드백 섹션 - 코치가 작성한 자녀 피드백 표시 */}
+            {feedbacks.length > 0 && (
+                <div>
+                    <div className="flex items-center justify-between mb-3 px-1">
+                        <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                            <Star size={18} className="text-brand-orange-500" /> 학습 피드백
+                        </h2>
+                    </div>
+                    <div className="space-y-2">
+                        {feedbacks.map(fb => {
+                            // 카테고리 정보 (없으면 '종합'으로 표시)
+                            const cat = FB_CATEGORIES[fb.category] || FB_CATEGORIES.GENERAL;
+                            // 이 카드가 펼쳐져 있는지 확인
+                            const isExpanded = expandedFbId === fb.id;
+                            return (
+                                <div
+                                    key={fb.id}
+                                    onClick={() => setExpandedFbId(isExpanded ? null : fb.id)}
+                                    className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition cursor-pointer"
+                                >
+                                    {/* 상단: 학생이름, 코치이름, 날짜 */}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-gray-900">{fb.studentName}</span>
+                                            {fb.coachName && (
+                                                <span className="text-xs text-gray-400">| {fb.coachName} 코치</span>
+                                            )}
+                                        </div>
+                                        <span className="text-xs text-gray-400">
+                                            {fb.sessionDate
+                                                ? new Date(fb.sessionDate).toLocaleDateString("ko-KR")
+                                                : new Date(fb.createdAt).toLocaleDateString("ko-KR")}
+                                        </span>
+                                    </div>
+                                    {/* 카테고리 뱃지 + 제목 + 별점 */}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cat.color}`}>
+                                            {cat.label}
+                                        </span>
+                                        <span className="text-sm font-medium text-gray-800 flex-1 truncate">{fb.title}</span>
+                                        {/* 별점 표시 (1~5) */}
+                                        {fb.rating != null && fb.rating > 0 && (
+                                            <span className="text-yellow-500 text-sm flex-shrink-0">
+                                                {"★".repeat(fb.rating)}{"☆".repeat(5 - fb.rating)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {/* 카드 클릭 시 내용 펼치기 */}
+                                    {isExpanded && (
+                                        <div className="mt-3 pt-3 border-t border-gray-100">
+                                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.content}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}

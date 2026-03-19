@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getMyPageData, getGalleryByClassIds, getNoticesByClassIds, getNotifications, getUnreadNotificationCount, getMyRequests } from "@/lib/queries";
+import { getMyPageData, getGalleryByClassIds, getNoticesByClassIds, getNotifications, getUnreadNotificationCount, getMyRequests, getChildrenFeedbacks } from "@/lib/queries";
 import MyPageClient from "./MyPageClient";
 import Link from "next/link";
 
@@ -46,14 +46,17 @@ export default async function MyPageDashboard() {
     const classIds = data.children.flatMap(c =>
         c.enrollments.map((e: any) => e.classId).filter(Boolean)
     );
-    // 갤러리/공지/알림 데이터 가져오기
-    const [gallery, notices, notifications, unreadCount, myRequests] = await Promise.all([
+    // 자녀 ID 목록 추출 (피드백 조회용)
+    const studentIds = data.children.map(c => c.id);
+    // 갤러리/공지/알림/피드백 데이터 가져오기
+    const [gallery, notices, notifications, unreadCount, myRequests, feedbacks] = await Promise.all([
         getGalleryByClassIds(classIds, 10),
         getNoticesByClassIds(classIds, 10),
         getNotifications(data.parent.id),
         getUnreadNotificationCount(data.parent.id),
         getMyRequests(data.parent.id),
+        getChildrenFeedbacks(studentIds),
     ]);
 
-    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} myRequests={myRequests} />;
+    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} myRequests={myRequests} feedbacks={feedbacks} />;
 }

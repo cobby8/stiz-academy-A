@@ -1092,3 +1092,84 @@ export async function deleteParentRequest(id: string) {
     revalidatePath("/mypage");
 }
 
+// ── 학습 피드백 ──────────────────────────────────────────────────────────────
+
+// 피드백 생성: 코치가 원생에게 학습 피드백을 작성하고, 해당 학부모에게 알림 전송
+export async function createFeedback(data: {
+    studentId: string;
+    coachId: string;
+    sessionDate?: string | null;
+    category?: string;
+    title: string;
+    content: string;
+    rating?: number | null;
+    isPublic?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Feedback" (id, "studentId", "coachId", "sessionDate", category, title, content, rating, "isPublic", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3::timestamptz, $4, $5, $6, $7, $8, NOW(), NOW())`,
+            data.studentId, data.coachId, data.sessionDate || null,
+            data.category || "GENERAL", data.title, data.content,
+            data.rating ?? null, data.isPublic !== false,
+        );
+
+        // 학부모에게 피드백 알림 전송
+        const studentRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT name, "parentId" FROM "Student" WHERE id = $1`, data.studentId
+        );
+        if (studentRows[0]) {
+            const parentId = studentRows[0].parentId ?? studentRows[0].parentid;
+            if (parentId) {
+                await createNotificationRecord({
+                    userId: parentId,
+                    type: "FEEDBACK",
+                    title: "학습 피드백",
+                    message: `${studentRows[0].name} - ${data.title}`,
+                    linkUrl: "/mypage",
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Failed to create feedback:", e);
+        throw new Error("피드백 작성 실패");
+    }
+    revalidatePath("/admin/feedback");
+    revalidatePath("/mypage");
+}
+
+// 피드백 수정: 제목/내용/카테고리/평점/공개여부 변경
+export async function updateFeedback(id: string, data: {
+    category?: string;
+    title: string;
+    content: string;
+    rating?: number | null;
+    isPublic?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Feedback" SET category = $1, title = $2, content = $3, rating = $4, "isPublic" = $5, "updatedAt" = NOW()
+             WHERE id = $6`,
+            data.category || "GENERAL", data.title, data.content,
+            data.rating ?? null, data.isPublic !== false, id,
+        );
+    } catch (e) {
+        console.error("Failed to update feedback:", e);
+        throw new Error("피드백 수정 실패");
+    }
+    revalidatePath("/admin/feedback");
+    revalidatePath("/mypage");
+}
+
+// 피드백 삭제
+export async function deleteFeedback(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "Feedback" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete feedback:", e);
+        throw new Error("피드백 삭제 실패");
+    }
+    revalidatePath("/admin/feedback");
+    revalidatePath("/mypage");
+}
+

@@ -292,6 +292,23 @@ model PushSubscription {
   @@index([userId])
 }
 
+model Feedback {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId   String
+  coachId     String
+  sessionDate DateTime? @db.Timestamptz(6)
+  category    String    @default("GENERAL") // SKILL, ATTITUDE, PHYSICAL, GENERAL
+  title       String
+  content     String
+  rating      Int?      // 1~5
+  isPublic    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([studentId, sessionDate])
+  @@index([coachId])
+}
+
 model ParentRequest {
   id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   userId     String

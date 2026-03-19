@@ -1117,3 +1117,98 @@ export const getRecentPendingRequests = cache(async () => {
         return [];
     }
 });
+
+// ── 학습 피드백 조회 ──────────────────────────────────────────────────────────
+
+// 학생별 피드백 목록 (최신순, 코치 이름 포함)
+export const getFeedbacksByStudent = cache(async (studentId: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT f.id, f."studentId", f."coachId", f."sessionDate", f.category,
+                    f.title, f.content, f.rating, f."isPublic", f."createdAt",
+                    c.name AS coach_name
+             FROM "Feedback" f
+             LEFT JOIN "Coach" c ON f."coachId" = c.id
+             WHERE f."studentId" = $1
+             ORDER BY f."createdAt" DESC
+             LIMIT 30`,
+            studentId
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId ?? r.studentid,
+            coachId: r.coachId ?? r.coachid,
+            sessionDate: r.sessionDate ?? r.sessiondate ?? null,
+            category: r.category,
+            title: r.title,
+            content: r.content,
+            rating: r.rating != null ? Number(r.rating) : null,
+            isPublic: r.isPublic ?? r.ispublic ?? true,
+            createdAt: r.createdAt ?? r.createdat,
+            coachName: r.coach_name,
+        }));
+    } catch { return []; }
+});
+
+// 관리자용: 전체 피드백 목록 (최신순, 코치+원생 이름 포함)
+export const getAllFeedbacks = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT f.id, f."studentId", f."coachId", f."sessionDate", f.category,
+                    f.title, f.content, f.rating, f."isPublic", f."createdAt",
+                    c.name AS coach_name, s.name AS student_name
+             FROM "Feedback" f
+             LEFT JOIN "Coach" c ON f."coachId" = c.id
+             LEFT JOIN "Student" s ON f."studentId" = s.id
+             ORDER BY f."createdAt" DESC
+             LIMIT 100`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId ?? r.studentid,
+            coachId: r.coachId ?? r.coachid,
+            sessionDate: r.sessionDate ?? r.sessiondate ?? null,
+            category: r.category,
+            title: r.title,
+            content: r.content,
+            rating: r.rating != null ? Number(r.rating) : null,
+            isPublic: r.isPublic ?? r.ispublic ?? true,
+            createdAt: r.createdAt ?? r.createdat,
+            coachName: r.coach_name,
+            studentName: r.student_name,
+        }));
+    } catch { return []; }
+});
+
+// 학부모 마이페이지용: 자녀들의 공개 피드백만 조회
+export const getChildrenFeedbacks = cache(async (studentIds: string[]) => {
+    try {
+        if (studentIds.length === 0) return [];
+        // 자녀 ID 개수에 맞춰 동적 placeholder 생성 ($1, $2, ...)
+        const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(",");
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT f.id, f."studentId", f."coachId", f."sessionDate", f.category,
+                    f.title, f.content, f.rating, f."createdAt",
+                    c.name AS coach_name, s.name AS student_name
+             FROM "Feedback" f
+             LEFT JOIN "Coach" c ON f."coachId" = c.id
+             LEFT JOIN "Student" s ON f."studentId" = s.id
+             WHERE f."studentId" IN (${placeholders}) AND f."isPublic" = true
+             ORDER BY f."createdAt" DESC
+             LIMIT 20`,
+            ...studentIds
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId ?? r.studentid,
+            sessionDate: r.sessionDate ?? r.sessiondate ?? null,
+            category: r.category,
+            title: r.title,
+            content: r.content,
+            rating: r.rating != null ? Number(r.rating) : null,
+            createdAt: r.createdAt ?? r.createdat,
+            coachName: r.coach_name,
+            studentName: r.student_name,
+        }));
+    } catch { return []; }
+});

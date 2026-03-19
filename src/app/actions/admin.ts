@@ -218,26 +218,60 @@ export async function createClass(data: {
     capacity: number;
 }) {
     try {
-        await prisma.class.create({ data });
-        revalidatePath("/admin/classes");
-        revalidatePath("/schedule");
-        revalidatePath("/");
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Class" (id, "programId", name, "dayOfWeek", "startTime", "endTime", location, capacity, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+            data.programId, data.name, data.dayOfWeek,
+            data.startTime || "", data.endTime || "",
+            data.location || null, data.capacity,
+        );
     } catch (e) {
         console.error("Failed to create class:", e);
         throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
     }
+    revalidatePath("/admin/classes");
+    revalidatePath("/schedule");
+    revalidatePath("/");
+}
+
+export async function updateClass(id: string, data: {
+    programId: string;
+    name: string;
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+    location?: string;
+    capacity: number;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Class" SET "programId" = $1, name = $2, "dayOfWeek" = $3,
+             "startTime" = $4, "endTime" = $5, location = $6, capacity = $7, "updatedAt" = NOW()
+             WHERE id = $8`,
+            data.programId, data.name, data.dayOfWeek,
+            data.startTime || "", data.endTime || "",
+            data.location || null, data.capacity, id,
+        );
+    } catch (e) {
+        console.error("Failed to update class:", e);
+        throw new Error("반 수정 실패");
+    }
+    revalidatePath("/admin/classes");
+    revalidatePath("/schedule");
+    revalidatePath("/");
 }
 
 export async function deleteClass(id: string) {
     try {
-        await prisma.class.delete({ where: { id } });
-        revalidatePath("/admin/classes");
-        revalidatePath("/schedule");
-        revalidatePath("/");
+        await prisma.$executeRawUnsafe(`DELETE FROM "Enrollment" WHERE "classId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "Class" WHERE id = $1`, id);
     } catch (e) {
         console.error("Failed to delete class:", e);
-        throw new Error("Failed to delete class");
+        throw new Error("반 삭제 실패");
     }
+    revalidatePath("/admin/classes");
+    revalidatePath("/schedule");
+    revalidatePath("/");
 }
 
 export async function updateAcademySettings(data: {
@@ -433,5 +467,141 @@ export async function deleteAnnualEvent(id: string) {
     }
     revalidatePath("/admin/annual");
     revalidatePath("/annual");
+}
+
+// ── 원생 관리 CRUD ────────────────────────────────────────────────────────────
+export async function createStudent(data: {
+    name: string;
+    birthDate: string;
+    gender?: string | null;
+    parentName: string;
+    parentPhone?: string | null;
+    parentEmail?: string | null;
+}) {
+    try {
+        // 학부모 User 생성 또는 조회 (이메일 기준)
+        let parentId: string;
+        const email = data.parentEmail?.trim() || `parent_${Date.now()}@stiz.local`;
+
+        const existing = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE email = $1 LIMIT 1`, email
+        );
+
+        if (existing.length > 0) {
+            parentId = existing[0].id;
+            // 이름/전화번호 업데이트
+            await prisma.$executeRawUnsafe(
+                `UPDATE "User" SET name = $1, phone = $2, "updatedAt" = NOW() WHERE id = $3`,
+                data.parentName, data.parentPhone || null, parentId,
+            );
+        } else {
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
+                 RETURNING id`,
+                email, data.parentName, data.parentPhone || null,
+            );
+            parentId = rows[0].id;
+        }
+
+        // 원생 생성
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Student" (id, name, "birthDate", gender, "parentId", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, NOW(), NOW())`,
+            data.name, data.birthDate, data.gender || null, parentId,
+        );
+    } catch (e) {
+        console.error("Failed to create student:", e);
+        throw new Error("원생 등록 실패");
+    }
+    revalidatePath("/admin/students");
+    revalidatePath("/admin");
+}
+
+export async function updateStudent(id: string, data: {
+    name: string;
+    birthDate: string;
+    gender?: string | null;
+    parentName: string;
+    parentPhone?: string | null;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Student" SET name = $1, "birthDate" = $2::timestamp, gender = $3, "updatedAt" = NOW()
+             WHERE id = $4`,
+            data.name, data.birthDate, data.gender || null, id,
+        );
+        // 학부모 정보도 업데이트
+        const student = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "parentId" FROM "Student" WHERE id = $1`, id
+        );
+        if (student[0]) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "User" SET name = $1, phone = $2, "updatedAt" = NOW() WHERE id = $3`,
+                data.parentName, data.parentPhone || null, student[0].parentId ?? student[0].parentid,
+            );
+        }
+    } catch (e) {
+        console.error("Failed to update student:", e);
+        throw new Error("원생 수정 실패");
+    }
+    revalidatePath("/admin/students");
+    revalidatePath("/admin");
+}
+
+export async function deleteStudent(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "Attendance" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "Payment" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "Enrollment" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "Student" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete student:", e);
+        throw new Error("원생 삭제 실패");
+    }
+    revalidatePath("/admin/students");
+    revalidatePath("/admin");
+}
+
+// ── 수강 등록 관리 ────────────────────────────────────────────────────────────
+export async function enrollStudent(studentId: string, classId: string) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
+             ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()`,
+            studentId, classId,
+        );
+    } catch (e) {
+        console.error("Failed to enroll student:", e);
+        throw new Error("수강 등록 실패");
+    }
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/classes");
+}
+
+export async function updateEnrollmentStatus(enrollmentId: string, status: string) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Enrollment" SET status = $1, "updatedAt" = NOW() WHERE id = $2`,
+            status, enrollmentId,
+        );
+    } catch (e) {
+        console.error("Failed to update enrollment:", e);
+        throw new Error("수강 상태 변경 실패");
+    }
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/classes");
+}
+
+export async function deleteEnrollment(enrollmentId: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "Enrollment" WHERE id = $1`, enrollmentId);
+    } catch (e) {
+        console.error("Failed to delete enrollment:", e);
+        throw new Error("수강 취소 실패");
+    }
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/classes");
 }
 

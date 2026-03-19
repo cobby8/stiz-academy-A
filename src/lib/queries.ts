@@ -86,12 +86,121 @@ export const getPrograms = cache(async () => {
 
 export const getClasses = cache(async () => {
     try {
-        return await prisma.class.findMany({
-            include: { program: true },
-            orderBy: { createdAt: "desc" },
-        });
-    } catch {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT c.id, c."programId", c."instructorId", c.name, c."dayOfWeek",
+                    c."startTime", c."endTime", c.location, c.capacity,
+                    c."createdAt", c."updatedAt",
+                    p.id AS p_id, p.name AS p_name
+             FROM "Class" c
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             ORDER BY c."createdAt" DESC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            programId: r.programId ?? r.programid,
+            instructorId: r.instructorId ?? r.instructorid ?? null,
+            name: r.name,
+            dayOfWeek: r.dayOfWeek ?? r.dayofweek,
+            startTime: r.startTime ?? r.starttime ?? "",
+            endTime: r.endTime ?? r.endtime ?? "",
+            location: r.location ?? null,
+            capacity: Number(r.capacity ?? 0),
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            program: r.p_id ? { id: r.p_id, name: r.p_name } : null,
+        }));
+    } catch (e) {
+        console.error("[getClasses] failed:", e);
         return [];
+    }
+});
+
+/** 원생 목록 조회 (학부모 정보 포함) */
+export const getStudents = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
+                    s."createdAt", s."updatedAt",
+                    u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email
+             FROM "Student" s
+             LEFT JOIN "User" u ON s."parentId" = u.id
+             ORDER BY s."createdAt" DESC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            birthDate: r.birthDate ?? r.birthdate,
+            gender: r.gender ?? null,
+            parentId: r.parentId ?? r.parentid,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            parent: {
+                name: r.parent_name ?? null,
+                phone: r.parent_phone ?? null,
+                email: r.parent_email ?? null,
+            },
+        }));
+    } catch (e) {
+        console.error("[getStudents] failed:", e);
+        return [];
+    }
+});
+
+/** 원생 상세 조회 (수강 내역 포함) */
+export const getStudentWithEnrollments = cache(async (id: string) => {
+    try {
+        // 원생 기본 정보
+        const sRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
+                    s."createdAt", s."updatedAt",
+                    u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email
+             FROM "Student" s
+             LEFT JOIN "User" u ON s."parentId" = u.id
+             WHERE s.id = $1`,
+            id
+        );
+        if (!sRows[0]) return null;
+        const r = sRows[0];
+        // 수강 내역
+        const eRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT e.id, e."classId", e.status, e."createdAt",
+                    c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                    p.name AS program_name
+             FROM "Enrollment" e
+             LEFT JOIN "Class" c ON e."classId" = c.id
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             WHERE e."studentId" = $1
+             ORDER BY e."createdAt" DESC`,
+            id
+        );
+        return {
+            id: r.id,
+            name: r.name,
+            birthDate: r.birthDate ?? r.birthdate,
+            gender: r.gender ?? null,
+            parentId: r.parentId ?? r.parentid,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            parent: {
+                name: r.parent_name ?? null,
+                phone: r.parent_phone ?? null,
+                email: r.parent_email ?? null,
+            },
+            enrollments: eRows.map((e: any) => ({
+                id: e.id,
+                classId: e.classId ?? e.classid,
+                status: e.status,
+                createdAt: e.createdAt ?? e.createdat,
+                className: e.class_name,
+                dayOfWeek: e.dayOfWeek ?? e.dayofweek,
+                startTime: e.startTime ?? e.starttime,
+                endTime: e.endTime ?? e.endtime,
+                programName: e.program_name,
+            })),
+        };
+    } catch (e) {
+        console.error("[getStudentWithEnrollments] failed:", e);
+        return null;
     }
 });
 

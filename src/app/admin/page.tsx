@@ -1,8 +1,8 @@
-import { Users, BookOpen, UserCheck, Layers, Database, CloudOff, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
+import { Users, BookOpen, UserCheck, Layers, Database, CloudOff, TrendingUp, TrendingDown, Minus, AlertTriangle, MessageSquare, Clock, CalendarCheck, UserPlus } from "lucide-react";
 import { Suspense } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
-import { getDashboardStats, getDashboardExtendedStats } from "@/lib/queries";
+import { getDashboardStats, getDashboardExtendedStats, getRecentPendingRequests, getPendingRequestCount } from "@/lib/queries";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -86,10 +86,59 @@ async function SystemStatusCard() {
     );
 }
 
+// 오늘의 수업 조회 (요일 기준)
+async function getTodayClasses() {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const today = days[new Date().getDay()];
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT c.id, c.name, c."startTime", c."endTime", c.capacity,
+                    p.name AS program_name,
+                    (SELECT COUNT(*)::int FROM "Enrollment" e WHERE e."classId" = c.id AND e.status = 'ACTIVE') AS enrolled
+             FROM "Class" c
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             WHERE c."dayOfWeek" = $1
+             ORDER BY c."startTime" ASC`,
+            today
+        );
+        return rows.map((r: any) => ({
+            id: r.id, name: r.name,
+            startTime: r.startTime ?? r.starttime,
+            endTime: r.endTime ?? r.endtime,
+            capacity: Number(r.capacity ?? 0),
+            programName: r.program_name,
+            enrolled: Number(r.enrolled ?? 0),
+        }));
+    } catch { return []; }
+}
+
+// 최근 7일 신규 원생
+async function getRecentStudents() {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT s.id, s.name, s."createdAt", u.name AS parent_name
+             FROM "Student" s
+             LEFT JOIN "User" u ON s."parentId" = u.id
+             WHERE s."createdAt" >= NOW() - INTERVAL '7 days'
+             ORDER BY s."createdAt" DESC
+             LIMIT 5`
+        );
+        return rows.map((r: any) => ({
+            id: r.id, name: r.name,
+            createdAt: r.createdAt ?? r.createdat,
+            parentName: r.parent_name,
+        }));
+    } catch { return []; }
+}
+
 export default async function AdminDashboard() {
-    const [stats, ext] = await Promise.all([
+    const [stats, ext, pendingRequests, pendingCount, todayClasses, recentStudents] = await Promise.all([
         getDashboardStats(),
         getDashboardExtendedStats(),
+        getRecentPendingRequests(),
+        getPendingRequestCount(),
+        getTodayClasses(),
+        getRecentStudents(),
     ]);
 
     const revDiff = ext.lastMonthRevenue > 0
@@ -98,6 +147,8 @@ export default async function AdminDashboard() {
 
     const maxRevenue = Math.max(...ext.monthlyRevenue.map(m => m.amount), 1);
     const maxAttRate = 100;
+    const dayLabels: Record<string, string> = { Sun: "일", Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토" };
+    const todayLabel = dayLabels[["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date().getDay()]] + "요일";
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
@@ -105,6 +156,26 @@ export default async function AdminDashboard() {
                 <h1 className="text-2xl font-extrabold text-gray-900 mb-1">경영 대시보드</h1>
                 <p className="text-gray-500 text-sm">스티즈농구교실 다산점의 운영 현황입니다.</p>
             </div>
+
+            {/* 학부모 요청 알림 배너 */}
+            {pendingCount > 0 && (
+                <Link href="/admin/requests"
+                    className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 hover:bg-yellow-100 transition shadow-sm">
+                    <div className="bg-yellow-400 text-white p-2 rounded-full">
+                        <MessageSquare size={20} />
+                    </div>
+                    <div className="flex-1">
+                        <p className="font-bold text-yellow-800">
+                            미처리 요청 {pendingCount}건
+                        </p>
+                        <p className="text-xs text-yellow-600 mt-0.5">
+                            {pendingRequests.slice(0, 2).map(r => `${r.studentName} - ${r.title}`).join(" / ")}
+                            {pendingCount > 2 && ` 외 ${pendingCount - 2}건`}
+                        </p>
+                    </div>
+                    <span className="text-yellow-600 text-sm font-bold">처리하기 &rarr;</span>
+                </Link>
+            )}
 
             {/* KPI Cards - Row 1: 기본 */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -197,6 +268,94 @@ export default async function AdminDashboard() {
                 </div>
             </div>
 
+            {/* 오늘의 수업 + 신규 원생 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 오늘의 수업 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <CalendarCheck size={18} className="text-brand-orange-500" />
+                        오늘의 수업 ({todayLabel})
+                    </h3>
+                    {todayClasses.length === 0 ? (
+                        <p className="text-sm text-gray-400">오늘은 수업이 없습니다</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {todayClasses.map(c => (
+                                <div key={c.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-900">{c.name}</p>
+                                        <p className="text-xs text-gray-500">{c.programName} &middot; {c.startTime}~{c.endTime}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                            c.enrolled >= c.capacity ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                                        }`}>
+                                            {c.enrolled}/{c.capacity}명
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* 신규 원생 + 최근 요청 */}
+                <div className="space-y-6">
+                    {/* 신규 원생 */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <UserPlus size={18} className="text-emerald-500" />
+                            신규 원생 (최근 7일)
+                        </h3>
+                        {recentStudents.length === 0 ? (
+                            <p className="text-sm text-gray-400">최근 등록된 원생이 없습니다</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {recentStudents.map(s => (
+                                    <Link key={s.id} href={`/admin/students/${s.id}`}
+                                        className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50 rounded-lg px-2 transition">
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900">{s.name}</p>
+                                            <p className="text-xs text-gray-500">학부모: {s.parentName}</p>
+                                        </div>
+                                        <span className="text-xs text-gray-400">
+                                            {new Date(s.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
+                                        </span>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 최근 요청 요약 */}
+                    {pendingRequests.length > 0 && (
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-yellow-200">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                                    <Clock size={18} className="text-yellow-500" />
+                                    대기중 요청
+                                </h3>
+                                <Link href="/admin/requests" className="text-xs text-brand-orange-500 hover:underline">전체보기</Link>
+                            </div>
+                            <div className="space-y-2">
+                                {pendingRequests.map(r => (
+                                    <Link key={r.id} href="/admin/requests"
+                                        className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 hover:bg-yellow-50 rounded-lg px-2 transition">
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900">{r.title}</p>
+                                            <p className="text-xs text-gray-500">{r.parentName} ({r.studentName})</p>
+                                        </div>
+                                        <span className="text-xs text-gray-400">
+                                            {new Date(r.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
+                                        </span>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* Bottom Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 프로그램별 원생 분포 */}
@@ -233,6 +392,7 @@ export default async function AdminDashboard() {
                     <div className="grid grid-cols-2 gap-3">
                         <QuickLink title="출결 관리" href="/admin/attendance" color="orange" />
                         <QuickLink title="수납/결제" href="/admin/finance" color="blue" />
+                        <QuickLink title="요청 관리" href="/admin/requests" color="orange" />
                         <QuickLink title="갤러리" href="/admin/gallery" color="green" />
                         <QuickLink title="공지사항" href="/admin/notices" color="purple" />
                         <QuickLink title="시간표" href="/admin/schedule" color="orange" />

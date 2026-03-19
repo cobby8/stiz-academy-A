@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getMyPageData, getGalleryByClassIds, getNoticesByClassIds, getNotifications, getUnreadNotificationCount } from "@/lib/queries";
+import { getMyPageData, getGalleryByClassIds, getNoticesByClassIds, getNotifications, getUnreadNotificationCount, getMyRequests } from "@/lib/queries";
 import MyPageClient from "./MyPageClient";
 import Link from "next/link";
 
@@ -47,12 +47,13 @@ export default async function MyPageDashboard() {
         c.enrollments.map((e: any) => e.classId).filter(Boolean)
     );
     // 갤러리/공지/알림 데이터 가져오기
-    const [gallery, notices, notifications, unreadCount] = await Promise.all([
+    const [gallery, notices, notifications, unreadCount, myRequests] = await Promise.all([
         getGalleryByClassIds(classIds, 10),
         getNoticesByClassIds(classIds, 10),
         getNotifications(data.parent.id),
         getUnreadNotificationCount(data.parent.id),
+        getMyRequests(data.parent.id),
     ]);
 
-    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} />;
+    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} myRequests={myRequests} />;
 }

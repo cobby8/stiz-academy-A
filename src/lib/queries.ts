@@ -1005,3 +1005,115 @@ export const getUnreadNotificationCount = cache(async (userId: string) => {
         return 0;
     }
 });
+
+// ── 학부모 요청 조회 ──────────────────────────────────────────────────────────
+
+// 학부모 본인의 요청 목록
+export const getMyRequests = cache(async (userId: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT r.id, r."userId", r."studentId", r.type, r.title, r.content,
+                    r.date, r.status, r."adminNote", r."createdAt", r."updatedAt",
+                    s.name AS student_name
+             FROM "ParentRequest" r
+             LEFT JOIN "Student" s ON r."studentId" = s.id
+             WHERE r."userId" = $1
+             ORDER BY r."createdAt" DESC
+             LIMIT 30`,
+            userId
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            userId: r.userId ?? r.userid,
+            studentId: r.studentId ?? r.studentid,
+            type: r.type,
+            title: r.title,
+            content: r.content,
+            date: r.date,
+            status: r.status,
+            adminNote: r.adminNote ?? r.adminnote ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            studentName: r.student_name,
+        }));
+    } catch {
+        return [];
+    }
+});
+
+// 관리자용: 전체 요청 목록 (최신순)
+export const getAllRequests = cache(async (statusFilter?: string) => {
+    try {
+        const whereClause = statusFilter ? `WHERE r.status = $1` : "";
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT r.id, r."userId", r."studentId", r.type, r.title, r.content,
+                    r.date, r.status, r."adminNote", r."createdAt", r."updatedAt",
+                    s.name AS student_name,
+                    u.name AS parent_name, u.phone AS parent_phone
+             FROM "ParentRequest" r
+             LEFT JOIN "Student" s ON r."studentId" = s.id
+             LEFT JOIN "User" u ON r."userId" = u.id
+             ORDER BY
+                CASE r.status WHEN 'PENDING' THEN 0 WHEN 'CONFIRMED' THEN 1 ELSE 2 END,
+                r."createdAt" DESC
+             LIMIT 100`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            userId: r.userId ?? r.userid,
+            studentId: r.studentId ?? r.studentid,
+            type: r.type,
+            title: r.title,
+            content: r.content,
+            date: r.date,
+            status: r.status,
+            adminNote: r.adminNote ?? r.adminnote ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            studentName: r.student_name,
+            parentName: r.parent_name,
+            parentPhone: r.parent_phone,
+        }));
+    } catch {
+        return [];
+    }
+});
+
+// 관리자 대시보드용: 미처리 요청 수
+export const getPendingRequestCount = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*)::int as count FROM "ParentRequest" WHERE status = 'PENDING'`
+        );
+        return rows[0]?.count ?? 0;
+    } catch {
+        return 0;
+    }
+});
+
+// 관리자 대시보드용: 최근 미처리 요청 (최대 5개)
+export const getRecentPendingRequests = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT r.id, r.type, r.title, r.status, r."createdAt",
+                    s.name AS student_name, u.name AS parent_name
+             FROM "ParentRequest" r
+             LEFT JOIN "Student" s ON r."studentId" = s.id
+             LEFT JOIN "User" u ON r."userId" = u.id
+             WHERE r.status = 'PENDING'
+             ORDER BY r."createdAt" DESC
+             LIMIT 5`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            type: r.type,
+            title: r.title,
+            status: r.status,
+            createdAt: r.createdAt ?? r.createdat,
+            studentName: r.student_name,
+            parentName: r.parent_name,
+        }));
+    } catch {
+        return [];
+    }
+});

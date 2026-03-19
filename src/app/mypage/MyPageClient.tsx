@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip, Check, CheckCheck, BellRing, BellOff } from "lucide-react";
+import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip, Check, CheckCheck, BellRing, BellOff, Send, MessageSquare, Clock, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { markNotificationRead, markAllNotificationsRead } from "@/app/actions/admin";
+import { markNotificationRead, markAllNotificationsRead, createParentRequest } from "@/app/actions/admin";
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -86,21 +86,57 @@ type NotificationItem = {
     createdAt: Date | string;
 };
 
+type RequestItem = {
+    id: string;
+    userId: string;
+    studentId: string;
+    type: string;
+    title: string;
+    content: string;
+    date: Date | string | null;
+    status: string;
+    adminNote: string | null;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    studentName: string;
+};
+
 type MyPageData = {
     parent: { id: string; name: string; email: string; phone: string | null };
     children: ChildData[];
 };
 
-export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0 }: {
+const REQUEST_TYPES = [
+    { value: "ABSENCE", label: "결석 신청" },
+    { value: "SHUTTLE", label: "셔틀 변경" },
+    { value: "EARLY_LEAVE", label: "조퇴 요청" },
+    { value: "OTHER", label: "기타 요청" },
+];
+
+const REQUEST_STATUS: Record<string, { label: string; color: string; icon: typeof Clock }> = {
+    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-700", icon: Clock },
+    CONFIRMED: { label: "확인됨", color: "bg-blue-100 text-blue-700", icon: CheckCircle2 },
+    COMPLETED: { label: "처리완료", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
+    REJECTED: { label: "반려", color: "bg-red-100 text-red-700", icon: XCircle },
+};
+
+export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [] }: {
     data: MyPageData;
     gallery?: GalleryItem[];
     notices?: NoticeItem[];
     notifications?: NotificationItem[];
     unreadCount?: number;
+    myRequests?: RequestItem[];
 }) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [showRequestForm, setShowRequestForm] = useState(false);
+    const [showRequests, setShowRequests] = useState(false);
     const [isPending, startTransition] = useTransition();
+    // 요청 폼 상태
+    const [reqType, setReqType] = useState("ABSENCE");
+    const [reqContent, setReqContent] = useState("");
+    const [reqDate, setReqDate] = useState("");
     // 푸시 알림 상태
     const [pushSupported, setPushSupported] = useState(false);
     const [pushEnabled, setPushEnabled] = useState(false);
@@ -319,6 +355,157 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                         )}
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* 학원에 요청하기 */}
+            <div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => { setShowRequestForm(!showRequestForm); setShowRequests(false); }}
+                        className="flex-1 flex items-center justify-center gap-2 bg-brand-orange-500 text-white font-bold py-3 rounded-2xl hover:bg-orange-600 transition shadow-sm"
+                    >
+                        <Send size={16} /> 학원에 요청하기
+                    </button>
+                    <button
+                        onClick={() => { setShowRequests(!showRequests); setShowRequestForm(false); }}
+                        className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-bold px-4 py-3 rounded-2xl hover:bg-gray-50 transition shadow-sm"
+                    >
+                        <MessageSquare size={16} />
+                        내 요청
+                        {myRequests.filter(r => r.status === "PENDING").length > 0 && (
+                            <span className="bg-yellow-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                                {myRequests.filter(r => r.status === "PENDING").length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {/* 요청 접수 폼 */}
+                {showRequestForm && (
+                    <div className="mt-3 bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+                        <h3 className="font-bold text-gray-900">요청 접수</h3>
+
+                        {/* 요청 유형 */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {REQUEST_TYPES.map(t => (
+                                <button key={t.value}
+                                    onClick={() => setReqType(t.value)}
+                                    className={`py-2 px-3 rounded-xl text-sm font-bold border transition ${
+                                        reqType === t.value
+                                            ? "bg-brand-orange-500 text-white border-brand-orange-500"
+                                            : "bg-gray-50 text-gray-700 border-gray-200 hover:border-brand-orange-300"
+                                    }`}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* 자녀 선택 (여러 명일 때) */}
+                        {data.children.length > 1 && (
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 mb-1 block">자녀 선택</label>
+                                <select
+                                    value={selectedIdx}
+                                    onChange={e => setSelectedIdx(Number(e.target.value))}
+                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm"
+                                >
+                                    {data.children.map((c, i) => (
+                                        <option key={c.id} value={i}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* 날짜 */}
+                        <div>
+                            <label className="text-xs font-medium text-gray-500 mb-1 block">
+                                {reqType === "ABSENCE" ? "결석일" : reqType === "EARLY_LEAVE" ? "조퇴일" : "해당 날짜"} (선택)
+                            </label>
+                            <input type="date" value={reqDate} onChange={e => setReqDate(e.target.value)}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                        </div>
+
+                        {/* 내용 */}
+                        <div>
+                            <label className="text-xs font-medium text-gray-500 mb-1 block">상세 내용</label>
+                            <textarea
+                                value={reqContent}
+                                onChange={e => setReqContent(e.target.value)}
+                                placeholder={
+                                    reqType === "ABSENCE" ? "결석 사유를 입력해주세요" :
+                                    reqType === "SHUTTLE" ? "변경 희망 내용을 입력해주세요 (예: 3/25부터 A노선 → B노선)" :
+                                    reqType === "EARLY_LEAVE" ? "조퇴 사유와 픽업 시간을 입력해주세요" :
+                                    "요청 내용을 입력해주세요"
+                                }
+                                rows={3}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none"
+                            />
+                        </div>
+
+                        {/* 제출 */}
+                        <button
+                            disabled={isPending || !reqContent.trim()}
+                            onClick={() => {
+                                const typeLabel = REQUEST_TYPES.find(t => t.value === reqType)?.label || reqType;
+                                const dateLabel = reqDate ? ` (${reqDate})` : "";
+                                startTransition(async () => {
+                                    await createParentRequest({
+                                        userId: data.parent.id,
+                                        studentId: child.id,
+                                        type: reqType,
+                                        title: `${child.name} ${typeLabel}${dateLabel}`,
+                                        content: reqContent,
+                                        date: reqDate || null,
+                                    });
+                                    setReqContent("");
+                                    setReqDate("");
+                                    setShowRequestForm(false);
+                                });
+                            }}
+                            className="w-full bg-brand-orange-500 text-white font-bold py-3 rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
+                        >
+                            {isPending ? "접수 중..." : "요청 접수하기"}
+                        </button>
+                    </div>
+                )}
+
+                {/* 내 요청 내역 */}
+                {showRequests && (
+                    <div className="mt-3 bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                        {myRequests.length === 0 ? (
+                            <div className="p-8 text-center text-gray-400 text-sm">요청 내역이 없습니다</div>
+                        ) : (
+                            <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+                                {myRequests.map(r => {
+                                    const st = REQUEST_STATUS[r.status] || REQUEST_STATUS.PENDING;
+                                    const StatusIcon = st.icon;
+                                    return (
+                                        <div key={r.id} className="px-4 py-3">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-sm font-bold text-gray-900">{r.title}</span>
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${st.color}`}>
+                                                    <StatusIcon size={12} /> {st.label}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 line-clamp-2">{r.content}</p>
+                                            {r.adminNote && (
+                                                <div className="mt-2 bg-blue-50 rounded-lg px-3 py-2">
+                                                    <p className="text-xs text-blue-700">
+                                                        <span className="font-bold">학원 답변:</span> {r.adminNote}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {new Date(r.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                            </p>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

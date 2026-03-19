@@ -970,3 +970,100 @@ export async function markAllNotificationsRead(userId: string) {
     revalidatePath("/mypage");
 }
 
+// ── 학부모 요청 시스템 ───────────────────────────────────────────────────────
+
+// 학부모가 요청 접수
+export async function createParentRequest(data: {
+    userId: string;
+    studentId: string;
+    type: string;
+    title: string;
+    content: string;
+    date?: string | null;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "ParentRequest" (id, "userId", "studentId", type, title, content, date, status, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6::timestamptz, 'PENDING', NOW(), NOW())`,
+            data.userId, data.studentId, data.type, data.title, data.content, data.date || null,
+        );
+
+        // 관리자(ADMIN)에게 알림
+        const admins = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE role = 'ADMIN'`
+        );
+        // 해당 원생 이름 조회
+        const studentRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT name FROM "Student" WHERE id = $1`, data.studentId
+        );
+        const studentName = studentRows[0]?.name ?? "원생";
+        const typeLabels: Record<string, string> = {
+            ABSENCE: "결석 신청", SHUTTLE: "셔틀 변경", EARLY_LEAVE: "조퇴 요청", OTHER: "기타 요청"
+        };
+        const typeLabel = typeLabels[data.type] || data.type;
+
+        for (const admin of admins) {
+            await createNotificationRecord({
+                userId: admin.id,
+                type: "REQUEST",
+                title: `${typeLabel} 접수`,
+                message: `${studentName} - ${data.title}`,
+                linkUrl: "/admin/requests",
+            });
+        }
+    } catch (e) {
+        console.error("Failed to create parent request:", e);
+        throw new Error("요청 접수 실패");
+    }
+    revalidatePath("/mypage");
+    revalidatePath("/admin");
+    revalidatePath("/admin/requests");
+}
+
+// 관리자가 요청 상태 변경 + 메모 작성
+export async function updateRequestStatus(id: string, status: string, adminNote?: string) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "ParentRequest" SET status = $1, "adminNote" = $2, "updatedAt" = NOW() WHERE id = $3`,
+            status, adminNote || null, id,
+        );
+
+        // 학부모에게 처리 결과 알림
+        const reqRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "userId", title FROM "ParentRequest" WHERE id = $1`, id
+        );
+        if (reqRows[0]) {
+            const parentId = reqRows[0].userId ?? reqRows[0].userid;
+            const statusLabels: Record<string, string> = {
+                CONFIRMED: "확인됨", COMPLETED: "처리 완료", REJECTED: "반려"
+            };
+            await createNotificationRecord({
+                userId: parentId,
+                type: "REQUEST",
+                title: "요청 처리 알림",
+                message: `"${reqRows[0].title}" → ${statusLabels[status] || status}`,
+                linkUrl: "/mypage",
+            });
+        }
+    } catch (e) {
+        console.error("Failed to update request status:", e);
+        throw new Error("요청 상태 변경 실패");
+    }
+    revalidatePath("/admin/requests");
+    revalidatePath("/admin");
+    revalidatePath("/mypage");
+}
+
+// 요청 삭제 (관리자)
+export async function deleteParentRequest(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "ParentRequest" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete parent request:", e);
+        throw new Error("요청 삭제 실패");
+    }
+    revalidatePath("/admin/requests");
+    revalidatePath("/admin");
+    revalidatePath("/mypage");
+}
+

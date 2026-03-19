@@ -292,6 +292,24 @@ model PushSubscription {
   @@index([userId])
 }
 
+model ParentRequest {
+  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId     String
+  studentId  String
+  type       String          // ABSENCE, SHUTTLE, EARLY_LEAVE, OTHER
+  title      String
+  content    String
+  date       DateTime?       @db.Timestamptz(6)
+  status     String    @default("PENDING") // PENDING, CONFIRMED, COMPLETED
+  adminNote  String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

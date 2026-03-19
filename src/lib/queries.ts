@@ -345,6 +345,89 @@ export const getDashboardStats = cache(async () => {
     }
 });
 
+/** 출결: 특정 날짜+반의 세션 및 출석 데이터 조회 */
+export const getAttendanceByDateAndClass = cache(async (date: string, classId: string) => {
+    try {
+        // 세션 조회
+        const sessions = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, "classId", date, notes FROM "Session"
+             WHERE "classId" = $1 AND date::date = $2::date LIMIT 1`,
+            classId, date
+        );
+        const session = sessions[0] ?? null;
+
+        // 해당 반 수강생 목록
+        const enrolled = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT e."studentId", s.name AS student_name
+             FROM "Enrollment" e
+             JOIN "Student" s ON e."studentId" = s.id
+             WHERE e."classId" = $1 AND e.status = 'ACTIVE'
+             ORDER BY s.name ASC`,
+            classId
+        );
+
+        // 세션이 있으면 출석 기록 조회
+        let attendances: any[] = [];
+        if (session) {
+            attendances = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT id, "studentId", status FROM "Attendance" WHERE "sessionId" = $1`,
+                session.id
+            );
+        }
+
+        return {
+            session,
+            students: enrolled.map((e: any) => ({
+                studentId: e.studentId ?? e.studentid,
+                studentName: e.student_name,
+                status: attendances.find(
+                    (a: any) => (a.studentId ?? a.studentid) === (e.studentId ?? e.studentid)
+                )?.status ?? null,
+                attendanceId: attendances.find(
+                    (a: any) => (a.studentId ?? a.studentid) === (e.studentId ?? e.studentid)
+                )?.id ?? null,
+            })),
+        };
+    } catch (e) {
+        console.error("[getAttendanceByDateAndClass] failed:", e);
+        return { session: null, students: [] };
+    }
+});
+
+/** 수납: 월별 수납 내역 조회 */
+export const getPayments = cache(async (year?: number, month?: number) => {
+    try {
+        let where = "";
+        const params: any[] = [];
+        if (year && month) {
+            where = `WHERE EXTRACT(YEAR FROM p."dueDate") = $1 AND EXTRACT(MONTH FROM p."dueDate") = $2`;
+            params.push(year, month);
+        }
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT p.id, p."studentId", p.amount, p.status, p."dueDate", p."paidDate",
+                    p."createdAt", s.name AS student_name
+             FROM "Payment" p
+             JOIN "Student" s ON p."studentId" = s.id
+             ${where}
+             ORDER BY p."dueDate" DESC`,
+            ...params
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId ?? r.studentid,
+            studentName: r.student_name,
+            amount: Number(r.amount),
+            status: r.status,
+            dueDate: r.dueDate ?? r.duedate,
+            paidDate: r.paidDate ?? r.paiddate ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+        }));
+    } catch (e) {
+        console.error("[getPayments] failed:", e);
+        return [];
+    }
+});
+
 /** Google Sheets 동기화 캐시 조회 (SheetSlotCache 테이블 싱글턴 row) */
 export const getSheetSlotCache = cache(async (): Promise<SheetClassSlot[] | null> => {
     try {

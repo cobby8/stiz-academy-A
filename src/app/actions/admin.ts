@@ -605,3 +605,84 @@ export async function deleteEnrollment(enrollmentId: string) {
     revalidatePath("/admin/classes");
 }
 
+// ── 출결 관리 ──────────────────────────────────────────────────────────────────
+export async function saveAttendance(classId: string, date: string, records: { studentId: string; status: string }[]) {
+    try {
+        // 세션 생성 또는 조회
+        const existing = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "Session" WHERE "classId" = $1 AND date::date = $2::date LIMIT 1`,
+            classId, date
+        );
+        let sessionId: string;
+        if (existing.length > 0) {
+            sessionId = existing[0].id;
+        } else {
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "Session" (id, "classId", date, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2::timestamp, NOW(), NOW())
+                 RETURNING id`,
+                classId, date
+            );
+            sessionId = rows[0].id;
+        }
+
+        // 각 학생 출석 기록 upsert
+        for (const rec of records) {
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "Attendance" (id, "sessionId", "studentId", status, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, NOW(), NOW())
+                 ON CONFLICT ("sessionId", "studentId") DO UPDATE SET status = $3, "updatedAt" = NOW()`,
+                sessionId, rec.studentId, rec.status
+            );
+        }
+    } catch (e) {
+        console.error("Failed to save attendance:", e);
+        throw new Error("출결 저장 실패");
+    }
+    revalidatePath("/admin/attendance");
+}
+
+// ── 수납 관리 ──────────────────────────────────────────────────────────────────
+export async function createPayment(data: {
+    studentId: string;
+    amount: number;
+    dueDate: string;
+    status?: string;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Payment" (id, "studentId", amount, status, "dueDate", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4::timestamp, NOW(), NOW())`,
+            data.studentId, data.amount, data.status || "PENDING", data.dueDate,
+        );
+    } catch (e) {
+        console.error("Failed to create payment:", e);
+        throw new Error("수납 기록 생성 실패");
+    }
+    revalidatePath("/admin/finance");
+}
+
+export async function updatePaymentStatus(id: string, status: string) {
+    try {
+        const paidDate = status === "PAID" ? ", \"paidDate\" = NOW()" : "";
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Payment" SET status = $1${paidDate}, "updatedAt" = NOW() WHERE id = $2`,
+            status, id,
+        );
+    } catch (e) {
+        console.error("Failed to update payment:", e);
+        throw new Error("수납 상태 변경 실패");
+    }
+    revalidatePath("/admin/finance");
+}
+
+export async function deletePayment(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "Payment" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete payment:", e);
+        throw new Error("수납 기록 삭제 실패");
+    }
+    revalidatePath("/admin/finance");
+}
+

@@ -20,6 +20,9 @@ export async function ensureAcademySettingsColumns() {
         ["enrollContent", "TEXT"],
         ["enrollFormUrl", "TEXT"],
         ["youtubeUrl", "TEXT"],
+        ["philosophyText", "TEXT"],
+        ["facilitiesText", "TEXT"],
+        ["facilitiesImagesJSON", "TEXT"],
     ];
     for (const [col, type] of columns) {
         try {
@@ -42,6 +45,9 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'trialTitle', 'trialContent', 'trialFormUrl',
     'enrollTitle', 'enrollContent', 'enrollFormUrl',
     'youtubeUrl',
+    'philosophyText',
+    'facilitiesText',
+    'facilitiesImagesJSON',
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
@@ -253,6 +259,9 @@ export async function updateAcademySettings(data: {
     enrollContent?: string;
     enrollFormUrl?: string;
     youtubeUrl?: string;
+    philosophyText?: string;
+    facilitiesText?: string;
+    facilitiesImagesJSON?: string;
 }) {
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음
     const payload = { ...data };
@@ -358,5 +367,71 @@ export async function reorderCoaches(ids: string[]) {
         console.error("Failed to reorder coaches:", e);
         throw new Error("순서 변경 실패");
     }
+}
+
+// ── 연간일정 CRUD ─────────────────────────────────────────────────────────────
+export async function createAnnualEvent(data: {
+    title: string;
+    date: string;
+    endDate?: string | null;
+    description?: string | null;
+    category?: string;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "AnnualEvent" (id, title, date, "endDate", description, category, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3::timestamp, $4, $5, NOW(), NOW())`,
+            data.title,
+            data.date,
+            data.endDate || null,
+            data.description || null,
+            data.category || "일반",
+        );
+    } catch (e) {
+        console.error("Failed to create annual event:", e);
+        throw new Error("일정 추가 실패");
+    }
+    revalidatePath("/admin/annual");
+    revalidatePath("/annual");
+}
+
+export async function updateAnnualEvent(id: string, data: {
+    title: string;
+    date: string;
+    endDate?: string | null;
+    description?: string | null;
+    category?: string;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "AnnualEvent" SET title = $1, date = $2::timestamp, "endDate" = $3::timestamp,
+             description = $4, category = $5, "updatedAt" = NOW() WHERE id = $6`,
+            data.title,
+            data.date,
+            data.endDate || null,
+            data.description || null,
+            data.category || "일반",
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update annual event:", e);
+        throw new Error("일정 수정 실패");
+    }
+    revalidatePath("/admin/annual");
+    revalidatePath("/annual");
+}
+
+export async function deleteAnnualEvent(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `DELETE FROM "AnnualEvent" WHERE id = $1`,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to delete annual event:", e);
+        throw new Error("일정 삭제 실패");
+    }
+    revalidatePath("/admin/annual");
+    revalidatePath("/annual");
 }
 

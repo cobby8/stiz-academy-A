@@ -44,6 +44,9 @@ export const getAcademySettings = cache(async () => {
                 enrollContent: r.enrollContent ?? r.enrollcontent ?? null,
                 enrollFormUrl: r.enrollFormUrl ?? r.enrollformurl ?? null,
                 youtubeUrl: r.youtubeUrl ?? r.youtubeurl ?? null,
+                philosophyText: r.philosophyText ?? r.philosophytext ?? null,
+                facilitiesText: r.facilitiesText ?? r.facilitiestext ?? null,
+                facilitiesImagesJSON: r.facilitiesImagesJSON ?? r.facilitiesimagesjson ?? null,
             } as any;
         }
     } catch {
@@ -183,6 +186,53 @@ export const getCustomClassSlots = cache(async () => {
     } catch (e) {
         console.error("[getCustomClassSlots] failed:", e);
         return [];
+    }
+});
+
+/** 연간일정 DB 조회 */
+export const getAnnualEvents = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, title, date, "endDate", description, category, "createdAt", "updatedAt"
+             FROM "AnnualEvent" ORDER BY date ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            date: r.date,
+            endDate: r.endDate ?? r.enddate ?? null,
+            description: r.description ?? null,
+            category: r.category ?? "일반",
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getAnnualEvents] failed:", e);
+        return [];
+    }
+});
+
+/** 대시보드 통계 쿼리 */
+export const getDashboardStats = cache(async () => {
+    const zero = { studentCount: 0, programCount: 0, coachCount: 0, classCount: 0 };
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(`
+            SELECT
+                (SELECT COUNT(*)::int FROM "Student") AS "studentCount",
+                (SELECT COUNT(*)::int FROM "Program") AS "programCount",
+                (SELECT COUNT(*)::int FROM "Coach") AS "coachCount",
+                (SELECT COUNT(*)::int FROM "Class") AS "classCount"
+        `);
+        if (!rows[0]) return zero;
+        return {
+            studentCount: Number(rows[0].studentCount ?? 0),
+            programCount: Number(rows[0].programCount ?? 0),
+            coachCount: Number(rows[0].coachCount ?? 0),
+            classCount: Number(rows[0].classCount ?? 0),
+        };
+    } catch (e) {
+        console.error("[getDashboardStats] failed:", e);
+        return zero;
     }
 });
 

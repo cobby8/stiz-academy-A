@@ -8,197 +8,170 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum Role {
-  ADMIN
-  INSTRUCTOR
-  PARENT
-}
-
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String    @id @default(uuid())
+  email     String    @unique
   name      String
   phone     String?
-  role      Role     @default(PARENT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  students  Student[] // For parents
-  classes   Class[]   // For instructors
+  role      Role      @default(PARENT)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  classes   Class[]
+  students  Student[]
 }
 
 model Student {
-  id        String   @id @default(uuid())
-  name      String
-  birthDate DateTime
-  gender    String?
-  parentId  String
-  parent    User     @relation(fields: [parentId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  enrollments Enrollment[]
+  id          String       @id @default(uuid())
+  name        String
+  birthDate   DateTime
+  gender      String?
+  parentId    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   attendances Attendance[]
+  enrollments Enrollment[]
   payments    Payment[]
+  parent      User         @relation(fields: [parentId], references: [id])
 }
 
 model Program {
-  id                 String   @id @default(uuid())
+  id                 String              @id @default(uuid())
   name               String
   targetAge          String?
-  frequency          String?  // Legacy free-text (kept for backwards compat)
-  weeklyFrequency    String?  // "주1회" | "주2회" | "주3회" | "매일반" (primary display badge)
+  frequency          String?
   description        String?
-  price              Int      // Fallback/default price
-  order              Int      @default(0)  // Display sort order
-  days               String?  // Comma-separated day keys: "Mon,Tue,Wed"
-  priceWeek1         Int?     // 주1회 수강료
-  priceWeek2         Int?     // 주2회 수강료
-  priceWeek3         Int?     // 주3회 수강료
-  priceDaily         Int?     // 매일반 수강료
-  shuttleFeeOverride Int?     // null=auto, 0=no shuttle (weekend), >0=custom amount
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  classes          Class[]
-  slotOverrides    ClassSlotOverride[]
-  customClassSlots CustomClassSlot[]
+  price              Int
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  order              Int                 @default(0)
+  days               String?
+  priceWeek1         Int?
+  priceWeek2         Int?
+  priceWeek3         Int?
+  priceDaily         Int?
+  shuttleFeeOverride Int?
+  weeklyFrequency    String?
+  classes            Class[]
+  slotOverrides      ClassSlotOverride[]
+  customClassSlots   CustomClassSlot[]
 }
 
 model Class {
-  id          String   @id @default(uuid())
-  programId   String
-  program     Program  @relation(fields: [programId], references: [id])
+  id           String       @id @default(uuid())
+  programId    String
   instructorId String?
-  instructor  User?    @relation(fields: [instructorId], references: [id])
-  name        String   // e.g., "초등 저학년 A반"
-  dayOfWeek   String   // e.g., "Mon", "Tue", etc.
-  startTime   String   // e.g., "15:00"
-  endTime     String   // e.g., "16:00"
-  location    String?  // e.g., "A코트", "메인구장"
-  capacity    Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  enrollments Enrollment[]
-  sessions    Session[]
+  name         String
+  dayOfWeek    String
+  startTime    String
+  endTime      String
+  location     String?
+  capacity     Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  instructor   User?        @relation(fields: [instructorId], references: [id])
+  program      Program      @relation(fields: [programId], references: [id])
+  enrollments  Enrollment[]
+  sessions     Session[]
 }
 
 model Enrollment {
   id        String   @id @default(uuid())
   studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
   classId   String
-  class     Class    @relation(fields: [classId], references: [id])
-  status    String   @default("ACTIVE") // ACTIVE, CANCELLED, PAUSED
+  status    String   @default("ACTIVE")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  class     Class    @relation(fields: [classId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id])
 
   @@unique([studentId, classId])
 }
 
 model Session {
-  id        String   @id @default(uuid())
-  classId   String
-  class     Class    @relation(fields: [classId], references: [id])
-  date      DateTime
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id          String       @id @default(uuid())
+  classId     String
+  date        DateTime
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   attendances Attendance[]
+  class       Class        @relation(fields: [classId], references: [id])
 }
 
 model Attendance {
   id        String   @id @default(uuid())
   sessionId String
-  session   Session  @relation(fields: [sessionId], references: [id])
   studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
-  status    String   // PRESENT, ABSENT, LATE, EXCUSED
+  status    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  session   Session  @relation(fields: [sessionId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id])
 
   @@unique([sessionId, studentId])
 }
 
 model Payment {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   studentId String
-  student   Student  @relation(fields: [studentId], references: [id])
   amount    Int
-  status    String   // PENDING, COMPLETED, FAILED
+  status    String
   dueDate   DateTime
   paidDate  DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  student   Student   @relation(fields: [studentId], references: [id])
 }
 
-// Shuttle Bus system
 model Route {
-  id        String   @id @default(uuid())
-  name      String
+  id         String   @id @default(uuid())
+  name       String
   driverName String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  stops     Stop[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  stops      Stop[]
 }
 
 model Stop {
   id        String   @id @default(uuid())
   routeId   String
-  route     Route    @relation(fields: [routeId], references: [id])
   name      String
-  time      String   // e.g., "14:30"
+  time      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  route     Route    @relation(fields: [routeId], references: [id])
 }
 
-// Academy General Settings (Singleton-like)
 model AcademySettings {
-  id                 String   @id @default("singleton")
-  introductionTitle  String?  @default("다산신도시 No.1 스티즈농구교실")
-  introductionText   String?  // Main welcome text
-  shuttleInfoText    String?  // Text explaining shuttle bus service
-  contactPhone       String?
-  address            String?
-  termsOfService     String?  @db.Text  // Program terms of service content
-  // Visual Builder JSON Data
-  pageDesignJSON     String?  @db.Text
-
-  // Google Calendar ICS URL for annual events sync
-  googleCalendarIcsUrl String?
-
-  // Google Sheets URL for schedule data sync
+  id                      String   @id @default("singleton")
+  introductionTitle       String?  @default("다산신도시 No.1 스티즈농구교실")
+  introductionText        String?
+  shuttleInfoText         String?
+  contactPhone            String?
+  address                 String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  pageDesignJSON          String?
+  googleCalendarIcsUrl    String?
+  classDays               String?
+  siteBodyFont            String?  @default("system")
+  siteHeadingFont         String?  @default("system")
+  termsOfService          String?
+  trialTitle              String?  @default("체험수업 안내")
+  trialContent            String?
+  trialFormUrl            String?
+  enrollTitle             String?  @default("수강신청 안내")
+  enrollContent           String?
+  enrollFormUrl           String?
   googleSheetsScheduleUrl String?
-
-  // Class days of week for schedule calculation (comma-separated JS getDay values: 0=Sun,1=Mon,...,6=Sat)
-  // e.g. "1,3" = 월·수, "2,4,6" = 화·목·토
-  classDays            String?
-
-  // Font settings (key strings matching FONT_OPTIONS in lib/fonts.ts)
-  siteBodyFont         String?  @default("system")
-  siteHeadingFont      String?  @default("system")
-
-  // 체험/수강신청 페이지 콘텐츠 및 구글폼 연동
-  trialTitle           String?  @default("체험수업 안내")
-  trialContent         String?  @db.Text
-  trialFormUrl         String?
-  enrollTitle          String?  @default("수강신청 안내")
-  enrollContent        String?  @db.Text
-  enrollFormUrl        String?
-
-  // 메인페이지 유튜브 영상 URL 또는 iframe 코드
-  youtubeUrl           String?  @db.Text
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  youtubeUrl              String?
+  philosophyText          String?
+  facilitiesText          String?
+  facilitiesImagesJSON    String?
 }
 
-// Per-slot admin overrides for the Google Sheets schedule
 model ClassSlotOverride {
-  id                String   @id @default(uuid())
+  id                String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   slotKey           String   @unique
   label             String?
   note              String?
@@ -207,18 +180,15 @@ model ClassSlotOverride {
   startTimeOverride String?
   endTimeOverride   String?
   coachId           String?
-  coach             Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
   programId         String?
-  program           Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@index([coachId])
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  coach             Coach?   @relation(fields: [coachId], references: [id], onUpdate: NoAction)
+  program           Program? @relation(fields: [programId], references: [id], onUpdate: NoAction)
 }
 
-// Custom class slots not sourced from Google Sheets
 model CustomClassSlot {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   dayKey     String
   startTime  String
   endTime    String
@@ -229,35 +199,45 @@ model CustomClassSlot {
   note       String?
   isHidden   Boolean  @default(false)
   coachId    String?
-  coach      Coach?   @relation(fields: [coachId], references: [id], onDelete: SetNull)
   programId  String?
-  program    Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([dayKey, startTime])
-  @@index([coachId])
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  coach      Coach?   @relation(fields: [coachId], references: [id], onUpdate: NoAction)
+  program    Program? @relation(fields: [programId], references: [id], onUpdate: NoAction)
 }
 
-// Coaches / Instructors Profile
 model Coach {
-  id          String   @id @default(uuid())
+  id          String              @id @default(uuid())
   name        String
-  role        String   // e.g., "대표 원장", "수석 코치"
-  description String?  @db.Text  // Bio / career details (multi-line)
-  imageUrl    String?  // Profile picture URL
-  order       Int      @default(0) // Control display order
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  role        String
+  description String?
+  imageUrl    String?
+  order       Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
   slots       ClassSlotOverride[]
   customSlots CustomClassSlot[]
 }
 
-// Google Sheets 시간표 동기화 캐시 (싱글턴)
-// /api/cron/sync-schedule 또는 관리자 수동 동기화 시 갱신
 model SheetSlotCache {
   id        String   @id @default("singleton")
-  slotsJson String   @db.Text  // JSON: SheetClassSlot[]
-  syncedAt  DateTime @updatedAt
+  slotsJson String   @default("[]")
+  syncedAt  DateTime @default(now()) @updatedAt
+}
+
+model AnnualEvent {
+  id          String    @id
+  title       String
+  date        DateTime
+  endDate     DateTime?
+  description String?
+  category    String?   @default("일반")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+}
+
+enum Role {
+  ADMIN
+  INSTRUCTOR
+  PARENT
 }

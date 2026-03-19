@@ -85,6 +85,14 @@ export default function AdminSettingsClient({
             : "same-as-body"
     );
     const [introText, setIntroText] = useState<string>(initialSettings?.introductionText || "");
+    const [philosophyText, setPhilosophyText] = useState<string>(initialSettings?.philosophyText || "");
+    const [facilitiesText, setFacilitiesText] = useState<string>(initialSettings?.facilitiesText || "");
+    const [facilityImages, setFacilityImages] = useState<string[]>(() => {
+        try {
+            if (initialSettings?.facilitiesImagesJSON) return JSON.parse(initialSettings.facilitiesImagesJSON);
+        } catch {}
+        return [];
+    });
 
     const bodyFontCss = BODY_FONT_OPTIONS.find(f => f.key === bodyFont)?.css ?? "";
     const headingFontCss = headingFont === "same-as-body"
@@ -100,6 +108,9 @@ export default function AdminSettingsClient({
                 if (typeof value === "string") data[key] = value;
             });
             data.introductionText = introText;
+            data.philosophyText = philosophyText;
+            data.facilitiesText = facilitiesText;
+            data.facilitiesImagesJSON = JSON.stringify(facilityImages.filter(u => u.trim()));
             data.siteBodyFont = bodyFont;
             data.siteHeadingFont = headingFont;
             await updateAcademySettings(data);
@@ -206,6 +217,74 @@ export default function AdminSettingsClient({
                                     onChange={setIntroText}
                                     placeholder={"안녕하세요, 스티즈 농구교실 다산점입니다.\n\n아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다."}
                                 />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* ── 교육 이념 ──────────────────────────────────────── */}
+                    <section className="pt-6 border-t border-gray-100">
+                        <SectionHeader title="교육 이념" />
+                        <AppliesTo pages={["학원소개 페이지 (원장 인사말 아래)"]} />
+                        <p className="text-xs text-gray-400 mb-2">
+                            학원의 교육 철학, 비전, 지도 방침 등을 작성합니다. 비워두면 섹션이 숨겨집니다.
+                        </p>
+                        <RichTextEditor
+                            value={philosophyText}
+                            onChange={setPhilosophyText}
+                            placeholder={"우리 학원은 농구를 통해 아이들의 체력, 협동심, 리더십을 길러줍니다.\n\n모든 수업은 연령과 실력에 맞춘 단계별 커리큘럼으로 진행됩니다."}
+                        />
+                    </section>
+
+                    {/* ── 시설 소개 ──────────────────────────────────────── */}
+                    <section className="pt-6 border-t border-gray-100">
+                        <SectionHeader title="시설 소개" />
+                        <AppliesTo pages={["학원소개 페이지 (코치진 아래)"]} />
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">시설 설명</label>
+                                <p className="text-xs text-gray-400 mb-2">비워두면 섹션이 숨겨집니다.</p>
+                                <RichTextEditor
+                                    value={facilitiesText}
+                                    onChange={setFacilitiesText}
+                                    placeholder="최신 시설과 안전한 환경에서 수업이 진행됩니다."
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">시설 사진 URL</label>
+                                <p className="text-xs text-gray-400 mb-2">
+                                    Supabase Storage 또는 외부 이미지 URL을 한 줄에 하나씩 입력합니다.
+                                </p>
+                                {facilityImages.map((url, i) => (
+                                    <div key={i} className="flex gap-2 mb-2">
+                                        <input
+                                            type="url"
+                                            value={url}
+                                            onChange={(e) => {
+                                                const next = [...facilityImages];
+                                                next[i] = e.target.value;
+                                                setFacilityImages(next);
+                                            }}
+                                            placeholder="https://..."
+                                            className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setFacilityImages(facilityImages.filter((_, j) => j !== i))}
+                                            className="text-red-400 hover:text-red-600 px-2 font-bold text-lg"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => setFacilityImages([...facilityImages, ""])}
+                                    className="text-sm text-brand-orange-500 font-bold hover:underline"
+                                >
+                                    + 사진 URL 추가
+                                </button>
                             </div>
                         </div>
                     </section>

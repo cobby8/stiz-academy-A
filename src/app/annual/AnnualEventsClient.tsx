@@ -53,10 +53,11 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
     const [openMonths, setOpenMonths]                 = useState<Set<number>>(
         () => new Set([thisMonth, nextMonth])
     );
-    const [lastSynced, setLastSynced]                 = useState<Date>(() => new Date());
+    const [lastSynced, setLastSynced]                 = useState<Date | null>(null);
 
-    // 5분마다 서버 컴포넌트 재조회 (구글 캘린더 자동 동기화)
+    // 초기 마운트 시 동기화 시간 설정 + 5분마다 서버 컴포넌트 재조회
     useEffect(() => {
+        setLastSynced(new Date());
         const id = setInterval(() => {
             router.refresh();
             setLastSynced(new Date());
@@ -149,9 +150,11 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                             ))}
                         </div>
                         </div>
+                        {lastSynced && (
                         <span className="text-xs text-gray-400 shrink-0">
                             🔄 {lastSynced.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 동기화
                         </span>
+                        )}
                     </div>
 
                     {/* 일정 없음 */}

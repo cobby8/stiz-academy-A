@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,13 @@ async function safeQuery<T = any>(sql: string): Promise<T[]> {
 
 // GET /api/admin/backup — download full DB snapshot as JSON
 export async function GET() {
+    // 인증 체크: 로그인한 관리자만 백업 다운로드 가능
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     try {
         const [
             academySettingsRows,
@@ -73,6 +81,13 @@ export async function GET() {
 
 // POST /api/admin/backup — restore from JSON backup
 export async function POST(req: NextRequest) {
+    // 인증 체크: 로그인한 관리자만 백업 복원 가능
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     let backup: any;
     try {
         backup = await req.json();

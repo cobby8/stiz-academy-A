@@ -8,21 +8,14 @@ import { prisma } from "@/lib/prisma";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
 export const getAcademySettings = cache(async () => {
-    // Try Prisma first, then raw SQL fallback (in case schema mismatch affects Prisma)
+    // PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe 사용 (prepared statement 우회)
     try {
-        const settings = await prisma.academySettings.findUnique({
-            where: { id: "singleton" },
-        });
-        if (settings) return settings;
-    } catch {
-        // Prisma query failed — try raw SQL
-    }
-    try {
-        const rows = await prisma.$queryRaw<any[]>`
-            SELECT * FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1
-        `;
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT * FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+        );
         if (rows[0]) {
             const r = rows[0];
+            // 컬럼명 대소문자 차이 대응: camelCase 우선, 소문자 fallback
             return {
                 id: r.id,
                 introductionTitle: r.introductionTitle ?? r.introductiontitle ?? null,
@@ -51,7 +44,7 @@ export const getAcademySettings = cache(async () => {
             } as any;
         }
     } catch {
-        // Both failed — return safe fallback
+        // 쿼리 실패 시 안전한 기본값 반환
     }
     return {
         pageDesignJSON: null,
@@ -1044,20 +1037,27 @@ export const getMyRequests = cache(async (userId: string) => {
 // 관리자용: 전체 요청 목록 (최신순)
 export const getAllRequests = cache(async (statusFilter?: string) => {
     try {
-        const whereClause = statusFilter ? `WHERE r.status = $1` : "";
-        const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT r.id, r."userId", r."studentId", r.type, r.title, r.content,
+        // statusFilter 유무에 따라 WHERE절 포함 여부를 분기
+        // $queryRawUnsafe의 $1 파라미터 바인딩으로 SQL 인젝션 방지
+        const baseQuery = `SELECT r.id, r."userId", r."studentId", r.type, r.title, r.content,
                     r.date, r.status, r."adminNote", r."createdAt", r."updatedAt",
                     s.name AS student_name,
                     u.name AS parent_name, u.phone AS parent_phone
              FROM "ParentRequest" r
              LEFT JOIN "Student" s ON r."studentId" = s.id
-             LEFT JOIN "User" u ON r."userId" = u.id
-             ORDER BY
+             LEFT JOIN "User" u ON r."userId" = u.id`;
+        const orderClause = `ORDER BY
                 CASE r.status WHEN 'PENDING' THEN 0 WHEN 'CONFIRMED' THEN 1 ELSE 2 END,
                 r."createdAt" DESC
-             LIMIT 100`
-        );
+             LIMIT 100`;
+        const rows = statusFilter
+            ? await prisma.$queryRawUnsafe<any[]>(
+                `${baseQuery} WHERE r.status = $1 ${orderClause}`,
+                statusFilter
+              )
+            : await prisma.$queryRawUnsafe<any[]>(
+                `${baseQuery} ${orderClause}`
+              );
         return rows.map((r: any) => ({
             id: r.id,
             userId: r.userId ?? r.userid,

@@ -184,28 +184,25 @@ export async function updateProgram(id: string, data: ProgramData) {
 }
 
 export async function reorderPrograms(orderedIds: string[]) {
+    // 파라미터 바인딩으로 SQL 인젝션 방지 + $executeRawUnsafe로 PgBouncer 호환
     try {
-        await prisma.$transaction(
-            orderedIds.map((id, index) =>
-                prisma.program.update({ where: { id }, data: { order: index } })
-            )
-        );
-    } catch {
-        // order column may not exist yet — try raw SQL
-        try {
-            for (let i = 0; i < orderedIds.length; i++) {
-                await prisma.$executeRawUnsafe(`UPDATE "Program" SET "order" = ${i} WHERE id = '${orderedIds[i]}'`);
-            }
-        } catch {}
+        for (let i = 0; i < orderedIds.length; i++) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Program" SET "order" = $1 WHERE id = $2`, i, orderedIds[i]
+            );
+        }
+    } catch (e) {
+        console.error("Failed to reorder programs:", e);
     }
     revalidatePath("/admin/programs");
     revalidatePath("/programs");
 }
 
 export async function deleteProgram(id: string) {
+    // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
-        await prisma.class.deleteMany({ where: { programId: id } });
-        await prisma.program.delete({ where: { id } });
+        await prisma.$executeRawUnsafe(`DELETE FROM "Class" WHERE "programId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "Program" WHERE id = $1`, id);
         revalidatePath("/admin/programs");
         revalidatePath("/programs");
         revalidatePath("/schedule");
@@ -329,8 +326,19 @@ export async function createCoach(data: {
     imageUrl?: string;
     order?: number;
 }) {
+    // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
-        await prisma.coach.create({ data });
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Coach" (id, name, role, description, "imageUrl", "order", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4,
+               COALESCE($5, (SELECT COALESCE(MAX("order"), -1) + 1 FROM "Coach")),
+               NOW(), NOW())`,
+            data.name,
+            data.role,
+            data.description || null,
+            data.imageUrl || null,
+            data.order ?? null,
+        );
         revalidatePath("/admin/coaches");
         revalidatePath("/admin/schedule");
         revalidatePath("/about");
@@ -347,8 +355,17 @@ export async function updateCoach(id: string, data: {
     description?: string;
     imageUrl?: string;
 }) {
+    // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
-        await prisma.coach.update({ where: { id }, data });
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Coach" SET name = $1, role = $2, description = $3, "imageUrl" = $4, "updatedAt" = NOW()
+             WHERE id = $5`,
+            data.name,
+            data.role,
+            data.description || null,
+            data.imageUrl || null,
+            id,
+        );
         revalidatePath("/admin/coaches");
         revalidatePath("/admin/schedule");
         revalidatePath("/about");
@@ -360,8 +377,9 @@ export async function updateCoach(id: string, data: {
 }
 
 export async function deleteCoach(id: string) {
+    // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
-        await prisma.coach.delete({ where: { id } });
+        await prisma.$executeRawUnsafe(`DELETE FROM "Coach" WHERE id = $1`, id);
         revalidatePath("/admin/coaches");
         revalidatePath("/admin/schedule");
         revalidatePath("/about");
@@ -373,18 +391,24 @@ export async function deleteCoach(id: string) {
 }
 
 export async function moveCoach(id: string, direction: "up" | "down") {
+    // $queryRawUnsafe + $executeRawUnsafe: PgBouncer transaction mode 호환
     try {
-        const coaches = await prisma.coach.findMany({ orderBy: { order: "asc" } });
-        const idx = coaches.findIndex((c) => c.id === id);
+        const coaches = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, "order" FROM "Coach" ORDER BY "order" ASC`
+        );
+        const idx = coaches.findIndex((c: any) => c.id === id);
         if (idx === -1) return;
         const swapIdx = direction === "up" ? idx - 1 : idx + 1;
         if (swapIdx < 0 || swapIdx >= coaches.length) return;
         const a = coaches[idx];
         const b = coaches[swapIdx];
-        await prisma.$transaction([
-            prisma.coach.update({ where: { id: a.id }, data: { order: b.order } }),
-            prisma.coach.update({ where: { id: b.id }, data: { order: a.order } }),
-        ]);
+        // 두 코치의 order 값을 서로 교환
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Coach" SET "order" = $1 WHERE id = $2`, b.order, a.id
+        );
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Coach" SET "order" = $1 WHERE id = $2`, a.order, b.id
+        );
         revalidatePath("/admin/coaches");
         revalidatePath("/about");
         revalidatePath("/schedule");
@@ -395,13 +419,14 @@ export async function moveCoach(id: string, direction: "up" | "down") {
 }
 
 export async function reorderCoaches(ids: string[]) {
+    // 파라미터 바인딩으로 SQL 인젝션 방지 + PgBouncer 호환
     try {
         if (ids.length === 0) return;
-        const cases = ids.map((id, index) => `WHEN '${id}' THEN ${index}`).join(" ");
-        const inList = ids.map((id) => `'${id}'`).join(", ");
-        await prisma.$executeRawUnsafe(
-            `UPDATE "Coach" SET "order" = CASE id ${cases} END WHERE id IN (${inList})`
-        );
+        for (let i = 0; i < ids.length; i++) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Coach" SET "order" = $1 WHERE id = $2`, i, ids[i]
+            );
+        }
         revalidatePath("/admin/coaches");
         revalidatePath("/about");
         revalidatePath("/schedule");

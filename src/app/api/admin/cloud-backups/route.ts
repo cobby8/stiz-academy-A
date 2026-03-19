@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,13 @@ const BUCKET = "backups";
 
 // ── GET: 백업 파일 목록 ──────────────────────────────────────────────────────
 export async function GET() {
+    // 인증 체크: 로그인한 관리자만 백업 목록 조회 가능
+    const authSupabase = await createClient();
+    const { data: { user } } = await authSupabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     try {
         const supabase = createAdminClient();
         const { data: files, error } = await supabase.storage
@@ -44,6 +52,13 @@ export async function GET() {
 
 // ── POST: 클라우드 백업 파일로 DB 복원 ─────────────────────────────────────
 export async function POST(req: NextRequest) {
+    // 인증 체크: 로그인한 관리자만 백업 복원 가능
+    const authSupabase = await createClient();
+    const { data: { user } } = await authSupabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     let filename: string;
     try {
         const body = await req.json();
@@ -217,6 +232,13 @@ export async function POST(req: NextRequest) {
 
 // ── DELETE: 백업 파일 삭제 ───────────────────────────────────────────────────
 export async function DELETE(req: NextRequest) {
+    // 인증 체크: 로그인한 관리자만 백업 삭제 가능
+    const authSupabase = await createClient();
+    const { data: { user } } = await authSupabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     let filename: string;
     try {
         const body = await req.json();

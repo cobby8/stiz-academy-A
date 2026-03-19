@@ -45,6 +45,13 @@ export async function POST(req: NextRequest) {
 
 // DELETE: 푸시 구독 해제
 export async function DELETE(req: NextRequest) {
+    // 인증 체크: 로그인한 사용자만 구독 해제 가능
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     try {
         const { endpoint } = await req.json();
         if (!endpoint) {

@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,13 @@ async function safeQuery<T = any>(sql: string): Promise<T[]> {
 }
 
 export async function POST() {
+    // 인증 체크: 로그인한 관리자만 수동 백업 가능
+    const authSupabase = await createClient();
+    const { data: { user } } = await authSupabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     try {
         const supabase = createAdminClient();
 

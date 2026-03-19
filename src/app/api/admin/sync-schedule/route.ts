@@ -8,10 +8,18 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { syncSheetSlots } from "@/lib/syncSheetSlots";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+    // 인증 체크: 로그인한 관리자만 시간표 동기화 가능
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     const result = await syncSheetSlots();
 
     if ("error" in result) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,13 @@ async function safeRaw<T = any>(sql: string): Promise<T[] | { error: string }> {
 }
 
 export async function GET() {
+    // 인증 체크: 로그인한 관리자만 진단 정보 조회 가능
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    }
+
     const result: Record<string, unknown> = {};
 
     // ── 1. 모든 테이블 목록 ─────────────────────────────────────────────────────

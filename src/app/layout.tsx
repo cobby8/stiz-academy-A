@@ -6,6 +6,14 @@ import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, getFontCss } from "@/lib/fonts
 export const metadata: Metadata = {
     title: "스티즈농구교실 다산점 | 스마트 학원 관리",
     description: "우리아이 농구교실 스티즈농구교실 다산점의 스마트 출결/결제 관리 시스템입니다.",
+    // PWA manifest 연결 - 홈 화면 추가 시 앱처럼 동작하게 해줌
+    manifest: "/manifest.json",
+    // iOS Safari용 PWA 설정 (Apple은 manifest를 완전히 지원하지 않아 별도 메타 태그 필요)
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "default",
+        title: "스티즈농구",
+    },
 };
 
 export default async function RootLayout({
@@ -28,6 +36,10 @@ export default async function RootLayout({
     return (
         <html lang="ko">
             <head>
+                {/* PWA 테마 색상 - 브라우저 상단 바 색상을 브랜드 오렌지로 */}
+                <meta name="theme-color" content="#f97316" />
+                {/* iOS에서 홈 화면 아이콘으로 쓸 이미지 */}
+                <link rel="apple-touch-icon" href="/icon-192.png" />
                 {/* Pretendard (CDN) */}
                 <link
                     rel="stylesheet"

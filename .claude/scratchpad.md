@@ -2,7 +2,7 @@
 
 ## 현재 작업
 - **요청**: 공개 페이지 전체 UI/UX 개편 설계 계획서 작성
-- **상태**: Phase 4 완료 — 다음 단계 대기
+- **상태**: Phase 5 완료 — 테스트/커밋 대기
 - **현재 담당**: pm
 - **마지막 세션**: 2026-03-20
 - **사용자 결정사항**:
@@ -1078,6 +1078,58 @@ reviewer 참고:
 - notices/page.tsx에서 getAcademySettings를 추가 호출하여 phone prop을 CTABanner에 전달 — Promise.all로 병렬 호출하여 성능 영향 최소화
 - notices/[id]/page.tsx도 동일하게 getAcademySettings 병렬 호출 추가
 
+### Phase 5: 마이페이지 + 로그인 페이지 스타일 통일 (2026-03-20)
+
+구현한 기능: mypage(layout + client)와 login 페이지의 디자인 토큰을 Phase 0~4와 동일하게 통일
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/mypage/layout.tsx | 배경 bg-gray-50 -> bg-surface-warm, 데스크탑 헤더 마이페이지 링크에 active 색상(text-brand-orange-500) 적용 | 수정 |
+| src/app/mypage/MyPageClient.tsx | 학생카드를 그라데이션+장식도형 패턴으로 교체, 섹션 타이틀 text-gray-900 -> text-brand-navy-900 통일, 카드 호버시 hover:border-brand-orange-200 추가, 버튼 색상 orange-600 -> brand-orange-600 토큰화 | 수정 |
+| src/app/login/page.tsx | 배경 bg-gray-50 -> bg-surface-warm + 장식도형 3개 추가, "관리자 시스템" -> "학부모/관리자 로그인" 변경, 오렌지 사각형 S 아이콘 -> STIZ 실제 로고(stiz-logo.png) 사용, input focus 색상 ring-orange-500 -> ring-brand-orange-500 토큰화, 하단 링크 색상 text-gray-500 -> text-brand-navy-700 + hover:text-brand-orange-500, 이메일 placeholder "admin@example.com" -> "example@email.com"으로 변경(학부모도 사용하므로) | 수정 |
+
+핵심 변경 내용:
+- 3개 파일 모두 스타일/텍스트만 변경, 기능 로직 0% 변경
+- 마이페이지: 학생 카드가 단색 bg-brand-navy-900 -> 그라데이션(from-brand-navy-900 via-brand-navy-800 to-brand-navy-900) + 장식 도형(원형 보더, 오렌지 반투명) 추가
+- 마이페이지: 모든 섹션 타이틀(수강중인 반, 출결기록, 수납내역, 공지사항, 학습피드백, 수업사진)의 텍스트 색상을 brand-navy-900으로 통일
+- 마이페이지: 카드형 요소들에 hover:border-brand-orange-200 추가 (알림 토글, 수강반 카드, 공지 카드, 피드백 카드)
+- 로그인: 배경에 장식 도형 3개(우상단 큰 원, 좌하단 중 원, 우하단 작은 원) 추가
+- 로그인: STIZ 실제 로고 이미지로 교체 (기존 오렌지 사각형 S 아이콘 제거)
+- 로그인: 타이틀 부제목을 "관리자 시스템" -> "학부모/관리자 로그인"으로 변경하여 용도 명확화
+- 모바일 하단 네비게이션: 구조/동작 100% 유지 (NavItem 컴포넌트 미변경)
+- revalidate 값: 해당 없음 (mypage는 동적, login은 CSR)
+- $queryRawUnsafe: 변경 없음 (Client Component만 수정)
+- Server/Client Component 구분 유지: layout.tsx는 Server, MyPageClient/login은 "use client" 유지
+
+검증 결과:
+- tsc --noEmit: 에러 0건
+
+tester 참고:
+- 테스트 방법:
+  (1) /mypage 접속 -> 배경이 따뜻한 톤(surface-warm)인지 확인
+  (2) 학생 카드에 그라데이션 배경 + 우상단/좌하단 반투명 장식 도형 표시 확인
+  (3) 섹션 타이틀(수강 중인 반, 출결 기록, 수납 내역 등)이 진한 남색인지 확인
+  (4) 카드 호버 시 오렌지 계열 보더 표시 확인
+  (5) 알림 토글, 요청하기, 내 요청 버튼 정상 동작 확인
+  (6) 모바일 하단 네비게이션 4개 탭 정상 이동 확인
+  (7) /login 접속 -> 따뜻한 배경 + 3개 장식 도형 확인
+  (8) STIZ 로고 이미지 표시 확인
+  (9) "학부모/관리자 로그인" 텍스트 확인
+  (10) 로그인/회원가입 탭 전환 정상 동작 확인
+  (11) input 포커스 시 오렌지 링 표시 확인
+  (12) 홈페이지로 돌아가기 링크 동작 확인
+- 정상 동작: 기존과 동일한 기능 + 개선된 디자인
+- 주의할 테스트:
+  - 기존 마이페이지 기능(출결/수납/알림 읽음/요청 접수/피드백 펼치기/갤러리)이 모두 정상 동작하는지
+  - 자녀 여러 명일 때 select로 전환이 정상 작동하는지
+  - 푸시 알림 토글이 기존과 동일하게 동작하는지
+  - 모바일(375px)에서 레이아웃 깨지지 않는지
+
+reviewer 참고:
+- MyPageClient.tsx는 기능 로직 미접촉, className 문자열만 변경
+- login/page.tsx에 Image 컴포넌트 import 추가 (Next.js 이미지 최적화)
+- login/page.tsx의 hidden input (role="ADMIN") 유지 — 기존 회원가입 로직 보존
+
 ## 테스트 결과 (tester)
 
 ### Phase 0~3 통합 테스트 (2026-03-20)
@@ -1241,6 +1293,83 @@ reviewer 참고:
 
 최종 판정: ✅ 전체 통과
 
+---
+
+### Phase 5 테스트 (2026-03-20)
+
+#### 1. 빌드 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| tsc --noEmit 타입 체크 | ✅ 통과 | 에러 0건 |
+| npm run build (next build) | ✅ 통과 | 빌드 성공, 23/23 페이지 생성 완료 |
+
+#### 2. Phase 5 — mypage/layout.tsx
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| bg-surface-warm 배경 적용 | ✅ 통과 | 12행: `bg-surface-warm` 확인 |
+| 데스크탑 헤더 마이페이지 active 색상 | ✅ 통과 | 30행: `text-brand-orange-500` 적용 확인 |
+| 모바일 하단 네비게이션 4개 탭 보존 | ✅ 통과 | NavItem 4개(홈, 시간표, 프로그램, 홈페이지) + NavItem 함수 정의 유지 |
+| STIZ 로고 이미지 사용 | ✅ 통과 | `stiz-logo.png` Image 컴포넌트 (모바일/데스크탑 헤더 2곳) |
+
+#### 3. Phase 5 — mypage/MyPageClient.tsx
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| 학생 카드 그라데이션 배경 | ✅ 통과 | 231행: `bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900` |
+| 학생 카드 장식 도형 2개 | ✅ 통과 | 우상단 원형 보더(white/5) + 좌하단 오렌지 반투명(brand-orange-500/10) |
+| 섹션 타이틀 text-brand-navy-900 통일 | ✅ 통과 | 6개 섹션(수강 중인 반, 출결기록, 수납내역, 공지사항, 학습피드백, 수업사진) 모두 적용 |
+| 카드 hover:border-brand-orange-200 추가 | ✅ 통과 | 4곳(알림 토글, 수강반 카드, 공지 카드, 피드백 카드) 모두 적용 |
+| 기존 기능 로직 보존 — 출결 | ✅ 통과 | attendance.records 렌더링 로직 유지 |
+| 기존 기능 로직 보존 — 수납 | ✅ 통과 | PAYMENT_STATUS 상태별 표시 + pendingPayments 로직 유지 |
+| 기존 기능 로직 보존 — 알림 | ✅ 통과 | markNotificationRead, markAllNotificationsRead import/사용 유지 |
+| 기존 기능 로직 보존 — 요청 | ✅ 통과 | createParentRequest import/사용 + REQUEST_TYPES 4개 유지 |
+| 기존 기능 로직 보존 — 피드백 | ✅ 통과 | expandedFbId 펼치기 상태 + FB_CATEGORIES 4개 + 별점 표시 유지 |
+| 기존 기능 로직 보존 — 갤러리 | ✅ 통과 | gallery.slice(0,6) + mediaJSON 파싱 로직 유지 |
+| 푸시 알림 토글 코드 보존 | ✅ 통과 | togglePush 함수 + pushSupported/pushEnabled 상태 + urlBase64ToUint8Array 함수 유지 |
+| 자녀 여러 명 select 전환 코드 보존 | ✅ 통과 | selectedIdx 상태 + data.children.length > 1 조건부 select 유지 |
+| 'use client' 선언 유지 | ✅ 통과 | 1행: `"use client"` 확인 |
+
+#### 4. Phase 5 — login/page.tsx
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| bg-surface-warm 배경 적용 | ✅ 통과 | 31행: `bg-surface-warm` 확인 |
+| 장식 도형 3개 존재 | ✅ 통과 | 우상단 큰 원(w-96), 좌하단 중 원(w-64), 우하단 작은 원(w-32) 확인 |
+| "학부모/관리자 로그인" 텍스트 | ✅ 통과 | 55행: `학부모/관리자 로그인` 확인 |
+| STIZ 로고 이미지 사용 | ✅ 통과 | 44행: `stiz-logo.png` Image 컴포넌트 확인 |
+| input focus 색상 토큰화 | ✅ 통과 | 3개 input 모두 `focus:ring-brand-orange-500` 적용 |
+| 이메일 placeholder 변경 | ✅ 통과 | `example@email.com`으로 변경 확인 |
+| 하단 링크 색상 토큰화 | ✅ 통과 | 176행: `text-brand-navy-700 hover:text-brand-orange-500` 확인 |
+| hidden input role="ADMIN" 유지 | ✅ 통과 | 156행: `<input type="hidden" name="role" value="ADMIN" />` 보존 |
+| 로그인/회원가입 탭 전환 코드 보존 | ✅ 통과 | mode 상태("login"/"signup") + 탭 버튼 2개 유지 |
+| 'use client' 선언 유지 | ✅ 통과 | 1행: `"use client"` 확인 |
+
+#### 5. 회귀 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| lib/queries.ts 미수정 | ✅ 통과 | git diff 결과 변경 없음 |
+| 모바일 하단 네비게이션 코드 보존 | ✅ 통과 | NavItem 4개 + NavItem 함수 정의 유지 |
+
+#### 6. 개발 서버 라우팅 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| /login 접속 | ✅ 통과 | HTTP 200 |
+| /login HTML에 "학부모/관리자 로그인" 포함 | ✅ 통과 | curl 응답에서 문자열 확인 |
+| /login HTML에 surface-warm 포함 | ✅ 통과 | curl 응답에서 클래스명 확인 |
+| /mypage 접속 | ✅ 통과 | HTTP 200 |
+
+---
+
+참고사항: `npm run build` 시 `prisma generate` 단계에서 Windows 파일 잠금 에러(EPERM)가 발생했으나, 이는 코드 문제가 아닌 OS 레벨 파일 잠금 문제(개발 서버 실행 중). `npx next build`로 직접 실행 시 정상 빌드 확인.
+
+📊 종합: 33개 항목 중 33개 통과 / 0개 실패
+
+최종 판정: ✅ 전체 통과
+
 ## 리뷰 결과 (reviewer)
 
 ### 설계 계획서 리뷰 (2026-03-20)
@@ -1352,3 +1481,5 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 | 2026-03-20 | tester | Phase 0~3 통합 테스트 (빌드/파일/import/회귀/서버 라우팅) | ✅ 35개 항목 전체 통과 |
 | 2026-03-20 | developer | Phase 4-A 시간표+연간일정 스타일 통일 (4개 파일 수정) | ✅ tsc 타입 체크 통과 |
 | 2026-03-20 | tester | Phase 4 통합 테스트 (빌드/import/기능보존/회귀/서버 라우팅) | ✅ 33개 항목 전체 통과 |
+| 2026-03-20 | developer | Phase 5 마이페이지+로그인 디자인 토큰 통일 (3개 파일 수정) | ✅ tsc 타입 체크 통과 |
+| 2026-03-20 | tester | Phase 5 테스트 (빌드/스타일/기능보존/회귀/서버 라우팅) | ✅ 33개 항목 전체 통과 |

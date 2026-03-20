@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link"; // 클래스 상세 페이지 링크용
 import { createClass, updateClass, deleteClass } from "@/app/actions/admin";
 
 type Program = { id: string; name: string };
@@ -249,7 +250,13 @@ export default function ClassManagementClient({
                                         <div className="text-sm text-gray-500">{cls.startTime || "-"} ~ {cls.endTime || "-"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-gray-900">{cls.name}</div>
+                                        {/* 반 이름 클릭 시 클래스 상세 페이지로 이동 */}
+                                        <Link
+                                            href={`/admin/classes/${cls.id}`}
+                                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                        >
+                                            {cls.name}
+                                        </Link>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm text-gray-500">{cls.program?.name || "-"}</div>

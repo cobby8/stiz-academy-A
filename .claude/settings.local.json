@@ -70,7 +70,13 @@
       "Bash(powershell -Command \"Stop-Process -Id 33800 -Force\" 2>&1)",
       "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003 -UseBasicParsing -TimeoutSec 30\\).StatusCode\")",
       "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003/admin/students -UseBasicParsing -TimeoutSec 30\\).StatusCode\" 2>&1)",
-      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003/admin/classes -UseBasicParsing -TimeoutSec 30\\).StatusCode\" 2>&1)"
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003/admin/classes -UseBasicParsing -TimeoutSec 30\\).StatusCode\" 2>&1)",
+      "Bash(node -e \":*)",
+      "Bash(tasklist)",
+      "Bash(netstat -ano)",
+      "Bash(findstr /I \"node\")",
+      "Bash(timeout 15)",
+      "Bash(git ls-files:*)"
     ]
   }
 }

@@ -1292,3 +1292,127 @@ export const getChildrenFeedbacks = cache(async (studentIds: string[]) => {
         }));
     } catch { return []; }
 });
+
+// ── 수업 기록(클래스 상세) 조회 ─────────────────────────────────────────────────
+
+/** 반 상세 + 수강생 목록 조회 (클래스 상세 페이지용) */
+export const getClassWithStudents = cache(async (classId: string) => {
+    try {
+        // 반 기본 정보 + 프로그램명 JOIN
+        const classRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity, c."slotKey",
+                    p.name AS program_name, p.id AS program_id
+             FROM "Class" c
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             WHERE c.id = $1`,
+            classId
+        );
+        if (!classRows[0]) return null;
+        const c = classRows[0];
+
+        // ACTIVE 상태의 수강생 목록 (이름순 정렬)
+        const studentRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT e.id AS enrollment_id, e.status, e."createdAt" AS enrolled_at,
+                    s.id AS student_id, s.name AS student_name, s.phone, s.school, s.grade,
+                    s."birthDate", s.gender
+             FROM "Enrollment" e
+             JOIN "Student" s ON e."studentId" = s.id
+             WHERE e."classId" = $1 AND e.status = 'ACTIVE'
+             ORDER BY s.name ASC`,
+            classId
+        );
+
+        return {
+            // 반 정보 — 컬럼명 대소문자 fallback 처리
+            id: c.id,
+            name: c.name,
+            dayOfWeek: c.dayOfWeek ?? c.dayofweek,
+            startTime: c.startTime ?? c.starttime ?? "",
+            endTime: c.endTime ?? c.endtime ?? "",
+            capacity: Number(c.capacity ?? 0),
+            slotKey: c.slotKey ?? c.slotkey ?? null,
+            programName: c.program_name ?? null,
+            programId: c.program_id ?? null,
+            // 수강생 배열
+            students: studentRows.map((s: any) => ({
+                enrollmentId: s.enrollment_id,
+                status: s.status,
+                enrolledAt: s.enrolled_at,
+                studentId: s.student_id,
+                studentName: s.student_name,
+                phone: s.phone ?? null,
+                school: s.school ?? null,
+                grade: s.grade ?? null,
+                birthDate: s.birthDate ?? s.birthdate ?? null,
+                gender: s.gender ?? null,
+            })),
+        };
+    } catch (e) {
+        console.error("[getClassWithStudents] failed:", e);
+        return null;
+    }
+});
+
+/** 반의 수업 기록 목록 조회 (출석 카운트 포함, 최신순) */
+export const getSessionsByClass = cache(async (classId: string, limit: number = 20) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT se.id, se.date, se.topic, se.notes, se."photosJSON", se."coachId",
+                    co.name AS coach_name,
+                    COUNT(a.id)::int AS attendance_count,
+                    COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present_count
+             FROM "Session" se
+             LEFT JOIN "Coach" co ON se."coachId" = co.id
+             LEFT JOIN "Attendance" a ON a."sessionId" = se.id
+             WHERE se."classId" = $1
+             GROUP BY se.id, se.date, se.topic, se.notes, se."photosJSON", se."coachId", co.name
+             ORDER BY se.date DESC
+             LIMIT $2`,
+            classId, limit
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            date: r.date,
+            topic: r.topic ?? null,
+            notes: r.notes ?? null,
+            photosJSON: r.photosJSON ?? r.photosjson ?? null,
+            coachId: r.coachId ?? r.coachid ?? null,
+            coachName: r.coach_name ?? null,
+            attendanceCount: Number(r.attendance_count ?? 0),
+            presentCount: Number(r.present_count ?? 0),
+        }));
+    } catch (e) {
+        console.error("[getSessionsByClass] failed:", e);
+        return [];
+    }
+});
+
+/** 수업 기록 상세 조회 (수정용 — content 필드 포함) */
+export const getSessionDetail = cache(async (sessionId: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT se.id, se."classId", se.date, se.topic, se.content, se.notes,
+                    se."photosJSON", se."coachId", co.name AS coach_name
+             FROM "Session" se
+             LEFT JOIN "Coach" co ON se."coachId" = co.id
+             WHERE se.id = $1`,
+            sessionId
+        );
+        if (!rows[0]) return null;
+        const r = rows[0];
+        return {
+            id: r.id,
+            classId: r.classId ?? r.classid,
+            date: r.date,
+            topic: r.topic ?? null,
+            content: r.content ?? null,
+            notes: r.notes ?? null,
+            photosJSON: r.photosJSON ?? r.photosjson ?? null,
+            coachId: r.coachId ?? r.coachid ?? null,
+            coachName: r.coach_name ?? null,
+        };
+    } catch (e) {
+        console.error("[getSessionDetail] failed:", e);
+        return null;
+    }
+});

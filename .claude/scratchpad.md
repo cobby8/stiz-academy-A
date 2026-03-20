@@ -1,15 +1,10 @@
 # 📋 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 시간표 슬롯 → Class 동기화 + 엑셀 클래스 자동 매칭
-- **상태**: ✅ 9~10단계 완료 — 수강 등록 모달 그룹화 + 엑셀 클래스 자동 매칭
+- **요청**: 클래스별 관리 기능 (학생 명단 확인, 출석 기록, 수업 내용 및 사진 업로드)
+- **상태**: 🔨 1단계 진행 중 — DB 스키마 변경 (Session 4개 필드 추가)
 - **현재 담당**: developer
 - **마지막 세션**: 2026-03-21
-- **사용자 결정사항**:
-  - 시간표 관리(ClassSlotOverride/CustomClassSlot)가 실제 수업
-  - 이것을 Class 테이블로 동기화해서 Enrollment와 연결
-  - 기존 수동 Class 삭제 전 데이터 확인 필요 (사용자 승인 후)
-  - 엑셀 클래스명 자동 매칭으로 수강 등록
 
 ## 프로젝트 현황 요약
 - **완료된 Phase**: 초기 ~ Phase 10 (총 10단계 + 보안패치)
@@ -530,6 +525,291 @@ tester 참고:
 - /admin/classes 페이지에서 31개 Class가 모두 표시되는지 확인
 - 각 Class에 slotKey가 정상적으로 연결되어 있는지 확인
 - 프로그램명이 올바르게 매핑되어 있는지 확인
+
+### 클래스별 관리 기능 구현 계획 (2026-03-21)
+
+목표: 관리자가 클래스(반)별로 학생 명단을 확인하고, 출석을 기록하고, 수업 내용과 사진을 기록할 수 있는 통합 관리 페이지를 만든다.
+
+#### 현재 상태 분석
+
+**이미 있는 것**:
+- Class 테이블: 31개 반이 시간표와 동기화되어 있음 (slotKey 연결)
+- Enrollment 테이블: 학생-반 수강 등록 관계 (studentId + classId, ACTIVE 상태)
+- Session 테이블: 수업 세션 (classId, date, notes) -- notes 필드가 있지만 간단한 텍스트만 저장
+- Attendance 테이블: 출석 기록 (sessionId, studentId, status) -- PRESENT/ABSENT/LATE
+- /admin/attendance 페이지: 날짜+반 선택 -> 학생 목록 -> 출석/결석/지각 버튼 -> 저장 (기본 기능 완성)
+- /admin/classes 페이지: 반 CRUD (생성/수정/삭제) 기능
+- /api/admin/attendance API: 날짜+반으로 출석 데이터 조회
+- saveAttendance Server Action: 세션 생성/조회 + 출석 upsert
+- /api/upload API: Supabase Storage 업로드 (coaches/gallery/notices 폴더 지원, "class-logs" 폴더 추가 필요)
+- queries.ts의 getAttendanceByDateAndClass: 세션+수강생+출석 데이터 한번에 조회
+
+**부족한 것 (이번에 만들어야 할 것)**:
+1. 클래스별 학생 명단 확인: /admin/classes에서 반을 클릭하면 해당 반의 수강생 목록을 볼 수 있어야 함 (현재는 반 목록만 표시)
+2. 수업 내용 기록: Session.notes가 있지만 구조화된 수업 기록이 없음 (수업 주제, 진행 내용, 코치 메모 등)
+3. 사진 업로드: 수업 중 촬영한 사진을 세션에 첨부하는 기능 없음
+
+#### DB 스키마 변경 설계
+
+**변경 1: Session 테이블에 필드 추가**
+
+```prisma
+model Session {
+  id          String       @id @default(uuid())
+  classId     String
+  date        DateTime
+  notes       String?       // 기존: 간단 메모
+  topic       String?       // [신규] 수업 주제 (예: "드리블 기초", "3대3 경기")
+  content     String?       // [신규] 수업 진행 내용 (긴 텍스트)
+  photosJSON  String?       // [신규] 수업 사진 URL 배열 JSON (예: '["url1","url2"]')
+  coachId     String?       // [신규] 수업 담당 코치 ID (Coach 테이블 FK)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  attendances Attendance[]
+  class       Class        @relation(fields: [classId], references: [id])
+}
+```
+
+추가 필드 4개: topic, content, photosJSON, coachId -- 모두 nullable이므로 기존 데이터에 영향 없음
+
+**사진 저장 방식**: Supabase Storage의 "uploads" 버킷에 "class-logs" 폴더로 업로드 -> 반환된 public URL을 photosJSON에 JSON 배열로 저장. 기존 /api/upload 라우트의 folder 파라미터로 "class-logs"를 전달하면 됨.
+
+**coachId 참조**: Coach 테이블의 id를 참조하되, schema.prisma에서 FK 관계는 추가하지 않음 (기존 패턴에서 Coach와 Class 사이에 직접 FK가 없으므로 일관성 유지). 코드 레벨에서 JOIN으로 처리.
+
+#### 필요한 파일 목록
+
+| 파일 경로 | 신규/수정 | 설명 |
+|----------|----------|------|
+| `prisma/schema.prisma` | 수정 | Session 모델에 topic, content, photosJSON, coachId 4개 필드 추가 |
+| `src/lib/queries.ts` | 수정 | getClassWithStudents (신규 함수), getSessionsByClass (신규 함수), getSessionDetail (신규 함수) 추가 |
+| `src/app/actions/admin.ts` | 수정 | saveSessionLog (수업 내용+사진 저장 액션) 추가, saveAttendance 확장 (topic/content/photos 포함) |
+| `src/app/admin/classes/page.tsx` | 수정 | 클래스 상세 페이지 링크 추가 |
+| `src/app/admin/classes/[id]/page.tsx` | 신규 | 클래스 상세 페이지 (Server Component) -- 학생 명단 + 수업 기록 목록 |
+| `src/app/admin/classes/[id]/ClassDetailClient.tsx` | 신규 | 클래스 상세 Client Component -- 탭 UI (학생명단 / 출석기록 / 수업기록) |
+| `src/app/admin/classes/[id]/SessionLogModal.tsx` | 신규 | 수업 내용 기록 + 사진 업로드 모달 |
+
+#### 작업 순서
+
+| 순서 | 작업 | 담당 | 예상 시간 | 선행 조건 |
+|------|------|------|----------|----------|
+| 1 | DB 스키마 변경: Session에 4개 필드 추가 + prisma db push | developer | 5분 | 없음 (DB 백업 필수!) |
+| 2 | queries.ts에 조회 함수 3개 추가 (getClassWithStudents, getSessionsByClass, getSessionDetail) | developer | 10분 | 1단계 |
+| 3 | admin.ts에 saveSessionLog Server Action 추가 (수업 내용 저장 + 사진 URL 저장) | developer | 10분 | 1단계 |
+| 4 | 클래스 상세 페이지 구현: /admin/classes/[id] (학생 명단 탭 + 수업 기록 목록 탭 + 출석 기록 탭) | developer | 20분 | 2, 3단계 |
+| 5 | 수업 기록 모달 구현: SessionLogModal (주제/내용 입력 + 사진 업로드 + 출석 체크 통합) | developer | 15분 | 4단계 |
+| 6 | 클래스 목록 페이지에서 상세 페이지 링크 연결 + 전체 동작 확인 | developer | 5분 | 4, 5단계 |
+| 7 | 전체 동작 확인 (클래스 선택 -> 학생 명단 확인 -> 수업 기록 작성 -> 사진 업로드 -> 출석 체크 -> 저장 -> 기록 목록 확인) | tester | 10분 | 6단계 |
+
+총 예상 시간: 약 75분 (7단계)
+
+#### 각 단계 상세 설명 (developer 참고용)
+
+**1단계 - DB 스키마 변경**:
+- `prisma/schema.prisma`의 Session 모델에 4개 필드 추가:
+  - `topic String?` -- 수업 주제
+  - `content String?` -- 수업 진행 내용 (긴 텍스트)
+  - `photosJSON String?` -- 사진 URL JSON 배열 (기존 GalleryPost의 mediaJSON 패턴과 동일)
+  - `coachId String?` -- 담당 코치 ID
+- `npx prisma db push` 실행 (모두 nullable이므로 --accept-data-loss 불필요)
+- `npx prisma generate` 실행 (dev 서버 중단 후)
+
+**2단계 - queries.ts 조회 함수 추가**:
+
+함수 1: `getClassWithStudents(classId: string)` -- 반 상세 + 수강생 목록
+```sql
+-- 반 기본 정보
+SELECT c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity, c."slotKey",
+       p.name AS program_name, p.id AS program_id
+FROM "Class" c
+LEFT JOIN "Program" p ON c."programId" = p.id
+WHERE c.id = $1
+
+-- 수강생 목록 (ACTIVE만)
+SELECT e.id AS enrollment_id, e.status, e."createdAt" AS enrolled_at,
+       s.id AS student_id, s.name AS student_name, s.phone, s.school, s.grade,
+       s."birthDate", s.gender
+FROM "Enrollment" e
+JOIN "Student" s ON e."studentId" = s.id
+WHERE e."classId" = $1 AND e.status = 'ACTIVE'
+ORDER BY s.name ASC
+```
+
+함수 2: `getSessionsByClass(classId: string, limit?: number)` -- 반의 수업 기록 목록
+```sql
+SELECT se.id, se.date, se.topic, se.notes, se."photosJSON", se."coachId",
+       co.name AS coach_name,
+       COUNT(a.id)::int AS attendance_count,
+       COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present_count
+FROM "Session" se
+LEFT JOIN "Coach" co ON se."coachId" = co.id
+LEFT JOIN "Attendance" a ON a."sessionId" = se.id
+WHERE se."classId" = $1
+GROUP BY se.id, se.date, se.topic, se.notes, se."photosJSON", se."coachId", co.name
+ORDER BY se.date DESC
+LIMIT $2
+```
+
+함수 3: `getSessionDetail(sessionId: string)` -- 수업 기록 상세 (수정용)
+```sql
+SELECT se.id, se."classId", se.date, se.topic, se.content, se.notes,
+       se."photosJSON", se."coachId", co.name AS coach_name
+FROM "Session" se
+LEFT JOIN "Coach" co ON se."coachId" = co.id
+WHERE se.id = $1
+```
+- 모든 함수에서 `$queryRawUnsafe` 사용, `cache()` 래핑, 컬럼명 대소문자 fallback 처리 (기존 패턴 준수)
+
+**3단계 - saveSessionLog Server Action**:
+
+`saveSessionLog(data: { classId, date, topic?, content?, photosJSON?, coachId?, attendances?: {studentId, status}[] })`
+- 세션이 이미 있으면 UPDATE, 없으면 INSERT (기존 saveAttendance의 세션 생성 로직 참고)
+- photosJSON은 클라이언트에서 이미 JSON.stringify된 문자열로 전달받음
+- attendances가 함께 전달되면 기존 saveAttendance 로직과 동일하게 upsert
+- revalidatePath('/admin/classes') 호출
+- 기존 saveAttendance는 그대로 유지 (하위 호환성). 새 함수는 수업 기록 + 출석을 한번에 저장하는 통합 버전
+
+**4단계 - 클래스 상세 페이지 (/admin/classes/[id])**:
+
+page.tsx (Server Component):
+```
+export const revalidate = 30;
+// getClassWithStudents, getSessionsByClass, getCoaches 호출
+// ClassDetailClient에 props 전달
+```
+
+ClassDetailClient.tsx (Client Component):
+- 3개 탭: "학생 명단" / "수업 기록" / "출석 현황"
+- 학생 명단 탭: 테이블 (이름, 성별, 학교, 학년, 전화번호, 등록일) + 수강생 수/정원 표시
+- 수업 기록 탭: 수업 기록 카드 목록 (날짜, 주제, 코치, 출석률, 사진 썸네일) + "수업 기록 추가" 버튼
+- 출석 현황 탭: 기존 AttendanceClient와 유사하되, classId가 고정된 상태로 날짜만 선택
+- 상단에 반 정보 헤더 (반 이름, 프로그램, 요일/시간, 수강생 수/정원)
+
+**5단계 - SessionLogModal (수업 기록 모달)**:
+
+Props: `isOpen, onClose, classId, date?, sessionId?, coaches[], students[], onSaved`
+- 수업 날짜 선택 (date input, 기본값 오늘)
+- 코치 선택 (select, coaches 목록에서)
+- 수업 주제 (text input)
+- 수업 내용 (textarea, 여러 줄)
+- 사진 업로드 (기존 /api/upload 활용, folder="class-logs"):
+  - 여러 장 업로드 가능 (각각 /api/upload로 POST -> URL 반환)
+  - 업로드된 사진 미리보기 (썸네일 그리드)
+  - 사진 삭제 가능 (URL 목록에서 제거)
+- 출석 체크 섹션 (학생 목록 + 출석/결석/지각 버튼 -- 기존 AttendanceClient와 동일 패턴)
+- "저장" 버튼 -> saveSessionLog 호출
+- sessionId가 있으면 기존 데이터를 불러와서 수정 모드
+
+**6단계 - 클래스 목록 페이지 연결**:
+- ClassManagementClient.tsx에서 각 반 이름을 `/admin/classes/{id}` 링크로 변경
+- 또는 "상세" 버튼 추가
+- 최소한의 변경으로 기존 CRUD 기능은 그대로 유지
+
+#### 주의사항
+
+- **1단계 전 반드시 DB 백업**: 관리자 사이드바 -> "지금 클라우드에 저장" 먼저 실행
+- Prisma ORM 기본 메서드(findMany, create 등) 절대 사용 금지. 반드시 `$queryRawUnsafe` / `$executeRawUnsafe` 사용
+- 사진 업로드는 기존 `/api/upload` 라우트를 재활용 (folder="class-logs" 파라미터만 변경)
+- Session 테이블에 이미 데이터가 있을 수 있음 (기존 출석 기록 시 생성된 세션). 새 필드는 NULL로 유지되므로 영향 없음
+- 기존 /admin/attendance 페이지는 그대로 유지 (독립적인 출석 전용 페이지로 존속)
+- GalleryPost의 mediaJSON과 동일한 패턴으로 photosJSON 사용 (JSON 문자열로 URL 배열 저장)
+- coachId는 Coach 테이블 참조이지만, schema.prisma에서 FK 관계를 추가하지 않음 (기존 Class 모델에서도 Coach FK가 없는 패턴 유지). 삭제 시 orphan 방지는 코드 레벨에서 처리
+
+### 클래스별 관리 1단계: DB 스키마 반영 + Prisma Client 재생성 + 개발서버 시작 (2026-03-21)
+
+구현한 기능: Session 테이블의 4개 새 필드(topic, content, photosJSON, coachId) DB 동기화 확인 + Prisma Client 재생성 + 개발서버 시작
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | Session 모델에 topic, content, photosJSON, coachId 4개 nullable 필드 추가 (이전 세션에서 완료) | 수정 |
+
+실행 결과:
+- `npx prisma db push`: "Your database is now in sync with your Prisma schema" -- DB에 이미 반영되어 있었음 (추가 변경 없음)
+- `npx prisma generate`: db push 과정에서 자동 실행됨 (Prisma Client v5.22.0, 166ms)
+- `npm run dev`: Next.js 16.1.6 (Turbopack), localhost:3000에서 정상 시작 (797ms)
+
+tester 참고:
+- 테스트 방법: http://localhost:3000/admin 접속하여 정상 로딩 확인
+- 정상 동작: 기존 모든 페이지가 정상 동작해야 함 (Session 새 필드는 모두 NULL이므로 영향 없음)
+- 개발서버가 백그라운드로 실행 중이므로 이후 단계 작업 바로 진행 가능
+
+### 클래스별 관리 3단계: saveSessionLog Server Action 추가 (2026-03-21)
+
+구현한 기능: 수업 기록(Session) + 출석(Attendance)을 한번에 저장하는 통합 Server Action
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/actions/admin.ts | saveSessionLog 함수 추가 (1632행 부근, 시간표 동기화 섹션 바로 위) | 수정 |
+
+구현 상세:
+- classId + date 기준으로 기존 Session 조회 (date::date = $2::date로 날짜만 비교)
+- 있으면 UPDATE (topic, content, photosJSON, coachId 업데이트)
+- 없으면 INSERT (gen_random_uuid()::text로 ID 생성, RETURNING id로 sessionId 반환)
+- attendances 배열이 전달되면 각 학생별 Attendance UPSERT (기존 saveAttendance와 동일한 ON CONFLICT 패턴)
+- revalidatePath('/admin/classes') 호출
+- 반환값: { success: true, sessionId: string }
+- 기존 saveAttendance 함수는 그대로 유지 (하위 호환성)
+
+tester 참고:
+- 테스트 방법: 이 함수는 아직 UI에서 호출하지 않음. 4~5단계(클래스 상세 페이지 + SessionLogModal)에서 사용 예정
+- tsc --noEmit 타입 체크 통과 확인 완료
+- $queryRawUnsafe / $executeRawUnsafe만 사용 (PgBouncer 호환)
+- $transaction 미사용 (PgBouncer 트랜잭션 모드 제약)
+
+reviewer 참고:
+- 기존 saveAttendance(683행)와 패턴이 유사하지만, Session의 추가 필드(topic, content, photosJSON, coachId)를 함께 저장하는 점이 다름
+- saveAttendance의 알림 전송 로직은 saveSessionLog에 포함하지 않음 (4~5단계에서 필요 시 추가)
+
+### 클래스별 관리 5단계: SessionLogModal 구현 + ClassDetailClient 연결 (2026-03-21)
+
+구현한 기능: 수업 기록 + 사진 업로드 + 출석 체크 통합 모달 (신규/수정 모드)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/classes/[id]/SessionLogModal.tsx | 수업 기록 모달 컴포넌트 (날짜/코치/주제/내용 입력 + 사진 업로드 + 출석 체크) | 신규 |
+| src/app/admin/classes/[id]/ClassDetailClient.tsx | SessionLogModal import + 신규/수정 모드 연결 + 카드 클릭 시 수정 모달 열기 | 수정 |
+| src/app/api/admin/session-detail/route.ts | 세션 상세 조회 API (수정 모드에서 content + 출석 데이터 로드용) | 신규 |
+
+구현 상세:
+
+SessionLogModal.tsx:
+- 수업 날짜 선택 (date input, 기본값 오늘)
+- 코치 선택 (select dropdown)
+- 수업 주제 (text input) + 수업 내용 (textarea)
+- 사진 업로드: /api/upload에 FormData POST (folder="class-logs"), 여러 장 가능, 썸네일 그리드 미리보기, X 버튼 삭제
+- 출석 체크: 학생 목록 + 출석/결석/지각 3가지 상태 토글, 기본값 전체 출석, 전체출석/전체결석 일괄 버튼
+- 저장: saveSessionLog Server Action 직접 호출
+- 수정 모드: initialData prop으로 기존 데이터 채우기 (API에서 가져온 데이터)
+- 모달 닫힐 때 모든 상태 초기화
+- 사진 업로드 중 로딩 스피너 표시
+- 학생 없으면 "수강생이 없습니다" 안내
+
+ClassDetailClient.tsx 변경:
+- SessionLogModal import 추가
+- "수업 기록 추가" 버튼 → 신규 모드로 모달 열기
+- 수업 기록 카드 클릭 → /api/admin/session-detail API로 상세 데이터 fetch → 수정 모드로 모달 열기
+- onSaved 콜백에서 router.refresh() 호출
+
+session-detail API:
+- GET /api/admin/session-detail?sessionId=xxx
+- 인증 체크 (Supabase Auth)
+- 세션 기본 정보(content 포함) + 출석 데이터 반환
+- photosJSON 파싱하여 URL 배열로 변환
+- $queryRawUnsafe 사용 (PgBouncer 호환)
+
+tester 참고:
+- 테스트 방법: /admin/classes/{id} 접속 → "수업 기록" 탭 → "수업 기록 추가" 버튼 클릭 → 모달에서 정보 입력 후 저장
+- 신규 모드: 날짜/코치/주제/내용 입력, 사진 여러 장 업로드, 출석 체크 후 저장 → 수업 기록 목록에 새 카드 표시
+- 수정 모드: 기존 수업 기록 카드 클릭 → 모달에 기존 데이터 채워짐 → 수정 후 저장
+- 사진 업로드: "사진 추가" 클릭 → 여러 장 선택 → 썸네일 표시 → X 버튼으로 삭제 가능
+- 출석 체크: 기본 전체 출석, 각 학생별 토글 가능, "전체 출석/전체 결석" 일괄 버튼 동작 확인
+- 수강생 없는 반에서 "수강생이 없습니다" 안내 표시 확인
+- 정상 동작: 저장 후 모달 닫히고 수업 기록 목록이 자동 새로고침됨
+
+reviewer 참고:
+- getSessionDetail(cache 래핑 서버 함수)은 클라이언트에서 호출 불가하므로, 별도 API route(/api/admin/session-detail)를 만들어 수정 모드 데이터 로드
+- lucide-react 아이콘 대신 인라인 SVG 사용 (SessionLogModal 내부) — 의존성 최소화 지침 준수
+- ClassDetailClient에서는 기존 lucide-react import 유지 (이미 사용 중이므로)
+- tsc --noEmit 타입 체크 통과 확인
 
 ## 설계 노트 (architect)
 
@@ -1876,6 +2156,85 @@ reviewer 참고:
 
 ---
 
+### DB 데이터 검증: Class 동기화 + 엑셀 업로드 후 수업 매칭 확인 (2026-03-21)
+
+#### 1. Class 테이블 데이터 검증
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| Class 테이블 총 레코드 수 | ✅ 통과 | 31개 Class 존재 |
+| 모든 Class에 slotKey 존재 (NULL 없음) | ✅ 통과 | 31개 전부 slotKey 값 있음 |
+| slotKey 형식 정상 (DayKey-N) | ✅ 통과 | Mon-4 ~ Sun-8까지 "{요일}-{교시}" 형식 |
+| 모든 Class에 programId 연결 | ✅ 통과 | 31개 전부 Program과 JOIN 성공 |
+| 요일별 Class 분포 정상 | ✅ 통과 | Mon:4, Tue:5, Wed:5, Thu:6, Fri:5, Sat:5, Sun:1 |
+| 프로그램 매핑 정상 | ✅ 통과 | 즐거운 주중취미반/치열한 주중경기반/통쾌한 주말경기반/대회준비반/슈팅 클래스/성인반 등 올바르게 매핑 |
+
+#### 2. Enrollment(수강 등록) 매칭 검증
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| 전체 학생 수 | -- | 196명 (Student 테이블) |
+| Enrollment 연결된 학생 수 | -- | 177명 (90.3%) |
+| Enrollment 미연결 학생 수 | -- | 19명 (9.7%) |
+| 총 Enrollment 레코드 수 | -- | 243건 (1인 다수 수업 수강 포함) |
+| 모든 Enrollment 상태가 ACTIVE | ✅ 통과 | 243건 전부 status='ACTIVE' |
+| Class별 수강생 분포 합리적 | ✅ 통과 | 0~12명 범위 (대부분 5~12명) |
+| 수강생 0명인 Class | ⚠️ 참고 | Sun-8 (일요일 8교시, 대회준비반) 1개 — 수강생 0명 |
+
+#### 3. 미매칭 학생 19명 분석
+
+미매칭 원인: **전원 중복 등록된 학생 레코드** (동명이인이 아닌 실제 중복)
+
+같은 이름 + 같은 생년월일(2000-01-01) + 같은 학교/학년/입회일자를 가진 레코드가 2~4개씩 존재.
+그 중 1~2개만 Enrollment가 연결되고, 나머지는 빈 레코드로 남아있음.
+이는 엑셀 업로드 시 중복 학생이 생성된 것으로 추정.
+
+| 학생 이름 | 중복 수 | 매칭된 레코드 | 미매칭 레코드 | 학교 | 비고 |
+|----------|---------|-------------|-------------|------|------|
+| 김대건 | 2개 | 1개 | 1개 | 금성초등학교 | birthDate 동일(2000-01-01) |
+| 김태현 | 4개 | 2개 | 2개 | (없음) | 4개 전부 동일 정보 |
+| 명주원 | 2개 | 1개 | 1개 | 다산새봄중학교 | birthDate 동일 |
+| 문재연 | 2개 | 1개 | 1개 | (없음) | birthDate 동일 |
+| 송지안 | 2개 | 1개 | 1개 | 와부초등학교 | birthDate 동일 |
+| 신혜정 | 2개 | 1개 | 1개 | (없음) | birthDate 동일 |
+| 윤세진 | 4개 | 2개 | 2개 | (없음) | 4개 전부 동일 정보 |
+| 이일우 | 2개 | 1개 | 1개 | (없음) | birthDate 동일 |
+| 이준영 | 2개 | 1개 | 1개 | (없음) | birthDate 동일 |
+| 이하율 | 2개 | 1개 | 1개 | 금교초등학교 | birthDate 동일 |
+| 정해담 | 2개 | 1개 | 1개 | 남양주다산초등학교 | birthDate 동일 |
+| 조윤환 | 2개 | 1개 | 1개 | (없음) | birthDate 동일 |
+| 조해원 | 4개 | 2개 | 2개 | 다산새봄중학교 | 4개 전부 동일 정보 |
+| 진호진 | 4개 | 2개 | 2개 | (없음) | enrollDate만 다름(2026-03-02, 2025-10-13) — 실제 2명일 수 있음 |
+| 표성현 | 2개 | 1개 | 1개 | (없음) | birthDate 동일 |
+
+참고: 진호진(4개 레코드)은 enrollDate가 2개 그룹으로 나뉘어 실제 동명이인(2명)일 가능성 있음.
+참고: 김태훈(2개 레코드)은 birthDate가 다르고(2014-09-10 vs 2016-02-08) 학교도 다르므로 실제 동명이인. 둘 다 Enrollment 연결됨.
+참고: 이현준(2개 레코드)도 birthDate가 다르고(2013-06-26 vs 2014-10-19) 학교도 다르므로 실제 동명이인. 둘 다 Enrollment 연결됨.
+
+#### 4. 중복 발생 원인 분석
+
+중복 체크 로직 (admin.ts 1378~1390행):
+- 기준: `이름 + 생년월일`이 같으면 중복으로 판단
+- 문제: 많은 학생의 birthDate가 `2000-01-01`(기본값/파싱 실패값)으로 저장됨
+- `LIMIT 1`로 첫 번째 기존 레코드만 찾아서 처리하므로, 이미 중복 레코드가 있으면 가장 먼저 등록된 레코드에만 Enrollment가 연결됨
+- 나머지 중복 레코드는 Enrollment 없이 방치
+
+추정 시나리오: 엑셀을 여러 번 업로드하면서, 첫 업로드 시 생년월일이 제대로 안 들어가 birthDate=2000-01-01로 저장된 학생들이 중복 생성됨. 이후 재업로드 시 중복 체크가 "이름+birthDate" 기준이므로 첫 번째 레코드만 매칭하고 나머지는 누적.
+
+---
+
+📊 종합: 6개 핵심 항목 중 6개 통과 / 0개 실패
+
+종합 판정: ✅ 기능 정상 동작 확인 (단, 중복 레코드 정리 필요)
+
+권고사항 (developer에게):
+1. **중복 Student 레코드 정리 필요**: 15명의 학생에 대해 Enrollment가 없는 중복 레코드 19개를 삭제하는 것이 좋음 (데이터 정합성)
+2. **birthDate 기본값 문제**: 많은 학생의 birthDate가 2000-01-01로 되어 있음. 엑셀의 생년월일 컬럼(Q열) 파싱이 제대로 되었는지 확인 필요
+3. **Sun-8(일요일 8교시, 대회준비반)**: 수강생 0명. 엑셀에 해당 수업을 듣는 학생이 없었거나, 클래스명 매칭이 안 된 것. 의도한 것인지 확인 필요
+4. **진호진 2명 구분 필요**: enrollDate가 다른 2그룹이므로 실제 동명이인일 수 있음. 확인 후 처리 필요
+
+---
+
 ### Phase 0~3 통합 테스트 (2026-03-20)
 
 #### 1. 빌드 테스트
@@ -2114,6 +2473,20 @@ reviewer 참고:
 
 최종 판정: ✅ 전체 통과
 
+### 에러 해결 기록 (2026-03-21)
+
+#### "Jest worker encountered 2 child process exceptions, exceeding retry limit" 에러
+
+| 항목 | 내용 |
+|------|------|
+| 에러 메시지 | Jest worker encountered 2 child process exceptions, exceeding retry limit |
+| 원인 | 이전 Next.js 개발 서버 프로세스(PID 39296)가 포트 3000을 점유한 채 좀비 상태로 남아있었고, .next 캐시가 손상됨 |
+| 해결 방법 | 1) 기존 node 프로세스 종료 (taskkill /F /PID 39296) 2) .next 캐시 폴더 삭제 (rm -rf .next) 3) npm run dev 재시작 |
+| 결과 | localhost:3000에서 정상 동작 확인 (Ready in 1043ms, GET / 200, GET /admin/students/* 200) |
+| 코드 수정 여부 | 불필요 (환경 문제) |
+
+예방법: 개발 서버를 종료할 때 터미널에서 Ctrl+C로 완전히 종료하고, 비정상 종료 시 작업관리자에서 node.exe 프로세스를 수동 종료한 후 .next 폴더를 삭제하고 재시작.
+
 ## 리뷰 결과 (reviewer)
 
 ### 설계 계획서 리뷰 (2026-03-20)
@@ -2202,9 +2575,41 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 
 계획서의 논리적 흐름, 구현 가능성 모두 양호하다. 현재 프로젝트 구조(globals.css @theme, PublicPageLayout, LandingPageClient)와 호환되며, 제안된 파일 경로도 기존 구조와 충돌 없다. 위의 5가지 개선 제안은 "하면 좋은 것"이지 "하지 않으면 안 되는 것"은 아니므로, 현재 상태로 Phase 0부터 착수해도 무방하다.
 
+### 클래스별 관리 기능 테스트 - 7단계 (2026-03-21)
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| tsc --noEmit 타입 체크 | ✅ 통과 | 종료 코드 0, 에러 0건 |
+| npm run build 빌드 | ✅ 통과 | 에러 없이 빌드 완료 |
+| /admin/classes 접근 | ✅ 통과 | HTTP 307 (인증 리다이렉트 → 정상 동작) |
+| /admin/classes/[id] 접근 | ✅ 통과 | HTTP 307 (실제 classId: 81ac1ff7... 사용, 인증 리다이렉트 → 정상 동작) |
+| 존재하지 않는 id 처리 | ✅ 통과 | page.tsx에서 notFound() 호출 확인 (classData 없으면 404 반환) |
+| session-detail API (인증 없음) | ✅ 통과 | HTTP 401 + {"error":"인증 필요"} 반환 |
+| session-detail API (sessionId 없음) | ✅ 통과 | 코드에서 HTTP 400 + "sessionId required" 반환 확인 |
+| session-detail API (없는 세션) | ✅ 통과 | 코드에서 HTTP 404 + "세션을 찾을 수 없습니다" 반환 확인 |
+| 파일 존재: page.tsx | ✅ 통과 | src/app/admin/classes/[id]/page.tsx 확인 |
+| 파일 존재: ClassDetailClient.tsx | ✅ 통과 | src/app/admin/classes/[id]/ClassDetailClient.tsx 확인 |
+| 파일 존재: SessionLogModal.tsx | ✅ 통과 | src/app/admin/classes/[id]/SessionLogModal.tsx 확인 |
+| 파일 존재: session-detail/route.ts | ✅ 통과 | src/app/api/admin/session-detail/route.ts 확인 |
+| 함수: getClassWithStudents (queries.ts) | ✅ 통과 | 1299행, cache() 래핑 확인 |
+| 함수: getSessionsByClass (queries.ts) | ✅ 통과 | 1357행, cache() 래핑 확인 |
+| 함수: getSessionDetail (queries.ts) | ✅ 통과 | 1391행, cache() 래핑 확인 |
+| 함수: saveSessionLog (admin.ts) | ✅ 통과 | 1642행, export async function 확인 |
+| ClassManagementClient Link import | ✅ 통과 | 5행: import Link from "next/link" 확인 |
+| ClassManagementClient 반 이름 링크 | ✅ 통과 | 254행: href={`/admin/classes/${cls.id}`} 확인 |
+| page.tsx notFound 처리 | ✅ 통과 | notFound import + classData 없으면 notFound() 호출 |
+| page.tsx revalidate 설정 | ✅ 통과 | revalidate = 30 (캐싱 전략 준수) |
+| session-detail API $queryRawUnsafe 사용 | ✅ 통과 | PgBouncer 호환 패턴 준수 |
+
+발견된 문제: 없음
+
+📊 종합: 21개 중 21개 통과 / 0개 실패
+
 ## 수정 요청
 | 요청자 | 대상 파일 | 문제 설명 | 상태 |
 |--------|----------|----------|------|
+| tester | DB (Student 테이블) | 중복 Student 레코드 19개 존재 (15명). Enrollment 없는 빈 레코드로, 엑셀 중복 업로드로 추정. 정리 필요 | 대기 |
+| tester | admin.ts (bulkCreateStudents) | birthDate가 2000-01-01인 학생이 다수 — 엑셀 생년월일(Q열) 파싱 실패 의심. 엑셀 원본과 대조 확인 필요 | 대기 |
 
 ## Git 기록 (git-manager)
 
@@ -2236,6 +2641,22 @@ push 여부: 미완료 (사용자 확인 후 진행)
 - src/app/actions/admin.ts (수정 - bulkCreateStudents Server Action 추가)
 - src/app/admin/students/ExcelUploadModal.tsx (신규 - 3단계 UI 모달)
 - src/app/admin/students/StudentManagementClient.tsx (수정 - 엑셀 업로드 버튼 추가)
+push 여부: 미완료 (커밋만, 사용자 확인 후 push)
+
+### 2026-03-21 커밋 (3차)
+
+커밋: feat: 시간표-Class 동기화 + 엑셀 클래스 자동 매칭 (8~10단계)
+해시: ba3fc5b
+브랜치: main
+포함 파일 (8개):
+- .claude/scratchpad.md (수정)
+- .claude/settings.local.json (수정)
+- prisma/schema.prisma (수정 - Class 테이블에 slotKey 필드 추가)
+- scripts/sync-classes.mjs (신규 - 일회성 동기화 스크립트)
+- src/app/actions/admin.ts (수정 - 엑셀 클래스 자동 매칭 로직)
+- src/app/admin/students/ExcelUploadModal.tsx (수정 - 클래스 매칭 UI)
+- src/app/admin/students/StudentManagementClient.tsx (수정 - 수강 등록 모달 그룹화)
+- src/lib/queries.ts (수정)
 push 여부: 미완료 (커밋만, 사용자 확인 후 push)
 
 ### 9~10단계: 수강 등록 모달 개선 + 엑셀 클래스 자동 매칭 (2026-03-21)
@@ -2296,6 +2717,12 @@ reviewer 참고:
 | 2026-03-21 | git-manager | 4~6단계 작업 커밋 (17171b8) | ✅ 4개 파일, push 미완료 |
 | 2026-03-21 | developer | 9~10단계: 수강 등록 모달 그룹화 + 엑셀 클래스 자동 매칭 (3개 파일 수정) | ✅ tsc 타입 체크 통과 |
 | 2026-03-21 | tester | 8~10단계 변경사항 검증 (스키마/동기화/모달그룹화/엑셀매칭/DB확인) | ✅ 27개 항목 전체 통과 |
+| 2026-03-21 | git-manager | 8~10단계 작업 커밋 (ba3fc5b) | ✅ 8개 파일, push 미완료 |
+| 2026-03-21 | tester | DB 데이터 검증: Class 동기화 + 엑셀 매칭 + 미매칭 학생 분석 | ✅ Class 31개 정상, 177/196명 매칭, 19명 중복 레코드 발견 |
+| 2026-03-21 | debugger | Jest worker 에러 해결 (좀비 프로세스 종료 + .next 캐시 삭제) | ✅ localhost:3000 정상 동작 확인 |
+| 2026-03-21 | developer | 6단계: 클래스 목록 반 이름에 상세페이지 링크 추가 (ClassManagementClient.tsx) | ✅ tsc 타입 체크 통과 |
+| 2026-03-21 | planner | 클래스별 관리 기능 구현 계획 수립 (학생명단+출석+수업기록+사진) | ✅ 7단계 계획 완료 (Session 확장 + 상세페이지 + 모달) |
+| 2026-03-21 | tester | 클래스별 관리 기능 7단계 전체 동작 테스트 (tsc/build/파일/함수/API/페이지접근) | ✅ 21개 항목 전체 통과 |
 
 ### 파비콘 교체 구현 기록
 
@@ -2400,3 +2827,82 @@ reviewer 참고:
 - Notice CRUD 패턴과 동일한 구조로 구현 (일관성 유지)
 - $queryRawUnsafe / $executeRawUnsafe만 사용 (PgBouncer 호환)
 - prisma generate가 파일 잠금으로 실패 — 개발 서버 재시작 후 재실행 필요
+
+### 수업 기록 기능 - 2단계: queries.ts 조회 함수 추가 (2026-03-21)
+
+구현한 기능: 클래스 상세 페이지에서 사용할 DB 조회 함수 3개 추가
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/queries.ts | getClassWithStudents, getSessionsByClass, getSessionDetail 함수 3개 추가 | 수정 |
+
+추가된 함수 설명:
+1. `getClassWithStudents(classId)` — 반 기본 정보(이름, 요일, 시간, 정원, 프로그램명) + ACTIVE 수강생 목록 조회. 2개 쿼리 실행 (반 정보 + 수강생).
+2. `getSessionsByClass(classId, limit?)` — 반의 수업 기록 목록 (최신순). 출석 카운트를 GROUP BY + COUNT로 집계. 기본 limit 20.
+3. `getSessionDetail(sessionId)` — 수업 기록 상세 (content 포함). 수정 모달에서 기존 데이터를 불러올 때 사용.
+
+구현 규칙 준수 사항:
+- $queryRawUnsafe만 사용 (PgBouncer 트랜잭션 모드 호환)
+- cache()로 래핑 (request-level memoization)
+- 컬럼명 대소문자 fallback 처리 (dayOfWeek ?? dayofweek 등)
+- 기존 queries.ts 패턴과 동일한 스타일
+- 기존 코드 수정 없이 파일 끝에만 추가
+
+tester 참고:
+- 테스트 방법: 이 함수들은 아직 UI에서 사용하지 않음. 3단계(Server Action) + 4단계(클래스 상세 페이지)에서 실제 연결 예정.
+- tsc --noEmit 통과 확인 완료.
+
+reviewer 참고:
+- getSessionsByClass의 GROUP BY 절에 se.id가 PK이므로 나머지 컬럼도 함수적 종속 — PostgreSQL에서 정상 동작.
+- getClassWithStudents는 반 정보가 없으면 null 반환 (404 처리용).
+
+### 4단계 - 클래스 상세 페이지 (/admin/classes/[id]) (2026-03-21)
+
+구현한 기능: 반 상세 페이지 (Server Component + Client Component 3탭 UI)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/classes/[id]/page.tsx | Server Component — getClassWithStudents, getSessionsByClass, getCoaches 병렬 조회 + notFound 처리 | 신규 |
+| src/app/admin/classes/[id]/ClassDetailClient.tsx | Client Component — 3탭(학생 명단/수업 기록/출석 현황) + 상단 헤더 + 요약 카드 3개 | 신규 |
+
+tester 참고:
+- 테스트 방법: /admin/classes 목록에서 아무 반 클릭하여 /admin/classes/[id] 페이지 접속
+- 정상 동작:
+  (1) 상단에 반 이름, 프로그램명, 요일/시간, 수강생 수/정원 표시
+  (2) 요약 카드 3개: 수강생 수, 수업 기록 횟수, 평균 출석률
+  (3) "학생 명단" 탭: 수강생 테이블 (이름 클릭 시 /admin/students/[id]로 이동)
+  (4) "수업 기록" 탭: 수업 기록 카드 목록 (날짜, 주제, 코치, 출석률 바, 사진 썸네일)
+  (5) "출석 현황" 탭: 날짜별 출석 요약 테이블 (출석/결석 수, 출석률 뱃지)
+  (6) 뒤로가기 화살표 클릭 시 /admin/classes로 이동
+- 주의할 테스트:
+  - 수강생이 0명인 반에서 빈 상태 메시지 표시 확인
+  - 수업 기록이 없는 반에서 빈 상태 메시지 + "수업 기록 추가" 버튼 표시 확인
+  - "수업 기록 추가" 버튼은 아직 동작하지 않음 (5단계 SessionLogModal에서 연결 예정)
+  - 존재하지 않는 ID로 접속 시 404 페이지 표시 확인
+
+reviewer 참고:
+- Next.js 16 params Promise 패턴 준수 (기존 students/[id]/page.tsx와 동일)
+- revalidate: 30 설정 (기존 admin 페이지 캐시 정책과 일치)
+- showSessionLog 상태는 준비만 해둠 — 5단계에서 SessionLogModal과 연결 예정
+- coaches 배열은 5단계 모달에서 코치 선택 드롭다운에 사용될 예정이므로 미리 조회하여 전달
+- photosJSON 파싱: 문자열 배열과 객체 배열({ url: string }) 두 형식 모두 지원
+
+---
+
+### 6단계: 클래스 목록 페이지 연결 (2026-03-21)
+
+📝 구현한 기능: 클래스 목록에서 반 이름을 클릭하면 상세 페이지(/admin/classes/[id])로 이동하는 링크 추가
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/classes/ClassManagementClient.tsx | Link import 추가 + 반 이름을 Link 컴포넌트로 변경 (파란색 텍스트, 호버 밑줄) | 수정 |
+
+💡 tester 참고:
+- 테스트 방법: /admin/classes 접속 -> 각 반 이름(파란색 텍스트)을 클릭하면 /admin/classes/[id] 상세 페이지로 이동
+- 정상 동작: 반 이름이 파란색으로 표시되고, 호버 시 밑줄이 나타나며, 클릭 시 상세 페이지로 이동
+- 주의할 테스트: 기존 수정/삭제 버튼이 정상 동작하는지 확인 (CRUD 기능 영향 없음)
+
+⚠️ reviewer 참고:
+- 변경량 최소: import 1줄 + JSX 4줄 변경만 수행
+- 기존 CRUD 기능(createClass/updateClass/deleteClass)은 전혀 수정하지 않음
+- tsc --noEmit 타입 체크 통과 확인

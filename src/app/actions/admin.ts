@@ -1629,6 +1629,89 @@ async function insertGuardians(studentId: string, student: BulkStudentInput) {
     }
 }
 
+// ── 수업 기록 저장 (세션 + 출석 일괄) ─────────────────────────────────────────
+
+/**
+ * saveSessionLog: 수업 기록(Session)과 출석(Attendance)을 한번에 저장하는 통합 Server Action
+ *
+ * - 기존 saveAttendance는 출석만 저장하지만, 이 함수는 수업 주제/내용/사진/코치 + 출석을 함께 저장
+ * - Session이 이미 있으면 UPDATE, 없으면 INSERT (classId + date 기준)
+ * - attendances가 전달되면 각 학생에 대해 Attendance UPSERT
+ * - PgBouncer 호환을 위해 $queryRawUnsafe / $executeRawUnsafe만 사용
+ */
+export async function saveSessionLog(data: {
+    classId: string;
+    date: string;           // ISO 날짜 문자열
+    topic?: string;         // 수업 주제
+    content?: string;       // 수업 상세 내용
+    photosJSON?: string;    // 사진 URL 배열 JSON 문자열 (클라이언트에서 JSON.stringify 완료)
+    coachId?: string;       // 담당 코치 ID
+    attendances?: Array<{   // 출석 데이터 (선택)
+        studentId: string;
+        status: string;     // PRESENT, ABSENT, LATE
+    }>;
+}) {
+    try {
+        // ── 1. 해당 classId + date로 기존 Session 검색 ──
+        const existing = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "Session" WHERE "classId" = $1 AND date::date = $2::date LIMIT 1`,
+            data.classId, data.date
+        );
+
+        let sessionId: string;
+
+        if (existing.length > 0) {
+            // ── 2. 기존 Session이 있으면 UPDATE ──
+            sessionId = existing[0].id;
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Session" SET
+                    topic = $1, content = $2, "photosJSON" = $3, "coachId" = $4, "updatedAt" = NOW()
+                 WHERE id = $5`,
+                data.topic || null,
+                data.content || null,
+                data.photosJSON || null,
+                data.coachId || null,
+                sessionId,
+            );
+        } else {
+            // ── 3. 없으면 새 Session INSERT ──
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "Session" (id, "classId", date, topic, content, "photosJSON", "coachId", "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5, $6, NOW(), NOW())
+                 RETURNING id`,
+                data.classId,
+                data.date,
+                data.topic || null,
+                data.content || null,
+                data.photosJSON || null,
+                data.coachId || null,
+            );
+            sessionId = rows[0].id;
+        }
+
+        // ── 4. 출석 데이터가 있으면 각 학생별 Attendance UPSERT ──
+        // 기존 saveAttendance와 동일한 ON CONFLICT 패턴 사용
+        if (data.attendances && data.attendances.length > 0) {
+            for (const rec of data.attendances) {
+                await prisma.$executeRawUnsafe(
+                    `INSERT INTO "Attendance" (id, "sessionId", "studentId", status, "createdAt", "updatedAt")
+                     VALUES (gen_random_uuid()::text, $1, $2, $3, NOW(), NOW())
+                     ON CONFLICT ("sessionId", "studentId") DO UPDATE SET status = $3, "updatedAt" = NOW()`,
+                    sessionId, rec.studentId, rec.status
+                );
+            }
+        }
+
+        // ── 5. 캐시 무효화 ──
+        revalidatePath("/admin/classes");
+
+        return { success: true, sessionId };
+    } catch (e) {
+        console.error("Failed to save session log:", e);
+        throw new Error("수업 기록 저장 실패");
+    }
+}
+
 // ── 시간표 슬롯 → Class 동기화 ────────────────────────────────────────────────
 
 // 요일 키를 한글 라벨로 변환하는 매핑

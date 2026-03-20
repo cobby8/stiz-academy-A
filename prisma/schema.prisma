@@ -101,6 +101,10 @@ model Session {
   classId     String
   date        DateTime
   notes       String?
+  topic       String?      // 수업 주제 (예: "드리블 연습")
+  content     String?      // 수업 상세 내용
+  photosJSON  String?      // 수업 사진 URL 배열 (JSON 문자열로 저장)
+  coachId     String?      // 담당 코치 ID (Coach 테이블 참조용, FK 없음)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   attendances Attendance[]

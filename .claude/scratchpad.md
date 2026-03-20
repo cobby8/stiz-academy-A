@@ -2,8 +2,8 @@
 
 ## 현재 작업
 - **요청**: 공개 페이지 전체 UI/UX 개편 설계 계획서 작성
-- **상태**: Phase 5 완료 — 테스트/커밋 대기
-- **현재 담당**: pm
+- **상태**: Phase 6 구현 완료 — tester 검증 대기
+- **현재 담당**: developer
 - **마지막 세션**: 2026-03-20
 - **사용자 결정사항**:
   - 실시간 채팅: ❌ 개발 계획에서 제외
@@ -1130,6 +1130,47 @@ reviewer 참고:
 - login/page.tsx에 Image 컴포넌트 import 추가 (Next.js 이미지 최적화)
 - login/page.tsx의 hidden input (role="ADMIN") 유지 — 기존 회원가입 로직 보존
 
+### Phase 6: 마무리 및 최적화 — 스켈레톤 로딩 UI + 폰트 확인 (2026-03-20)
+
+구현한 기능: 각 공개 페이지에 loading.tsx 스켈레톤 UI를 추가하여, 페이지 로딩 중 회색 박스 + 펄스 애니메이션이 표시되도록 함. Pretendard 폰트는 layout.tsx에 이미 CDN 로딩이 설정되어 있어 변경 불필요.
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/about/loading.tsx | 학원소개 스켈레톤 (히어로 + 카드 3개 + 텍스트 블록) | 신규 |
+| src/app/programs/loading.tsx | 프로그램 스켈레톤 (히어로 + 카드 2x2 격자) | 신규 |
+| src/app/schedule/loading.tsx | 시간표 스켈레톤 (히어로 + 필터탭 + 시간표 격자) | 신규 |
+| src/app/annual/loading.tsx | 연간일정 스켈레톤 (히어로 + 월 네비 + 캘린더 7x5 격자) | 신규 |
+| src/app/gallery/loading.tsx | 갤러리 스켈레톤 (히어로 + 이미지 2x3 격자 + 캡션) | 신규 |
+| src/app/notices/loading.tsx | 공지사항 스켈레톤 (히어로 + 리스트 5개) | 신규 |
+| src/app/apply/loading.tsx | 체험신청 스켈레톤 (히어로 + 카드 2개) | 신규 |
+
+폰트 확인 결과:
+- src/app/layout.tsx 43~47행에 Pretendard CDN (cdn.jsdelivr.net/gh/orioncactus/pretendard) 이미 로딩됨
+- Google Fonts (Noto Sans KR, Nanum Gothic, IBM Plex Sans KR, Black Han Sans, Jua)도 이미 로딩됨
+- DB 설정으로 폰트 선택하는 기존 구조(getFontCss) 유지 -- 변경 불필요
+
+안전성 확인:
+- 기존 파일 수정: 0건 (신규 파일만 7개 생성)
+- revalidate 값: 해당 없음 (loading.tsx는 캐싱과 무관)
+- $queryRawUnsafe: 변경 없음 (프론트엔드 전용)
+- Server/Client Component: loading.tsx는 Server Component (기본값)
+
+검증 결과:
+- tsc --noEmit: 에러 0건
+
+tester 참고:
+- 테스트 방법:
+  (1) 각 페이지(/about, /programs, /schedule, /annual, /gallery, /notices, /apply) 접속
+  (2) 브라우저 개발자 도구 > Network 탭 > "Slow 3G" 설정으로 느린 로딩 시뮬레이션
+  (3) 페이지 새로고침 시 스켈레톤 UI(회색 박스 + 깜빡임 애니메이션)가 잠시 보이다가 실제 콘텐츠로 교체되는지 확인
+- 정상 동작: 로딩 중 빈 화면 대신 회색 스켈레톤이 보이고, 로딩 완료 후 자연스럽게 실제 콘텐츠로 전환
+- 주의할 테스트: 빠른 네트워크에서는 스켈레톤이 거의 안 보일 수 있음 (정상). Slow 3G로 테스트 권장
+
+reviewer 참고:
+- 모든 loading.tsx는 순수 JSX + Tailwind만 사용, 외부 의존성 없음
+- animate-pulse는 Tailwind 내장 애니메이션 (opacity 깜빡임)
+- 기존 파일 미접촉으로 회귀 위험 없음
+
 ## 테스트 결과 (tester)
 
 ### Phase 0~3 통합 테스트 (2026-03-20)
@@ -1483,3 +1524,4 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 | 2026-03-20 | tester | Phase 4 통합 테스트 (빌드/import/기능보존/회귀/서버 라우팅) | ✅ 33개 항목 전체 통과 |
 | 2026-03-20 | developer | Phase 5 마이페이지+로그인 디자인 토큰 통일 (3개 파일 수정) | ✅ tsc 타입 체크 통과 |
 | 2026-03-20 | tester | Phase 5 테스트 (빌드/스타일/기능보존/회귀/서버 라우팅) | ✅ 33개 항목 전체 통과 |
+| 2026-03-20 | developer | Phase 6 마무리 및 최적화 (스켈레톤 로딩 UI 7개 + 폰트 확인) | ✅ tsc 타입 체크 통과 |

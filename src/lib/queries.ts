@@ -687,43 +687,96 @@ export async function getNoticesByClassIds(classIds: string[], limit = 20) {
 export const getDashboardExtendedStats = cache(async () => {
     try {
         const now = new Date();
-        const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}-01`;
-        const thisMonthEnd = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, "0")}-01`;
 
-        // 이번 달 매출 (납부 완료)
-        const revenueRows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COALESCE(SUM(amount), 0)::int AS total
-             FROM "Payment" WHERE status = 'PAID'
-             AND "paidDate" >= $1::timestamp AND "paidDate" < $2::timestamp`,
-            thisMonth, thisMonthEnd
+        // 6개월 전 1일을 시작점으로 계산 (이번 달 포함 6개월치)
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        const sixMonthsAgoStr = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
+
+        // 이번 달 다음 달 1일 (상한 경계)
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const nextMonthStr = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
+
+        // 이번 달 / 지난 달 키 (월별 매출 맵에서 꺼내기 위해)
+        const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthKey = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, "0")}`;
+
+        // [쿼리 1] 6개월 매출을 GROUP BY로 한 번에 가져옴 (기존 루프 6번 + 개별 2번 → 1번)
+        const revenueByMonth = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT TO_CHAR(DATE_TRUNC('month', "paidDate"), 'YYYY-MM') AS month,
+                    COALESCE(SUM(amount), 0)::int AS total
+             FROM "Payment"
+             WHERE status = 'PAID'
+               AND "paidDate" >= $1::timestamp
+               AND "paidDate" < $2::timestamp
+             GROUP BY DATE_TRUNC('month', "paidDate")
+             ORDER BY DATE_TRUNC('month', "paidDate")`,
+            sixMonthsAgoStr, nextMonthStr
         );
-        const thisMonthRevenue = Number(revenueRows[0]?.total ?? 0);
 
-        // 지난 달 매출
-        const lastRevRows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COALESCE(SUM(amount), 0)::int AS total
-             FROM "Payment" WHERE status = 'PAID'
-             AND "paidDate" >= $1::timestamp AND "paidDate" < $2::timestamp`,
-            lastMonthStr, thisMonth
-        );
-        const lastMonthRevenue = Number(lastRevRows[0]?.total ?? 0);
+        // 매출 결과를 월별 맵으로 변환 (빠른 조회용)
+        const revenueMap = new Map<string, number>();
+        for (const row of revenueByMonth) {
+            revenueMap.set(row.month, Number(row.total ?? 0));
+        }
 
-        // 이번 달 출석률
-        const attRows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COUNT(*)::int AS total,
+        // 이번 달 / 지난 달 매출을 맵에서 추출
+        const thisMonthRevenue = revenueMap.get(thisMonthKey) ?? 0;
+        const lastMonthRevenue = revenueMap.get(lastMonthKey) ?? 0;
+
+        // 6개월 매출 추이 배열 구성 (과거→현재 순서)
+        const monthlyRevenue: { month: string; amount: number }[] = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            monthlyRevenue.push({
+                month: `${d.getMonth() + 1}월`,
+                amount: revenueMap.get(key) ?? 0,
+            });
+        }
+
+        // [쿼리 2] 6개월 출석률을 GROUP BY로 한 번에 가져옴 (기존 루프 6번 + 개별 1번 → 1번)
+        const attendanceByMonth = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT TO_CHAR(DATE_TRUNC('month', se.date), 'YYYY-MM') AS month,
+                    COUNT(*)::int AS total,
                     COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present
              FROM "Attendance" a
              JOIN "Session" se ON a."sessionId" = se.id
-             WHERE se.date >= $1::timestamp AND se.date < $2::timestamp`,
-            thisMonth, thisMonthEnd
+             WHERE se.date >= $1::timestamp
+               AND se.date < $2::timestamp
+             GROUP BY DATE_TRUNC('month', se.date)
+             ORDER BY DATE_TRUNC('month', se.date)`,
+            sixMonthsAgoStr, nextMonthStr
         );
-        const attTotal = Number(attRows[0]?.total ?? 0);
-        const attPresent = Number(attRows[0]?.present ?? 0);
-        const attendanceRate = attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0;
 
-        // 미납 건수/금액
+        // 출석 결과를 월별 맵으로 변환
+        const attendanceMap = new Map<string, { total: number; present: number }>();
+        for (const row of attendanceByMonth) {
+            attendanceMap.set(row.month, {
+                total: Number(row.total ?? 0),
+                present: Number(row.present ?? 0),
+            });
+        }
+
+        // 이번 달 출석률 계산
+        const thisMonthAtt = attendanceMap.get(thisMonthKey);
+        const attendanceRate = thisMonthAtt && thisMonthAtt.total > 0
+            ? Math.round((thisMonthAtt.present / thisMonthAtt.total) * 100)
+            : 0;
+
+        // 6개월 출석률 추이 배열 구성 (과거→현재 순서)
+        const monthlyAttendance: { month: string; rate: number }[] = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            const att = attendanceMap.get(key);
+            monthlyAttendance.push({
+                month: `${d.getMonth() + 1}월`,
+                rate: att && att.total > 0 ? Math.round((att.present / att.total) * 100) : 0,
+            });
+        }
+
+        // [쿼리 3] 미납 건수/금액 (통합 불가 — 별도 테이블 조건)
         const unpaidRows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT COUNT(*)::int AS cnt, COALESCE(SUM(amount), 0)::int AS total
              FROM "Payment" WHERE status IN ('PENDING', 'OVERDUE')`
@@ -731,49 +784,7 @@ export const getDashboardExtendedStats = cache(async () => {
         const unpaidCount = Number(unpaidRows[0]?.cnt ?? 0);
         const unpaidAmount = Number(unpaidRows[0]?.total ?? 0);
 
-        // 최근 6개월 매출 추이
-        const monthlyRevenue: { month: string; amount: number }[] = [];
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-            const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-            const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-01`;
-            const rows = await prisma.$queryRawUnsafe<any[]>(
-                `SELECT COALESCE(SUM(amount), 0)::int AS total
-                 FROM "Payment" WHERE status = 'PAID'
-                 AND "paidDate" >= $1::timestamp AND "paidDate" < $2::timestamp`,
-                start, endStr
-            );
-            monthlyRevenue.push({
-                month: `${d.getMonth() + 1}월`,
-                amount: Number(rows[0]?.total ?? 0),
-            });
-        }
-
-        // 최근 6개월 출석률 추이
-        const monthlyAttendance: { month: string; rate: number }[] = [];
-        for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-            const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-            const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-01`;
-            const rows = await prisma.$queryRawUnsafe<any[]>(
-                `SELECT COUNT(*)::int AS total,
-                        COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present
-                 FROM "Attendance" a
-                 JOIN "Session" se ON a."sessionId" = se.id
-                 WHERE se.date >= $1::timestamp AND se.date < $2::timestamp`,
-                start, endStr
-            );
-            const t = Number(rows[0]?.total ?? 0);
-            const p = Number(rows[0]?.present ?? 0);
-            monthlyAttendance.push({
-                month: `${d.getMonth() + 1}월`,
-                rate: t > 0 ? Math.round((p / t) * 100) : 0,
-            });
-        }
-
-        // 프로그램별 원생 수
+        // [쿼리 4] 프로그램별 원생 수
         const programStudents = await prisma.$queryRawUnsafe<any[]>(
             `SELECT p.name, COUNT(DISTINCT e."studentId")::int AS cnt
              FROM "Program" p

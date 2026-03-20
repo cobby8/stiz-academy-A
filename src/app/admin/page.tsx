@@ -5,26 +5,33 @@ import { prisma } from "@/lib/prisma";
 import { getDashboardStats, getDashboardExtendedStats, getRecentPendingRequests, getPendingRequestCount } from "@/lib/queries";
 import Link from "next/link";
 
-export const dynamic = "force-dynamic";
+// 30초 캐시: 아무도 수정 안 할 때 캐시 유지, Server Action 호출 시 즉시 무효화
+export const revalidate = 30;
 
-async function getSystemStatus() {
-    const results = { dbOk: false, lastBackupAt: null as Date | null, backupCount: 0 };
+// DB 연결 상태만 확인 (빠름, 보통 수십ms)
+async function getDbStatus() {
     try {
         await prisma.$queryRaw`SELECT 1`;
-        results.dbOk = true;
-    } catch {}
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// Supabase Storage 백업 목록 조회 (느림, 500ms~2초 소요되는 외부 네트워크 호출)
+async function getBackupStatus() {
     try {
         const supabase = createAdminClient();
         const { data: allFiles } = await supabase.storage.from("backups").list("", {
             limit: 50,
             sortBy: { column: "created_at", order: "desc" },
         });
-        if (allFiles?.[0]?.created_at) {
-            results.lastBackupAt = new Date(allFiles[0].created_at);
-        }
-        results.backupCount = allFiles?.length ?? 0;
-    } catch {}
-    return results;
+        const lastBackupAt = allFiles?.[0]?.created_at ? new Date(allFiles[0].created_at) : null;
+        const backupCount = allFiles?.length ?? 0;
+        return { lastBackupAt, backupCount };
+    } catch {
+        return { lastBackupAt: null as Date | null, backupCount: 0 };
+    }
 }
 
 function formatKRW(n: number): string {
@@ -32,8 +39,10 @@ function formatKRW(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
 }
 
-async function SystemStatusCard() {
-    const { dbOk, lastBackupAt, backupCount } = await getSystemStatus();
+// 백업 상태 표시 - Suspense 안에서 비동기로 로딩되는 서버 컴포넌트
+// Supabase Storage 호출이 느리므로 DB 상태와 분리하여 독립적으로 로딩
+async function BackupStatusSection() {
+    const { lastBackupAt, backupCount } = await getBackupStatus();
     const now = new Date();
     const backupAgeMs = lastBackupAt ? now.getTime() - lastBackupAt.getTime() : Infinity;
     const backupAgeDays = Math.floor(backupAgeMs / (1000 * 60 * 60 * 24));
@@ -49,9 +58,40 @@ async function SystemStatusCard() {
     }
 
     return (
-        <div className={`bg-white p-5 rounded-2xl shadow-sm border ${backupDanger ? "border-red-300" : backupWarn ? "border-yellow-300" : "border-gray-100"}`}>
+        <>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                    {backupWarn ? <CloudOff size={14} className={backupDanger ? "text-red-500" : "text-yellow-500"} /> : <span className="text-sm">☁️</span>}
+                    <span>마지막 백업</span>
+                </div>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${backupDanger ? "bg-red-100 text-red-700" : backupWarn ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                    {backupLabel()}
+                </span>
+            </div>
+            {backupCount > 0 && (
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">저장된 백업</span>
+                    <span className="text-xs text-gray-500">{backupCount}개</span>
+                </div>
+            )}
+            {backupDanger && (
+                <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                    7일 이상 백업이 없습니다. 사이드바에서 즉시 저장하세요.
+                </p>
+            )}
+        </>
+    );
+}
+
+// 시스템 상태 카드 - DB 상태는 즉시 표시, 백업 상태는 Suspense로 비동기 로딩
+async function SystemStatusCard() {
+    const dbOk = await getDbStatus();
+
+    return (
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-3">시스템 상태</h3>
             <div className="space-y-2.5">
+                {/* DB 상태: 빠르게 표시 */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Database size={14} className="text-gray-400" />
@@ -61,26 +101,18 @@ async function SystemStatusCard() {
                         {dbOk ? "정상" : "오류"}
                     </span>
                 </div>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                        {backupWarn ? <CloudOff size={14} className={backupDanger ? "text-red-500" : "text-yellow-500"} /> : <span className="text-sm">☁️</span>}
-                        <span>마지막 백업</span>
+                {/* 백업 상태: 느린 외부 호출이므로 Suspense로 비동기 로딩 */}
+                <Suspense fallback={
+                    <div className="flex items-center justify-between animate-pulse">
+                        <div className="flex items-center gap-2 text-sm text-gray-400">
+                            <span className="text-sm">☁️</span>
+                            <span>백업 확인 중...</span>
+                        </div>
+                        <span className="bg-gray-200 h-5 w-16 rounded-full" />
                     </div>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${backupDanger ? "bg-red-100 text-red-700" : backupWarn ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                        {backupLabel()}
-                    </span>
-                </div>
-                {backupCount > 0 && (
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500">저장된 백업</span>
-                        <span className="text-xs text-gray-500">{backupCount}개</span>
-                    </div>
-                )}
-                {backupDanger && (
-                    <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
-                        7일 이상 백업이 없습니다. 사이드바에서 즉시 저장하세요.
-                    </p>
-                )}
+                }>
+                    <BackupStatusSection />
+                </Suspense>
             </div>
         </div>
     );

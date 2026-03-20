@@ -1,9 +1,9 @@
 # 📋 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 공개 페이지 전체 UI/UX 개편 설계 계획서 작성
-- **상태**: Phase 6 구현 완료 — tester 검증 대기
-- **현재 담당**: developer
+- **요청**: 공개 페이지 전체 UI/UX 개편
+- **상태**: ✅ Phase 0~6 전체 완료
+- **현재 담당**: pm
 - **마지막 세션**: 2026-03-20
 - **사용자 결정사항**:
   - 실시간 채팅: ❌ 개발 계획에서 제외
@@ -19,6 +19,119 @@
 
 ## 작업 계획 (planner)
 (아직 없음)
+
+## 구현 기록 (developer)
+
+### 카드 내부 텍스트 크기 전체 상향 (2026-03-21)
+
+구현한 기능: 사이트 전체 카드 안 텍스트 크기를 한 단계씩 상향 (학부모 모바일 가독성 개선)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/about/page.tsx | 교육이념 카드 설명 text-xs→text-sm, md:text-sm→md:text-base | 수정 |
+| src/app/about/CoachBioToggle.tsx | 코치 이력 text-sm→text-base, 더보기 버튼 text-xs→text-sm | 수정 |
+| src/app/programs/page.tsx | 프로그램 설명 text-sm→text-base, 단일가격 라벨 text-xs→text-sm | 수정 |
+| src/components/landing/ProgramHighlight.tsx | 프로그램 카드 설명 text-sm→text-base | 수정 |
+| src/components/landing/ProcessSteps.tsx | 단계 설명 text-sm→text-base, max-w 200→220px | 수정 |
+| src/components/landing/TestimonialCarousel.tsx | 후기 text-sm→text-base, 이름 text-sm→text-base, 정보 text-xs→text-sm, 모바일 안내 text-xs→text-sm | 수정 |
+| src/app/apply/ApplyPageClient.tsx | 미등록 안내 text-sm→text-base, FAQ 답변 text-base 명시 | 수정 |
+| src/app/notices/page.tsx | 내용 미리보기 text-sm→text-base, 날짜/메타 text-xs→text-sm | 수정 |
+| src/app/schedule/ScheduleClient.tsx | 수업명 text-sm→text-base, 메모 text-xs→text-sm, 코치명 text-[11px]→text-xs, 역할 text-[10px]→text-xs, 마감뱃지 text-[10px]→text-xs, 필터라벨 text-xs→text-sm | 수정 |
+
+tester 참고:
+- 테스트 방법: 모바일 뷰포트(375px)에서 각 페이지 카드 내 텍스트가 이전보다 한 단계 커졌는지 확인
+- 정상 동작: 카드 레이아웃이 깨지지 않으면서 텍스트가 더 잘 읽힘
+- 주의할 점: 시간표 카드(ScheduleClient)에서 코치 이름이 truncate로 잘리는지 확인 필요
+- 뱃지(Badge 컴포넌트) 안 텍스트는 변경하지 않음 (이미 적절한 크기)
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- 카드 밖의 히어로/섹션 제목은 변경하지 않음
+
+### admin 대시보드 쿼리 최적화 (2026-03-21)
+
+구현한 기능: getDashboardExtendedStats 함수의 DB 호출 17번 → 4번으로 통합
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/queries.ts | getDashboardExtendedStats: 매출 루프 6번+개별 2번 → GROUP BY 1번, 출석률 루프 6번+개별 1번 → GROUP BY 1번으로 통합 | 수정 |
+
+최적화 상세:
+- 쿼리 1: 6개월 매출 GROUP BY (이번달/지난달 매출도 같은 결과에서 추출)
+- 쿼리 2: 6개월 출석률 GROUP BY (이번달 출석률도 같은 결과에서 추출)
+- 쿼리 3: 미납 건수/금액 (기존 유지)
+- 쿼리 4: 프로그램별 원생 수 (기존 유지)
+- DB 호출: 17번 → 4번 (76% 감소)
+
+tester 참고:
+- 테스트 방법: /admin 대시보드 접속하여 매출 차트, 출석률 차트, 미납 정보, 프로그램별 원생 수가 정상 표시되는지 확인
+- 정상 동작: 기존과 동일한 데이터가 표시되어야 함 (수치 변화 없음)
+- 주의할 점: 데이터가 없는 월은 0으로 표시되어야 함
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- 반환 타입/구조 변경 없음 (호출 측 영향 없음)
+- $queryRawUnsafe 사용 유지 (PgBouncer 호환)
+- react.cache() 래퍼 유지
+
+### admin 페이지 revalidate: 30 캐시 적용 (2026-03-21)
+
+구현한 기능: admin 하위 모든 page.tsx에서 force-dynamic을 revalidate: 30으로 변경 (페이지 로딩 속도 개선)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/annual/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/attendance/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/classes/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/feedback/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/finance/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/gallery/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/notices/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/requests/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/students/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/students/[id]/page.tsx | force-dynamic → revalidate: 30 | 수정 |
+| src/app/admin/apply/page.tsx | revalidate: 30 추가 (기존에 캐시 설정 없었음) | 수정 |
+| src/app/admin/coaches/page.tsx | revalidate: 30 추가 (기존에 캐시 설정 없었음) | 수정 |
+| src/app/admin/programs/page.tsx | revalidate: 30 추가 (기존에 캐시 설정 없었음) | 수정 |
+| src/app/admin/settings/page.tsx | revalidate: 30 추가 (기존에 캐시 설정 없었음) | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin 하위 각 페이지 접속 시 정상 로딩되는지 확인
+- 정상 동작: 기존과 동일하게 데이터 표시, 단 두 번째 접속부터 체감 속도 향상
+- 주의할 점: 데이터 수정 후 페이지 새로고침 시 변경사항이 즉시 반영되는지 확인 (Server Action의 revalidatePath가 정상 작동하는지)
+- schedule 페이지는 기존에 이미 revalidate: 30이므로 변경하지 않음
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- API 라우트(src/app/api/) 변경 없음
+- layout.tsx 변경 없음
+- $queryRawUnsafe 변경 없음
+
+### admin 대시보드 백업 상태 비동기 로딩 분리 (2026-03-21)
+
+구현한 기능: SystemStatusCard에서 Supabase Storage 백업 조회를 Suspense로 분리하여 대시보드 렌더링 차단 해소
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/page.tsx | getSystemStatus를 getDbStatus(빠름)와 getBackupStatus(느림)로 분리, BackupStatusSection 서버 컴포넌트 신규 추가, SystemStatusCard 내부에서 백업 부분을 Suspense로 감쌈 | 수정 |
+
+변경 상세:
+- getSystemStatus() 함수를 getDbStatus()와 getBackupStatus() 두 함수로 분리
+- BackupStatusSection: 백업 정보만 비동기로 가져와 표시하는 서버 컴포넌트
+- SystemStatusCard: DB 상태는 즉시 표시, 백업 상태는 내부 Suspense로 스켈레톤 표시 후 비동기 로딩
+- 기존 외부 Suspense(405-412행)는 DB 상태 표시를 위해 유지, 내부에 백업용 Suspense 추가 (이중 Suspense)
+
+tester 참고:
+- 테스트 방법: /admin 대시보드 접속 시 시스템 상태 카드에서 DB 상태가 먼저 표시되고, 백업 상태가 나중에 로딩되는지 확인
+- 정상 동작: "데이터베이스: 정상"이 먼저 보이고, "백업 확인 중..." 스켈레톤이 잠시 보인 후 백업 정보가 나타남
+- 주의할 점: 백업이 없는 경우 "백업 없음" 빨간 뱃지, 7일 이상이면 경고 메시지 정상 표시되는지 확인
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- revalidate 값 변경 없음 (30 유지)
+- $queryRawUnsafe 변경 없음
+- 카드 외부 border는 border-gray-100 고정으로 변경 (기존에는 백업 상태에 따라 border-red/yellow로 변했으나, 백업이 비동기 로딩이므로 초기 상태에서 border가 깜빡이는 것을 방지)
 
 ## 설계 노트 (architect)
 
@@ -1525,3 +1638,76 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 | 2026-03-20 | developer | Phase 5 마이페이지+로그인 디자인 토큰 통일 (3개 파일 수정) | ✅ tsc 타입 체크 통과 |
 | 2026-03-20 | tester | Phase 5 테스트 (빌드/스타일/기능보존/회귀/서버 라우팅) | ✅ 33개 항목 전체 통과 |
 | 2026-03-20 | developer | Phase 6 마무리 및 최적화 (스켈레톤 로딩 UI 7개 + 폰트 확인) | ✅ tsc 타입 체크 통과 |
+| 2026-03-20 | developer | 파비콘 교체 (STIZ 로고 농구공 크롭 -> icon.png/icon-192/icon-512) | ✅ tsc 타입 체크 통과 |
+
+### 파비콘 교체 구현 기록
+
+구현한 기능: STIZ 로고(stiz-logo.png)에서 오렌지 농구공 부분만 크롭하여 파비콘 및 PWA 아이콘으로 교체
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/icon.png | 32x32 파비콘 (Next.js App Router 자동 인식) | 신규 |
+| public/icon-192.png | 192x192 PWA 아이콘 (manifest.json + apple-touch-icon) | 신규 |
+| public/icon-512.png | 512x512 PWA 스플래시 아이콘 (manifest.json) | 신규 |
+
+참고: 기존 src/app/favicon.ico는 그대로 유지. Next.js App Router에서 icon.png가 favicon.ico보다 우선하므로 자동 교체됨.
+
+tester 참고:
+- 테스트 방법: 브라우저에서 사이트 열고 탭 아이콘 확인, PWA 설치 시 아이콘 확인
+- 정상 동작: 오렌지 농구공(SD 로고 포함) 아이콘이 브라우저 탭에 표시됨
+- 기존 검은 삼각형 Next.js 기본 아이콘이 더 이상 표시되지 않아야 함
+
+#### 수정 이력
+| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
+|------|------|----------|----------|------|
+| 1차 | 2026-03-20 | 농구공 크롭 영역 타이트하게 재조정 + trim() 적용으로 투명 여백 제거. 농구공이 아이콘 영역 90% 이상 차지하도록 개선 | src/app/icon.png, public/icon-192.png, public/icon-512.png | PM 요청: 농구공이 너무 작게 보여서 아이콘 영역을 꽉 채우도록 재생성 |
+
+---
+
+### 구현 기록: 폰트 크기 증가 + 큰글씨 모드 토글 (2026-03-21)
+
+구현한 기능: 사이트 전반 기본 폰트 크기 증가 및 "큰글씨 모드" 토글 기능
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/globals.css | 모바일 기본 17px / 데스크탑 16px 설정, .text-large 클래스 CSS 규칙 추가 | 수정 |
+| src/components/PublicHeader.tsx | 큰글씨 모드 토글 버튼 3곳 추가 (유틸리티바, 모바일헤더, 사이드바) | 수정 |
+
+구현 상세:
+1. globals.css: html font-size를 모바일 17px / 데스크탑 16px으로 설정. .text-large 클래스 시 19px로 증가. 큰글씨 모드에서 .text-sm/.text-base/.text-lg/.text-xl을 한 단계씩 키움
+2. PublicHeader.tsx: isLargeFont 상태 추가. localStorage "fontSize" 키로 normal/large 저장. document.documentElement.classList로 html에 .text-large 토글
+3. 토글 버튼 위치: (1) 데스크탑 유틸리티바 전화번호 옆, (2) 모바일 헤더 햄버거 버튼 왼쪽, (3) 모바일 사이드바 하단
+4. 활성 상태 시각적 표시: 주황색 배경(활성) vs 회색 배경(비활성)
+
+tester 참고:
+- 테스트 방법: (1) 모바일 뷰에서 기본 글씨 크기가 이전보다 약간 커졌는지 확인 (2) "가" 버튼 클릭하여 큰글씨 모드 토글 (3) 새로고침 후에도 설정 유지되는지 확인
+- 정상 동작: 큰글씨 모드 켜면 전체 글씨가 눈에 띄게 커짐, 버튼이 주황색으로 변함
+- 주의할 입력: 큰글씨 모드에서 레이아웃이 깨지는 페이지가 없는지 전체 페이지 순회 확인 필요
+
+reviewer 참고:
+- !important 사용: Tailwind 유틸리티 클래스 우선순위를 덮어쓰기 위해 .text-large 하위 규칙에 !important 사용. Tailwind v4에서 @layer utilities 내의 클래스가 높은 우선순위를 가지므로 필요
+- tsc --noEmit 통과 확인됨
+
+### 관리자 페이지 속도 분석 (2026-03-21, debugger)
+
+분석 요청: /admin 페이지 반응속도가 느린 원인 파악 (코드 수정 없이 분석만)
+
+#### 주요 발견사항
+
+| 우선순위 | 원인 | 파일 | 영향도 |
+|---------|------|------|--------|
+| 1 | getDashboardExtendedStats에서 for루프 12회 직렬 DB 쿼리 | src/lib/queries.ts (686~807) | 대시보드 로드 800ms~2.4초 낭비 |
+| 2 | admin 하위 10개 페이지가 전부 force-dynamic (캐시 0초) | src/app/admin/*/page.tsx | 매 요청마다 DB 직접 조회 |
+| 3 | 대시보드 SystemStatusCard에서 Supabase Storage API 호출 | src/app/admin/page.tsx (10~28) | 500ms~2초 외부 API 지연 |
+| 4 | Server Action마다 revalidatePath 3~4개씩 호출 | src/app/actions/admin.ts | ISR 캐시 불필요 무효화 |
+| 5 | settings 페이지에서 ensureAcademySettingsColumns 14회 DDL | src/app/actions/admin.ts (11~39) | 콜드스타트 시 추가 지연 |
+| 6 | getStudents() LIMIT 없이 전체 조회 (3개 페이지에서 사용) | src/lib/queries.ts | 데이터 증가 시 악화 |
+| 7 | prisma.$queryRaw 사용 (PgBouncer 비호환) | src/app/admin/page.tsx 13행 | 간헐적 실패 가능 |
+
+#### 개선 제안 우선순위
+1. getDashboardExtendedStats의 6개월 루프를 GROUP BY 단일 쿼리로 통합
+2. 자주 안 바뀌는 admin 페이지에 revalidate: 30 적용
+3. SystemStatusCard를 클라이언트 사이드로 이동
+4. ensureAcademySettingsColumns를 마이그레이션으로 대체
+5. $queryRaw를 $queryRawUnsafe로 교체
+6. getStudents에 페이지네이션 추가

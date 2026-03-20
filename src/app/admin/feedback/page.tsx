@@ -1,8 +1,8 @@
 import { getAllFeedbacks, getStudents, getCoaches } from "@/lib/queries";
 import FeedbackManagementClient from "./FeedbackManagementClient";
 
-// 실시간 데이터가 필요하므로 매 요청마다 최신 데이터를 가져옴
-export const dynamic = "force-dynamic";
+// 30초 캐시: 아무도 수정 안 할 때 캐시 유지, Server Action 호출 시 즉시 무효화
+export const revalidate = 30;
 
 export default async function FeedbackPage() {
     // 피드백 목록, 원생 목록, 코치 목록을 동시에 가져옴 (병렬 처리로 속도 향상)

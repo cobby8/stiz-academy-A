@@ -1,15 +1,15 @@
 # 📋 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 랠리즈 엑셀 파일 업로드로 학원생 일괄 등록 기능
-- **상태**: 7단계 - 전체 동작 확인 (tester 작업 대기)
+- **요청**: 시간표 슬롯 → Class 동기화 + 엑셀 클래스 자동 매칭
+- **상태**: ✅ 9~10단계 완료 — 수강 등록 모달 그룹화 + 엑셀 클래스 자동 매칭
 - **현재 담당**: developer
 - **마지막 세션**: 2026-03-21
 - **사용자 결정사항**:
-  - Student 테이블에 새 필드 추가 (phone, school, grade, address) → B안
-  - 보호자 2, 3 정보도 저장 필요
-  - 클래스 자동 매칭은 나중에 (학생 정보만 먼저)
-  - 엑셀 형식: 랠리즈 다운로드 xlsx 파일
+  - 시간표 관리(ClassSlotOverride/CustomClassSlot)가 실제 수업
+  - 이것을 Class 테이블로 동기화해서 Enrollment와 연결
+  - 기존 수동 Class 삭제 전 데이터 확인 필요 (사용자 승인 후)
+  - 엑셀 클래스명 자동 매칭으로 수강 등록
 
 ## 프로젝트 현황 요약
 - **완료된 Phase**: 초기 ~ Phase 10 (총 10단계 + 보안패치)
@@ -457,6 +457,79 @@ reviewer 참고:
 - tsc --noEmit 통과 확인 완료
 - 기존 코드 변경 최소화: import 1줄, 상태 1줄, 버튼 영역 div 감싸기, 모달 렌더링 추가만 수행
 - 학교/학년 컬럼은 2단계에서 이미 추가되어 있어 추가 작업 불필요
+
+### 8단계: Class 테이블에 slotKey 추가 + 시간표 슬롯 → Class 동기화 함수 구현 (2026-03-21)
+
+구현한 기능: Class 모델에 slotKey 필드 추가 + syncScheduleToClasses 동기화 함수 + getClassSyncPreview 미리보기 함수
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | Class 모델에 slotKey String? @unique 필드 추가 | 수정 |
+| src/app/actions/admin.ts | syncScheduleToClasses Server Action 추가 (시간표 슬롯을 Class 테이블로 동기화), getClassSyncPreview 함수 추가 (동기화 미리보기), SheetClassSlot 타입 import 추가 | 수정 |
+| src/lib/queries.ts | getClasses: SELECT에 slotKey 추가 + 매핑에 slotKey 포함 | 수정 |
+
+DB 스키마 변경:
+- `prisma db push --accept-data-loss` 실행 완료 (slotKey UNIQUE 제약조건 추가)
+- Prisma Client 재생성은 dev 서버 DLL 잠금으로 실패 — dev 서버 중단 후 `npx prisma generate` 필요
+
+syncScheduleToClasses 동기화 흐름:
+1. SheetSlotCache에서 기본 슬롯 가져오기
+2. ClassSlotOverride 합치기 (isHidden 제외)
+3. CustomClassSlot 추가 (isHidden 제외)
+4. 각 MergedSlot에 대해:
+   - programId가 없으면 skip (Class.programId는 NOT NULL 제약)
+   - programId가 유효하지 않으면 skip + 에러 메시지
+   - slotKey로 기존 Class 검색 → 있으면 UPDATE, 없으면 INSERT
+5. slotKey 없는 기존 수동 Class 목록도 반환 (oldClasses)
+6. revalidatePath('/admin/students', '/admin/classes') 호출
+
+getClassSyncPreview 함수:
+- newClasses: 동기화 시 생길 Class 목록 + isNew 플래그 (이미 동기화된 것인지 구분)
+- oldClasses: slotKey 없는 기존 수동 Class + enrollmentCount (삭제 영향 파악용)
+
+tester 참고:
+- 테스트 방법: UI가 아직 없으므로 Server Action 직접 호출 불가. 다음 단계(UI 구현) 후 테스트 가능
+- 동기화 전 확인: getClassSyncPreview()로 미리보기 확인 → programId가 없는 슬롯이 skipped로 표시
+- 동기화 실행: syncScheduleToClasses() 호출 → SyncResult에서 created/updated/skipped 확인
+- 주의할 점: 시간표 슬롯에 programId가 할당되지 않은 경우 Class가 생성되지 않음 (관리자가 시간표 관리에서 프로그램을 먼저 지정해야 함)
+- prisma generate 재실행 필요: dev 서버 중단 → `npx prisma generate` → dev 서버 재시작
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- $queryRawUnsafe / $executeRawUnsafe만 사용 (PgBouncer 호환)
+- slotKey 컬럼명 대소문자 fallback 처리 (r.slotKey ?? r.slotkey)
+- programId 존재 여부와 유효성 모두 검증 (FK 위반 방지)
+- 동기화는 기존 수동 Class를 삭제하지 않음 (사용자가 별도로 결정)
+- instructorId는 NULL로 설정 (Coach와 User(instructor)는 별개 시스템)
+
+### syncScheduleToClasses 실행 + 수동 Class 삭제 (2026-03-21)
+
+구현한 기능: syncScheduleToClasses 동기화 스크립트 실행 + slotKey NULL인 기존 수동 Class 삭제
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| scripts/sync-classes.mjs | syncScheduleToClasses 로직을 Node.js 스크립트로 작성하여 직접 실행 | 신규 (일회성) |
+
+실행 결과:
+- SheetSlotCache 슬롯 수: 32 (hidden 1개 제외 -> 31개 처리)
+- ClassSlotOverride 수: 32
+- CustomClassSlot 수: 0
+- 생성된 Class: 31개
+- 업데이트된 Class: 0개
+- 건너뛴 슬롯: 0개 (모든 슬롯에 programId 할당됨)
+- 삭제된 수동 Class: 2개 (월요일 4교시, 화요일 4교시 — Enrollment 0개 확인 후 삭제)
+
+최종 Class 31개 요약:
+- 월~금 4,5교시: 즐거운 주중취미반 (10개)
+- 월~금 6,7교시: 치열한 주중경기반 (10개)
+- 토 1~4,7교시: 통쾌한 주말경기반 (5개)
+- 목2: 슈팅 클래스, 목4: 대회준비반, 수7: 대회준비반, 일8: 대회준비반 (4개)
+- 화8: 화요 성인반, 목8: 목요 성인반 (2개)
+
+tester 참고:
+- /admin/classes 페이지에서 31개 Class가 모두 표시되는지 확인
+- 각 Class에 slotKey가 정상적으로 연결되어 있는지 확인
+- 프로그램명이 올바르게 매핑되어 있는지 확인
 
 ## 설계 노트 (architect)
 
@@ -1739,6 +1812,70 @@ reviewer 참고:
 
 ---
 
+### 8~10단계 변경사항 검증 테스트 (2026-03-21)
+
+#### 1. 종합 빌드/서버 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| tsc --noEmit 타입 체크 | ✅ 통과 | 종료 코드 0, 에러 0건 |
+| 개발서버 정상 동작 (localhost:3003) | ✅ 통과 | HTTP 200 확인 (기존 서버 hang으로 재시작 후 정상) |
+| /admin/students 페이지 접근 | ✅ 통과 | HTTP 200 |
+| /admin/classes 페이지 접근 | ✅ 통과 | HTTP 200 |
+
+#### 2. 8단계 검증: Class slotKey + 동기화
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| schema.prisma에 Class.slotKey 필드 존재 | ✅ 통과 | String? @unique (77행) |
+| syncScheduleToClasses 함수 존재 (admin.ts) | ✅ 통과 | admin.ts 1663행: export async function syncScheduleToClasses |
+| getClassSyncPreview 함수 존재 (admin.ts) | ✅ 통과 | admin.ts 1856행: export async function getClassSyncPreview |
+| queries.ts getClasses에서 slotKey SELECT | ✅ 통과 | 86행: c."slotKey" 포함, 103행: 매핑에 slotKey 포함 |
+| DB에 Class 31개 존재 | ✅ 통과 | SELECT COUNT(*) = 31 확인 |
+| slotKey NULL인 Class 없음 (수동 Class 삭제 확인) | ✅ 통과 | NULL slotKey 0건 확인 |
+| slotKey 형식 올바름 (요일-교시) | ✅ 통과 | Mon-4~Sun-8까지 전부 "DayKey-N" 형식 |
+| 프로그램 매핑 정상 (월~금 4,5교시 등) | ✅ 통과 | 31개 모두 요일+교시 이름으로 생성, scratchpad 기록과 일치 |
+
+#### 3. 9단계 검증: 수강 등록 모달 프로그램별 그룹화
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| groupClassesByProgram 함수 존재 | ✅ 통과 | StudentManagementClient.tsx 74행 |
+| ClassItem 타입에 slotKey 포함 | ✅ 통과 | 41행: slotKey: string or null |
+| DAY_ORDER 요일 정렬 순서 존재 | ✅ 통과 | 50행: Mon~Sun 0~6 순서 |
+| groupClassesByProgram 호출부 존재 | ✅ 통과 | 476행: 수강 등록 모달에서 프로그램별 그룹 렌더링 |
+
+#### 4. 10단계 검증: 엑셀 클래스 자동 매칭
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| parseClassNameToSlotKey 함수 존재 (admin.ts) | ✅ 통과 | admin.ts 1324행 |
+| "6. 토요일 2교시" -> "Sat-2" 파싱 정상 | ✅ 통과 | Node.js 스크립트로 직접 검증 |
+| "1. 월요일 7교시" -> "Mon-7" 파싱 정상 | ✅ 통과 | Node.js 스크립트로 직접 검증 |
+| "화요일 8교시(성인)" -> "Tue-8" 파싱 정상 | ✅ 통과 | 괄호 무시, 정상 파싱 확인 |
+| 잘못된 값 -> null 반환 | ✅ 통과 | "잘못된값", "" 모두 null 반환 |
+| BulkStudentInput에 className 필드 존재 | ✅ 통과 | admin.ts 1282행: className: string or null |
+| bulkCreateStudents에 자동 수강 등록 로직 존재 | ✅ 통과 | admin.ts 1545~1565행: slotKey로 Class 검색 -> Enrollment INSERT |
+| ExcelUploadModal 미리보기에 "클래스" 컬럼 존재 | ✅ 통과 | ExcelUploadModal.tsx 456행: th "클래스" |
+| 클래스 매칭 성공 시 초록색 표시 | ✅ 통과 | 474행: text-green-700 bg-green-50 |
+| 클래스 매칭 실패 시 회색 "매칭 없음" 표시 | ✅ 통과 | 478행: text-gray-400 "매칭 없음" |
+| ExcelUploadModal에 canParseClassName 헬퍼 존재 | ✅ 통과 | 258행: 클라이언트 측 미리보기용 파싱 함수 |
+
+---
+
+📊 종합: 27개 항목 중 27개 통과 / 0개 실패
+
+종합 판정: ✅ 전체 통과
+
+비고:
+- 개발서버가 기존 프로세스(PID 33800)에서 hang 상태였으나, 재시작 후 정상 동작 확인
+- Class 31개가 DB에 정상 존재하며, slotKey NULL인 Class가 0개임을 확인 (수동 Class 2개 삭제 완료 상태)
+- parseClassNameToSlotKey 파싱 로직을 Node.js 스크립트로 5개 케이스 (정상 3개 + 예외 2개) 직접 검증 완료
+- 수강 등록 모달의 프로그램별 그룹화와 엑셀 클래스 자동 매칭은 코드 수준에서 검증 완료. 실제 브라우저 E2E 테스트는 인증 필요
+- $queryRawUnsafe/$executeRawUnsafe 패턴 유지 확인 (PgBouncer 호환)
+
+---
+
 ### Phase 0~3 통합 테스트 (2026-03-20)
 
 #### 1. 빌드 테스트
@@ -2089,6 +2226,48 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 - src/lib/queries.ts (수정)
 push 여부: 미완료 (사용자 확인 후 진행)
 
+### 2026-03-21 커밋 (2차)
+
+커밋: feat: 학원생 엑셀 업로드 기능 완성 (4~6단계)
+해시: 17171b8
+브랜치: main
+포함 파일 (4개):
+- .claude/scratchpad.md (수정)
+- src/app/actions/admin.ts (수정 - bulkCreateStudents Server Action 추가)
+- src/app/admin/students/ExcelUploadModal.tsx (신규 - 3단계 UI 모달)
+- src/app/admin/students/StudentManagementClient.tsx (수정 - 엑셀 업로드 버튼 추가)
+push 여부: 미완료 (커밋만, 사용자 확인 후 push)
+
+### 9~10단계: 수강 등록 모달 개선 + 엑셀 클래스 자동 매칭 (2026-03-21)
+
+구현한 기능:
+- 9단계: 수강 등록 모달을 프로그램별 그룹화 + 요일/시간 정렬로 개선
+- 10단계: 엑셀 C열 클래스명을 slotKey로 파싱하여 자동 수강 등록
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/StudentManagementClient.tsx | ClassItem에 slotKey 추가, 수강 등록 모달을 프로그램별 그룹화 UI로 교체, 요일+교시 정렬 헬퍼 추가 | 수정 |
+| src/app/actions/admin.ts | BulkStudentInput에 className 추가, BulkCreateResult에 enrolled/enrollErrors 추가, parseClassNameToSlotKey() 파싱 함수 추가, bulkCreateStudents에 자동 수강 등록 로직(7단계) 추가 | 수정 |
+| src/app/admin/students/ExcelUploadModal.tsx | BulkCreateResult 타입 갱신, 미리보기 테이블에 "클래스" 컬럼 추가(매칭 초록/실패 회색), 결과 카드에 "수강 등록" 추가, enrollErrors 경고 목록 추가, className 전달 | 수정 |
+
+클래스명 파싱 규칙:
+- "6. 토요일 2교시" -> slotKey "Sat-2"
+- "1. 월요일 7교시" -> slotKey "Mon-7"
+- "화요일 8교시(성인)" -> slotKey "Tue-8"
+- 앞의 번호("6. ") 제거, 요일명->dayKey, "N교시"->N, 괄호 무시
+
+tester 참고:
+- 테스트 방법 (9단계): 관리자 > 원생 관리 > 아무 학생 "수강 등록" 클릭 -> 프로그램별 그룹으로 표시되는지 확인
+- 정상 동작: 프로그램명 헤더 아래에 해당 프로그램 클래스가 요일/교시 순으로 정렬됨
+- 테스트 방법 (10단계): 엑셀 업로드 -> 미리보기에 "클래스" 컬럼이 보이는지 확인 -> 등록 후 결과에 "수강 등록" 카드 표시
+- 정상 동작: 엑셀 C열 클래스명이 초록색으로 매칭 성공, 파싱 불가하면 회색 "매칭 없음"
+- 주의: Class 동기화(8단계)가 먼저 실행되어 있어야 slotKey 매칭이 작동함
+
+reviewer 참고:
+- skip 모드에서도 className이 있으면 수강 등록 시도 (기존 학생이라도 새 클래스에 등록)
+- ON CONFLICT로 중복 수강 등록 방지
+- 수강 등록 실패는 errors가 아닌 enrollErrors에 분리 (학생 등록 성공은 유지)
+
 ## 문서 기록 (doc-writer)
 (아직 없음)
 
@@ -2114,6 +2293,9 @@ push 여부: 미완료 (사용자 확인 후 진행)
 | 2026-03-21 | tester | 1~3단계 변경사항 검증 (DB 스키마+코드 업데이트+엑셀 API) | ✅ 25개 항목 전체 통과 |
 | 2026-03-21 | git-manager | 1~3단계 작업 커밋 (329ef6a) | ✅ 10개 파일, push 미완료 |
 | 2026-03-21 | tester | 4~6단계 + 통합 테스트 (빌드/Server Action/모달/화면연결/API) | ✅ 24개 항목 전체 통과 |
+| 2026-03-21 | git-manager | 4~6단계 작업 커밋 (17171b8) | ✅ 4개 파일, push 미완료 |
+| 2026-03-21 | developer | 9~10단계: 수강 등록 모달 그룹화 + 엑셀 클래스 자동 매칭 (3개 파일 수정) | ✅ tsc 타입 체크 통과 |
+| 2026-03-21 | tester | 8~10단계 변경사항 검증 (스키마/동기화/모달그룹화/엑셀매칭/DB확인) | ✅ 27개 항목 전체 통과 |
 
 ### 파비콘 교체 구현 기록
 

@@ -38,12 +38,63 @@ type ClassItem = {
     dayOfWeek: string;
     startTime: string;
     endTime: string;
+    slotKey: string | null; // 시간표 슬롯 키 (예: "Mon-4")
     program: { id: string; name: string } | null;
 };
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
+
+// 요일 정렬 순서 (월~일)
+const DAY_ORDER: Record<string, number> = {
+    Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
+};
+
+// 요일 전체 라벨 (수강 등록 모달에서 사용)
+const DAY_FULL_LABELS: Record<string, string> = {
+    Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일",
+    Fri: "금요일", Sat: "토요일", Sun: "일요일",
+};
+
+/**
+ * slotKey에서 교시 번호를 추출하는 유틸 함수
+ * 예: "Mon-4" → 4, "Sat-2" → 2, "custom-xxx" → 999 (커스텀은 맨 뒤로)
+ */
+function getPeriodFromSlotKey(slotKey: string | null): number {
+    if (!slotKey) return 999;
+    const match = slotKey.match(/-(\d+)$/);
+    return match ? parseInt(match[1], 10) : 999;
+}
+
+/**
+ * Class 목록을 프로그램별로 그룹화하고, 각 그룹 안에서 요일+교시 순으로 정렬
+ * 반환: { programName: string, classes: ClassItem[] }[]
+ */
+function groupClassesByProgram(classes: ClassItem[]) {
+    // 프로그램별로 그룹핑
+    const groups = new Map<string, { programName: string; classes: ClassItem[] }>();
+
+    for (const c of classes) {
+        const key = c.program?.id ?? "__no_program__";
+        const name = c.program?.name ?? "미지정 프로그램";
+        if (!groups.has(key)) {
+            groups.set(key, { programName: name, classes: [] });
+        }
+        groups.get(key)!.classes.push(c);
+    }
+
+    // 각 그룹 안에서 요일 + 교시 순으로 정렬
+    for (const group of groups.values()) {
+        group.classes.sort((a, b) => {
+            const dayDiff = (DAY_ORDER[a.dayOfWeek] ?? 99) - (DAY_ORDER[b.dayOfWeek] ?? 99);
+            if (dayDiff !== 0) return dayDiff;
+            return getPeriodFromSlotKey(a.slotKey) - getPeriodFromSlotKey(b.slotKey);
+        });
+    }
+
+    return Array.from(groups.values());
+}
 
 function toDateStr(d: Date | string | null): string {
     if (!d) return "";
@@ -410,29 +461,51 @@ export default function StudentManagementClient({
                 }}
             />
 
-            {/* Enroll Modal */}
+            {/* 수강 등록 모달 — 프로그램별 그룹화 + 요일/시간 표시 */}
             {enrollModal && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                    <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
                         <h3 className="font-bold text-lg text-gray-900 mb-4">
                             수강 등록 — {students.find(s => s.id === enrollModal)?.name}
                         </h3>
                         {classes.length === 0 ? (
                             <p className="text-gray-500 text-sm">개설된 반이 없습니다. 먼저 반을 개설하세요.</p>
                         ) : (
-                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {classes.map((c) => (
-                                    <button
-                                        key={c.id}
-                                        onClick={() => handleEnroll(enrollModal!, c.id)}
-                                        disabled={busy}
-                                        className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-brand-orange-400 hover:bg-orange-50 transition disabled:opacity-50"
-                                    >
-                                        <div className="font-medium text-gray-900">{c.name}</div>
-                                        <div className="text-xs text-gray-500">
-                                            {c.program?.name} | {DAY_LABELS[c.dayOfWeek] || c.dayOfWeek}요일 {c.startTime}~{c.endTime}
+                            <div className="max-h-[60vh] overflow-y-auto space-y-4">
+                                {/* 프로그램별 그룹으로 표시 */}
+                                {groupClassesByProgram(classes).map((group) => (
+                                    <div key={group.programName}>
+                                        {/* 프로그램명 헤더 */}
+                                        <div className="bg-gray-100 rounded-lg px-3 py-1.5 mb-2">
+                                            <span className="text-sm font-bold text-gray-700">
+                                                {group.programName}
+                                            </span>
+                                            <span className="text-xs text-gray-400 ml-2">
+                                                ({group.classes.length}개 반)
+                                            </span>
                                         </div>
-                                    </button>
+                                        {/* 해당 프로그램의 클래스 목록 */}
+                                        <div className="space-y-1 pl-2">
+                                            {group.classes.map((c) => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => handleEnroll(enrollModal!, c.id)}
+                                                    disabled={busy}
+                                                    className="w-full text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-brand-orange-400 hover:bg-orange-50 transition disabled:opacity-50"
+                                                >
+                                                    {/* 요일 + 교시명 + 시간 표시 */}
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-medium text-gray-900 text-sm">
+                                                            {c.name}
+                                                        </span>
+                                                        <span className="text-xs text-gray-400">
+                                                            {c.startTime}~{c.endTime}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         )}

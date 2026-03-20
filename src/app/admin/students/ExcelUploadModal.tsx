@@ -47,6 +47,8 @@ type BulkCreateResult = {
     created: number;
     skipped: number;
     updated: number;
+    enrolled: number;       // 자동 수강 등록 성공 수
+    enrollErrors: string[]; // 수강 등록 실패/매칭 실패 목록
     errors: { rowNumber: number; name: string; reason: string }[];
 };
 
@@ -183,6 +185,7 @@ export default function ExcelUploadModal({
         try {
             // ParsedStudent를 BulkStudentInput 형태로 변환
             // bulkCreateStudents가 필요로 하는 필드만 매핑
+            // className도 전달하여 자동 수강 등록에 사용
             const input = parsedStudents.map((s) => ({
                 rowNumber: s.rowNumber,
                 name: s.name,
@@ -194,6 +197,7 @@ export default function ExcelUploadModal({
                 address: s.address,
                 enrollDate: s.enrollDate,
                 memo: s.memo,
+                className: s.className,
                 guardian1Relation: s.guardian1Relation,
                 guardian1Phone: s.guardian1Phone,
                 guardian2Relation: s.guardian2Relation,
@@ -239,6 +243,29 @@ export default function ExcelUploadModal({
         if (g === "MALE") return "남";
         if (g === "FEMALE") return "여";
         return "-";
+    }
+
+    // 요일 매핑 (클래스명 파싱 미리보기에 사용)
+    const dayNameToKey: Record<string, string> = {
+        "월요일": "Mon", "화요일": "Tue", "수요일": "Wed", "목요일": "Thu",
+        "금요일": "Fri", "토요일": "Sat", "일요일": "Sun",
+    };
+
+    /**
+     * 클래스명에서 slotKey를 파싱할 수 있는지 미리 확인
+     * 성공하면 slotKey 반환, 실패하면 null
+     */
+    function canParseClassName(className: string | null): string | null {
+        if (!className) return null;
+        const cleaned = className.replace(/^\d+\.\s*/, "").trim();
+        let dayKey: string | null = null;
+        for (const [korDay, key] of Object.entries(dayNameToKey)) {
+            if (cleaned.includes(korDay)) { dayKey = key; break; }
+        }
+        if (!dayKey) return null;
+        const periodMatch = cleaned.match(/(\d+)교시/);
+        if (!periodMatch) return null;
+        return `${dayKey}-${periodMatch[1]}`;
     }
 
     // 정상 학생 수 (에러 제외)
@@ -426,6 +453,7 @@ export default function ExcelUploadModal({
                                             <tr>
                                                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">행</th>
                                                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">클래스</th>
                                                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">생년월일</th>
                                                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">성별</th>
                                                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">학교</th>
@@ -439,6 +467,22 @@ export default function ExcelUploadModal({
                                                 <tr key={i} className="hover:bg-gray-50">
                                                     <td className="px-3 py-2 text-gray-400">{s.rowNumber}</td>
                                                     <td className="px-3 py-2 font-medium text-gray-900">{s.name}</td>
+                                                    {/* 클래스 매칭 상태: 매칭 성공=초록, 실패=회색 */}
+                                                    <td className="px-3 py-2">
+                                                        {s.className ? (
+                                                            canParseClassName(s.className) ? (
+                                                                <span className="text-xs text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
+                                                                    {s.className.replace(/^\d+\.\s*/, "")}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400">
+                                                                    매칭 없음
+                                                                </span>
+                                                            )
+                                                        ) : (
+                                                            <span className="text-xs text-gray-300">-</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-3 py-2 text-gray-600">{formatDate(s.birthDate)}</td>
                                                     <td className="px-3 py-2 text-gray-600">{formatGender(s.gender)}</td>
                                                     <td className="px-3 py-2 text-gray-600">{s.school || "-"}</td>
@@ -471,7 +515,7 @@ export default function ExcelUploadModal({
                     {step === "result" && result && (
                         <div className="space-y-4">
                             {/* 결과 요약 카드 */}
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 <div className="bg-green-50 rounded-lg p-4 text-center">
                                     <div className="text-2xl font-bold text-green-700">{result.created}</div>
                                     <div className="text-sm text-green-600">신규 등록</div>
@@ -484,11 +528,32 @@ export default function ExcelUploadModal({
                                         {duplicateMode === "skip" ? "건너뛰기" : "덮어쓰기"}
                                     </div>
                                 </div>
+                                {/* 자동 수강 등록 결과 카드 */}
+                                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                                    <div className="text-2xl font-bold text-blue-700">{result.enrolled}</div>
+                                    <div className="text-sm text-blue-600">수강 등록</div>
+                                </div>
                                 <div className="bg-red-50 rounded-lg p-4 text-center">
                                     <div className="text-2xl font-bold text-red-700">{result.errors.length}</div>
                                     <div className="text-sm text-red-600">오류</div>
                                 </div>
                             </div>
+
+                            {/* 수강 등록 매칭 실패 목록 (있을 때만) */}
+                            {result.enrollErrors && result.enrollErrors.length > 0 && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                    <p className="text-sm font-medium text-yellow-700 mb-2">
+                                        수강 등록 경고 ({result.enrollErrors.length}건)
+                                    </p>
+                                    <div className="max-h-32 overflow-y-auto">
+                                        <ul className="text-xs text-yellow-600 space-y-0.5">
+                                            {result.enrollErrors.map((msg, i) => (
+                                                <li key={i}>{msg}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* 오류 상세 목록 (있을 때만) */}
                             {result.errors.length > 0 && (

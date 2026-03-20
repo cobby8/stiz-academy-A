@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/pushNotification";
+import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
@@ -1278,6 +1279,7 @@ type BulkStudentInput = {
     address: string | null;      // 주소
     enrollDate: string | null;   // 입회일자 ISO 문자열
     memo: string | null;         // 메모 (관리용이름 + 원본 메모 조합)
+    className: string | null;    // 엑셀 C열 클래스명 (예: "6. 토요일 2교시") — 자동 매칭용
     // 보호자1 정보 → User 테이블에 저장
     guardian1Relation: string | null; // 보호자1 관계 (예: "아버지")
     guardian1Phone: string | null;    // 보호자1 전화번호
@@ -1293,8 +1295,53 @@ type BulkCreateResult = {
     created: number;     // 새로 등록된 학생 수
     skipped: number;     // 중복으로 건너뛴 학생 수
     updated: number;     // 덮어쓰기로 업데이트된 학생 수
+    enrolled: number;    // 자동 수강 등록 성공 수
+    enrollErrors: string[];  // 수강 등록 실패/매칭 실패 목록
     errors: { rowNumber: number; name: string; reason: string }[];  // 실패한 행 목록
 };
+
+/**
+ * 엑셀 클래스명 → slotKey 파싱 함수
+ *
+ * 엑셀 C열 클래스명 형식 예시:
+ * - "6. 토요일 2교시" → "Sat-2"
+ * - "1. 월요일 7교시" → "Mon-7"
+ * - "화요일 8교시(성인)" → "Tue-8"
+ * - "목요일 4교시(대표반)" → "Thu-4"
+ *
+ * 파싱 규칙:
+ * 1. 앞의 번호("6. ") 제거
+ * 2. 요일명 추출 → dayKey (Mon/Tue/...)
+ * 3. "N교시" → N
+ * 4. 괄호 안의 내용은 무시
+ * 5. 결과: "{dayKey}-{period}"
+ */
+const DAY_NAME_TO_KEY: Record<string, string> = {
+    "월요일": "Mon", "화요일": "Tue", "수요일": "Wed", "목요일": "Thu",
+    "금요일": "Fri", "토요일": "Sat", "일요일": "Sun",
+};
+
+function parseClassNameToSlotKey(className: string): string | null {
+    // 앞의 번호 제거 (예: "6. " → "")
+    const cleaned = className.replace(/^\d+\.\s*/, "").trim();
+
+    // 요일명 추출
+    let dayKey: string | null = null;
+    for (const [korDay, key] of Object.entries(DAY_NAME_TO_KEY)) {
+        if (cleaned.includes(korDay)) {
+            dayKey = key;
+            break;
+        }
+    }
+    if (!dayKey) return null;
+
+    // 교시 추출: "N교시" 패턴에서 N을 가져옴
+    const periodMatch = cleaned.match(/(\d+)교시/);
+    if (!periodMatch) return null;
+
+    const period = parseInt(periodMatch[1], 10);
+    return `${dayKey}-${period}`;
+}
 
 /**
  * 엑셀에서 파싱된 학생 데이터를 일괄 등록하는 Server Action
@@ -1305,6 +1352,7 @@ type BulkCreateResult = {
  * 3. 보호자1: User 테이블에서 전화번호로 검색, 없으면 새로 생성
  * 4. Student INSERT (또는 UPDATE)
  * 5. 보호자2,3: Guardian 테이블에 INSERT
+ * 6. className이 있으면: slotKey로 파싱 → Class 검색 → 자동 수강 등록
  *
  * PgBouncer 호환을 위해 $queryRawUnsafe / $executeRawUnsafe만 사용
  * 트랜잭션 사용 불가이므로, 건별 INSERT + 실패 목록 반환 방식
@@ -1317,6 +1365,8 @@ export async function bulkCreateStudents(
         created: 0,
         skipped: 0,
         updated: 0,
+        enrolled: 0,
+        enrollErrors: [],
         errors: [],
     };
 
@@ -1340,62 +1390,67 @@ export async function bulkCreateStudents(
             }
 
             // ── 2. 중복 학생 처리 ──
+            // finalStudentId: 수강 등록에 사용할 학생 ID (신규든 기존이든 여기에 저장)
+            let finalStudentId: string | null = null;
+
             if (existingStudentId) {
                 if (duplicateMode === "skip") {
-                    // 건너뛰기: 카운트만 올리고 다음 학생으로
+                    // 건너뛰기: 학생 정보는 안 건드리고, 수강 등록만 시도
                     result.skipped++;
-                    continue;
-                }
-
-                // 덮어쓰기 모드: 기존 학생 정보를 엑셀 데이터로 업데이트
-                await prisma.$executeRawUnsafe(
-                    `UPDATE "Student" SET
-                        gender = $1, phone = $2, school = $3, grade = $4,
-                        address = $5, "enrollDate" = $6::timestamp, memo = $7,
-                        "updatedAt" = NOW()
-                     WHERE id = $8`,
-                    student.gender || null,
-                    student.phone || null,
-                    student.school || null,
-                    student.grade || null,
-                    student.address || null,
-                    student.enrollDate || null,
-                    student.memo || null,
-                    existingStudentId,
-                );
-
-                // 기존 Guardian 삭제 후 재등록 (보호자 정보 갱신)
-                await prisma.$executeRawUnsafe(
-                    `DELETE FROM "Guardian" WHERE "studentId" = $1`,
-                    existingStudentId,
-                );
-
-                // 보호자2,3 Guardian 테이블에 INSERT
-                await insertGuardians(existingStudentId, student);
-
-                // 보호자1 정보도 업데이트 (User 테이블)
-                if (student.guardian1Phone) {
-                    const parentRows = await prisma.$queryRawUnsafe<any[]>(
-                        `SELECT "parentId" FROM "Student" WHERE id = $1`,
+                    finalStudentId = existingStudentId;
+                } else {
+                    // 덮어쓰기 모드: 기존 학생 정보를 엑셀 데이터로 업데이트
+                    await prisma.$executeRawUnsafe(
+                        `UPDATE "Student" SET
+                            gender = $1, phone = $2, school = $3, grade = $4,
+                            address = $5, "enrollDate" = $6::timestamp, memo = $7,
+                            "updatedAt" = NOW()
+                         WHERE id = $8`,
+                        student.gender || null,
+                        student.phone || null,
+                        student.school || null,
+                        student.grade || null,
+                        student.address || null,
+                        student.enrollDate || null,
+                        student.memo || null,
                         existingStudentId,
                     );
-                    const parentId = parentRows[0]?.parentId ?? parentRows[0]?.parentid;
-                    if (parentId) {
-                        await prisma.$executeRawUnsafe(
-                            `UPDATE "User" SET
-                                name = $1, phone = $2, "updatedAt" = NOW()
-                             WHERE id = $3`,
-                            student.guardian1Relation || "보호자",
-                            student.guardian1Phone,
-                            parentId,
-                        );
-                    }
-                }
 
-                result.updated++;
-                continue;
+                    // 기존 Guardian 삭제 후 재등록 (보호자 정보 갱신)
+                    await prisma.$executeRawUnsafe(
+                        `DELETE FROM "Guardian" WHERE "studentId" = $1`,
+                        existingStudentId,
+                    );
+
+                    // 보호자2,3 Guardian 테이블에 INSERT
+                    await insertGuardians(existingStudentId, student);
+
+                    // 보호자1 정보도 업데이트 (User 테이블)
+                    if (student.guardian1Phone) {
+                        const parentRows = await prisma.$queryRawUnsafe<any[]>(
+                            `SELECT "parentId" FROM "Student" WHERE id = $1`,
+                            existingStudentId,
+                        );
+                        const parentId = parentRows[0]?.parentId ?? parentRows[0]?.parentid;
+                        if (parentId) {
+                            await prisma.$executeRawUnsafe(
+                                `UPDATE "User" SET
+                                    name = $1, phone = $2, "updatedAt" = NOW()
+                                 WHERE id = $3`,
+                                student.guardian1Relation || "보호자",
+                                student.guardian1Phone,
+                                parentId,
+                            );
+                        }
+                    }
+
+                    result.updated++;
+                    finalStudentId = existingStudentId;
+                }
             }
 
+            // 기존 학생이 처리된 경우 (skip 또는 overwrite) 신규 등록은 건너뜀
+            if (!finalStudentId) {
             // ── 3. 신규 학생: 보호자1 User 생성 또는 조회 ──
             let parentId: string;
 
@@ -1482,6 +1537,49 @@ export async function bulkCreateStudents(
             await insertGuardians(newStudentId, student);
 
             result.created++;
+            finalStudentId = newStudentId;
+            }
+
+            // ── 7. 엑셀 클래스명으로 자동 수강 등록 ──
+            // className이 있고, 학생 ID가 확보된 경우에만 실행
+            if (student.className && finalStudentId) {
+                try {
+                    const slotKey = parseClassNameToSlotKey(student.className);
+                    if (slotKey) {
+                        // slotKey로 Class 검색
+                        const classRows = await prisma.$queryRawUnsafe<any[]>(
+                            `SELECT id FROM "Class" WHERE "slotKey" = $1 LIMIT 1`,
+                            slotKey,
+                        );
+                        if (classRows.length > 0) {
+                            // Class를 찾았으면 수강 등록 (ON CONFLICT로 중복 등록 방지)
+                            await prisma.$executeRawUnsafe(
+                                `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
+                                 VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
+                                 ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()`,
+                                finalStudentId,
+                                classRows[0].id,
+                            );
+                            result.enrolled++;
+                        } else {
+                            // Class를 못 찾으면 경고 로그에 추가 (에러는 아님)
+                            result.enrollErrors.push(
+                                `${student.name} (행 ${student.rowNumber}): "${student.className}" → slotKey "${slotKey}" 매칭 Class 없음`
+                            );
+                        }
+                    } else {
+                        // slotKey 파싱 실패
+                        result.enrollErrors.push(
+                            `${student.name} (행 ${student.rowNumber}): "${student.className}" 클래스명 파싱 실패`
+                        );
+                    }
+                } catch (enrollErr) {
+                    // 수강 등록 오류: 학생 등록은 성공했으므로 경고만 기록
+                    result.enrollErrors.push(
+                        `${student.name} (행 ${student.rowNumber}): 수강 등록 오류 — ${enrollErr instanceof Error ? enrollErr.message : "알 수 없는 오류"}`
+                    );
+                }
+            }
         } catch (e) {
             // 건별 오류: 해당 학생만 실패 기록하고 나머지 계속 진행
             console.error(`[bulkCreate] 행 ${student.rowNumber} (${student.name}) 실패:`, e);
@@ -1528,6 +1626,346 @@ async function insertGuardians(studentId: string, student: BulkStudentInput) {
             student.guardian3Relation || "보호자3",
             student.guardian3Phone || null,
         );
+    }
+}
+
+// ── 시간표 슬롯 → Class 동기화 ────────────────────────────────────────────────
+
+// 요일 키를 한글 라벨로 변환하는 매핑
+const DAY_KEY_TO_LABEL: Record<string, string> = {
+    Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일",
+    Fri: "금요일", Sat: "토요일", Sun: "일요일",
+};
+
+/**
+ * 시간표 슬롯(SheetSlotCache + Override + CustomSlot)을 Class 테이블로 동기화하는 Server Action
+ *
+ * 처리 흐름:
+ * 1. SheetSlotCache에서 기본 슬롯 가져오기
+ * 2. ClassSlotOverride로 오버라이드 적용 (isHidden 제외)
+ * 3. CustomClassSlot 추가
+ * 4. 각 MergedSlot에 대해 Class 테이블에 UPSERT (slotKey 기준)
+ * 5. programId가 없는 슬롯은 건너뜀 (Class.programId는 NOT NULL)
+ *
+ * $queryRawUnsafe / $executeRawUnsafe만 사용 (PgBouncer 트랜잭션 모드 호환)
+ */
+type SyncResult = {
+    success: boolean;
+    created: number;      // 새로 만든 Class 수
+    updated: number;      // 업데이트한 Class 수
+    skipped: number;      // programId 없어서 건너뛴 수
+    totalSlots: number;   // 전체 슬롯 수
+    classes: { slotKey: string; name: string; dayOfWeek: string; programName: string }[];  // 동기화된 Class 목록
+    oldClasses: { id: string; name: string; slotKey: string | null }[];  // slotKey 없는 기존 수동 Class
+    errors: string[];
+};
+
+export async function syncScheduleToClasses(): Promise<SyncResult> {
+    const result: SyncResult = {
+        success: false,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        totalSlots: 0,
+        classes: [],
+        oldClasses: [],
+        errors: [],
+    };
+
+    try {
+        // ── 1. 시간표 데이터 수집 ──
+
+        // SheetSlotCache에서 기본 슬롯 목록 가져오기
+        const cacheRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "slotsJson" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`
+        );
+        const rawSlots: SheetClassSlot[] = cacheRows[0]
+            ? JSON.parse(cacheRows[0].slotsJson ?? cacheRows[0].slotsjson ?? "[]")
+            : [];
+
+        // ClassSlotOverride 목록 가져오기
+        const overrides = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT cso.id, cso."slotKey", cso.label, cso.note, cso."isHidden", cso.capacity,
+                    cso."startTimeOverride", cso."endTimeOverride", cso."coachId", cso."programId"
+             FROM "ClassSlotOverride" cso`
+        );
+        const overrideMap = Object.fromEntries(
+            overrides.map((o: any) => [o.slotKey ?? o.slotkey, o])
+        );
+
+        // CustomClassSlot 목록 가져오기
+        const customSlots = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT cs.id, cs."dayKey", cs."startTime", cs."endTime", cs.label,
+                    cs."gradeRange", cs.enrolled, cs.capacity, cs.note, cs."isHidden",
+                    cs."coachId", cs."programId"
+             FROM "CustomClassSlot" cs`
+        );
+
+        // ── 2. MergedSlot 생성 (시간표 페이지와 동일한 로직) ──
+
+        // 각 MergedSlot의 핵심 정보만 담는 내부 타입
+        type SlotInfo = {
+            slotKey: string;
+            dayKey: string;
+            label: string;
+            startTime: string;
+            endTime: string;
+            capacity: number;
+            programId: string | null;
+        };
+
+        const mergedSlots: SlotInfo[] = [];
+
+        // SheetSlotCache 기본 슬롯에 Override 적용
+        for (const s of rawSlots) {
+            const ov = overrideMap[s.slotKey];
+            // isHidden인 슬롯은 제외
+            if (ov && (ov.isHidden ?? ov.ishidden)) continue;
+
+            mergedSlots.push({
+                slotKey: s.slotKey,
+                dayKey: s.dayKey,
+                label: ov?.label || `${DAY_KEY_TO_LABEL[s.dayKey] || s.dayKey} ${s.period}교시`,
+                startTime: (ov?.startTimeOverride ?? ov?.starttimeoverride) || s.startTime,
+                endTime: (ov?.endTimeOverride ?? ov?.endtimeoverride) || s.endTime,
+                capacity: Number(ov?.capacity ?? 12),
+                programId: (ov?.programId ?? ov?.programid) || null,
+            });
+        }
+
+        // CustomClassSlot 추가 (isHidden 제외)
+        for (const cs of customSlots) {
+            if (cs.isHidden ?? cs.ishidden) continue;
+            mergedSlots.push({
+                slotKey: `custom-${cs.id}`,
+                dayKey: cs.dayKey ?? cs.daykey,
+                label: cs.label,
+                startTime: cs.startTime ?? cs.starttime,
+                endTime: cs.endTime ?? cs.endtime,
+                capacity: Number(cs.capacity ?? 12),
+                programId: (cs.programId ?? cs.programid) || null,
+            });
+        }
+
+        result.totalSlots = mergedSlots.length;
+
+        // ── 3. Class 테이블과 동기화 ──
+
+        // 프로그램 이름 조회용 캐시 (결과에 programName 포함하기 위해)
+        const programs = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name FROM "Program"`
+        );
+        const programNameMap = Object.fromEntries(
+            programs.map((p: any) => [p.id, p.name])
+        );
+
+        for (const slot of mergedSlots) {
+            try {
+                // programId가 없는 슬롯은 skip (Class.programId는 NOT NULL)
+                if (!slot.programId) {
+                    result.skipped++;
+                    continue;
+                }
+
+                // programId가 유효한지 확인 (FK 제약 위반 방지)
+                if (!programNameMap[slot.programId]) {
+                    result.skipped++;
+                    result.errors.push(`슬롯 "${slot.label}" (${slot.slotKey}): 프로그램 ID "${slot.programId}"가 존재하지 않음`);
+                    continue;
+                }
+
+                // slotKey로 기존 Class 검색
+                const existing = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT id FROM "Class" WHERE "slotKey" = $1 LIMIT 1`,
+                    slot.slotKey,
+                );
+
+                if (existing.length > 0) {
+                    // 기존 Class가 있으면 UPDATE
+                    await prisma.$executeRawUnsafe(
+                        `UPDATE "Class" SET
+                            name = $1, "dayOfWeek" = $2, "startTime" = $3, "endTime" = $4,
+                            capacity = $5, "programId" = $6, "updatedAt" = NOW()
+                         WHERE "slotKey" = $7`,
+                        slot.label,
+                        slot.dayKey,
+                        slot.startTime,
+                        slot.endTime,
+                        slot.capacity,
+                        slot.programId,
+                        slot.slotKey,
+                    );
+                    result.updated++;
+                } else {
+                    // 새 Class INSERT
+                    await prisma.$executeRawUnsafe(
+                        `INSERT INTO "Class" (id, "programId", name, "dayOfWeek", "startTime", "endTime", capacity, "slotKey", "createdAt", "updatedAt")
+                         VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+                        slot.programId,
+                        slot.label,
+                        slot.dayKey,
+                        slot.startTime,
+                        slot.endTime,
+                        slot.capacity,
+                        slot.slotKey,
+                    );
+                    result.created++;
+                }
+
+                result.classes.push({
+                    slotKey: slot.slotKey,
+                    name: slot.label,
+                    dayOfWeek: slot.dayKey,
+                    programName: programNameMap[slot.programId] || "알 수 없음",
+                });
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                result.errors.push(`슬롯 "${slot.label}" (${slot.slotKey}) 동기화 실패: ${msg}`);
+            }
+        }
+
+        // ── 4. slotKey가 없는 기존 수동 Class 목록 조회 ──
+        const oldClasses = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, "slotKey" FROM "Class" WHERE "slotKey" IS NULL`
+        );
+        result.oldClasses = oldClasses.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            slotKey: c.slotKey ?? c.slotkey ?? null,
+        }));
+
+        result.success = true;
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        result.errors.push(`동기화 전체 오류: ${msg}`);
+    }
+
+    // ── 5. 캐시 무효화 ──
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/classes");
+
+    return result;
+}
+
+/**
+ * 동기화 미리보기: 실행 전에 어떤 Class가 생기고, 어떤 기존 Class가 있는지 확인
+ *
+ * - newClasses: 동기화하면 새로 생길/업데이트될 Class 목록
+ * - oldClasses: slotKey 없는 기존 수동 Class + 각각의 Enrollment 수
+ */
+export async function getClassSyncPreview(): Promise<{
+    newClasses: { slotKey: string; name: string; dayOfWeek: string; startTime: string; endTime: string; programId: string | null; programName: string | null; isNew: boolean }[];
+    oldClasses: { id: string; name: string; dayOfWeek: string; enrollmentCount: number }[];
+}> {
+    try {
+        // 시간표 데이터 수집 (syncScheduleToClasses와 동일 로직)
+        const cacheRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "slotsJson" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`
+        );
+        const rawSlots: SheetClassSlot[] = cacheRows[0]
+            ? JSON.parse(cacheRows[0].slotsJson ?? cacheRows[0].slotsjson ?? "[]")
+            : [];
+
+        const overrides = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT cso."slotKey", cso.label, cso."isHidden", cso.capacity,
+                    cso."startTimeOverride", cso."endTimeOverride", cso."programId"
+             FROM "ClassSlotOverride" cso`
+        );
+        const overrideMap = Object.fromEntries(
+            overrides.map((o: any) => [o.slotKey ?? o.slotkey, o])
+        );
+
+        const customSlots = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT cs.id, cs."dayKey", cs."startTime", cs."endTime", cs.label,
+                    cs."isHidden", cs.capacity, cs."programId"
+             FROM "CustomClassSlot" cs`
+        );
+
+        // 프로그램 이름 매핑
+        const programs = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name FROM "Program"`
+        );
+        const programNameMap = Object.fromEntries(
+            programs.map((p: any) => [p.id, p.name])
+        );
+
+        // 기존 Class의 slotKey 목록 조회 (이미 동기화된 것 확인용)
+        const existingClasses = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "slotKey" FROM "Class" WHERE "slotKey" IS NOT NULL`
+        );
+        const existingSlotKeys = new Set(
+            existingClasses.map((c: any) => c.slotKey ?? c.slotkey)
+        );
+
+        // MergedSlot 생성
+        type PreviewSlot = {
+            slotKey: string;
+            name: string;
+            dayOfWeek: string;
+            startTime: string;
+            endTime: string;
+            programId: string | null;
+            programName: string | null;
+            isNew: boolean;
+        };
+
+        const newClasses: PreviewSlot[] = [];
+
+        for (const s of rawSlots) {
+            const ov = overrideMap[s.slotKey];
+            if (ov && (ov.isHidden ?? ov.ishidden)) continue;
+
+            const programId = (ov?.programId ?? ov?.programid) || null;
+            newClasses.push({
+                slotKey: s.slotKey,
+                name: ov?.label || `${DAY_KEY_TO_LABEL[s.dayKey] || s.dayKey} ${s.period}교시`,
+                dayOfWeek: s.dayKey,
+                startTime: (ov?.startTimeOverride ?? ov?.starttimeoverride) || s.startTime,
+                endTime: (ov?.endTimeOverride ?? ov?.endtimeoverride) || s.endTime,
+                programId,
+                programName: programId ? (programNameMap[programId] || null) : null,
+                isNew: !existingSlotKeys.has(s.slotKey),  // 이미 동기화된 것이면 false
+            });
+        }
+
+        for (const cs of customSlots) {
+            if (cs.isHidden ?? cs.ishidden) continue;
+            const slotKey = `custom-${cs.id}`;
+            const programId = (cs.programId ?? cs.programid) || null;
+            newClasses.push({
+                slotKey,
+                name: cs.label,
+                dayOfWeek: cs.dayKey ?? cs.daykey,
+                startTime: cs.startTime ?? cs.starttime,
+                endTime: cs.endTime ?? cs.endtime,
+                programId,
+                programName: programId ? (programNameMap[programId] || null) : null,
+                isNew: !existingSlotKeys.has(slotKey),
+            });
+        }
+
+        // 기존 수동 Class (slotKey 없음) + Enrollment 수
+        const oldClasses = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT c.id, c.name, c."dayOfWeek",
+                    COUNT(e.id)::int AS enrollment_count
+             FROM "Class" c
+             LEFT JOIN "Enrollment" e ON c.id = e."classId"
+             WHERE c."slotKey" IS NULL
+             GROUP BY c.id, c.name, c."dayOfWeek"`
+        );
+
+        return {
+            newClasses,
+            oldClasses: oldClasses.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                dayOfWeek: c.dayOfWeek ?? c.dayofweek,
+                enrollmentCount: Number(c.enrollment_count ?? 0),
+            })),
+        };
+    } catch (e) {
+        console.error("[getClassSyncPreview] failed:", e);
+        return { newClasses: [], oldClasses: [] };
     }
 }
 

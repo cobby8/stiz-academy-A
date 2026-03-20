@@ -60,7 +60,17 @@
       "Bash(cmd /c \"taskkill /F /IM node.exe 2>nul & timeout /t 3 & npx prisma generate\")",
       "Bash(del /f \"C:\\\\0.programing\\\\stiz-academy-A\\\\node_modules\\\\.prisma\\\\client\\\\query_engine-windows.dll.node\")",
       "Bash(cmd /c \"taskkill /F /PID 67888 2>nul & taskkill /F /IM node.exe 2>nul\")",
-      "Bash(echo \"EXIT_CODE=$?\")"
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(find /c/0.programing/stiz-academy-A/src -type f -name *nroll*)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003 -UseBasicParsing -TimeoutSec 10\\).StatusCode\" 2>&1)",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 3003 -ErrorAction SilentlyContinue | Select-Object LocalPort,State,OwningProcess\" 2>&1)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003 -UseBasicParsing -TimeoutSec 30\\).StatusCode\" 2>&1)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://127.0.0.1:3003 -UseBasicParsing -TimeoutSec 30\\).StatusCode\" 2>&1)",
+      "Bash(powershell -Command \"Get-Process -Id 33800 | Select-Object ProcessName,Id,StartTime\" 2>&1)",
+      "Bash(powershell -Command \"Stop-Process -Id 33800 -Force\" 2>&1)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003 -UseBasicParsing -TimeoutSec 30\\).StatusCode\")",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003/admin/students -UseBasicParsing -TimeoutSec 30\\).StatusCode\" 2>&1)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri http://localhost:3003/admin/classes -UseBasicParsing -TimeoutSec 30\\).StatusCode\" 2>&1)"
     ]
   }
 }

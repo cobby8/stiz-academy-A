@@ -83,7 +83,7 @@ export const getClasses = cache(async () => {
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT c.id, c."programId", c."instructorId", c.name, c."dayOfWeek",
-                    c."startTime", c."endTime", c.location, c.capacity,
+                    c."startTime", c."endTime", c.location, c.capacity, c."slotKey",
                     c."createdAt", c."updatedAt",
                     p.id AS p_id, p.name AS p_name
              FROM "Class" c
@@ -100,6 +100,7 @@ export const getClasses = cache(async () => {
             endTime: r.endTime ?? r.endtime ?? "",
             location: r.location ?? null,
             capacity: Number(r.capacity ?? 0),
+            slotKey: r.slotKey ?? r.slotkey ?? null,
             createdAt: r.createdAt ?? r.createdat,
             updatedAt: r.updatedAt ?? r.updatedat,
             program: r.p_id ? { id: r.p_id, name: r.p_name } : null,

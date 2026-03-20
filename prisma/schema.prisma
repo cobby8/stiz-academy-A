@@ -74,6 +74,7 @@ model Class {
   endTime      String
   location     String?
   capacity     Int
+  slotKey      String?      @unique  // 시간표 슬롯과 연결 (예: "Mon-3", "custom-uuid")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   instructor   User?        @relation(fields: [instructorId], references: [id])

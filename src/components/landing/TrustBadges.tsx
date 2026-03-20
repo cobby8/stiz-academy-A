@@ -25,9 +25,9 @@ interface TrustBadgesProps {
 
 // 기본 신뢰 지표 데이터 — 하드코딩 (향후 DB 연동 시 props로 대체)
 const defaultItems: TrustItem[] = [
-  { icon: '🏀', value: '3년+', label: '운영 기간' },
-  { icon: '👨‍👩‍👧‍👦', value: '200명+', label: '누적 수강생' },
-  { icon: '⭐', value: '98%', label: '학부모 만족도' },
+  { icon: '🏀', value: 'Since 2021', label: '운영 기간' },
+  { icon: '👨‍👩‍👧‍👦', value: '2,000+', label: '누적 수강생' },
+  { icon: '⭐', value: '90% ↑', label: '체험수업 등록률' },
   { icon: '🏆', value: '5명+', label: '전문 코치진' },
 ];
 

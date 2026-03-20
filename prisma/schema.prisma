@@ -327,6 +327,16 @@ model ParentRequest {
   @@index([createdAt])
 }
 
+model Faq {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  question  String
+  answer    String
+  order     Int      @default(0)
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

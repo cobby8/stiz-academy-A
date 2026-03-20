@@ -1191,6 +1191,55 @@ export const getAllFeedbacks = cache(async () => {
     } catch { return []; }
 });
 
+// ── FAQ 조회 ─────────────────────────────────────────────────────────────────
+
+// 공개 FAQ만 조회 (공개 페이지용 — isPublic=true, order 오름차순)
+export const getPublicFaqs = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, question, answer, "order", "isPublic", "createdAt", "updatedAt"
+             FROM "Faq"
+             WHERE "isPublic" = true
+             ORDER BY "order" ASC, "createdAt" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            question: r.question,
+            answer: r.answer,
+            order: Number(r.order ?? 0),
+            isPublic: r.isPublic ?? r.ispublic ?? true,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getPublicFaqs] failed:", e);
+        return [];
+    }
+});
+
+// 전체 FAQ 조회 (관리자용 — 공개/비공개 모두, order 오름차순)
+export const getAllFaqs = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, question, answer, "order", "isPublic", "createdAt", "updatedAt"
+             FROM "Faq"
+             ORDER BY "order" ASC, "createdAt" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            question: r.question,
+            answer: r.answer,
+            order: Number(r.order ?? 0),
+            isPublic: r.isPublic ?? r.ispublic ?? true,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getAllFaqs] failed:", e);
+        return [];
+    }
+});
+
 // 학부모 마이페이지용: 자녀들의 공개 피드백만 조회
 export const getChildrenFeedbacks = cache(async (studentIds: string[]) => {
     try {

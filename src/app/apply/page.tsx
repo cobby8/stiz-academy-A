@@ -1,4 +1,4 @@
-import { getAcademySettings } from "@/lib/queries";
+import { getAcademySettings, getPublicFaqs } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SectionLayout from "@/components/ui/SectionLayout";
@@ -10,7 +10,11 @@ export const revalidate = 60;
 export const metadata = { title: "체험/수강신청 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점 체험 수업 신청 및 수강 신청 안내. 지금 바로 신청하세요." };
 
 export default async function ApplyPage() {
-    const settings = (await getAcademySettings()) as any;
+    // 설정과 FAQ를 동시에 조회 (성능 최적화)
+    const [settings, faqData] = await Promise.all([
+        getAcademySettings() as Promise<any>,
+        getPublicFaqs(),
+    ]);
     const phone = settings?.contactPhone || "010-0000-0000";
 
     return (
@@ -43,6 +47,7 @@ export default async function ApplyPage() {
                 enrollTitle={settings?.enrollTitle || "수강신청 안내"}
                 enrollContent={settings?.enrollContent || null}
                 enrollFormUrl={settings?.enrollFormUrl || null}
+                faqData={faqData}
             />
 
             {/* CTA 배너 — 하단 행동 유도 (about 페이지와 동일 패턴) */}

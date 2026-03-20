@@ -7,6 +7,9 @@ import Button from "@/components/ui/Button";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SectionLayout from "@/components/ui/SectionLayout";
 
+// FAQ 데이터 타입 (DB에서 가져온 FAQ 항목)
+type FaqItem = { id: string; question: string; answer: string };
+
 interface ApplyPageClientProps {
     trialTitle: string;
     trialContent: string | null;
@@ -14,6 +17,8 @@ interface ApplyPageClientProps {
     enrollTitle: string;
     enrollContent: string | null;
     enrollFormUrl: string | null;
+    // DB에서 가져온 FAQ 데이터 (없으면 기본 FAQ 표시)
+    faqData?: FaqItem[];
 }
 
 // --- FormModal: 기존 코드 그대로 유지 (절대 변경 금지) ---
@@ -85,8 +90,8 @@ function ContentBlock({ content }: { content: string }) {
     );
 }
 
-// --- FAQ 데이터 --- 자주 묻는 질문 (향후 DB 연동 가능하도록 배열로 관리)
-const FAQ_DATA = [
+// --- 기본 FAQ 데이터 --- DB에 데이터가 없을 때 fallback으로 사용
+const DEFAULT_FAQ_DATA = [
     {
         question: "체험수업은 무료인가요?",
         answer: "네, 첫 체험수업은 무료로 진행됩니다. 운동복과 실내화만 준비해 주시면 됩니다.",
@@ -148,8 +153,11 @@ export default function ApplyPageClient({
     enrollTitle,
     enrollContent,
     enrollFormUrl,
+    faqData,
 }: ApplyPageClientProps) {
     const [modal, setModal] = useState<"trial" | "enroll" | null>(null);
+    // DB FAQ가 있으면 사용, 없으면 기본 FAQ fallback
+    const displayFaqs = faqData && faqData.length > 0 ? faqData : DEFAULT_FAQ_DATA;
 
     return (
         <>
@@ -243,7 +251,7 @@ export default function ApplyPageClient({
                 <AnimateOnScroll>
                     <Card variant="default" className="!p-0 max-w-3xl mx-auto">
                         <div className="px-6 py-2">
-                            {FAQ_DATA.map((faq, i) => (
+                            {displayFaqs.map((faq, i) => (
                                 <FAQItem key={i} question={faq.question} answer={faq.answer} />
                             ))}
                         </div>

@@ -1173,3 +1173,66 @@ export async function deleteFeedback(id: string) {
     revalidatePath("/mypage");
 }
 
+// ── FAQ 관리 ──────────────────────────────────────────────────────────────────
+
+// FAQ 생성
+export async function createFaq(data: {
+    question: string;
+    answer: string;
+    order?: number;
+    isPublic?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Faq" (id, question, answer, "order", "isPublic", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW(), NOW())`,
+            data.question,
+            data.answer,
+            data.order ?? 0,
+            data.isPublic ?? true,
+        );
+    } catch (e) {
+        console.error("Failed to create FAQ:", e);
+        throw new Error("FAQ 생성 실패");
+    }
+    revalidatePath("/admin/faq");
+    revalidatePath("/apply");
+}
+
+// FAQ 수정
+export async function updateFaq(id: string, data: {
+    question: string;
+    answer: string;
+    order?: number;
+    isPublic?: boolean;
+}) {
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Faq" SET question = $1, answer = $2, "order" = $3, "isPublic" = $4, "updatedAt" = NOW()
+             WHERE id = $5`,
+            data.question,
+            data.answer,
+            data.order ?? 0,
+            data.isPublic ?? true,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update FAQ:", e);
+        throw new Error("FAQ 수정 실패");
+    }
+    revalidatePath("/admin/faq");
+    revalidatePath("/apply");
+}
+
+// FAQ 삭제
+export async function deleteFaq(id: string) {
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "Faq" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete FAQ:", e);
+        throw new Error("FAQ 삭제 실패");
+    }
+    revalidatePath("/admin/faq");
+    revalidatePath("/apply");
+}
+

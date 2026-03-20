@@ -17,6 +17,12 @@ type Student = {
     birthDate: Date | string;
     gender: string | null;
     parentId: string;
+    // 새 필드: 엑셀 업로드 일괄 등록용
+    phone: string | null;       // 학생 휴대폰번호
+    school: string | null;      // 학교명
+    grade: string | null;       // 학년
+    address: string | null;     // 주소
+    enrollDate: Date | string | null;  // 입회일자
     createdAt: Date | string;
     parent: {
         name: string | null;
@@ -160,10 +166,12 @@ export default function StudentManagementClient({
     const filtered = students.filter((s) => {
         if (!search) return true;
         const q = search.toLowerCase();
+        // 학교명도 검색 대상에 포함
         return (
             s.name.toLowerCase().includes(q) ||
             (s.parent.name && s.parent.name.toLowerCase().includes(q)) ||
-            (s.parent.phone && s.parent.phone.includes(q))
+            (s.parent.phone && s.parent.phone.includes(q)) ||
+            (s.school && s.school.toLowerCase().includes(q))
         );
     });
 
@@ -188,7 +196,7 @@ export default function StudentManagementClient({
             <div className="mb-4">
                 <input
                     type="text"
-                    placeholder="이름, 학부모명, 전화번호로 검색..."
+                    placeholder="이름, 학부모명, 전화번호, 학교명으로 검색..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full max-w-md border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
@@ -295,6 +303,9 @@ export default function StudentManagementClient({
                                     <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
                                     <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">나이/생년월일</th>
                                     <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">성별</th>
+                                    {/* 학교/학년: 모바일에서 숨김 처리 */}
+                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">학교</th>
+                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">학년</th>
                                     <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">학부모</th>
                                     <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">연락처</th>
                                     <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase">관리</th>
@@ -314,6 +325,13 @@ export default function StudentManagementClient({
                                         </td>
                                         <td className="px-5 py-3.5 text-sm text-gray-600">
                                             {s.gender || "-"}
+                                        </td>
+                                        {/* 학교/학년: 모바일에서 숨김 */}
+                                        <td className="px-5 py-3.5 text-sm text-gray-600 hidden lg:table-cell">
+                                            {s.school || "-"}
+                                        </td>
+                                        <td className="px-5 py-3.5 text-sm text-gray-600 hidden lg:table-cell">
+                                            {s.grade || "-"}
                                         </td>
                                         <td className="px-5 py-3.5 text-sm text-gray-600">
                                             {s.parent.name || "-"}

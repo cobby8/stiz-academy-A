@@ -510,6 +510,13 @@ export async function createStudent(data: {
     parentName: string;
     parentPhone?: string | null;
     parentEmail?: string | null;
+    // 새 필드: 엑셀 업로드 일괄 등록에서도 사용
+    phone?: string | null;       // 학생 휴대폰번호
+    school?: string | null;      // 학교명
+    grade?: string | null;       // 학년
+    address?: string | null;     // 주소
+    enrollDate?: string | null;  // 입회일자
+    memo?: string | null;        // 메모
 }) {
     try {
         // 학부모 User 생성 또는 조회 (이메일 기준)
@@ -537,11 +544,20 @@ export async function createStudent(data: {
             parentId = rows[0].id;
         }
 
-        // 원생 생성
+        // 원생 생성: 새 필드(phone, school, grade, address, enrollDate, memo) 포함
         await prisma.$executeRawUnsafe(
-            `INSERT INTO "Student" (id, name, "birthDate", gender, "parentId", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, NOW(), NOW())`,
-            data.name, data.birthDate, data.gender || null, parentId,
+            `INSERT INTO "Student" (id, name, "birthDate", gender, "parentId", phone, school, grade, address, "enrollDate", memo, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5, $6, $7, $8, $9::timestamp, $10, NOW(), NOW())`,
+            data.name,
+            data.birthDate,
+            data.gender || null,
+            parentId,
+            data.phone || null,
+            data.school || null,
+            data.grade || null,
+            data.address || null,
+            data.enrollDate || null,
+            data.memo || null,
         );
     } catch (e) {
         console.error("Failed to create student:", e);
@@ -570,12 +586,23 @@ export async function updateStudent(id: string, data: {
     gender?: string | null;
     parentName: string;
     parentPhone?: string | null;
+    // 새 필드: 학생 추가 정보
+    phone?: string | null;
+    school?: string | null;
+    grade?: string | null;
+    address?: string | null;
+    enrollDate?: string | null;
 }) {
     try {
+        // 원생 정보 업데이트: 새 필드(phone, school, grade, address, enrollDate) 포함
         await prisma.$executeRawUnsafe(
-            `UPDATE "Student" SET name = $1, "birthDate" = $2::timestamp, gender = $3, "updatedAt" = NOW()
+            `UPDATE "Student" SET name = $1, "birthDate" = $2::timestamp, gender = $3,
+                    phone = $5, school = $6, grade = $7, address = $8, "enrollDate" = $9::timestamp,
+                    "updatedAt" = NOW()
              WHERE id = $4`,
             data.name, data.birthDate, data.gender || null, id,
+            data.phone || null, data.school || null, data.grade || null,
+            data.address || null, data.enrollDate || null,
         );
         // 학부모 정보도 업데이트
         const student = await prisma.$queryRawUnsafe<any[]>(

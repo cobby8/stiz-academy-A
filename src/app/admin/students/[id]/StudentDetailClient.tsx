@@ -43,6 +43,9 @@ type StudentActivityData = {
     student: {
         id: string; name: string; birthDate: Date | string; gender: string | null;
         memo: string | null; parentId: string; createdAt: Date | string;
+        // 새 필드: 학생 추가 정보
+        phone: string | null; school: string | null; grade: string | null;
+        address: string | null; enrollDate: Date | string | null;
         parent: { name: string | null; phone: string | null; email: string | null };
     };
     enrollments: {
@@ -85,6 +88,9 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                     <p className="text-sm text-gray-500">
                         {calcAge(student.birthDate)}세 ({toDateStr(student.birthDate)})
                         {student.gender && ` · ${student.gender}`}
+                        {/* 학교/학년 있으면 표시 */}
+                        {student.school && ` · ${student.school}`}
+                        {student.grade && ` ${student.grade}`}
                         {" · "}등록일 {toDateStr(student.createdAt)}
                     </p>
                 </div>
@@ -141,6 +147,47 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                             </div>
                         </div>
                     </div>
+
+                    {/* 학생 추가 정보: 학교, 학년, 주소, 연락처, 입회일 */}
+                    {(student.phone || student.school || student.grade || student.address || student.enrollDate) && (
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                <BookOpen size={16} className="text-gray-400" /> 학생 추가 정보
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                                {student.phone && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">연락처</span>
+                                        <span className="font-medium">{student.phone}</span>
+                                    </div>
+                                )}
+                                {student.school && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">학교</span>
+                                        <span className="font-medium">{student.school}</span>
+                                    </div>
+                                )}
+                                {student.grade && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">학년</span>
+                                        <span className="font-medium">{student.grade}</span>
+                                    </div>
+                                )}
+                                {student.address && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">주소</span>
+                                        <span className="font-medium text-xs">{student.address}</span>
+                                    </div>
+                                )}
+                                {student.enrollDate && (
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">입회일</span>
+                                        <span className="font-medium">{toDateStr(student.enrollDate)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* 메모 */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">

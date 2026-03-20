@@ -27,10 +27,16 @@ model Student {
   gender      String?
   memo        String?
   parentId    String
+  phone       String?      // 학생 휴대폰번호
+  school      String?      // 학교명
+  grade       String?      // 학년 (예: "2026년 초등 5학년")
+  address     String?      // 주소
+  enrollDate  DateTime?    // 입회일자
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   attendances Attendance[]
   enrollments Enrollment[]
+  guardians   Guardian[]
   payments    Payment[]
   parent      User         @relation(fields: [parentId], references: [id])
 }
@@ -335,6 +341,20 @@ model Faq {
   isPublic  Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
+model Guardian {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId String
+  relation  String   // 관계 (예: "부", "모", "조부모" 등)
+  name      String   // 보호자 이름
+  phone     String?  // 보호자 연락처
+  isPrimary Boolean  @default(false) // 주 보호자 여부
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  student   Student  @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
 }
 
 enum Role {

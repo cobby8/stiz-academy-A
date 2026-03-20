@@ -113,8 +113,10 @@ export const getClasses = cache(async () => {
 /** 원생 목록 조회 (학부모 정보 포함) */
 export const getStudents = cache(async () => {
     try {
+        // 학생 목록 조회: 새 필드(phone, school, grade, address, enrollDate) 포함
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
+                    s.phone, s.school, s.grade, s.address, s."enrollDate",
                     s."createdAt", s."updatedAt",
                     u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email
              FROM "Student" s
@@ -127,6 +129,11 @@ export const getStudents = cache(async () => {
             birthDate: r.birthDate ?? r.birthdate,
             gender: r.gender ?? null,
             parentId: r.parentId ?? r.parentid,
+            phone: r.phone ?? null,
+            school: r.school ?? null,
+            grade: r.grade ?? null,
+            address: r.address ?? null,
+            enrollDate: r.enrollDate ?? r.enrolldate ?? null,
             createdAt: r.createdAt ?? r.createdat,
             updatedAt: r.updatedAt ?? r.updatedat,
             parent: {
@@ -144,9 +151,10 @@ export const getStudents = cache(async () => {
 /** 원생 상세 조회 (수강 내역 포함) */
 export const getStudentWithEnrollments = cache(async (id: string) => {
     try {
-        // 원생 기본 정보
+        // 원생 기본 정보: 새 필드(phone, school, grade, address, enrollDate) 포함
         const sRows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
+                    s.phone, s.school, s.grade, s.address, s."enrollDate",
                     s."createdAt", s."updatedAt",
                     u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email
              FROM "Student" s
@@ -174,6 +182,11 @@ export const getStudentWithEnrollments = cache(async (id: string) => {
             birthDate: r.birthDate ?? r.birthdate,
             gender: r.gender ?? null,
             parentId: r.parentId ?? r.parentid,
+            phone: r.phone ?? null,
+            school: r.school ?? null,
+            grade: r.grade ?? null,
+            address: r.address ?? null,
+            enrollDate: r.enrollDate ?? r.enrolldate ?? null,
             createdAt: r.createdAt ?? r.createdat,
             updatedAt: r.updatedAt ?? r.updatedat,
             parent: {
@@ -820,9 +833,10 @@ export const getDashboardExtendedStats = cache(async () => {
 // ── 원생 상세 활동 현황 ─────────────────────────────────────────────────────
 export async function getStudentActivity(studentId: string) {
     try {
-        // 원생 기본 + 학부모 정보
+        // 원생 기본 + 학부모 정보: 새 필드(phone, school, grade, address, enrollDate) 포함
         const sRows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT s.id, s.name, s."birthDate", s.gender, s.memo, s."parentId",
+                    s.phone, s.school, s.grade, s.address, s."enrollDate",
                     s."createdAt", s."updatedAt",
                     u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email
              FROM "Student" s
@@ -900,6 +914,11 @@ export async function getStudentActivity(studentId: string) {
                 gender: r.gender ?? null,
                 memo: r.memo ?? null,
                 parentId: r.parentId ?? r.parentid,
+                phone: r.phone ?? null,
+                school: r.school ?? null,
+                grade: r.grade ?? null,
+                address: r.address ?? null,
+                enrollDate: r.enrollDate ?? r.enrolldate ?? null,
                 createdAt: r.createdAt ?? r.createdat,
                 parent: {
                     name: r.parent_name ?? null,

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ExcelUploadModal from "./ExcelUploadModal";
 import {
     createStudent,
     updateStudent,
@@ -73,6 +74,8 @@ export default function StudentManagementClient({
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [search, setSearch] = useState("");
     const [enrollModal, setEnrollModal] = useState<string | null>(null);
+    // 엑셀 업로드 모달 열기/닫기 상태
+    const [showExcelUpload, setShowExcelUpload] = useState(false);
 
     // Form state
     const [name, setName] = useState("");
@@ -184,12 +187,22 @@ export default function StudentManagementClient({
                         등록된 원생: {students.length}명
                     </p>
                 </div>
-                <button
-                    onClick={() => { resetForm(); setShowForm(true); }}
-                    className="bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
-                >
-                    + 원생 등록
-                </button>
+                <div className="flex gap-2">
+                    {/* 엑셀 일괄 업로드 버튼 — 랠리즈 다운로드 파일용 */}
+                    <button
+                        onClick={() => setShowExcelUpload(true)}
+                        className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 transition"
+                    >
+                        엑셀 업로드
+                    </button>
+                    {/* 기존 1명씩 수동 등록 버튼 */}
+                    <button
+                        onClick={() => { resetForm(); setShowForm(true); }}
+                        className="bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
+                    >
+                        + 원생 등록
+                    </button>
+                </div>
             </div>
 
             {/* Search */}
@@ -386,6 +399,16 @@ export default function StudentManagementClient({
                     </div>
                 </div>
             )}
+
+            {/* 엑셀 업로드 모달 — 파일 선택 -> 미리보기 -> 일괄 등록 */}
+            <ExcelUploadModal
+                isOpen={showExcelUpload}
+                onClose={() => setShowExcelUpload(false)}
+                onComplete={() => {
+                    setShowExcelUpload(false);
+                    router.refresh(); // 목록 새로고침
+                }}
+            />
 
             {/* Enroll Modal */}
             {enrollModal && (

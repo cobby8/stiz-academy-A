@@ -2,7 +2,7 @@
 
 ## 현재 작업
 - **요청**: 랠리즈 엑셀 파일 업로드로 학원생 일괄 등록 기능
-- **상태**: ✅ 3단계 완료 → 4단계 대기 (bulkCreateStudents Server Action)
+- **상태**: 7단계 - 전체 동작 확인 (tester 작업 대기)
 - **현재 담당**: developer
 - **마지막 세션**: 2026-03-21
 - **사용자 결정사항**:
@@ -367,6 +367,96 @@ reviewer 참고:
 - xlsx 라이브러리의 cellDates: true 옵션으로 날짜 자동 변환 활성화
 - ParsedStudent 타입을 export하여 5단계 ExcelUploadModal에서 import 가능
 - guardiansJSON 대신 개별 필드(guardian2Relation, guardian2Phone 등)로 파싱 — 4단계에서 Guardian 테이블에 INSERT
+
+### 4단계: bulkCreateStudents Server Action 구현 (2026-03-21)
+
+구현한 기능: 엑셀에서 파싱된 학생 데이터를 일괄 등록하는 Server Action + 보호자 Guardian 테이블 저장
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/actions/admin.ts | BulkStudentInput 타입, BulkCreateResult 타입, bulkCreateStudents 함수, insertGuardians 헬퍼 함수 추가 (파일 끝에 약 200줄 추가) | 수정 |
+
+구현 상세:
+- BulkStudentInput 타입: 파싱된 학생 1명의 데이터 (ParsedStudent와 유사하되 Server Action용 별도 정의)
+- BulkCreateResult 타입: 결과 요약 (created/skipped/updated/errors)
+- bulkCreateStudents 함수 처리 흐름 (학생 1명당):
+  1. 중복 체크: 이름 + 생년월일(::date)로 기존 Student 조회
+  2. 중복 시 skip 모드: 건너뛰기 / overwrite 모드: UPDATE + Guardian 재등록
+  3. 보호자1: 전화번호로 User 검색 → 없으면 신규 생성 (email 자동 생성)
+  4. Student INSERT (birthDate 없으면 기본값 2000-01-01 사용)
+  5. 보호자1도 Guardian 테이블에 isPrimary=true로 저장 (이중 저장)
+  6. 보호자2,3은 Guardian 테이블에 isPrimary=false로 저장
+- insertGuardians 헬퍼: 보호자2,3 INSERT 로직을 공유 (신규/덮어쓰기 모두 사용)
+- 건별 에러 격리: 한 학생 실패해도 나머지 계속 진행, errors 배열에 기록
+
+tester 참고:
+- 테스트 방법: 5단계(ExcelUploadModal) 완성 후 UI를 통해 테스트 가능. 또는 브라우저 콘솔에서 직접 호출 불가(Server Action이므로)
+- 정상 동작: `{ created: N, skipped: 0, updated: 0, errors: [] }` 반환
+- 중복 테스트: 같은 엑셀 파일을 2번 업로드 시 skip 모드면 `{ created: 0, skipped: N }`, overwrite 모드면 `{ updated: N }`
+- 주의할 입력: 생년월일 없는 학생(기본값 2000-01-01 적용), 보호자 전화번호 없는 학생(새 User 무조건 생성)
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- $queryRawUnsafe / $executeRawUnsafe만 사용 (PgBouncer 호환)
+- 트랜잭션 미사용 (PgBouncer 트랜잭션 모드에서 $transaction 불가) — 건별 INSERT + 실패 목록 반환
+- 보호자1 중복 검색: 전화번호 기준 (이메일은 자동 생성이라 의미 없음)
+- 덮어쓰기 시 Guardian 전체 삭제 후 재등록 (부분 업데이트보다 단순)
+
+### 5단계: ExcelUploadModal 컴포넌트 구현 (2026-03-21)
+
+구현한 기능: 엑셀 파일 업로드 -> 미리보기 -> 일괄 등록을 3단계 UI로 처리하는 모달 컴포넌트
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/ExcelUploadModal.tsx | 엑셀 업로드 모달 컴포넌트 (3단계 UI: 업로드 -> 미리보기 -> 결과) | 신규 |
+
+컴포넌트 상세:
+- Props: isOpen, onClose, onComplete (부모가 열기/닫기 제어, 등록 완료 후 목록 새로고침)
+- 화면 1 (upload): 드래그앤드롭 + 클릭으로 파일 선택 → /api/admin/parse-excel에 fetch로 업로드 → 로딩 스피너
+- 화면 2 (preview): 파싱 결과 요약 뱃지 (총/정상/오류) + 스크롤 가능한 테이블 (행, 이름, 생년월일, 성별, 학교, 학년, 보호자1, 전화번호) + 중복 처리 라디오 (건너뛰기/덮어쓰기) + 파싱 에러 목록 + "N명 등록하기" 버튼
+- 화면 3 (result): 결과 요약 카드 3개 (신규 등록/건너뛰기 or 덮어쓰기/오류) + 오류 상세 테이블 (있을 때만) + "확인" 버튼 → onComplete + 모달 닫기
+- 모달 닫을 때 모든 상태 초기화 (handleClose)
+- bulkCreateStudents Server Action 직접 import하여 호출
+- ParsedStudent를 BulkStudentInput 형태로 매핑 후 전달
+- 기존 관리자 UI 스타일 준수: Tailwind CSS, rounded-2xl 모달, brand-orange-500 버튼, border-gray-100 구분선
+
+tester 참고:
+- 테스트 방법: /admin/students 페이지에서 ExcelUploadModal을 여는 버튼이 필요함 (6단계에서 추가 예정). 현재는 컴포넌트만 존재
+- 6단계 완료 후 전체 흐름 테스트 가능: 엑셀 파일 선택 → 미리보기 확인 → 등록하기 → 결과 확인
+- 정상 동작: 파일 업로드 후 미리보기 테이블에 학생 목록 표시, 등록하기 클릭 후 결과 요약 표시
+- 주의할 테스트: 빈 엑셀 파일, 형식이 다른 파일(.csv), 대용량 파일(10MB 초과), 드래그앤드롭 vs 클릭 선택
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- ParsedStudent 타입을 parse-excel/route.ts에서 import하지 않고 로컬에 동일하게 재정의 (클라이언트에서 서버 route 파일 직접 import 방지)
+- lucide-react 아이콘 대신 인라인 SVG 사용 (의존성 최소화)
+- useCallback으로 이벤트 핸들러 메모이제이션 (모달 re-render 최적화)
+
+### 6단계: StudentManagementClient에 엑셀 업로드 버튼 + ExcelUploadModal 연결 (2026-03-21)
+
+구현한 기능: 원생 관리 페이지에 "엑셀 업로드" 버튼 추가 + ExcelUploadModal 모달 연결
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/StudentManagementClient.tsx | ExcelUploadModal import 추가, showExcelUpload 상태 추가, "엑셀 업로드" 버튼(초록색) 추가, ExcelUploadModal 렌더링 추가 | 수정 |
+
+변경 상세:
+- ExcelUploadModal import: 같은 디렉토리의 ExcelUploadModal.tsx에서 가져옴
+- showExcelUpload 상태: useState(false)로 모달 열기/닫기 제어
+- "엑셀 업로드" 버튼: 기존 "원생 등록" 버튼 왼쪽에 배치, 초록색(emerald-600)으로 시각적 구분
+- ExcelUploadModal 렌더링: isOpen/onClose/onComplete props 전달, onComplete에서 모달 닫기 + router.refresh()로 목록 새로고침
+- 학교/학년 컬럼: 2단계에서 이미 추가 완료 확인 (lg 이상에서만 표시)
+
+tester 참고:
+- 테스트 방법: /admin/students 페이지 접속 → "엑셀 업로드" 초록색 버튼 클릭 → 모달이 열리는지 확인
+- 전체 흐름 테스트: 엑셀 파일 선택 → 미리보기 확인 → "등록하기" 클릭 → 결과 확인 → 모달 닫힘 → 목록에 새 학생 표시
+- 정상 동작: 버튼 2개(초록 "엑셀 업로드" + 주황 "+ 원생 등록")가 나란히 보임
+- 주의할 테스트: 모달 닫기(X 버튼, 배경 클릭) 후 다시 열었을 때 상태가 초기화되는지 확인
+
+reviewer 참고:
+- tsc --noEmit 통과 확인 완료
+- 기존 코드 변경 최소화: import 1줄, 상태 1줄, 버튼 영역 div 감싸기, 모달 렌더링 추가만 수행
+- 학교/학년 컬럼은 2단계에서 이미 추가되어 있어 추가 작업 불필요
 
 ## 설계 노트 (architect)
 
@@ -1584,6 +1674,71 @@ reviewer 참고:
 
 ---
 
+### 4~6단계 + 통합 테스트 결과 (2026-03-21)
+
+#### 1. 종합 빌드 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| tsc --noEmit 타입 체크 | ✅ 통과 | 종료 코드 0, 에러 0건 |
+| 개발서버 정상 동작 (localhost:3002) | ✅ 통과 | HTTP 200 확인 |
+| /admin/students 페이지 접근 | ✅ 통과 | HTTP 307 (인증 리다이렉트, 정상 동작) |
+
+#### 2. 4단계 검증: bulkCreateStudents Server Action
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| bulkCreateStudents 함수 export 존재 | ✅ 통과 | admin.ts 1312행: export async function bulkCreateStudents |
+| BulkStudentInput 타입 정의 존재 | ✅ 통과 | admin.ts 1270행: type BulkStudentInput (export 없음, 내부 사용 전용) |
+| BulkCreateResult 타입 정의 존재 | ✅ 통과 | admin.ts 1292행: type BulkCreateResult (export 없음, 내부 사용 전용) |
+| 함수 시그니처 올바름 | ✅ 통과 | (students: BulkStudentInput[], duplicateMode: "skip"/"overwrite") -> Promise<BulkCreateResult> |
+| insertGuardians 헬퍼 함수 존재 | ✅ 통과 | admin.ts 1508행: async function insertGuardians(studentId, student) |
+| $queryRawUnsafe/$executeRawUnsafe 사용 | ✅ 통과 | Prisma ORM 기본 메서드(findMany, create 등) 사용하지 않음 확인 |
+
+#### 3. 5단계 검증: ExcelUploadModal
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| ExcelUploadModal.tsx 파일 존재 | ✅ 통과 | src/app/admin/students/ExcelUploadModal.tsx |
+| "use client" 선언 | ✅ 통과 | 1행에 "use client" 확인 |
+| Props 타입 올바름 (isOpen, onClose, onComplete) | ✅ 통과 | ExcelUploadModalProps = { isOpen: boolean, onClose: () => void, onComplete: () => void } |
+| bulkCreateStudents import | ✅ 통과 | 13행: import { bulkCreateStudents } from "@/app/actions/admin" |
+| ParsedStudent 로컬 타입 정의 | ✅ 통과 | 서버 route 파일 직접 import 대신 로컬 재정의 (17~37행) |
+| BulkCreateResult 로컬 타입 정의 | ✅ 통과 | 46~51행에 결과 타입 로컬 재정의 |
+| 3단계 UI 상태 관리 (upload/preview/result) | ✅ 통과 | Step = "upload"/"preview"/"result" 타입 + useState 확인 |
+| 중복 처리 옵션 (skip/overwrite) | ✅ 통과 | duplicateMode 상태 기본값 "skip" 확인 |
+
+#### 4. 6단계 검증: 화면 연결
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| ExcelUploadModal import | ✅ 통과 | StudentManagementClient.tsx 6행 |
+| showExcelUpload 상태 | ✅ 통과 | 78행: useState(false) |
+| "엑셀 업로드" 버튼 렌더링 | ✅ 통과 | 192~197행: bg-emerald-600 초록색 버튼, onClick -> setShowExcelUpload(true) |
+| 버튼 배치 (원생 등록 버튼 옆) | ✅ 통과 | div.flex.gap-2 안에 엑셀 업로드(초록) + 원생 등록(주황) 나란히 배치 |
+| ExcelUploadModal 렌더링 (isOpen/onClose/onComplete) | ✅ 통과 | 404~411행: 3개 props 모두 전달, onComplete에서 모달 닫기 + router.refresh() |
+
+#### 5. 엑셀 파싱 API 통합 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| POST /api/admin/parse-excel 파일 없이 요청 시 400 | ✅ 통과 | HTTP 400 + {"error":"파일이 전송되지 않았습니다."} |
+| Content-Type 미전송 시 에러 처리 | ✅ 통과 | HTTP 500 + JSON 에러 메시지 반환 (서버 크래시 없음) |
+
+---
+
+📊 종합: 24개 항목 중 24개 통과 / 0개 실패
+
+종합 판정: ✅ 전체 통과
+
+비고:
+- BulkStudentInput, BulkCreateResult 타입은 export되어 있지 않으나, ExcelUploadModal에서 로컬 재정의하여 사용하므로 문제 없음
+- Content-Type 미전송 시 HTTP 500 반환은 기술적으로 400이 더 적절하나, JSON 에러 메시지를 반환하며 서버가 크래시하지 않으므로 기능상 문제 없음
+- 실제 엑셀 파일(.xlsx) 업로드 -> 파싱 -> DB 저장의 E2E 테스트는 브라우저에서 /admin/students 접속 후 엑셀 업로드 버튼 클릭으로 수행 필요 (인증 필요)
+- Prisma ORM 기본 메서드(findMany, create 등) 사용 여부 확인: bulkCreateStudents에서 $queryRawUnsafe/$executeRawUnsafe만 사용 확인 완료
+
+---
+
 ### Phase 0~3 통합 테스트 (2026-03-20)
 
 #### 1. 빌드 테스트
@@ -1915,7 +2070,24 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 |--------|----------|----------|------|
 
 ## Git 기록 (git-manager)
-(아직 없음)
+
+### 2026-03-21 커밋
+
+커밋: feat: 학원생 엑셀 업로드 기능 기반 구축 (1~3단계)
+해시: 329ef6a
+브랜치: main
+포함 파일 (10개):
+- .claude/scratchpad.md (수정)
+- .claude/settings.local.json (신규)
+- package.json (수정)
+- package-lock.json (수정)
+- prisma/schema.prisma (수정)
+- src/app/actions/admin.ts (수정)
+- src/app/admin/students/StudentManagementClient.tsx (수정)
+- src/app/admin/students/[id]/StudentDetailClient.tsx (수정)
+- src/app/api/admin/parse-excel/route.ts (신규)
+- src/lib/queries.ts (수정)
+push 여부: 미완료 (사용자 확인 후 진행)
 
 ## 문서 기록 (doc-writer)
 (아직 없음)
@@ -1940,6 +2112,8 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 | 2026-03-20 | developer | 파비콘 교체 (STIZ 로고 농구공 크롭 -> icon.png/icon-192/icon-512) | ✅ tsc 타입 체크 통과 |
 | 2026-03-21 | developer | 3단계: xlsx 설치 + 엑셀 파싱 API 구현 (parse-excel/route.ts 신규) | ✅ tsc 타입 체크 통과 |
 | 2026-03-21 | tester | 1~3단계 변경사항 검증 (DB 스키마+코드 업데이트+엑셀 API) | ✅ 25개 항목 전체 통과 |
+| 2026-03-21 | git-manager | 1~3단계 작업 커밋 (329ef6a) | ✅ 10개 파일, push 미완료 |
+| 2026-03-21 | tester | 4~6단계 + 통합 테스트 (빌드/Server Action/모달/화면연결/API) | ✅ 24개 항목 전체 통과 |
 
 ### 파비콘 교체 구현 기록
 

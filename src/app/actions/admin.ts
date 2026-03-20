@@ -1263,3 +1263,271 @@ export async function deleteFaq(id: string) {
     revalidatePath("/apply");
 }
 
+// ── 엑셀 일괄 등록 ──────────────────────────────────────────────────────────
+
+// bulkCreateStudents에서 사용하는 학생 데이터 타입
+// ParsedStudent(엑셀 파싱 결과)와 동일한 구조이지만, Server Action은 별도 타입으로 정의
+type BulkStudentInput = {
+    rowNumber: number;           // 엑셀 원본 행 번호 (에러 보고용)
+    name: string;                // 학생명
+    birthDate: string | null;    // 생년월일 ISO 문자열
+    gender: string | null;       // "MALE" | "FEMALE" | null
+    phone: string | null;        // 학생 휴대폰번호
+    school: string | null;       // 학교명
+    grade: string | null;        // 학년
+    address: string | null;      // 주소
+    enrollDate: string | null;   // 입회일자 ISO 문자열
+    memo: string | null;         // 메모 (관리용이름 + 원본 메모 조합)
+    // 보호자1 정보 → User 테이블에 저장
+    guardian1Relation: string | null; // 보호자1 관계 (예: "아버지")
+    guardian1Phone: string | null;    // 보호자1 전화번호
+    // 보호자2,3 정보 → Guardian 테이블에 저장
+    guardian2Relation: string | null;
+    guardian2Phone: string | null;
+    guardian3Relation: string | null;
+    guardian3Phone: string | null;
+};
+
+// 일괄 등록 결과 타입
+type BulkCreateResult = {
+    created: number;     // 새로 등록된 학생 수
+    skipped: number;     // 중복으로 건너뛴 학생 수
+    updated: number;     // 덮어쓰기로 업데이트된 학생 수
+    errors: { rowNumber: number; name: string; reason: string }[];  // 실패한 행 목록
+};
+
+/**
+ * 엑셀에서 파싱된 학생 데이터를 일괄 등록하는 Server Action
+ *
+ * 처리 흐름 (학생 1명당):
+ * 1. 중복 체크: 이름 + 생년월일이 동일한 Student가 있는지 확인
+ * 2. 중복이면: duplicateMode에 따라 건너뛰기 또는 덮어쓰기
+ * 3. 보호자1: User 테이블에서 전화번호로 검색, 없으면 새로 생성
+ * 4. Student INSERT (또는 UPDATE)
+ * 5. 보호자2,3: Guardian 테이블에 INSERT
+ *
+ * PgBouncer 호환을 위해 $queryRawUnsafe / $executeRawUnsafe만 사용
+ * 트랜잭션 사용 불가이므로, 건별 INSERT + 실패 목록 반환 방식
+ */
+export async function bulkCreateStudents(
+    students: BulkStudentInput[],
+    duplicateMode: "skip" | "overwrite" = "skip"
+): Promise<BulkCreateResult> {
+    const result: BulkCreateResult = {
+        created: 0,
+        skipped: 0,
+        updated: 0,
+        errors: [],
+    };
+
+    for (const student of students) {
+        try {
+            // ── 1. 중복 체크: 이름 + 생년월일이 같은 학생이 있는지 조회 ──
+            let existingStudentId: string | null = null;
+
+            if (student.birthDate) {
+                // 이름 + 생년월일 기준으로 기존 학생 조회
+                const existing = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT id FROM "Student"
+                     WHERE name = $1 AND "birthDate"::date = $2::date
+                     LIMIT 1`,
+                    student.name,
+                    student.birthDate,
+                );
+                if (existing.length > 0) {
+                    existingStudentId = existing[0].id;
+                }
+            }
+
+            // ── 2. 중복 학생 처리 ──
+            if (existingStudentId) {
+                if (duplicateMode === "skip") {
+                    // 건너뛰기: 카운트만 올리고 다음 학생으로
+                    result.skipped++;
+                    continue;
+                }
+
+                // 덮어쓰기 모드: 기존 학생 정보를 엑셀 데이터로 업데이트
+                await prisma.$executeRawUnsafe(
+                    `UPDATE "Student" SET
+                        gender = $1, phone = $2, school = $3, grade = $4,
+                        address = $5, "enrollDate" = $6::timestamp, memo = $7,
+                        "updatedAt" = NOW()
+                     WHERE id = $8`,
+                    student.gender || null,
+                    student.phone || null,
+                    student.school || null,
+                    student.grade || null,
+                    student.address || null,
+                    student.enrollDate || null,
+                    student.memo || null,
+                    existingStudentId,
+                );
+
+                // 기존 Guardian 삭제 후 재등록 (보호자 정보 갱신)
+                await prisma.$executeRawUnsafe(
+                    `DELETE FROM "Guardian" WHERE "studentId" = $1`,
+                    existingStudentId,
+                );
+
+                // 보호자2,3 Guardian 테이블에 INSERT
+                await insertGuardians(existingStudentId, student);
+
+                // 보호자1 정보도 업데이트 (User 테이블)
+                if (student.guardian1Phone) {
+                    const parentRows = await prisma.$queryRawUnsafe<any[]>(
+                        `SELECT "parentId" FROM "Student" WHERE id = $1`,
+                        existingStudentId,
+                    );
+                    const parentId = parentRows[0]?.parentId ?? parentRows[0]?.parentid;
+                    if (parentId) {
+                        await prisma.$executeRawUnsafe(
+                            `UPDATE "User" SET
+                                name = $1, phone = $2, "updatedAt" = NOW()
+                             WHERE id = $3`,
+                            student.guardian1Relation || "보호자",
+                            student.guardian1Phone,
+                            parentId,
+                        );
+                    }
+                }
+
+                result.updated++;
+                continue;
+            }
+
+            // ── 3. 신규 학생: 보호자1 User 생성 또는 조회 ──
+            let parentId: string;
+
+            // 보호자1 이름은 관계명(예: "아버지")을 사용, 없으면 "보호자"
+            const parentName = student.guardian1Relation || "보호자";
+            // 랠리즈 엑셀에 email이 없으므로 자동 생성 (기존 createStudent 패턴 동일)
+            const parentEmail = `parent_${Date.now()}_${student.rowNumber}@stiz.local`;
+
+            if (student.guardian1Phone) {
+                // 전화번호로 기존 보호자 검색 (같은 전화번호 = 같은 보호자)
+                const existingParent = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT id FROM "User" WHERE phone = $1 AND role = 'PARENT' LIMIT 1`,
+                    student.guardian1Phone,
+                );
+
+                if (existingParent.length > 0) {
+                    parentId = existingParent[0].id;
+                } else {
+                    // 보호자1 신규 생성
+                    const rows = await prisma.$queryRawUnsafe<any[]>(
+                        `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+                         VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
+                         RETURNING id`,
+                        parentEmail,
+                        parentName,
+                        student.guardian1Phone,
+                    );
+                    parentId = rows[0].id;
+                }
+            } else {
+                // 전화번호 없으면 무조건 새 User 생성
+                const rows = await prisma.$queryRawUnsafe<any[]>(
+                    `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+                     VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
+                     RETURNING id`,
+                    parentEmail,
+                    parentName,
+                    null,
+                );
+                parentId = rows[0].id;
+            }
+
+            // ── 4. Student INSERT ──
+            // 생년월일이 없으면 기본값(2000-01-01) 사용 — birthDate는 NOT NULL 컬럼
+            const birthDateValue = student.birthDate || "2000-01-01T00:00:00.000Z";
+
+            const studentRows = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "Student" (id, name, "birthDate", gender, "parentId",
+                    phone, school, grade, address, "enrollDate", memo,
+                    "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4,
+                    $5, $6, $7, $8, $9::timestamp, $10,
+                    NOW(), NOW())
+                 RETURNING id`,
+                student.name,
+                birthDateValue,
+                student.gender || null,
+                parentId,
+                student.phone || null,
+                student.school || null,
+                student.grade || null,
+                student.address || null,
+                student.enrollDate || null,
+                student.memo || null,
+            );
+
+            const newStudentId = studentRows[0].id;
+
+            // ── 5. 보호자1도 Guardian 테이블에 기록 (isPrimary = true) ──
+            // 보호자1은 User에도 있고 Guardian에도 있음 (이중 저장)
+            // 이유: Guardian 테이블에서 모든 보호자를 일괄 조회할 수 있도록
+            if (student.guardian1Phone || student.guardian1Relation) {
+                await prisma.$executeRawUnsafe(
+                    `INSERT INTO "Guardian" (id, "studentId", relation, name, phone, "isPrimary", "createdAt", "updatedAt")
+                     VALUES (gen_random_uuid()::text, $1, $2, $3, $4, true, NOW(), NOW())`,
+                    newStudentId,
+                    student.guardian1Relation || "보호자",
+                    student.guardian1Relation || "보호자",
+                    student.guardian1Phone || null,
+                );
+            }
+
+            // ── 6. 보호자2,3 Guardian 테이블에 INSERT ──
+            await insertGuardians(newStudentId, student);
+
+            result.created++;
+        } catch (e) {
+            // 건별 오류: 해당 학생만 실패 기록하고 나머지 계속 진행
+            console.error(`[bulkCreate] 행 ${student.rowNumber} (${student.name}) 실패:`, e);
+            result.errors.push({
+                rowNumber: student.rowNumber,
+                name: student.name,
+                reason: e instanceof Error ? e.message : "알 수 없는 오류",
+            });
+        }
+    }
+
+    // 학생 목록 페이지 캐시 무효화
+    revalidatePath("/admin/students");
+    revalidatePath("/admin");
+
+    return result;
+}
+
+/**
+ * 보호자2, 3 정보를 Guardian 테이블에 INSERT하는 헬퍼 함수
+ * - isPrimary = false (보호자2,3은 보조 보호자)
+ * - 관계명 또는 전화번호가 하나라도 있으면 저장
+ */
+async function insertGuardians(studentId: string, student: BulkStudentInput) {
+    // 보호자2
+    if (student.guardian2Relation || student.guardian2Phone) {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Guardian" (id, "studentId", relation, name, phone, "isPrimary", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, false, NOW(), NOW())`,
+            studentId,
+            student.guardian2Relation || "보호자2",
+            student.guardian2Relation || "보호자2",
+            student.guardian2Phone || null,
+        );
+    }
+
+    // 보호자3
+    if (student.guardian3Relation || student.guardian3Phone) {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Guardian" (id, "studentId", relation, name, phone, "isPrimary", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, false, NOW(), NOW())`,
+            studentId,
+            student.guardian3Relation || "보호자3",
+            student.guardian3Relation || "보호자3",
+            student.guardian3Phone || null,
+        );
+    }
+}
+

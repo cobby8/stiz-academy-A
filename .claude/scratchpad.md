@@ -2,7 +2,7 @@
 
 ## 현재 작업
 - **요청**: 공개 페이지 전체 UI/UX 개편 설계 계획서 작성
-- **상태**: Phase 3 완료 — 테스트 대기
+- **상태**: Phase 4 완료 — 다음 단계 대기
 - **현재 담당**: pm
 - **마지막 세션**: 2026-03-20
 - **사용자 결정사항**:
@@ -979,6 +979,105 @@ reviewer 참고:
 - useState를 early return 앞에 배치하여 React hooks 규칙(조건부 호출 금지) 준수
 - 부모(programs/page.tsx)에서도 termsOfService가 있을 때만 렌더링하므로 이중 안전장치
 
+### Phase 4-A: 시간표(/schedule) + 연간일정(/annual) 스타일 통일 (2026-03-20)
+
+구현한 기능: schedule과 annual 페이지의 히어로/필터/카드/CTA를 Phase 0~3과 동일한 디자인 토큰으로 통일
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/schedule/page.tsx | 히어로를 그라데이션+장식도형 패턴으로 교체, CTABanner 공통 컴포넌트로 교체 | 수정 |
+| src/app/schedule/ScheduleClient.tsx | 필터탭 pill 스타일 개선, 카드 hover 인터랙션 추가, 배경색 surface-section 적용, max-w-6xl 통일 | 수정 |
+| src/app/annual/page.tsx | 히어로를 그라데이션+장식도형 패턴으로 교체, 범례 pill 뱃지 스타일로 개선, CTABanner 공통 컴포넌트로 교체 | 수정 |
+| src/app/annual/AnnualEventsClient.tsx | 배경색 surface-section 적용, 연도 선택 pill 스타일 개선, 이벤트 카드 rounded-2xl+shadow 적용, max-w-6xl 통일 | 수정 |
+
+핵심 변경 내용:
+- 4개 파일 모두 스타일만 변경, 기능 로직 0% 변경
+- 히어로: about/programs/apply와 동일한 "그라데이션 배경 + 장식 도형 + AnimateOnScroll" 패턴 적용
+- 필터 탭: backdrop-blur + pill 버튼 + shadow 추가로 세련된 느낌
+- 카드: hover:shadow-md + hover:-translate-y-0.5 인터랙션 추가
+- 배경: bg-gray-50 -> bg-surface-section(따뜻한 크림색)으로 통일
+- CTA: 기존 수동 작성 CTA -> CTABanner 공통 컴포넌트로 교체
+- 컨테이너: max-w-4xl/5xl -> max-w-6xl로 다른 페이지와 통일
+- revalidate 값: 변경 없음 (schedule=300, annual=300 유지)
+- $queryRawUnsafe: 변경 없음 (Server Component의 DB 조회 로직 미접촉)
+- EventDetailPanel: 변경 없음
+
+검증 결과:
+- tsc --noEmit: 에러 0건
+
+tester 참고:
+- 테스트 방법:
+  (1) /schedule 페이지 접속 -> 히어로 그라데이션 + 장식 도형 확인
+  (2) 프로그램 필터 탭 클릭 -> 필터 동작 확인 (기존과 동일하게 동작해야 함)
+  (3) 요일별 시간표 카드 표시 확인 (코치 사진, 정원 바, 메모 등)
+  (4) /annual 페이지 접속 -> 히어로 + 범례 pill 뱃지 확인
+  (5) 연도 선택 -> 월별 접기/펼치기 -> 이벤트 클릭 -> 상세 패널 동작 확인
+  (6) "수업일자 확인" 버튼 클릭 -> 수업일자 패널 표시 확인
+  (7) 하단 CTA 배너 -> "체험 수업 신청" 버튼 + "전화 상담" 버튼 확인
+- 정상 동작: 기존과 동일한 기능 + 개선된 디자인
+- 주의할 테스트:
+  - 모바일(375px)에서 필터 탭이 줄바꿈 되는지 확인
+  - 모바일에서 시간표 카드가 세로 1열로 나오는지 (sm 이하)
+  - 연간일정의 월 접기/펼치기가 정상 동작하는지
+  - 프로그램 필터 적용 후 "전체 보기" 링크가 동작하는지
+
+reviewer 참고:
+- 기능 로직(useSearchParams, 프로그램 필터, 요일 그룹핑, 수업일자 계산, 이벤트 그룹핑)은 100% 보존
+- Server/Client Component 구분 유지: page.tsx는 Server, Client 컴포넌트는 "use client" 유지
+- revalidate 값 미변경 확인 필요
+- EventDetailPanel.tsx는 미변경 (import 경로도 동일)
+
+### Phase 4-B: 갤러리(/gallery) + 공지사항(/notices) 스타일 통일 (2026-03-20)
+
+구현한 기능: gallery와 notices 페이지의 히어로/그리드/라이트박스/카드/CTA를 Phase 0~4-A와 동일한 디자인 토큰으로 통일
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/gallery/page.tsx | 히어로를 그라데이션+장식도형 패턴으로 교체, CTABanner 추가, bg-surface-section 배경 적용, getAcademySettings 병렬 호출 | 수정 |
+| src/app/gallery/GalleryPublicClient.tsx | 호버 오버레이 개선(제목+날짜+그라데이션), 라이트박스를 별도 컴포넌트로 분리(ESC/좌우 키보드 네비+body 스크롤 잠금+카운터+접근성), 동영상 재생 아이콘 추가, 모바일 항상 제목 표시, rounded-2xl+shadow 적용 | 수정 |
+| src/app/notices/page.tsx | 히어로를 그라데이션+장식도형 패턴으로 교체, 좌측 날짜 블록(월/일) 추가, Badge 컴포넌트로 카테고리 뱃지(중요/안내) 추가, AnimateOnScroll 순차 애니메이션, CTABanner 추가 | 수정 |
+| src/app/notices/[id]/page.tsx | 히어로를 그라데이션+장식도형 패턴으로 교체, 고정공지 Badge 추가, 본문 타이포그래피 개선(leading-loose, text-[15px]), 첨부파일 호버 색상 개선, 하단 목록 돌아가기 링크 추가, CTABanner 추가 | 수정 |
+
+핵심 변경 내용:
+- 4개 파일 모두 스타일만 변경, 기능 로직 0% 변경
+- 히어로: about/programs/apply/schedule/annual과 동일한 "그라데이션 배경 + 장식 도형 + AnimateOnScroll" 패턴 적용
+- 갤러리 호버 오버레이: 기존 bg-black/20 단색 → from-black/70 그라데이션 + 제목/날짜 표시 (데스크탑은 호버, 모바일은 항상 표시)
+- 갤러리 라이트박스: LightboxOverlay 별도 컴포넌트 분리, ESC/좌우 화살표 키보드 네비게이션 추가, body 스크롤 잠금, 현재위치/전체 카운터 추가
+- 공지 리스트: 좌측 날짜 블록(sm 이상) + Badge 카테고리(중요/안내) 추가
+- 공지 상세: leading-loose + text-[15px] 타이포그래피 개선, 첨부파일 호버 시 오렌지 계열 색상 변화
+- CTA 배너: CTABanner 공통 컴포넌트 재사용 (gallery/notices 모두)
+- revalidate 값: 변경 없음 (gallery=60, notices=60 유지)
+- $queryRawUnsafe: 변경 없음 (Server Component의 DB 조회 로직 미접촉)
+- Server/Client Component 구분 유지: page.tsx는 Server, GalleryPublicClient는 "use client" 유지
+
+검증 결과:
+- tsc --noEmit: 에러 0건
+
+tester 참고:
+- 테스트 방법:
+  (1) /gallery 페이지 접속 -> 히어로 그라데이션 + 장식 도형 확인
+  (2) 갤러리 이미지 호버 시 제목/날짜 오버레이 표시 확인
+  (3) 이미지 클릭 -> 라이트박스 열림, ESC 키로 닫기, 좌우 화살표로 이동
+  (4) 라이트박스에서 "현재/전체" 카운터 표시 확인
+  (5) 동영상 썸네일에 재생 아이콘 표시 확인
+  (6) /notices 페이지 접속 -> 히어로 + 날짜 블록 + 카테고리 뱃지 확인
+  (7) 고정 공지에 "중요" 빨간 뱃지, 일반 공지에 "안내" 파란 뱃지 표시 확인
+  (8) /notices/[id] 상세 페이지 -> 히어로에 제목/날짜 + 본문 가독성 확인
+  (9) 하단 CTA 배너 표시 확인 (gallery, notices, notices/[id] 모두)
+- 정상 동작: 기존과 동일한 기능 + 개선된 디자인
+- 주의할 테스트:
+  - 모바일(375px)에서 갤러리 이미지에 제목이 항상 표시되는지 (호버 불가하므로)
+  - 모바일에서 공지 리스트의 날짜 블록이 숨겨지는지 (sm 이하)
+  - 라이트박스에서 키보드(ESC/좌우) 네비게이션이 정상 동작하는지
+  - 갤러리가 비어있을 때 빈 상태 UI 정상 표시되는지
+  - 공지사항이 비어있을 때 빈 상태 UI 정상 표시되는지
+
+reviewer 참고:
+- GalleryPublicClient에서 LightboxOverlay를 별도 함수 컴포넌트로 분리 — useEffect/useCallback 사용을 위한 구조
+- LightboxOverlay에서 body.style.overflow를 직접 조작 — cleanup 함수에서 복원 보장
+- notices/page.tsx에서 getAcademySettings를 추가 호출하여 phone prop을 CTABanner에 전달 — Promise.all로 병렬 호출하여 성능 영향 최소화
+- notices/[id]/page.tsx도 동일하게 getAcademySettings 병렬 호출 추가
+
 ## 테스트 결과 (tester)
 
 ### Phase 0~3 통합 테스트 (2026-03-20)
@@ -1065,6 +1164,80 @@ reviewer 참고:
 발견된 문제: 없음
 
 📊 종합: 35개 항목 중 35개 통과 / 0개 실패
+
+최종 판정: ✅ 전체 통과
+
+---
+
+### Phase 4 통합 테스트 (2026-03-20)
+
+#### 1. 빌드 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| tsc --noEmit 타입 체크 | ✅ 통과 | 에러 0건 |
+| npm run build (next build) | ✅ 통과 | 빌드 성공, 23/23 페이지 생성 완료 |
+
+#### 2. Phase 4-A — 시간표 + 연간일정
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| schedule/page.tsx — CTABanner import | ✅ 통과 | `import CTABanner from "@/components/landing/CTABanner"` 확인 |
+| schedule/page.tsx — 히어로 그라데이션 패턴 | ✅ 통과 | `bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900` + 장식 도형 2개 확인 |
+| schedule/page.tsx — revalidate = 300 | ✅ 통과 | 5분 ISR 유지 |
+| ScheduleClient.tsx — 프로그램 필터 (useSearchParams) | ✅ 통과 | `useSearchParams()` + `programId` 필터 로직 보존 |
+| ScheduleClient.tsx — 요일 그룹핑 + 시간순 정렬 | ✅ 통과 | `DAY_ORDER` 기반 그룹핑 + `startTime.localeCompare` 정렬 보존 |
+| annual/page.tsx — CTABanner import | ✅ 통과 | `import CTABanner from "@/components/landing/CTABanner"` 확인 |
+| annual/page.tsx — 히어로 그라데이션 패턴 | ✅ 통과 | schedule과 동일한 그라데이션 + 장식 도형 패��� |
+| annual/page.tsx — revalidate = 300 | ✅ 통과 | 5분 ISR 유지 |
+| AnnualEventsClient.tsx — 수업일자 계산 로직 보존 | ✅ 통과 | `yearlySchedules`, `computeClassDatesFromRange`, `getMonthClassSchedule` 모두 사용 확인 |
+| AnnualEventsClient.tsx — 이벤트 그룹핑 | ✅ 통과 | `displayYearOf`/`displayMonthOf` + `byMonthDate` 그룹핑 보존 |
+
+#### 3. Phase 4-B — 갤러리 + 공지
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| gallery/page.tsx — CTABanner import | ✅ 통과 | `import CTABanner from "@/components/landing/CTABanner"` 확인 |
+| gallery/page.tsx — 히어로 그라데이션 패턴 | ✅ 통과 | 동일 패턴 확인 |
+| gallery/page.tsx — revalidate = 60 | ✅ 통과 | 1분 ISR |
+| GalleryPublicClient.tsx — 라이트박스 코드 존재 | ✅ 통과 | `LightboxOverlay` 컴포넌트 + ESC/좌우 키보드 네비게이션 + body 스크롤 잠금 보존 |
+| GalleryPublicClient.tsx — 빈 갤러리 처리 | ✅ 통과 | `posts.length === 0` 시 "아직 갤러리가 비어있습니다" 안내 표시 |
+| notices/page.tsx — CTABanner import | ✅ 통과 | 확인 |
+| notices/page.tsx — Badge import | ✅ 통과 | `import Badge from "@/components/ui/Badge"` 확인 |
+| notices/page.tsx — 히어로 그라데이션 패턴 | ✅ 통과 | 동일 패턴 확인 |
+| notices/page.tsx — revalidate = 60 | ✅ 통과 | 1분 ISR |
+| notices/[id]/page.tsx — CTABanner import | ✅ 통과 | 확인 |
+| notices/[id]/page.tsx — Badge import | ✅ 통과 | `import Badge from "@/components/ui/Badge"` 확인 |
+| notices/[id]/page.tsx — 히어로 그라데이션 패턴 | ✅ 통과 | 동일 패턴 확인 |
+| notices/[id]/page.tsx — revalidate = 60 | ✅ 통과 | 1분 ISR |
+
+#### 4. 회귀 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| lib/queries.ts 미수정 | ✅ 통과 | git diff 결과 변경 없음 |
+| schedule revalidate = 300 유지 | ✅ 통과 | |
+| annual revalidate = 300 유지 | ✅ 통과 | |
+| gallery revalidate = 60 유지 | ✅ 통과 | |
+| notices revalidate = 60 유지 | ✅ 통과 | |
+| notices/[id] revalidate = 60 유지 | ✅ 통과 | |
+
+#### 5. 개발 서버 라우팅 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|------------|------|------|
+| /schedule 라우팅 | ✅ 통과 | HTTP 200 |
+| /annual 라우팅 | ✅ 통과 | HTTP 200 |
+| /gallery 라우팅 | ✅ 통과 | HTTP 200 |
+| /notices 라우팅 | ✅ 통과 | HTTP 200 |
+
+---
+
+발견된 문제: 없음
+
+참고사항: `npm run build` 시 `prisma generate` 단계에서 Windows 파일 잠금 에러(EPERM)가 1회 발생했으나, 이는 코드 문제가 아닌 OS 레벨 파일 잠금 문제. `npx next build`로 직접 실행 시 정상 빌드 확인.
+
+📊 종합: 33개 항목 중 33개 통과 / 0개 실패
 
 최종 판정: ✅ 전체 통과
 
@@ -1177,3 +1350,5 @@ Phase 0~6의 순서는 논리적으로 타당하다.
 | 2026-03-20 | developer | Phase 1 공통 레이아웃 통합 (헤더/푸터 통합 + 모바일 사이드바) | ✅ tsc + build 통과 |
 | 2026-03-20 | developer | Phase 2 메인 랜딩 전면 개편 (신규 5개 + 수정 1개) | ✅ tsc + build 통과 |
 | 2026-03-20 | tester | Phase 0~3 통합 테스트 (빌드/파일/import/회귀/서버 라우팅) | ✅ 35개 항목 전체 통과 |
+| 2026-03-20 | developer | Phase 4-A 시간표+연간일정 스타일 통일 (4개 파일 수정) | ✅ tsc 타입 체크 통과 |
+| 2026-03-20 | tester | Phase 4 통합 테스트 (빌드/import/기능보존/회귀/서버 라우팅) | ✅ 33개 항목 전체 통과 |

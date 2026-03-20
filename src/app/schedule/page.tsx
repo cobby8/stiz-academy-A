@@ -2,6 +2,8 @@ import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getProg
 import { fetchSheetSchedule, type SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import ScheduleClient, { type MergedSlot } from "./ScheduleClient";
+import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
+import CTABanner from "@/components/landing/CTABanner";
 
 // searchParams 없음 → ISR 정적 캐싱 (5분) 활성화
 // 프로그램 필터는 ScheduleClient(클라이언트)에서 useSearchParams()로 처리
@@ -81,14 +83,21 @@ export default async function SchedulePage() {
 
     return (
         <PublicPageLayout>
-            {/* Page Hero */}
-            <div className="bg-brand-navy-900 text-white py-14">
-                <div className="max-w-4xl mx-auto px-4">
-                    <p className="text-brand-orange-500 text-sm font-bold uppercase mb-2">SCHEDULE</p>
-                    <h1 className="text-4xl font-black mb-3">수업시간표</h1>
-                    <p className="text-blue-200">요일별 수업 시간을 확인하세요.</p>
+            {/* 페이지 히어로 — about/programs와 동일한 그라데이션 + 장식 도형 패턴 */}
+            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white py-16 md:py-20">
+                {/* 배경 장식 도형들 — 시각적 깊이감 */}
+                <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
+                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
                 </div>
-            </div>
+                <div className="max-w-6xl mx-auto px-4 relative">
+                    <AnimateOnScroll>
+                        <p className="text-brand-orange-500 text-sm font-bold uppercase tracking-widest mb-3">SCHEDULE</p>
+                        <h1 className="text-4xl md:text-5xl font-black mb-4">수업시간표</h1>
+                        <p className="text-blue-200 text-lg max-w-xl">요일별 수업 시간과 담당 코치를 확인하세요.</p>
+                    </AnimateOnScroll>
+                </div>
+            </section>
 
             {/* 필터 탭 + 시간표 그리드 (클라이언트 컴포넌트 — useSearchParams 사용) */}
             <ScheduleClient
@@ -97,19 +106,14 @@ export default async function SchedulePage() {
                 phone={phone}
             />
 
-            {/* CTA */}
-            <section className="bg-brand-navy-900 text-white py-14">
-                <div className="max-w-4xl mx-auto px-4 text-center">
-                    <h2 className="text-2xl font-black mb-4">수강 문의</h2>
-                    <p className="text-blue-200 mb-6">원하시는 시간대가 없다면 문의해 주세요. 최대한 맞춰드리겠습니다.</p>
-                    <a
-                        href={`tel:${phone.replace(/-/g, "")}`}
-                        className="inline-block bg-brand-orange-500 hover:bg-orange-600 text-white font-black text-lg px-10 py-4 rounded-xl transition shadow-lg"
-                    >
-                        📞 {phone}
-                    </a>
-                </div>
-            </section>
+            {/* CTA 배너 — 공통 CTABanner 재사용 */}
+            <CTABanner
+                title="원하시는 시간대가 없으신가요?"
+                subtitle="문의해 주시면 최대한 맞춰드리겠습니다"
+                phone={phone}
+                primaryLabel="체험 수업 신청"
+                primaryHref="/apply"
+            />
         </PublicPageLayout>
     );
 }

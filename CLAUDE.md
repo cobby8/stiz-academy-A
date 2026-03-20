@@ -165,3 +165,9 @@ npx prisma migrate dev --name fix-schema
 # 이미 프로덕션과 불일치한 경우
 npx prisma migrate resolve --applied <migration-name>
 ```
+
+---
+
+## 작업 습관 규칙
+
+- **하루 마무리 시 자동 푸시**: 사용자가 "마무리", "오늘 끝", "내일 이어서" 등 하루 작업 종료를 알리면, 미푸시 커밋이 있을 경우 자동으로 `git push`를 실행한다. 별도 확인 없이 바로 푸시할 것.

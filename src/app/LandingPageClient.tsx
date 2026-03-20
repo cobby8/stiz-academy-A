@@ -1,306 +1,257 @@
 "use client";
 
+/**
+ * LandingPageClient — 메인 랜딩 페이지 콘텐츠 (Phase 2 개편)
+ *
+ * Phase 2 변경사항:
+ * - 히어로 섹션을 좌 텍스트 + 우 이미지 분할 레이아웃으로 변경
+ * - 듀얼 CTA: "체험 신청"(Primary) + "프로그램 보기"(Ghost)
+ * - TrustBadges, ProgramHighlight, ProcessSteps, TestimonialCarousel, CTABanner 추가
+ * - 기존 유튜브/갤러리 섹션은 SectionLayout으로 감싸서 스타일 개선
+ * - settings 데이터 의존성 모두 유지 (introductionTitle, introductionText,
+ *   youtubeUrl, galleryImagesJSON, contactPhone, address)
+ * - dangerouslySetInnerHTML 유지 (Tiptap HTML 지원)
+ * - revalidate 값 변경 없음 (page.tsx에서 관리)
+ */
+
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Phone, Calendar, Clock, Users, Award, ChevronRight } from "lucide-react";
 
+// Phase 2 신규 컴포넌트들
+import TrustBadges from "@/components/landing/TrustBadges";
+import ProgramHighlight from "@/components/landing/ProgramHighlight";
+import ProcessSteps from "@/components/landing/ProcessSteps";
+import TestimonialCarousel from "@/components/landing/TestimonialCarousel";
+import CTABanner from "@/components/landing/CTABanner";
+
+// Phase 0 공통 컴포넌트들
+import SectionLayout from "@/components/ui/SectionLayout";
+import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 
 export default function LandingPageClient({
-    initialSettings,
+  initialSettings,
 }: {
-    initialSettings: any;
+  initialSettings: any;
 }) {
-    const settings = initialSettings || {};
-    const phone = settings.contactPhone || "010-0000-0000";
-    const address = settings.address || "";
+  const settings = initialSettings || {};
+  const phone = settings.contactPhone || "010-0000-0000";
 
-    return (
-        <div className="min-h-screen bg-white text-gray-900">
+  return (
+    <>
+      {/* =============================================
+          1. 히어로 섹션
+          - 좌: 텍스트(소개 제목 + 설명) + 듀얼 CTA
+          - 우: 장식 도형 (이미지 미등록 시 그래픽으로 대체)
+          - settings.introductionTitle, settings.introductionText 의존성 유지
+          - dangerouslySetInnerHTML 유지 (Tiptap HTML 지원)
+          ============================================= */}
+      <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-20 md:py-28 relative overflow-hidden">
+        {/* 장식 도형 — 배경에 깊이감과 다이나믹 느낌 부여 */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute right-0 top-0 w-[500px] h-[500px] border-[40px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3"></div>
+          <div className="absolute left-0 bottom-0 w-80 h-80 border-[30px] border-brand-orange-500/20 rounded-full -translate-x-1/3 translate-y-1/3"></div>
+          <div className="absolute right-1/4 bottom-1/4 w-32 h-32 bg-brand-orange-500/10 rounded-full blur-xl"></div>
+        </div>
 
-            {/* Top Utility Bar */}
-            <div className="bg-brand-navy-900 text-white text-xs py-2 hidden md:block">
-                <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
-                    <span className="text-gray-300">평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)</span>
-                    <span>상담문의: {phone}</span>
-                </div>
+        <div className="max-w-6xl mx-auto px-4 relative">
+          {/* 좌(텍스트) + 우(비주얼) 분할 레이아웃 */}
+          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+            {/* 좌측: 텍스트 + CTA */}
+            <div className="flex-1 max-w-xl">
+              {/* 상단 뱃지 — 지역 No.1 포지셔닝 */}
+              <div className="inline-block bg-brand-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider shadow">
+                다산신도시 No.1 농구 전문 학원
+              </div>
+
+              {/* 메인 타이틀 — settings에서 가져온 동적 데이터 */}
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 leading-tight tracking-tight">
+                {settings.introductionTitle || "스티즈 농구교실"}
+              </h1>
+
+              {/* 소개 텍스트 — Tiptap HTML(dangerouslySetInnerHTML) 유지 필수 */}
+              <div
+                className="text-blue-100 text-lg mb-10 leading-relaxed [&_strong]:font-bold [&_em]:italic [&_p]:mb-1.5 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold"
+                dangerouslySetInnerHTML={{
+                  __html: (() => {
+                    const t = settings.introductionText;
+                    if (!t)
+                      return "아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다.";
+                    // HTML 태그가 포함되어 있으면 그대로, 아니면 줄바꿈을 <br>로
+                    if (t.includes("<")) return t;
+                    return t.replace(/\n/g, "<br>");
+                  })(),
+                }}
+              />
+
+              {/* 듀얼 CTA: 체험 신청(Primary) + 프로그램 보기(Ghost) */}
+              <div className="flex flex-wrap gap-4">
+                <Link
+                  href="/apply"
+                  className="bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold px-8 py-4 rounded-xl transition-all duration-200 shadow-lg text-base hover:scale-[1.02] hover:shadow-xl"
+                >
+                  체험 수업 신청
+                </Link>
+                <Link
+                  href="/programs"
+                  className="bg-white/10 hover:bg-white/20 text-white font-bold px-8 py-4 rounded-xl transition-colors border border-white/30 text-base"
+                >
+                  프로그램 보기
+                </Link>
+              </div>
             </div>
 
-            {/* Navigation */}
-            <header className="bg-white sticky top-0 z-50 shadow-sm border-b border-gray-100">
-                <div className="max-w-6xl mx-auto px-4 py-3 md:py-4 flex items-center justify-between">
-                    <Link href="/" className="flex items-center gap-2 sm:gap-3">
-                        <Image src="/stiz-logo.png" alt="STIZ" width={180} height={45} className="h-10 sm:h-12 w-auto object-contain" priority />
-                        <span className="font-extrabold text-lg sm:text-xl text-brand-navy-900">다산점</span>
-                    </Link>
-
-                    <nav className="hidden md:flex items-center gap-6 font-bold text-sm text-gray-700">
-                        <Link href="/about" className="hover:text-brand-orange-500 transition-colors">학원/멤버소개</Link>
-                        <Link href="/programs" className="hover:text-brand-orange-500 transition-colors">프로그램안내</Link>
-                        <Link href="/schedule" className="hover:text-brand-orange-500 transition-colors">수업시간표</Link>
-                        <Link href="/annual" className="hover:text-brand-orange-500 transition-colors">연간일정표</Link>
-                        <Link href="/apply" className="hover:text-brand-orange-500 transition-colors">체험/수강신청</Link>
-                    </nav>
-
-                    <a
-                        href={`tel:${phone.replace(/-/g, "")}`}
-                        className="bg-brand-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors shadow-sm"
-                    >
-                        📞 전화문의
-                    </a>
+            {/* 우측: 비주얼 영역 — 농구 그래픽 장식 */}
+            <div className="flex-1 hidden lg:flex items-center justify-center">
+              <div className="relative w-80 h-80">
+                {/* 큰 농구공 실루엣 원 */}
+                <div className="absolute inset-0 bg-brand-orange-500/20 rounded-full animate-pulse" />
+                <div className="absolute inset-4 bg-brand-orange-500/30 rounded-full" />
+                <div className="absolute inset-8 bg-brand-orange-500/20 rounded-full flex items-center justify-center">
+                  <span className="text-8xl">🏀</span>
                 </div>
-
-                {/* Mobile Nav */}
-                <nav className="md:hidden flex overflow-x-auto gap-1 px-4 pb-3 text-sm font-bold border-t border-gray-100">
-                    {[
-                        { href: "/about", label: "학원/멤버소개" },
-                        { href: "/programs", label: "프로그램" },
-                        { href: "/schedule", label: "수업시간표" },
-                        { href: "/annual", label: "연간일정" },
-                        { href: "/apply", label: "체험/수강신청" },
-                    ].map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className="shrink-0 px-3 py-1.5 rounded-full text-gray-600 hover:bg-gray-100 hover:text-brand-navy-900 transition-colors whitespace-nowrap"
-                        >
-                            {item.label}
-                        </Link>
-                    ))}
-                </nav>
-            </header>
-
-            {/* Hero Section */}
-            <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-20 md:py-32 relative overflow-hidden">
-                <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-0 top-0 w-[500px] h-[500px] border-[40px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3"></div>
-                    <div className="absolute left-0 bottom-0 w-80 h-80 border-[30px] border-brand-orange-500/20 rounded-full -translate-x-1/3 translate-y-1/3"></div>
-                    <div className="absolute right-1/4 bottom-1/4 w-32 h-32 bg-brand-orange-500/10 rounded-full blur-xl"></div>
-                </div>
-
-                <div className="max-w-6xl mx-auto px-4 relative">
-                    <div className="max-w-2xl">
-                        <div className="inline-block bg-brand-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider shadow">
-                            다산신도시 No.1 농구 전문 학원
-                        </div>
-                        <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight tracking-tight">
-                            {settings.introductionTitle || "스티즈 농구교실"}
-                        </h1>
-                        {/* introductionText: Tiptap HTML이면 그대로, plain text면 <br>로 변환 */}
-                        <div
-                            className="text-blue-100 text-lg mb-10 leading-relaxed max-w-xl [&_strong]:font-bold [&_em]:italic [&_p]:mb-1.5 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold"
-                            dangerouslySetInnerHTML={{
-                                __html: (() => {
-                                    const t = settings.introductionText;
-                                    if (!t) return "아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다.";
-                                    if (t.includes("<")) return t;
-                                    return t.replace(/\n/g, "<br>");
-                                })()
-                            }}
-                        />
-                        <div className="flex flex-wrap gap-4">
-                            <a
-                                href={`tel:${phone.replace(/-/g, "")}`}
-                                className="bg-brand-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-4 rounded-xl transition-colors shadow-lg text-base"
-                            >
-                                {phone} 상담전화
-                            </a>
-                            <Link
-                                href="/programs"
-                                className="bg-white/10 hover:bg-white/20 text-white font-bold px-8 py-4 rounded-xl transition-colors border border-white/30 text-base"
-                            >
-                                프로그램 보기
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* Quick Navigation Cards */}
-            <section className="py-12 md:py-16 bg-gray-50">
-                <div className="max-w-6xl mx-auto px-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                        {[
-                            {
-                                icon: <Award className="w-7 h-7" />,
-                                title: "학원/멤버소개",
-                                desc: "코치진·시설·특장점",
-                                href: "/about",
-                                bg: "bg-blue-50",
-                                color: "text-blue-700",
-                            },
-                            {
-                                icon: <Users className="w-7 h-7" />,
-                                title: "프로그램안내",
-                                desc: "수준별 맞춤 클래스",
-                                href: "/programs",
-                                bg: "bg-orange-50",
-                                color: "text-brand-orange-500",
-                            },
-                            {
-                                icon: <Clock className="w-7 h-7" />,
-                                title: "수업시간표",
-                                desc: "요일별 수업 시간",
-                                href: "/schedule",
-                                bg: "bg-green-50",
-                                color: "text-green-700",
-                            },
-                            {
-                                icon: <Calendar className="w-7 h-7" />,
-                                title: "연간일정표",
-                                desc: "대회·방학·행사 일정",
-                                href: "/annual",
-                                bg: "bg-purple-50",
-                                color: "text-purple-700",
-                            },
-                        ].map((card) => (
-                            <Link
-                                key={card.href}
-                                href={card.href}
-                                className="bg-white rounded-2xl p-5 md:p-6 shadow-sm border border-gray-100 hover:shadow-md hover:-translate-y-1 transition-all group text-center"
-                            >
-                                <div className={`${card.bg} ${card.color} w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform`}>
-                                    {card.icon}
-                                </div>
-                                <h3 className="font-bold text-gray-900 text-sm md:text-base mb-1">{card.title}</h3>
-                                <p className="text-xs text-gray-500 hidden md:block">{card.desc}</p>
-                                <div className="mt-2 text-brand-orange-500 text-xs font-bold flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    자세히 보기 <ChevronRight className="w-3 h-3" />
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* YouTube Video Section */}
-            {settings.youtubeUrl && (() => {
-                const raw = settings.youtubeUrl as string;
-                // iframe embed 코드 붙여넣기 지원: src="..." 에서 URL 추출
-                const srcMatch = raw.match(/src=["']([^"']+)["']/);
-                const url = srcMatch ? srcMatch[1] : raw;
-                const match = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
-                const videoId = match?.[1];
-                if (!videoId) return null;
-                return (
-                    <section className="py-12 md:py-16 bg-white">
-                        <div className="max-w-4xl mx-auto px-4">
-                            <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200 aspect-video">
-                                <iframe
-                                    src={`https://www.youtube.com/embed/${videoId}?rel=0`}
-                                    title="STIZ 농구교실 소개"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                    className="w-full h-full"
-                                />
-                            </div>
-                        </div>
-                    </section>
-                );
-            })()}
-
-            {/* Photo Gallery */}
-            {(() => {
-                let galleryImages: string[] = [];
-                try {
-                    if (settings.galleryImagesJSON) galleryImages = JSON.parse(settings.galleryImagesJSON);
-                } catch {}
-                if (galleryImages.length === 0) return null;
-                return (
-                    <section className="py-12 md:py-16 bg-gray-50">
-                        <div className="max-w-6xl mx-auto px-4">
-                            <div className="text-center mb-8">
-                                <p className="text-brand-orange-500 text-sm font-bold uppercase mb-2">GALLERY</p>
-                                <h2 className="text-3xl font-black text-brand-navy-900">학원 활동 사진</h2>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                {galleryImages.map((url, i) => (
-                                    <div key={i} className="aspect-square relative rounded-xl overflow-hidden bg-gray-200 group">
-                                        <Image
-                                            src={url}
-                                            alt={`학원 활동 사진 ${i + 1}`}
-                                            fill
-                                            className="object-cover group-hover:scale-105 transition-transform duration-300"
-                                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-                );
-            })()}
-
-            {/* CTA Banner */}
-            <section className="bg-brand-orange-500 py-16 text-white">
-                <div className="max-w-4xl mx-auto px-4 text-center">
-                    <h2 className="text-3xl font-black mb-4">수강 문의 / 체험 신청</h2>
-                    <p className="text-orange-100 mb-8 text-lg">
-                        아이에게 딱 맞는 클래스를 찾아드립니다. 지금 바로 문의해 주세요.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                        <a
-                            href={`tel:${phone.replace(/-/g, "")}`}
-                            className="inline-block bg-white text-brand-orange-500 font-black text-xl px-12 py-4 rounded-2xl hover:bg-orange-50 transition shadow-lg"
-                        >
-                            📞 전화문의
-                        </a>
-                        <Link
-                            href="/apply"
-                            className="inline-block bg-brand-navy-900 text-white font-black text-xl px-12 py-4 rounded-2xl hover:bg-blue-900 transition shadow-lg"
-                        >
-                            체험/수강신청
-                        </Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* Footer */}
-            <footer className="bg-gray-900 text-gray-300 pt-12 pb-8 border-t-4 border-brand-orange-500">
-                <div className="max-w-6xl mx-auto px-4">
-                    <div className="grid md:grid-cols-3 gap-8 mb-8">
-                        <div>
-                            <div className="bg-white px-4 py-2.5 rounded-lg inline-flex items-center justify-center mb-4">
-                                <Image src="/stiz-logo.png" alt="STIZ" width={140} height={35} className="h-9 w-auto object-contain" />
-                            </div>
-                            <p className="text-sm text-gray-400 leading-relaxed">
-                                아이들이 농구를 통해 협동심과<br />건강한 체력을 기를 수 있도록 지도합니다.
-                            </p>
-                        </div>
-
-                        <div>
-                            <h4 className="text-white font-bold mb-4">학원 정보</h4>
-                            <ul className="space-y-2 text-sm text-gray-400">
-                                {address && (
-                                    <li className="flex items-start gap-2">
-                                        <MapPin className="w-4 h-4 mt-0.5 text-gray-500 shrink-0" />
-                                        <span>{address}</span>
-                                    </li>
-                                )}
-                                <li className="flex items-center gap-2">
-                                    <Phone className="w-4 h-4 text-gray-500 shrink-0" />
-                                    <span>{phone}</span>
-                                </li>
-                                <li className="text-xs text-gray-500 mt-1">평일 13:00~21:00 / 토 09:00~18:00</li>
-                            </ul>
-                        </div>
-
-                        <div>
-                            <h4 className="text-white font-bold mb-4">바로가기</h4>
-                            <ul className="space-y-2 text-sm text-gray-400">
-                                <li><Link href="/about" className="hover:text-white transition-colors">학원/멤버소개</Link></li>
-                                <li><Link href="/programs" className="hover:text-white transition-colors">프로그램안내</Link></li>
-                                <li><Link href="/schedule" className="hover:text-white transition-colors">수업시간표</Link></li>
-                                <li><Link href="/annual" className="hover:text-white transition-colors">연간일정표</Link></li>
-                                <li><Link href="/apply" className="hover:text-white transition-colors">체험/수강신청</Link></li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div className="border-t border-gray-800 pt-6 text-center text-xs text-gray-500">
-                        <p>© 2026 STIZ Basketball Academy. All rights reserved.</p>
-                    </div>
-                </div>
-            </footer>
+                {/* 장식 링 */}
+                <div className="absolute -top-4 -right-4 w-16 h-16 border-4 border-white/20 rounded-full" />
+                <div className="absolute -bottom-2 -left-2 w-12 h-12 border-4 border-brand-orange-500/30 rounded-full" />
+              </div>
+            </div>
+          </div>
         </div>
-    );
+      </section>
+
+      {/* =============================================
+          2. 신뢰 지표 바
+          - 운영 기간 / 수강생 수 / 만족도 / 코치진 숫자
+          - 히어로 바로 아래에 위치하여 첫인상에서 신뢰감 형성
+          ============================================= */}
+      <TrustBadges />
+
+      {/* =============================================
+          3. 프로그램 하이라이트
+          - 기존 퀵네비 4개 카드를 프로그램 중심 카드로 대체
+          - 유아반/초등저/초등고/중등반 4개 프로그램 카드
+          ============================================= */}
+      <ProgramHighlight />
+
+      {/* =============================================
+          4. 수강 과정 시각화
+          - 상담 → 체험 → 등록 → 수업 4단계
+          - 학부모가 진입 과정을 한눈에 파악
+          ============================================= */}
+      <ProcessSteps />
+
+      {/* =============================================
+          5. 유튜브 영상 섹션
+          - settings.youtubeUrl이 있을 때만 표시 (기존 로직 유지)
+          - SectionLayout으로 감싸서 일관된 스타일 적용
+          ============================================= */}
+      {settings.youtubeUrl &&
+        (() => {
+          const raw = settings.youtubeUrl as string;
+          // iframe embed 코드 붙여넣기 지원: src="..." 에서 URL 추출
+          const srcMatch = raw.match(/src=["']([^"']+)["']/);
+          const url = srcMatch ? srcMatch[1] : raw;
+          const match = url.match(
+            /(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/
+          );
+          const videoId = match?.[1];
+          if (!videoId) return null;
+          return (
+            <SectionLayout
+              label="VIDEO"
+              title="스티즈 농구교실 영상"
+              bgColor="white"
+            >
+              <div className="max-w-4xl mx-auto">
+                <AnimateOnScroll>
+                  <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200 aspect-video">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${videoId}?rel=0`}
+                      title="STIZ 농구교실 소개"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full"
+                    />
+                  </div>
+                </AnimateOnScroll>
+              </div>
+            </SectionLayout>
+          );
+        })()}
+
+      {/* =============================================
+          6. 갤러리 하이라이트
+          - settings.galleryImagesJSON에서 최근 사진 8장까지 표시
+          - SectionLayout으로 감싸서 스타일 통일
+          - "더보기" 링크 → /gallery
+          ============================================= */}
+      {(() => {
+        let galleryImages: string[] = [];
+        try {
+          if (settings.galleryImagesJSON)
+            galleryImages = JSON.parse(settings.galleryImagesJSON);
+        } catch {}
+        if (galleryImages.length === 0) return null;
+        // 최대 8장까지만 표시
+        const displayImages = galleryImages.slice(0, 8);
+        return (
+          <SectionLayout
+            label="GALLERY"
+            title="학원 활동 사진"
+            description="아이들의 즐거운 농구 수업 모습을 확인하세요"
+            bgColor="section"
+          >
+            <AnimateOnScroll>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {displayImages.map((url, i) => (
+                  <div
+                    key={i}
+                    className="aspect-square relative rounded-xl overflow-hidden bg-gray-200 group"
+                  >
+                    <Image
+                      src={url}
+                      alt={`학원 활동 사진 ${i + 1}`}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    />
+                    {/* 호버 시 반투명 오버레이 */}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                  </div>
+                ))}
+              </div>
+            </AnimateOnScroll>
+
+            {/* 갤러리 더보기 링크 */}
+            {galleryImages.length > 8 && (
+              <div className="text-center mt-8">
+                <Link
+                  href="/gallery"
+                  className="inline-flex items-center gap-2 text-brand-orange-500 font-bold hover:text-brand-orange-600 transition-colors text-base"
+                >
+                  더 많은 사진 보기
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+            )}
+          </SectionLayout>
+        );
+      })()}
+
+      {/* =============================================
+          7. 학부모 후기 섹션
+          - CSS scroll-snap 캐러셀로 좌우 스크롤
+          - 초기 하드코딩, 향후 DB 연동 가능
+          ============================================= */}
+      <TestimonialCarousel />
+
+      {/* =============================================
+          8. CTA 배너
+          - 그라데이션 배경 + 듀얼 CTA
+          - settings.contactPhone 사용
+          ============================================= */}
+      <CTABanner phone={phone} />
+    </>
+  );
 }

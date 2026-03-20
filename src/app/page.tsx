@@ -1,11 +1,24 @@
+/**
+ * 메인 랜딩 페이지 — Server Component (Phase 1 개편)
+ *
+ * Phase 1 변경사항:
+ * - 기존에 LandingPageClient가 자체 헤더/푸터를 가지고 있었으나,
+ *   이제 PublicHeader + PublicFooter로 감싸는 구조로 통합
+ * - settings 데이터를 서버에서 한 번만 가져와서 헤더/푸터/콘텐츠에 모두 전달
+ * - revalidate: 60 유지 (캐싱 정책 변경 없음)
+ */
+
 import { getAcademySettings } from "@/lib/queries";
+import PublicHeader from "@/components/PublicHeader";
+import PublicFooter from "@/components/PublicFooter";
 import LandingPageClient from "./LandingPageClient";
 
 export const revalidate = 60;
 
 export const metadata = {
-    title: "STIZ 농구교실 다산점 | 다산신도시 No.1 농구 전문 학원",
-    description: "다산신도시 스티즈 농구교실입니다. 유아·초등·중등 수준별 맞춤 클래스, 전문 코치진, 셔틀 운행. 체험 수업 신청 및 수강 문의.",
+  title: "STIZ 농구교실 다산점 | 다산신도시 No.1 농구 전문 학원",
+  description:
+    "다산신도시 스티즈 농구교실입니다. 유아·초등·중등 수준별 맞춤 클래스, 전문 코치진, 셔틀 운행. 체험 수업 신청 및 수강 문의.",
 };
 
 export default async function Home() {
@@ -16,5 +29,22 @@ export default async function Home() {
     console.error("Failed to load settings for landing page:", e);
   }
 
-  return <LandingPageClient initialSettings={settings} />;
+  // 헤더/푸터에 전달할 데이터 추출
+  const phone = settings?.contactPhone || "010-0000-0000";
+  const address = settings?.address || "";
+
+  return (
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col">
+      {/* 통합 헤더 */}
+      <PublicHeader phone={phone} address={address} />
+
+      {/* 메인 콘텐츠 — LandingPageClient는 히어로~CTA까지만 담당 */}
+      <main className="flex-1">
+        <LandingPageClient initialSettings={settings} />
+      </main>
+
+      {/* 통합 푸터 */}
+      <PublicFooter phone={phone} address={address} />
+    </div>
+  );
 }

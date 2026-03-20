@@ -165,7 +165,7 @@ export default async function ProgramsPage() {
                                         {/* 프로그램 설명 */}
                                         {program.description && (
                                             <div className="px-5 pb-3">
-                                                <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{program.description}</p>
+                                                <p className="text-gray-600 text-base leading-relaxed whitespace-pre-line">{program.description}</p>
                                             </div>
                                         )}
 
@@ -202,7 +202,7 @@ export default async function ProgramsPage() {
                                             ) : (
                                                 <div className="flex flex-wrap items-center gap-6">
                                                     <div>
-                                                        <p className="text-xs text-gray-400 mb-0.5">월 수강료</p>
+                                                        <p className="text-sm text-gray-400 mb-0.5">월 수강료</p>
                                                         <p className="text-3xl font-black text-brand-navy-900">
                                                             {program.price.toLocaleString()}
                                                             <span className="text-base font-normal text-gray-500">원</span>

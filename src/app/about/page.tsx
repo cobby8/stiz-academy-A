@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import CTABanner from "@/components/landing/CTABanner";
+import CoachBioToggle from "./CoachBioToggle";
 
 export const revalidate = 60;
 export const metadata = { title: "학원/멤버소개 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점의 원장 인사말, 전문 코치진, 시설을 소개합니다." };
@@ -87,92 +88,89 @@ export default async function AboutPage() {
                 </div>
             </section>
 
-            {/* 학원 소개 — 좌 텍스트(원장 인사말) + 우 이미지 분할 레이아웃 */}
+            {/* 학원 소개 — 좌 인사말 + 우 대표원장 사진 */}
             <SectionLayout label="INTRODUCTION" title="원장 인사말" bgColor="white">
-                <div className="grid md:grid-cols-2 gap-10 items-start">
-                    {/* 좌: 원장 인사말 텍스트 */}
-                    <AnimateOnScroll>
-                        <div
-                            className="rich-content prose prose-gray max-w-none"
-                            dangerouslySetInnerHTML={{
-                                __html: renderHtml(
-                                    settings.introductionText,
-                                    "<p>안녕하세요, 스티즈 농구교실 다산점입니다.</p><p>저희 학원은 아이들이 농구를 통해 협동심, 책임감, 그리고 건강한 체력을 기를 수 있도록 최선을 다해 지도하고 있습니다.</p><p>전문 코치진과 체계적인 커리큘럼으로 아이들의 가능성을 이끌어 드리겠습니다.</p>"
-                                ),
-                            }}
-                        />
-                    </AnimateOnScroll>
+                {(() => {
+                    const headCoach = (coaches as any[]).find((c: any) => c.role === '대표원장');
+                    return (
+                        <div className="max-w-3xl mx-auto">
+                            <div className="grid md:grid-cols-[1fr_auto] gap-8 items-start">
+                                {/* 좌: 인사말 텍스트 */}
+                                <AnimateOnScroll>
+                                    <div
+                                        className="rich-content prose prose-gray prose-p:text-base prose-p:leading-relaxed max-w-none"
+                                        dangerouslySetInnerHTML={{
+                                            __html: renderHtml(
+                                                settings.introductionText,
+                                                "<p>안녕하세요, 스티즈 농구교실 다산점입니다.</p><p>저희 학원은 아이들이 농구를 통해 협동심, 책임감, 그리고 건강한 체력을 기를 수 있도록 최선을 다해 지도하고 있습니다.</p><p>전문 코치진과 체계적인 커리큘럼으로 아이들의 가능성을 이끌어 드리겠습니다.</p>"
+                                            ),
+                                        }}
+                                    />
+                                </AnimateOnScroll>
 
-                    {/* 우: "우리의 약속" 핵심 가치 3가지 카드 */}
-                    <AnimateOnScroll delay={200}>
-                        <div className="space-y-4">
-                            <h3 className="text-xl font-bold text-gray-900 mb-4">우리의 약속</h3>
-                            {PROMISES.map((item, i) => (
-                                <Card key={i} variant="default" className="!p-0">
-                                    <div className="flex items-center gap-4 p-4">
-                                        {/* 아이콘 원 */}
-                                        <div className="w-12 h-12 rounded-full bg-brand-orange-50 flex items-center justify-center text-xl shrink-0">
-                                            {item.icon}
+                                {/* 우: 대표원장 사진 + 이름 */}
+                                {headCoach?.imageUrl && (
+                                    <AnimateOnScroll delay={200}>
+                                        <div className="flex flex-col items-center mx-auto md:mx-0">
+                                            <div className="w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden bg-gray-100 shadow-md">
+                                                <Image
+                                                    src={headCoach.imageUrl}
+                                                    alt={headCoach.name}
+                                                    width={192}
+                                                    height={192}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                            <p className="mt-3 font-bold text-gray-900">{headCoach.name}</p>
+                                            <Badge variant="default" size="sm">대표원장</Badge>
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-gray-900">{item.title}</p>
-                                            <p className="text-sm text-gray-500">{item.text}</p>
-                                        </div>
-                                    </div>
-                                </Card>
-                            ))}
+                                    </AnimateOnScroll>
+                                )}
+                            </div>
+
                         </div>
-                    </AnimateOnScroll>
-                </div>
+                    );
+                })()}
             </SectionLayout>
 
-            {/* 교육 이념 — 아이콘 + 텍스트 카드 4개 */}
+            {/* 교육 이념 — 가로 4칸 컴팩트 카드 */}
             {settings.philosophyText ? (
-                // DB에 교육 이념 텍스트가 있으면 텍스트 + 카드 둘 다 표시
                 <SectionLayout label="PHILOSOPHY" title="교육 이념" bgColor="section">
                     <AnimateOnScroll>
                         <div
-                            className="rich-content prose prose-gray max-w-none text-center mb-12"
+                            className="rich-content prose prose-gray max-w-none text-center mb-8"
                             dangerouslySetInnerHTML={{
                                 __html: renderHtml(settings.philosophyText, ""),
                             }}
                         />
                     </AnimateOnScroll>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                        {PHILOSOPHY_CARDS.map((card, i) => (
-                            <AnimateOnScroll key={i} delay={i * 100}>
-                                <Card variant="default" className="text-center !p-0">
-                                    <div className="p-5">
-                                        {/* 아이콘 배경 원 — 카드 색상에 맞춤 */}
-                                        <div className={`w-14 h-14 rounded-full ${card.color} flex items-center justify-center text-2xl mx-auto mb-3`}>
-                                            {card.icon}
-                                        </div>
-                                        <h4 className="font-bold text-gray-900 mb-1">{card.title}</h4>
-                                        <p className="text-xs text-gray-500 leading-relaxed">{card.description}</p>
+                    <AnimateOnScroll delay={200}>
+                        <Card variant="default" className="!p-0">
+                            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                                {PHILOSOPHY_CARDS.map((card, i) => (
+                                    <div key={i} className="flex flex-col items-center text-center gap-1.5 py-5 px-3 md:py-6 md:px-4">
+                                        <h4 className="text-lg md:text-xl font-black text-brand-navy-900 tracking-tight">{card.title}</h4>
+                                        <p className="text-sm md:text-base text-gray-500 leading-relaxed">{card.description}</p>
                                     </div>
-                                </Card>
-                            </AnimateOnScroll>
-                        ))}
-                    </div>
+                                ))}
+                            </div>
+                        </Card>
+                    </AnimateOnScroll>
                 </SectionLayout>
             ) : (
-                // DB에 교육 이념 텍스트가 없으면 카드만 표시
                 <SectionLayout label="PHILOSOPHY" title="교육 이념" description="STIZ 농구교실이 추구하는 가치" bgColor="section">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                        {PHILOSOPHY_CARDS.map((card, i) => (
-                            <AnimateOnScroll key={i} delay={i * 100}>
-                                <Card variant="default" className="text-center !p-0">
-                                    <div className="p-5">
-                                        <div className={`w-14 h-14 rounded-full ${card.color} flex items-center justify-center text-2xl mx-auto mb-3`}>
-                                            {card.icon}
-                                        </div>
-                                        <h4 className="font-bold text-gray-900 mb-1">{card.title}</h4>
-                                        <p className="text-xs text-gray-500 leading-relaxed">{card.description}</p>
+                    <AnimateOnScroll>
+                        <Card variant="default" className="!p-0">
+                            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                                {PHILOSOPHY_CARDS.map((card, i) => (
+                                    <div key={i} className="flex flex-col items-center text-center gap-1.5 py-5 px-3 md:py-6 md:px-4">
+                                        <h4 className="text-lg md:text-xl font-black text-brand-navy-900 tracking-tight">{card.title}</h4>
+                                        <p className="text-sm md:text-base text-gray-500 leading-relaxed">{card.description}</p>
                                     </div>
-                                </Card>
-                            </AnimateOnScroll>
-                        ))}
-                    </div>
+                                ))}
+                            </div>
+                        </Card>
+                    </AnimateOnScroll>
                 </SectionLayout>
             )}
 
@@ -183,18 +181,17 @@ export default async function AboutPage() {
                         {coaches.map((coach, i) => (
                             <AnimateOnScroll key={coach.id} delay={i * 100}>
                                 <Card variant="default" className="overflow-hidden !p-0">
-                                    {/* 코치 사진 영역 — 가로형 (4:3 비율) */}
-                                    <div className="relative aspect-[4/3] bg-gradient-to-br from-brand-navy-900 to-brand-navy-800 overflow-hidden">
+                                    {/* 코치 사진 영역 — 정방형 (1:1) */}
+                                    <div className="relative aspect-square bg-gray-100 overflow-hidden">
                                         {coach.imageUrl ? (
                                             <Image
                                                 src={coach.imageUrl}
                                                 alt={coach.name}
                                                 fill
-                                                className="object-cover"
+                                                className="object-cover object-top"
                                                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                             />
                                         ) : (
-                                            // 사진이 없으면 농구공 아이콘 표시
                                             <div className="w-full h-full flex items-center justify-center text-6xl opacity-30">
                                                 🏀
                                             </div>
@@ -205,16 +202,11 @@ export default async function AboutPage() {
                                     <div className="p-5">
                                         <div className="flex items-center gap-3 mb-2">
                                             <h3 className="text-lg font-bold text-gray-900">{coach.name}</h3>
-                                            {/* 역할 뱃지 — Badge 공통 컴포넌트 사용 */}
                                             <Badge variant="default" size="sm">{coach.role}</Badge>
                                         </div>
 
-                                        {/* 한줄 소개 */}
-                                        {coach.description && (
-                                            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                                                {coach.description}
-                                            </p>
-                                        )}
+                                        {/* 이력 — 1줄만 보이고 더보기로 펼치기 */}
+                                        <CoachBioToggle text={coach.description || ''} />
                                     </div>
                                 </Card>
                             </AnimateOnScroll>

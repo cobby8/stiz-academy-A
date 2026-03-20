@@ -82,7 +82,7 @@ export default function ProgramHighlight() {
                   {program.ageRange}
                 </span>
                 {/* 프로그램 설명 */}
-                <p className="text-sm text-gray-500 leading-relaxed">
+                <p className="text-base text-gray-500 leading-relaxed">
                   {program.description}
                 </p>
               </div>

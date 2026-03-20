@@ -103,7 +103,7 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                     {filterProgramId && selectedProgram && (
                         <div className="mb-6 bg-white border border-gray-100 rounded-2xl px-6 py-4 flex items-center justify-between gap-4 shadow-sm">
                             <div>
-                                <p className="text-xs text-gray-400 mb-0.5 font-medium">프로그램 필터</p>
+                                <p className="text-sm text-gray-400 mb-0.5 font-medium">프로그램 필터</p>
                                 <p className="font-bold text-gray-900">{selectedProgram.name}</p>
                             </div>
                             <a href="/schedule" className="text-sm text-brand-orange-500 hover:text-brand-orange-600 font-bold transition">
@@ -142,7 +142,7 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                                                     <div className="flex gap-3">
                                                         {/* 좌측: 수업 정보 */}
                                                         <div className="flex-1 min-w-0">
-                                                            <h4 className="font-bold text-gray-900 mb-2 text-sm">{slot.displayLabel}</h4>
+                                                            <h4 className="font-bold text-gray-900 mb-2 text-base">{slot.displayLabel}</h4>
                                                             {/* 시간 표시 */}
                                                             <div className="flex items-center gap-1.5 text-sm text-gray-700 mb-1">
                                                                 <span className="text-gray-400">⏰</span>
@@ -158,9 +158,9 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                                                             {/* 정원 프로그레스 바 — 마감/마감임박/여유 3단계 */}
                                                             <div className="mt-2.5 pt-2 border-t border-gray-50 flex items-center gap-2">
                                                                 {slot.isFull ? (
-                                                                    <span className="shrink-0 text-[10px] bg-red-500 text-white font-black px-2 py-0.5 rounded-full">마감</span>
+                                                                    <span className="shrink-0 text-xs bg-red-500 text-white font-black px-2 py-0.5 rounded-full">마감</span>
                                                                 ) : slot.enrolled > 10 ? (
-                                                                    <span className="shrink-0 text-[10px] bg-brand-orange-500 text-white font-black px-2 py-0.5 rounded-full">마감임박</span>
+                                                                    <span className="shrink-0 text-xs bg-brand-orange-500 text-white font-black px-2 py-0.5 rounded-full">마감임박</span>
                                                                 ) : null}
                                                                 <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
                                                                     <div
@@ -171,7 +171,7 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                                                             </div>
                                                             {/* 메모 — 있을 때만 표시 */}
                                                             {slot.note && (
-                                                                <p className="text-xs text-brand-orange-600 mt-2 font-medium">📌 {slot.note}</p>
+                                                                <p className="text-sm text-brand-orange-600 mt-2 font-medium">📌 {slot.note}</p>
                                                             )}
                                                         </div>
 
@@ -189,8 +189,8 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                                                                 ) : (
                                                                     <div className="w-11 h-11 rounded-full bg-gray-200 flex items-center justify-center text-lg">🏀</div>
                                                                 )}
-                                                                <p className="text-[11px] font-bold text-gray-800 text-center leading-tight truncate w-full">{slot.coach.name}</p>
-                                                                <p className="text-[10px] text-gray-400 text-center leading-tight truncate w-full">{slot.coach.role}</p>
+                                                                <p className="text-xs font-bold text-gray-800 text-center leading-tight truncate w-full">{slot.coach.name}</p>
+                                                                <p className="text-xs text-gray-400 text-center leading-tight truncate w-full">{slot.coach.role}</p>
                                                             </div>
                                                         )}
                                                     </div>

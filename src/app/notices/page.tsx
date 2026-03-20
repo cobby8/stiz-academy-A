@@ -66,7 +66,7 @@ export default async function NoticesPage() {
                                             <div className="flex items-start gap-4 p-5 md:p-6">
                                                 {/* 좌측: 날짜 블록 — 월/일 강조 */}
                                                 <div className="hidden sm:flex flex-col items-center justify-center w-16 h-16 rounded-xl bg-brand-navy-900/5 shrink-0">
-                                                    <span className="text-xs text-gray-400 font-medium">
+                                                    <span className="text-sm text-gray-400 font-medium">
                                                         {new Date(n.createdAt).toLocaleDateString("ko-KR", { month: "short" })}
                                                     </span>
                                                     <span className="text-xl font-black text-brand-navy-900">
@@ -92,17 +92,17 @@ export default async function NoticesPage() {
                                                     </div>
 
                                                     {/* 내용 미리보기 — 2줄 제한 */}
-                                                    <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">{n.content}</p>
+                                                    <p className="text-base text-gray-500 line-clamp-2 leading-relaxed">{n.content}</p>
 
                                                     {/* 하단 메타 정보 */}
                                                     <div className="flex items-center gap-3 mt-2.5">
                                                         {/* 모바일에서만 날짜 표시 (데스크탑은 좌측 블록에 표시) */}
-                                                        <span className="text-xs text-gray-400 sm:hidden">
+                                                        <span className="text-sm text-gray-400 sm:hidden">
                                                             {new Date(n.createdAt).toLocaleDateString("ko-KR")}
                                                         </span>
                                                         {/* 첨부파일 카운트 */}
                                                         {atts.length > 0 && (
-                                                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                                                            <span className="text-sm text-gray-400 flex items-center gap-1">
                                                                 <Paperclip size={12} /> {atts.length}개 첨부
                                                             </span>
                                                         )}

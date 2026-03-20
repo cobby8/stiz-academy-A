@@ -85,7 +85,7 @@ export default function ProcessSteps() {
               </h3>
 
               {/* 단계 설명 */}
-              <p className="text-sm text-gray-500 leading-relaxed max-w-[200px]">
+              <p className="text-base text-gray-500 leading-relaxed max-w-[220px]">
                 {step.description}
               </p>
 

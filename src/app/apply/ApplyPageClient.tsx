@@ -134,7 +134,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
             {/* 답변 영역 — isOpen일 때만 표시 */}
             {isOpen && (
                 <div className="pb-5 px-1">
-                    <p className="text-gray-600 leading-relaxed">{answer}</p>
+                    <p className="text-gray-600 text-base leading-relaxed">{answer}</p>
                 </div>
             )}
         </div>
@@ -177,7 +177,7 @@ export default function ApplyPageClient({
                                 {trialContent ? (
                                     <ContentBlock content={trialContent} />
                                 ) : (
-                                    <p className="text-gray-400 text-sm italic">체험수업 안내 내용이 아직 등록되지 않았습니다.</p>
+                                    <p className="text-gray-400 text-base italic">체험수업 안내 내용이 아직 등록되지 않았습니다.</p>
                                 )}
 
                                 <div className="mt-6">
@@ -214,7 +214,7 @@ export default function ApplyPageClient({
                                 {enrollContent ? (
                                     <ContentBlock content={enrollContent} />
                                 ) : (
-                                    <p className="text-gray-400 text-sm italic">수강신청 안내 내용이 아직 등록되지 않았습니다.</p>
+                                    <p className="text-gray-400 text-base italic">수강신청 안내 내용이 아직 등록되지 않았습니다.</p>
                                 )}
 
                                 <div className="mt-6">

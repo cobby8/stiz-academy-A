@@ -42,6 +42,9 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
   // 스크롤 위치 추적 — 스크롤하면 헤더 배경을 불투명하게 만든다 (glassmorphism)
   const [isScrolled, setIsScrolled] = useState(false);
 
+  // 큰글씨 모드 상태 — localStorage에 저장하여 새로고침 후에도 유지
+  const [isLargeFont, setIsLargeFont] = useState(false);
+
   useEffect(() => {
     const handleScroll = () => {
       // 50px 이상 스크롤하면 배경 변경
@@ -52,6 +55,28 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // 큰글씨 모드: localStorage에서 초기값 로드 (SSR 호환을 위해 useEffect 안에서 실행)
+  useEffect(() => {
+    const saved = localStorage.getItem("fontSize");
+    if (saved === "large") {
+      setIsLargeFont(true);
+      document.documentElement.classList.add("text-large");
+    }
+  }, []);
+
+  // 큰글씨 모드 토글 핸들러
+  const toggleFontSize = () => {
+    const nextIsLarge = !isLargeFont;
+    setIsLargeFont(nextIsLarge);
+    if (nextIsLarge) {
+      document.documentElement.classList.add("text-large");
+      localStorage.setItem("fontSize", "large");
+    } else {
+      document.documentElement.classList.remove("text-large");
+      localStorage.setItem("fontSize", "normal");
+    }
+  };
 
   // 모바일 메뉴가 열려있을 때 body 스크롤 방지
   useEffect(() => {
@@ -73,7 +98,24 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
           <span className="text-gray-300">
             평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)
           </span>
-          <span>상담문의: {phone}</span>
+          <div className="flex items-center gap-3">
+            <span>상담문의: {phone}</span>
+            {/* 큰글씨 모드 토글 — 학부모 편의를 위한 글씨 크기 변경 버튼 */}
+            <button
+              onClick={toggleFontSize}
+              className={[
+                "flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold transition-colors",
+                isLargeFont
+                  ? "bg-brand-orange-500 text-white"
+                  : "bg-gray-700 text-gray-300 hover:bg-gray-600",
+              ].join(" ")}
+              aria-label={isLargeFont ? "기본 글씨 크기로 변경" : "큰 글씨 모드로 변경"}
+              title={isLargeFont ? "기본 글씨" : "큰 글씨"}
+            >
+              <span className="text-sm font-black leading-none">가</span>
+              <span className="leading-none">{isLargeFont ? "크게" : "보통"}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -118,6 +160,20 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
           </nav>
 
           <div className="flex items-center gap-3">
+            {/* 큰글씨 모드 토글 (모바일 전용) — 유틸리티 바가 안 보이는 모바일에서도 접근 가능 */}
+            <button
+              onClick={toggleFontSize}
+              className={[
+                "md:hidden flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors",
+                isLargeFont
+                  ? "bg-brand-orange-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+              ].join(" ")}
+              aria-label={isLargeFont ? "기본 글씨 크기로 변경" : "큰 글씨 모드로 변경"}
+            >
+              <span className="text-sm font-black leading-none">가</span>
+            </button>
+
             {/* 체험 신청 CTA 버튼 — 전화문의 대신 체험 신청으로 변경 (설계 계획서 방향) */}
             <Link
               href="/apply"
@@ -201,6 +257,19 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
           >
             상담전화: {phone}
           </a>
+          {/* 모바일 사이드바 내 큰글씨 모드 토글 */}
+          <button
+            onClick={toggleFontSize}
+            className={[
+              "w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-colors",
+              isLargeFont
+                ? "bg-brand-orange-100 text-brand-orange-600 border border-brand-orange-200"
+                : "bg-gray-100 text-gray-600 border border-gray-200",
+            ].join(" ")}
+          >
+            <span className="text-base font-black">가</span>
+            <span>{isLargeFont ? "큰글씨 모드 켜짐" : "큰글씨 모드"}</span>
+          </button>
         </div>
       </div>
     </>

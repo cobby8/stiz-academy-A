@@ -33,6 +33,36 @@
   --foreground: #111827;
 }
 
+/* 모바일 기본 폰트 17px — 학부모(30~40대) 스마트폰 가독성 향상 */
+html {
+  font-size: 17px;
+}
+
+/* 데스크탑은 기존 16px 유지 */
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+/* 큰글씨 모드 — html에 .text-large 클래스 추가 시 활성화 */
+html.text-large {
+  font-size: 19px;
+}
+
+/* 큰글씨 모드: 데스크탑에서도 동일하게 19px 적용 */
+@media (min-width: 768px) {
+  html.text-large {
+    font-size: 19px;
+  }
+}
+
+/* 큰글씨 모드에서 Tailwind 텍스트 클래스별 크기 조정 */
+.text-large .text-sm { font-size: 1rem !important; }          /* 14px → 16px */
+.text-large .text-base { font-size: 1.125rem !important; }    /* 16px → 18px */
+.text-large .text-lg { font-size: 1.25rem !important; }       /* 18px → 20px */
+.text-large .text-xl { font-size: 1.5rem !important; }        /* 20px → 24px */
+
 body {
   color: var(--foreground);
   background: var(--background);

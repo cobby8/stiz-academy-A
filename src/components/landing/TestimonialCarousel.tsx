@@ -130,14 +130,14 @@ export default function TestimonialCarousel({
                 <div className="text-lg mb-3">{renderStars(item.rating)}</div>
 
                 {/* 후기 내용 — 따옴표로 감싸서 후기 느낌 강조 */}
-                <p className="text-gray-600 text-sm leading-relaxed mb-4 min-h-[80px]">
+                <p className="text-gray-600 text-base leading-relaxed mb-4 min-h-[80px]">
                   &ldquo;{item.text}&rdquo;
                 </p>
 
                 {/* 학부모 정보 */}
                 <div className="border-t border-gray-100 pt-3">
-                  <p className="font-bold text-gray-900 text-sm">{item.name}</p>
-                  <p className="text-xs text-gray-400">{item.info}</p>
+                  <p className="font-bold text-gray-900 text-base">{item.name}</p>
+                  <p className="text-sm text-gray-400">{item.info}</p>
                 </div>
               </div>
             ))}
@@ -157,7 +157,7 @@ export default function TestimonialCarousel({
       </AnimateOnScroll>
 
       {/* 모바일 스크롤 안내 */}
-      <p className="text-center text-xs text-gray-400 mt-4 md:hidden">
+      <p className="text-center text-sm text-gray-400 mt-4 md:hidden">
         좌우로 밀어서 더 많은 후기를 확인하세요
       </p>
     </SectionLayout>

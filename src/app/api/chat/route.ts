@@ -217,10 +217,11 @@ const getCachedCoachSlots = unstable_cache(
          LEFT JOIN "Program" p ON cso."programId" = p.id
          WHERE cso."coachId" IS NOT NULL AND cso."isHidden" = false`
       );
-      // CustomClassSlot: dayKey로 요일 직접 사용
+      // CustomClassSlot: dayKey로 요일 직접 사용 + gradeRange/enrolled/capacity 포함
       const customs = await prisma.$queryRawUnsafe<any[]>(
         `SELECT ccs."dayKey", ccs."coachId", ccs.label,
                 ccs."startTime", ccs."endTime",
+                ccs."gradeRange", ccs.enrolled, ccs.capacity,
                 co.name AS "coachName",
                 p.name AS "programName"
          FROM "CustomClassSlot" ccs
@@ -263,7 +264,14 @@ const getCachedCoachSlots = unstable_cache(
         const start = c.startTime ?? c.starttime ?? "";
         const end = c.endTime ?? c.endtime ?? "";
         const program = c.programName ?? c.programname ?? "";
-        const slotInfo = `${dayKor} ${start}~${end} ${label}${program ? ` (${program})` : ""}`.trim();
+        // 학년 범위 표시 (예: "초1~초4")
+        const grade = c.gradeRange ?? c.graderange ?? "";
+        const gradeTag = grade ? `, ${grade}` : "";
+        // 정원 현황 표시 (예: "8/12명")
+        const enrolled = Number(c.enrolled ?? 0);
+        const capacity = Number(c.capacity ?? 12);
+        const capTag = capacity > 0 ? `, ${enrolled}/${capacity}명` : "";
+        const slotInfo = `${dayKor} ${start}~${end} ${label}${gradeTag}${capTag}${program ? ` (${program})` : ""}`.trim();
 
         if (!coachMap[coachId]) coachMap[coachId] = { coachName, slots: [] };
         coachMap[coachId].slots.push(slotInfo);
@@ -368,6 +376,67 @@ const getCachedFaq = unstable_cache(
   { revalidate: 300 } // 5분 캐시
 );
 
+// 반별 학년 범위 — SheetSlotCache(구글시트 기반 슬롯)와 CustomClassSlot의
+// 학년 범위를 통합하여 학부모 학년 질문에 정확한 반 추천을 하기 위함
+const getCachedSlotGrades = unstable_cache(
+  async () => {
+    try {
+      // 1) Google Sheets 기반 슬롯: SheetSlotCache JSON에서 학년 범위 추출
+      const sheetRows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT "slotsJson" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`
+      );
+      const sheetSlots: Array<{
+        dayLabel: string; startTime: string; endTime: string;
+        gradeRange: string; enrolled: number;
+      }> = [];
+      if (sheetRows[0]) {
+        const json = sheetRows[0].slotsJson ?? sheetRows[0].slotsjson ?? "[]";
+        const parsed = JSON.parse(json) as any[];
+        for (const s of parsed) {
+          if (s.gradeRange) {
+            sheetSlots.push({
+              dayLabel: s.dayLabel ?? "",
+              startTime: s.startTime ?? "",
+              endTime: s.endTime ?? "",
+              gradeRange: s.gradeRange,
+              enrolled: Number(s.enrolled ?? 0),
+            });
+          }
+        }
+      }
+
+      // 2) CustomClassSlot: DB에 직접 저장된 학년 범위
+      const customRows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT ccs."dayKey", ccs."startTime", ccs."endTime", ccs.label,
+                ccs."gradeRange", ccs.enrolled, ccs.capacity
+         FROM "CustomClassSlot" ccs
+         WHERE ccs."isHidden" = false AND ccs."gradeRange" IS NOT NULL`
+      );
+      // 요일 한글 매핑
+      const dayMap: Record<string, string> = {
+        Mon: "월요일", Tue: "화요일", Wed: "수요일",
+        Thu: "목요일", Fri: "금요일", Sat: "토요일", Sun: "일요일",
+      };
+      const customSlots = customRows.map((r: any) => ({
+        dayLabel: dayMap[r.dayKey ?? r.daykey] ?? (r.dayKey ?? r.daykey ?? ""),
+        startTime: r.startTime ?? r.starttime ?? "",
+        endTime: r.endTime ?? r.endtime ?? "",
+        gradeRange: r.gradeRange ?? r.graderange ?? "",
+        enrolled: Number(r.enrolled ?? 0),
+        capacity: Number(r.capacity ?? 12),
+        label: r.label ?? "",
+      }));
+
+      return { sheetSlots, customSlots };
+    } catch (e) {
+      console.error("[chat] getSlotGrades failed:", e);
+      return { sheetSlots: [], customSlots: [] };
+    }
+  },
+  ["chat-slot-grades"],
+  { revalidate: 300 } // 5분 캐시
+);
+
 // --- 시스템 프롬프트 조립 ---
 function buildSystemPrompt(
   programs: any[],
@@ -393,7 +462,11 @@ function buildSystemPrompt(
   routes: any[],
   stops: any[],
   notices: any[],
-  faq: any[]
+  faq: any[],
+  slotGrades: {
+    sheetSlots: Array<{ dayLabel: string; startTime: string; endTime: string; gradeRange: string; enrolled: number }>;
+    customSlots: Array<{ dayLabel: string; startTime: string; endTime: string; gradeRange: string; enrolled: number; capacity: number; label: string }>;
+  }
 ): string {
   // 프로그램별 반 정보를 그룹핑하여 가독성 높은 텍스트로 변환
   const programInfo = programs
@@ -538,6 +611,23 @@ function buildSystemPrompt(
     ? `\n- 유튜브 채널: ${settings.youtubeUrl}`
     : "";
 
+  // 반별 학년 구성 정보 — 학부모가 학년을 말하면 실제 반별 학년 데이터로 추천
+  const gradeLines: string[] = [];
+  // Google Sheets 기반 슬롯의 학년 범위
+  for (const s of slotGrades.sheetSlots) {
+    gradeLines.push(`- ${s.dayLabel} ${s.startTime}~${s.endTime}: ${s.gradeRange} (${s.enrolled}명 수강중)`);
+  }
+  // CustomClassSlot의 학년 범위
+  for (const s of slotGrades.customSlots) {
+    const fullTag = s.capacity > 0
+      ? `${s.enrolled}/${s.capacity}명${s.enrolled >= s.capacity ? " [마감]" : ""}`
+      : `${s.enrolled}명 수강중`;
+    gradeLines.push(`- ${s.dayLabel} ${s.startTime}~${s.endTime} ${s.label}: ${s.gradeRange} (${fullTag})`);
+  }
+  const slotGradeInfo = gradeLines.length > 0
+    ? gradeLines.join("\n")
+    : "- (학년 범위 데이터 없음)";
+
   return `당신은 STIZ 농구교실의 학부모 상담 도우미입니다.
 
 ${introSection}
@@ -595,6 +685,11 @@ ${shuttleRouteInfo ? `\n### 셔틀 노선 상세\n${shuttleRouteInfo}` : ""}
 - 각 프로그램을 안내할 때 프로그램 설명(description)도 함께 간략히 소개하세요.
 - 프로그램별로 수업 요일, 시간, 수강료를 구분하여 정리해주세요.
 - 추천 순서: 해당 학년에 가장 일반적인(메인) 프로그램을 먼저, 특별/주말/선택 프로그램을 나중에 안내하세요.
+- **반별 학년 구성 데이터를 반드시 참고하세요**: 아래 "반별 학년 구성 현황"에 각 수업 시간대별 실제 수강생 학년 범위가 있습니다. 학부모가 학년을 말하면, 해당 학년이 포함되는 반을 찾아 "이 시간대는 현재 OO~OO 학년 아이들이 함께 수업하고 있습니다"라고 안내하세요.
+- **마감된 반([마감] 표시)은 추천하지 마세요.** 대신 여유가 있는 다른 시간대를 안내하세요.
+
+## 반별 학년 구성 현황 (실제 수강생 기준)
+${slotGradeInfo}
 
 ## 코치진 소개
 ${coachInfo}
@@ -644,7 +739,7 @@ export async function POST(request: NextRequest) {
     }
 
     // DB에서 모든 데이터를 동시 조회 (5분 캐시)
-    const [programs, classes, settings, annualEvents, coaches, coachSlots, routes, stops, notices, faq] = await Promise.all([
+    const [programs, classes, settings, annualEvents, coaches, coachSlots, routes, stops, notices, faq, slotGrades] = await Promise.all([
       getCachedPrograms(),
       getCachedClasses(),
       getCachedSettings(),
@@ -655,11 +750,12 @@ export async function POST(request: NextRequest) {
       getCachedStops(),
       getCachedNotices(),
       getCachedFaq(),
+      getCachedSlotGrades(),
     ]);
 
     // 시스템 프롬프트 조립 (고정 부분 + DB 동적 데이터)
     const systemPrompt = buildSystemPrompt(
-      programs, classes, settings, annualEvents, coaches, coachSlots, routes, stops, notices, faq
+      programs, classes, settings, annualEvents, coaches, coachSlots, routes, stops, notices, faq, slotGrades
     );
 
     // Gemini 모델 초기화 (시스템 프롬프트 포함)

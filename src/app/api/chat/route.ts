@@ -59,16 +59,19 @@ const getCachedPrograms = unstable_cache(
   { revalidate: 300 } // 5분 캐시
 );
 
-// 학원 설정 (전화번호, 주소, 체험수업/수강신청 안내, 셔틀 안내)
+// 학원 설정 (전화번호, 주소, 체험수업/수강신청 안내, 셔틀 안내, 소개/철학/시설/유튜브)
 const getCachedSettings = unstable_cache(
   async () => {
     try {
       const rows = await prisma.$queryRawUnsafe<any[]>(
-        // 챗봇 시스템 프롬프트에 필요한 설정값 5개 추가 조회
-        // termsOfService 추가: 이용약관을 챗봇이 안내할 수 있도록
+        // 챗봇 시스템 프롬프트에 필요한 설정값 조회
+        // introductionTitle/Text, philosophyText, facilitiesText: 학원 소개/철학/시설 안내
+        // youtubeUrl: 유튜브 채널 URL 안내용
         `SELECT "contactPhone", address,
                 "trialTitle", "trialContent", "trialFormUrl",
-                "enrollContent", "shuttleInfoText", "termsOfService"
+                "enrollContent", "shuttleInfoText", "termsOfService",
+                "introductionTitle", "introductionText",
+                "philosophyText", "facilitiesText", "youtubeUrl"
          FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
       );
       if (rows[0]) {
@@ -86,6 +89,15 @@ const getCachedSettings = unstable_cache(
           shuttleInfoText: r.shuttleInfoText ?? r.shuttleinfotext ?? "",
           // 이용약관 텍스트
           termsOfService: r.termsOfService ?? r.termsofservice ?? "",
+          // 학원 소개 타이틀/텍스트
+          introductionTitle: r.introductionTitle ?? r.introductiontitle ?? "",
+          introductionText: r.introductionText ?? r.introductiontext ?? "",
+          // 교육 철학/운영 방침
+          philosophyText: r.philosophyText ?? r.philosophytext ?? "",
+          // 시설 안내
+          facilitiesText: r.facilitiesText ?? r.facilitiestext ?? "",
+          // 유튜브 채널 URL
+          youtubeUrl: r.youtubeUrl ?? r.youtubeurl ?? "",
         };
       }
     } catch (e) {
@@ -100,6 +112,11 @@ const getCachedSettings = unstable_cache(
       enrollContent: "",
       shuttleInfoText: "",
       termsOfService: "",
+      introductionTitle: "",
+      introductionText: "",
+      philosophyText: "",
+      facilitiesText: "",
+      youtubeUrl: "",
     };
   },
   ["chat-settings"],
@@ -140,7 +157,8 @@ const getCachedAnnualEvents = unstable_cache(
     try {
       // 스키마: date 컬럼 사용 (startDate가 아님)
       const rows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT id, title, date, "endDate", category
+        // description 추가: 일정 상세 설명을 챗봇이 안내할 수 있도록
+        `SELECT id, title, date, "endDate", category, description
          FROM "AnnualEvent"
          ORDER BY date ASC`
       );
@@ -149,6 +167,7 @@ const getCachedAnnualEvents = unstable_cache(
         date: r.date,
         endDate: r.endDate ?? r.enddate ?? null,
         category: r.category ?? "일반",
+        description: r.description ?? null,
       }));
     } catch (e) {
       console.error("[chat] getAnnualEvents failed:", e);
@@ -306,13 +325,15 @@ const getCachedStops = unstable_cache(
   { revalidate: 300 }
 );
 
-// 공지사항 — 최근 공지를 챗봇이 참고하기 위함 (스키마: isPublished 컬럼 없음)
+// 공지사항 — 최근 공지를 챗봇이 참고하기 위함 (공개 대상만 필터)
 const getCachedNotices = unstable_cache(
   async () => {
     try {
       const rows = await prisma.$queryRawUnsafe<any[]>(
+        // targetType = 'ALL'인 공지만 조회 (내부용/특정 대상 공지 제외)
         `SELECT title, content, "isPinned", "createdAt"
          FROM "Notice"
+         WHERE "targetType" = 'ALL'
          ORDER BY "isPinned" DESC, "createdAt" DESC
          LIMIT 10`
       );
@@ -360,6 +381,11 @@ function buildSystemPrompt(
     enrollContent: string;
     shuttleInfoText: string;
     termsOfService: string;
+    introductionTitle: string;
+    introductionText: string;
+    philosophyText: string;
+    facilitiesText: string;
+    youtubeUrl: string;
   },
   annualEvents: any[],
   coaches: any[],
@@ -475,7 +501,9 @@ function buildSystemPrompt(
         const endStr = e.endDate
           ? ` ~ ${new Date(e.endDate).getMonth() + 1}/${new Date(e.endDate).getDate()}`
           : "";
-        return `- ${dateStr}${endStr}: ${e.title} (${e.category})`;
+        // description이 있으면 일정 설명도 함께 표시
+        const desc = e.description ? ` — ${e.description}` : "";
+        return `- ${dateStr}${endStr}: ${e.title} (${e.category})${desc}`;
       }).join("\n")
     : "- (예정된 행사 없음)";
 
@@ -490,14 +518,31 @@ function buildSystemPrompt(
       }).join("\n")
     : "- (등록된 공지 없음)";
 
+  // 학원 소개 섹션: DB에 등록된 타이틀/소개가 있으면 사용, 없으면 기본 문구
+  const introSection = settings.introductionTitle || settings.introductionText
+    ? `## 학원 소개${settings.introductionTitle ? `\n- ${settings.introductionTitle}` : ""}${settings.introductionText ? `\n${settings.introductionText}` : ""}`
+    : `## 학원 소개\n- STIZ 농구교실은 다산신도시에 있는 농구교실입니다.\n- 대부분의 학생이 취미/건강/자연스러운 신체활동 목적으로 수업합니다.\n- 전문 선수 양성보다는 아이들이 즐겁게 운동하는 것을 중시합니다.`;
+
+  // 교육 철학 섹션: 비어있으면 생략
+  const philosophySection = settings.philosophyText
+    ? `\n\n## 교육 철학\n${settings.philosophyText}`
+    : "";
+
+  // 시설 안내 섹션: 비어있으면 생략
+  const facilitiesSection = settings.facilitiesText
+    ? `\n\n## 시설 안내\n${settings.facilitiesText}`
+    : "";
+
+  // 유튜브 채널 안내: URL이 있으면 표시
+  const youtubeSection = settings.youtubeUrl
+    ? `\n- 유튜브 채널: ${settings.youtubeUrl}`
+    : "";
+
   return `당신은 STIZ 농구교실의 학부모 상담 도우미입니다.
 
-## 학원 소개
-- STIZ 농구교실은 다산신도시에 있는 농구교실입니다.
-- 대부분의 학생이 취미/건강/자연스러운 신체활동 목적으로 수업합니다.
-- 전문 선수 양성보다는 아이들이 즐겁게 운동하는 것을 중시합니다.
+${introSection}
 - 전화번호: ${settings.contactPhone}
-- 주소: ${settings.address}
+- 주소: ${settings.address}${youtubeSection}${philosophySection}${facilitiesSection}
 
 ## 상담 규칙 (반드시 지킬 것)
 - 친근하고 편안한 톤으로 대화하세요. 학부모의 불안감을 해소하는 것이 목표입니다.

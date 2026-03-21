@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@craftjs/core": "^0.2.12",
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",

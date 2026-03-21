@@ -16,6 +16,7 @@
 import { getAcademySettings } from "@/lib/queries";
 import PublicHeader from "./PublicHeader";
 import PublicFooter from "./PublicFooter";
+import ChatBotButton from "./chat/ChatBotButton";
 
 export default async function PublicPageLayout({
   children,
@@ -37,6 +38,9 @@ export default async function PublicPageLayout({
 
       {/* 통합 푸터 — Server Component */}
       <PublicFooter phone={phone} address={address} />
+
+      {/* 학부모 상담 챗봇 — 모든 공개 페이지 우하단에 플로팅 버튼 */}
+      <ChatBotButton />
     </div>
   );
 }

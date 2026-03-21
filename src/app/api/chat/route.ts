@@ -26,14 +26,17 @@ const getCachedPrograms = unstable_cache(
   async () => {
     try {
       const rows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT name, "targetAge", days, "weeklyFrequency",
+        // description 추가: 프로그램 설명을 시스템 프롬프트에 포함시키기 위함
+        `SELECT id, name, description, "targetAge", days, "weeklyFrequency",
                 price, "priceWeek1", "priceWeek2", "priceWeek3",
                 "priceDaily", "shuttleFeeOverride"
          FROM "Program" ORDER BY "order" ASC`
       );
       // 토큰 절약을 위해 필요한 필드만 반환
       return rows.map((r: any) => ({
+        id: r.id,
         name: r.name,
+        description: r.description ?? null,
         targetAge: r.targetAge ?? r.targetage,
         days: r.days,
         weeklyFrequency: r.weeklyFrequency ?? r.weeklyfrequency,
@@ -79,12 +82,78 @@ const getCachedSettings = unstable_cache(
   { revalidate: 300 }
 );
 
+// 반(Class) 정보 — 프로그램별 구체적인 수업 시간/요일을 챗봇이 안내하기 위함
+const getCachedClasses = unstable_cache(
+  async () => {
+    try {
+      const rows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT c.id, c."programId", c.name, c."dayOfWeek", c."startTime", c."endTime",
+                c.location, c.capacity
+         FROM "Class" c
+         ORDER BY c."programId", c."dayOfWeek", c."startTime" ASC`
+      );
+      return rows.map((r: any) => ({
+        programId: r.programId ?? r.programid,
+        name: r.name,
+        dayOfWeek: r.dayOfWeek ?? r.dayofweek,
+        startTime: r.startTime ?? r.starttime,
+        endTime: r.endTime ?? r.endtime,
+        location: r.location ?? null,
+        capacity: Number(r.capacity ?? 0),
+      }));
+    } catch (e) {
+      console.error("[chat] getClasses failed:", e);
+      return [];
+    }
+  },
+  ["chat-classes"],
+  { revalidate: 300 } // 5분 캐시
+);
+
 // --- 시스템 프롬프트 조립 ---
 function buildSystemPrompt(
   programs: any[],
+  classes: any[],
   settings: { contactPhone: string; address: string }
 ): string {
-  const programsJSON = JSON.stringify(programs, null, 2);
+  // 프로그램별 반 정보를 그룹핑하여 가독성 높은 텍스트로 변환
+  const programInfo = programs
+    .map((p) => {
+      // 해당 프로그램에 속하는 반 목록 필터링
+      const programClasses = classes.filter((c) => c.programId === p.id);
+
+      // 수강료 정보를 주 횟수별로 정리
+      const priceLines: string[] = [];
+      if (p.priceWeek1 != null) priceLines.push(`  - 주1회: ${p.priceWeek1.toLocaleString()}원`);
+      if (p.priceWeek2 != null) priceLines.push(`  - 주2회: ${p.priceWeek2.toLocaleString()}원`);
+      if (p.priceWeek3 != null) priceLines.push(`  - 주3회: ${p.priceWeek3.toLocaleString()}원`);
+      // 주 횟수별 가격이 없으면 기본 price 사용
+      if (priceLines.length === 0 && p.price > 0) {
+        priceLines.push(`  - 월 수강료: ${p.price.toLocaleString()}원`);
+      }
+      if (p.priceDaily != null) priceLines.push(`  - 1일 체험: ${p.priceDaily.toLocaleString()}원`);
+      if (p.shuttleFeeOverride != null) priceLines.push(`  - 셔틀비: 월 ${p.shuttleFeeOverride.toLocaleString()}원`);
+
+      // 반 정보 텍스트
+      const classLines = programClasses.length > 0
+        ? programClasses.map((c) => {
+            const loc = c.location ? ` (${c.location})` : "";
+            return `  - ${c.name}: ${c.dayOfWeek} ${c.startTime}~${c.endTime}${loc}`;
+          })
+        : ["  - (등록된 반 없음)"];
+
+      // 프로그램 한 블록 조립
+      const lines = [`### ${p.name}`];
+      if (p.description) lines.push(`설명: ${p.description}`);
+      if (p.targetAge) lines.push(`대상: ${p.targetAge}`);
+      if (p.days) lines.push(`수업 요일: ${p.days}`);
+      lines.push(`수강료:`);
+      lines.push(...priceLines);
+      lines.push(`반 구성:`);
+      lines.push(...classLines);
+      return lines.join("\n");
+    })
+    .join("\n\n");
 
   return `당신은 STIZ 농구교실의 학부모 상담 도우미입니다.
 
@@ -95,11 +164,14 @@ function buildSystemPrompt(
 - 전화번호: ${settings.contactPhone}
 - 주소: ${settings.address}
 
-## 상담 규칙
+## 상담 규칙 (반드시 지킬 것)
 - 친근하고 편안한 톤으로 대화하세요. 학부모의 불안감을 해소하는 것이 목표입니다.
 - 반말이 아닌 존댓말을 사용하세요.
-- 답변은 간결하게 3-5문장 이내로 하세요.
-- 학원/수업과 관련 없는 질문에는 "죄송합니다, 수업 관련 문의에 대해서만 안내드릴 수 있습니다."라고 정중히 안내하세요.
+- 답변은 간결하게 3-5문장 이내로 하세요. 불필요하게 길게 늘이지 마세요.
+- 학원/수업과 관련 없는 질문(정치, 연예, 일반 상식 등)에는 "죄송합니다, 수업 관련 문의에 대해서만 안내드릴 수 있습니다."라고 정중히 안내하세요.
+- 아래 제공된 프로그램/반 정보에 없는 내용을 지어내지 마세요. 모르는 것은 전화 문의를 안내하세요.
+- 수강료를 안내할 때는 반드시 아래 데이터에 있는 금액만 사용하세요. 임의로 할인이나 추가 비용을 언급하지 마세요.
+- 다른 학원이나 경쟁 업체에 대한 비교/언급을 하지 마세요.
 
 ## 체험수업 안내
 - 체험수업을 적극 권유하세요: "한번 체험해보시고 결정하시는 게 좋습니다"
@@ -116,12 +188,12 @@ function buildSystemPrompt(
 
 ## 상담 흐름
 1. 학부모가 문의하면 먼저 아이의 학년을 물어보세요.
-2. 학년에 맞는 프로그램/클래스를 추천하세요.
-3. 해당 클래스의 수업 요일, 시간, 수강료를 안내하세요.
+2. 학년에 맞는 프로그램과 반을 추천하세요.
+3. 해당 반의 수업 요일, 시간, 수강료(주 횟수별)를 안내하세요.
 4. 체험수업을 권유하세요.
 
-## 현재 운영 중인 프로그램 정보
-${programsJSON}`;
+## 현재 운영 중인 프로그램 및 반 정보
+${programInfo}`;
 }
 
 // --- POST 핸들러 ---
@@ -148,14 +220,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // DB에서 프로그램 정보와 학원 설정을 동시 조회 (5분 캐시)
-    const [programs, settings] = await Promise.all([
+    // DB에서 프로그램/반/학원 설정을 동시 조회 (5분 캐시)
+    const [programs, classes, settings] = await Promise.all([
       getCachedPrograms(),
+      getCachedClasses(),
       getCachedSettings(),
     ]);
 
     // 시스템 프롬프트 조립 (고정 부분 + DB 동적 데이터)
-    const systemPrompt = buildSystemPrompt(programs, settings);
+    const systemPrompt = buildSystemPrompt(programs, classes, settings);
 
     // Gemini 모델 초기화 (시스템 프롬프트 포함)
     const model = genAI.getGenerativeModel({

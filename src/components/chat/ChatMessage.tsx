@@ -6,6 +6,8 @@
  */
 "use client";
 
+import Link from "next/link";
+
 interface ChatMessageProps {
   role: "user" | "model"; // user: 학부모, model: 챗봇
   content: string;
@@ -38,18 +40,18 @@ export default function ChatMessage({ role, content, actions }: ChatMessageProps
         {/* <a> 태그는 fixed+overflow-y-auto 컨테이너 내에서 클릭이 안 되는 경우가 있어
             button + window.location.href 방식으로 강제 이동 처리 */}
         {!isUser && actions && actions.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2 mt-2" style={{ position: "relative", zIndex: 9999 }}>
             {actions.map((action, i) => (
-              <button
+              <Link
                 key={i}
-                type="button"
-                onClick={() => {
-                  window.location.href = action.url;
+                href={action.url}
+                className="inline-block px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-full hover:bg-orange-600 transition-colors no-underline"
+                onClick={(e) => {
+                  e.stopPropagation();
                 }}
-                className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-full hover:bg-orange-600 transition-colors cursor-pointer"
               >
                 {action.label}
-              </button>
+              </Link>
             ))}
           </div>
         )}

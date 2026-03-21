@@ -328,9 +328,14 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                                         <span className="flex-1 text-sm font-bold text-gray-900 truncate">
                                                                             {ev.title}
                                                                             {ev.endDate && (() => {
+                                                                                const s = new Date(ev.date);
                                                                                 const e = new Date(ev.endDate);
+                                                                                // startDate와 endDate가 같은 날이면 종료일 표시 생략 (당일 일정)
+                                                                                if (s.getUTCFullYear() === e.getUTCFullYear() &&
+                                                                                    s.getUTCMonth() === e.getUTCMonth() &&
+                                                                                    s.getUTCDate() === e.getUTCDate()) return null;
                                                                                 return (
-                                                                                    <span className="ml-1.5 text-xs font-semibold text-gray-400">
+                                                                                    <span className="ml-1.5 text-sm font-semibold text-gray-600">
                                                                                         ~ {e.getUTCMonth() + 1}월 {e.getUTCDate()}일
                                                                                     </span>
                                                                                 );

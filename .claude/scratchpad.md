@@ -2982,6 +2982,7 @@ push 여부: 미완료 (커밋만, 사용자 확인 후 push)
 | 2026-03-21 | tester | inferCategory 방학 키워드 검증 (21개 항목) | ✅ 전체 통과 |
 | 2026-03-21 | git-manager | inferCategory 방학 키워드 커밋 (03c7593) | ✅ 2개 파일 커밋 |
 | 2026-03-21 | tester | 종강 키워드 제거 + 일반 색상 green 변경 검증 (36개 항목) | ✅ 전체 통과 |
+| 2026-03-21 | tester | 3가지 수정사항 검증 (경기 제거 + 당일일정 숨김 + endDate 스타일) (10개 항목) | ✅ 전체 통과 |
 
 ### 테스트 결과 (tester) — inferCategory 방학 키워드 추가 (2026-03-21)
 
@@ -3395,3 +3396,51 @@ tsc --noEmit 통과 확인됨
 - src/app/annual/page.tsx (수정 - 일반 카테고리 dot gray → green)
 - src/app/admin/annual/AnnualAdminClient.tsx (수정 - 일반 카테고리 gray → green)
 push 여부: 미완료 (커밋만, 사용자 확인 후 push)
+
+---
+
+### 연간일정 카테고리 수정 2차 (2026-03-21)
+
+📝 구현한 기능: (1) "경기" 키워드 대회 자동분류에서 제거 (2) 종료일 표시: 당일 일정이면 숨김 (3) 종료일 텍스트 크기/색상 강화
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/googleCalendar.ts | inferCategory()에서 "경기" 키워드 제거 — "경기" 포함 일정이 "대회"가 아닌 "일반"으로 분류됨 | 수정 |
+| src/app/annual/AnnualEventsClient.tsx | endDate 표시 조건: startDate(ev.date)와 endDate가 UTC 기준 같은 날이면 null 반환(숨김). 스타일: text-xs→text-sm, text-gray-400→text-gray-600 | 수정 |
+
+#### 수정 이력
+| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
+|------|------|----------|----------|------|
+| 1차 | 2026-03-21 | "경기" 키워드를 대회 카테고리 매핑에서 제거 | googleCalendar.ts | tester 요청: 농구교실에서 "경기"는 일반 맥락이 많아 오분류 |
+| 2차 | 2026-03-21 | 당일 일정(start==end)에서 종료일 숨김 처리 | AnnualEventsClient.tsx | tester 요청: 불필요한 종료일 표시 제거 |
+| 3차 | 2026-03-21 | 종료일 텍스트 text-xs→text-sm, text-gray-400→text-gray-600 | AnnualEventsClient.tsx | tester 요청: 종료일 가독성 향상 |
+
+💡 tester 참고:
+- 테스트 방법:
+  (1) /annual 페이지에서 "경기" 포함 일정이 "대회"가 아닌 "일반"으로 표시되는지 확인
+  (2) 당일 일정(시작일==종료일)에서 "~N월N일" 종료일 텍스트가 안 보이는지 확인
+  (3) 여러 날에 걸친 일정에서 종료일이 이전보다 크고 진한 글씨(text-sm, text-gray-600)로 표시되는지 확인
+- 정상 동작: "경기 일정"→일반, 당일 일정→종료일 미표시, 다일 일정→종료일 큰 글씨
+- 주의할 입력: "대회" 키워드만 있는 일정은 여전히 "대회"로 분류되어야 함
+
+⚠️ reviewer 참고:
+- ev.date가 시작일 역할 (SerializedEvent 타입에 startDate 없음, date 필드 사용)
+- UTC 기준 비교로 시간대 이슈 방지 (getUTCFullYear/getUTCMonth/getUTCDate)
+- tsc --noEmit 통과 확인됨
+
+### 테스트 결과 (tester) — 3가지 수정사항 검증 (2026-03-21)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| "경기" 키워드가 대회 분류 조건에서 제거됨 | ✅ 통과 | inferCategory 18행: "대회", "tournament"만 남아있음 |
+| "대회", "tournament"는 여전히 대회로 분류 | ✅ 통과 | 기존 키워드 정상 유지 |
+| 다른 카테고리(방학/특별행사/정기행사/일반) 영향 없음 | ✅ 통과 | 19~22행 변경 없음 |
+| 당일 일정(start==end) 종료일 숨김 로직 존재 | ✅ 통과 | 330~336행: UTC 년/월/일 비교 후 null 반환 |
+| 다일 일정에서 종료일 정상 표시 | ✅ 통과 | 337~341행: span 요소로 "~N월 N일" 표시 |
+| UTC 기준 비교 사용 | ✅ 통과 | getUTCFullYear/getUTCMonth/getUTCDate 사용 |
+| 서버측 이중 안전장치 (하루짜리 endDate 제거) | ✅ 통과 | googleCalendar.ts 87~89행, 141~143행에서도 처리 |
+| endDate 스타일: text-sm 적용 | ✅ 통과 | 338행 className 확인 |
+| endDate 스타일: text-gray-600 적용 | ✅ 통과 | 338행 className 확인 |
+| TypeScript 컴파일 (tsc --noEmit) | ✅ 통과 | 에러 0건 |
+
+📊 종합: 10개 중 10개 통과 / 0개 실패

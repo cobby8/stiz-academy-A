@@ -242,14 +242,18 @@ const getCachedCoachSlots = unstable_cache(
         const coachName = o.coachName ?? o.coachname;
         const coachId = o.coachId ?? o.coachid;
         if (!coachName || !coachId) continue;
-        // slotKey에서 요일 추출 (예: "Mon-3" → "Mon")
-        const dayEng = (o.slotKey ?? o.slotkey)?.split("-")[0] ?? "";
+        // slotKey에서 요일과 교시 번호 추출 (예: "Mon-3" → 요일="Mon", 교시="3")
+        const keyParts = (o.slotKey ?? o.slotkey)?.split("-") ?? [];
+        const dayEng = keyParts[0] ?? "";
+        const slotNum = keyParts[1] ?? ""; // 교시 번호 (예: "5")
         const dayKor = dayMap[dayEng] ?? dayEng;
         const label = o.label ?? "";
         const start = o.startTimeOverride ?? o.starttimeoverride ?? "";
         const end = o.endTimeOverride ?? o.endtimeoverride ?? "";
         const program = o.programName ?? o.programname ?? "";
-        const slotInfo = `${dayKor} ${start}~${end} ${label}${program ? ` (${program})` : ""}`.trim();
+        // 교시 번호가 있으면 "수 5교시 16:00~16:55" 형태로 포함
+        const slotTag = slotNum ? `${slotNum}교시 ` : "";
+        const slotInfo = `${dayKor} ${slotTag}${start}~${end} ${label}${program ? ` (${program})` : ""}`.trim();
 
         if (!coachMap[coachId]) coachMap[coachId] = { coachName, slots: [] };
         coachMap[coachId].slots.push(slotInfo);

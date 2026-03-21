@@ -59,24 +59,44 @@ const getCachedPrograms = unstable_cache(
   { revalidate: 300 } // 5분 캐시
 );
 
-// 학원 설정 (전화번호, 주소)
+// 학원 설정 (전화번호, 주소, 체험수업/수강신청 안내, 셔틀 안내)
 const getCachedSettings = unstable_cache(
   async () => {
     try {
       const rows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT "contactPhone", address FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+        // 챗봇 시스템 프롬프트에 필요한 설정값 5개 추가 조회
+        `SELECT "contactPhone", address,
+                "trialTitle", "trialContent", "trialFormUrl",
+                "enrollContent", "shuttleInfoText"
+         FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
       );
       if (rows[0]) {
+        const r = rows[0];
         return {
-          contactPhone:
-            rows[0].contactPhone ?? rows[0].contactphone ?? "010-0000-0000",
-          address: rows[0].address ?? "",
+          contactPhone: r.contactPhone ?? r.contactphone ?? "010-0000-0000",
+          address: r.address ?? "",
+          // 체험수업 안내 정보
+          trialTitle: r.trialTitle ?? r.trialtitle ?? "체험수업 안내",
+          trialContent: r.trialContent ?? r.trialcontent ?? "",
+          trialFormUrl: r.trialFormUrl ?? r.trialformurl ?? "",
+          // 수강신청 안내 정보
+          enrollContent: r.enrollContent ?? r.enrollcontent ?? "",
+          // 셔틀 안내 텍스트
+          shuttleInfoText: r.shuttleInfoText ?? r.shuttleinfotext ?? "",
         };
       }
     } catch (e) {
       console.error("[chat] getSettings failed:", e);
     }
-    return { contactPhone: "010-0000-0000", address: "" };
+    return {
+      contactPhone: "010-0000-0000",
+      address: "",
+      trialTitle: "체험수업 안내",
+      trialContent: "",
+      trialFormUrl: "",
+      enrollContent: "",
+      shuttleInfoText: "",
+    };
   },
   ["chat-settings"],
   { revalidate: 300 }
@@ -114,7 +134,15 @@ const getCachedClasses = unstable_cache(
 function buildSystemPrompt(
   programs: any[],
   classes: any[],
-  settings: { contactPhone: string; address: string }
+  settings: {
+    contactPhone: string;
+    address: string;
+    trialTitle: string;
+    trialContent: string;
+    trialFormUrl: string;
+    enrollContent: string;
+    shuttleInfoText: string;
+  }
 ): string {
   // 프로그램별 반 정보를 그룹핑하여 가독성 높은 텍스트로 변환
   const programInfo = programs
@@ -173,14 +201,17 @@ function buildSystemPrompt(
 - 수강료를 안내할 때는 반드시 아래 데이터에 있는 금액만 사용하세요. 임의로 할인이나 추가 비용을 언급하지 마세요.
 - 다른 학원이나 경쟁 업체에 대한 비교/언급을 하지 마세요.
 
-## 체험수업 안내
+## 체험수업/수강신청 안내
 - 체험수업을 적극 권유하세요: "한번 체험해보시고 결정하시는 게 좋습니다"
 - 체험수업은 실제 수강할 수업에 들어가서 해봅니다 (별도 체험반이 아님).
-- 체험수업 신청은 전화(${settings.contactPhone})로 안내하세요.
+${settings.trialContent ? `- 체험수업 상세: ${settings.trialContent}` : ""}
+${settings.trialFormUrl ? `- 체험수업 신청: 홈페이지 신청 페이지(${settings.trialFormUrl})에서 신청 가능합니다.` : `- 체험수업 신청은 전화(${settings.contactPhone})로 안내하세요.`}
+${settings.enrollContent ? `- 수강신청 안내: ${settings.enrollContent}` : ""}
+- 체험수업이나 수강신청 문의 시, 홈페이지의 "수강신청" 페이지를 안내하세요.
 
 ## 셔틀
 - 셔틀버스를 운행하고 있습니다.
-- 셔틀 노선/시간 등 세부사항은 전화로 문의하도록 안내하세요.
+${settings.shuttleInfoText ? `- 셔틀 안내: ${settings.shuttleInfoText}` : "- 셔틀 노선/시간 등 세부사항은 전화로 문의하도록 안내하세요."}
 
 ## 초보자 안내
 - 농구를 처음 하는 아이도 걱정 없다고 안내하세요.

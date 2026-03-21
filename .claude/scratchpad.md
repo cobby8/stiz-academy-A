@@ -2962,6 +2962,17 @@ reviewer 참고:
 - .claude/scratchpad.md (수정 - 작업 기록)
 push 여부: 미완료 (커밋만, 사용자 확인 후 push)
 
+### 2026-03-21 커밋 (7차)
+
+커밋: fix: 대회 분류 경기 키워드 제거 + 하루짜리 일정 종료일 숨김 + 종료일 스타일 강화
+해시: 1327652
+브랜치: main
+포함 파일 (3개):
+- src/lib/googleCalendar.ts (수정 - inferCategory에서 "경기" 키워드 제거)
+- src/app/annual/AnnualEventsClient.tsx (수정 - 당일 일정 종료일 숨김 + 종료일 스타일 강화)
+- .claude/scratchpad.md (수정 - 작업 기록)
+push 여부: 미완료 (커밋만, 사용자 확인 후 push)
+
 ## 문서 기록 (doc-writer)
 (아직 없음)
 
@@ -2983,6 +2994,8 @@ push 여부: 미완료 (커밋만, 사용자 확인 후 push)
 | 2026-03-21 | git-manager | inferCategory 방학 키워드 커밋 (03c7593) | ✅ 2개 파일 커밋 |
 | 2026-03-21 | tester | 종강 키워드 제거 + 일반 색상 green 변경 검증 (36개 항목) | ✅ 전체 통과 |
 | 2026-03-21 | tester | 3가지 수정사항 검증 (경기 제거 + 당일일정 숨김 + endDate 스타일) (10개 항목) | ✅ 전체 통과 |
+| 2026-03-21 | git-manager | 대회분류 경기제거 + 당일일정 종료일 숨김 커밋 (1327652) | ✅ 3개 파일 커밋 |
+| 2026-03-21 | tester | 반복 이벤트 정기행사 자동분류 검증 (24개 항목) | ✅ 전체 통과 |
 
 ### 테스트 결과 (tester) — inferCategory 방학 키워드 추가 (2026-03-21)
 
@@ -3444,3 +3457,97 @@ push 여부: 미완료 (커밋만, 사용자 확인 후 push)
 | TypeScript 컴파일 (tsc --noEmit) | ✅ 통과 | 에러 0건 |
 
 📊 종합: 10개 중 10개 통과 / 0개 실패
+
+---
+
+### 반복 이벤트 정기행사 자동분류 (2026-03-21)
+
+구현한 기능: Google Calendar 반복 이벤트(recurring event)를 "정기행사"로 자동 분류하는 로직 추가
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/googleCalendar.ts | inferCategory에 isRecurring 파라미터 추가 + fetchViaCalendarAPI/fetchViaICS에서 반복 여부 전달 | 수정 |
+
+변경 상세:
+1. inferCategory(summary, description, isRecurring=false) — 3번째 파라미터 추가
+2. 카테고리 우선순위: 대회 > 방학 > 특별행사 > 키워드 정기행사 > 반복이벤트 정기행사 > 일반
+3. fetchViaCalendarAPI: item.recurringEventId 존재 여부로 isRecurring 판별 (singleEvents=true로 전개된 인스턴스)
+4. fetchViaICS: event.recurrenceid 존재 여부로 isRecurring 판별 (rrule 있는 원본은 skip, 수정된 인스턴스만 감지)
+
+#### 수정 이력
+| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
+|------|------|----------|----------|------|
+| 1차 | 2026-03-21 | inferCategory에 isRecurring 파라미터 추가 + 호출부 2곳에서 반복 여부 전달 | googleCalendar.ts | planner/architect 요청: 반복 이벤트를 정기행사로 자동 분류 |
+
+tester 참고:
+- 테스트 방법:
+  (1) Google Calendar에서 반복 이벤트(매주/매월 등)를 생성하고 /annual 페이지에서 "정기행사"로 분류되는지 확인
+  (2) "대회", "방학" 등 키워드가 포함된 반복 이벤트는 키워드 분류가 우선 적용되는지 확인
+  (3) 비반복 단일 이벤트는 여전히 "일반"으로 분류되는지 확인
+- 정상 동작: 키워드 없는 반복 이벤트 -> 정기행사, 키워드 있는 반복 이벤트 -> 키워드 우선
+- 주의사항: ICS fallback에서는 rrule 있는 원본 이벤트는 skip되므로, recurrenceid가 있는 수정된 인스턴스만 isRecurring=true로 처리됨. Calendar API(singleEvents=true)에서는 모든 반복 인스턴스가 정상 감지됨.
+
+reviewer 참고:
+- inferCategory의 기본값 isRecurring=false이므로 기존 호출부(없는 경우)에 영향 없음
+- tsc --noEmit 통과 확인됨
+
+### 테스트 결과 (tester) — 반복 이벤트 정기행사 자동분류 (2026-03-21)
+
+**대상 파일**: src/lib/googleCalendar.ts (inferCategory 함수 + fetchViaCalendarAPI + fetchViaICS)
+
+#### 1. inferCategory 시그니처 확인
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| isRecurring 파라미터 존재 (17행) | ✅ 통과 | 기본값 false 설정됨 |
+
+#### 2. 분류 우선순위 테스트 (로직 단위 테스트 16개)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| 반복+대회 키워드 -> "대회" | ✅ 통과 | 대회가 우선 |
+| 반복+방학 키워드 -> "방학" | ✅ 통과 | 방학이 우선 |
+| 반복+특별행사 키워드 -> "특별행사" | ✅ 통과 | 특별행사가 우선 |
+| 반복+키워드 없음 -> "정기행사" | ✅ 통과 | 반복 이벤트 자동 분류 |
+| 비반복+키워드 없음 -> "일반" | ✅ 통과 | 기존 동작 유지 |
+| 비반복+정기 키워드 -> "정기행사" | ✅ 통과 | 기존 키워드 분류 유지 |
+| 반복+키워드 없음2 -> "정기행사" | ✅ 통과 | |
+| 반복+tournament -> "대회" | ✅ 통과 | 영문 키워드도 우선 |
+| 반복+휴강 -> "방학" | ✅ 통과 | |
+| 비반복+휴무 -> "방학" | ✅ 통과 | |
+| 반복+vacation -> "방학" | ✅ 통과 | |
+| 비반복+행사 -> "특별행사" | ✅ 통과 | |
+| 반복+event -> "특별행사" | ✅ 통과 | |
+| 비반복+정례 -> "정기행사" | ✅ 통과 | |
+| isRecurring 미전달 -> "일반" | ✅ 통과 | 기본값 false 동작 확인 |
+| isRecurring 미전달+대회 -> "대회" | ✅ 통과 | 기존 호출부 영향 없음 |
+
+#### 3. API 방식 recurringEventId 전달 확인
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| item.recurringEventId로 isRecurring 판별 (102행) | ✅ 통과 | `!!item.recurringEventId` |
+| inferCategory에 isRecurring 전달 (109행) | ✅ 통과 | 3번째 인자로 전달됨 |
+
+#### 4. ICS 방식 recurrenceid 전달 확인
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| event.recurrenceid로 isRecurring 판별 (156행) | ✅ 통과 | `!!(event as any).recurrenceid` |
+| inferCategory에 isRecurring 전달 (163행) | ✅ 통과 | 3번째 인자로 전달됨 |
+| rrule 스킵 로직 유지 (136행) | ✅ 통과 | `if ((event as any).rrule) continue;` 그대로 |
+
+#### 5. TypeScript 컴파일
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| npx tsc --noEmit | ✅ 통과 | 에러 없음 (출력 없음) |
+
+#### 6. 기존 기능 회귀 테스트
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| 기존 키워드 분류 (대회/방학/특별행사/정기행사) 영향 없음 | ✅ 통과 | 16개 케이스 중 관련 항목 모두 통과 |
+| isRecurring 미전달 시 기본값 false 동작 | ✅ 통과 | 기존 호출부 호환성 보장 |
+
+종합: 24개 중 24개 통과 / 0개 실패

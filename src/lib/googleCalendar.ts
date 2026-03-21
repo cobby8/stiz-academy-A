@@ -12,13 +12,17 @@ export interface GoogleCalendarEvent {
     source: "google";
 }
 
-function inferCategory(summary: string, description?: string): string {
+// isRecurring: Google Calendar 반복 이벤트 여부 (recurringEventId 또는 recurrenceid 존재 시 true)
+// 텍스트 키워드 기반 분류가 우선이고, 키워드 매칭이 안 되면 반복 여부로 "정기행사" 판별
+function inferCategory(summary: string, description?: string, isRecurring = false): string {
     const text = `${summary} ${description || ""}`.toLowerCase();
     // "경기" 제거 — 농구교실에서 "경기"는 일반 수업/연습 맥락이 많아 대회로 오분류됨
     if (text.includes("대회") || text.includes("tournament")) return "대회";
     if (text.includes("방학") || text.includes("휴강") || text.includes("휴무") || text.includes("휴가") || text.includes("vacation")) return "방학";
     if (text.includes("특별") || text.includes("행사") || text.includes("event")) return "특별행사";
     if (text.includes("정기") || text.includes("정례")) return "정기행사";
+    // 키워드 매칭 없지만 반복 이벤트면 정기행사로 분류
+    if (isRecurring) return "정기행사";
     return "일반";
 }
 
@@ -94,13 +98,15 @@ async function fetchViaCalendarAPI(
         }
 
         // 반복 이벤트는 singleEvents=true로 이미 전개됨 (별도 처리 불필요)
+        // recurringEventId가 있으면 원래 반복 이벤트에서 전개된 인스턴스
+        const isRecurring = !!item.recurringEventId;
         result.push({
             id: `gcal-${item.id}`,
             title: summary,
             date: startDate,
             endDate,
             description: item.description,
-            category: inferCategory(summary, item.description),
+            category: inferCategory(summary, item.description, isRecurring),
             isAllDay,
             url: item.htmlLink,
             source: "google",
@@ -146,13 +152,15 @@ async function fetchViaICS(icsUrl: string): Promise<GoogleCalendarEvent[]> {
             }
         }
 
+        // recurrenceid가 있으면 반복 이벤트에서 수정된 인스턴스
+        const isRecurring = !!(event as any).recurrenceid;
         result.push({
             id: `gcal-${key}`,
             title: summary,
             date: startDate,
             endDate,
             description: event.description,
-            category: inferCategory(summary, event.description),
+            category: inferCategory(summary, event.description, isRecurring),
             isAllDay,
             url: (event as any).url || undefined,
             source: "google",

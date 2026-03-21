@@ -41,7 +41,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                     <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
                     <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
                 </div>
-                <div className="max-w-4xl mx-auto px-4 relative">
+                <div className="max-w-4xl mx-auto px-6 md:px-4 relative">
                     <AnimateOnScroll>
                         {/* 목록으로 돌아가기 링크 */}
                         <Link
@@ -62,7 +62,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                         )}
 
                         {/* 공지 제목 */}
-                        <h1 className="text-3xl md:text-4xl font-black leading-tight mb-3">{notice.title}</h1>
+                        <h1 className="text-3xl md:text-4xl font-black leading-tight mb-3 break-keep">{notice.title}</h1>
 
                         {/* 날짜 */}
                         <p className="text-blue-200/60 text-sm">

@@ -43,7 +43,7 @@ export default function CTABanner({
         <div className="absolute right-1/4 top-1/2 w-24 h-24 bg-brand-orange-500/5 rounded-full blur-xl" />
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 text-center relative">
+      <div className="max-w-4xl mx-auto px-6 md:px-4 text-center relative">
         <AnimateOnScroll>
           {/* 제목 */}
           <h2 className="text-3xl md:text-4xl font-black text-white mb-4">

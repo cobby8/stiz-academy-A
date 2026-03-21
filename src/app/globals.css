@@ -63,6 +63,10 @@ html.text-large {
 .text-large .text-lg { font-size: 1.25rem !important; }       /* 18px → 20px */
 .text-large .text-xl { font-size: 1.5rem !important; }        /* 20px → 24px */
 
+/* 큰글씨 모드에서 히어로 제목이 과도하게 커지는 것을 방지 */
+.text-large .text-4xl { font-size: 2.25rem !important; }      /* 36px 고정 */
+.text-large .text-5xl { font-size: 2.75rem !important; }      /* 44px 제한 */
+
 body {
   color: var(--foreground);
   background: var(--background);

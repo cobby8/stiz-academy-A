@@ -26,10 +26,10 @@ export default async function ApplyPage() {
                     <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
                     <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
                 </div>
-                <div className="max-w-6xl mx-auto px-4 relative">
+                <div className="max-w-6xl mx-auto px-6 md:px-4 relative">
                     <AnimateOnScroll>
                         <p className="text-brand-orange-500 text-sm font-bold uppercase tracking-widest mb-3">APPLY</p>
-                        <h1 className="text-4xl md:text-5xl font-black mb-4">체험 / 수강신청</h1>
+                        <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">체험 / 수강신청</h1>
                         {/* 진입 장벽 낮추는 핵심 메시지 */}
                         <p className="text-blue-200 text-lg max-w-xl">1분이면 충분해요! 간단한 신청으로 우리 아이의 농구 여정을 시작하세요.</p>
                     </AnimateOnScroll>

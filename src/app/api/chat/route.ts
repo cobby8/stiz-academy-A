@@ -65,9 +65,10 @@ const getCachedSettings = unstable_cache(
     try {
       const rows = await prisma.$queryRawUnsafe<any[]>(
         // 챗봇 시스템 프롬프트에 필요한 설정값 5개 추가 조회
+        // termsOfService 추가: 이용약관을 챗봇이 안내할 수 있도록
         `SELECT "contactPhone", address,
                 "trialTitle", "trialContent", "trialFormUrl",
-                "enrollContent", "shuttleInfoText"
+                "enrollContent", "shuttleInfoText", "termsOfService"
          FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
       );
       if (rows[0]) {
@@ -83,6 +84,8 @@ const getCachedSettings = unstable_cache(
           enrollContent: r.enrollContent ?? r.enrollcontent ?? "",
           // 셔틀 안내 텍스트
           shuttleInfoText: r.shuttleInfoText ?? r.shuttleinfotext ?? "",
+          // 이용약관 텍스트
+          termsOfService: r.termsOfService ?? r.termsofservice ?? "",
         };
       }
     } catch (e) {
@@ -96,6 +99,7 @@ const getCachedSettings = unstable_cache(
       trialFormUrl: "",
       enrollContent: "",
       shuttleInfoText: "",
+      termsOfService: "",
     };
   },
   ["chat-settings"],
@@ -355,6 +359,7 @@ function buildSystemPrompt(
     trialFormUrl: string;
     enrollContent: string;
     shuttleInfoText: string;
+    termsOfService: string;
   },
   annualEvents: any[],
   coaches: any[],
@@ -549,6 +554,11 @@ ${annualEventInfo}
 
 ## 최근 공지사항
 ${noticeInfo}
+
+## 이용약관
+${settings.termsOfService
+  ? `아래는 학원 이용약관입니다. 학부모가 이용약관, 환불규정, 수업규칙 등에 대해 질문하면 이 내용을 바탕으로 안내하세요.\n${settings.termsOfService}`
+  : "(등록된 이용약관 없음)"}
 
 ## 자주 묻는 질문 (FAQ)
 ${faq.length > 0

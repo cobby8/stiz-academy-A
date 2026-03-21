@@ -164,9 +164,9 @@ export default function ApplyPageClient({
             {/* 체험수업 / 수강신청 카드 섹션 */}
             <SectionLayout label="APPLY NOW" title="신청하기" description="체험수업 또는 수강신청을 선택하세요" bgColor="section">
                 <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-                    {/* 체험수업 카드 — 진입 장벽이 낮은 첫 번째 행동 */}
+                    {/* 체험수업 카드 — 앵커 id="trial"로 챗봇에서 바로 스크롤 가능 */}
                     <AnimateOnScroll>
-                        <Card variant="default" className="overflow-hidden !p-0 h-full">
+                        <Card id="trial" variant="default" className="overflow-hidden !p-0 h-full">
                             {/* 카드 헤더 — 네이비 배경 */}
                             <div className="bg-brand-navy-900 px-6 py-5">
                                 <div className="flex items-center gap-2 mb-2">
@@ -207,9 +207,9 @@ export default function ApplyPageClient({
                         </Card>
                     </AnimateOnScroll>
 
-                    {/* 수강신청 카드 — 이미 결심한 학부모를 위한 행동 */}
+                    {/* 수강신청 카드 — 앵커 id="enroll"로 챗봇에서 바로 스크롤 가능 */}
                     <AnimateOnScroll delay={150}>
-                        <Card variant="default" className="overflow-hidden !p-0 h-full">
+                        <Card id="enroll" variant="default" className="overflow-hidden !p-0 h-full">
                             {/* 카드 헤더 — 오렌지 배경으로 차별화 */}
                             <div className="bg-brand-orange-500 px-6 py-5">
                                 <div className="flex items-center gap-2 mb-2">

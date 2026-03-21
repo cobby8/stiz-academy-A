@@ -797,17 +797,17 @@ export async function POST(request: NextRequest) {
       // 체험수업 + 수강신청 둘 다 안내하는 경우
       cleanReply = reply.replace("[ACTION:BOTH]", "").trim();
       actions = [
-        { label: "체험수업 신청하기", url: "/apply" },
-        { label: "수강신청하기", url: "/apply" },
+        { label: "체험수업 신청하기", url: "/apply#trial" },
+        { label: "수강신청하기", url: "/apply#enroll" },
       ];
     } else if (reply.includes("[ACTION:TRIAL]")) {
       // 체험수업만 안내하는 경우
       cleanReply = reply.replace("[ACTION:TRIAL]", "").trim();
-      actions = [{ label: "체험수업 신청하기", url: "/apply" }];
+      actions = [{ label: "체험수업 신청하기", url: "/apply#trial" }];
     } else if (reply.includes("[ACTION:ENROLL]")) {
       // 수강신청만 안내하는 경우
       cleanReply = reply.replace("[ACTION:ENROLL]", "").trim();
-      actions = [{ label: "수강신청하기", url: "/apply" }];
+      actions = [{ label: "수강신청하기", url: "/apply#enroll" }];
     }
 
     // actions가 있으면 응답에 포함, 없으면 기존과 동일한 형식

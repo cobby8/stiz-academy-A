@@ -17,6 +17,7 @@ type CardVariant = 'default' | 'accent' | 'image' | 'info';
 interface CardBaseProps {
   children: React.ReactNode;
   className?: string;
+  id?: string; // 앵커 스크롤용 HTML id 속성
 }
 
 // accent 카드 전용: 좌측 바 색상 지정
@@ -79,9 +80,11 @@ export default function Card({
   accentColor = 'bg-brand-orange-500',
   imageSrc,
   imageAlt,
+  id,
 }: CardProps) {
   return (
     <div
+      id={id}
       className={[
         // 모든 카드에 공통: 부드러운 전환 효과
         'transition-all duration-300',

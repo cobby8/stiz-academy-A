@@ -35,16 +35,21 @@ export default function ChatMessage({ role, content, actions }: ChatMessageProps
         </div>
 
         {/* 액션 버튼 영역: 봇 메시지이고 actions가 있을 때만 표시 */}
+        {/* <a> 태그는 fixed+overflow-y-auto 컨테이너 내에서 클릭이 안 되는 경우가 있어
+            button + window.location.href 방식으로 강제 이동 처리 */}
         {!isUser && actions && actions.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {actions.map((action, i) => (
-              <a
+              <button
                 key={i}
-                href={action.url}
-                className="inline-block px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-full hover:bg-orange-600 transition-colors"
+                type="button"
+                onClick={() => {
+                  window.location.href = action.url;
+                }}
+                className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-full hover:bg-orange-600 transition-colors cursor-pointer"
               >
                 {action.label}
-              </a>
+              </button>
             ))}
           </div>
         )}

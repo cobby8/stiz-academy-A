@@ -15,7 +15,7 @@ export interface GoogleCalendarEvent {
 function inferCategory(summary: string, description?: string): string {
     const text = `${summary} ${description || ""}`.toLowerCase();
     if (text.includes("대회") || text.includes("경기") || text.includes("tournament")) return "대회";
-    if (text.includes("방학") || text.includes("휴강") || text.includes("휴무") || text.includes("종강") || text.includes("휴가") || text.includes("vacation")) return "방학";
+    if (text.includes("방학") || text.includes("휴강") || text.includes("휴무") || text.includes("휴가") || text.includes("vacation")) return "방학";
     if (text.includes("특별") || text.includes("행사") || text.includes("event")) return "특별행사";
     if (text.includes("정기") || text.includes("정례")) return "정기행사";
     return "일반";

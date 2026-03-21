@@ -2952,6 +2952,16 @@ reviewer 참고:
 - 단순 조건 추가이므로 기존 로직 변경 없음
 - tsc --noEmit 통과 확인 완료
 
+### 2026-03-21 커밋 (6차)
+
+커밋: fix: 연간일정표 휴무/종강/휴가 키워드를 방학 카테고리로 분류
+해시: 03c7593
+브랜치: main
+포함 파일 (2개):
+- src/lib/googleCalendar.ts (수정 - inferCategory 함수에 휴무/종강/휴가 키워드 추가)
+- .claude/scratchpad.md (수정 - 작업 기록)
+push 여부: 미완료 (커밋만, 사용자 확인 후 push)
+
 ## 문서 기록 (doc-writer)
 (아직 없음)
 
@@ -2970,6 +2980,8 @@ reviewer 참고:
 | 2026-03-21 | architect | 수업 등록 시뮬레이터 가능 여부 분석 | ✅ 구현 가능 판정 (독립 페이지 위저드 추천) |
 | 2026-03-21 | developer | inferCategory 방학 키워드 3개 추가 (휴무/종강/휴가) | ✅ tsc 통과 |
 | 2026-03-21 | tester | inferCategory 방학 키워드 검증 (21개 항목) | ✅ 전체 통과 |
+| 2026-03-21 | git-manager | inferCategory 방학 키워드 커밋 (03c7593) | ✅ 2개 파일 커밋 |
+| 2026-03-21 | tester | 종강 키워드 제거 + 일반 색상 green 변경 검증 (36개 항목) | ✅ 전체 통과 |
 
 ### 테스트 결과 (tester) — inferCategory 방학 키워드 추가 (2026-03-21)
 
@@ -3268,3 +3280,118 @@ reviewer 참고:
 | 홈페이지 돌아가기 링크 | 통과 | 210행 유지 |
 
 결과: 16개 중 16개 통과 / 0개 실패
+
+---
+
+### 연간일정 카테고리 수정 (2026-03-21)
+
+구현한 기능: (1) 캘린더 자동분류에서 "종강" 키워드를 "방학" 카테고리 매핑에서 제거 (2) "일반" 카테고리 색상을 gray에서 green 계열로 변경
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/googleCalendar.ts | inferCategory()에서 "종강" 키워드 제거 — 종강 일정이 "방학"이 아닌 "일반"으로 분류됨 | 수정 |
+| src/app/annual/AnnualEventsClient.tsx | CATEGORY_STYLES "일반" 색상: gray-50/gray-700/gray-400/gray-200 → green-50/green-700/green-500/green-200 | 수정 |
+| src/app/annual/page.tsx | CATEGORY_STYLES "일반" dot: bg-gray-400 → bg-green-500 | 수정 |
+| src/app/admin/annual/AnnualAdminClient.tsx | BADGE_COLORS "일반": bg-gray-100 text-gray-700 → bg-green-100 text-green-700 | 수정 |
+
+tester 참고:
+- 테스트 방법: (1) /annual 페이지에서 "일반" 카테고리 일정이 녹색 계열로 표시되는지 확인 (2) /admin/annual 페이지에서 "일반" 뱃지가 녹색인지 확인 (3) Google 캘린더 연동 시 "종강" 포함 일정이 "일반"으로 분류되는지 확인
+- 정상 동작: "일반" 카테고리가 회색이 아닌 연한 녹색으로 표시됨
+- 주의할 입력: "종강" 키워드가 포함된 캘린더 이벤트가 "방학"이 아닌 "일반"으로 분류됨
+
+tsc --noEmit 통과 확인됨
+
+### 테스트 결과 (tester) — 종강 키워드 제거 + 일반 색상 green 변경 (2026-03-21)
+
+**대상 파일**:
+- src/lib/googleCalendar.ts (inferCategory 함수)
+- src/app/annual/AnnualEventsClient.tsx (CATEGORY_STYLES)
+- src/app/annual/page.tsx (CATEGORY_STYLES)
+- src/app/admin/annual/AnnualAdminClient.tsx (CATEGORY_COLORS)
+
+#### 1. TypeScript 컴파일 검증
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| npx tsc --noEmit | ✅ 통과 | 에러/경고 없음 |
+
+#### 2. 검증 1 — "종강" 키워드가 방학에서 제거되었는지
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| "종강" → 일반 | ✅ 통과 | 방학이 아닌 일반으로 분류됨 |
+| "3월 종강" → 일반 | ✅ 통과 | 부분 문자열도 일반 |
+| "종강일 안내" → 일반 | ✅ 통과 | |
+| "종강 파티" → 일반 | ✅ 통과 | |
+| description에 "종강" → 일반 | ✅ 통과 | summary+description 합산 검색에서도 방학 아님 |
+
+#### 3. 기존 방학 키워드 회귀 테스트 — 여전히 방학으로 분류되는지
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| "겨울방학" → 방학 | ✅ 통과 | "방학" 키워드 |
+| "여름방학 안내" → 방학 | ✅ 통과 | |
+| "휴강" → 방학 | ✅ 통과 | "휴강" 키워드 |
+| "휴강 안내" → 방학 | ✅ 통과 | |
+| "학원 휴무" → 방학 | ✅ 통과 | "휴무" 키워드 |
+| "휴무일" → 방학 | ✅ 통과 | |
+| "여름휴가" → 방학 | ✅ 통과 | "휴가" 키워드 |
+| "summer vacation" → 방학 | ✅ 통과 | "vacation" 키워드 |
+
+#### 4. 다른 카테고리 영향 없음 확인
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| "전국대회" → 대회 | ✅ 통과 | |
+| "경기 일정" → 대회 | ✅ 통과 | |
+| "tournament 안내" → 대회 | ✅ 통과 | |
+| "특별행사" → 특별행사 | ✅ 통과 | |
+| "특별 수업" → 특별행사 | ✅ 통과 | |
+| "행사 안내" → 특별행사 | ✅ 통과 | |
+| "정기 평가" → 정기행사 | ✅ 통과 | |
+| "정례 회의" → 정기행사 | ✅ 통과 | |
+| "수업 안내" → 일반 | ✅ 통과 | |
+| "3월 개강" → 일반 | ✅ 통과 | |
+| "" (빈 값) → 일반 | ✅ 통과 | |
+
+#### 5. 검증 2 — "일반" 카테고리 색상 gray → green 변경 확인
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| AnnualEventsClient.tsx 일반 bg → green-50 | ✅ 통과 | bg-green-50 확인 (기존 gray-50) |
+| AnnualEventsClient.tsx 일반 text → green-700 | ✅ 통과 | text-green-700 확인 |
+| AnnualEventsClient.tsx 일반 dot → green-500 | ✅ 통과 | bg-green-500 확인 |
+| AnnualEventsClient.tsx 일반 border → green-200 | ✅ 통과 | border-green-200 확인 |
+| page.tsx 일반 dot → green-500 | ✅ 통과 | bg-green-500 확인 (기존 gray-400) |
+| AnnualAdminClient.tsx 일반 → green-100/green-700 | ✅ 통과 | bg-green-100 text-green-700 확인 |
+
+#### 6. 다른 카테고리 색상 변경 없음 확인
+
+| 파일 | 카테고리 | 결과 | 비고 |
+|------|---------|------|------|
+| AnnualEventsClient.tsx | 대회 | ✅ 변경 없음 | red 계열 유지 |
+| AnnualEventsClient.tsx | 방학 | ✅ 변경 없음 | yellow 계열 유지 |
+| AnnualEventsClient.tsx | 특별행사 | ✅ 변경 없음 | purple 계열 유지 |
+| AnnualEventsClient.tsx | 정기행사 | ✅ 변경 없음 | blue 계열 유지 |
+| page.tsx | 대회/방학/특별행사/정기행사 | ✅ 변경 없음 | 각각 red/yellow/purple/blue 유지 |
+| AnnualAdminClient.tsx | 대회 | ✅ 변경 없음 | red-100/red-700 유지 |
+| AnnualAdminClient.tsx | 방학 | ✅ 변경 없음 | blue-100/blue-700 유지 |
+| AnnualAdminClient.tsx | 특별행사 | ✅ 변경 없음 | purple-100/purple-700 유지 |
+| AnnualAdminClient.tsx | 정기행사 | ✅ 변경 없음 | green-100/green-700 유지 |
+
+종합: 36개 중 36개 통과 / 0개 실패
+
+참고사항: AnnualAdminClient.tsx에서 "정기행사"와 "일반"이 동일한 색상(bg-green-100 text-green-700)을 사용 중. 기능상 문제는 없으나, 두 카테고리를 시각적으로 구분하기 어려울 수 있음. 필요시 정기행사를 다른 색상으로 변경 고려 가능.
+
+### 2026-03-21 커밋 (7차)
+
+커밋: fix: 종강을 일반 카테고리로 변경 + 일반 카테고리 색상 초록색으로 변경
+해시: 8e5b5e4
+브랜치: main
+포함 파일 (5개):
+- .claude/scratchpad.md (수정)
+- src/lib/googleCalendar.ts (수정 - 종강 키워드를 방학 카테고리에서 제거)
+- src/app/annual/AnnualEventsClient.tsx (수정 - 일반 카테고리 gray → green)
+- src/app/annual/page.tsx (수정 - 일반 카테고리 dot gray → green)
+- src/app/admin/annual/AnnualAdminClient.tsx (수정 - 일반 카테고리 gray → green)
+push 여부: 미완료 (커밋만, 사용자 확인 후 push)

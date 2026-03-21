@@ -20,7 +20,7 @@ const CATEGORY_COLORS: Record<string, string> = {
     "방학": "bg-blue-100 text-blue-700",
     "특별행사": "bg-purple-100 text-purple-700",
     "정기행사": "bg-green-100 text-green-700",
-    "일반": "bg-gray-100 text-gray-700",
+    "일반": "bg-green-100 text-green-700",
 };
 
 function toDateString(d: Date | string | null | undefined): string {

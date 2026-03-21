@@ -24,7 +24,7 @@ const CATEGORY_STYLES: Record<string, { dot: string }> = {
     방학: { dot: "bg-yellow-500" },
     특별행사: { dot: "bg-purple-500" },
     정기행사: { dot: "bg-blue-500" },
-    일반: { dot: "bg-gray-400" },
+    일반: { dot: "bg-green-500" },
 };
 
 // Class.dayOfWeek("Mon","Tue"…) → JS getDay() 숫자

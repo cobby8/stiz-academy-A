@@ -8,6 +8,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // 비밀번호 보기/숨기기 토글 상태
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
@@ -64,6 +66,7 @@ export default function LoginPage() {
               onClick={() => {
                 setMode("login");
                 setError(null);
+                setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "login"
@@ -78,6 +81,7 @@ export default function LoginPage() {
               onClick={() => {
                 setMode("signup");
                 setError(null);
+                setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "signup"
@@ -111,6 +115,7 @@ export default function LoginPage() {
                   name="name"
                   type="text"
                   required
+                  autoComplete="off"
                   placeholder="홍길동"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 outline-none transition-colors"
                 />
@@ -129,6 +134,7 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 required
+                autoComplete={mode === "login" ? "email" : "off"}
                 placeholder="example@email.com"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 outline-none transition-colors"
               />
@@ -141,15 +147,43 @@ export default function LoginPage() {
               >
                 비밀번호
               </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                minLength={6}
-                placeholder="6자 이상"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 outline-none transition-colors"
-              />
+              {/* 비밀번호 입력 + 보기/숨기기 토글을 감싸는 relative 컨테이너 */}
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={6}
+                  autoComplete={mode === "login" ? "current-password" : "off"}
+                  placeholder="6자 이상"
+                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 outline-none transition-colors"
+                />
+                {/* 비밀번호 보기/숨기기 토글 버튼 — 눈 아이콘 인라인 SVG */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  tabIndex={-1}
+                  aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                >
+                  {showPassword ? (
+                    /* 눈 열림 아이콘 — 비밀번호가 보이는 상태 */
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  ) : (
+                    /* 눈 닫힘 아이콘 (사선 있음) — 비밀번호가 숨겨진 상태 */
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {mode === "signup" && (

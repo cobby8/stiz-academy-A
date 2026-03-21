@@ -19,7 +19,6 @@ import Image from "next/image";
 
 // Phase 2 신규 컴포넌트들
 import TrustBadges from "@/components/landing/TrustBadges";
-import ProgramHighlight from "@/components/landing/ProgramHighlight";
 import ProcessSteps from "@/components/landing/ProcessSteps";
 import TestimonialCarousel from "@/components/landing/TestimonialCarousel";
 import CTABanner from "@/components/landing/CTABanner";
@@ -124,13 +123,6 @@ export default function LandingPageClient({
           - 히어로 바로 아래에 위치하여 첫인상에서 신뢰감 형성
           ============================================= */}
       <TrustBadges />
-
-      {/* =============================================
-          3. 프로그램 하이라이트
-          - 기존 퀵네비 4개 카드를 프로그램 중심 카드로 대체
-          - 유아반/초등저/초등고/중등반 4개 프로그램 카드
-          ============================================= */}
-      <ProgramHighlight />
 
       {/* =============================================
           4. 수강 과정 시각화

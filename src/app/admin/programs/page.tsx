@@ -8,9 +8,13 @@ export default async function AdminProgramsPage() {
     let programs: any[] = [];
     let termsOfService: string | null = null;
     try {
-        [programs] = await Promise.all([getPrograms()]);
-        const settings = await getAcademySettings() as any;
-        termsOfService = settings?.termsOfService ?? null;
+        // 두 쿼리를 동시에 실행하여 페이지 로딩 속도 개선
+        const [fetchedPrograms, settings] = await Promise.all([
+            getPrograms(),
+            getAcademySettings(),
+        ]);
+        programs = fetchedPrograms;
+        termsOfService = (settings as any)?.termsOfService ?? null;
     } catch (e) {
         console.error("Error fetching programs page data:", e);
         try { programs = await getPrograms(); } catch {}

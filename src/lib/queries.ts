@@ -715,18 +715,48 @@ export const getDashboardExtendedStats = cache(async () => {
         const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const lastMonthKey = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, "0")}`;
 
-        // [쿼리 1] 6개월 매출을 GROUP BY로 한 번에 가져옴 (기존 루프 6번 + 개별 2번 → 1번)
-        const revenueByMonth = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT TO_CHAR(DATE_TRUNC('month', "paidDate"), 'YYYY-MM') AS month,
-                    COALESCE(SUM(amount), 0)::int AS total
-             FROM "Payment"
-             WHERE status = 'PAID'
-               AND "paidDate" >= $1::timestamp
-               AND "paidDate" < $2::timestamp
-             GROUP BY DATE_TRUNC('month', "paidDate")
-             ORDER BY DATE_TRUNC('month', "paidDate")`,
-            sixMonthsAgoStr, nextMonthStr
-        );
+        // 4개 쿼리를 Promise.all로 병렬 실행 (순차 → 병렬: 응답 시간 단축)
+        const [revenueByMonth, attendanceByMonth, unpaidRows, programStudents] = await Promise.all([
+            // [쿼리 1] 6개월 매출을 GROUP BY로 한 번에 가져옴
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT TO_CHAR(DATE_TRUNC('month', "paidDate"), 'YYYY-MM') AS month,
+                        COALESCE(SUM(amount), 0)::int AS total
+                 FROM "Payment"
+                 WHERE status = 'PAID'
+                   AND "paidDate" >= $1::timestamp
+                   AND "paidDate" < $2::timestamp
+                 GROUP BY DATE_TRUNC('month', "paidDate")
+                 ORDER BY DATE_TRUNC('month', "paidDate")`,
+                sixMonthsAgoStr, nextMonthStr
+            ),
+            // [쿼리 2] 6개월 출석률을 GROUP BY로 한 번에 가져옴
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT TO_CHAR(DATE_TRUNC('month', se.date), 'YYYY-MM') AS month,
+                        COUNT(*)::int AS total,
+                        COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present
+                 FROM "Attendance" a
+                 JOIN "Session" se ON a."sessionId" = se.id
+                 WHERE se.date >= $1::timestamp
+                   AND se.date < $2::timestamp
+                 GROUP BY DATE_TRUNC('month', se.date)
+                 ORDER BY DATE_TRUNC('month', se.date)`,
+                sixMonthsAgoStr, nextMonthStr
+            ),
+            // [쿼리 3] 미납 건수/금액
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT COUNT(*)::int AS cnt, COALESCE(SUM(amount), 0)::int AS total
+                 FROM "Payment" WHERE status IN ('PENDING', 'OVERDUE')`
+            ),
+            // [쿼리 4] 프로그램별 원생 수
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT p.name, COUNT(DISTINCT e."studentId")::int AS cnt
+                 FROM "Program" p
+                 LEFT JOIN "Class" c ON c."programId" = p.id
+                 LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+                 GROUP BY p.id, p.name, p."order"
+                 ORDER BY p."order" ASC`
+            ),
+        ]);
 
         // 매출 결과를 월별 맵으로 변환 (빠른 조회용)
         const revenueMap = new Map<string, number>();
@@ -748,20 +778,6 @@ export const getDashboardExtendedStats = cache(async () => {
                 amount: revenueMap.get(key) ?? 0,
             });
         }
-
-        // [쿼리 2] 6개월 출석률을 GROUP BY로 한 번에 가져옴 (기존 루프 6번 + 개별 1번 → 1번)
-        const attendanceByMonth = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT TO_CHAR(DATE_TRUNC('month', se.date), 'YYYY-MM') AS month,
-                    COUNT(*)::int AS total,
-                    COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present
-             FROM "Attendance" a
-             JOIN "Session" se ON a."sessionId" = se.id
-             WHERE se.date >= $1::timestamp
-               AND se.date < $2::timestamp
-             GROUP BY DATE_TRUNC('month', se.date)
-             ORDER BY DATE_TRUNC('month', se.date)`,
-            sixMonthsAgoStr, nextMonthStr
-        );
 
         // 출석 결과를 월별 맵으로 변환
         const attendanceMap = new Map<string, { total: number; present: number }>();
@@ -790,23 +806,9 @@ export const getDashboardExtendedStats = cache(async () => {
             });
         }
 
-        // [쿼리 3] 미납 건수/금액 (통합 불가 — 별도 테이블 조건)
-        const unpaidRows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COUNT(*)::int AS cnt, COALESCE(SUM(amount), 0)::int AS total
-             FROM "Payment" WHERE status IN ('PENDING', 'OVERDUE')`
-        );
+        // 미납 결과 추출
         const unpaidCount = Number(unpaidRows[0]?.cnt ?? 0);
         const unpaidAmount = Number(unpaidRows[0]?.total ?? 0);
-
-        // [쿼리 4] 프로그램별 원생 수
-        const programStudents = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT p.name, COUNT(DISTINCT e."studentId")::int AS cnt
-             FROM "Program" p
-             LEFT JOIN "Class" c ON c."programId" = p.id
-             LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
-             GROUP BY p.id, p.name, p."order"
-             ORDER BY p."order" ASC`
-        );
 
         return {
             thisMonthRevenue,
@@ -834,7 +836,7 @@ export const getDashboardExtendedStats = cache(async () => {
 // ── 원생 상세 활동 현황 ─────────────────────────────────────────────────────
 export async function getStudentActivity(studentId: string) {
     try {
-        // 원생 기본 + 학부모 정보: 새 필드(phone, school, grade, address, enrollDate) 포함
+        // 1단계: 원생 기본 + 학부모 정보 (null이면 즉시 반환해야 하므로 먼저 실행)
         const sRows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT s.id, s.name, s."birthDate", s.gender, s.memo, s."parentId",
                     s.phone, s.school, s.grade, s.address, s."enrollDate",
@@ -848,51 +850,51 @@ export async function getStudentActivity(studentId: string) {
         if (!sRows[0]) return null;
         const r = sRows[0];
 
-        // 수강 내역
-        const enrollments = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT e.id, e."classId", e.status, e."createdAt",
-                    c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
-                    p.name AS program_name
-             FROM "Enrollment" e
-             LEFT JOIN "Class" c ON e."classId" = c.id
-             LEFT JOIN "Program" p ON c."programId" = p.id
-             WHERE e."studentId" = $1
-             ORDER BY e."createdAt" DESC`,
-            studentId
-        );
+        // 2단계: 수강/출결/수납/통계를 병렬로 실행 (모두 studentId만 사용, 서로 독립적)
+        const [enrollments, attendances, payments, attStats] = await Promise.all([
+            // 수강 내역
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT e.id, e."classId", e.status, e."createdAt",
+                        c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                        p.name AS program_name
+                 FROM "Enrollment" e
+                 LEFT JOIN "Class" c ON e."classId" = c.id
+                 LEFT JOIN "Program" p ON c."programId" = p.id
+                 WHERE e."studentId" = $1
+                 ORDER BY e."createdAt" DESC`,
+                studentId
+            ),
+            // 전체 출결 기록 (최근 50건)
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT a.id, a.status, se.date, c.name AS class_name
+                 FROM "Attendance" a
+                 JOIN "Session" se ON a."sessionId" = se.id
+                 JOIN "Class" c ON se."classId" = c.id
+                 WHERE a."studentId" = $1
+                 ORDER BY se.date DESC LIMIT 50`,
+                studentId
+            ),
+            // 전체 수납 기록
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT id, amount, status, "dueDate", "paidDate", "createdAt"
+                 FROM "Payment" WHERE "studentId" = $1
+                 ORDER BY "dueDate" DESC`,
+                studentId
+            ),
+            // 출석 통계
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT COUNT(*)::int AS total,
+                        COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present,
+                        COUNT(CASE WHEN a.status = 'ABSENT' THEN 1 END)::int AS absent,
+                        COUNT(CASE WHEN a.status = 'LATE' THEN 1 END)::int AS late,
+                        COUNT(CASE WHEN a.status = 'EXCUSED' THEN 1 END)::int AS excused
+                 FROM "Attendance" a
+                 WHERE a."studentId" = $1`,
+                studentId
+            ),
+        ]);
 
-        // 전체 출결 기록 (최근 50건)
-        const attendances = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT a.id, a.status, se.date, c.name AS class_name
-             FROM "Attendance" a
-             JOIN "Session" se ON a."sessionId" = se.id
-             JOIN "Class" c ON se."classId" = c.id
-             WHERE a."studentId" = $1
-             ORDER BY se.date DESC LIMIT 50`,
-            studentId
-        );
-
-        // 전체 수납 기록
-        const payments = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, amount, status, "dueDate", "paidDate", "createdAt"
-             FROM "Payment" WHERE "studentId" = $1
-             ORDER BY "dueDate" DESC`,
-            studentId
-        );
-
-        // 출석 통계
-        const attStats = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COUNT(*)::int AS total,
-                    COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present,
-                    COUNT(CASE WHEN a.status = 'ABSENT' THEN 1 END)::int AS absent,
-                    COUNT(CASE WHEN a.status = 'LATE' THEN 1 END)::int AS late,
-                    COUNT(CASE WHEN a.status = 'EXCUSED' THEN 1 END)::int AS excused
-             FROM "Attendance" a
-             WHERE a."studentId" = $1`,
-            studentId
-        );
-
-        // 관련 갤러리 (수강 반의 사진)
+        // 3단계: 갤러리는 enrollments 결과(classIds)에 의존하므로 별도 실행
         const classIds = enrollments.map((e: any) => e.classId ?? e.classid).filter(Boolean);
         let galleryPosts: any[] = [];
         if (classIds.length > 0) {

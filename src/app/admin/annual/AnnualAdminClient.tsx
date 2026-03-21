@@ -16,11 +16,11 @@ type AnnualEvent = {
 const CATEGORIES = ["일반", "대회", "방학", "특별행사", "정기행사"] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
-    "대회": "bg-red-100 text-red-700",
-    "방학": "bg-blue-100 text-blue-700",
+    "대회": "bg-orange-100 text-orange-700",
+    "방학": "bg-red-100 text-red-700",
     "특별행사": "bg-purple-100 text-purple-700",
-    "정기행사": "bg-green-100 text-green-700",
-    "일반": "bg-green-100 text-green-700",
+    "정기행사": "bg-blue-100 text-blue-700",
+    "일般": "bg-green-100 text-green-700",
 };
 
 function toDateString(d: Date | string | null | undefined): string {

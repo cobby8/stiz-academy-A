@@ -20,8 +20,8 @@ export const revalidate = 300;
 export const metadata = { title: "연간일정표 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점 연간 행사 일정. 대회·방학·특별행사 및 정기 일정 안내." };
 
 const CATEGORY_STYLES: Record<string, { dot: string }> = {
-    대회: { dot: "bg-red-500" },
-    방학: { dot: "bg-yellow-500" },
+    대회: { dot: "bg-orange-500" },
+    방학: { dot: "bg-red-500" },
     특별행사: { dot: "bg-purple-500" },
     정기행사: { dot: "bg-blue-500" },
     일반: { dot: "bg-green-500" },

@@ -205,9 +205,15 @@ function buildSystemPrompt(
 - 체험수업을 적극 권유하세요: "한번 체험해보시고 결정하시는 게 좋습니다"
 - 체험수업은 실제 수강할 수업에 들어가서 해봅니다 (별도 체험반이 아님).
 ${settings.trialContent ? `- 체험수업 상세: ${settings.trialContent}` : ""}
-${settings.trialFormUrl ? `- 체험수업 신청: 홈페이지 신청 페이지(${settings.trialFormUrl})에서 신청 가능합니다.` : `- 체험수업 신청은 전화(${settings.contactPhone})로 안내하세요.`}
 ${settings.enrollContent ? `- 수강신청 안내: ${settings.enrollContent}` : ""}
-- 체험수업이나 수강신청 문의 시, 홈페이지의 "수강신청" 페이지를 안내하세요.
+
+## 신청 안내 규칙
+- 체험수업이나 수강신청을 안내할 때, 구글폼 URL을 직접 보여주지 마세요.
+- 대신 "아래 버튼을 눌러 신청 페이지로 이동하시면 됩니다"라고 안내하세요.
+- 체험수업 신청 안내 시: 응답 맨 끝에 [ACTION:TRIAL] 태그를 반드시 포함하세요.
+- 수강신청 안내 시: 응답 맨 끝에 [ACTION:ENROLL] 태그를 반드시 포함하세요.
+- 체험수업과 수강신청 둘 다 안내 시: [ACTION:BOTH] 태그를 포함하세요.
+- 이 태그는 시스템이 자동으로 버튼으로 변환합니다. 사용자에게 태그가 보이지 않습니다.
 
 ## 셔틀
 - 셔틀버스를 운행하고 있습니다.
@@ -282,7 +288,29 @@ export async function POST(request: NextRequest) {
     const result = await chat.sendMessage(lastMessage);
     const reply = result.response.text();
 
-    return NextResponse.json({ reply });
+    // --- 액션 태그 후처리: [ACTION:TRIAL/ENROLL/BOTH] 감지 → actions 배열로 변환 ---
+    let actions: Array<{ label: string; url: string }> | undefined;
+    let cleanReply = reply;
+
+    if (reply.includes("[ACTION:BOTH]")) {
+      // 체험수업 + 수강신청 둘 다 안내하는 경우
+      cleanReply = reply.replace("[ACTION:BOTH]", "").trim();
+      actions = [
+        { label: "체험수업 신청하기", url: "/apply" },
+        { label: "수강신청하기", url: "/apply" },
+      ];
+    } else if (reply.includes("[ACTION:TRIAL]")) {
+      // 체험수업만 안내하는 경우
+      cleanReply = reply.replace("[ACTION:TRIAL]", "").trim();
+      actions = [{ label: "체험수업 신청하기", url: "/apply" }];
+    } else if (reply.includes("[ACTION:ENROLL]")) {
+      // 수강신청만 안내하는 경우
+      cleanReply = reply.replace("[ACTION:ENROLL]", "").trim();
+      actions = [{ label: "수강신청하기", url: "/apply" }];
+    }
+
+    // actions가 있으면 응답에 포함, 없으면 기존과 동일한 형식
+    return NextResponse.json({ reply: cleanReply, ...(actions && { actions }) });
   } catch (error: any) {
     console.error("[chat] Gemini API error:", error);
     return NextResponse.json(

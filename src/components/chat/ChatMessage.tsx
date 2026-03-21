@@ -9,27 +9,45 @@
 interface ChatMessageProps {
   role: "user" | "model"; // user: 학부모, model: 챗봇
   content: string;
+  actions?: Array<{ label: string; url: string }>; // 체험수업/수강신청 이동 버튼
 }
 
-export default function ChatMessage({ role, content }: ChatMessageProps) {
+export default function ChatMessage({ role, content, actions }: ChatMessageProps) {
   // 사용자 메시지: 오른쪽 정렬, 파란 배경
   // 봇 메시지: 왼쪽 정렬, 회색 배경
   const isUser = role === "user";
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}>
-      <div
-        className={`
-          max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed
-          ${
-            isUser
-              ? "bg-blue-500 text-white rounded-br-md" // 사용자: 파란색, 우하단 모서리 각짐
-              : "bg-gray-100 text-gray-800 rounded-bl-md" // 봇: 회색, 좌하단 모서리 각짐
-          }
-        `}
-      >
-        {/* 줄바꿈을 유지하기 위해 whitespace-pre-wrap 적용 */}
-        <p className="whitespace-pre-wrap">{content}</p>
+      <div className="max-w-[80%]">
+        <div
+          className={`
+            rounded-2xl px-4 py-3 text-sm leading-relaxed
+            ${
+              isUser
+                ? "bg-blue-500 text-white rounded-br-md" // 사용자: 파란색, 우하단 모서리 각짐
+                : "bg-gray-100 text-gray-800 rounded-bl-md" // 봇: 회색, 좌하단 모서리 각짐
+            }
+          `}
+        >
+          {/* 줄바꿈을 유지하기 위해 whitespace-pre-wrap 적용 */}
+          <p className="whitespace-pre-wrap">{content}</p>
+        </div>
+
+        {/* 액션 버튼 영역: 봇 메시지이고 actions가 있을 때만 표시 */}
+        {!isUser && actions && actions.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {actions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => (window.location.href = action.url)}
+                className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-full hover:bg-orange-600 transition-colors"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

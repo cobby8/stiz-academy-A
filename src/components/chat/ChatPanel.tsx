@@ -25,8 +25,9 @@ const WELCOME_MESSAGE = {
 
 export default function ChatPanel({ onClose }: ChatPanelProps) {
   // 대화 히스토리 (인사 메시지로 시작)
+  // actions: 체험수업/수강신청 버튼 데이터 (API 응답에 포함될 수 있음)
   const [messages, setMessages] = useState<
-    Array<{ role: "user" | "model"; content: string }>
+    Array<{ role: "user" | "model"; content: string; actions?: Array<{ label: string; url: string }> }>
   >([WELCOME_MESSAGE]);
 
   // 입력 중인 텍스트
@@ -71,10 +72,10 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
       const data = await res.json();
 
       if (res.ok && data.reply) {
-        // 봇 응답을 대화에 추가
+        // 봇 응답을 대화에 추가 (actions가 있으면 함께 저장)
         setMessages((prev) => [
           ...prev,
-          { role: "model", content: data.reply },
+          { role: "model", content: data.reply, actions: data.actions },
         ]);
       } else {
         // API 에러 시 사용자에게 안내
@@ -142,7 +143,7 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
         {/* 중간 메시지 영역: 스크롤 가능 */}
         <div className="flex-1 overflow-y-auto p-4">
           {messages.map((msg, i) => (
-            <ChatMessage key={i} role={msg.role} content={msg.content} />
+            <ChatMessage key={i} role={msg.role} content={msg.content} actions={msg.actions} />
           ))}
 
           {/* API 호출 중일 때 "답변 작성 중..." 표시 */}

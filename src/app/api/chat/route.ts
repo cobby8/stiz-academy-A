@@ -178,6 +178,84 @@ const getCachedCoaches = unstable_cache(
   { revalidate: 300 }
 );
 
+// 코치-반-요일 매칭 — ClassSlotOverride, CustomClassSlot에서 코치가 배정된 슬롯을 조회
+// 학부모가 "월요일 수업하는 선생님 누구야?" 같은 질문에 답하기 위함
+const getCachedCoachSlots = unstable_cache(
+  async () => {
+    try {
+      // ClassSlotOverride: slotKey에서 요일 추출 (예: "Mon-3" → "Mon")
+      const overrides = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT cso."slotKey", cso."coachId", cso.label,
+                cso."startTimeOverride", cso."endTimeOverride",
+                co.name AS "coachName",
+                p.name AS "programName"
+         FROM "ClassSlotOverride" cso
+         LEFT JOIN "Coach" co ON cso."coachId" = co.id
+         LEFT JOIN "Program" p ON cso."programId" = p.id
+         WHERE cso."coachId" IS NOT NULL AND cso."isHidden" = false`
+      );
+      // CustomClassSlot: dayKey로 요일 직접 사용
+      const customs = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT ccs."dayKey", ccs."coachId", ccs.label,
+                ccs."startTime", ccs."endTime",
+                co.name AS "coachName",
+                p.name AS "programName"
+         FROM "CustomClassSlot" ccs
+         LEFT JOIN "Coach" co ON ccs."coachId" = co.id
+         LEFT JOIN "Program" p ON ccs."programId" = p.id
+         WHERE ccs."coachId" IS NOT NULL AND ccs."isHidden" = false`
+      );
+
+      // 요일 한글 매핑
+      const dayMap: Record<string, string> = {
+        Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
+      };
+
+      // 코치별로 담당 반/요일을 그룹핑
+      const coachMap: Record<string, { coachName: string; slots: string[] }> = {};
+
+      for (const o of overrides) {
+        const coachName = o.coachName ?? o.coachname;
+        const coachId = o.coachId ?? o.coachid;
+        if (!coachName || !coachId) continue;
+        // slotKey에서 요일 추출 (예: "Mon-3" → "Mon")
+        const dayEng = (o.slotKey ?? o.slotkey)?.split("-")[0] ?? "";
+        const dayKor = dayMap[dayEng] ?? dayEng;
+        const label = o.label ?? "";
+        const start = o.startTimeOverride ?? o.starttimeoverride ?? "";
+        const end = o.endTimeOverride ?? o.endtimeoverride ?? "";
+        const program = o.programName ?? o.programname ?? "";
+        const slotInfo = `${dayKor} ${start}~${end} ${label}${program ? ` (${program})` : ""}`.trim();
+
+        if (!coachMap[coachId]) coachMap[coachId] = { coachName, slots: [] };
+        coachMap[coachId].slots.push(slotInfo);
+      }
+
+      for (const c of customs) {
+        const coachName = c.coachName ?? c.coachname;
+        const coachId = c.coachId ?? c.coachid;
+        if (!coachName || !coachId) continue;
+        const dayKor = dayMap[c.dayKey ?? c.daykey] ?? (c.dayKey ?? c.daykey ?? "");
+        const label = c.label ?? "";
+        const start = c.startTime ?? c.starttime ?? "";
+        const end = c.endTime ?? c.endtime ?? "";
+        const program = c.programName ?? c.programname ?? "";
+        const slotInfo = `${dayKor} ${start}~${end} ${label}${program ? ` (${program})` : ""}`.trim();
+
+        if (!coachMap[coachId]) coachMap[coachId] = { coachName, slots: [] };
+        coachMap[coachId].slots.push(slotInfo);
+      }
+
+      return coachMap;
+    } catch (e) {
+      console.error("[chat] getCoachSlots failed:", e);
+      return {};
+    }
+  },
+  ["chat-coach-slots"],
+  { revalidate: 300 } // 5분 캐시
+);
+
 // 셔틀 노선 — 어떤 셔틀 노선이 있는지 안내 (스키마: description 컬럼 없음)
 const getCachedRoutes = unstable_cache(
   async () => {
@@ -280,6 +358,7 @@ function buildSystemPrompt(
   },
   annualEvents: any[],
   coaches: any[],
+  coachSlots: Record<string, { coachName: string; slots: string[] }>,
   routes: any[],
   stops: any[],
   notices: any[],
@@ -301,7 +380,32 @@ function buildSystemPrompt(
         priceLines.push(`  - 월 수강료: ${p.price.toLocaleString()}원`);
       }
       if (p.priceDaily != null) priceLines.push(`  - 1일 체험: ${p.priceDaily.toLocaleString()}원`);
-      if (p.shuttleFeeOverride != null) priceLines.push(`  - 셔틀비: 월 ${p.shuttleFeeOverride.toLocaleString()}원`);
+
+      // 셔틀비: programs 페이지와 동일한 로직 적용
+      // - shuttleFeeOverride가 0이면 셔틀 없음
+      // - shuttleFeeOverride가 양수면 해당 금액 표시
+      // - shuttleFeeOverride가 null이면 주 횟수별 기본 셔틀비 표시
+      const WEEKEND_DAYS = new Set(["Sat", "Sun"]);
+      const programDays = p.days ? p.days.split(",") : [];
+      const isWeekendOnly = programDays.length > 0 && programDays.every((d: string) => WEEKEND_DAYS.has(d.trim()));
+
+      if (isWeekendOnly) {
+        priceLines.push(`  - 셔틀: 주말반은 셔틀 운행 없음`);
+      } else if (p.shuttleFeeOverride === 0) {
+        // shuttleFeeOverride가 명시적으로 0이면 셔틀 없음
+      } else if (p.shuttleFeeOverride != null && p.shuttleFeeOverride > 0) {
+        priceLines.push(`  - 셔틀비: 월 ${p.shuttleFeeOverride.toLocaleString()}원`);
+      } else {
+        // 기본 셔틀비 (프로그램 페이지 FREQ_TIERS와 동일)
+        const shuttleLines: string[] = [];
+        if (p.priceWeek1 != null) shuttleLines.push(`주1회 10,000원`);
+        if (p.priceWeek2 != null) shuttleLines.push(`주2회 15,000원`);
+        if (p.priceWeek3 != null) shuttleLines.push(`주3회 20,000원`);
+        if (p.priceDaily != null) shuttleLines.push(`매일반 20,000원`);
+        if (shuttleLines.length > 0) {
+          priceLines.push(`  - 셔틀비(월): ${shuttleLines.join(" / ")}`);
+        }
+      }
 
       // 반 정보 텍스트
       const classLines = programClasses.length > 0
@@ -324,11 +428,18 @@ function buildSystemPrompt(
     })
     .join("\n\n");
 
-  // 코치 정보를 텍스트로 변환
+  // 코치 정보를 텍스트로 변환 (담당 반/요일 매칭 포함)
   const coachInfo = coaches.length > 0
     ? coaches.map((c) => {
         const desc = c.description ? ` — ${c.description}` : "";
-        return `- ${c.name} (${c.role})${desc}`;
+        // coachSlots에서 해당 코치의 담당 슬롯 찾기 (이름으로 매칭)
+        const matchedEntry = Object.values(coachSlots).find(
+          (entry) => entry.coachName === c.name
+        );
+        const slotsText = matchedEntry && matchedEntry.slots.length > 0
+          ? `\n  담당 수업: ${matchedEntry.slots.join(", ")}`
+          : "";
+        return `- ${c.name} (${c.role})${desc}${slotsText}`;
       }).join("\n")
     : "- (등록된 코치 없음)";
 
@@ -470,12 +581,13 @@ export async function POST(request: NextRequest) {
     }
 
     // DB에서 모든 데이터를 동시 조회 (5분 캐시)
-    const [programs, classes, settings, annualEvents, coaches, routes, stops, notices, faq] = await Promise.all([
+    const [programs, classes, settings, annualEvents, coaches, coachSlots, routes, stops, notices, faq] = await Promise.all([
       getCachedPrograms(),
       getCachedClasses(),
       getCachedSettings(),
       getCachedAnnualEvents(),
       getCachedCoaches(),
+      getCachedCoachSlots(),
       getCachedRoutes(),
       getCachedStops(),
       getCachedNotices(),
@@ -484,7 +596,7 @@ export async function POST(request: NextRequest) {
 
     // 시스템 프롬프트 조립 (고정 부분 + DB 동적 데이터)
     const systemPrompt = buildSystemPrompt(
-      programs, classes, settings, annualEvents, coaches, routes, stops, notices, faq
+      programs, classes, settings, annualEvents, coaches, coachSlots, routes, stops, notices, faq
     );
 
     // Gemini 모델 초기화 (시스템 프롬프트 포함)

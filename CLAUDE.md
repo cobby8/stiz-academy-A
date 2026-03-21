@@ -10,6 +10,10 @@ Next.js 16 + Supabase + Prisma 기반 학원 관리 및 홈페이지 시스템.
 - **배포**: Vercel (ISR + Cron)
 - **시간표 데이터**: Google Sheets CSV 파싱
 
+## 개발서버
+- 포트: **4000** (`npm run dev` → localhost:4000)
+- 다른 프로젝트와 포트 충돌 방지를 위해 4000번대 사용
+
 ---
 
 ## 핵심 아키텍처 결정사항

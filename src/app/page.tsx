@@ -12,6 +12,7 @@ import { getAcademySettings } from "@/lib/queries";
 import PublicHeader from "@/components/PublicHeader";
 import PublicFooter from "@/components/PublicFooter";
 import LandingPageClient from "./LandingPageClient";
+import ChatBotButton from "@/components/chat/ChatBotButton";
 
 export const revalidate = 60;
 
@@ -45,6 +46,9 @@ export default async function Home() {
 
       {/* 통합 푸터 */}
       <PublicFooter phone={phone} address={address} />
+
+      {/* 챗봇 버튼 — 다른 페이지는 PublicPageLayout에서 렌더링하지만, 메인 페이지는 직접 추가 */}
+      <ChatBotButton />
     </div>
   );
 }

@@ -47,6 +47,24 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // 패널이 처음 열릴 때 입력창에 자동 포커스
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  // isLoading이 false로 바뀌면 입력창에 포커스 복귀
+  // useEffect는 React가 DOM 업데이트(disabled 해제)를 완료한 뒤 실행되므로 확실하게 동작한다.
+  // 모바일(iOS Safari 등)에서는 사용자 인터랙션 없이 focus()가 차단될 수 있으나,
+  // 이 경우 원래 사용자가 전송 버튼을 누른 인터랙션 체인 내이므로 대부분 허용된다.
+  const prevLoadingRef = useRef(false);
+  useEffect(() => {
+    // 로딩 중 → 로딩 완료로 전환된 순간에만 focus
+    if (prevLoadingRef.current && !isLoading) {
+      inputRef.current?.focus();
+    }
+    prevLoadingRef.current = isLoading;
+  }, [isLoading]);
+
   // 메시지 전송 함수
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
@@ -101,8 +119,7 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
       ]);
     } finally {
       setIsLoading(false);
-      // 전송 후 입력 필드에 포커스 복귀
-      inputRef.current?.focus();
+      // 포커스 복귀는 useEffect([isLoading])에서 처리 — DOM 업데이트 완료 후 확실하게 동작
     }
   }, [input, isLoading, messages]);
 

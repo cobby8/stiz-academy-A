@@ -163,12 +163,50 @@ async function getRecentStudents() {
     } catch { return []; }
 }
 
-export default async function AdminDashboard() {
-    const [stats, ext, pendingRequests, pendingCount, todayClasses, recentStudents] = await Promise.all([
-        getDashboardStats(),
+// 느린 쿼리(ext, todayClasses, recentStudents) 로딩 중 보여줄 스켈레톤
+function SlowSectionSkeleton() {
+    return (
+        <>
+            {/* KPI Cards Row 2 스켈레톤 */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => (
+                    <div key={i} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 animate-pulse">
+                        <div className="h-3 bg-gray-200 rounded w-20 mb-2" />
+                        <div className="h-7 bg-gray-200 rounded w-24" />
+                    </div>
+                ))}
+            </div>
+            {/* Charts 스켈레톤 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[...Array(2)].map((_, i) => (
+                    <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-40 mb-4" />
+                        <div className="h-40 bg-gray-100 rounded" />
+                    </div>
+                ))}
+            </div>
+            {/* 오늘의 수업 + 신규 원생 스켈레톤 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[...Array(2)].map((_, i) => (
+                    <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-32 mb-4" />
+                        <div className="space-y-3">
+                            {[...Array(3)].map((_, j) => (
+                                <div key={j} className="h-10 bg-gray-100 rounded" />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </>
+    );
+}
+
+// 느린 쿼리(경영 통계, 오늘 수업, 신규 원생)를 별도 async 서버 컴포넌트로 분리
+// Suspense 경계 안에서 로딩되므로 빠른 쿼리 결과가 먼저 화면에 표시됨
+async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[] }) {
+    const [ext, todayClasses, recentStudents] = await Promise.all([
         getDashboardExtendedStats(),
-        getRecentPendingRequests(),
-        getPendingRequestCount(),
         getTodayClasses(),
         getRecentStudents(),
     ]);
@@ -183,44 +221,7 @@ export default async function AdminDashboard() {
     const todayLabel = dayLabels[["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date().getDay()]] + "요일";
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 mb-1">경영 대시보드</h1>
-                <p className="text-gray-500 text-sm">스티즈농구교실 다산점의 운영 현황입니다.</p>
-            </div>
-
-            {/* 학부모 요청 알림 배너 */}
-            {pendingCount > 0 && (
-                <Link href="/admin/requests"
-                    className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 hover:bg-yellow-100 transition shadow-sm">
-                    <div className="bg-yellow-400 text-white p-2 rounded-full">
-                        <MessageSquare size={20} />
-                    </div>
-                    <div className="flex-1">
-                        <p className="font-bold text-yellow-800">
-                            미처리 요청 {pendingCount}건
-                        </p>
-                        <p className="text-xs text-yellow-600 mt-0.5">
-                            {pendingRequests.slice(0, 2).map(r => `${r.studentName} - ${r.title}`).join(" / ")}
-                            {pendingCount > 2 && ` 외 ${pendingCount - 2}건`}
-                        </p>
-                    </div>
-                    <span className="text-yellow-600 text-sm font-bold">처리하기 &rarr;</span>
-                </Link>
-            )}
-
-            {/* KPI Cards - Row 1: 기본 */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="등록 원생" value={`${stats.studentCount}명`}
-                    icon={<Users className="w-5 h-5 text-blue-500" />} href="/admin/students" />
-                <StatCard title="운영 프로그램" value={`${stats.programCount}개`}
-                    icon={<BookOpen className="w-5 h-5 text-brand-orange-500" />} href="/admin/programs" />
-                <StatCard title="코치/강사진" value={`${stats.coachCount}명`}
-                    icon={<UserCheck className="w-5 h-5 text-emerald-500" />} href="/admin/coaches" />
-                <StatCard title="개설 반" value={`${stats.classCount}개`}
-                    icon={<Layers className="w-5 h-5 text-purple-500" />} href="/admin/classes" />
-            </div>
-
+        <>
             {/* KPI Cards - Row 2: 경영 */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -387,36 +388,80 @@ export default async function AdminDashboard() {
                     )}
                 </div>
             </div>
+        </>
+    );
+}
 
-            {/* Bottom Row */}
+export default async function AdminDashboard() {
+    // 빠른 쿼리만 먼저 실행 (stats, pendingRequests, pendingCount)
+    // 느린 쿼리(ext, todayClasses, recentStudents)는 Suspense 안에서 별도 로딩
+    const [stats, pendingRequests, pendingCount] = await Promise.all([
+        getDashboardStats(),
+        getRecentPendingRequests(),
+        getPendingRequestCount(),
+    ]);
+
+    return (
+        <div className="max-w-7xl mx-auto space-y-6">
+            <div>
+                <h1 className="text-2xl font-extrabold text-gray-900 mb-1">경영 대시보드</h1>
+                <p className="text-gray-500 text-sm">스티즈농구교실 다산점의 운영 현황입니다.</p>
+            </div>
+
+            {/* 학부모 요청 알림 배너 - 빠른 쿼리로 즉시 표시 */}
+            {pendingCount > 0 && (
+                <Link href="/admin/requests"
+                    className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 hover:bg-yellow-100 transition shadow-sm">
+                    <div className="bg-yellow-400 text-white p-2 rounded-full">
+                        <MessageSquare size={20} />
+                    </div>
+                    <div className="flex-1">
+                        <p className="font-bold text-yellow-800">
+                            미처리 요청 {pendingCount}건
+                        </p>
+                        <p className="text-xs text-yellow-600 mt-0.5">
+                            {pendingRequests.slice(0, 2).map(r => `${r.studentName} - ${r.title}`).join(" / ")}
+                            {pendingCount > 2 && ` 외 ${pendingCount - 2}건`}
+                        </p>
+                    </div>
+                    <span className="text-yellow-600 text-sm font-bold">처리하기 &rarr;</span>
+                </Link>
+            )}
+
+            {/* KPI Cards - Row 1: 기본 통계 (빠른 쿼리로 즉시 표시) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard title="등록 원생" value={`${stats.studentCount}명`}
+                    icon={<Users className="w-5 h-5 text-blue-500" />} href="/admin/students" />
+                <StatCard title="운영 프로그램" value={`${stats.programCount}개`}
+                    icon={<BookOpen className="w-5 h-5 text-brand-orange-500" />} href="/admin/programs" />
+                <StatCard title="코치/강사진" value={`${stats.coachCount}명`}
+                    icon={<UserCheck className="w-5 h-5 text-emerald-500" />} href="/admin/coaches" />
+                <StatCard title="개설 반" value={`${stats.classCount}개`}
+                    icon={<Layers className="w-5 h-5 text-purple-500" />} href="/admin/classes" />
+            </div>
+
+            {/* 느린 쿼리 섹션: 경영 통계 + 차트 + 오늘 수업 + 신규 원생 */}
+            {/* Suspense로 감싸서 위의 빠른 섹션이 먼저 표시되고, 이 부분은 스켈레톤 후 로딩 */}
+            <Suspense fallback={<SlowSectionSkeleton />}>
+                <SlowDashboardSection pendingRequests={pendingRequests} />
+            </Suspense>
+
+            {/* Bottom Row: 빠른 관리 + 시스템 상태 */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 프로그램별 원생 분포 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4">프로그램별 원생 수</h3>
-                    {ext.programStudents.length === 0 ? (
-                        <p className="text-sm text-gray-400">프로그램을 추가하세요</p>
-                    ) : (
+                {/* 프로그램별 원생 분포는 SlowDashboardSection의 ext가 필요하므로 그 안에서 렌더 */}
+                {/* 여기서는 빠른 관리 + 시스템 상태만 즉시 표시 */}
+
+                {/* 빈 슬롯 (프로그램별 원생은 SlowBottomSection에서 처리) */}
+                <Suspense fallback={
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-32 mb-4" />
                         <div className="space-y-3">
-                            {ext.programStudents.map((p, i) => {
-                                const maxCnt = Math.max(...ext.programStudents.map(x => x.count), 1);
-                                return (
-                                    <div key={i}>
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-gray-700 font-medium truncate">{p.name}</span>
-                                            <span className="text-gray-500 font-bold">{p.count}명</span>
-                                        </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2">
-                                            <div
-                                                className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                                                style={{ width: `${(p.count / maxCnt) * 100}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {[...Array(3)].map((_, i) => <div key={i} className="h-6 bg-gray-100 rounded" />)}
                         </div>
-                    )}
-                </div>
+                    </div>
+                }>
+                    <ProgramStudentsCard />
+                </Suspense>
 
                 {/* 빠른 관리 */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -442,6 +487,39 @@ export default async function AdminDashboard() {
                     <SystemStatusCard />
                 </Suspense>
             </div>
+        </div>
+    );
+}
+
+// 프로그램별 원생 분포 카드 - ext 데이터가 필요하므로 별도 async 서버 컴포넌트
+async function ProgramStudentsCard() {
+    const ext = await getDashboardExtendedStats();
+    return (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4">프로그램별 원생 수</h3>
+            {ext.programStudents.length === 0 ? (
+                <p className="text-sm text-gray-400">프로그램을 추가하세요</p>
+            ) : (
+                <div className="space-y-3">
+                    {ext.programStudents.map((p, i) => {
+                        const maxCnt = Math.max(...ext.programStudents.map(x => x.count), 1);
+                        return (
+                            <div key={i}>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-gray-700 font-medium truncate">{p.name}</span>
+                                    <span className="text-gray-500 font-bold">{p.count}명</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-2">
+                                    <div
+                                        className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                                        style={{ width: `${(p.count / maxCnt) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }

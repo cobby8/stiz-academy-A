@@ -9,11 +9,15 @@ export default async function AdminSettingsPage() {
     let settings = null;
     let fetchError = false;
 
-    // 누락 컬럼 보장 (youtubeUrl 등 신규 컬럼이 DB에 없을 경우 자동 추가)
-    await ensureAcademySettingsColumns().catch(() => {});
-
+    // 누락 컬럼 보장과 설정 조회를 병렬 실행 (직렬 → 병렬 최적화)
+    // ensureAcademySettingsColumns가 컬럼을 추가해도 getAcademySettings는
+    // 기존 컬럼만 읽으므로 동시 실행해도 안전함
     try {
-        settings = await getAcademySettings();
+        const [, fetchedSettings] = await Promise.all([
+            ensureAcademySettingsColumns().catch(() => {}),
+            getAcademySettings(),
+        ]);
+        settings = fetchedSettings;
     } catch (e) {
         console.error("Error fetching settings:", e);
         fetchError = true;

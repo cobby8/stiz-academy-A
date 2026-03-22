@@ -1,7 +1,7 @@
 import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms, getSheetSlotCache } from "@/lib/queries";
 import { fetchSheetSchedule, type SheetClassSlot } from "@/lib/googleSheetsSchedule";
+import { buildMergedSlots } from "@/lib/mergeSlots";
 import PublicPageLayout from "@/components/PublicPageLayout";
-import { type MergedSlot } from "@/app/schedule/ScheduleClient";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SimulatorClient from "./SimulatorClient";
 
@@ -10,12 +10,6 @@ export const revalidate = 300;
 export const metadata = {
     title: "우리 아이 수업 찾기 | STIZ 농구교실 다산점",
     description: "학년과 원하는 요일/시간을 입력하면 등록 가능한 수업을 자동으로 추천해드립니다.",
-};
-
-// 요일 키 → 한글 라벨 변환용 (custom 슬롯에서 사용)
-const DAY_KEY_TO_LABEL: Record<string, string> = {
-    Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일",
-    Fri: "금요일", Sat: "토요일", Sun: "일요일",
 };
 
 export default async function SimulatorPage() {
@@ -44,53 +38,8 @@ export default async function SimulatorPage() {
         }
     }
 
-    // 슬롯 오버라이드 맵 생성 (관리자가 수정한 정보)
-    const overrideMap = Object.fromEntries(overridesList.map((o: any) => [o.slotKey, o]));
-
-    // Google Sheets 슬롯 + 오버라이드 병합
-    const sheetMerged: MergedSlot[] = rawSlots
-        .filter((s: SheetClassSlot) => !(overrideMap[s.slotKey]?.isHidden))
-        .map((s: SheetClassSlot) => {
-            const ov = overrideMap[s.slotKey];
-            const capacity: number = ov?.capacity ?? 12;
-            return {
-                slotKey: s.slotKey,
-                dayKey: s.dayKey,
-                dayLabel: s.dayLabel,
-                startTime: ov?.startTimeOverride || s.startTime,
-                endTime: ov?.endTimeOverride || s.endTime,
-                gradeRange: s.gradeRange,
-                enrolled: s.enrolled,
-                displayLabel: ov?.label || `${s.dayLabel} ${s.period}교시`,
-                note: ov?.note || null,
-                capacity,
-                isFull: s.enrolled >= capacity,
-                coach: ov?.coach ?? null,
-                programId: ov?.programId ?? null,
-            };
-        });
-
-    // 관리자가 직접 추가한 커스텀 슬롯 병합
-    const customMerged: MergedSlot[] = (customSlotsList as any[])
-        .filter((cs) => !cs.isHidden)
-        .map((cs) => ({
-            slotKey: `custom-${cs.id}`,
-            dayKey: cs.dayKey,
-            dayLabel: DAY_KEY_TO_LABEL[cs.dayKey] || cs.dayKey,
-            startTime: cs.startTime,
-            endTime: cs.endTime,
-            gradeRange: cs.gradeRange || "",
-            enrolled: cs.enrolled,
-            displayLabel: cs.label,
-            note: cs.note || null,
-            capacity: cs.capacity,
-            isFull: cs.enrolled >= cs.capacity,
-            coach: cs.coach ?? null,
-            programId: cs.programId ?? null,
-        }));
-
-    // 모든 슬롯 합치기
-    const allSlots: MergedSlot[] = [...sheetMerged, ...customMerged];
+    // 공통 함수로 시트 슬롯 + 오버라이드 + 커스텀 슬롯 병합
+    const allSlots = buildMergedSlots(rawSlots, overridesList, customSlotsList);
 
     // 프로그램 정보 (이름 매칭용)
     const programList = (programs as any[]).map((p) => ({ id: p.id, name: p.name }));

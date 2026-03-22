@@ -14,6 +14,21 @@ export const metadata: Metadata = {
         statusBarStyle: "default",
         title: "스티즈농구",
     },
+    // Open Graph: 카카오톡/페이스북 등에서 링크 공유 시 미리보기 카드에 표시되는 정보
+    openGraph: {
+        title: "STIZ 농구교실 다산점",
+        description: "다산신도시 No.1 농구 전문 학원",
+        url: "https://stiz-dasan.kr",
+        siteName: "STIZ 농구교실 다산점",
+        locale: "ko_KR",
+        type: "website",
+    },
+    // Twitter(X) 카드: 트위터에서 링크 공유 시 큰 이미지 카드로 표시
+    twitter: {
+        card: "summary_large_image",
+        title: "STIZ 농구교실 다산점",
+        description: "다산신도시 No.1 농구 전문 학원",
+    },
 };
 
 export default async function RootLayout({

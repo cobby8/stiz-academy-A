@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import * as XLSX from "xlsx";
 
 // ──────────────────────────────────────────────
@@ -186,6 +187,13 @@ function buildGuardiansJSON(
 // ──────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // 인증 체크: 로그인한 관리자만 엑셀 파싱 가능
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+  }
+
   try {
     // 1) FormData에서 파일 추출
     const formData = await request.formData();

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SimulatorClient — 수업 등록 시뮬레이터 위저드 UI
+ * SimulatorClient — 우리 아이 수업 찾기 위저드 UI
  *
  * 3단계로 구성:
  * 1단계: 학년 선택 (드롭다운)
@@ -25,6 +25,9 @@ interface SimulatorClientProps {
     allSlots: MergedSlot[];
     programs: Program[];
     phone: string;
+    // 구글폼 URL (DB AcademySettings에서 전달받음, 없으면 /apply 폴백)
+    trialFormUrl: string | null;
+    enrollFormUrl: string | null;
 }
 
 // --- 상수 ---
@@ -93,7 +96,7 @@ function getHourFromTime(timeStr: string): number {
 
 // --- 메인 컴포넌트 ---
 
-export default function SimulatorClient({ allSlots, programs, phone }: SimulatorClientProps) {
+export default function SimulatorClient({ allSlots, programs, phone, trialFormUrl, enrollFormUrl }: SimulatorClientProps) {
     // 위저드 단계 (1: 학년, 2: 요일/시간, 3: 결과)
     const [step, setStep] = useState(1);
 
@@ -512,18 +515,42 @@ export default function SimulatorClient({ allSlots, programs, phone }: Simulator
                                         원하는 수업을 찾으셨나요?
                                     </p>
                                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                                        <Link
-                                            href="/apply#trial"
-                                            className="px-6 py-3.5 rounded-xl font-bold text-sm bg-brand-orange-500 hover:bg-brand-orange-600 text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 text-center"
-                                        >
-                                            체험수업 신청
-                                        </Link>
-                                        <Link
-                                            href="/apply#enroll"
-                                            className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 text-brand-navy-900 hover:bg-brand-navy-900 hover:text-white active:scale-[0.98] transition-all duration-200 text-center"
-                                        >
-                                            수강신청
-                                        </Link>
+                                        {/* 체험수업 CTA: 구글폼 URL이 있으면 외부 링크, 없으면 /apply 폴백 */}
+                                        {trialFormUrl ? (
+                                            <a
+                                                href={trialFormUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-6 py-3.5 rounded-xl font-bold text-sm bg-brand-orange-500 hover:bg-brand-orange-600 text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 text-center"
+                                            >
+                                                체험수업 신청
+                                            </a>
+                                        ) : (
+                                            <Link
+                                                href="/apply#trial"
+                                                className="px-6 py-3.5 rounded-xl font-bold text-sm bg-brand-orange-500 hover:bg-brand-orange-600 text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 text-center"
+                                            >
+                                                체험수업 신청
+                                            </Link>
+                                        )}
+                                        {/* 수강신청 CTA: 구글폼 URL이 있으면 외부 링크, 없으면 /apply 폴백 */}
+                                        {enrollFormUrl ? (
+                                            <a
+                                                href={enrollFormUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 text-brand-navy-900 hover:bg-brand-navy-900 hover:text-white active:scale-[0.98] transition-all duration-200 text-center"
+                                            >
+                                                수강신청
+                                            </a>
+                                        ) : (
+                                            <Link
+                                                href="/apply#enroll"
+                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 text-brand-navy-900 hover:bg-brand-navy-900 hover:text-white active:scale-[0.98] transition-all duration-200 text-center"
+                                            >
+                                                수강신청
+                                            </Link>
+                                        )}
                                     </div>
                                 </div>
 

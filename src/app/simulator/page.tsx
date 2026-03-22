@@ -8,7 +8,7 @@ import SimulatorClient from "./SimulatorClient";
 // 공개 페이지이므로 5분 ISR 캐싱 (schedule 페이지와 동일)
 export const revalidate = 300;
 export const metadata = {
-    title: "수업 등록 시뮬레이터 | STIZ 농구교실 다산점",
+    title: "우리 아이 수업 찾기 | STIZ 농구교실 다산점",
     description: "학년과 원하는 요일/시간을 입력하면 등록 가능한 수업을 자동으로 추천해드립니다.",
 };
 
@@ -30,6 +30,9 @@ export default async function SimulatorPage() {
 
     const phone = (settings as any).contactPhone || "010-0000-0000";
     const sheetUrl = (settings as any).googleSheetsScheduleUrl as string | null | undefined;
+    // CTA 버튼용 구글폼 URL (DB에 저장된 값)
+    const trialFormUrl = (settings as any).trialFormUrl as string | null | undefined;
+    const enrollFormUrl = (settings as any).enrollFormUrl as string | null | undefined;
 
     // DB 캐시가 비어있으면 Google Sheets에서 직접 읽기 (폴백)
     let rawSlots: SheetClassSlot[] = cachedSlots ?? [];
@@ -104,7 +107,7 @@ export default async function SimulatorPage() {
                 <div className="max-w-6xl mx-auto px-6 md:px-4 relative">
                     <AnimateOnScroll>
                         <p className="text-brand-orange-500 text-sm font-bold uppercase tracking-widest mb-3">SIMULATOR</p>
-                        <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">수업 등록 시뮬레이터</h1>
+                        <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">우리 아이 수업 찾기</h1>
                         <p className="text-blue-200 text-lg max-w-xl break-keep">
                             학년과 원하는 요일/시간을 선택하면, 등록 가능한 수업을 자동으로 찾아드려요.
                         </p>
@@ -117,6 +120,8 @@ export default async function SimulatorPage() {
                 allSlots={allSlots}
                 programs={programList}
                 phone={phone}
+                trialFormUrl={trialFormUrl || null}
+                enrollFormUrl={enrollFormUrl || null}
             />
         </PublicPageLayout>
     );

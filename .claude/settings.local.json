@@ -76,7 +76,24 @@
       "Bash(netstat -ano)",
       "Bash(findstr /I \"node\")",
       "Bash(timeout 15)",
-      "Bash(git ls-files:*)"
+      "Bash(git ls-files:*)",
+      "Bash(findstr /i node)",
+      "Bash(npm ls:*)",
+      "Bash(findstr \"node\")",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(findstr \"3000 3001 3002\")",
+      "Bash(findstr \":300\")",
+      "Bash(findstr \"39768\")",
+      "Bash(if exist:*)",
+      "Bash(cd:*)",
+      "Bash(grep -r singleEvents --include=*.ts --include=*.tsx)",
+      "Bash(python -m json.tool)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[''''reply''''][:500]\\)\")",
+      "Bash(rm:*)",
+      "Bash(findstr :4000)",
+      "Bash(for dir:*)",
+      "Read(//c/0.programing/stiz-academy-A/**)",
+      "Bash(done)"
     ]
   }
 }

@@ -29,6 +29,7 @@ const NAV_ITEMS = [
   { href: "/about", label: "학원/멤버소개" },
   { href: "/programs", label: "프로그램안내" },
   { href: "/schedule", label: "수업시간표" },
+  { href: "/simulator", label: "수업시뮬레이터" },
   { href: "/annual", label: "연간일정표" },
   { href: "/gallery", label: "포토갤러리" },
   { href: "/notices", label: "공지사항" },

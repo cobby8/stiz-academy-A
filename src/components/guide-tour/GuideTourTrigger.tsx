@@ -340,9 +340,13 @@ async function runPhase2(routerPush: (url: string) => void) {
   }
 
   // Step 1: 프로그램 카드 목록 하이라이트 (정보 읽기용)
+  // X 버튼 클릭 시 투어 중단, "확인했어요" 클릭 시 다음 Phase로 진행
+  let closedByUser = false;
+
   const d = driverFn({
     showProgress: false,
     allowClose: false,
+    smoothScroll: false, // 스크롤 점프 방지
     overlayColor: "rgba(0,0,0,0.5)",
     stageRadius: 12,
     stagePadding: 10,
@@ -361,10 +365,17 @@ async function runPhase2(routerPush: (url: string) => void) {
         },
       },
     ],
+    // X 버튼 클릭: 투어 중단 (다음 단계 실행 안 함)
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d.destroy();
+    },
     onDestroyed: () => {
+      if (closedByUser) return; // X로 닫으면 다음 단계 실행 안 함
       setTimeout(
         () => highlightScheduleNav(driverFn, routerPush, isMobile),
-        300
+        100
       );
     },
   });
@@ -508,9 +519,13 @@ async function runPhase3(routerPush: (url: string) => void) {
     return;
   }
 
+  // X 버튼 클릭 시 투어 중단, "확인했어요" 클릭 시 다음 Phase로 진행
+  let closedByUser = false;
+
   const d = driverFn({
     showProgress: false,
     allowClose: false,
+    smoothScroll: false, // 스크롤 점프 방지
     overlayColor: "rgba(0,0,0,0.5)",
     stageRadius: 12,
     stagePadding: 10,
@@ -529,10 +544,17 @@ async function runPhase3(routerPush: (url: string) => void) {
         },
       },
     ],
+    // X 버튼 클릭: 투어 중단 (다음 단계 실행 안 함)
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d.destroy();
+    },
     onDestroyed: () => {
+      if (closedByUser) return; // X로 닫으면 다음 단계 실행 안 함
       setTimeout(
         () => highlightSimulatorNav(driverFn, routerPush, isMobile),
-        300
+        100
       );
     },
   });
@@ -676,6 +698,9 @@ async function runPhase4() {
     return;
   }
 
+  // X 버튼 클릭 시 투어 중단 (축하 토스트 안 보여줌)
+  let closedByUser = false;
+
   const d = driverFn({
     showProgress: false,
     // 오버레이 클릭/스크롤로 꺼지지 않도록 (버튼으로만 닫기)
@@ -698,11 +723,17 @@ async function runPhase4() {
         },
       },
     ],
+    // X 버튼 클릭: 투어 중단만 (축하 토스트 표시 안 함)
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d.destroy();
+    },
     onDestroyed: () => {
-      // 투어 완료 처리
+      if (closedByUser) return; // X로 닫으면 완료 처리 안 함
+      // "시작할게요!" 버튼 클릭 시에만 투어 완료 처리
       clearSavedPhase();
       markCompleted();
-      // 축하 토스트 표시
       showCompletionToast();
     },
   });

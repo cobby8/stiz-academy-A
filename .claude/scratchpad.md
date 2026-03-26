@@ -439,6 +439,7 @@ reviewer 참고:
 |------|------|----------|----------|------|
 | 1차 | 2026-03-26 | UX 개선 5건: B-1 smoothScroll:false, B-2 href교체방식, 진행률표시, 완료토스트, 중단재개 | GuideTourTrigger.tsx, tourStyles.css | planner-architect 기획: P1 우선순위 5건 |
 | 2차 | 2026-03-26 | 요소 미존재 fallback 4건: waitForElement 폴링 헬퍼 + Phase2/3/4 스킵 로직 + Phase3 side:bottom | GuideTourTrigger.tsx | tester 요청: #1(polling) + #3(fallback) + #4(side변경) |
+| 3차 | 2026-03-26 | X버튼/확인버튼 동작분리(closedByUser) + Phase간 전환 300->100ms + Phase2/3 smoothScroll:false | GuideTourTrigger.tsx | PM 요청: UX 개선 3건 (X닫기분리, 타이밍단축, 스크롤방지) |
 
 📝 수정 상세 (1차):
 

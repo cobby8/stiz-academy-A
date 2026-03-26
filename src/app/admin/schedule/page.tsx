@@ -5,22 +5,21 @@ import ScheduleAdminClient from "./ScheduleAdminClient";
 export const revalidate = 30;
 
 export default async function AdminSchedulePage() {
-    // settings와 나머지 4개 쿼리를 동시에 시작 (직렬 → 병렬 최적화)
-    const [settings, overrides, coaches, customSlots, programs] = await Promise.all([
-        getAcademySettings() as Promise<any>,
+    // 1단계: settings만 먼저 가져옴 (Google Sheets URL이 필요하므로)
+    const settings = await (getAcademySettings() as Promise<any>);
+    const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
+
+    // 2단계: 나머지 DB 쿼리 4개 + Google Sheets를 모두 병렬로 동시 실행
+    // Google Sheets는 외부 네트워크 호출(500ms~2초)이므로 DB 쿼리와 동시에 실행하면 대기 시간 절감
+    const [overrides, coaches, customSlots, programs, slots] = await Promise.all([
         getClassSlotOverrides(),
         getCoaches(),
         getCustomClassSlots(),
         getPrograms(),
+        sheetUrl
+            ? fetchSheetScheduleAdmin(sheetUrl).catch(() => [])
+            : Promise.resolve([]),
     ]);
-
-    const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
-
-    // Google Sheets는 sheetUrl이 필요하므로 settings 완료 후 별도 호출
-    // 실패 시 빈 배열 fallback 유지
-    const slots = sheetUrl
-        ? await fetchSheetScheduleAdmin(sheetUrl).catch(() => [])
-        : [];
 
     return (
         <ScheduleAdminClient

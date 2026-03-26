@@ -198,6 +198,19 @@ function SlowSectionSkeleton() {
                     </div>
                 ))}
             </div>
+            {/* Bottom Row 스켈레톤 (프로그램별 원생 + 빠른 관리 + 시스템 상태) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {[...Array(3)].map((_, i) => (
+                    <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-pulse">
+                        <div className="h-4 bg-gray-200 rounded w-32 mb-4" />
+                        <div className="space-y-3">
+                            {[...Array(3)].map((_, j) => (
+                                <div key={j} className="h-6 bg-gray-100 rounded" />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
         </>
     );
 }
@@ -388,6 +401,37 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                     )}
                 </div>
             </div>
+
+            {/* Bottom Row: 프로그램별 원생(ext 재사용) + 빠른 관리 + 시스템 상태 */}
+            {/* ext를 이미 가져왔으므로 getDashboardExtendedStats 이중 호출 없이 바로 사용 */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* 프로그램별 원생 분포 - ext.programStudents 직접 사용 */}
+                <ProgramStudentsCardUI programStudents={ext.programStudents} />
+
+                {/* 빠른 관리 */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-900 mb-4">빠른 관리</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <QuickLink title="출결 관리" href="/admin/attendance" color="orange" />
+                        <QuickLink title="수납/결제" href="/admin/finance" color="blue" />
+                        <QuickLink title="요청 관리" href="/admin/requests" color="orange" />
+                        <QuickLink title="갤러리" href="/admin/gallery" color="green" />
+                        <QuickLink title="공지사항" href="/admin/notices" color="purple" />
+                        <QuickLink title="시간표" href="/admin/schedule" color="orange" />
+                        <QuickLink title="설정" href="/admin/settings" color="blue" />
+                    </div>
+                </div>
+
+                {/* 시스템 상태 */}
+                <Suspense fallback={
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                        <h3 className="font-bold text-gray-900 mb-3">시스템 상태</h3>
+                        <p className="text-sm text-gray-400">확인 중...</p>
+                    </div>
+                }>
+                    <SystemStatusCard />
+                </Suspense>
+            </div>
         </>
     );
 }
@@ -440,69 +484,28 @@ export default async function AdminDashboard() {
                     icon={<Layers className="w-5 h-5 text-purple-500" />} href="/admin/classes" />
             </div>
 
-            {/* 느린 쿼리 섹션: 경영 통계 + 차트 + 오늘 수업 + 신규 원생 */}
+            {/* 느린 쿼리 섹션: 경영 통계 + 차트 + 오늘 수업 + 신규 원생 + Bottom Row */}
             {/* Suspense로 감싸서 위의 빠른 섹션이 먼저 표시되고, 이 부분은 스켈레톤 후 로딩 */}
+            {/* ProgramStudentsCard도 ext 데이터가 필요하므로 같은 Suspense 안에서 렌더 (이중 호출 방지) */}
             <Suspense fallback={<SlowSectionSkeleton />}>
                 <SlowDashboardSection pendingRequests={pendingRequests} />
             </Suspense>
-
-            {/* Bottom Row: 빠른 관리 + 시스템 상태 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 프로그램별 원생 분포는 SlowDashboardSection의 ext가 필요하므로 그 안에서 렌더 */}
-                {/* 여기서는 빠른 관리 + 시스템 상태만 즉시 표시 */}
-
-                {/* 빈 슬롯 (프로그램별 원생은 SlowBottomSection에서 처리) */}
-                <Suspense fallback={
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-pulse">
-                        <div className="h-4 bg-gray-200 rounded w-32 mb-4" />
-                        <div className="space-y-3">
-                            {[...Array(3)].map((_, i) => <div key={i} className="h-6 bg-gray-100 rounded" />)}
-                        </div>
-                    </div>
-                }>
-                    <ProgramStudentsCard />
-                </Suspense>
-
-                {/* 빠른 관리 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4">빠른 관리</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <QuickLink title="출결 관리" href="/admin/attendance" color="orange" />
-                        <QuickLink title="수납/결제" href="/admin/finance" color="blue" />
-                        <QuickLink title="요청 관리" href="/admin/requests" color="orange" />
-                        <QuickLink title="갤러리" href="/admin/gallery" color="green" />
-                        <QuickLink title="공지사항" href="/admin/notices" color="purple" />
-                        <QuickLink title="시간표" href="/admin/schedule" color="orange" />
-                        <QuickLink title="설정" href="/admin/settings" color="blue" />
-                    </div>
-                </div>
-
-                {/* 시스템 상태 */}
-                <Suspense fallback={
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-3">시스템 상태</h3>
-                        <p className="text-sm text-gray-400">확인 중...</p>
-                    </div>
-                }>
-                    <SystemStatusCard />
-                </Suspense>
-            </div>
         </div>
     );
 }
 
-// 프로그램별 원생 분포 카드 - ext 데이터가 필요하므로 별도 async 서버 컴포넌트
-async function ProgramStudentsCard() {
-    const ext = await getDashboardExtendedStats();
+// 프로그램별 원생 분포 카드 - SlowDashboardSection에서 ext.programStudents를 props로 전달받음
+// getDashboardExtendedStats 이중 호출을 방지하기 위해 async 제거, props 기반으로 변경
+function ProgramStudentsCardUI({ programStudents }: { programStudents: { name: string; count: number }[] }) {
     return (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-4">프로그램별 원생 수</h3>
-            {ext.programStudents.length === 0 ? (
+            {programStudents.length === 0 ? (
                 <p className="text-sm text-gray-400">프로그램을 추가하세요</p>
             ) : (
                 <div className="space-y-3">
-                    {ext.programStudents.map((p, i) => {
-                        const maxCnt = Math.max(...ext.programStudents.map(x => x.count), 1);
+                    {programStudents.map((p, i) => {
+                        const maxCnt = Math.max(...programStudents.map(x => x.count), 1);
                         return (
                             <div key={i}>
                                 <div className="flex justify-between text-sm mb-1">

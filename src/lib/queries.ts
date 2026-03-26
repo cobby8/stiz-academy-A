@@ -850,8 +850,9 @@ export async function getStudentActivity(studentId: string) {
         if (!sRows[0]) return null;
         const r = sRows[0];
 
-        // 2단계: 수강/출결/수납/통계를 병렬로 실행 (모두 studentId만 사용, 서로 독립적)
-        const [enrollments, attendances, payments, attStats] = await Promise.all([
+        // 2단계: 수강/출결/수납/통계/갤러리를 모두 병렬로 실행
+        // classIds를 별도 쿼리로 가져와서 갤러리도 2단계에 합류 (3단계 직렬 제거)
+        const [enrollments, attendances, payments, attStats, galleryPosts] = await Promise.all([
             // 수강 내역
             prisma.$queryRawUnsafe<any[]>(
                 `SELECT e.id, e."classId", e.status, e."createdAt",
@@ -892,21 +893,18 @@ export async function getStudentActivity(studentId: string) {
                  WHERE a."studentId" = $1`,
                 studentId
             ),
-        ]);
-
-        // 3단계: 갤러리는 enrollments 결과(classIds)에 의존하므로 별도 실행
-        const classIds = enrollments.map((e: any) => e.classId ?? e.classid).filter(Boolean);
-        let galleryPosts: any[] = [];
-        if (classIds.length > 0) {
-            const placeholders = classIds.map((_: any, i: number) => `$${i + 1}`).join(", ");
-            galleryPosts = await prisma.$queryRawUnsafe<any[]>(
+            // 갤러리: classIds를 서브쿼리로 직접 가져와서 별도 단계 없이 병렬 실행
+            // enrollments 결과를 기다리지 않고 DB에서 직접 classId 목록을 조회
+            prisma.$queryRawUnsafe<any[]>(
                 `SELECT id, title, "mediaJSON", "createdAt"
                  FROM "GalleryPost"
-                 WHERE "classId" IN (${placeholders})
+                 WHERE "classId" IN (
+                     SELECT e."classId" FROM "Enrollment" e WHERE e."studentId" = $1
+                 )
                  ORDER BY "createdAt" DESC LIMIT 6`,
-                ...classIds
-            );
-        }
+                studentId
+            ),
+        ]);
 
         const stats = attStats[0] || {};
         return {
@@ -1300,29 +1298,32 @@ export const getChildrenFeedbacks = cache(async (studentIds: string[]) => {
 /** 반 상세 + 수강생 목록 조회 (클래스 상세 페이지용) */
 export const getClassWithStudents = cache(async (classId: string) => {
     try {
-        // 반 기본 정보 + 프로그램명 JOIN
-        const classRows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity, c."slotKey",
-                    p.name AS program_name, p.id AS program_id
-             FROM "Class" c
-             LEFT JOIN "Program" p ON c."programId" = p.id
-             WHERE c.id = $1`,
-            classId
-        );
+        // 반 정보와 수강생 목록을 병렬로 동시 조회 (classId만 있으면 독립 실행 가능)
+        const [classRows, studentRows] = await Promise.all([
+            // 반 기본 정보 + 프로그램명 JOIN
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity, c."slotKey",
+                        p.name AS program_name, p.id AS program_id
+                 FROM "Class" c
+                 LEFT JOIN "Program" p ON c."programId" = p.id
+                 WHERE c.id = $1`,
+                classId
+            ),
+            // ACTIVE 상태의 수강생 목록 (이름순 정렬)
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT e.id AS enrollment_id, e.status, e."createdAt" AS enrolled_at,
+                        s.id AS student_id, s.name AS student_name, s.phone, s.school, s.grade,
+                        s."birthDate", s.gender
+                 FROM "Enrollment" e
+                 JOIN "Student" s ON e."studentId" = s.id
+                 WHERE e."classId" = $1 AND e.status = 'ACTIVE'
+                 ORDER BY s.name ASC`,
+                classId
+            ),
+        ]);
+        // 반 정보가 없으면 null 반환 (수강생 쿼리 결과는 무시)
         if (!classRows[0]) return null;
         const c = classRows[0];
-
-        // ACTIVE 상태의 수강생 목록 (이름순 정렬)
-        const studentRows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT e.id AS enrollment_id, e.status, e."createdAt" AS enrolled_at,
-                    s.id AS student_id, s.name AS student_name, s.phone, s.school, s.grade,
-                    s."birthDate", s.gender
-             FROM "Enrollment" e
-             JOIN "Student" s ON e."studentId" = s.id
-             WHERE e."classId" = $1 AND e.status = 'ACTIVE'
-             ORDER BY s.name ASC`,
-            classId
-        );
 
         return {
             // 반 정보 — 컬럼명 대소문자 fallback 처리

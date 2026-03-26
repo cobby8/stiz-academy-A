@@ -1,0 +1,894 @@
+"use client";
+
+/**
+ * GuideTourTrigger -- 입학 가이드 투어 v2 (driver.js 기반)
+ *
+ * 이 파일 하나가 모든 투어 로직을 담당한다.
+ * - 플로팅 "입학 가이드" 버튼
+ * - 첫 방문 자동 제안 토스트
+ * - Phase 1~4 투어 실행 (driver.js SVG cutout)
+ * - 모바일 햄버거 메뉴 2단계 안내
+ * - 투어 중단 시 재개 기능 (localStorage)
+ * - 투어 완료 축하 토스트
+ *
+ * 핵심 원칙:
+ * 1. 작은 요소만 하이라이트 (메뉴 링크, 버튼, 드롭다운 등)
+ * 2. 사용자가 직접 클릭하여 페이지 이동
+ * 3. driver.js SVG cutout 사용 (CSS hack 절대 금지)
+ * 4. 페이지 간 상태: URL ?tour=N 파라미터
+ */
+
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+
+// 투어 완료 여부를 localStorage에 저장하는 키
+const STORAGE_KEY = "stiz_tour_completed";
+
+// 투어 완료 여부 확인
+function isCompleted(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+// 투어 완료로 표시
+function markCompleted() {
+  try {
+    localStorage.setItem(STORAGE_KEY, "true");
+  } catch {}
+}
+
+// ========================================
+// 투어 중단/재개를 위한 Phase 저장 함수들
+// ========================================
+const PHASE_KEY = "stiz_tour_phase";
+
+// 현재 진행 중인 Phase를 localStorage에 저장
+function savePhase(phase: string) {
+  try {
+    localStorage.setItem(PHASE_KEY, phase);
+  } catch {}
+}
+
+// 저장된 Phase 읽기 (없으면 null)
+function getSavedPhase(): string | null {
+  try {
+    return localStorage.getItem(PHASE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+// 저장된 Phase 삭제 (투어 완료 시)
+function clearSavedPhase() {
+  try {
+    localStorage.removeItem(PHASE_KEY);
+  } catch {}
+}
+
+/**
+ * driver.js와 스타일을 동적 로드하는 헬퍼
+ * 빌드 번들에 포함되지 않도록 dynamic import 사용
+ */
+async function loadDriver() {
+  const { driver } = await import("driver.js");
+  await import("driver.js/dist/driver.css");
+  await import("./tourStyles.css");
+  return driver;
+}
+
+/**
+ * DOM 요소가 나타날 때까지 폴링하는 헬퍼
+ *
+ * 페이지 이동 후 React 렌더링이 완료되기 전에 driver.js가
+ * 실행되면 대상 요소를 못 찾는 문제를 해결한다.
+ * 최대 maxWait(ms) 동안 interval(ms) 간격으로 요소를 찾고,
+ * 시간 초과 시 null을 반환하여 호출자가 스킵 처리할 수 있게 한다.
+ */
+function waitForElement(
+  selector: string,
+  maxWait: number = 3000,
+  interval: number = 100
+): Promise<Element | null> {
+  return new Promise((resolve) => {
+    // 이미 있으면 바로 반환
+    const existing = document.querySelector(selector);
+    if (existing) {
+      resolve(existing);
+      return;
+    }
+    let elapsed = 0;
+    const timer = setInterval(() => {
+      elapsed += interval;
+      const el = document.querySelector(selector);
+      if (el) {
+        clearInterval(timer);
+        resolve(el);
+      } else if (elapsed >= maxWait) {
+        // 시간 초과 — 요소를 못 찾음
+        clearInterval(timer);
+        resolve(null);
+      }
+    }, interval);
+  });
+}
+
+/**
+ * 진행률 HTML을 생성하는 헬퍼
+ * 각 popover description 앞에 "N/4 단계" 표시를 추가
+ */
+function progressLabel(step: number, total: number = 4): string {
+  return `<span style="display:inline-block;color:#999;font-size:11px;margin-bottom:4px">${step}/${total} 단계</span><br/>`;
+}
+
+/**
+ * 투어 완료 축하 토스트를 화면 하단에 표시
+ * 5초 후 자동으로 사라진다
+ */
+function showCompletionToast() {
+  const toast = document.createElement("div");
+  toast.id = "tour-completion-toast";
+  toast.innerHTML = `
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;
+      background:white;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.15);
+      padding:24px 32px;max-width:360px;text-align:center;
+      animation:tourSlideUp 0.3s ease-out">
+      <div style="font-size:36px;margin-bottom:8px">🎉</div>
+      <div style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:6px">둘러보기 완료!</div>
+      <div style="font-size:13px;color:#666;line-height:1.6">
+        궁금한 프로그램을 찾으셨나요?<br/>
+        <a href="/apply" style="color:#f97316;font-weight:600;text-decoration:underline">
+          체험수업 신청하기 →
+        </a>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  // 5초 후 서서히 사라짐
+  setTimeout(() => {
+    const inner = toast.querySelector("div");
+    if (inner) {
+      inner.style.opacity = "0";
+      inner.style.transition = "opacity 0.3s";
+    }
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
+}
+
+/**
+ * 하이라이트된 링크 클릭 시 투어용 URL로 이동하는 헬퍼
+ *
+ * Next.js Link는 DOM href가 아닌 React props의 href를 사용하므로,
+ * DOM의 href를 바꿔도 무시된다. 따라서 capture phase에서 이벤트를
+ * 가로채서 routerPush로 직접 이동하는 방식을 사용한다.
+ */
+function setupLinkCapture(
+  selector: string,
+  tourUrl: string,
+  driverInstance: { destroy: () => void },
+  routerPush: (url: string) => void
+): (() => void) | null {
+  const link = document.querySelector(selector) as HTMLElement;
+  if (!link) return null;
+
+  const handleClick = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    driverInstance.destroy();
+    routerPush(tourUrl);
+  };
+
+  // capture: true → Next.js Link의 React 합성 이벤트보다 먼저 실행
+  link.addEventListener("click", handleClick, { capture: true, once: true });
+
+  // cleanup 함수 반환 (driver 종료 시 리스너 제거)
+  return () => {
+    link.removeEventListener("click", handleClick, { capture: true });
+  };
+}
+
+// ========================================
+// Phase 1: 메인(/) -> 프로그램안내 메뉴 클릭 유도
+// ========================================
+async function runPhase1(routerPush: (url: string) => void) {
+  savePhase("1"); // 재개 기능용 Phase 저장
+  const driverFn = await loadDriver();
+  const isMobile = window.innerWidth < 768;
+
+  if (isMobile) {
+    // 모바일: 먼저 햄버거 버튼을 하이라이트하여 메뉴 열기 유도
+    const d = driverFn({
+      showProgress: false,
+      allowClose: true,
+      smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+      overlayColor: "rgba(0,0,0,0.6)",
+      stageRadius: 8,
+      stagePadding: 8,
+      steps: [
+        {
+          element: '[data-tour-target="hamburger"]',
+          popover: {
+            title: "메뉴를 열어주세요",
+            description:
+              progressLabel(1) +
+              "먼저 메뉴를 열어서 프로그램을 살펴볼 거예요.",
+            side: "bottom" as const,
+            align: "end" as const,
+            showButtons: ["close"] as any,
+          },
+        },
+      ],
+    });
+    d.drive();
+
+    // 햄버거 클릭 감지 -> 사이드바 열린 후 메뉴 링크 하이라이트
+    const btn = document.querySelector(
+      '[data-tour-target="hamburger"]'
+    ) as HTMLElement;
+    if (btn) {
+      btn.addEventListener(
+        "click",
+        () => {
+          d.destroy();
+          // 사이드바 열림 애니메이션 대기(400ms) 후 메뉴 링크 하이라이트
+          setTimeout(() => {
+            // href 복원 함수를 저장할 변수
+            let restoreHref: (() => void) | null = null;
+
+            const d2 = driverFn({
+              showProgress: false,
+              allowClose: true,
+              smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+              overlayColor: "rgba(0,0,0,0.6)",
+              stageRadius: 4,
+              stagePadding: 4,
+              steps: [
+                {
+                  element: '[data-tour-target="mobile-nav-programs"]',
+                  popover: {
+                    title: "프로그램 안내",
+                    description:
+                      progressLabel(1) +
+                      "여기를 눌러서 프로그램과 수강료를 확인해보세요!",
+                    side: "left" as const,
+                    showButtons: ["close"] as any,
+                  },
+                },
+              ],
+              // B-2: driver 종료 시 href 복원
+              onDestroyed: () => {
+                if (restoreHref) restoreHref();
+              },
+            });
+            d2.drive();
+
+            // B-2: href 직접 교체 방식으로 Link 클릭 충돌 해결
+            restoreHref = setupLinkCapture(
+              '[data-tour-target="mobile-nav-programs"]',
+              "/programs?tour=2",
+              d2,
+              routerPush
+            );
+          }, 400);
+        },
+        { once: true }
+      );
+    }
+  } else {
+    // PC: 데스크탑 네비의 "프로그램안내" 링크 하이라이트
+    // href 복원 함수를 저장할 변수
+    let restoreHref: (() => void) | null = null;
+
+    const d = driverFn({
+      showProgress: false,
+      allowClose: true,
+      smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+      overlayColor: "rgba(0,0,0,0.6)",
+      stageRadius: 8,
+      stagePadding: 10,
+      steps: [
+        {
+          element: '[data-tour-target="nav-programs"]',
+          popover: {
+            title: "프로그램 안내",
+            description:
+              progressLabel(1) +
+              "먼저 프로그램을 살펴볼까요? 여기를 눌러주세요!",
+            side: "bottom" as const,
+            align: "center" as const,
+            showButtons: ["close"] as any,
+          },
+        },
+      ],
+      // B-2: driver 종료 시 href 복원
+      onDestroyed: () => {
+        if (restoreHref) restoreHref();
+      },
+    });
+    d.drive();
+
+    // B-2: href 직접 교체 방식으로 Link 클릭 충돌 해결
+    restoreHref = setupLinkCapture(
+      '[data-tour-target="nav-programs"]',
+      "/programs?tour=2",
+      d,
+      routerPush
+    );
+  }
+}
+
+// ========================================
+// Phase 2: 프로그램(/programs?tour=2)
+// 프로그램 카드 확인 -> 수업시간표 클릭 유도
+// ========================================
+async function runPhase2(routerPush: (url: string) => void) {
+  savePhase("2"); // 재개 기능용 Phase 저장
+  const driverFn = await loadDriver();
+  const isMobile = window.innerWidth < 768;
+
+  // 프로그램 카드가 렌더링될 때까지 폴링 (최대 3초)
+  const cardEl = await waitForElement('[data-tour-target="program-cards"]');
+
+  // 요소를 못 찾으면 카드 하이라이트를 건너뛰고 네비 안내로 스킵
+  if (!cardEl) {
+    highlightScheduleNav(driverFn, routerPush, isMobile);
+    return;
+  }
+
+  // Step 1: 프로그램 카드 목록 하이라이트 (정보 읽기용)
+  const d = driverFn({
+    showProgress: false,
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    doneBtnText: "확인했어요",
+    nextBtnText: "확인했어요",
+    steps: [
+      {
+        element: '[data-tour-target="program-cards"]',
+        popover: {
+          title: "프로그램 안내 📋",
+          description:
+            progressLabel(2) +
+            "우리 아이 나이에 맞는 프로그램과 수강료를 확인하세요!",
+          side: "bottom" as const,
+          showButtons: ["close", "next"] as any,
+        },
+      },
+    ],
+    onDestroyed: () => {
+      setTimeout(
+        () => highlightScheduleNav(driverFn, routerPush, isMobile),
+        300
+      );
+    },
+  });
+
+  d.drive();
+}
+
+/** 시간표 네비게이션 하이라이트 (Phase 2에서 호출) */
+function highlightScheduleNav(
+  driverFn: any,
+  routerPush: (url: string) => void,
+  isMobile: boolean
+) {
+  if (isMobile) {
+    // 모바일: 햄버거 -> 사이드바 -> 시간표 링크
+    const d = driverFn({
+      showProgress: false,
+      allowClose: true,
+      smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+      overlayColor: "rgba(0,0,0,0.6)",
+      stageRadius: 8,
+      stagePadding: 8,
+      steps: [
+        {
+          element: '[data-tour-target="hamburger"]',
+          popover: {
+            title: "시간표를 볼까요?",
+            description: progressLabel(2) + "메뉴를 열어주세요!",
+            side: "bottom" as const,
+            align: "end" as const,
+            showButtons: ["close"] as any,
+          },
+        },
+      ],
+    });
+    d.drive();
+    const btn = document.querySelector(
+      '[data-tour-target="hamburger"]'
+    ) as HTMLElement;
+    if (btn) {
+      btn.addEventListener(
+        "click",
+        () => {
+          d.destroy();
+          setTimeout(() => {
+            let restoreHref: (() => void) | null = null;
+
+            const d2 = driverFn({
+              showProgress: false,
+              allowClose: true,
+              smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+              overlayColor: "rgba(0,0,0,0.6)",
+              stageRadius: 4,
+              stagePadding: 4,
+              steps: [
+                {
+                  element: '[data-tour-target="mobile-nav-schedule"]',
+                  popover: {
+                    title: "수업시간표",
+                    description:
+                      progressLabel(2) +
+                      "여기를 눌러서 시간표를 확인해보세요!",
+                    side: "left" as const,
+                    showButtons: ["close"] as any,
+                  },
+                },
+              ],
+              onDestroyed: () => {
+                if (restoreHref) restoreHref();
+              },
+            });
+            d2.drive();
+
+            // B-2: href 직접 교체
+            restoreHref = setupLinkCapture(
+              '[data-tour-target="mobile-nav-schedule"]',
+              "/schedule?tour=3",
+              d2,
+              routerPush
+            );
+          }, 400);
+        },
+        { once: true }
+      );
+    }
+  } else {
+    // PC: 데스크탑 네비의 "수업시간표" 링크
+    let restoreHref: (() => void) | null = null;
+
+    const d = driverFn({
+      showProgress: false,
+      allowClose: true,
+      smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+      overlayColor: "rgba(0,0,0,0.6)",
+      stageRadius: 8,
+      stagePadding: 10,
+      steps: [
+        {
+          element: '[data-tour-target="nav-schedule"]',
+          popover: {
+            title: "수업시간표",
+            description:
+              progressLabel(2) +
+              "시간표도 확인해볼까요? 여기를 눌러주세요!",
+            side: "bottom" as const,
+            showButtons: ["close"] as any,
+          },
+        },
+      ],
+      onDestroyed: () => {
+        if (restoreHref) restoreHref();
+      },
+    });
+    d.drive();
+
+    // B-2: href 직접 교체
+    restoreHref = setupLinkCapture(
+      '[data-tour-target="nav-schedule"]',
+      "/schedule?tour=3",
+      d,
+      routerPush
+    );
+  }
+}
+
+// ========================================
+// Phase 3: 시간표(/schedule?tour=3)
+// 시간표 그리드 확인 -> 수업 찾기 클릭 유도
+// ========================================
+async function runPhase3(routerPush: (url: string) => void) {
+  savePhase("3"); // 재개 기능용 Phase 저장
+  const driverFn = await loadDriver();
+  const isMobile = window.innerWidth < 768;
+
+  // 시간표 그리드가 렌더링될 때까지 폴링 (최대 3초)
+  const gridEl = await waitForElement('[data-tour-target="schedule-grid"]');
+
+  // 요소를 못 찾으면 시간표 하이라이트를 건너뛰고 네비 안내로 스킵
+  if (!gridEl) {
+    highlightSimulatorNav(driverFn, routerPush, isMobile);
+    return;
+  }
+
+  const d = driverFn({
+    showProgress: false,
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    doneBtnText: "확인했어요",
+    nextBtnText: "확인했어요",
+    steps: [
+      {
+        element: '[data-tour-target="schedule-grid"]',
+        popover: {
+          title: "수업 시간표 📅",
+          description:
+            progressLabel(3) + "요일별 수업 시간을 확인하세요!",
+          // 시간표 그리드는 세로로 길어서 아래에 popover를 띄워야 가림 없음
+          side: "bottom" as const,
+          showButtons: ["close", "next"] as any,
+        },
+      },
+    ],
+    onDestroyed: () => {
+      setTimeout(
+        () => highlightSimulatorNav(driverFn, routerPush, isMobile),
+        300
+      );
+    },
+  });
+
+  d.drive();
+}
+
+/** 수업 찾기 네비게이션 하이라이트 (Phase 3에서 호출) */
+function highlightSimulatorNav(
+  driverFn: any,
+  routerPush: (url: string) => void,
+  isMobile: boolean
+) {
+  if (isMobile) {
+    // 모바일: 햄버거 -> 사이드바 -> 수업 찾기 링크
+    const d = driverFn({
+      showProgress: false,
+      allowClose: true,
+      smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+      overlayColor: "rgba(0,0,0,0.6)",
+      stageRadius: 8,
+      stagePadding: 8,
+      steps: [
+        {
+          element: '[data-tour-target="hamburger"]',
+          popover: {
+            title: "수업을 찾아볼까요?",
+            description: progressLabel(3) + "메뉴를 열어주세요!",
+            side: "bottom" as const,
+            align: "end" as const,
+            showButtons: ["close"] as any,
+          },
+        },
+      ],
+    });
+    d.drive();
+    const btn = document.querySelector(
+      '[data-tour-target="hamburger"]'
+    ) as HTMLElement;
+    if (btn) {
+      btn.addEventListener(
+        "click",
+        () => {
+          d.destroy();
+          setTimeout(() => {
+            let restoreHref: (() => void) | null = null;
+
+            const d2 = driverFn({
+              showProgress: false,
+              allowClose: true,
+              smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+              overlayColor: "rgba(0,0,0,0.6)",
+              stageRadius: 4,
+              stagePadding: 4,
+              steps: [
+                {
+                  element: '[data-tour-target="mobile-nav-simulator"]',
+                  popover: {
+                    title: "우리 아이 수업 찾기",
+                    description:
+                      progressLabel(3) + "딱 맞는 수업을 찾아볼까요?",
+                    side: "left" as const,
+                    showButtons: ["close"] as any,
+                  },
+                },
+              ],
+              onDestroyed: () => {
+                if (restoreHref) restoreHref();
+              },
+            });
+            d2.drive();
+
+            // B-2: href 직접 교체
+            restoreHref = setupLinkCapture(
+              '[data-tour-target="mobile-nav-simulator"]',
+              "/simulator?tour=4",
+              d2,
+              routerPush
+            );
+          }, 400);
+        },
+        { once: true }
+      );
+    }
+  } else {
+    // PC: 데스크탑 네비의 "우리 아이 수업 찾기" 링크
+    let restoreHref: (() => void) | null = null;
+
+    const d = driverFn({
+      showProgress: false,
+      allowClose: true,
+      smoothScroll: false, // B-1: sticky 헤더 스크롤 충돌 방지
+      overlayColor: "rgba(0,0,0,0.6)",
+      stageRadius: 8,
+      stagePadding: 10,
+      steps: [
+        {
+          element: '[data-tour-target="nav-simulator"]',
+          popover: {
+            title: "우리 아이 수업 찾기",
+            description:
+              progressLabel(3) +
+              "딱 맞는 수업을 찾아볼까요? 여기를 눌러주세요!",
+            side: "bottom" as const,
+            showButtons: ["close"] as any,
+          },
+        },
+      ],
+      onDestroyed: () => {
+        if (restoreHref) restoreHref();
+      },
+    });
+    d.drive();
+
+    // B-2: href 직접 교체
+    restoreHref = setupLinkCapture(
+      '[data-tour-target="nav-simulator"]',
+      "/simulator?tour=4",
+      d,
+      routerPush
+    );
+  }
+}
+
+// ========================================
+// Phase 4: 시뮬레이터(/simulator?tour=4)
+// 학년 선택 유도 -> 투어 완료
+// ========================================
+async function runPhase4() {
+  savePhase("4"); // 재개 기능용 Phase 저장
+  const driverFn = await loadDriver();
+
+  // 학년 선택 드롭다운이 렌더링될 때까지 폴링 (최대 3초)
+  const selectEl = await waitForElement('[data-tour-target="grade-select"]');
+
+  // 요소를 못 찾으면 투어를 완료 처리 (에러 없이 정상 종료)
+  if (!selectEl) {
+    clearSavedPhase();
+    markCompleted();
+    showCompletionToast();
+    return;
+  }
+
+  const d = driverFn({
+    showProgress: false,
+    // 오버레이 클릭/스크롤로 꺼지지 않도록 (버튼으로만 닫기)
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    // 버튼 한국어 설정
+    doneBtnText: "시작할게요!",
+    steps: [
+      {
+        element: '[data-tour-target="grade-select"]',
+        popover: {
+          title: "수업 찾기 시작! 🏀",
+          description:
+            progressLabel(4) +
+            "학년만 선택하면 자동으로 맞는 수업을 찾아드려요! 직접 해보세요.",
+          side: "top" as const,
+          showButtons: ["close", "next"] as any,
+        },
+      },
+    ],
+    onDestroyed: () => {
+      // 투어 완료 처리
+      clearSavedPhase();
+      markCompleted();
+      // 축하 토스트 표시
+      showCompletionToast();
+    },
+  });
+
+  d.drive();
+}
+
+// ========================================
+// 메인 컴포넌트
+// ========================================
+
+function TourTriggerInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // URL의 ?tour=N 파라미터 읽기
+  const tourPhase = searchParams.get("tour");
+  // router를 ref로 저장하여 useEffect 의존성에서 제외 (재실행 방지)
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const routerPush = useCallback(
+    (url: string) => routerRef.current.push(url),
+    []
+  );
+
+  // ?tour=N 파라미터에 따라 해당 Phase 자동 실행 (1회만)
+  const hasRunPhase = useRef<string | null>(null);
+  useEffect(() => {
+    if (!mounted || !tourPhase) return;
+    // 같은 phase를 중복 실행하지 않음
+    if (hasRunPhase.current === tourPhase) return;
+    hasRunPhase.current = tourPhase;
+
+    const timer = setTimeout(() => {
+      switch (tourPhase) {
+        case "2":
+          runPhase2(routerPush);
+          break;
+        case "3":
+          runPhase3(routerPush);
+          break;
+        case "4":
+          runPhase4();
+          break;
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [mounted, tourPhase, routerPush]);
+
+  // 첫 방문 자동 제안 (메인 페이지에서 3초 후 토스트 표시)
+  useEffect(() => {
+    if (!mounted || pathname !== "/" || tourPhase || isCompleted()) return;
+    const timer = setTimeout(() => setShowPrompt(true), 3000);
+    return () => clearTimeout(timer);
+  }, [mounted, pathname, tourPhase]);
+
+  // 투어를 처음부터 시작하는 함수
+  const startTourFromBeginning = useCallback(() => {
+    setShowPrompt(false);
+    clearSavedPhase();
+    runPhase1(routerPush);
+  }, [routerPush]);
+
+  // "입학 가이드" 버튼 또는 토스트에서 투어 시작 (재개 지원)
+  const startTour = useCallback(() => {
+    setShowPrompt(false);
+    const savedPhase = getSavedPhase();
+
+    // 저장된 Phase가 2 이상이면 해당 페이지로 바로 이동
+    if (savedPhase && parseInt(savedPhase) >= 2) {
+      const phasePages: Record<string, string> = {
+        "2": "/programs?tour=2",
+        "3": "/schedule?tour=3",
+        "4": "/simulator?tour=4",
+      };
+      if (phasePages[savedPhase]) {
+        routerPush(phasePages[savedPhase]);
+        return;
+      }
+    }
+
+    // Phase 1부터 시작
+    runPhase1(routerPush);
+  }, [routerPush]);
+
+  // 토스트 닫기 (투어 완료로 처리하여 다시 안 뜨게)
+  const dismissPrompt = useCallback(() => {
+    setShowPrompt(false);
+    markCompleted();
+  }, []);
+
+  // 투어 진행 중이거나 admin 페이지면 버튼 숨김
+  if (tourPhase || pathname.startsWith("/admin")) return null;
+
+  // 클라이언트에서만 저장된 Phase 확인 (SSR 안전)
+  const hasSavedPhase = mounted ? getSavedPhase() : null;
+
+  return (
+    <>
+      {/* 플로팅 입학 가이드 버튼 -- 챗봇 버튼(bottom-6)보다 위에 배치 */}
+      <button
+        onClick={startTour}
+        className="fixed bottom-20 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-white text-brand-navy-900 font-bold text-sm rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 border border-gray-200"
+        aria-label="입학 가이드 시작"
+      >
+        {/* Material Symbols Outlined 아이콘 */}
+        <span
+          className="material-symbols-outlined text-brand-orange-500"
+          style={{ fontSize: 20 }}
+        >
+          school
+        </span>
+        입학 가이드
+      </button>
+
+      {/* 첫 방문 자동 제안 토스트 -- 메인 페이지에서만, 3초 후 표시 */}
+      {showPrompt && (
+        <div className="fixed bottom-36 right-4 z-50 bg-white rounded-2xl shadow-2xl p-5 max-w-xs border border-gray-100 animate-in slide-in-from-bottom-4">
+          {hasSavedPhase ? (
+            <>
+              {/* 이전에 중단된 투어가 있는 경우 */}
+              <p className="text-sm font-bold text-gray-900 mb-1">
+                이어서 볼까요? 🏀
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                이전에 보시던 둘러보기가 있어요.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={startTourFromBeginning}
+                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  처음부터
+                </button>
+                <button
+                  onClick={startTour}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-brand-orange-500 hover:bg-brand-orange-600 rounded-lg transition-colors"
+                >
+                  이어서 보기
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* 첫 방문 사용자 */}
+              <p className="text-sm font-bold text-gray-900 mb-1">
+                처음 오셨나요?
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                학원 둘러보기를 시작할까요?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={dismissPrompt}
+                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  괜찮아요
+                </button>
+                <button
+                  onClick={startTour}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-brand-orange-500 hover:bg-brand-orange-600 rounded-lg transition-colors"
+                >
+                  시작하기
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+// useSearchParams()는 반드시 Suspense 안에서 사용해야 함
+export default function GuideTourTrigger() {
+  return (
+    <Suspense fallback={null}>
+      <TourTriggerInner />
+    </Suspense>
+  );
+}

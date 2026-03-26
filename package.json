@@ -26,6 +26,7 @@
     "@tiptap/pm": "^3.20.0",
     "@tiptap/react": "^3.20.0",
     "@tiptap/starter-kit": "^3.20.0",
+    "driver.js": "^1.4.0",
     "lucide-react": "^0.575.0",
     "lzutf8": "^0.6.3",
     "next": "16.1.6",

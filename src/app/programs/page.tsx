@@ -108,7 +108,7 @@ export default async function ProgramsPage() {
                         <p className="text-sm mt-2">문의: {phone}</p>
                     </div>
                 ) : (
-                    <div className="grid md:grid-cols-2 gap-6">
+                    <div data-tour-target="program-cards" className="grid md:grid-cols-2 gap-6">
                         {programs.map((program, i) => {
                             const days = program.days
                                 ? DAY_ORDER.filter((d) => program.days!.split(",").includes(d))

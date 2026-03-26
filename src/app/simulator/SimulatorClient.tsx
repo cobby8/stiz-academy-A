@@ -205,7 +205,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
 
                 {/* ===== 1단계: 학년 선택 ===== */}
                 {step === 1 && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-8">
+                    <div data-tour-target="grade-select" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-8">
                         <h2 className="text-xl md:text-2xl font-black text-gray-900 mb-2 break-keep">
                             아이의 학년을 선택해 주세요
                         </h2>

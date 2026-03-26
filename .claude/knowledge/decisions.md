@@ -19,3 +19,27 @@
 - **발견자**: planner-architect
 - **내용**: CLAUDE.md에는 "/admin/schedule은 revalidate:30, 나머지 /admin/*은 force-dynamic"으로 기술되어 있으나, 실제 코드 분석 결과 전체 15개 admin 페이지가 이미 revalidate:30으로 통일되어 있음. force-dynamic 사용 페이지 0개. Server Action 호출 시 revalidatePath로 즉시 무효화되므로 실시간성도 보장됨. CLAUDE.md 업데이트 필요.
 - **참조횟수**: 0
+
+### 2026-03-26 입학 가이드 투어 v1: 직접 구현 방식 채택 -> 5회 실패로 폐기
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: v1에서 직접 구현(CSS box-shadow, z-index, 4-div 오버레이)을 시도했으나 5회 연속 실패. 근본 원인: (1) 하이라이트 대상이 너무 큰 섹션(히어로 1920x600px 등), (2) CSS hack으로는 부모 stacking context를 안정적으로 뚫을 수 없음, (3) 슬라이드쇼식 "다음" 버튼 방식은 게임 튜토리얼이 아님. 이 결정은 v2에서 번복됨.
+- **참조횟수**: 1
+
+### 2026-03-26 입학 가이드 투어 v2: driver.js 라이브러리 채택 (직접 구현 폐기)
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: v1의 5회 실패 후 driver.js(MIT, ~5KB gzipped) 채택. 선택 이유: (1) SVG cutout 방식으로 작은 요소도 정확히 하이라이트 (CSS hack 불필요), (2) pointer-events 자동 처리로 하이라이트된 요소 클릭 가능, (3) onNextClick/onHighlightStarted 콜백으로 "직접 클릭" 방식 구현 가능, (4) vanilla JS라 React 래핑 불필요, (5) 번들 크기 최소. 페이지 간 이동은 URL 파라미터(?tour=phase)로 자체 처리. shepherd.js(AGPL 라이센스)와 react-joyride(React 19 미호환) 제외.
+- **참조횟수**: 0
+
+### 2026-03-26 입학 가이드 투어: driver.js + sticky 헤더 위치 버그
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: driver.js가 sticky top-0 헤더 내부의 nav 링크를 하이라이트할 때, scrollIntoView 로직이 불필요하게 작동하여 popover 위치가 어긋남. 해결: nav 링크 스텝에 scrollIntoView:false 옵션 적용. 또한 Next.js Link에 DOM addEventListener로 click 리스너를 붙이면 React 합성 이벤트와 실행 순서 충돌 발생. 해결: href 속성 직접 교체 방식으로 전환.
+- **참조횟수**: 0
+
+### 2026-03-26 입학 가이드 투어: 기존 시뮬레이터 공존 방식
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 가이드 투어와 기존 /simulator 페이지는 공존. 시뮬레이터는 독립 기능으로 유지하고, 가이드 투어에서 시뮬레이터를 "도착지 중 하나"로 활용. 시뮬레이터를 대체하지 않는 이유: (1) 시뮬레이터는 직접 검색/필터링이 가능한 도구형 페이지, (2) 가이드 투어는 정보 안내 목적, (3) SEO와 챗봇에서 /simulator 직접 링크가 이미 사용 중.
+- **참조횟수**: 0

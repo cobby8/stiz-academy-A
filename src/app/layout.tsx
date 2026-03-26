@@ -104,6 +104,11 @@ export default async function RootLayout({
                     rel="stylesheet"
                     href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
                 />
+                {/* Material Symbols Outlined: 가이드 투어 등에서 사용하는 아이콘 폰트 */}
+                <link
+                    rel="stylesheet"
+                    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0"
+                />
             </head>
             <body
                 className="antialiased selection:bg-brand-orange-500 selection:text-white"

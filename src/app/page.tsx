@@ -13,6 +13,8 @@ import PublicHeader from "@/components/PublicHeader";
 import PublicFooter from "@/components/PublicFooter";
 import LandingPageClient from "./LandingPageClient";
 import ChatBotButton from "@/components/chat/ChatBotButton";
+// 가이드 투어: 메인 페이지에서도 플로팅 버튼 표시
+import GuideTourTrigger from "@/components/guide-tour/GuideTourTrigger";
 
 export const revalidate = 60;
 
@@ -49,6 +51,9 @@ export default async function Home() {
 
       {/* 챗봇 버튼 — 다른 페이지는 PublicPageLayout에서 렌더링하지만, 메인 페이지는 직접 추가 */}
       <ChatBotButton />
+
+      {/* 가이드 투어: 플로팅 트리거 버튼 (driver.js가 오버레이/말풍선 직접 처리) */}
+      <GuideTourTrigger />
     </div>
   );
 }

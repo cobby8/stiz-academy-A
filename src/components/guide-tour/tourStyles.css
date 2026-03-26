@@ -1,0 +1,52 @@
+/* driver.js popover 커스텀 스타일 — 프로젝트 디자인에 맞춤 */
+.driver-popover {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important;
+  padding: 24px !important;
+  max-width: 340px !important;
+}
+.driver-popover .driver-popover-title {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #1a1a2e !important;
+}
+.driver-popover .driver-popover-description {
+  font-size: 14px !important;
+  color: #666 !important;
+  line-height: 1.6 !important;
+  margin-top: 8px !important;
+}
+.driver-popover-navigation-btns {
+  margin-top: 16px !important;
+  gap: 8px !important;
+}
+.driver-popover .driver-popover-next-btn {
+  background: #f97316 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 8px 20px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  text-shadow: none !important;
+}
+.driver-popover .driver-popover-prev-btn {
+  background: #f3f4f6 !important;
+  color: #666 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  text-shadow: none !important;
+}
+.driver-popover .driver-popover-close-btn {
+  color: #999 !important;
+}
+
+/* 투어 완료 축하 토스트 슬라이드업 애니메이션 */
+@keyframes tourSlideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

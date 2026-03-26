@@ -151,6 +151,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour-target={`nav-${item.href.slice(1)}`}
                 className="relative py-1 hover:text-brand-orange-500 transition-colors group"
               >
                 {item.label}
@@ -190,6 +191,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
 
             {/* 모바일 햄버거 버튼 */}
             <button
+              data-tour-target="hamburger"
               onClick={() => setIsMobileMenuOpen(true)}
               className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
               aria-label="메뉴 열기"
@@ -235,6 +237,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             <Link
               key={item.href}
               href={item.href}
+              data-tour-target={`mobile-nav-${item.href.slice(1)}`}
               onClick={() => setIsMobileMenuOpen(false)}
               className="block px-6 py-3 text-gray-700 font-medium hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
             >

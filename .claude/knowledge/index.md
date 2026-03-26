@@ -4,14 +4,15 @@
 | 파일 | 항목 수 | 최종 업데이트 |
 |------|--------|------------|
 | architecture.md | 4 | 2026-03-26 |
-| errors.md | 0 | - |
+| errors.md | 2 | 2026-03-26 |
 | conventions.md | 3 | 2026-03-22 |
-| decisions.md | 3 | 2026-03-26 |
-| lessons.md | 0 | - |
+| decisions.md | 7 | 2026-03-26 |
+| lessons.md | 2 | 2026-03-26 |
 
 ## 최근 추가된 지식 (최근 5건)
-1. [architecture] 관리자 페이지 데이터 로딩 패턴 (revalidate:30 통일, 병목 3곳)
-2. [decision] admin 캐싱: force-dynamic 전면 폐지 -> revalidate:30 통일 확인
-3. [architecture] 시간표 데이터 파이프라인 (Google Sheets -> Override -> MergedSlot)
-4. [architecture] 공개 페이지 공통 패턴 (PublicPageLayout + 히어로 + CTABanner)
-5. [decision] 시뮬레이터: API 없이 클라이언트 필터링 방식
+1. [decision] driver.js + sticky 헤더 위치 버그 원인과 해결 방향
+2. [lesson] 가이드 투어: "큰 섹션 하이라이트"는 본질적으로 무의미
+2. [lesson] 가이드 투어: 직접 구현 vs 라이브러리 판단 기준
+3. [error] CSS 기반 하이라이트의 근본적 한계 (5회 실패 종합)
+4. [decision] 입학 가이드 투어 v2: driver.js 라이브러리 채택 (직접 구현 폐기)
+5. [decision] 입학 가이드 투어: 기존 시뮬레이터 공존 방식

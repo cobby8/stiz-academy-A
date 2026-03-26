@@ -122,7 +122,7 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                             <p className="text-sm mt-2 text-gray-400">문의: {phone}</p>
                         </div>
                     ) : (
-                        <div className="space-y-8">
+                        <div data-tour-target="schedule-grid" className="space-y-8">
                             {activeDays.map((dayKey) => (
                                 <div key={dayKey} className={`rounded-2xl border ${DAY_CARD_BG[dayKey]} overflow-hidden shadow-sm`}>
                                     {/* 요일 헤더 — 색상 바 + 클래스 수 표시 */}

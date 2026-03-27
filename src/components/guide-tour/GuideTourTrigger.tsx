@@ -679,66 +679,300 @@ function highlightSimulatorNav(
   }
 }
 
+/**
+ * 투어 완료 공통 헬퍼
+ * Phase 저장 삭제 + 완료 표시 + 축하 토스트를 한 곳에서 처리한다.
+ * 여러 곳에서 동일한 완료 로직을 반복하지 않기 위해 추출.
+ */
+function finishTour() {
+  clearSavedPhase();
+  markCompleted();
+  showCompletionToast();
+}
+
 // ========================================
 // Phase 4: 시뮬레이터(/simulator?tour=4)
-// 학년 선택 유도 -> 투어 완료
+// 5단계 서브스텝: 학년 선택 -> 다음 버튼 -> 요일/시간 안내 -> 수업 찾기 -> 결과 확인
+// 사용자가 시뮬레이터를 직접 조작하면서 투어가 단계별로 안내하는 게임 튜토리얼 방식
 // ========================================
 async function runPhase4() {
   savePhase("4"); // 재개 기능용 Phase 저장
   const driverFn = await loadDriver();
 
-  // 학년 선택 드롭다운이 렌더링될 때까지 폴링 (최대 3초)
+  // --- 서브스텝 4-1: 학년 선택 드롭다운 하이라이트 ---
   const selectEl = await waitForElement('[data-tour-target="grade-select"]');
 
   // 요소를 못 찾으면 투어를 완료 처리 (에러 없이 정상 종료)
   if (!selectEl) {
-    clearSavedPhase();
-    markCompleted();
-    showCompletionToast();
+    finishTour();
     return;
   }
 
-  // X 버튼 클릭 시 투어 중단 (축하 토스트 안 보여줌)
   let closedByUser = false;
 
-  const d = driverFn({
+  const d1 = driverFn({
     showProgress: false,
-    // 오버레이 클릭/스크롤로 꺼지지 않도록 (버튼으로만 닫기)
     allowClose: false,
     overlayColor: "rgba(0,0,0,0.5)",
     stageRadius: 12,
     stagePadding: 10,
-    // 버튼 한국어 설정
-    doneBtnText: "시작할게요!",
     steps: [
       {
         element: '[data-tour-target="grade-select"]',
         popover: {
-          title: "수업 찾기 시작! 🏀",
+          title: "학년을 선택해 주세요",
           description:
             progressLabel(4) +
-            "학년만 선택하면 자동으로 맞는 수업을 찾아드려요! 직접 해보세요.",
+            "아이의 학년을 선택하면 맞는 수업을 찾아드려요. 직접 선택해 보세요!",
+          side: "top" as const,
+          // 사용자가 직접 드롭다운을 조작해야 하므로 "다음" 버튼 없이 X만 표시
+          showButtons: ["close"] as any,
+        },
+      },
+    ],
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d1.destroy();
+    },
+  });
+  d1.drive();
+
+  // 학년 드롭다운의 값 변경을 감지하여 다음 서브스텝으로 진행
+  // <select> 요소의 change 이벤트를 폴링 대신 이벤트 리스너로 감지한다
+  const gradeSelect = selectEl as HTMLSelectElement;
+  await new Promise<void>((resolve) => {
+    // 이미 X로 닫았으면 즉시 종료
+    if (closedByUser) { resolve(); return; }
+
+    const onGradeChange = () => {
+      // 학년이 실제로 선택되었는지 확인 (빈 값이면 무시)
+      if (gradeSelect.value) {
+        gradeSelect.removeEventListener("change", onGradeChange);
+        d1.destroy();
+        resolve();
+      }
+    };
+    gradeSelect.addEventListener("change", onGradeChange);
+  });
+
+  if (closedByUser) return;
+
+  // --- 서브스텝 4-2: "다음 단계" 버튼 클릭 유도 ---
+  // 학년 선택 후 "다음 단계" 버튼이 활성화되었으므로 클릭을 안내한다
+  // 짧은 딜레이로 React 상태 업데이트를 기다림
+  await new Promise((r) => setTimeout(r, 300));
+
+  // "다음 단계" 버튼은 grade-select 카드 안에 있음 (step===1일 때만 렌더링)
+  const nextBtn = document.querySelector('[data-tour-target="grade-select"] button') as HTMLElement;
+  if (!nextBtn) {
+    // 버튼을 못 찾으면 스킵하고 다음 서브스텝 시도
+    await waitForStep2Card(driverFn, closedByUser);
+    return;
+  }
+
+  closedByUser = false;
+  const d2 = driverFn({
+    showProgress: false,
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    steps: [
+      {
+        element: '[data-tour-target="grade-select"]',
+        popover: {
+          title: "다음 단계로!",
+          description:
+            progressLabel(4) +
+            "학년을 선택했으니, 아래 '다음 단계' 버튼을 눌러주세요!",
+          side: "top" as const,
+          showButtons: ["close"] as any,
+        },
+      },
+    ],
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d2.destroy();
+    },
+  });
+  d2.drive();
+
+  // "다음 단계" 버튼 클릭 감지 -> 2단계 카드가 나타남
+  await new Promise<void>((resolve) => {
+    if (closedByUser) { resolve(); return; }
+
+    const onClick = () => {
+      d2.destroy();
+      resolve();
+    };
+    nextBtn.addEventListener("click", onClick, { once: true });
+  });
+
+  if (closedByUser) return;
+
+  // --- 서브스텝 4-3: 요일/시간대 선택 안내 ---
+  await waitForStep2Card(driverFn, closedByUser);
+}
+
+/**
+ * 서브스텝 4-3 ~ 4-5: 2단계 카드가 나타난 후의 안내 흐름
+ * - 4-3: 요일/시간대 선택 영역 안내 (읽기 전용)
+ * - 4-4: "수업 찾기" 버튼 클릭 유도
+ * - 4-5: 결과 카드 확인 + 투어 완료
+ */
+async function waitForStep2Card(driverFn: any, parentClosed: boolean) {
+  if (parentClosed) return;
+
+  // 2단계 카드가 렌더링될 때까지 대기 (step 전환 애니메이션 포함)
+  const step2Card = await waitForElement('[data-tour-target="sim-step2-card"]');
+  if (!step2Card) {
+    finishTour();
+    return;
+  }
+
+  let closedByUser = false;
+
+  // 요일 선택 영역 하이라이트 (정보 안내 스텝)
+  const d3 = driverFn({
+    showProgress: false,
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    doneBtnText: "확인했어요",
+    nextBtnText: "확인했어요",
+    steps: [
+      {
+        element: '[data-tour-target="sim-day-select"]',
+        popover: {
+          title: "요일을 선택하세요",
+          description:
+            progressLabel(4) +
+            "원하는 요일을 여러 개 고를 수 있어요. 선택 안 하면 전체 요일로 검색돼요.",
           side: "top" as const,
           showButtons: ["close", "next"] as any,
         },
       },
     ],
-    // X 버튼 클릭: 투어 중단만 (축하 토스트 표시 안 함)
     onCloseClick: () => {
       closedByUser = true;
       clearSavedPhase();
-      d.destroy();
+      d3.destroy();
     },
     onDestroyed: () => {
-      if (closedByUser) return; // X로 닫으면 완료 처리 안 함
-      // "시작할게요!" 버튼 클릭 시에만 투어 완료 처리
-      clearSavedPhase();
-      markCompleted();
-      showCompletionToast();
+      if (closedByUser) return;
+      // "확인했어요" 클릭 후 -> 서브스텝 4-4로 진행
+      setTimeout(() => runSubStep4_4(driverFn), 100);
     },
   });
+  d3.drive();
+}
 
-  d.drive();
+/**
+ * 서브스텝 4-4: "수업 찾기" 버튼 클릭 유도
+ * 사용자가 직접 버튼을 눌러서 3단계(결과)로 이동하게 한다.
+ */
+async function runSubStep4_4(driverFn: any) {
+  const searchBtn = await waitForElement('[data-tour-target="sim-search-btn"]');
+  if (!searchBtn) {
+    finishTour();
+    return;
+  }
+
+  let closedByUser = false;
+
+  const d4 = driverFn({
+    showProgress: false,
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    steps: [
+      {
+        element: '[data-tour-target="sim-search-btn"]',
+        popover: {
+          title: "수업을 찾아볼까요?",
+          description:
+            progressLabel(4) +
+            "'수업 찾기' 버튼을 눌러서 조건에 맞는 수업을 검색해 보세요!",
+          side: "top" as const,
+          showButtons: ["close"] as any,
+        },
+      },
+    ],
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d4.destroy();
+    },
+  });
+  d4.drive();
+
+  // "수업 찾기" 버튼 클릭 감지 -> 3단계(결과) 표시
+  await new Promise<void>((resolve) => {
+    if (closedByUser) { resolve(); return; }
+
+    const onClick = () => {
+      d4.destroy();
+      resolve();
+    };
+    (searchBtn as HTMLElement).addEventListener("click", onClick, { once: true });
+  });
+
+  if (closedByUser) return;
+
+  // --- 서브스텝 4-5: 결과 카드 확인 + 투어 완료 ---
+  await runSubStep4_5(driverFn);
+}
+
+/**
+ * 서브스텝 4-5: 검색 결과 확인 + 투어 완료
+ * 결과 영역을 하이라이트하고 "완료!" 버튼으로 투어를 마무리한다.
+ */
+async function runSubStep4_5(driverFn: any) {
+  // 3단계 결과가 렌더링될 때까지 대기
+  const resultsEl = await waitForElement('[data-tour-target="sim-results"]');
+  if (!resultsEl) {
+    finishTour();
+    return;
+  }
+
+  let closedByUser = false;
+
+  const d5 = driverFn({
+    showProgress: false,
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    doneBtnText: "완료!",
+    steps: [
+      {
+        element: '[data-tour-target="sim-results"]',
+        popover: {
+          title: "검색 완료! 🎉",
+          description:
+            progressLabel(4) +
+            "조건에 맞는 수업이 나왔어요! 마음에 드는 수업을 찾으면 체험수업을 신청해 보세요.",
+          side: "top" as const,
+          showButtons: ["close", "next"] as any,
+        },
+      },
+    ],
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d5.destroy();
+    },
+    onDestroyed: () => {
+      if (closedByUser) return;
+      // "완료!" 버튼 클릭 시 투어 완료 처리
+      finishTour();
+    },
+  });
+  d5.drive();
 }
 
 // ========================================

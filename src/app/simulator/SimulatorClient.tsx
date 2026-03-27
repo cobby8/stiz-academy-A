@@ -247,7 +247,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
 
                 {/* ===== 2단계: 요일 + 시간대 선택 ===== */}
                 {step === 2 && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-8">
+                    <div data-tour-target="sim-step2-card" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-8">
                         <h2 className="text-xl md:text-2xl font-black text-gray-900 mb-2 break-keep">
                             원하는 요일과 시간대를 선택해 주세요
                         </h2>
@@ -269,7 +269,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                         </div>
 
                         {/* 요일 복수 선택 — 체크박스 스타일의 토글 버튼 */}
-                        <div className="mb-6">
+                        <div data-tour-target="sim-day-select" className="mb-6">
                             <p className="text-sm font-bold text-gray-700 mb-3">요일 선택 (복수 가능)</p>
                             <div className="flex flex-wrap gap-2">
                                 {DAY_OPTIONS.map(({ key, label }) => (
@@ -290,7 +290,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                         </div>
 
                         {/* 시간대 선택 — 라디오 스타일 버튼 */}
-                        <div className="mb-6">
+                        <div data-tour-target="sim-time-select" className="mb-6">
                             <p className="text-sm font-bold text-gray-700 mb-3">시간대 선택</p>
                             <div className="grid grid-cols-2 gap-2">
                                 {TIME_OPTIONS.map(({ key, label }) => (
@@ -319,6 +319,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                 이전
                             </button>
                             <button
+                                data-tour-target="sim-search-btn"
                                 onClick={goToStep3}
                                 className="flex-[2] py-3.5 rounded-xl font-bold text-base bg-brand-orange-500 hover:bg-brand-orange-600 text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200"
                             >
@@ -330,7 +331,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
 
                 {/* ===== 3단계: 결과 표시 ===== */}
                 {step === 3 && (
-                    <div>
+                    <div data-tour-target="sim-results">
                         {/* 검색 조건 요약 */}
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
                             <div className="flex items-center justify-between mb-3">

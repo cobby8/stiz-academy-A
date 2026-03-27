@@ -123,7 +123,7 @@ export default function ApplyAdminClient({ initialSettings }: ApplyAdminClientPr
                         onChange={(e) => setTrialContent(e.target.value)}
                         rows={6}
                         className={TEXTAREA}
-                        placeholder={"예:\n- 첫 수업 무료 체험 가능\n- 초등학생~중학생 누구나 신청 가능\n- 체험 후 수강 결정하셔도 됩니다"}
+                        placeholder={"예:\n- 체험수업 1회 1만원\n- 초등학생~중학생 누구나 신청 가능\n- 체험 후 수강 결정하셔도 됩니다"}
                     />
                 </div>
                 <div>

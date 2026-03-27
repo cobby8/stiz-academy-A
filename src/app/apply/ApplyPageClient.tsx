@@ -93,8 +93,8 @@ function ContentBlock({ content }: { content: string }) {
 // --- 기본 FAQ 데이터 --- DB에 데이터가 없을 때 fallback으로 사용
 const DEFAULT_FAQ_DATA = [
     {
-        question: "체험수업은 무료인가요?",
-        answer: "네, 첫 체험수업은 무료로 진행됩니다. 운동복과 실내화만 준비해 주시면 됩니다.",
+        question: "체험수업 비용이 얼마인가요?",
+        answer: "체험수업은 1회 1만원의 체험비가 있습니다. 운동복과 실내화를 준비해 주시면 됩니다.",
     },
     {
         question: "몇 살부터 수업을 들을 수 있나요?",
@@ -178,7 +178,7 @@ export default function ApplyPageClient({
                             <div className="px-6 py-6">
                                 {/* 체험 혜택 강조 태그들 */}
                                 <div className="flex flex-wrap gap-2 mb-4">
-                                    <Badge variant="success" size="sm">무료 체험</Badge>
+                                    <Badge variant="success" size="sm">체험비 1만원</Badge>
                                     <Badge variant="info" size="sm">준비물: 운동복, 실내화</Badge>
                                 </div>
 

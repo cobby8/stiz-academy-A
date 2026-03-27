@@ -359,7 +359,7 @@ async function runPhase2(routerPush: (url: string) => void) {
           title: "프로그램 안내 📋",
           description:
             progressLabel(2) +
-            "우리 아이 나이에 맞는 프로그램과 수강료를 확인하세요!",
+            "우리 아이 나이에 맞는 프로그램과 수강료를 확인하세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 다양한 프로그램을 둘러보세요</span>",
           side: "bottom" as const,
           showButtons: ["close", "next"] as any,
         },
@@ -537,7 +537,7 @@ async function runPhase3(routerPush: (url: string) => void) {
         popover: {
           title: "수업 시간표 📅",
           description:
-            progressLabel(3) + "요일별 수업 시간을 확인하세요!",
+            progressLabel(3) + "요일별 수업 시간을 확인하세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 전체 시간표를 확인해보세요</span>",
           // 시간표 그리드는 세로로 길어서 아래에 popover를 띄워야 가림 없음
           side: "bottom" as const,
           showButtons: ["close", "next"] as any,
@@ -897,6 +897,9 @@ async function runSubStep4_5(driverFn: any, routerPush: (url: string) => void) {
     return;
   }
 
+  // 결과 최상단이 보이도록 스크롤
+  resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+
   let closedByUser = false;
 
   const d5 = driverFn({
@@ -914,7 +917,7 @@ async function runSubStep4_5(driverFn: any, routerPush: (url: string) => void) {
           title: "수업을 찾았어요! 🎉",
           description:
             progressLabel(4) +
-            "마음에 드는 수업이 있으면 체험수업을 신청해 보세요!",
+            "마음에 드는 수업이 있으면 체험수업을 신청해 보세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 검색 결과를 확인해보세요</span>",
           side: "top" as const,
           showButtons: ["close", "next"] as any,
         },
@@ -963,7 +966,7 @@ async function runPhase5() {
           title: "체험수업을 신청해 보세요! 🏀",
           description:
             progressLabel(5) +
-            "무료 체험수업을 신청하면 실제 수업을 경험할 수 있어요!",
+            "체험수업을 신청하면 실제 수업을 경험할 수 있어요! (체험비 1만원)",
           side: "top" as const,
           showButtons: ["close"] as any,
         },

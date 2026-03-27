@@ -1095,20 +1095,19 @@ function TourTriggerInner() {
 
   return (
     <>
-      {/* 플로팅 입학 가이드 버튼 -- 챗봇 버튼(bottom-6)보다 위에 배치 */}
+      {/* 플로팅 입학 가이드 버튼 — 챗봇 버튼(bottom-6 right-6)과 같은 열, 바로 위 */}
       <button
         onClick={startTour}
-        className="fixed bottom-20 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-white text-brand-navy-900 font-bold text-sm rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 border border-gray-200"
+        className="fixed bottom-[88px] right-6 z-50 w-14 h-14 rounded-full bg-brand-navy-900 text-white shadow-lg hover:bg-brand-navy-800 hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center"
         aria-label="입학 가이드 시작"
+        title="입학 가이드"
       >
-        {/* Material Symbols Outlined 아이콘 */}
         <span
-          className="material-symbols-outlined text-brand-orange-500"
-          style={{ fontSize: 20 }}
+          className="material-symbols-outlined"
+          style={{ fontSize: 26 }}
         >
           school
         </span>
-        입학 가이드
       </button>
 
       {/* 첫 방문 자동 제안 토스트 -- 메인 페이지에서만, 3초 후 표시 */}

@@ -51,16 +51,27 @@ export default function AdminLayout({
                     <span className="font-bold text-white tracking-tight ml-2">Admin</span>
                 </div>
                 <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
-                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">홈페이지 콘텐츠</p>
+                    {/* 학원 소개 */}
+                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">학원 소개</p>
                     <NavItem href="/admin/settings" active={pathname.startsWith("/admin/settings")} icon="🏫" label="학원 소개 관리" />
-                    <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램·이용약관" />
                     <NavItem href="/admin/coaches" active={pathname.startsWith("/admin/coaches")} icon="👤" label="코치/강사진 관리" />
+
+                    {/* 수업 안내 */}
+                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">수업 안내</p>
+                    <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램 관리" />
                     <NavItem href="/admin/schedule" active={pathname.startsWith("/admin/schedule")} icon="📅" label="수업시간표 관리" />
-                    <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
                     <NavItem href="/admin/annual" active={pathname.startsWith("/admin/annual")} icon="📆" label="연간일정 관리" />
-                    <NavItem href="/admin/gallery" active={pathname.startsWith("/admin/gallery")} icon="📸" label="사진/영상 갤러리" />
+
+                    {/* 소식/안내 */}
+                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">소식/안내</p>
                     <NavItem href="/admin/notices" active={pathname.startsWith("/admin/notices")} icon="📢" label="공지사항 관리" />
+                    <NavItem href="/admin/gallery" active={pathname.startsWith("/admin/gallery")} icon="📸" label="사진/영상 갤러리" />
                     <NavItem href="/admin/faq" active={pathname.startsWith("/admin/faq")} icon="❓" label="FAQ 관리" />
+                    <NavItem href="/admin/programs" active={pathname === "/admin/programs#terms"} icon="📜" label="이용약관 관리" />
+
+                    {/* 신청 관리 */}
+                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">신청 관리</p>
+                    <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
 
                     <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">학원 운영 관리</p>
                     <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />

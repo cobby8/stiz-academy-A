@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createProgram, updateProgram, deleteProgram, reorderPrograms, updateAcademySettings } from "@/app/actions/admin";
+import { createProgram, updateProgram, deleteProgram, reorderPrograms } from "@/app/actions/admin";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -407,10 +407,8 @@ function ProgramFormFields({
 
 export default function ProgramsAdminClient({
     programs: initialPrograms,
-    termsOfService: initialTerms,
 }: {
     programs: Program[];
-    termsOfService: string | null;
 }) {
     const router = useRouter();
     // Programs list with local state for optimistic drag-and-drop reorder
@@ -462,23 +460,6 @@ export default function ProgramsAdminClient({
         setDragOverId(null);
     }
 
-    // Terms of service state
-    const [terms, setTerms] = useState(initialTerms ?? "");
-    const [termsSaved, setTermsSaved] = useState(false);
-    const [termsPending, startTermsTransition] = useTransition();
-
-    function saveTerms() {
-        startTermsTransition(async () => {
-            try {
-                await updateAcademySettings({ termsOfService: terms });
-                setTermsSaved(true);
-                setTimeout(() => setTermsSaved(false), 2000);
-            } catch (e: any) {
-                alert(e.message || "저장 실패");
-            }
-        });
-    }
-
     function handleAdd() {
         if (!addForm.name.trim()) return;
         startAddTransition(async () => {
@@ -522,7 +503,7 @@ export default function ProgramsAdminClient({
         <div className="space-y-8">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">프로그램·이용약관 관리</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">프로그램 관리</h1>
                     <p className="text-gray-500">학원에서 운영하는 교육 프로그램을 등록하고 관리합니다.</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -653,33 +634,6 @@ export default function ProgramsAdminClient({
                 </ul>
             </div>
 
-            {/* Terms of Service editor */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-900">이용약관 관리</h2>
-                        <p className="text-sm text-gray-500 mt-0.5">프로그램 안내 페이지 하단에 표시됩니다.</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        {termsSaved && <span className="text-xs text-green-600 font-medium">✓ 저장됨</span>}
-                        <button
-                            onClick={saveTerms}
-                            disabled={termsPending}
-                            className="bg-brand-navy-900 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40"
-                        >
-                            {termsPending ? "저장 중..." : "저장"}
-                        </button>
-                    </div>
-                </div>
-                <textarea
-                    value={terms}
-                    onChange={(e) => { setTerms(e.target.value); setTermsSaved(false); }}
-                    rows={12}
-                    placeholder={`예시:\n제1조 (목적)\n본 약관은 STIZ 농구교실 다산점(이하 '학원')이 제공하는 교육 서비스 이용에 관한 기본적인 사항을 규정합니다.\n\n제2조 (수강료 및 환불)\n• 수강료는 매월 초에 납부합니다.\n• 개인 사정으로 인한 환불은 규정에 따릅니다.`}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white resize-y font-mono leading-relaxed"
-                />
-                <p className="text-xs text-gray-400 mt-2">엔터키로 줄바꿈이 프론트에 그대로 적용됩니다.</p>
-            </div>
         </div>
     );
 }

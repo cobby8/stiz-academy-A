@@ -12,6 +12,7 @@
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-26 | 이용약관 관리 독립 페이지 분리 (/admin/terms) | admin/terms/*, ProgramsAdminClient, programs/page, layout | 완료 |
 | 2026-03-28 | 히어로-본문 제목 중복 제거 (FAQ+이용약관) | FaqClient, ProgramAccordionTerms, terms/page | 완료 |
 | 2026-03-28 | 이용약관+FAQ 독립 페이지 분리 (/terms, /faq) | terms/page, faq/page, FaqClient, Header, Footer | 완료 |
 | 2026-03-28 | 메뉴 4카테고리 재구성 + 오시는 길 섹션 | PublicHeader, about/page | 완료 |

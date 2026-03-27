@@ -94,9 +94,16 @@ export default function PublicFooter({ phone, address }: PublicFooterProps) {
           </div>
         </div>
 
-        {/* 저작권 표시 */}
+        {/* 저작권 표시 + 이용약관 링크 */}
         <div className="border-t border-gray-800 pt-6 text-center text-xs text-gray-500">
           <p>&copy; 2026 STIZ Basketball Academy. All rights reserved.</p>
+          {/* 프로그램 페이지 약관 섹션(#terms)으로 이동하는 링크 */}
+          <Link
+            href="/programs#terms"
+            className="inline-block mt-2 text-gray-500 hover:text-white transition-colors underline underline-offset-2"
+          >
+            이용약관
+          </Link>
         </div>
       </div>
     </footer>

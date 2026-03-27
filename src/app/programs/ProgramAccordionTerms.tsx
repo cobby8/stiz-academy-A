@@ -50,7 +50,7 @@ export default function ProgramAccordionTerms({
       {/* 약관 본문 — isOpen일 때만 표시, 부드러운 전환 */}
       {isOpen && (
         <div className="px-6 pb-6 border-t border-gray-100">
-          <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line pt-4">
+          <p className="text-gray-600 text-base leading-relaxed whitespace-pre-line pt-4">
             {termsText}
           </p>
         </div>

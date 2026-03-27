@@ -236,12 +236,14 @@ export default async function ProgramsPage() {
                 )}
             </SectionLayout>
 
-            {/* 이용약관 — Accordion(접기) 방식으로 변경 */}
+            {/* 이용약관 — Accordion(접기) 방식. id="terms"로 푸터/신청 페이지에서 앵커 링크 가능 */}
             {termsOfService && (
                 <SectionLayout bgColor="section">
-                    <AnimateOnScroll>
-                        <ProgramAccordionTerms termsText={termsOfService} />
-                    </AnimateOnScroll>
+                    <div id="terms">
+                        <AnimateOnScroll>
+                            <ProgramAccordionTerms termsText={termsOfService} />
+                        </AnimateOnScroll>
+                    </div>
                 </SectionLayout>
             )}
 

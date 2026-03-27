@@ -203,6 +203,17 @@ export default function ApplyPageClient({
                                             체험수업 신청하기 (준비 중)
                                         </Button>
                                     )}
+                                    {/* 약관 안내 — 프로그램 페이지 약관 섹션으로 링크 */}
+                                    <p className="mt-3 text-xs text-gray-400">
+                                        신청 시{" "}
+                                        <a
+                                            href="/programs#terms"
+                                            className="underline underline-offset-2 hover:text-brand-orange-500 transition-colors"
+                                        >
+                                            이용약관
+                                        </a>
+                                        에 동의한 것으로 간주합니다.
+                                    </p>
                                 </div>
                             </div>
                         </Card>

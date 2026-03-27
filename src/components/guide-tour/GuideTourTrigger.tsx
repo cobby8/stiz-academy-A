@@ -348,20 +348,19 @@ async function runPhase2(routerPush: (url: string) => void) {
   const d = driverFn({
     showProgress: false,
     allowClose: false,
-    overlayColor: "rgba(0,0,0,0.5)",
-    stageRadius: 12,
-    stagePadding: 10,
+    // 정보 확인 페이지: 오버레이 없이 말풍선만 (콘텐츠를 가리지 않음)
+    overlayOpacity: 0,
+    stagePadding: 0,
     doneBtnText: "확인했어요",
     nextBtnText: "확인했어요",
     steps: [
       {
-        // 첫 번째 카드만 하이라이트 — viewport보다 큰 요소 전체를 cutout하면 하이라이트 효과 없음
-        element: '[data-tour-target="program-cards"] > div:first-child',
+        element: '[data-tour-target="program-cards"]',
         popover: {
           title: "프로그램 안내 📋",
           description:
             progressLabel(2) +
-            "우리 아이 나이에 맞는 프로그램과 수강료를 확인하세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 다양한 프로그램을 둘러보세요</span>",
+            "스크롤하여 프로그램과 수강료를 확인하세요!",
           side: "bottom" as const,
           showButtons: ["close", "next"] as any,
         },
@@ -513,37 +512,33 @@ async function runPhase3(routerPush: (url: string) => void) {
   const driverFn = await loadDriver();
   const isMobile = window.innerWidth < 768;
 
-  // 첫 번째 요일 카드만 하이라이트 — 전체 그리드는 viewport보다 커서 하이라이트 효과가 없음
-  const gridEl = await waitForElement('[data-tour-target="schedule-grid"] > div:first-child');
+  const gridEl = await waitForElement('[data-tour-target="schedule-grid"]');
 
-  // 요소를 못 찾으면 시간표 하이라이트를 건너뛰고 네비 안내로 스킵
   if (!gridEl) {
     highlightSimulatorNav(driverFn, routerPush, isMobile);
     return;
   }
 
-  // 첫 번째 요일 카드가 보이도록 먼저 스크롤
+  // 시간표 상단으로 스크롤
   gridEl.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  // X 버튼 클릭 시 투어 중단, "확인했어요" 클릭 시 다음 Phase로 진행
   let closedByUser = false;
 
   const d = driverFn({
     showProgress: false,
     allowClose: false,
-    overlayColor: "rgba(0,0,0,0.5)",
-    stageRadius: 12,
-    stagePadding: 10,
+    // 정보 확인 페이지: 오버레이 없이 말풍선만 (시간표를 가리지 않음)
+    overlayOpacity: 0,
+    stagePadding: 0,
     doneBtnText: "확인했어요",
     nextBtnText: "확인했어요",
     steps: [
       {
-        // 첫 번째 요일 카드만 하이라이트 + side:"bottom" — block:"start"와 호환 (top은 위 공간이 0px라 popover 위치 불안정)
-        element: '[data-tour-target="schedule-grid"] > div:first-child',
+        element: '[data-tour-target="schedule-grid"]',
         popover: {
           title: "수업 시간표 📅",
           description:
-            progressLabel(3) + "요일별 수업 시간을 확인하세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 전체 시간표를 확인해보세요</span>",
+            progressLabel(3) + "스크롤하여 시간표를 확인하세요!",
           side: "bottom" as const,
           showButtons: ["close", "next"] as any,
         },
@@ -791,15 +786,12 @@ async function waitForStep2Card(driverFn: any, parentClosed: boolean, routerPush
 
   let closedByUser = false;
 
-  // step2 카드 전체를 하이라이트 (요일+시간 선택 영역)
-  // sim-day-select 대신 sim-step2-card를 하이라이트 — 개별 영역보다 카드 전체가 안정적
+  // 요일/시간 선택: 오버레이 없이 말풍선만 (사용자가 자유롭게 조작)
   const d3 = driverFn({
     showProgress: false,
     allowClose: false,
-    // smoothScroll을 제거하여 driver.js가 요소로 스크롤하도록 허용
-    overlayColor: "rgba(0,0,0,0.5)",
-    stageRadius: 12,
-    stagePadding: 10,
+    overlayOpacity: 0,
+    stagePadding: 0,
     doneBtnText: "선택했어요",
     nextBtnText: "선택했어요",
     steps: [
@@ -809,7 +801,7 @@ async function waitForStep2Card(driverFn: any, parentClosed: boolean, routerPush
           title: "요일과 시간을 선택하세요 📅",
           description:
             progressLabel(4) +
-            "원하는 요일과 시간대를 선택하고 아래 '수업 찾기'를 눌러주세요!<br/>선택 안 하면 전체로 검색돼요.",
+            "요일과 시간대를 선택하고 '수업 찾기'를 눌러주세요!",
           side: "top" as const,
           showButtons: ["close", "next"] as any,
         },
@@ -896,15 +888,12 @@ async function runSubStep4_4(driverFn: any, routerPush: (url: string) => void) {
  * 서브스텝 4-5: 검색 결과 확인 → 체험신청 페이지로 안내
  */
 async function runSubStep4_5(driverFn: any, routerPush: (url: string) => void) {
-  // 검색조건 요약 카드만 하이라이트 — 결과 전체는 결과 수에 따라 viewport 초과 가능
-  const resultsEl = await waitForElement('[data-tour-target="sim-results"] > div:first-child');
+  const resultsEl = await waitForElement('[data-tour-target="sim-results"]');
   if (!resultsEl) {
-    // 결과 못 찾으면 바로 /apply로 이동
     routerPush("/apply?tour=5");
     return;
   }
 
-  // 검색조건 요약 카드가 보이도록 스크롤
   resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 
   let closedByUser = false;
@@ -912,20 +901,19 @@ async function runSubStep4_5(driverFn: any, routerPush: (url: string) => void) {
   const d5 = driverFn({
     showProgress: false,
     allowClose: false,
-    overlayColor: "rgba(0,0,0,0.5)",
-    stageRadius: 12,
-    stagePadding: 10,
+    // 정보 확인: 오버레이 없이 말풍선만 (결과를 자유롭게 확인)
+    overlayOpacity: 0,
+    stagePadding: 0,
     doneBtnText: "체험수업 신청하러 가기!",
     nextBtnText: "체험수업 신청하러 가기!",
     steps: [
       {
-        // 검색조건 요약 카드만 하이라이트 + side:"bottom" — block:"start" 후 바로 아래에 popover 표시
-        element: '[data-tour-target="sim-results"] > div:first-child',
+        element: '[data-tour-target="sim-results"]',
         popover: {
           title: "수업을 찾았어요! 🎉",
           description:
             progressLabel(4) +
-            "마음에 드는 수업이 있으면 체험수업을 신청해 보세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 검색 결과를 확인해보세요</span>",
+            "스크롤하여 결과를 확인하고, 체험수업을 신청해보세요!",
           side: "bottom" as const,
           showButtons: ["close", "next"] as any,
         },

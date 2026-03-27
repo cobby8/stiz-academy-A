@@ -5,14 +5,13 @@
 |------|--------|------------|
 | architecture.md | 4 | 2026-03-26 |
 | errors.md | 2 | 2026-03-26 |
-| conventions.md | 3 | 2026-03-22 |
+| conventions.md | 5 | 2026-03-28 |
 | decisions.md | 7 | 2026-03-26 |
 | lessons.md | 2 | 2026-03-26 |
 
 ## 최근 추가된 지식 (최근 5건)
-1. [decision] driver.js + sticky 헤더 위치 버그 원인과 해결 방향
-2. [lesson] 가이드 투어: "큰 섹션 하이라이트"는 본질적으로 무의미
-2. [lesson] 가이드 투어: 직접 구현 vs 라이브러리 판단 기준
-3. [error] CSS 기반 하이라이트의 근본적 한계 (5회 실패 종합)
-4. [decision] 입학 가이드 투어 v2: driver.js 라이브러리 채택 (직접 구현 폐기)
-5. [decision] 입학 가이드 투어: 기존 시뮬레이터 공존 방식
+1. [convention] 메뉴 4카테고리: 학원 소개(직접) / 수업 안내 / 소식·안내 / 수업찾기
+2. [convention] 체험수업 비용 1만원 (무료 표현 금지)
+3. [decision] driver.js + sticky 헤더 위치 버그 원인과 해결 방향
+4. [lesson] 가이드 투어: "큰 섹션 하이라이트"는 본질적으로 무의미
+5. [lesson] 가이드 투어: 직접 구현 vs 라이브러리 판단 기준

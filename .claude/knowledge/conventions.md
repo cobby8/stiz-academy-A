@@ -26,6 +26,12 @@
 - **내용**: CLAUDE.md에서 "Material Symbols Outlined 아이콘 사용, lucide-react 등 타 라이브러리 금지"로 규정되어 있으나, gallery/GalleryPublicClient.tsx (X, ChevronLeft, ChevronRight, Image, Play, Calendar)와 notices/page.tsx (Pin, Paperclip)에서 lucide-react를 여전히 사용 중. 교체 필요.
 - **참조횟수**: 0
 
+### [2026-03-28] 네비게이션 메뉴 4카테고리 구조
+- **분류**: convention
+- **발견자**: pm (사용자 지시)
+- **내용**: 헤더 메뉴는 4개 상위 항목으로 구성. (1) 학원 소개 — /about 직접 링크, 드롭다운 없음. (2) 수업 안내 ▾ — 프로그램, 시간표, 연간일정. (3) 소식/안내 ▾ — 공지, 갤러리, FAQ(/faq), 이용약관(/terms). (4) 수업찾기 — /simulator 직접 링크. CTA 버튼은 "신청하기"(/apply).
+- **참조횟수**: 0
+
 ### [2026-03-27] 체험수업 비용 표기 규칙
 - **분류**: convention
 - **발견자**: pm (사용자 지시)

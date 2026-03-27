@@ -93,7 +93,19 @@
       "Bash(findstr :4000)",
       "Bash(for dir:*)",
       "Read(//c/0.programing/stiz-academy-A/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(python3 -c \"import sys; d=sys.stdin.read\\(\\); print\\(''''not-found'''' in d, len\\(d\\)\\)\")",
+      "Bash(for f:*)",
+      "Read(//c/Users/cobby/AppData/Local/Temp/claude/C--0-programing-stiz-academy-A/122f377f-c0a7-43b8-9849-bd1fb274df62/**)",
+      "Bash(findstr LISTENING)",
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(tr '>' '>\\\\n')",
+      "Bash(grep -rn \"무료\\\\|free\\\\|0원\" /c/0.programing/stiz-academy-A/prisma --include=*.ts)",
+      "Bash(grep -rn 무료 /c/0.programing/stiz-academy-A/src --include=*.ts --include=*.tsx)",
+      "Bash(grep -oE '65:T[0-9]+,.{0,2000}')",
+      "Bash(grep -oE '65:T[0-9]+,.{0,5000}')",
+      "WebFetch(domain:naver.github.io)",
+      "WebFetch(domain:developers.google.com)"
     ]
   }
 }

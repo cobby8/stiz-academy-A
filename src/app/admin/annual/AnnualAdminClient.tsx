@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createAnnualEvent, updateAnnualEvent, deleteAnnualEvent } from "@/app/actions/admin";
+import { createAnnualEvent, updateAnnualEvent, deleteAnnualEvent, updateAcademySettings } from "@/app/actions/admin";
 
 type AnnualEvent = {
     id: string;
@@ -29,12 +29,23 @@ function toDateString(d: Date | string | null | undefined): string {
     return date.toISOString().split("T")[0];
 }
 
-export default function AnnualAdminClient({ events }: { events: AnnualEvent[] }) {
+export default function AnnualAdminClient({
+    events,
+    initialIcsUrl,
+}: {
+    events: AnnualEvent[];
+    initialIcsUrl: string;
+}) {
     const router = useRouter();
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+    // ICS URL 관련 상태
+    const [icsUrl, setIcsUrl] = useState(initialIcsUrl);
+    const [icsSaving, setIcsSaving] = useState(false);
+    const [icsMsg, setIcsMsg] = useState<string | null>(null);
 
     // Form state
     const [title, setTitle] = useState("");
@@ -102,6 +113,22 @@ export default function AnnualAdminClient({ events }: { events: AnnualEvent[] })
         }
     }
 
+    // ICS URL 저장 핸들러
+    async function handleSaveIcsUrl() {
+        setIcsSaving(true);
+        setIcsMsg(null);
+        try {
+            await updateAcademySettings({ googleCalendarIcsUrl: icsUrl.trim() });
+            setIcsMsg("저장되었습니다.");
+            router.refresh();
+            setTimeout(() => setIcsMsg(null), 3000);
+        } catch (err: any) {
+            setIcsMsg("저장 실패: " + (err.message || "알 수 없는 오류"));
+        } finally {
+            setIcsSaving(false);
+        }
+    }
+
     // Group events by year
     const eventsByYear = events.reduce<Record<number, AnnualEvent[]>>((acc, ev) => {
         const year = new Date(ev.date).getFullYear();
@@ -123,6 +150,37 @@ export default function AnnualAdminClient({ events }: { events: AnnualEvent[] })
                 >
                     + 일정 추가
                 </button>
+            </div>
+
+            {/* ── 구글 캘린더 ICS URL 설정 ────────────────────────── */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
+                <h3 className="font-bold text-sm text-gray-800 mb-2">구글 캘린더 연동 (ICS)</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                    구글 캘린더 → 설정 → 캘린더 통합 → &quot;iCal 형식의 공개 주소&quot;를 복사해 붙여넣으세요.
+                    연동하면 공개 연간일정 페이지에 구글 캘린더 일정이 함께 표시됩니다.
+                </p>
+                <div className="flex gap-2">
+                    <input
+                        type="url"
+                        value={icsUrl}
+                        onChange={(e) => setIcsUrl(e.target.value)}
+                        placeholder="https://calendar.google.com/calendar/ical/...@group.calendar.google.com/public/basic.ics"
+                        className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                    />
+                    <button
+                        type="button"
+                        onClick={handleSaveIcsUrl}
+                        disabled={icsSaving}
+                        className="shrink-0 bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50 text-sm"
+                    >
+                        {icsSaving ? "저장 중..." : "저장"}
+                    </button>
+                </div>
+                {icsMsg && (
+                    <p className={`text-xs mt-2 ${icsMsg.startsWith("저장 실패") ? "text-red-600" : "text-green-600"}`}>
+                        {icsMsg}
+                    </p>
+                )}
             </div>
 
             {/* Form */}

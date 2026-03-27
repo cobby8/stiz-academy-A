@@ -377,33 +377,6 @@ export default function AdminSettingsClient({
                         <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
                     </section>
 
-                    {/* ── 구글 캘린더 ───────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100">
-                        <SectionHeader title="구글 캘린더 연동" />
-                        <AppliesTo pages={["연간일정표 페이지"]} />
-
-                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 text-xs text-blue-700">
-                            <strong>ICS 주소 확인 방법:</strong> 구글 캘린더 → 캘린더 설정 → &quot;캘린더 통합&quot; → &quot;iCal 형식의 공개 주소&quot; 복사
-                        </div>
-                        <input
-                            name="googleCalendarIcsUrl"
-                            type="url"
-                            defaultValue={initialSettings?.googleCalendarIcsUrl || ""}
-                            placeholder="https://calendar.google.com/calendar/ical/...@group.calendar.google.com/public/basic.ics"
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
-                        />
-                    </section>
-
-                    {/* ── 구글시트 시간표 → 수업시간표 관리 메뉴로 이동됨 ── */}
-                    <section className="pt-6 border-t border-gray-100">
-                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-blue-800 flex items-center justify-between gap-4">
-                            <span>구글시트 시간표 연동은 <strong>수업시간표 관리</strong> 메뉴에서 설정할 수 있습니다.</span>
-                            <a href="/admin/schedule" className="shrink-0 font-bold underline hover:text-blue-900 whitespace-nowrap">
-                                수업시간표 관리 →
-                            </a>
-                        </div>
-                    </section>
-
                     {/* 저장 */}
                     <div className="pt-4 border-t border-gray-100 flex justify-end">
                         <ConfirmSubmitButton
@@ -415,12 +388,6 @@ export default function AdminSettingsClient({
                     </div>
                 </form>
 
-                <div className="pt-4 border-t border-gray-100 bg-gray-50 rounded-lg p-4 flex items-center justify-between text-sm">
-                    <span className="text-gray-500">코치/강사진 관리는 별도 메뉴로 이동되었습니다.</span>
-                    <a href="/admin/coaches" className="font-bold text-brand-navy-900 underline hover:text-gray-600">
-                        코치/강사진 관리 →
-                    </a>
-                </div>
             </div>
         </div>
     );

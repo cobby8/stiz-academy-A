@@ -1,22 +1,21 @@
 "use client";
 
 /**
- * PublicHeader — 통합 공개 페이지 헤더 (Phase 1)
+ * PublicHeader — 통합 공개 페이지 헤더
  *
- * 메인 랜딩(LandingPageClient)과 서브페이지(PublicPageLayout) 양쪽에서
- * 사용하던 헤더를 하나로 통합한 컴포넌트.
+ * 카테고리 드롭다운 방식:
+ * - PC(md 이상): group/group-hover CSS 드롭다운 (JS 상태 불필요)
+ * - 모바일(md 미만): 카테고리 라벨 + 구분선으로 시각 그룹핑
  *
- * Client Component인 이유:
- * - 모바일 햄버거 메뉴 열기/닫기에 useState가 필요
- * - 스크롤 시 헤더 배경 변화에 useEffect가 필요
- *
- * props로 settings 데이터(phone, address)를 Server Component 부모에서 받아온다.
+ * 메뉴 구조:
+ *   학원 안내 v | 수업 안내 v | 수업찾기 | [신청하기]
+ *   + FAQ, 이용약관은 드롭다운 하위에 배치
  */
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ChevronDown } from "lucide-react";
 
 // 부모(Server Component)에서 전달받을 props 타입
 interface PublicHeaderProps {
@@ -24,16 +23,33 @@ interface PublicHeaderProps {
   address: string;
 }
 
-// 통합 네비게이션 메뉴 항목 — PublicPageLayout 기준으로 7개 전부 포함
-const NAV_ITEMS = [
-  { href: "/about", label: "학원/멤버소개" },
-  { href: "/programs", label: "프로그램안내" },
-  { href: "/schedule", label: "수업시간표" },
-  { href: "/simulator", label: "우리 아이 수업 찾기" },
-  { href: "/annual", label: "연간일정표" },
-  { href: "/gallery", label: "포토갤러리" },
-  { href: "/notices", label: "공지사항" },
-  { href: "/apply", label: "체험/수강신청" },
+// ---------- 메뉴 데이터 구조 ----------
+
+// 카테고리 드롭다운 그룹 — 각 그룹은 hover 시 하위 메뉴가 펼쳐진다
+const NAV_GROUPS = [
+  {
+    label: "학원 안내",
+    items: [
+      { href: "/about", label: "학원/멤버소개" },
+      { href: "/gallery", label: "포토갤러리" },
+      { href: "/notices", label: "공지사항" },
+    ],
+  },
+  {
+    label: "수업 안내",
+    items: [
+      { href: "/programs", label: "프로그램안내" },
+      { href: "/schedule", label: "수업시간표" },
+      { href: "/annual", label: "연간일정표" },
+      { href: "/apply#faq", label: "FAQ" },
+      { href: "/programs#terms", label: "이용약관" },
+    ],
+  },
+];
+
+// 독립 메뉴 — 드롭다운 없이 바로 링크
+const NAV_STANDALONE = [
+  { href: "/simulator", label: "수업찾기" },
 ];
 
 export default function PublicHeader({ phone, address }: PublicHeaderProps) {
@@ -145,18 +161,48 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             </span>
           </Link>
 
-          {/* 데스크탑 네비게이션 — 호버 시 밑줄 슬라이드 인 효과 */}
-          <nav className="hidden md:flex items-center gap-6 font-bold text-sm text-gray-700">
-            {NAV_ITEMS.map((item) => (
+          {/* ===== 데스크탑 네비게이션 ===== */}
+          <nav className="hidden md:flex items-center gap-1 font-bold text-sm text-gray-700">
+            {/* 카테고리 드롭다운 그룹 — group/group-hover CSS로 구현 (JS 상태 불필요) */}
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label} className="relative group">
+                {/* 카테고리 라벨 버튼 — hover 시 드롭다운이 열린다 */}
+                <button
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
+                >
+                  {group.label}
+                  {/* 화살표 — hover 시 회전 */}
+                  <ChevronDown className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-180" />
+                </button>
+
+                {/* 드롭다운 패널 — group-hover로 보이기/숨기기 */}
+                <div className="absolute top-full left-0 pt-1 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-200">
+                  <div className="bg-white rounded-lg shadow-lg border border-gray-100 py-2 min-w-[180px]">
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        // data-tour-target: href에서 슬래시 제거 + 해시는 하이픈으로 변환
+                        data-tour-target={`nav-${item.href.slice(1).replace("#", "-")}`}
+                        className="block px-4 py-2.5 text-gray-600 hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors text-sm font-medium"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* 독립 메뉴 — 드롭다운 없이 직접 링크 */}
+            {NAV_STANDALONE.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 data-tour-target={`nav-${item.href.slice(1)}`}
-                className="relative py-1 hover:text-brand-orange-500 transition-colors group"
+                className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
               >
                 {item.label}
-                {/* 밑줄 슬라이드 인: 호버 시 왼쪽에서 오른쪽으로 밑줄이 나타남 */}
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-brand-orange-500 transition-all duration-300 group-hover:w-full" />
               </Link>
             ))}
           </nav>
@@ -176,7 +222,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
               <span className="text-sm font-black leading-none">가</span>
             </button>
 
-            {/* 체험 신청 CTA 버튼 — 전화문의 대신 체험 신청으로 변경 (설계 계획서 방향) */}
+            {/* CTA 버튼 — "신청하기"로 변경 */}
             <Link
               href="/apply"
               className={[
@@ -186,7 +232,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
                 "hidden sm:inline-flex items-center",
               ].join(" ")}
             >
-              체험 신청
+              신청하기
             </Link>
 
             {/* 모바일 햄버거 버튼 */}
@@ -211,7 +257,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
         />
       )}
 
-      {/* 모바일 사이드바 — 오른쪽에서 슬라이드 인 */}
+      {/* ===== 모바일 사이드바 — 카테고리 라벨 + 구분선으로 그룹핑 ===== */}
       <div
         className={[
           "fixed top-0 right-0 z-[70] h-full w-72 bg-white shadow-2xl",
@@ -231,15 +277,45 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
           </button>
         </div>
 
-        {/* 사이드바 메뉴 항목 */}
-        <nav className="py-4">
-          {NAV_ITEMS.map((item) => (
+        {/* 사이드바 메뉴 — 카테고리별 라벨 + 하위 링크 + 구분선 */}
+        <nav className="py-2 overflow-y-auto" style={{ maxHeight: "calc(100% - 200px)" }}>
+          {/* 카테고리 그룹들 */}
+          {NAV_GROUPS.map((group, groupIdx) => (
+            <div key={group.label}>
+              {/* 카테고리 라벨 — 작은 회색 텍스트로 그룹 구분 */}
+              <div className="px-6 pt-4 pb-1">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                  {group.label}
+                </span>
+              </div>
+              {/* 하위 메뉴 링크들 */}
+              {group.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  data-tour-target={`mobile-nav-${item.href.slice(1).replace("#", "-")}`}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block px-6 py-2.5 text-gray-700 font-medium hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {/* 그룹 사이 구분선 */}
+              {groupIdx < NAV_GROUPS.length - 1 && (
+                <div className="mx-4 my-2 border-t border-gray-100" />
+              )}
+            </div>
+          ))}
+
+          {/* 독립 메뉴 — 구분선 후 표시 */}
+          <div className="mx-4 my-2 border-t border-gray-100" />
+          {NAV_STANDALONE.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               data-tour-target={`mobile-nav-${item.href.slice(1)}`}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="block px-6 py-3 text-gray-700 font-medium hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
+              className="block px-6 py-3 text-gray-700 font-semibold hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
             >
               {item.label}
             </Link>
@@ -253,7 +329,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             onClick={() => setIsMobileMenuOpen(false)}
             className="block w-full bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold py-3 rounded-xl text-center transition-colors mb-3"
           >
-            체험 신청하기
+            신청하기
           </Link>
           <a
             href={`tel:${phone.replace(/-/g, "")}`}

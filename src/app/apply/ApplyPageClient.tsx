@@ -280,7 +280,7 @@ export default function ApplyPageClient({
             </SectionLayout>
 
             {/* FAQ 섹션 — 아코디언 형태의 자주 묻는 질문 */}
-            <SectionLayout label="FAQ" title="자주 묻는 질문" description="궁금한 점을 빠르게 확인하세요" bgColor="white">
+            <SectionLayout id="faq" label="FAQ" title="자주 묻는 질문" description="궁금한 점을 빠르게 확인하세요" bgColor="white">
                 <AnimateOnScroll>
                     <Card variant="default" className="!p-0 max-w-3xl mx-auto">
                         <div className="px-6 py-2">

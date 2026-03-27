@@ -21,6 +21,7 @@
 type BgColor = 'white' | 'section' | 'warm';
 
 interface SectionLayoutProps {
+  id?: string;          // 앵커 링크용 id (선택) — 예: id="faq"로 /apply#faq 스크롤 가능
   label?: string;       // 상단 작은 라벨 (선택)
   title?: string;       // 섹션 제목 (선택)
   description?: string; // 설명문 (선택)
@@ -37,6 +38,7 @@ const bgColorStyles: Record<BgColor, string> = {
 };
 
 export default function SectionLayout({
+  id,
   label,
   title,
   description,
@@ -45,7 +47,7 @@ export default function SectionLayout({
   className = '',
 }: SectionLayoutProps) {
   return (
-    <section className={`${bgColorStyles[bgColor]} ${className}`}>
+    <section id={id} className={`${bgColorStyles[bgColor]} ${className}`}>
       {/*
         py-16 md:py-24: 모바일 64px / 데스크탑 96px 세로 여백
         max-w-6xl: 최대 1152px로 콘텐츠 가독성 유지

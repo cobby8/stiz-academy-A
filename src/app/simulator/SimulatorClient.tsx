@@ -174,7 +174,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
     };
 
     return (
-        <section className="py-12 md:py-16 bg-surface-section">
+        <section className="py-8 md:py-12 bg-surface-section">
             <div className="max-w-2xl mx-auto px-6">
 
                 {/* 단계 표시 바 — 현재 진행 상황을 시각적으로 보여준다 */}

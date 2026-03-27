@@ -44,7 +44,7 @@ export default function LandingPageClient({
           - settings.introductionTitle, settings.introductionText 의존성 유지
           - dangerouslySetInnerHTML 유지 (Tiptap HTML 지원)
           ============================================= */}
-      <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-20 md:py-28 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-14 md:py-20 relative overflow-hidden">
         {/* 장식 도형 — 배경에 깊이감과 다이나믹 느낌 부여 */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute right-0 top-0 w-[500px] h-[500px] border-[40px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3"></div>

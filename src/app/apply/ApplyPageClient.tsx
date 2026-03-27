@@ -177,7 +177,11 @@ export default function ApplyPageClient({
 }: ApplyPageClientProps) {
     const [modal, setModal] = useState<"trial" | "enroll" | null>(null);
     // DB FAQ가 있으면 사용, 없으면 기본 FAQ fallback
-    const displayFaqs = faqData && faqData.length > 0 ? faqData : DEFAULT_FAQ_DATA;
+    // DB FAQ + 기본 FAQ를 합침 (DB에 없는 질문만 기본에서 추가)
+    const dbFaqs = faqData && faqData.length > 0 ? faqData : [];
+    const dbQuestions = new Set(dbFaqs.map((f: any) => f.question));
+    const extraFaqs = DEFAULT_FAQ_DATA.filter((f) => !dbQuestions.has(f.question));
+    const displayFaqs = [...dbFaqs, ...extraFaqs];
 
     return (
         <>

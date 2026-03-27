@@ -8,8 +8,8 @@
  * - 모바일(md 미만): 카테고리 라벨 + 구분선으로 시각 그룹핑
  *
  * 메뉴 구조:
- *   학원 안내 v | 수업 안내 v | 수업찾기 | [신청하기]
- *   + FAQ, 이용약관은 드롭다운 하위에 배치
+ *   학원 소개 | 수업 안내 v | 소식/안내 v | 수업찾기 | [신청하기]
+ *   + FAQ, 이용약관은 "소식/안내" 드롭다운 하위에 배치
  */
 
 import { useState, useEffect } from "react";
@@ -28,16 +28,6 @@ interface PublicHeaderProps {
 // 카테고리 드롭다운 그룹 — 각 그룹은 hover 시 하위 메뉴가 펼쳐진다
 const NAV_GROUPS = [
   {
-    label: "학원 안내",
-    items: [
-      { href: "/about", label: "학원/멤버소개" },
-      { href: "/gallery", label: "포토갤러리" },
-      { href: "/notices", label: "공지사항" },
-      { href: "/apply#faq", label: "자주 묻는 질문" },
-      { href: "/programs#terms", label: "이용약관" },
-    ],
-  },
-  {
     label: "수업 안내",
     items: [
       { href: "/programs", label: "프로그램안내" },
@@ -45,10 +35,20 @@ const NAV_GROUPS = [
       { href: "/annual", label: "연간일정표" },
     ],
   },
+  {
+    label: "소식/안내",
+    items: [
+      { href: "/notices", label: "공지사항" },
+      { href: "/gallery", label: "포토갤러리" },
+      { href: "/apply#faq", label: "자주 묻는 질문" },
+      { href: "/programs#terms", label: "이용약관" },
+    ],
+  },
 ];
 
-// 독립 메뉴 — 드롭다운 없이 바로 링크
+// 독립 메뉴 — 드롭다운 없이 바로 링크 (학원 소개: 맨 앞, 수업찾기: 맨 뒤)
 const NAV_STANDALONE = [
+  { href: "/about", label: "학원 소개" },
   { href: "/simulator", label: "수업찾기" },
 ];
 
@@ -162,7 +162,17 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
           </Link>
 
           {/* ===== 데스크탑 네비게이션 ===== */}
+          {/* 순서: 학원 소개 | 수업 안내 v | 소식/안내 v | 수업찾기 | [신청하기] */}
           <nav className="hidden md:flex items-center gap-1 font-bold text-sm text-gray-700">
+            {/* 학원 소개 — 독립 링크, 맨 앞 배치 */}
+            <Link
+              href="/about"
+              data-tour-target="nav-about"
+              className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
+            >
+              학원 소개
+            </Link>
+
             {/* 카테고리 드롭다운 그룹 — group/group-hover CSS로 구현 (JS 상태 불필요) */}
             {NAV_GROUPS.map((group) => (
               <div key={group.label} className="relative group">
@@ -194,17 +204,14 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
               </div>
             ))}
 
-            {/* 독립 메뉴 — 드롭다운 없이 직접 링크 */}
-            {NAV_STANDALONE.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                data-tour-target={`nav-${item.href.slice(1)}`}
-                className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
+            {/* 수업찾기 — 독립 링크, 드롭다운 뒤 배치 */}
+            <Link
+              href="/simulator"
+              data-tour-target="nav-simulator"
+              className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
+            >
+              수업찾기
+            </Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -277,8 +284,20 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
           </button>
         </div>
 
-        {/* 사이드바 메뉴 — 카테고리별 라벨 + 하위 링크 + 구분선 */}
+        {/* 사이드바 메뉴 — 순서: 학원 소개 → 수업 안내 → 소식/안내 → 수업찾기 */}
         <nav className="py-2 overflow-y-auto" style={{ maxHeight: "calc(100% - 200px)" }}>
+          {/* 학원 소개 — 독립 링크, 맨 앞 배치 */}
+          <Link
+            href="/about"
+            data-tour-target="mobile-nav-about"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="block px-6 py-3 text-gray-700 font-semibold hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
+          >
+            학원 소개
+          </Link>
+
+          <div className="mx-4 my-2 border-t border-gray-100" />
+
           {/* 카테고리 그룹들 */}
           {NAV_GROUPS.map((group, groupIdx) => (
             <div key={group.label}>
@@ -307,19 +326,16 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             </div>
           ))}
 
-          {/* 독립 메뉴 — 구분선 후 표시 */}
+          {/* 수업찾기 — 독립 링크, 맨 뒤 배치 */}
           <div className="mx-4 my-2 border-t border-gray-100" />
-          {NAV_STANDALONE.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              data-tour-target={`mobile-nav-${item.href.slice(1)}`}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="block px-6 py-3 text-gray-700 font-semibold hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
-            >
-              {item.label}
-            </Link>
-          ))}
+          <Link
+            href="/simulator"
+            data-tour-target="mobile-nav-simulator"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="block px-6 py-3 text-gray-700 font-semibold hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
+          >
+            수업찾기
+          </Link>
         </nav>
 
         {/* 사이드바 하단 — 연락처 + CTA */}

@@ -253,6 +253,38 @@ export default async function AboutPage() {
                 </SectionLayout>
             )}
 
+            {/* 오시는 길 — 카카오맵 embed + 주소 표시 */}
+            {settings.address && (
+                <SectionLayout label="LOCATION" title="오시는 길" bgColor="white">
+                    <AnimateOnScroll>
+                        <div className="max-w-4xl mx-auto">
+                            {/* 카카오맵 iframe — 주소 검색 기반 embed */}
+                            <div className="relative w-full aspect-[16/9] md:aspect-[2/1] rounded-2xl overflow-hidden shadow-md mb-6">
+                                <iframe
+                                    src={`https://map.kakao.com/link/search/${encodeURIComponent(settings.address)}`}
+                                    className="absolute inset-0 w-full h-full border-0"
+                                    title="오시는 길 지도"
+                                    loading="lazy"
+                                    allowFullScreen
+                                />
+                            </div>
+                            {/* 주소 텍스트 — 아이콘 + 클립보드 복사 없이 심플하게 */}
+                            <div className="flex items-start gap-3 text-gray-700">
+                                <span className="material-symbols-outlined text-brand-orange-500 text-2xl mt-0.5 shrink-0">location_on</span>
+                                <div>
+                                    <p className="font-bold text-lg text-gray-900">{settings.address}</p>
+                                    {phone && (
+                                        <p className="mt-1 text-gray-500">
+                                            상담문의: <a href={`tel:${phone.replace(/-/g, "")}`} className="text-brand-navy-900 font-semibold hover:underline">{phone}</a>
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </AnimateOnScroll>
+                </SectionLayout>
+            )}
+
             {/* CTA 배너 — Phase 2에서 만든 공통 CTABanner 재사용 */}
             <CTABanner
                 title="우리 아이, 농구로 성장시켜 보세요"

@@ -40,8 +40,8 @@ const NAV_GROUPS = [
     items: [
       { href: "/notices", label: "공지사항" },
       { href: "/gallery", label: "포토갤러리" },
-      { href: "/apply#faq", label: "자주 묻는 질문" },
-      { href: "/programs#terms", label: "이용약관" },
+      { href: "/faq", label: "자주 묻는 질문" },
+      { href: "/terms", label: "이용약관" },
     ],
   },
 ];

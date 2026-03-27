@@ -6,7 +6,6 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import CTABanner from "@/components/landing/CTABanner";
-import ProgramAccordionTerms from "./ProgramAccordionTerms";
 
 export const revalidate = 60;
 export const metadata = { title: "프로그램 안내 | STIZ 농구교실 다산점", description: "유아·초등·중등 수준별 맞춤 농구 클래스. 주 1~3회, 매일반 선택 가능. 수강료 및 셔틀버스 안내." };
@@ -80,8 +79,6 @@ export default async function ProgramsPage() {
         getAcademySettings() as Promise<any>,
     ]);
     const phone = settings.contactPhone || "010-0000-0000";
-    const termsOfService: string | null = settings.termsOfService ?? null;
-
     return (
         <PublicPageLayout>
             {/* 페이지 히어로 — 그라데이션 배경 + 장식 요소 */}
@@ -235,17 +232,6 @@ export default async function ProgramsPage() {
                     </div>
                 )}
             </SectionLayout>
-
-            {/* 이용약관 — Accordion(접기) 방식. id="terms"로 푸터/신청 페이지에서 앵커 링크 가능 */}
-            {termsOfService && (
-                <SectionLayout bgColor="section">
-                    <div id="terms">
-                        <AnimateOnScroll>
-                            <ProgramAccordionTerms termsText={termsOfService} />
-                        </AnimateOnScroll>
-                    </div>
-                </SectionLayout>
-            )}
 
             {/* CTA 배너 — 공통 CTABanner 재사용 */}
             <CTABanner

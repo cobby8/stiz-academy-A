@@ -1,10 +1,25 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 네이버/구글/카카오 플레이스 리뷰 수집 가능 여부 조사
-- **상태**: 조사 완료
-- **현재 담당**: planner-architect (완료)
+- **요청**: FAQ 독립 페이지 분리 (/apply#faq → /faq)
+- **상태**: 구현 완료
+- **현재 담당**: developer (완료)
 - **마지막 세션**: 2026-03-26
+
+### 구현 기록
+
+구현한 기능: FAQ 독립 페이지 (/faq) 신규 생성 + 헤더 링크 변경
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/faq/page.tsx | FAQ 독립 서버 컴포넌트 (ISR 60s, DB 조회) | 신규 |
+| src/app/faq/FaqClient.tsx | FAQ 아코디언 클라이언트 컴포넌트 (ApplyPageClient에서 분리) | 신규 |
+| src/components/PublicHeader.tsx | /apply#faq → /faq 링크 변경 | 수정 |
+
+tester 참고:
+- 테스트 방법: /faq 페이지 접속, 아코디언 클릭 동작 확인, 헤더 "자주 묻는 질문" 메뉴 링크가 /faq로 이동하는지 확인
+- 정상 동작: /faq에서 FAQ 목록이 아코디언으로 표시되고, 클릭 시 답변 펼침/접힘
+- /apply 페이지의 FAQ 섹션은 기존대로 유지됨 (독립 복사본)
 
 ---
 
@@ -119,6 +134,8 @@
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-26 | FAQ 독립 페이지 분리 (/faq 신규, 헤더 링크 변경) | faq/page.tsx, FaqClient.tsx, PublicHeader.tsx | 구현완료 |
+| 2026-03-26 | 이용약관 독립 페이지 분리 (/terms 신규, programs에서 제거, 링크 3곳 변경) | terms/page.tsx, programs/page.tsx, PublicHeader/Footer, ApplyPageClient | 구현완료 |
 | 2026-03-26 | 메뉴 4카테고리 변경 + about 오시는 길 섹션 추가 | PublicHeader.tsx, about/page.tsx | 구현완료 |
 | 2026-03-26 | 외부 리뷰 수집 조사 (네이버X, 구글O위젯추천, 카카오X) | - | 조사완료 |
 | 2026-03-26 | 네비게이션 카테고리 드롭다운 구현 (group-hover, FAQ/약관 메뉴 추가, CTA 변경) | PublicHeader.tsx, SectionLayout.tsx, ApplyPageClient.tsx | 구현완료 |

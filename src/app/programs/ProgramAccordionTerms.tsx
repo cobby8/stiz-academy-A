@@ -1,60 +1,103 @@
 "use client";
 
-import { useState } from "react";
 import Card from "@/components/ui/Card";
 
 /**
- * ProgramAccordionTerms — 이용약관 아코디언 컴포넌트
+ * ProgramAccordionTerms — 이용약관 표시 컴포넌트
  *
- * 이용약관 전문을 바로 노출하면 페이지가 길어지므로,
- * 접기/펼치기 방식으로 사용자가 필요할 때만 펼쳐볼 수 있게 한다.
- * ApplyPageClient의 FAQItem 아코디언 스타일과 일관성을 유지한다.
+ * 항상 펼쳐진 상태로 표시. 환불, 보강 등 중요 키워드가 포함된 줄은
+ * 자동으로 강조 표시하여 가독성을 높인다.
  */
+
+// 중요 표시할 키워드 목록 — 이 키워드가 포함된 줄은 강조됨
+const IMPORTANT_KEYWORDS = [
+  "환불",
+  "환급",
+  "취소",
+  "보강",
+  "보충",
+  "위약금",
+  "손해배상",
+  "개인정보",
+  "안전",
+  "사고",
+  "부상",
+  "보험",
+  "책임",
+];
+
+/**
+ * 텍스트 한 줄이 중요 키워드를 포함하는지 확인
+ */
+function isImportantLine(line: string): boolean {
+  return IMPORTANT_KEYWORDS.some((keyword) => line.includes(keyword));
+}
+
 export default function ProgramAccordionTerms({
   termsText,
 }: {
   termsText: string | null;
 }) {
-  // React hooks 규칙: useState는 조건문 앞에 호출해야 함
-  const [isOpen, setIsOpen] = useState(false);
-
-  // termsText가 null이면 아무것도 렌더링하지 않음
   if (!termsText) return null;
+
+  // 줄 단위로 분리하여 중요 여부를 판별
+  const lines = termsText.split("\n");
 
   return (
     <Card variant="default" className="!p-0 overflow-hidden">
-      {/* 아코디언 헤더 — 클릭 시 본문 토글 */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between py-5 px-6 text-left hover:text-brand-orange-500 transition-colors cursor-pointer"
-      >
-        <span className="font-semibold text-gray-900 text-lg">이용약관</span>
-        {/* ChevronDown 아이콘 — 열림 시 180도 회전 (lucide 스타일 SVG) */}
-        <svg
-          className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 ${
-            isOpen ? "rotate-180" : ""
-          }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
+      {/* 헤더 — 항상 펼쳐진 상태 */}
+      <div className="py-5 px-6 border-b border-gray-100 flex items-center gap-3">
+        <span className="material-symbols-outlined text-brand-orange-500" style={{ fontSize: 24 }}>
+          gavel
+        </span>
+        <h3 className="font-bold text-gray-900 text-xl">이용약관</h3>
+      </div>
 
-      {/* 약관 본문 — isOpen일 때만 표시, 부드러운 전환 */}
-      {isOpen && (
-        <div className="px-6 pb-6 border-t border-gray-100">
-          <p className="text-gray-600 text-base leading-relaxed whitespace-pre-line pt-4">
-            {termsText}
-          </p>
+      {/* 약관 본문 — 항상 표시, 줄별 중요 강조 */}
+      <div className="px-6 py-6">
+        <div className="space-y-1">
+          {lines.map((line, i) => {
+            const trimmed = line.trim();
+
+            // 빈 줄은 여백으로 처리
+            if (!trimmed) {
+              return <div key={i} className="h-3" />;
+            }
+
+            const important = isImportantLine(trimmed);
+
+            // 중요 줄: 강조 배경 + 아이콘
+            if (important) {
+              return (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg px-4 py-2.5 -mx-1"
+                >
+                  <span
+                    className="material-symbols-outlined text-amber-500 shrink-0 mt-0.5"
+                    style={{ fontSize: 18 }}
+                  >
+                    priority_high
+                  </span>
+                  <p className="text-gray-800 text-base leading-relaxed font-medium">
+                    {trimmed}
+                  </p>
+                </div>
+              );
+            }
+
+            // 일반 줄
+            return (
+              <p
+                key={i}
+                className="text-gray-600 text-base leading-relaxed pl-1"
+              >
+                {trimmed}
+              </p>
+            );
+          })}
         </div>
-      )}
+      </div>
     </Card>
   );
 }

@@ -28,6 +28,12 @@ function getCalendarClient() {
     try {
         const credentials = JSON.parse(keyJson);
 
+        // .env에서 JSON을 한 줄로 저장하면 \n이 리터럴 문자열로 남을 수 있음
+        // private_key의 리터럴 \n을 실제 개행문자로 치환
+        if (credentials.private_key) {
+            credentials.private_key = credentials.private_key.replace(/\\n/g, "\n");
+        }
+
         // Service Account JWT 인증 — 캘린더 쓰기 권한 스코프
         const auth = new google.auth.JWT({
             email: credentials.client_email,

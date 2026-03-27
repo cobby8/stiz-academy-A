@@ -710,6 +710,8 @@ async function runPhase4() {
 
   let closedByUser = false;
 
+  // 4-1: 학년 선택 카드 전체를 하이라이트
+  // 학년 선택 + "다음 단계" 클릭을 하나의 스텝으로 안내
   const d1 = driverFn({
     showProgress: false,
     allowClose: false,
@@ -720,12 +722,11 @@ async function runPhase4() {
       {
         element: '[data-tour-target="grade-select"]',
         popover: {
-          title: "학년을 선택해 주세요",
+          title: "학년을 선택해 주세요 📝",
           description:
             progressLabel(4) +
-            "아이의 학년을 선택하면 맞는 수업을 찾아드려요. 직접 선택해 보세요!",
+            "학년을 선택하고 '다음 단계' 버튼을 눌러주세요!",
           side: "top" as const,
-          // 사용자가 직접 드롭다운을 조작해야 하므로 "다음" 버튼 없이 X만 표시
           showButtons: ["close"] as any,
         },
       },
@@ -738,81 +739,31 @@ async function runPhase4() {
   });
   d1.drive();
 
-  // 학년 드롭다운의 값 변경을 감지하여 다음 서브스텝으로 진행
-  // <select> 요소의 change 이벤트를 폴링 대신 이벤트 리스너로 감지한다
-  const gradeSelect = selectEl as HTMLSelectElement;
+  // "다음 단계" 버튼 클릭을 감지 → step 2로 전환됨 → grade-select가 DOM에서 사라짐
+  // 그래서 "다음 단계" 클릭 시 즉시 driver를 destroy하고 step 2 대기로 넘어감
   await new Promise<void>((resolve) => {
-    // 이미 X로 닫았으면 즉시 종료
     if (closedByUser) { resolve(); return; }
 
-    const onGradeChange = () => {
-      // 학년이 실제로 선택되었는지 확인 (빈 값이면 무시)
-      if (gradeSelect.value) {
-        gradeSelect.removeEventListener("change", onGradeChange);
-        d1.destroy();
-        resolve();
+    // "다음 단계" 버튼 클릭 감지 (grade-select 카드 안의 버튼)
+    const checkAndBind = () => {
+      const nextBtn = document.querySelector('[data-tour-target="grade-select"] button') as HTMLElement;
+      if (nextBtn) {
+        nextBtn.addEventListener("click", () => {
+          d1.destroy();
+          resolve();
+        }, { once: true });
+      } else {
+        // 버튼이 아직 없으면 100ms 후 재시도
+        setTimeout(checkAndBind, 100);
       }
     };
-    gradeSelect.addEventListener("change", onGradeChange);
+    checkAndBind();
   });
 
   if (closedByUser) return;
 
-  // --- 서브스텝 4-2: "다음 단계" 버튼 클릭 유도 ---
-  // 학년 선택 후 "다음 단계" 버튼이 활성화되었으므로 클릭을 안내한다
-  // 짧은 딜레이로 React 상태 업데이트를 기다림
-  await new Promise((r) => setTimeout(r, 300));
-
-  // "다음 단계" 버튼은 grade-select 카드 안에 있음 (step===1일 때만 렌더링)
-  const nextBtn = document.querySelector('[data-tour-target="grade-select"] button') as HTMLElement;
-  if (!nextBtn) {
-    // 버튼을 못 찾으면 스킵하고 다음 서브스텝 시도
-    await waitForStep2Card(driverFn, closedByUser);
-    return;
-  }
-
-  closedByUser = false;
-  const d2 = driverFn({
-    showProgress: false,
-    allowClose: false,
-    overlayColor: "rgba(0,0,0,0.5)",
-    stageRadius: 12,
-    stagePadding: 10,
-    steps: [
-      {
-        element: '[data-tour-target="grade-select"]',
-        popover: {
-          title: "다음 단계로!",
-          description:
-            progressLabel(4) +
-            "학년을 선택했으니, 아래 '다음 단계' 버튼을 눌러주세요!",
-          side: "top" as const,
-          showButtons: ["close"] as any,
-        },
-      },
-    ],
-    onCloseClick: () => {
-      closedByUser = true;
-      clearSavedPhase();
-      d2.destroy();
-    },
-  });
-  d2.drive();
-
-  // "다음 단계" 버튼 클릭 감지 -> 2단계 카드가 나타남
-  await new Promise<void>((resolve) => {
-    if (closedByUser) { resolve(); return; }
-
-    const onClick = () => {
-      d2.destroy();
-      resolve();
-    };
-    nextBtn.addEventListener("click", onClick, { once: true });
-  });
-
-  if (closedByUser) return;
-
-  // --- 서브스텝 4-3: 요일/시간대 선택 안내 ---
+  // --- 서브스텝 4-2: 요일/시간대 선택 안내 ---
+  // step 전환 후 step2 카드가 렌더링될 때까지 대기
   await waitForStep2Card(driverFn, closedByUser);
 }
 

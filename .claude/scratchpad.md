@@ -89,6 +89,11 @@ tester 참고:
 - /notices: 중요 공지 핀 아이콘, 첨부파일 클립 아이콘 정상 표시 확인
 - tsc --noEmit 통과 완료
 
+#### 수정 이력
+| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
+|------|------|----------|----------|------|
+| 1차 | 2026-03-26 | 투어 하이라이트 대상 축소 + popover 위치 수정 5건 | GuideTourTrigger.tsx | tester 요청: viewport보다 큰 요소 하이라이트 무의미 + side/block 모순 + scrollIntoView 누락 |
+
 **developer 주의사항**:
 - A1: `flex flex-wrap gap-2` -> `flex gap-2 overflow-x-auto scrollbar-hide` + 각 칩에 `shrink-0` 추가. py-4는 py-3으로 줄여도 됨.
 - A2/A3: lucide-react import 제거 후, `<span className="material-symbols-outlined" style={{fontSize:N}}>icon_name</span>` 패턴 사용
@@ -96,10 +101,154 @@ tester 참고:
 
 ---
 
+### 테스트 결과 (tester) -- 2026-03-26 PC/모바일 레이아웃이 투어에 미치는 영향 분석
+
+#### 1. Phase 2: program-cards (programs/page.tsx 111줄)
+
+**요소 구조**: `grid md:grid-cols-2 gap-6` -- PC: 2열 그리드, 모바일: 1열 스택
+**PC 예상 크기**: max-w-6xl(1152px) 컨테이너 안의 2열 그리드. 프로그램 8개 가정 시 4행x2열, 높이 약 1600~2000px
+**모바일 예상 크기**: 1열, 8개 카드 세로 나열 시 높이 약 3000~4000px
+**driver.js 설정**: side:"bottom", scrollIntoView block:"start", 500ms 대기 후 drive
+
+| 분석 항목 | 결과 | 심각도 | 설명 |
+|-----------|------|--------|------|
+| PC side:"bottom" | 주의 | 중 | 요소 높이가 viewport(~900px)보다 훨씬 크다. block:"start"로 스크롤 후 요소 상단이 화면 최상단에 오는데, popover side:"bottom"이면 요소 하단(=화면 밖 훨씬 아래)에 popover가 위치한다. driver.js는 popover가 viewport 밖이면 자동 재배치하지만, 큰 요소에서는 popover가 요소 중간에 떠서 카드를 가리는 문제가 생길 수 있다. |
+| 모바일 side:"bottom" | 주의 | 중 | 모바일에서 1열 기준 3000px+ 높이. 같은 문제가 더 심화됨. popover가 화면 밖으로 나가거나, 요소 중간에 떠서 컨텐츠를 가릴 수 있다. |
+| 하이라이트 영역 | 주의 | 높음 | driver.js SVG cutout이 전체 프로그램 카드 영역을 감싸야 한다. viewport보다 큰 요소를 cutout하면, 오버레이 어두운 영역이 거의 없어져서 "하이라이트" 효과가 사라지고 사용자가 어디를 봐야 하는지 혼란스럽다. |
+| 스크롤 가이드 문구 | OK | - | "스크롤하여 다양한 프로그램을 둘러보세요" 안내가 있어서 사용자는 스크롤 가능 인지 |
+
+**수정 방향**:
+- (A) program-cards 전체 대신 **첫 번째 카드만** 하이라이트하는 방식으로 변경. selector를 `[data-tour-target="program-cards"] > div:first-child`로 바꾸면 적당한 크기의 카드 하나만 하이라이트됨
+- (B) 또는 popover side를 "bottom"에서 **"over"**(요소 위에 겹침)로 바꾸는 대안도 있음
+- (C) 최소한 side를 "top"으로 바꾸면 block:"start" 후 상단 popover가 보임
+
+---
+
+#### 2. Phase 3: schedule-grid (ScheduleClient.tsx 126줄)
+
+**요소 구조**: `space-y-8` 안에 요일별 카드가 세로로 나열. 활성 요일이 5~7개면 각 카드 높이 ~300px
+**PC 예상 크기**: 5요일 기준 약 1500~2000px 높이
+**모바일 예상 크기**: 같은 구조이나 카드가 더 세로로 길어져서 2000~3000px
+**driver.js 설정**: side:"top", scrollIntoView block:"start", 500ms 대기 후 drive
+**필터 포함 여부**: schedule-grid는 필터 바 아래의 `<section>` 안 `<div>`에만 적용됨. 필터 바는 포함되지 않음.
+
+| 분석 항목 | 결과 | 심각도 | 설명 |
+|-----------|------|--------|------|
+| side:"top" + block:"start" 조합 | 문제 | 높음 | block:"start"로 스크롤하면 요소 상단이 viewport 최상단에 온다. 그런데 side:"top"이면 popover가 요소 위에 나타나야 하는데, 위에 공간이 없다(0px). driver.js가 자동 재배치하겠지만, 재배치 후 side가 어디로 갈지 예측 불가능하다. |
+| PC에서 popover 위치 | 주의 | 중 | sticky 필터 바(top:0, z-10)가 있다. block:"start" 후 요소 상단이 viewport 상단에 오면, sticky 필터가 그리드 위에 겹친다. popover가 "top"으로 뜨면 필터 바 아래에 가려질 수 있다. |
+| 모바일에서 하이라이트 | 주의 | 높음 | program-cards와 같은 문제. viewport보다 큰 요소 전체를 cutout하면 하이라이트 효과 없음. |
+| smoothScroll 미설정 | OK | - | smoothScroll 옵션이 빠져 있어 driver.js 기본 스크롤 동작에 위임됨 |
+
+**수정 방향**:
+- (A) schedule-grid 전체 대신 **첫 번째 요일 카드만** 하이라이트. selector: `[data-tour-target="schedule-grid"] > div:first-child`
+- (B) side를 "top"에서 **"bottom"**으로 변경 + block:"start" 유지 (요소 상단 보이고 그 아래에 popover)
+- (C) 또는 block을 "center"로 바꾸면 요소 중간이 화면 가운데 오고 top/bottom 어느 쪽이든 공간이 생김
+
+---
+
+#### 3. Phase 4: sim-step2-card (SimulatorClient.tsx 250줄)
+
+**요소 구조**: `bg-white rounded-2xl p-6 md:p-8` 카드. 내부에 학년 표시 + 요일 버튼 7개 + 시간 버튼 4개 + 이전/검색 버튼
+**PC 예상 크기**: max-w-2xl(672px) 컨테이너 안. 높이 약 450~550px. viewport(900px)보다 작음
+**모바일 예상 크기**: 화면 폭 거의 전체(padding 제외), 높이 약 500~600px. viewport(667~844px)에 비해 약간 작거나 비슷
+**driver.js 설정**: side:"top", scrollIntoView block:"center", 400ms 대기 후 drive
+
+| 분석 항목 | 결과 | 심각도 | 설명 |
+|-----------|------|--------|------|
+| PC: 크기 적절 | OK | - | 카드가 viewport보다 작아서 하이라이트가 정상 동작함 |
+| 모바일: 크기 경계선 | 주의 | 낮음 | 카드 높이(~550px)가 모바일 viewport(~667px)에 근접. block:"center"로 스크롤하면 카드가 화면 중앙에 오고 popover side:"top"이 위에 뜨는데, 위 공간이 ~60px 정도밖에 없을 수 있다. popover가 잘릴 가능성 있으나 driver.js 자동 재배치가 처리할 것으로 예상 |
+| sim-search-btn 가시성 | 주의 | 중 | sim-search-btn은 step2 카드 하단 버튼. step2 카드를 block:"center"로 스크롤하면 카드 전체가 보이므로 버튼도 보여야 한다. 그러나 모바일에서 카드 높이가 viewport에 가까우면 하단 버튼이 잘릴 수 있다. runSubStep4_4에서 별도로 searchBtn.scrollIntoView(block:"center")를 하므로 이 문제는 해결됨 |
+
+**수정 방향**:
+- 현재 상태로 대부분 정상 동작 예상. 모바일에서 popover가 잘리면 side를 "bottom"으로 변경하는 것이 안전
+
+---
+
+#### 4. Phase 4: sim-results (SimulatorClient.tsx 334줄)
+
+**요소 구조**: `<div data-tour-target="sim-results">` 안에 검색조건 요약 카드 + 결과 카드 리스트(space-y-3) + CTA 카드 + 조건변경 버튼
+**PC 예상 크기**: 결과가 5개면 각 ~120px + 요약 ~100px + CTA ~150px = 약 950px. 결과가 많으면 viewport 초과
+**모바일 예상 크기**: 동일 구조이나 카드가 더 높아질 수 있음. 10개 결과면 1500px+
+**driver.js 설정**: side:"top", scrollIntoView block:"start"
+
+| 분석 항목 | 결과 | 심각도 | 설명 |
+|-----------|------|--------|------|
+| 결과 적을 때 (1~3개) | OK | - | 요소가 viewport보다 작아서 정상 |
+| 결과 많을 때 (5개+) | 주의 | 중 | program-cards/schedule-grid와 같은 "큰 요소" 문제. 전체를 cutout하면 하이라이트 효과 없음 |
+| side:"top" + block:"start" | 문제 | 중 | Phase 3과 동일. block:"start"로 상단 맞추면 top에 popover 공간 없음. driver.js 자동 재배치에 의존 |
+| 스크롤 가이드 문구 | OK | - | "스크롤하여 검색 결과를 확인해보세요" 안내 있음 |
+
+**수정 방향**:
+- (A) sim-results 전체 대신 **검색 조건 요약 카드만** 하이라이트. 결과 개수가 표시되는 부분만 보여주면 충분
+- (B) side를 "bottom"으로 변경하여 block:"start" 후 바로 아래에 popover 표시
+
+---
+
+#### 5. Phase 5: trial-apply-btn (ApplyPageClient.tsx 197줄)
+
+**요소 구조**: `<Button>` 컴포넌트. 체험수업 카드 내부 하단에 위치
+**PC 예상 크기**: 버튼 하나. 약 200x44px 정도. 매우 작은 요소
+**모바일 예상 크기**: 비슷하거나 모바일에서는 full-width일 수 있음
+**driver.js 설정**: side:"top", waitForElement 3초
+
+| 분석 항목 | 결과 | 심각도 | 설명 |
+|-----------|------|--------|------|
+| 버튼 위치 접근성 | 주의 | 중 | 이 버튼은 /apply 페이지의 체험수업 카드 안에 있다. 페이지 로드 시 히어로 영역 아래에 카드가 있으므로, 버튼까지 스크롤이 필요할 수 있다. 그런데 Phase 5 코드에는 **scrollIntoView가 없다**. waitForElement로 버튼을 찾기만 하고 스크롤을 안 한다. driver.js가 자체적으로 스크롤을 시도하겠지만, smoothScroll 옵션이 없어서 갑작스러운 점프가 발생할 수 있다. |
+| PC에서 위치 | OK | - | 2열 그리드(md:grid-cols-2)의 왼쪽 카드 안. 히어로 높이가 줄었으므로 스크롤이 적거나 없을 수 있음 |
+| 모바일에서 위치 | 주의 | 중 | 1열이라 체험수업 카드가 위에 오고 버튼은 카드 하단. 히어로 + 카드 헤더 + 내용 + 버튼까지 스크롤 필요. 화면 밖일 가능성 높음 |
+| trialFormUrl 미설정 시 | 주의 | 높음 | trialFormUrl이 없으면 `data-tour-target="trial-apply-btn"`이 DOM에 없다 (disabled 버튼에는 data-tour-target이 없음, 202줄). waitForElement가 3초 후 null 반환 -> finishTour() 호출. 투어가 조용히 끝나버려서 사용자는 "왜 갑자기 끝났지?" 혼란 |
+
+**수정 방향**:
+- (A) Phase 5에 `btn.scrollIntoView({ behavior: "smooth", block: "center" })` 추가 (다른 Phase에는 있는데 여기만 누락)
+- (B) trialFormUrl 미설정 시에도 disabled 버튼에 data-tour-target 추가하거나, Phase 5에서 대체 popover 표시
+- (C) side:"top"은 적절. 버튼이 작은 요소이므로 block:"center"로 중앙 배치하면 위아래 공간 충분
+
+---
+
+#### 종합 분석: driver.js 설정 일관성 검토
+
+| Phase | 대상 요소 | side | scrollIntoView | 요소 크기 vs viewport | 핵심 문제 |
+|-------|----------|------|----------------|----------------------|----------|
+| 2 | program-cards | bottom | block:"start" | 훨씬 큼 (2x~4x) | 큰 요소 하이라이트 무의미, popover 위치 불안정 |
+| 3 | schedule-grid | top | block:"start" | 훨씬 큼 (2x~3x) | side:"top" + block:"start" 모순, sticky 필터 겹침 |
+| 4-3 | sim-step2-card | top | block:"center" | 비슷하거나 약간 작음 | 경미. 모바일에서 약간 빠듯 |
+| 4-4 | sim-search-btn | top | block:"center" | 매우 작음 | OK |
+| 4-5 | sim-results | top | block:"start" | 결과 수에 따라 다름 | 결과 많으면 Phase 2/3과 같은 문제 |
+| 5 | trial-apply-btn | top | 없음! | 매우 작음 | scrollIntoView 누락 + trialFormUrl 미설정 시 투어 중단 |
+
+### 심각도별 정리
+
+**높음 (수정 권장)**:
+1. Phase 2/3/4-5: viewport보다 큰 요소 전체를 하이라이트하면 cutout이 화면 전체를 덮어서 하이라이트 효과 없음 -> 첫 번째 자식 요소만 하이라이트하는 것으로 변경
+2. Phase 5: scrollIntoView 누락 -> 추가 필요
+3. Phase 5: trialFormUrl 미설정 시 투어가 조용히 종료 -> 대체 UI 필요
+
+**중간 (개선 권장)**:
+4. Phase 3: side:"top" + block:"start" 조합 모순 -> side:"bottom" 또는 block:"center"로 변경
+5. Phase 3: sticky 필터 바가 그리드 위에 겹침 가능 -> 스크롤 offset 고려
+6. Phase 4-5: 결과 많을 때 큰 요소 문제 -> 검색 조건 요약 카드만 하이라이트
+
+**낮음 (참고)**:
+7. Phase 4-3: 모바일에서 popover 잘릴 수 있으나 driver.js 자동 재배치로 대응 예상
+
+### 수정 요청
+
+| 요청자 | 파일명 | 문제 설명 | 상태 |
+|--------|--------|----------|------|
+| tester | GuideTourTrigger.tsx | [높음] Phase 2: program-cards 전체 대신 첫번째 카드만 하이라이트 (selector 변경) | 완료 |
+| tester | GuideTourTrigger.tsx | [높음] Phase 3: schedule-grid 전체 대신 첫번째 요일 카드만 하이라이트 (selector 변경) | 완료 |
+| tester | GuideTourTrigger.tsx | [높음] Phase 3: side:"top" -> side:"bottom" 변경 (block:"start"와 호환) | 완료 |
+| tester | GuideTourTrigger.tsx | [높음] Phase 5: btn.scrollIntoView 추가 (다른 Phase에는 있는데 여기만 누락) | 완료 |
+| tester | GuideTourTrigger.tsx / ApplyPageClient.tsx | [높음] Phase 5: trialFormUrl 미설정 시 투어가 무음 종료되는 문제 대응 | 대기 |
+| tester | GuideTourTrigger.tsx | [중] Phase 4-5: sim-results 전체 대신 검색조건 요약 부분만 하이라이트 고려 | 완료 |
+
+---
+
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-26 | 공개 페이지 히어로 영역 높이 75% 축소 (9개 파일 패딩 변경) | LandingPageClient + about/programs/schedule/gallery/notices/annual/simulator | 완료 |
 | 2026-03-26 | 시간표 필터 UI + 공개 페이지 전체 점검 (8페이지 분석, 개선 6건 도출) | ScheduleClient + gallery + notices 등 | 기획완료 |
 | 2026-03-26 | 투어 UX 개선 5건 구현 (B-1 스크롤충돌, B-2 Link충돌, 진행률, 완료토스트, 중단재개) | GuideTourTrigger.tsx, tourStyles.css | 완료 |
 | 2026-03-26 | 투어 UX 개선 계획 + 위치 버그 3건 특정 | GuideTourTrigger.tsx, PublicHeader.tsx | 완료 |

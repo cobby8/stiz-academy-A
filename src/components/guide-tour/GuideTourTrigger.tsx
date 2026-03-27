@@ -330,8 +330,8 @@ async function runPhase2(routerPush: (url: string) => void) {
   const driverFn = await loadDriver();
   const isMobile = window.innerWidth < 768;
 
-  // 프로그램 카드가 렌더링될 때까지 폴링 (최대 3초)
-  const cardEl = await waitForElement('[data-tour-target="program-cards"]');
+  // 첫 번째 프로그램 카드만 하이라이트 — 전체 그리드는 viewport보다 커서 하이라이트 효과가 없음
+  const cardEl = await waitForElement('[data-tour-target="program-cards"] > div:first-child');
 
   // 요소를 못 찾으면 카드 하이라이트를 건너뛰고 네비 안내로 스킵
   if (!cardEl) {
@@ -339,7 +339,7 @@ async function runPhase2(routerPush: (url: string) => void) {
     return;
   }
 
-  // 프로그램 카드가 보이도록 먼저 스크롤
+  // 첫 번째 카드가 보이도록 먼저 스크롤
   cardEl.scrollIntoView({ behavior: "smooth", block: "start" });
 
   // X 버튼 클릭 시 투어 중단, "확인했어요" 클릭 시 다음 Phase로 진행
@@ -355,7 +355,8 @@ async function runPhase2(routerPush: (url: string) => void) {
     nextBtnText: "확인했어요",
     steps: [
       {
-        element: '[data-tour-target="program-cards"]',
+        // 첫 번째 카드만 하이라이트 — viewport보다 큰 요소 전체를 cutout하면 하이라이트 효과 없음
+        element: '[data-tour-target="program-cards"] > div:first-child',
         popover: {
           title: "프로그램 안내 📋",
           description:
@@ -512,8 +513,8 @@ async function runPhase3(routerPush: (url: string) => void) {
   const driverFn = await loadDriver();
   const isMobile = window.innerWidth < 768;
 
-  // 시간표 그리드가 렌더링될 때까지 폴링 (최대 3초)
-  const gridEl = await waitForElement('[data-tour-target="schedule-grid"]');
+  // 첫 번째 요일 카드만 하이라이트 — 전체 그리드는 viewport보다 커서 하이라이트 효과가 없음
+  const gridEl = await waitForElement('[data-tour-target="schedule-grid"] > div:first-child');
 
   // 요소를 못 찾으면 시간표 하이라이트를 건너뛰고 네비 안내로 스킵
   if (!gridEl) {
@@ -521,7 +522,7 @@ async function runPhase3(routerPush: (url: string) => void) {
     return;
   }
 
-  // 시간표 그리드 상단이 보이도록 먼저 스크롤
+  // 첫 번째 요일 카드가 보이도록 먼저 스크롤
   gridEl.scrollIntoView({ behavior: "smooth", block: "start" });
 
   // X 버튼 클릭 시 투어 중단, "확인했어요" 클릭 시 다음 Phase로 진행
@@ -537,12 +538,13 @@ async function runPhase3(routerPush: (url: string) => void) {
     nextBtnText: "확인했어요",
     steps: [
       {
-        element: '[data-tour-target="schedule-grid"]',
+        // 첫 번째 요일 카드만 하이라이트 + side:"bottom" — block:"start"와 호환 (top은 위 공간이 0px라 popover 위치 불안정)
+        element: '[data-tour-target="schedule-grid"] > div:first-child',
         popover: {
           title: "수업 시간표 📅",
           description:
             progressLabel(3) + "요일별 수업 시간을 확인하세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 전체 시간표를 확인해보세요</span>",
-          side: "top" as const,
+          side: "bottom" as const,
           showButtons: ["close", "next"] as any,
         },
       },
@@ -894,14 +896,15 @@ async function runSubStep4_4(driverFn: any, routerPush: (url: string) => void) {
  * 서브스텝 4-5: 검색 결과 확인 → 체험신청 페이지로 안내
  */
 async function runSubStep4_5(driverFn: any, routerPush: (url: string) => void) {
-  const resultsEl = await waitForElement('[data-tour-target="sim-results"]');
+  // 검색조건 요약 카드만 하이라이트 — 결과 전체는 결과 수에 따라 viewport 초과 가능
+  const resultsEl = await waitForElement('[data-tour-target="sim-results"] > div:first-child');
   if (!resultsEl) {
     // 결과 못 찾으면 바로 /apply로 이동
     routerPush("/apply?tour=5");
     return;
   }
 
-  // 결과 최상단이 보이도록 스크롤
+  // 검색조건 요약 카드가 보이도록 스크롤
   resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 
   let closedByUser = false;
@@ -916,13 +919,14 @@ async function runSubStep4_5(driverFn: any, routerPush: (url: string) => void) {
     nextBtnText: "체험수업 신청하러 가기!",
     steps: [
       {
-        element: '[data-tour-target="sim-results"]',
+        // 검색조건 요약 카드만 하이라이트 + side:"bottom" — block:"start" 후 바로 아래에 popover 표시
+        element: '[data-tour-target="sim-results"] > div:first-child',
         popover: {
           title: "수업을 찾았어요! 🎉",
           description:
             progressLabel(4) +
             "마음에 드는 수업이 있으면 체험수업을 신청해 보세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 검색 결과를 확인해보세요</span>",
-          side: "top" as const,
+          side: "bottom" as const,
           showButtons: ["close", "next"] as any,
         },
       },
@@ -954,6 +958,9 @@ async function runPhase5() {
     finishTour();
     return;
   }
+
+  // 다른 Phase에는 있는데 여기만 누락됐던 scrollIntoView 추가
+  (btn as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
 
   let closedByUser = false;
 

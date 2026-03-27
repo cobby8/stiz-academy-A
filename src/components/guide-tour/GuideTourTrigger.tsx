@@ -120,7 +120,7 @@ function waitForElement(
  * 진행률 HTML을 생성하는 헬퍼
  * 각 popover description 앞에 "N/4 단계" 표시를 추가
  */
-function progressLabel(step: number, total: number = 4): string {
+function progressLabel(step: number, total: number = 5): string {
   return `<span style="display:inline-block;color:#999;font-size:11px;margin-bottom:4px">${step}/${total} 단계</span><br/>`;
 }
 
@@ -695,7 +695,7 @@ function finishTour() {
 // 5단계 서브스텝: 학년 선택 -> 다음 버튼 -> 요일/시간 안내 -> 수업 찾기 -> 결과 확인
 // 사용자가 시뮬레이터를 직접 조작하면서 투어가 단계별로 안내하는 게임 튜토리얼 방식
 // ========================================
-async function runPhase4() {
+async function runPhase4(routerPush: (url: string) => void) {
   savePhase("4"); // 재개 기능용 Phase 저장
   const driverFn = await loadDriver();
 
@@ -764,7 +764,7 @@ async function runPhase4() {
 
   // --- 서브스텝 4-2: 요일/시간대 선택 안내 ---
   // step 전환 후 step2 카드가 렌더링될 때까지 대기
-  await waitForStep2Card(driverFn, closedByUser);
+  await waitForStep2Card(driverFn, closedByUser, routerPush);
 }
 
 /**
@@ -773,7 +773,7 @@ async function runPhase4() {
  * - 4-4: "수업 찾기" 버튼 클릭 유도
  * - 4-5: 결과 카드 확인 + 투어 완료
  */
-async function waitForStep2Card(driverFn: any, parentClosed: boolean) {
+async function waitForStep2Card(driverFn: any, parentClosed: boolean, routerPush: (url: string) => void) {
   if (parentClosed) return;
 
   // 2단계 카드가 렌더링될 때까지 대기 (step 전환 애니메이션 포함)
@@ -817,7 +817,7 @@ async function waitForStep2Card(driverFn: any, parentClosed: boolean) {
     onDestroyed: () => {
       if (closedByUser) return;
       // "선택했어요" 클릭 후 → 바로 "수업 찾기" 버튼 안내
-      setTimeout(() => runSubStep4_4(driverFn), 100);
+      setTimeout(() => runSubStep4_4(driverFn, routerPush), 100);
     },
   });
 
@@ -830,7 +830,7 @@ async function waitForStep2Card(driverFn: any, parentClosed: boolean) {
  * 서브스텝 4-4: "수업 찾기" 버튼 클릭 유도
  * 사용자가 직접 버튼을 눌러서 3단계(결과)로 이동하게 한다.
  */
-async function runSubStep4_4(driverFn: any) {
+async function runSubStep4_4(driverFn: any, routerPush: (url: string) => void) {
   const searchBtn = await waitForElement('[data-tour-target="sim-search-btn"]');
   if (!searchBtn) {
     finishTour();
@@ -882,19 +882,18 @@ async function runSubStep4_4(driverFn: any) {
 
   if (closedByUser) return;
 
-  // --- 서브스텝 4-5: 결과 카드 확인 + 투어 완료 ---
-  await runSubStep4_5(driverFn);
+  // --- 서브스텝 4-5: 결과 카드 확인 → 체험신청 페이지로 안내 ---
+  await runSubStep4_5(driverFn, routerPush);
 }
 
 /**
- * 서브스텝 4-5: 검색 결과 확인 + 투어 완료
- * 결과 영역을 하이라이트하고 "완료!" 버튼으로 투어를 마무리한다.
+ * 서브스텝 4-5: 검색 결과 확인 → 체험신청 페이지로 안내
  */
-async function runSubStep4_5(driverFn: any) {
-  // 3단계 결과가 렌더링될 때까지 대기
+async function runSubStep4_5(driverFn: any, routerPush: (url: string) => void) {
   const resultsEl = await waitForElement('[data-tour-target="sim-results"]');
   if (!resultsEl) {
-    finishTour();
+    // 결과 못 찾으면 바로 /apply로 이동
+    routerPush("/apply?tour=5");
     return;
   }
 
@@ -906,15 +905,16 @@ async function runSubStep4_5(driverFn: any) {
     overlayColor: "rgba(0,0,0,0.5)",
     stageRadius: 12,
     stagePadding: 10,
-    doneBtnText: "완료!",
+    doneBtnText: "체험수업 신청하러 가기!",
+    nextBtnText: "체험수업 신청하러 가기!",
     steps: [
       {
         element: '[data-tour-target="sim-results"]',
         popover: {
-          title: "검색 완료! 🎉",
+          title: "수업을 찾았어요! 🎉",
           description:
             progressLabel(4) +
-            "조건에 맞는 수업이 나왔어요! 마음에 드는 수업을 찾으면 체험수업을 신청해 보세요.",
+            "마음에 드는 수업이 있으면 체험수업을 신청해 보세요!",
           side: "top" as const,
           showButtons: ["close", "next"] as any,
         },
@@ -927,11 +927,61 @@ async function runSubStep4_5(driverFn: any) {
     },
     onDestroyed: () => {
       if (closedByUser) return;
-      // "완료!" 버튼 클릭 시 투어 완료 처리
-      finishTour();
+      // "체험수업 신청하러 가기!" 클릭 → /apply 페이지로 이동 (Phase 5)
+      routerPush("/apply?tour=5");
     },
   });
   d5.drive();
+}
+
+// ========================================
+// Phase 5: 체험신청(/apply?tour=5)
+// "체험수업 신청하기" 버튼 하이라이트 → 클릭 시 투어 종료
+// ========================================
+async function runPhase5() {
+  savePhase("5");
+  const driverFn = await loadDriver();
+
+  const btn = await waitForElement('[data-tour-target="trial-apply-btn"]');
+  if (!btn) {
+    finishTour();
+    return;
+  }
+
+  let closedByUser = false;
+
+  const d = driverFn({
+    showProgress: false,
+    allowClose: false,
+    overlayColor: "rgba(0,0,0,0.5)",
+    stageRadius: 12,
+    stagePadding: 10,
+    steps: [
+      {
+        element: '[data-tour-target="trial-apply-btn"]',
+        popover: {
+          title: "체험수업을 신청해 보세요! 🏀",
+          description:
+            progressLabel(5) +
+            "무료 체험수업을 신청하면 실제 수업을 경험할 수 있어요!",
+          side: "top" as const,
+          showButtons: ["close"] as any,
+        },
+      },
+    ],
+    onCloseClick: () => {
+      closedByUser = true;
+      clearSavedPhase();
+      d.destroy();
+    },
+  });
+  d.drive();
+
+  // "체험수업 신청하기" 버튼 클릭 감지 → 투어 완료
+  (btn as HTMLElement).addEventListener("click", () => {
+    d.destroy();
+    finishTour();
+  }, { once: true });
 }
 
 // ========================================
@@ -976,7 +1026,10 @@ function TourTriggerInner() {
           runPhase3(routerPush);
           break;
         case "4":
-          runPhase4();
+          runPhase4(routerPush);
+          break;
+        case "5":
+          runPhase5();
           break;
       }
     }, 300);
@@ -1009,6 +1062,7 @@ function TourTriggerInner() {
         "2": "/programs?tour=2",
         "3": "/schedule?tour=3",
         "4": "/simulator?tour=4",
+        "5": "/apply?tour=5",
       };
       if (phasePages[savedPhase]) {
         routerPush(phasePages[savedPhase]);

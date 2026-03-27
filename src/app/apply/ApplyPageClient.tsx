@@ -194,6 +194,7 @@ export default function ApplyPageClient({
                                             variant="primary"
                                             size="md"
                                             onClick={() => setModal("trial")}
+                                            data-tour-target="trial-apply-btn"
                                         >
                                             체험수업 신청하기
                                         </Button>

@@ -1095,10 +1095,11 @@ function TourTriggerInner() {
 
   return (
     <>
-      {/* 플로팅 입학 가이드 버튼 — 챗봇 버튼(bottom-6 right-6)과 같은 열, 바로 위 */}
+      {/* 플로팅 입학 가이드 버튼 — 챗봇 버튼(bottom-6 right-6) 바로 위, 같은 열 */}
       <button
         onClick={startTour}
-        className="fixed bottom-[88px] right-6 z-50 w-14 h-14 rounded-full bg-brand-navy-900 text-white shadow-lg hover:bg-brand-navy-800 hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center"
+        className="fixed right-6 z-50 w-14 h-14 rounded-full bg-white text-brand-orange-500 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center border-2 border-brand-orange-500"
+        style={{ bottom: 88 }}
         aria-label="입학 가이드 시작"
         title="입학 가이드"
       >

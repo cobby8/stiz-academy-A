@@ -1,4 +1,4 @@
-import { getAcademySettings, getClasses } from "@/lib/queries";
+import { getAcademySettings, getClasses, getAnnualEvents } from "@/lib/queries";
 import { fetchGoogleCalendarEvents } from "@/lib/googleCalendar";
 import {
     getMonthClassSchedule,
@@ -31,9 +31,11 @@ const CATEGORY_STYLES: Record<string, { dot: string }> = {
 const DOW_MAP: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
 
 export default async function AnnualPage() {
-    const [settings, classes] = await Promise.all([
+    // DB 일정도 함께 조회하여 구글 캘린더 이벤트와 합침
+    const [settings, classes, dbEvents] = await Promise.all([
         getAcademySettings() as Promise<any>,
         getClasses() as Promise<any[]>,
+        getAnnualEvents() as Promise<any[]>,
     ]);
 
     const phone = settings.contactPhone || "010-0000-0000";
@@ -42,30 +44,54 @@ export default async function AnnualPage() {
     // 구글 캘린더 이벤트 fetch
     const googleEvents = icsUrl ? await fetchGoogleCalendarEvents(icsUrl) : [];
 
-    // 직렬화 (Date → ISO string) 후 클라이언트에 전달
+    // ── 구글 이벤트 직렬화 (Date → ISO string) ──
+    const googleSerialized: SerializedEvent[] = googleEvents.map((e) => {
+        // "n월 개강/종강/n주차" 이벤트는 제목의 n월을 수강월로 사용 (실제 날짜와 무관)
+        const academicRE = OPEN_RE.test(e.title) ? OPEN_RE
+                         : CLOSE_RE.test(e.title) ? CLOSE_RE
+                         : WEEK_START_RE.test(e.title) ? WEEK_START_RE
+                         : null;
+        const parsed = academicRE ? parseAcademicYearMonth(e.title, academicRE, e.date) : null;
+        return {
+            id: e.id,
+            title: e.title,
+            date: e.date.toISOString(),
+            endDate: e.endDate?.toISOString(),
+            description: e.description,
+            category: e.category,
+            isAllDay: e.isAllDay,
+            url: e.url,
+            source: "google" as const,
+            academicYear:  parsed?.academicYear,
+            academicMonth: parsed?.academicMonth,
+        };
+    });
+
+    // ── DB 이벤트를 동일 SerializedEvent 형식으로 변환 ──
+    const dbSerialized: SerializedEvent[] = dbEvents.map((e: any) => ({
+        id: String(e.id),
+        title: e.title,
+        date: new Date(e.date).toISOString(),
+        endDate: e.endDate ? new Date(e.endDate).toISOString() : undefined,
+        description: e.description ?? undefined,
+        category: e.category ?? "일반",
+        isAllDay: true,       // DB 이벤트는 기본 종일 이벤트 취급
+        source: "db" as const,
+    }));
+
+    // ── 중복 제거: 같은 날짜(YYYY-MM-DD) + 제목이면 구글 이벤트 우선 ──
+    // 구글 캘린더에 이미 등록된 일정을 관리자가 DB에도 넣은 경우를 방지
+    const googleKeySet = new Set(
+        googleSerialized.map((e) => `${e.date.slice(0, 10)}|${e.title}`)
+    );
+    const uniqueDbEvents = dbSerialized.filter(
+        (e) => !googleKeySet.has(`${e.date.slice(0, 10)}|${e.title}`)
+    );
+
+    // ── 합치고 날짜순 정렬 ──
     const allEvents: SerializedEvent[] = [
-        ...googleEvents.map((e) => {
-            // "n월 개강/종강/n주차" 이벤트는 제목의 n월을 수강월로 사용 (실제 날짜와 무관)
-            const academicRE = OPEN_RE.test(e.title) ? OPEN_RE
-                             : CLOSE_RE.test(e.title) ? CLOSE_RE
-                             : WEEK_START_RE.test(e.title) ? WEEK_START_RE
-                             : null;
-            const parsed = academicRE ? parseAcademicYearMonth(e.title, academicRE, e.date) : null;
-            return {
-                id: e.id,
-                title: e.title,
-                date: e.date.toISOString(),
-                endDate: e.endDate?.toISOString(),
-                description: e.description,
-                category: e.category,
-                isAllDay: e.isAllDay,
-                url: e.url,
-                source: "google" as const,
-                // 수강월이 실제 달과 다른 경우에만 설정 (클라이언트 그룹핑용)
-                academicYear:  parsed?.academicYear,
-                academicMonth: parsed?.academicMonth,
-            };
-        }),
+        ...googleSerialized,
+        ...uniqueDbEvents,
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // ── 서버에서 월별 수업일자 계산 ──────────────────────────────────

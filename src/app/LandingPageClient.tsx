@@ -44,7 +44,7 @@ export default function LandingPageClient({
           - settings.introductionTitle, settings.introductionText 의존성 유지
           - dangerouslySetInnerHTML 유지 (Tiptap HTML 지원)
           ============================================= */}
-      <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-14 md:py-20 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-8 md:py-12 relative overflow-hidden">
         {/* 장식 도형 — 배경에 깊이감과 다이나믹 느낌 부여 */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute right-0 top-0 w-[500px] h-[500px] border-[40px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3"></div>
@@ -53,65 +53,46 @@ export default function LandingPageClient({
         </div>
 
         <div className="max-w-6xl mx-auto px-4 relative">
-          {/* 좌(텍스트) + 우(비주얼) 분할 레이아웃 */}
-          <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-            {/* 좌측: 텍스트 + CTA */}
-            <div className="flex-1 max-w-xl">
+          {/* 좌(비주얼) + 우(텍스트) 분할 레이아웃 */}
+          <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
+            {/* 좌측: 비주얼 영역 — 농구 그래픽 장식 */}
+            <div className="flex-1 hidden lg:flex items-center justify-center">
+              <div className="relative w-64 h-64">
+                <div className="absolute inset-0 bg-brand-orange-500/20 rounded-full animate-pulse" />
+                <div className="absolute inset-4 bg-brand-orange-500/30 rounded-full" />
+                <div className="absolute inset-8 bg-brand-orange-500/20 rounded-full flex items-center justify-center">
+                  <span className="text-7xl">🏀</span>
+                </div>
+                <div className="absolute -top-4 -right-4 w-16 h-16 border-4 border-white/20 rounded-full" />
+                <div className="absolute -bottom-2 -left-2 w-12 h-12 border-4 border-brand-orange-500/30 rounded-full" />
+              </div>
+            </div>
+
+            {/* 우측: 텍스트 (우정렬) */}
+            <div className="flex-1 max-w-xl lg:text-right">
               {/* 상단 뱃지 — 지역 No.1 포지셔닝 */}
-              <div className="inline-block bg-brand-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider shadow">
+              <div className="inline-block bg-brand-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full mb-4 uppercase tracking-wider shadow">
                 다산신도시 No.1 농구 전문 학원
               </div>
 
               {/* 메인 타이틀 — settings에서 가져온 동적 데이터 */}
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 leading-tight tracking-tight">
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black mb-4 leading-tight tracking-tight">
                 {settings.introductionTitle || "스티즈 농구교실"}
               </h1>
 
               {/* 소개 텍스트 — Tiptap HTML(dangerouslySetInnerHTML) 유지 필수 */}
               <div
-                className="text-blue-100 text-lg mb-10 leading-relaxed [&_strong]:font-bold [&_em]:italic [&_p]:mb-1.5 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold"
+                className="text-blue-100 text-base leading-relaxed [&_strong]:font-bold [&_em]:italic [&_p]:mb-1 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold"
                 dangerouslySetInnerHTML={{
                   __html: (() => {
                     const t = settings.introductionText;
                     if (!t)
                       return "아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다.";
-                    // HTML 태그가 포함되어 있으면 그대로, 아니면 줄바꿈을 <br>로
                     if (t.includes("<")) return t;
                     return t.replace(/\n/g, "<br>");
                   })(),
                 }}
               />
-
-              {/* 듀얼 CTA: 체험 신청(Primary) + 프로그램 보기(Ghost) */}
-              <div className="flex flex-wrap gap-4">
-                <Link
-                  href="/apply"
-                  className="bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold px-8 py-4 rounded-xl transition-all duration-200 shadow-lg text-base hover:scale-[1.02] hover:shadow-xl"
-                >
-                  체험 수업 신청
-                </Link>
-                <Link
-                  href="/programs"
-                  className="bg-white/10 hover:bg-white/20 text-white font-bold px-8 py-4 rounded-xl transition-colors border border-white/30 text-base"
-                >
-                  프로그램 보기
-                </Link>
-              </div>
-            </div>
-
-            {/* 우측: 비주얼 영역 — 농구 그래픽 장식 */}
-            <div className="flex-1 hidden lg:flex items-center justify-center">
-              <div className="relative w-80 h-80">
-                {/* 큰 농구공 실루엣 원 */}
-                <div className="absolute inset-0 bg-brand-orange-500/20 rounded-full animate-pulse" />
-                <div className="absolute inset-4 bg-brand-orange-500/30 rounded-full" />
-                <div className="absolute inset-8 bg-brand-orange-500/20 rounded-full flex items-center justify-center">
-                  <span className="text-8xl">🏀</span>
-                </div>
-                {/* 장식 링 */}
-                <div className="absolute -top-4 -right-4 w-16 h-16 border-4 border-white/20 rounded-full" />
-                <div className="absolute -bottom-2 -left-2 w-12 h-12 border-4 border-brand-orange-500/30 rounded-full" />
-              </div>
             </div>
           </div>
         </div>

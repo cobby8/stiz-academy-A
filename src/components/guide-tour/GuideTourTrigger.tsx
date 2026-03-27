@@ -834,23 +834,25 @@ async function waitForStep2Card(driverFn: any, parentClosed: boolean) {
 
   let closedByUser = false;
 
-  // 요일 선택 영역 하이라이트 (정보 안내 스텝)
+  // step2 카드 전체를 하이라이트 (요일+시간 선택 영역)
+  // sim-day-select 대신 sim-step2-card를 하이라이트 — 개별 영역보다 카드 전체가 안정적
   const d3 = driverFn({
     showProgress: false,
     allowClose: false,
+    // smoothScroll을 제거하여 driver.js가 요소로 스크롤하도록 허용
     overlayColor: "rgba(0,0,0,0.5)",
     stageRadius: 12,
     stagePadding: 10,
-    doneBtnText: "확인했어요",
-    nextBtnText: "확인했어요",
+    doneBtnText: "선택했어요",
+    nextBtnText: "선택했어요",
     steps: [
       {
-        element: '[data-tour-target="sim-day-select"]',
+        element: '[data-tour-target="sim-step2-card"]',
         popover: {
-          title: "요일을 선택하세요",
+          title: "요일과 시간을 선택하세요 📅",
           description:
             progressLabel(4) +
-            "원하는 요일을 여러 개 고를 수 있어요. 선택 안 하면 전체 요일로 검색돼요.",
+            "원하는 요일과 시간대를 선택하고 아래 '수업 찾기'를 눌러주세요!<br/>선택 안 하면 전체로 검색돼요.",
           side: "top" as const,
           showButtons: ["close", "next"] as any,
         },
@@ -863,11 +865,14 @@ async function waitForStep2Card(driverFn: any, parentClosed: boolean) {
     },
     onDestroyed: () => {
       if (closedByUser) return;
-      // "확인했어요" 클릭 후 -> 서브스텝 4-4로 진행
+      // "선택했어요" 클릭 후 → 바로 "수업 찾기" 버튼 안내
       setTimeout(() => runSubStep4_4(driverFn), 100);
     },
   });
-  d3.drive();
+
+  // step2 카드로 자동 스크롤 후 드라이브
+  step2Card.scrollIntoView({ behavior: "smooth", block: "center" });
+  setTimeout(() => d3.drive(), 400);
 }
 
 /**
@@ -883,6 +888,9 @@ async function runSubStep4_4(driverFn: any) {
 
   let closedByUser = false;
 
+  // 수업 찾기 버튼으로 스크롤
+  (searchBtn as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+
   const d4 = driverFn({
     showProgress: false,
     allowClose: false,
@@ -893,10 +901,10 @@ async function runSubStep4_4(driverFn: any) {
       {
         element: '[data-tour-target="sim-search-btn"]',
         popover: {
-          title: "수업을 찾아볼까요?",
+          title: "수업을 찾아볼까요? 🔍",
           description:
             progressLabel(4) +
-            "'수업 찾기' 버튼을 눌러서 조건에 맞는 수업을 검색해 보세요!",
+            "'수업 찾기' 버튼을 눌러보세요!",
           side: "top" as const,
           showButtons: ["close"] as any,
         },

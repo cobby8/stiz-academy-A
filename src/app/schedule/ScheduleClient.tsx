@@ -68,10 +68,11 @@ function ScheduleFilter({ programs, allSlots, phone }: {
             {/* 프로그램 필터 탭 — 디자인 개선 (둥글고 부드러운 pill 스타일) */}
             {programs.length > 0 && (
                 <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
-                    <div className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap gap-2 items-center">
+                    {/* 수평 스크롤 칩 — 모바일에서 자연스러운 좌우 스와이프 */}
+                    <div className="max-w-6xl mx-auto px-4 py-3 flex gap-2 items-center overflow-x-auto scrollbar-hide">
                         <a
                             href="/schedule"
-                            className={`text-sm font-bold px-5 py-2 rounded-full transition-all duration-200 ${
+                            className={`shrink-0 text-sm font-bold px-5 py-2 rounded-full transition-all duration-200 whitespace-nowrap ${
                                 !filterProgramId
                                     ? "bg-brand-navy-900 text-white shadow-md"
                                     : "bg-gray-50 text-gray-600 hover:bg-gray-100 hover:shadow-sm border border-gray-200"
@@ -83,7 +84,7 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                             <a
                                 key={p.id}
                                 href={`/schedule?program=${p.id}`}
-                                className={`text-sm font-bold px-5 py-2 rounded-full transition-all duration-200 ${
+                                className={`shrink-0 text-sm font-bold px-5 py-2 rounded-full transition-all duration-200 whitespace-nowrap ${
                                     filterProgramId === p.id
                                         ? "bg-brand-navy-900 text-white shadow-md"
                                         : "bg-gray-50 text-gray-600 hover:bg-gray-100 hover:shadow-sm border border-gray-200"

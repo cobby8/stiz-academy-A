@@ -4,7 +4,7 @@ import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import Badge from "@/components/ui/Badge";
 import CTABanner from "@/components/landing/CTABanner";
 import Link from "next/link";
-import { Pin, Paperclip } from "lucide-react";
+// Material Symbols Outlined 아이콘 사용 (프로젝트 conventions: lucide-react 금지)
 
 export const revalidate = 60;
 export const metadata = {
@@ -80,7 +80,7 @@ export default async function NoticesPage() {
                                                         {/* 카테고리 뱃지 */}
                                                         {n.isPinned && (
                                                             <Badge variant="error" size="sm">
-                                                                <Pin size={10} className="mr-1" />
+                                                                <span className="material-symbols-outlined mr-1" style={{ fontSize: 10 }}>push_pin</span>
                                                                 중요
                                                             </Badge>
                                                         )}
@@ -103,7 +103,7 @@ export default async function NoticesPage() {
                                                         {/* 첨부파일 카운트 */}
                                                         {atts.length > 0 && (
                                                             <span className="text-sm text-gray-400 flex items-center gap-1">
-                                                                <Paperclip size={12} /> {atts.length}개 첨부
+                                                                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>attach_file</span> {atts.length}개 첨부
                                                             </span>
                                                         )}
                                                     </div>

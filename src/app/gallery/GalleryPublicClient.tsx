@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, ChevronLeft, ChevronRight, Image as ImageIcon, Play, Calendar } from "lucide-react";
+// Material Symbols Outlined 아이콘 사용 (프로젝트 conventions: lucide-react 금지)
 
 type MediaItem = { url: string; type: "image" | "video" };
 type GalleryPost = {
@@ -20,7 +20,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
     if (posts.length === 0) {
         return (
             <div className="text-center py-20 text-gray-400">
-                <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <span className="material-symbols-outlined mx-auto mb-4 text-gray-300" style={{ fontSize: 64 }}>image</span>
                 <p className="text-lg font-medium">아직 갤러리가 비어있습니다</p>
                 <p className="text-sm mt-1">곧 수업 사진이 업로드됩니다.</p>
             </div>
@@ -72,7 +72,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
                                     {/* 동영상 재생 아이콘 표시 */}
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
-                                            <Play size={20} className="text-white ml-1" />
+                                            <span className="material-symbols-outlined text-white ml-1" style={{ fontSize: 20 }}>play_arrow</span>
                                         </div>
                                     </div>
                                 </>
@@ -87,7 +87,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
                                     )}
                                     {/* 날짜 표시 */}
                                     <p className="text-white/70 text-xs flex items-center gap-1">
-                                        <Calendar size={10} />
+                                        <span className="material-symbols-outlined" style={{ fontSize: 10 }}>calendar_today</span>
                                         {new Date(post.createdAt).toLocaleDateString("ko-KR")}
                                     </p>
                                 </div>
@@ -171,7 +171,7 @@ function LightboxOverlay({
                 className="absolute top-4 right-4 text-white/60 hover:text-white z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
                 aria-label="닫기"
             >
-                <X size={28} />
+                <span className="material-symbols-outlined" style={{ fontSize: 28 }}>close</span>
             </button>
 
             {/* 카운터 — 현재 위치 / 전체 개수 */}
@@ -186,7 +186,7 @@ function LightboxOverlay({
                     className="absolute left-2 md:left-6 text-white/40 hover:text-white z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
                     aria-label="이전 사진"
                 >
-                    <ChevronLeft size={36} />
+                    <span className="material-symbols-outlined" style={{ fontSize: 36 }}>chevron_left</span>
                 </button>
             )}
 
@@ -197,7 +197,7 @@ function LightboxOverlay({
                     className="absolute right-2 md:right-6 text-white/40 hover:text-white z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
                     aria-label="다음 사진"
                 >
-                    <ChevronRight size={36} />
+                    <span className="material-symbols-outlined" style={{ fontSize: 36 }}>chevron_right</span>
                 </button>
             )}
 

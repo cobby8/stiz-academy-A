@@ -20,6 +20,12 @@
 - **내용**: 서버에서 전체 데이터를 받아 클라이언트에서 필터링할 때는 useMemo로 감싸서 의존성 배열(선택된 필터값들)이 변경될 때만 재계산한다. (SimulatorClient, ScheduleClient 참고)
 - **참조횟수**: 0
 
+### [2026-03-26] lucide-react 아이콘 사용 잔존 (conventions 위반)
+- **분류**: convention
+- **발견자**: planner-architect
+- **내용**: CLAUDE.md에서 "Material Symbols Outlined 아이콘 사용, lucide-react 등 타 라이브러리 금지"로 규정되어 있으나, gallery/GalleryPublicClient.tsx (X, ChevronLeft, ChevronRight, Image, Play, Calendar)와 notices/page.tsx (Pin, Paperclip)에서 lucide-react를 여전히 사용 중. 교체 필요.
+- **참조횟수**: 0
+
 ### [2026-03-27] 체험수업 비용 표기 규칙
 - **분류**: convention
 - **발견자**: pm (사용자 지시)

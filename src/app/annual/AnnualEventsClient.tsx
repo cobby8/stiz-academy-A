@@ -130,34 +130,27 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
     return (
         <>
             {/* 메인 일정 영역 — 따뜻한 배경색으로 통일 */}
-            <section className="py-16 md:py-20 bg-surface-section">
+            <section className="py-8 md:py-12 bg-surface-section">
                 <div className="max-w-6xl mx-auto px-4">
 
-                    {/* 연도 선택 + 동기화 시각 — pill 버튼 스타일 개선 */}
-                    <div className="flex items-center justify-between mb-10 flex-wrap gap-3">
-                        <div className="flex items-center gap-3 flex-wrap">
-                            <span className="text-sm font-bold text-gray-400">연도</span>
-                            <div className="flex gap-2 flex-wrap">
-                                {availableYears.map(year => (
-                                    <button
-                                        key={year}
-                                        onClick={() => setSelectedYear(year)}
-                                        className={`px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 ${
-                                            selectedYear === year
-                                                ? "bg-brand-navy-900 text-white shadow-md"
-                                                : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                                        }`}
-                                    >
-                                        {year}년
-                                    </button>
-                                ))}
-                            </div>
+                    {/* 연도 선택 — 가로 스크롤 */}
+                    <div className="flex items-center gap-3 mb-6">
+                        <span className="text-sm font-bold text-gray-400 shrink-0">연도</span>
+                        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                            {availableYears.map(year => (
+                                <button
+                                    key={year}
+                                    onClick={() => setSelectedYear(year)}
+                                    className={`px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 shrink-0 whitespace-nowrap ${
+                                        selectedYear === year
+                                            ? "bg-brand-navy-900 text-white shadow-md"
+                                            : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                                    }`}
+                                >
+                                    {year}년
+                                </button>
+                            ))}
                         </div>
-                        {lastSynced && (
-                            <span className="text-xs text-gray-400 shrink-0 bg-white px-3 py-1.5 rounded-full border border-gray-100">
-                                {lastSynced.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 동기화
-                            </span>
-                        )}
                     </div>
 
                     {/* 일정 없을 때 안내 메시지 */}

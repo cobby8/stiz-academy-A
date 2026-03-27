@@ -38,6 +38,12 @@
 - **내용**: driver.js가 sticky top-0 헤더 내부의 nav 링크를 하이라이트할 때, scrollIntoView 로직이 불필요하게 작동하여 popover 위치가 어긋남. 해결: nav 링크 스텝에 scrollIntoView:false 옵션 적용. 또한 Next.js Link에 DOM addEventListener로 click 리스너를 붙이면 React 합성 이벤트와 실행 순서 충돌 발생. 해결: href 속성 직접 교체 방식으로 전환.
 - **참조횟수**: 0
 
+### 2026-03-26 구글 캘린더 양방향 동기화: Service Account + DB 이중 저장 방식
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: Phase 1은 "DB를 주 저장소로 유지하면서 구글 캘린더에 best-effort 푸시" 방식. 구글 캘린더를 단일 진실 소스로 전환하는 것은 Phase 2로 유보. 인증은 Service Account(서버-to-서버). googleapis 패키지 사용 (Service Account JWT 서명을 직접 구현하는 것보다 안전). INSERT 시 ID는 crypto.randomUUID()로 미리 생성하여 RETURNING 없이 처리. 구글 API 실패 시 DB 저장만 유지(graceful fallback). 환경변수: GOOGLE_SERVICE_ACCOUNT_KEY(JSON 문자열), GOOGLE_CALENDAR_ID.
+- **참조횟수**: 1
+
 ### 2026-03-26 입학 가이드 투어: 기존 시뮬레이터 공존 방식
 - **분류**: decision
 - **발견자**: planner-architect

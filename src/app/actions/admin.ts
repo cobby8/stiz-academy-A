@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { sendPushToUser } from "@/lib/pushNotification";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
+import {
+    createCalendarEvent,
+    updateCalendarEvent,
+    deleteCalendarEvent,
+} from "@/lib/googleCalendarWrite";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
@@ -445,10 +450,15 @@ export async function createAnnualEvent(data: {
     description?: string | null;
     category?: string;
 }) {
+    // ID를 미리 생성하여 INSERT 후 구글 이벤트 ID를 UPDATE할 때 사용
+    const id = crypto.randomUUID();
+
     try {
+        // 1단계: DB에 먼저 저장 (googleEventId는 null로 시작)
         await prisma.$executeRawUnsafe(
-            `INSERT INTO "AnnualEvent" (id, title, date, "endDate", description, category, "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3::timestamp, $4, $5, NOW(), NOW())`,
+            `INSERT INTO "AnnualEvent" (id, title, date, "endDate", description, category, "googleEventId", "createdAt", "updatedAt")
+             VALUES ($1, $2, $3::timestamp, $4::timestamp, $5, $6, NULL, NOW(), NOW())`,
+            id,
             data.title,
             data.date,
             data.endDate || null,
@@ -459,6 +469,29 @@ export async function createAnnualEvent(data: {
         console.error("Failed to create annual event:", e);
         throw new Error("일정 추가 실패");
     }
+
+    // 2단계: 구글 캘린더에 동기화 (best-effort — 실패해도 DB는 이미 저장됨)
+    const googleEventId = await createCalendarEvent({
+        title: data.title,
+        date: data.date,
+        endDate: data.endDate,
+        description: data.description,
+    });
+
+    // 3단계: 구글 이벤트 ID를 DB에 저장 (성공한 경우만)
+    if (googleEventId) {
+        try {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "AnnualEvent" SET "googleEventId" = $1, "updatedAt" = NOW() WHERE id = $2`,
+                googleEventId,
+                id,
+            );
+        } catch (e) {
+            console.error("Failed to save googleEventId:", e);
+            // googleEventId 저장 실패해도 이벤트 자체는 DB에 존재하므로 무시
+        }
+    }
+
     revalidatePath("/admin/annual");
     revalidatePath("/annual");
 }
@@ -470,6 +503,7 @@ export async function updateAnnualEvent(id: string, data: {
     description?: string | null;
     category?: string;
 }) {
+    // 1단계: DB 먼저 수정
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "AnnualEvent" SET title = $1, date = $2::timestamp, "endDate" = $3::timestamp,
@@ -485,11 +519,46 @@ export async function updateAnnualEvent(id: string, data: {
         console.error("Failed to update annual event:", e);
         throw new Error("일정 수정 실패");
     }
+
+    // 2단계: 구글 캘린더 동기화 (best-effort)
+    // 기존 googleEventId를 조회하여 구글 이벤트도 함께 수정
+    try {
+        const rows = await prisma.$queryRawUnsafe<{ googleEventId: string | null }[]>(
+            `SELECT "googleEventId" FROM "AnnualEvent" WHERE id = $1`,
+            id,
+        );
+        const gId = rows[0]?.googleEventId;
+        if (gId) {
+            await updateCalendarEvent(gId, {
+                title: data.title,
+                date: data.date,
+                endDate: data.endDate,
+                description: data.description,
+            });
+        }
+    } catch (e) {
+        // 구글 동기화 실패해도 DB 수정은 이미 완료됨
+        console.error("Failed to sync update to Google Calendar:", e);
+    }
+
     revalidatePath("/admin/annual");
     revalidatePath("/annual");
 }
 
 export async function deleteAnnualEvent(id: string) {
+    // 1단계: 삭제 전에 구글 이벤트 ID를 먼저 조회 (삭제 후에는 조회 불가)
+    let googleEventId: string | null = null;
+    try {
+        const rows = await prisma.$queryRawUnsafe<{ googleEventId: string | null }[]>(
+            `SELECT "googleEventId" FROM "AnnualEvent" WHERE id = $1`,
+            id,
+        );
+        googleEventId = rows[0]?.googleEventId ?? null;
+    } catch (e) {
+        console.error("Failed to fetch googleEventId before delete:", e);
+    }
+
+    // 2단계: DB에서 삭제
     try {
         await prisma.$executeRawUnsafe(
             `DELETE FROM "AnnualEvent" WHERE id = $1`,
@@ -499,6 +568,12 @@ export async function deleteAnnualEvent(id: string) {
         console.error("Failed to delete annual event:", e);
         throw new Error("일정 삭제 실패");
     }
+
+    // 3단계: 구글 캘린더에서도 삭제 (best-effort)
+    if (googleEventId) {
+        await deleteCalendarEvent(googleEventId);
+    }
+
     revalidatePath("/admin/annual");
     revalidatePath("/annual");
 }

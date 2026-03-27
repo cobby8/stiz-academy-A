@@ -239,14 +239,15 @@ model SheetSlotCache {
 }
 
 model AnnualEvent {
-  id          String    @id
-  title       String
-  date        DateTime
-  endDate     DateTime?
-  description String?
-  category    String?   @default("일반")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime
+  id            String    @id
+  title         String
+  date          DateTime
+  endDate       DateTime?
+  description   String?
+  category      String?   @default("일반")
+  googleEventId String?   // 구글 캘린더 이벤트 ID (양방향 동기화용)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime
 }
 
 model GalleryPost {

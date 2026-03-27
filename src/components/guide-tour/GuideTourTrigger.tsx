@@ -339,14 +339,15 @@ async function runPhase2(routerPush: (url: string) => void) {
     return;
   }
 
-  // Step 1: 프로그램 카드 목록 하이라이트 (정보 읽기용)
+  // 프로그램 카드가 보이도록 먼저 스크롤
+  cardEl.scrollIntoView({ behavior: "smooth", block: "start" });
+
   // X 버튼 클릭 시 투어 중단, "확인했어요" 클릭 시 다음 Phase로 진행
   let closedByUser = false;
 
   const d = driverFn({
     showProgress: false,
     allowClose: false,
-    smoothScroll: false, // 스크롤 점프 방지
     overlayColor: "rgba(0,0,0,0.5)",
     stageRadius: 12,
     stagePadding: 10,
@@ -380,7 +381,8 @@ async function runPhase2(routerPush: (url: string) => void) {
     },
   });
 
-  d.drive();
+  // 스크롤 완료 후 driver 시작
+  setTimeout(() => d.drive(), 500);
 }
 
 /** 시간표 네비게이션 하이라이트 (Phase 2에서 호출) */
@@ -519,13 +521,15 @@ async function runPhase3(routerPush: (url: string) => void) {
     return;
   }
 
+  // 시간표 그리드 상단이 보이도록 먼저 스크롤
+  gridEl.scrollIntoView({ behavior: "smooth", block: "start" });
+
   // X 버튼 클릭 시 투어 중단, "확인했어요" 클릭 시 다음 Phase로 진행
   let closedByUser = false;
 
   const d = driverFn({
     showProgress: false,
     allowClose: false,
-    smoothScroll: false, // 스크롤 점프 방지
     overlayColor: "rgba(0,0,0,0.5)",
     stageRadius: 12,
     stagePadding: 10,
@@ -538,8 +542,7 @@ async function runPhase3(routerPush: (url: string) => void) {
           title: "수업 시간표 📅",
           description:
             progressLabel(3) + "요일별 수업 시간을 확인하세요!<br/><span style='color:#f97316;font-size:12px'>↕ 스크롤하여 전체 시간표를 확인해보세요</span>",
-          // 시간표 그리드는 세로로 길어서 아래에 popover를 띄워야 가림 없음
-          side: "bottom" as const,
+          side: "top" as const,
           showButtons: ["close", "next"] as any,
         },
       },
@@ -559,7 +562,8 @@ async function runPhase3(routerPush: (url: string) => void) {
     },
   });
 
-  d.drive();
+  // 스크롤 완료 후 driver 시작 (500ms 대기)
+  setTimeout(() => d.drive(), 500);
 }
 
 /** 수업 찾기 네비게이션 하이라이트 (Phase 3에서 호출) */

@@ -11,7 +11,6 @@
 import { useState } from "react";
 import Card from "@/components/ui/Card";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
-import SectionLayout from "@/components/ui/SectionLayout";
 
 // FAQ 항목 타입 (DB에서 가져온 데이터)
 type FaqItem = { id: string; question: string; answer: string };
@@ -118,21 +117,19 @@ export default function FaqClient({ faqData }: FaqClientProps) {
     faqData && faqData.length > 0 ? faqData : DEFAULT_FAQ_DATA;
 
   return (
-    <SectionLayout
-      label="FAQ"
-      title="자주 묻는 질문"
-      description="궁금한 점을 빠르게 확인하세요"
-      bgColor="white"
-    >
-      <AnimateOnScroll>
-        <Card variant="default" className="!p-0 max-w-3xl mx-auto">
-          <div className="px-6 py-2">
-            {displayFaqs.map((faq, i) => (
-              <FAQItem key={i} question={faq.question} answer={faq.answer} />
-            ))}
-          </div>
-        </Card>
-      </AnimateOnScroll>
-    </SectionLayout>
+    // SectionLayout 대신 단순 section+div로 교체 — 독립 페이지에서는 섹션 래퍼 불필요
+    <section className="py-12 md:py-16 bg-white">
+      <div className="max-w-6xl mx-auto px-6 md:px-4">
+        <AnimateOnScroll>
+          <Card variant="default" className="!p-0 max-w-3xl mx-auto">
+            <div className="px-6 py-2">
+              {displayFaqs.map((faq, i) => (
+                <FAQItem key={i} question={faq.question} answer={faq.answer} />
+              ))}
+            </div>
+          </Card>
+        </AnimateOnScroll>
+      </div>
+    </section>
   );
 }

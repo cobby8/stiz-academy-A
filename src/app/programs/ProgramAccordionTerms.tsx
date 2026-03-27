@@ -35,8 +35,11 @@ function isImportantLine(line: string): boolean {
 
 export default function ProgramAccordionTerms({
   termsText,
+  hideHeader = false,
 }: {
   termsText: string | null;
+  // hideHeader — true이면 "이용약관" 헤더(아이콘+제목)를 숨긴다. 독립 페이지에서는 히어로가 제목 역할을 하므로 중복 방지용.
+  hideHeader?: boolean;
 }) {
   if (!termsText) return null;
 
@@ -45,13 +48,15 @@ export default function ProgramAccordionTerms({
 
   return (
     <Card variant="default" className="!p-0 overflow-hidden">
-      {/* 헤더 — 항상 펼쳐진 상태 */}
-      <div className="py-5 px-6 border-b border-gray-100 flex items-center gap-3">
-        <span className="material-symbols-outlined text-brand-orange-500" style={{ fontSize: 24 }}>
-          gavel
-        </span>
-        <h3 className="font-bold text-gray-900 text-xl">이용약관</h3>
-      </div>
+      {/* 헤더 — hideHeader가 false일 때만 표시 */}
+      {!hideHeader && (
+        <div className="py-5 px-6 border-b border-gray-100 flex items-center gap-3">
+          <span className="material-symbols-outlined text-brand-orange-500" style={{ fontSize: 24 }}>
+            gavel
+          </span>
+          <h3 className="font-bold text-gray-900 text-xl">이용약관</h3>
+        </div>
+      )}
 
       {/* 약관 본문 — 항상 표시, 줄별 중요 강조 */}
       <div className="px-6 py-6">

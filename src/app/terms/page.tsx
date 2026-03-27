@@ -37,7 +37,7 @@ export default async function TermsPage() {
       <SectionLayout bgColor="section">
         {termsOfService ? (
           <AnimateOnScroll>
-            <ProgramAccordionTerms termsText={termsOfService} />
+            <ProgramAccordionTerms termsText={termsOfService} hideHeader />
           </AnimateOnScroll>
         ) : (
           <div className="text-center py-20 text-gray-400">

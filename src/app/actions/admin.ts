@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guard";
 import { sendPushToUser } from "@/lib/pushNotification";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import {
@@ -117,6 +118,7 @@ type ProgramData = {
 };
 
 export async function createProgram(data: ProgramData) {
+    await requireAdmin();
     const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl } = data;
     // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
@@ -147,6 +149,7 @@ export async function createProgram(data: ProgramData) {
 }
 
 export async function updateProgram(id: string, data: ProgramData) {
+    await requireAdmin();
     const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl } = data;
     // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
@@ -190,6 +193,7 @@ export async function updateProgram(id: string, data: ProgramData) {
 }
 
 export async function reorderPrograms(orderedIds: string[]) {
+    await requireAdmin();
     // 파라미터 바인딩으로 SQL 인젝션 방지 + $executeRawUnsafe로 PgBouncer 호환
     try {
         for (let i = 0; i < orderedIds.length; i++) {
@@ -205,6 +209,7 @@ export async function reorderPrograms(orderedIds: string[]) {
 }
 
 export async function deleteProgram(id: string) {
+    await requireAdmin();
     // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Class" WHERE "programId" = $1`, id);
@@ -227,6 +232,7 @@ export async function createClass(data: {
     location?: string;
     capacity: number;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "Class" (id, "programId", name, "dayOfWeek", "startTime", "endTime", location, capacity, "createdAt", "updatedAt")
@@ -253,6 +259,7 @@ export async function updateClass(id: string, data: {
     location?: string;
     capacity: number;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Class" SET "programId" = $1, name = $2, "dayOfWeek" = $3,
@@ -272,6 +279,7 @@ export async function updateClass(id: string, data: {
 }
 
 export async function deleteClass(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Enrollment" WHERE "classId" = $1`, id);
         await prisma.$executeRawUnsafe(`DELETE FROM "Class" WHERE id = $1`, id);
@@ -308,6 +316,7 @@ export async function updateAcademySettings(data: {
     facilitiesImagesJSON?: string;
     galleryImagesJSON?: string;
 }) {
+    await requireAdmin();
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음
     const payload = { ...data };
     if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
@@ -332,6 +341,7 @@ export async function createCoach(data: {
     imageUrl?: string;
     order?: number;
 }) {
+    await requireAdmin();
     // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
         await prisma.$executeRawUnsafe(
@@ -361,6 +371,7 @@ export async function updateCoach(id: string, data: {
     description?: string;
     imageUrl?: string;
 }) {
+    await requireAdmin();
     // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
         await prisma.$executeRawUnsafe(
@@ -383,6 +394,7 @@ export async function updateCoach(id: string, data: {
 }
 
 export async function deleteCoach(id: string) {
+    await requireAdmin();
     // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Coach" WHERE id = $1`, id);
@@ -397,6 +409,7 @@ export async function deleteCoach(id: string) {
 }
 
 export async function moveCoach(id: string, direction: "up" | "down") {
+    await requireAdmin();
     // $queryRawUnsafe + $executeRawUnsafe: PgBouncer transaction mode 호환
     try {
         const coaches = await prisma.$queryRawUnsafe<any[]>(
@@ -425,6 +438,7 @@ export async function moveCoach(id: string, direction: "up" | "down") {
 }
 
 export async function reorderCoaches(ids: string[]) {
+    await requireAdmin();
     // 파라미터 바인딩으로 SQL 인젝션 방지 + PgBouncer 호환
     try {
         if (ids.length === 0) return;
@@ -450,6 +464,7 @@ export async function createAnnualEvent(data: {
     description?: string | null;
     category?: string;
 }) {
+    await requireAdmin();
     // ID를 미리 생성하여 INSERT 후 구글 이벤트 ID를 UPDATE할 때 사용
     const id = crypto.randomUUID();
 
@@ -503,6 +518,7 @@ export async function updateAnnualEvent(id: string, data: {
     description?: string | null;
     category?: string;
 }) {
+    await requireAdmin();
     // 1단계: DB 먼저 수정
     try {
         await prisma.$executeRawUnsafe(
@@ -546,6 +562,7 @@ export async function updateAnnualEvent(id: string, data: {
 }
 
 export async function deleteAnnualEvent(id: string) {
+    await requireAdmin();
     // 1단계: 삭제 전에 구글 이벤트 ID를 먼저 조회 (삭제 후에는 조회 불가)
     let googleEventId: string | null = null;
     try {
@@ -594,6 +611,7 @@ export async function createStudent(data: {
     enrollDate?: string | null;  // 입회일자
     memo?: string | null;        // 메모
 }) {
+    await requireAdmin();
     try {
         // 학부모 User 생성 또는 조회 (이메일 기준)
         let parentId: string;
@@ -644,6 +662,7 @@ export async function createStudent(data: {
 }
 
 export async function updateStudentMemo(id: string, memo: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Student" SET memo = $1, "updatedAt" = NOW() WHERE id = $2`,
@@ -669,6 +688,7 @@ export async function updateStudent(id: string, data: {
     address?: string | null;
     enrollDate?: string | null;
 }) {
+    await requireAdmin();
     try {
         // 원생 정보 업데이트: 새 필드(phone, school, grade, address, enrollDate) 포함
         await prisma.$executeRawUnsafe(
@@ -699,6 +719,7 @@ export async function updateStudent(id: string, data: {
 }
 
 export async function deleteStudent(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Attendance" WHERE "studentId" = $1`, id);
         await prisma.$executeRawUnsafe(`DELETE FROM "Payment" WHERE "studentId" = $1`, id);
@@ -714,6 +735,7 @@ export async function deleteStudent(id: string) {
 
 // ── 수강 등록 관리 ────────────────────────────────────────────────────────────
 export async function enrollStudent(studentId: string, classId: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
@@ -730,6 +752,7 @@ export async function enrollStudent(studentId: string, classId: string) {
 }
 
 export async function updateEnrollmentStatus(enrollmentId: string, status: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Enrollment" SET status = $1, "updatedAt" = NOW() WHERE id = $2`,
@@ -744,6 +767,7 @@ export async function updateEnrollmentStatus(enrollmentId: string, status: strin
 }
 
 export async function deleteEnrollment(enrollmentId: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Enrollment" WHERE id = $1`, enrollmentId);
     } catch (e) {
@@ -756,6 +780,7 @@ export async function deleteEnrollment(enrollmentId: string) {
 
 // ── 출결 관리 ──────────────────────────────────────────────────────────────────
 export async function saveAttendance(classId: string, date: string, records: { studentId: string; status: string }[]) {
+    await requireAdmin();
     try {
         // 세션 생성 또는 조회
         const existing = await prisma.$queryRawUnsafe<any[]>(
@@ -809,6 +834,7 @@ export async function createPayment(data: {
     dueDate: string;
     status?: string;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "Payment" (id, "studentId", amount, status, "dueDate", "createdAt", "updatedAt")
@@ -834,6 +860,7 @@ export async function createPayment(data: {
 }
 
 export async function updatePaymentStatus(id: string, status: string) {
+    await requireAdmin();
     try {
         const paidDate = status === "PAID" ? ", \"paidDate\" = NOW()" : "";
         await prisma.$executeRawUnsafe(
@@ -848,6 +875,7 @@ export async function updatePaymentStatus(id: string, status: string) {
 }
 
 export async function deletePayment(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Payment" WHERE id = $1`, id);
     } catch (e) {
@@ -865,6 +893,7 @@ export async function createGalleryPost(data: {
     mediaJSON: string;
     isPublic?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "GalleryPost" (id, "classId", title, caption, "mediaJSON", "isPublic", "createdAt", "updatedAt")
@@ -892,6 +921,7 @@ export async function updateGalleryPost(id: string, data: {
     mediaJSON?: string;
     isPublic?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "GalleryPost" SET "classId" = $1, title = $2, caption = $3,
@@ -914,6 +944,7 @@ export async function updateGalleryPost(id: string, data: {
 }
 
 export async function deleteGalleryPost(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "GalleryPost" WHERE id = $1`, id);
     } catch (e) {
@@ -935,6 +966,7 @@ export async function createNotice(data: {
     attachmentsJSON?: string | null;
     isPinned?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "Notice" (id, title, content, "targetType", "targetClassIds", "attachmentsJSON", "isPinned", "createdAt", "updatedAt")
@@ -971,6 +1003,7 @@ export async function updateNotice(id: string, data: {
     attachmentsJSON?: string | null;
     isPinned?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Notice" SET title = $1, content = $2, "targetType" = $3,
@@ -995,6 +1028,7 @@ export async function updateNotice(id: string, data: {
 }
 
 export async function deleteNotice(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Notice" WHERE id = $1`, id);
     } catch (e) {
@@ -1073,6 +1107,7 @@ async function notifyAllParents(type: string, title: string, message: string, li
 
 // 알림 읽음 처리
 export async function markNotificationRead(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Notification" SET "isRead" = true WHERE id = $1`, id
@@ -1086,6 +1121,7 @@ export async function markNotificationRead(id: string) {
 
 // 모든 알림 읽음 처리
 export async function markAllNotificationsRead(userId: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Notification" SET "isRead" = true WHERE "userId" = $1 AND "isRead" = false`,
@@ -1109,6 +1145,7 @@ export async function createParentRequest(data: {
     content: string;
     date?: string | null;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "ParentRequest" (id, "userId", "studentId", type, title, content, date, status, "createdAt", "updatedAt")
@@ -1150,6 +1187,7 @@ export async function createParentRequest(data: {
 
 // 관리자가 요청 상태 변경 + 메모 작성
 export async function updateRequestStatus(id: string, status: string, adminNote?: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "ParentRequest" SET status = $1, "adminNote" = $2, "updatedAt" = NOW() WHERE id = $3`,
@@ -1184,6 +1222,7 @@ export async function updateRequestStatus(id: string, status: string, adminNote?
 
 // 요청 삭제 (관리자)
 export async function deleteParentRequest(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "ParentRequest" WHERE id = $1`, id);
     } catch (e) {
@@ -1208,6 +1247,7 @@ export async function createFeedback(data: {
     rating?: number | null;
     isPublic?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "Feedback" (id, "studentId", "coachId", "sessionDate", category, title, content, rating, "isPublic", "createdAt", "updatedAt")
@@ -1249,6 +1289,7 @@ export async function updateFeedback(id: string, data: {
     rating?: number | null;
     isPublic?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Feedback" SET category = $1, title = $2, content = $3, rating = $4, "isPublic" = $5, "updatedAt" = NOW()
@@ -1266,6 +1307,7 @@ export async function updateFeedback(id: string, data: {
 
 // 피드백 삭제
 export async function deleteFeedback(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Feedback" WHERE id = $1`, id);
     } catch (e) {
@@ -1285,6 +1327,7 @@ export async function createFaq(data: {
     order?: number;
     isPublic?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "Faq" (id, question, answer, "order", "isPublic", "createdAt", "updatedAt")
@@ -1309,6 +1352,7 @@ export async function updateFaq(id: string, data: {
     order?: number;
     isPublic?: boolean;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `UPDATE "Faq" SET question = $1, answer = $2, "order" = $3, "isPublic" = $4, "updatedAt" = NOW()
@@ -1329,6 +1373,7 @@ export async function updateFaq(id: string, data: {
 
 // FAQ 삭제
 export async function deleteFaq(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(`DELETE FROM "Faq" WHERE id = $1`, id);
     } catch (e) {
@@ -1436,6 +1481,7 @@ export async function bulkCreateStudents(
     students: BulkStudentInput[],
     duplicateMode: "skip" | "overwrite" = "skip"
 ): Promise<BulkCreateResult> {
+    await requireAdmin();
     const result: BulkCreateResult = {
         created: 0,
         skipped: 0,
@@ -1726,6 +1772,7 @@ export async function saveSessionLog(data: {
         status: string;     // PRESENT, ABSENT, LATE
     }>;
 }) {
+    await requireAdmin();
     try {
         // ── 1. 해당 classId + date로 기존 Session 검색 ──
         const existing = await prisma.$queryRawUnsafe<any[]>(
@@ -1819,6 +1866,7 @@ type SyncResult = {
 };
 
 export async function syncScheduleToClasses(): Promise<SyncResult> {
+    await requireAdmin();
     const result: SyncResult = {
         success: false,
         created: 0,
@@ -2015,6 +2063,7 @@ export async function getClassSyncPreview(): Promise<{
     newClasses: { slotKey: string; name: string; dayOfWeek: string; startTime: string; endTime: string; programId: string | null; programName: string | null; isNew: boolean }[];
     oldClasses: { id: string; name: string; dayOfWeek: string; enrollmentCount: number }[];
 }> {
+    await requireAdmin();
     try {
         // 시간표 데이터 수집 (syncScheduleToClasses와 동일 로직)
         const cacheRows = await prisma.$queryRawUnsafe<any[]>(

@@ -186,10 +186,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {mode === "signup" && (
-              <input type="hidden" name="role" value="ADMIN" />
-            )}
-
             {/* 제출 버튼 — 브랜드 오렌지 디자인 토큰 적용 */}
             <button
               type="submit"

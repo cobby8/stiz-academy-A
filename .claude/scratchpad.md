@@ -1,121 +1,106 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 구글 캘린더 양방향 동기화 코드 구현 (Service Account 쓰기)
-- **상태**: 기획설계 완료 → developer 실행 대기
-- **현재 담당**: planner-architect → developer
-- **마지막 세션**: 2026-03-26
+- **요청**: 보안 즉시 조치 5건 (Phase A: 코드 보안 → Phase B: 법적 준수)
+- **상태**: Phase A 진행 중
+- **현재 담당**: developer
+- **마지막 세션**: 2026-03-29
+
+### 진행 현황
+| # | 작업 | 상태 |
+|---|------|------|
+| 1 | src/middleware.ts 생성 | ✅ 완료 |
+| 2 | Server Action 인증 체크 추가 (53개 함수) | ✅ 완료 |
+| 3 | 회원가입 role 서버 측 고정 | ✅ 완료 |
+| 4 | 개인정보 처리방침 페이지 (/privacy) | ⬜ 대기 |
+| 5 | 개인정보 동의 체크박스 | ⬜ 대기 |
+
+---
+
+## 기획설계 (planner-architect)
+**보안 분석 완료** → 상세 보고서: `.claude/security-report.md`
 
 ---
 
 ## 구현 기록 (developer)
 
-### 구글 캘린더 양방향 동기화 — Phase 1 코드 구현
+### Phase A 보안 조치 (작업 1~3) - 2026-03-29
 
 | 파일 경로 | 변경 내용 | 신규/수정 |
 |----------|----------|----------|
-| `prisma/schema.prisma` | AnnualEvent에 `googleEventId String?` 필드 추가 | 수정 |
-| `src/lib/googleCalendarWrite.ts` | Service Account 인증 + create/update/delete 3개 함수 | 신규 |
-| `src/app/actions/admin.ts` | 3개 CRUD에 구글 캘린더 동기화 추가 (best-effort) | 수정 |
-
-주요 구현 사항:
-- create: crypto.randomUUID()로 ID 미리 생성 -> DB INSERT -> 구글 생성 -> googleEventId UPDATE
-- update: DB UPDATE 먼저 -> googleEventId 조회 -> 구글 수정
-- delete: googleEventId 조회 -> DB DELETE -> 구글 삭제
-- 모든 구글 API 호출은 try-catch로 감싸서 실패해도 DB 정상 진행
-- 환경변수(GOOGLE_SERVICE_ACCOUNT_KEY, GOOGLE_CALENDAR_ID) 미설정 시 조용히 건너뜀
-- $queryRawUnsafe / $executeRawUnsafe만 사용 (PgBouncer 호환)
+| src/middleware.ts | Next.js 미들웨어 생성 (updateSession 호출, matcher 설정) | 신규 |
+| src/lib/auth-guard.ts | requireAuth(), requireAdmin() 함수 (DB role 확인) | 신규 |
+| src/app/actions/admin.ts | import requireAdmin 추가 + 48개 함수에 await requireAdmin() 삽입 | 수정 |
+| src/app/actions/schedule.ts | import requireAdmin 추가 + 5개 함수에 await requireAdmin() 삽입 | 수정 |
+| src/app/actions/auth.ts | signup 함수 role을 "PARENT" 하드코딩 (formData.get("role") 제거) | 수정 |
+| src/app/login/page.tsx | hidden input name="role" value="ADMIN" 제거 | 수정 |
 
 tester 참고:
-- tsc --noEmit 통과 완료
-- 환경변수 미설정 상태에서도 기존 CRUD 정상 동작해야 함
-- DB 마이그레이션(googleEventId 컬럼)은 별도 실행 필요
-
-reviewer 참고:
-- JWT 생성자를 객체 형태({email, key, scopes})로 전달 (googleapis v171 시그니처)
-- prisma migrate dev는 의도적으로 실행하지 않음 (PM 지시)
+- 테스트 방법: /admin 페이지에 미로그인 접근 시 /login 리다이렉트 확인
+- Server Action 보호: 브라우저 콘솔에서 직접 fetch로 admin action 호출 시 "관리자 권한이 필요합니다" 에러 확인
+- 회원가입: 새 회원가입 시 DB User 테이블에서 role이 PARENT인지 확인
+- 정상 동작: 관리자 로그인 후 모든 관리 기능 정상 사용 가능
+- 주의: ensureAcademySettingsColumns()는 DDL 헬퍼이므로 인증 가드 미적용 (다른 함수에서 내부 호출)
 
 ---
 
-## 기획설계: 구글 캘린더 양방향 동기화 — 코드 구현
+## 테스트 결과 (tester)
 
-### 현재 구조 분석 결과
+### Phase A 보안 조치 검증 - 2026-03-29
 
-**기존 코드 상태:**
-- `src/lib/googleCalendar.ts` — 읽기 전용 모듈. ICS 파싱 + Calendar API v3 (API Key, 읽기만 가능). `fetchViaCalendarAPI()`에서 직접 fetch로 REST API 호출 중
-- `src/app/actions/admin.ts` (441~504행) — AnnualEvent CRUD 3개 함수. 모두 `$executeRawUnsafe` 사용. INSERT는 `gen_random_uuid()::text`로 ID 자동 생성
-- `prisma/schema.prisma` (241~250행) — AnnualEvent 모델에 `googleEventId` 필드 없음
-- `package.json` — `googleapis` / `google-auth-library` 미설치 상태
-- `src/app/annual/page.tsx` — DB + 구글 이벤트를 합쳐서 표시 (이미 통합됨, 중복 제거 로직 포함)
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| tsc --noEmit 타입 체크 | ✅ 통과 | 에러 0건 |
+| src/middleware.ts 존재 및 구조 | ✅ 통과 | updateSession import/호출, matcher: /admin/:path*, /login, /mypage/:path* |
+| updateSession 시그니처 호환 | ✅ 통과 | NextRequest 받아서 Response 반환, /admin 미인증시 /login 리다이렉트 |
+| auth-guard.ts requireAuth() | ✅ 통과 | supabase.auth.getUser() 사용, 미인증시 에러 throw |
+| auth-guard.ts requireAdmin() | ✅ 통과 | $queryRawUnsafe로 DB role 조회, ADMIN 아니면 에러 throw |
+| admin.ts 인증 적용 (48/48) | ✅ 통과 | exported 49개 중 DDL 헬퍼 1개 제외, 48개 모두 requireAdmin 적용 |
+| schedule.ts 인증 적용 (5/5) | ✅ 통과 | 5개 exported 함수 모두 requireAdmin 적용 |
+| auth.ts signup role 고정 | ✅ 통과 | role = "PARENT" 하드코딩, formData.get("role") 미사용 |
+| login/page.tsx hidden input 제거 | ✅ 통과 | hidden input name="role" 없음 확인 |
+| Prisma ORM 메서드 미사용 | ✅ 통과 | auth-guard.ts에서 $queryRawUnsafe 사용 (PgBouncer 호환) |
+| 기존 기능 영향 없음 | ✅ 통과 | 인증 가드 추가 외 비즈니스 로직 변경 없음 |
 
-**핵심 제약사항:**
-- Supabase PgBouncer → `$queryRawUnsafe` / `$executeRawUnsafe`만 사용 (ORM 메서드 금지)
-- INSERT 시 ID가 서버에서 자동 생성(gen_random_uuid) → INSERT 후 생성된 ID를 돌려받으려면 `$queryRawUnsafe` + RETURNING 필요
+📊 종합: 11개 중 11개 통과 / 0개 실패
 
-### 기획설계
+---
 
-**목표**: 관리자가 사이트에서 일정 CRUD 시 구글 캘린더에도 자동 반영 (DB + 구글 이중 저장)
+## 리뷰 결과 (reviewer)
 
-**만들 위치와 구조:**
-| 파일 경로 | 역할 | 신규/수정 |
-|----------|------|----------|
-| `src/lib/googleCalendarWrite.ts` | Service Account 인증 + 구글 캘린더 쓰기 3개 함수 | 신규 |
-| `prisma/schema.prisma` | AnnualEvent에 `googleEventId String?` 추가 | 수정 |
-| `src/app/actions/admin.ts` | create/update/delete에 구글 쓰기 호출 추가 | 수정 |
+### Phase A 보안 조치 코드 리뷰 - 2026-03-29
 
-**기존 코드 연결:**
-- `src/lib/googleCalendar.ts` (읽기) — 변경 없음. 쓰기 모듈을 별도 파일로 분리
-- `src/app/annual/page.tsx` (공개 페이지) — 변경 없음. 이미 DB+구글 통합 표시 중
-- `src/app/admin/annual/AnnualAdminClient.tsx` — UI 변경 없음 (Phase 1에서는 서버 로직만)
+총평: **조건부 통과** (필수 수정 1건, 권장 수정 2건)
 
-**실행 계획:**
-| 순서 | 작업 | 담당 | 선행 조건 |
-|------|------|------|----------|
-| 1 | `npm install googleapis` 패키지 설치 | developer | 없음 |
-| 2 | `prisma/schema.prisma` AnnualEvent에 `googleEventId String?` 추가 + `npx prisma migrate dev` | developer | 없음 (1과 병렬) |
-| 3 | `src/lib/googleCalendarWrite.ts` 신규 생성 — Service Account 인증 + create/update/delete 함수 | developer | 1 완료 |
-| 4 | `src/app/actions/admin.ts` 수정 — 3개 함수에 구글 쓰기 연동 (best-effort: 실패해도 DB는 정상) | developer | 2, 3 완료 |
-| 5 | tester 검증 (tsc --noEmit + 동작 시나리오) | tester | 4 완료 |
+---
 
-**developer 주의사항:**
+잘된 점:
+1. auth-guard.ts 설계가 견고함 — DB에서 role을 직접 조회하여 토큰 metadata 조작 방어. getUser()로 서버 측 토큰 검증 수행.
+2. SQL 인젝션 방어 완벽 — $queryRawUnsafe에서 $1 파라미터 바인딩을 올바르게 사용. 문자열 연결 방식 SQL 전혀 없음.
+3. 에러 메시지가 안전함 — 내부 구현 정보 미노출.
+4. middleware.ts 간결하고 정확함 — matcher 패턴 적절, updateSession 로직 정상.
+5. signup role 고정 + hidden input 제거 — 권한 상승 공격 경로 완전 차단.
+6. 48개 admin + 5개 schedule 함수 모두 requireAdmin() 적용, 빠진 함수 없음.
 
-1. **googleapis vs 직접 fetch 선택**: `googleapis` 패키지가 거대하지만 (번들 ~50MB), 서버 전용이라 클라이언트 번들에 영향 없음. Service Account JWT 서명 + 토큰 관리를 직접 구현하는 것보다 `googleapis` 사용이 안전. 다만 번들 크기가 걱정되면 `google-auth-library` + fetch 직접 호출도 가능
+---
 
-2. **INSERT 후 ID 반환 방식 변경 필요**: 현재 `createAnnualEvent`는 `$executeRawUnsafe`(INSERT)로 ID를 반환받지 않음. 구글 이벤트 생성 후 `googleEventId`를 DB에 저장하려면:
-   - 방법 A: INSERT에 `RETURNING id` 추가 → `$queryRawUnsafe`로 변경하여 생성된 row의 id를 받아옴
-   - 방법 B: INSERT 전에 uuid를 미리 생성하여 전달 (crypto.randomUUID())
-   - **권장: 방법 B** — 기존 쿼리 구조 변경 최소화
+필수 수정 (1건):
 
-3. **환경변수 2개 추가**:
-   - `GOOGLE_SERVICE_ACCOUNT_KEY` — Service Account JSON 전체를 문자열로 저장 (JSON.parse하여 사용)
-   - `GOOGLE_CALENDAR_ID` — 쓰기 대상 캘린더 ID (예: xxxx@group.calendar.google.com)
+| # | 파일:위치 | 문제 | 수정 방법 |
+|---|----------|------|----------|
+| 1 | auth-guard.ts:1 | "use server" 지시자로 인해 requireAuth/requireAdmin이 Server Action으로 외부 호출 가능. 직접적 보안 위험은 없으나(user 객체 반환 또는 에러 throw) 불필요한 진입점 노출. 인증 가드는 내부 유틸리티이므로 Server Action일 필요 없음. | "use server" 지시자 제거. 호출하는 쪽(admin.ts, schedule.ts)이 이미 "use server" 파일이므로 서버에서 정상 실행됨. |
 
-4. **에러 처리 (graceful fallback)**:
-   - `GOOGLE_SERVICE_ACCOUNT_KEY`가 없으면 → 구글 쓰기 건너뜀, DB만 저장. console.warn으로 알림
-   - 구글 API 호출 실패 → catch 후 DB 저장은 유지. 에러 로그만 남김
-   - 즉, **구글 동기화는 "best effort"** — 실패해도 사이트 기능에 영향 없음
+권장 수정 (2건):
 
-5. **$queryRawUnsafe 규칙 절대 준수**: googleEventId 업데이트도 raw query로
+| # | 파일:위치 | 개선점 | 우선순위 |
+|---|----------|-------|---------|
+| 1 | admin.ts:1140 createParentRequest() | "학부모가 요청 접수" 함수인데 requireAdmin()이 적용됨. 학부모 마이페이지 구현 시 requireAuth()로 변경 필요. | 낮음 |
+| 2 | admin.ts:1109,1123 markNotificationRead/markAllNotificationsRead | 알림 읽음 처리는 학부모도 사용할 기능인데 requireAdmin() 적용됨. 위와 동일 이유. | 낮음 |
 
-6. **googleCalendarWrite.ts 함수 시그니처**:
-```typescript
-// 구글 캘린더에 이벤트 생성, 생성된 구글 이벤트 ID 반환 (실패 시 null)
-createCalendarEvent(event: { title: string; date: string; endDate?: string; description?: string }): Promise<string | null>
-
-// 구글 캘린더 이벤트 수정 (실패 시 조용히 실패)
-updateCalendarEvent(googleEventId: string, event: { title: string; date: string; endDate?: string; description?: string }): Promise<void>
-
-// 구글 캘린더 이벤트 삭제 (실패 시 조용히 실패)
-deleteCalendarEvent(googleEventId: string): Promise<void>
-```
-
-7. **admin.ts 수정 흐름 (create 예시)**:
-```
-1. DB INSERT (googleEventId 포함, 초기 null)
-2. createCalendarEvent() 호출
-3. 성공 시 → UPDATE SET googleEventId = 반환값 WHERE id = 방금 생성한 id
-4. 실패 시 → 아무것도 안 함 (DB에는 이미 저장됨)
-```
+구조적 관찰 (참고):
+- 새 함수 추가 시 requireAdmin() 누락 방지는 코드 리뷰로만 잡을 수 있는 한계. ensureAcademySettingsColumns()만 미적용(DDL 헬퍼, 적절함).
+- INSTRUCTOR 등 역할 추가 시 auth-guard.ts에 requireRole() 추가하면 되므로 확장성 충분.
+- Server Action throw 방식: 상위 try-catch에 잡히므로 클라이언트 에러 처리 정상 동작.
 
 ---
 
@@ -123,35 +108,15 @@ deleteCalendarEvent(googleEventId: string): Promise<void>
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
-| 2026-03-26 | 공개 연간일정에 DB 이벤트 통합 (구글+DB 합침, 중복제거) | annual/page.tsx | 완료 |
-| 2026-03-26 | 이용약관 관리 독립 페이지 분리 (/admin/terms) | admin/terms/*, ProgramsAdminClient, programs/page, layout | 완료 |
-| 2026-03-28 | 히어로-본문 제목 중복 제거 (FAQ+이용약관) | FaqClient, ProgramAccordionTerms, terms/page | 완료 |
-| 2026-03-28 | 이용약관+FAQ 독립 페이지 분리 (/terms, /faq) | terms/page, faq/page, FaqClient, Header, Footer | 완료 |
-| 2026-03-28 | 메뉴 4카테고리 재구성 + 오시는 길 섹션 | PublicHeader, about/page | 완료 |
-| 2026-03-28 | FAQ DB 통합 관리 (10개, 이용약관 기반 추가) | ApplyPageClient + DB INSERT | 완료 |
-| 2026-03-28 | 이용약관 항상 펼침 + 중요 키워드 자동 강조 | ProgramAccordionTerms | 완료 |
-| 2026-03-28 | 이용약관 접근성 개선 (푸터 링크+신청 안내) | PublicFooter, ApplyPageClient, programs/page | 완료 |
-| 2026-03-27 | 투어 정보 스텝 오버레이 제거 (콘텐츠 가리지 않음) | GuideTourTrigger | 완료 |
-| 2026-03-27 | 입학가이드 버튼 원형+색상 수정 | GuideTourTrigger | 완료 |
-| 2026-03-27 | 히어로 리디자인 + 높이 75% 축소 (전체 페이지) | LandingPageClient + 9개 페이지 | 완료 |
-| 2026-03-26 | 구글캘린더 ICS 설정을 연간일정 관리로 이동 | AdminSettingsClient, annual/page, AnnualAdminClient | 완료 |
+| 2026-03-29 | 보안 분석 보고서 작성 (등급 C, 즉시조치 5건) | .claude/security-report.md | 완료 |
+| 2026-03-28 | 구글 캘린더 양방향 동기화 + private_key 호환 수정 | googleCalendarWrite.ts, admin.ts, schema.prisma | 완료 |
+| 2026-03-28 | 이용약관+FAQ 독립 페이지 + 메뉴 4카테고리 + FAQ DB통합 | terms, faq, Header, Footer, about | 완료 |
+| 2026-03-28 | 이용약관 접근성 개선 (푸터 링크+신청 안내+항상 펼침) | PublicFooter, ApplyPageClient, ProgramAccordionTerms | 완료 |
+| 2026-03-27 | 히어로 리디자인 + 입학가이드 UI 수정 | LandingPageClient + 9개 페이지, GuideTourTrigger | 완료 |
 
 ---
 
-## 프로젝트 현황 요약
-- **완료된 Phase**: 초기 ~ Phase 10 + 보안패치 + 입학가이드 + UI개선
-- **개발서버**: localhost:4000
-- **프로덕션 배포**: stiz-dasan.kr (Vercel)
-
-### 최근 주요 변경사항
-- 입학가이드 투어 v2 (driver.js, 5단계 게임 튜토리얼)
-- 메뉴 4카테고리 (학원 소개 / 수업 안내 / 소식·안내 / 수업찾기)
-- 이용약관(/terms) + FAQ(/faq) 독립 페이지
-- 오시는 길 (카카오맵) /about 하단
-- 체험수업 비용 무료→1만원 전체 수정
-- 관리자 페이지 쿼리 병렬화 4건
-
-### 대기 중인 작업
-1. **학부모 후기 동적화**: 현재 하드코딩 → DB 관리 전환 (구글 리뷰 불가, 자체 관리)
-2. **수업 등록 시뮬레이터 리디자인**: 기획설계 완료, 디자인 시안 대기
-3. **엑셀 업로드 일괄 등록**: planner 계획 수립 완료, 사용자 결정 대기
+## 대기 중인 작업
+1. **학부모 후기 동적화**: 고민 중 (하이브리드 방식 추천)
+2. **수업 등록 시뮬레이터 리디자인**: 디자인 시안 대기
+3. **엑셀 업로드 일괄 등록**: 사용자 결정 대기

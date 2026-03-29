@@ -39,7 +39,8 @@ export async function signup(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
   const name = formData.get("name") as string;
-  const role = (formData.get("role") as string) || "PARENT";
+  // 보안: role은 서버에서 PARENT로 고정 (클라이언트 입력값 무시)
+  const role = "PARENT";
 
   if (!email || !password || !name) {
     return { error: "모든 필수 항목을 입력해주세요." };

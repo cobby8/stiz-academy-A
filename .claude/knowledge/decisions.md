@@ -2,6 +2,12 @@
 <!-- 담당: planner-architect | 최대 30항목 -->
 <!-- "왜 A 대신 B를 선택했는지" 기술 결정의 배경과 이유를 기록 -->
 
+### 2026-03-29 보안 분석: Server Action 인증 체크 필수화 결정
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 보안 분석 결과, admin.ts의 40개+ Server Action에 인증 체크가 전혀 없음을 발견. Server Action은 HTTP POST 엔드포인트로 노출되므로 인증 없이 누구나 호출 가능. `requireAdmin()` 헬퍼를 만들어 모든 관리자 함수에 적용하기로 결정. 또한 src/middleware.ts가 아예 없어서 미들웨어 보호가 동작하지 않으므로 파일 생성 필수. 회원가입 시 role을 클라이언트에서 보내는 취약점도 서버 측 고정으로 수정 예정.
+- **참조횟수**: 0
+
 ### 2026-03-22 수업 시뮬레이터: API 없이 클라이언트 필터링 방식 채택
 - **분류**: decision
 - **발견자**: planner-architect

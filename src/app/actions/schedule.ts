@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guard";
 
 export async function upsertClassSlotOverride(
     slotKey: string,
@@ -16,6 +17,7 @@ export async function upsertClassSlotOverride(
         programId?: string | null;
     }
 ) {
+    await requireAdmin();
     try {
         // $executeRawUnsafe = simple query protocol → PgBouncer transaction mode 호환
         // Prisma ORM upsert 는 prepared statement(extended protocol)를 사용 → PgBouncer 차단
@@ -54,6 +56,7 @@ export async function upsertClassSlotOverride(
 }
 
 export async function deleteClassSlotOverride(slotKey: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `DELETE FROM "ClassSlotOverride" WHERE "slotKey" = $1`,
@@ -80,6 +83,7 @@ export async function createCustomSlot(data: {
     coachId?: string | null;
     programId?: string | null;
 }) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "CustomClassSlot" (
@@ -117,6 +121,7 @@ export async function updateCustomSlot(
         programId?: string | null;
     }
 ) {
+    await requireAdmin();
     try {
         // Build SET clause dynamically for only provided fields
         const fields: string[] = [];
@@ -153,6 +158,7 @@ export async function updateCustomSlot(
 }
 
 export async function deleteCustomSlot(id: string) {
+    await requireAdmin();
     try {
         await prisma.$executeRawUnsafe(
             `DELETE FROM "CustomClassSlot" WHERE id = $1`,

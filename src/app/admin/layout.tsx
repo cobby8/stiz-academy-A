@@ -3,9 +3,19 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { LogOut } from "lucide-react";
+
+// "학원운영" 탭에 속하는 경로 목록 — 이 경로로 시작하면 학원운영 탭 활성화
+const OPS_PATHS = [
+    "/admin/students",
+    "/admin/attendance",
+    "/admin/finance",
+    "/admin/requests",
+    "/admin/feedback",
+    "/admin/shuttle",
+];
 
 export default function AdminLayout({
     children,
@@ -16,6 +26,22 @@ export default function AdminLayout({
     const router = useRouter();
     const [userName, setUserName] = useState<string>("");
     const [userEmail, setUserEmail] = useState<string>("");
+
+    // 현재 URL 경로를 기반으로 활성 탭을 자동 결정
+    // "/admin" 정확 일치(대시보드) 또는 OPS_PATHS로 시작하면 "학원운영"
+    const autoTab = useMemo(() => {
+        if (pathname === "/admin") return "ops" as const;
+        if (OPS_PATHS.some((p) => pathname.startsWith(p))) return "ops" as const;
+        return "site" as const;
+    }, [pathname]);
+
+    // 탭 상태 — URL 변경 시 자동으로 따라감
+    const [activeTab, setActiveTab] = useState<"site" | "ops">(autoTab);
+
+    // URL이 바뀌면 탭도 자동 전환 (다른 탭의 메뉴를 직접 URL로 접근했을 때)
+    useEffect(() => {
+        setActiveTab(autoTab);
+    }, [autoTab]);
 
     useEffect(() => {
         const supabase = createClient();
@@ -50,40 +76,74 @@ export default function AdminLayout({
                     </div>
                     <span className="font-bold text-white tracking-tight ml-2">Admin</span>
                 </div>
+                {/* 탭 전환 버튼 — 로고 바로 아래, 메뉴 목록 위 */}
+                <div className="px-4 pt-4 pb-2 flex gap-1 flex-shrink-0">
+                    <button
+                        onClick={() => setActiveTab("site")}
+                        className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                            activeTab === "site"
+                                ? "bg-white/15 text-white"
+                                : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                        }`}
+                    >
+                        사이트
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("ops")}
+                        className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                            activeTab === "ops"
+                                ? "bg-white/15 text-white"
+                                : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                        }`}
+                    >
+                        학원운영
+                    </button>
+                </div>
+
                 <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
-                    {/* 학원 소개 */}
-                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">학원 소개</p>
-                    <NavItem href="/admin/settings" active={pathname.startsWith("/admin/settings")} icon="🏫" label="학원 소개 관리" />
-                    <NavItem href="/admin/coaches" active={pathname.startsWith("/admin/coaches")} icon="👤" label="코치/강사진 관리" />
+                    {/* ===== 사이트 탭 메뉴 ===== */}
+                    {activeTab === "site" && (
+                        <>
+                            {/* 학원 소개 */}
+                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">학원 소개</p>
+                            <NavItem href="/admin/settings" active={pathname.startsWith("/admin/settings")} icon="🏫" label="학원 소개 관리" />
+                            <NavItem href="/admin/coaches" active={pathname.startsWith("/admin/coaches")} icon="👤" label="코치/강사진 관리" />
 
-                    {/* 수업 안내 */}
-                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">수업 안내</p>
-                    <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램 관리" />
-                    <NavItem href="/admin/schedule" active={pathname.startsWith("/admin/schedule")} icon="📅" label="수업시간표 관리" />
-                    <NavItem href="/admin/annual" active={pathname.startsWith("/admin/annual")} icon="📆" label="연간일정 관리" />
+                            {/* 수업 안내 */}
+                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">수업 안내</p>
+                            <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램 관리" />
+                            <NavItem href="/admin/schedule" active={pathname.startsWith("/admin/schedule")} icon="📅" label="수업시간표 관리" />
+                            <NavItem href="/admin/annual" active={pathname.startsWith("/admin/annual")} icon="📆" label="연간일정 관리" />
 
-                    {/* 소식/안내 */}
-                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">소식/안내</p>
-                    <NavItem href="/admin/notices" active={pathname.startsWith("/admin/notices")} icon="📢" label="공지사항 관리" />
-                    <NavItem href="/admin/gallery" active={pathname.startsWith("/admin/gallery")} icon="📸" label="사진/영상 갤러리" />
-                    <NavItem href="/admin/faq" active={pathname.startsWith("/admin/faq")} icon="❓" label="FAQ 관리" />
-                    <NavItem href="/admin/terms" active={pathname.startsWith("/admin/terms")} icon="📜" label="이용약관 관리" />
+                            {/* 소식/안내 */}
+                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">소식/안내</p>
+                            <NavItem href="/admin/notices" active={pathname.startsWith("/admin/notices")} icon="📢" label="공지사항 관리" />
+                            <NavItem href="/admin/gallery" active={pathname.startsWith("/admin/gallery")} icon="📸" label="사진/영상 갤러리" />
+                            <NavItem href="/admin/faq" active={pathname.startsWith("/admin/faq")} icon="❓" label="FAQ 관리" />
+                            <NavItem href="/admin/terms" active={pathname.startsWith("/admin/terms")} icon="📜" label="이용약관 관리" />
 
-                    {/* 신청 관리 */}
-                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">신청 관리</p>
-                    <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
+                            {/* 신청 관리 */}
+                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">신청 관리</p>
+                            <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
+                        </>
+                    )}
 
-                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">학원 운영 관리</p>
-                    <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />
-                    <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
-                    <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
-                    <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/결제" />
-                    <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" />
-                    <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
-                    <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
+                    {/* ===== 학원운영 탭 메뉴 ===== */}
+                    {activeTab === "ops" && (
+                        <>
+                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">학원 운영</p>
+                            <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />
+                            <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
+                            <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
+                            <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/결제" />
+                            <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" />
+                            <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
+                            <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
 
-                    <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
-                    <BackupButtons />
+                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
+                            <BackupButtons />
+                        </>
+                    )}
                 </nav>
 
                 {/* 사용자 정보 + 로그아웃 */}

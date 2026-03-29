@@ -135,6 +135,8 @@ export default function StudentManagementClient({
     const [parentName, setParentName] = useState("");
     const [parentPhone, setParentPhone] = useState("");
     const [parentEmail, setParentEmail] = useState("");
+    // 개인정보보호법 준수: 보호자 동의 확인 체크박스 (미성년자 개인정보 수집 시 필수)
+    const [guardianConsent, setGuardianConsent] = useState(false);
 
     function resetForm() {
         setName("");
@@ -143,6 +145,7 @@ export default function StudentManagementClient({
         setParentName("");
         setParentPhone("");
         setParentEmail("");
+        setGuardianConsent(false);
         setShowForm(false);
         setEditingId(null);
     }
@@ -161,6 +164,11 @@ export default function StudentManagementClient({
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!name.trim() || !birthDate || !parentName.trim()) return;
+        // 신규 등록 시 보호자 동의 필수 (개인정보보호법: 미성년자 정보 수집 시 법정대리인 동의)
+        if (!editingId && !guardianConsent) {
+            alert("보호자 개인정보 수집 동의를 확인해주세요.");
+            return;
+        }
         setBusy(true);
         try {
             if (editingId) {
@@ -338,13 +346,34 @@ export default function StudentManagementClient({
                         )}
                     </div>
 
+                    {/* 신규 등록 시에만 보호자 동의 확인 체크박스 표시 (수정 시에는 불필요) */}
+                    {!editingId && (
+                        <div className="border-t border-gray-100 pt-4">
+                            <label className="flex items-start gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={guardianConsent}
+                                    onChange={(e) => setGuardianConsent(e.target.checked)}
+                                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                                />
+                                <span className="text-sm text-gray-700">
+                                    보호자로부터 <strong>개인정보 수집 및 이용 동의</strong>를 받았음을 확인합니다
+                                    <span className="text-red-500 ml-1">(필수)</span>
+                                </span>
+                            </label>
+                            <p className="text-xs text-gray-400 mt-1 ml-6">
+                                미성년자 개인정보 수집 시 법정대리인(보호자)의 동의가 필요합니다.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="flex gap-2 justify-end">
                         <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
                             취소
                         </button>
                         <button
                             type="submit"
-                            disabled={busy}
+                            disabled={busy || (!editingId && !guardianConsent)}
                             className="bg-brand-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50"
                         >
                             {busy ? "저장 중..." : editingId ? "수정" : "등록"}

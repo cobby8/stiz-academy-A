@@ -98,12 +98,22 @@ export default function PublicFooter({ phone, address }: PublicFooterProps) {
         <div className="border-t border-gray-800 pt-6 text-center text-xs text-gray-500">
           <p>&copy; 2026 STIZ Basketball Academy. All rights reserved.</p>
           {/* 독립 이용약관 페이지로 이동 */}
-          <Link
-            href="/terms"
-            className="inline-block mt-2 text-gray-500 hover:text-white transition-colors underline underline-offset-2"
-          >
-            이용약관
-          </Link>
+          {/* 이용약관 + 개인정보 처리방침 링크를 나란히 배치 */}
+          <div className="flex items-center justify-center gap-3 mt-2">
+            <Link
+              href="/terms"
+              className="text-gray-500 hover:text-white transition-colors underline underline-offset-2"
+            >
+              이용약관
+            </Link>
+            <span className="text-gray-700">|</span>
+            <Link
+              href="/privacy"
+              className="text-gray-500 hover:text-white transition-colors underline underline-offset-2"
+            >
+              개인정보 처리방침
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

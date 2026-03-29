@@ -10,6 +10,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   // 비밀번호 보기/숨기기 토글 상태
   const [showPassword, setShowPassword] = useState(false);
+  // 개인정보보호법 준수: 회원가입 시 동의 체크박스 상태
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
@@ -67,6 +70,8 @@ export default function LoginPage() {
                 setMode("login");
                 setError(null);
                 setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
+                setAgreePrivacy(false); // 동의 체크박스 초기화
+                setAgreeTerms(false);
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "login"
@@ -82,6 +87,8 @@ export default function LoginPage() {
                 setMode("signup");
                 setError(null);
                 setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
+                setAgreePrivacy(false);
+                setAgreeTerms(false);
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "signup"
@@ -186,10 +193,57 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* 제출 버튼 — 브랜드 오렌지 디자인 토큰 적용 */}
+            {/* 회원가입 모드에서만 개인정보 동의 체크박스 표시 (개인정보보호법 준수) */}
+            {mode === "signup" && (
+              <div className="space-y-3 pt-2 pb-1">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreePrivacy}
+                    onChange={(e) => setAgreePrivacy(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-orange-500 underline underline-offset-2 hover:text-brand-orange-600"
+                    >
+                      개인정보 수집 및 이용
+                    </a>
+                    에 동의합니다 <span className="text-red-500">(필수)</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-orange-500 underline underline-offset-2 hover:text-brand-orange-600"
+                    >
+                      이용약관
+                    </a>
+                    에 동의합니다 <span className="text-red-500">(필수)</span>
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {/* 제출 버튼 — 회원가입 모드에서는 두 체크박스 모두 체크해야 활성화 */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={
+                loading ||
+                (mode === "signup" && (!agreePrivacy || !agreeTerms))
+              }
               className="w-full py-2.5 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading

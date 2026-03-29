@@ -1,0 +1,171 @@
+import PublicPageLayout from "@/components/PublicPageLayout";
+import SectionLayout from "@/components/ui/SectionLayout";
+import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
+
+// 개인정보 처리방침은 자주 바뀌지 않으므로 5분 ISR (terms 페이지와 동일)
+export const revalidate = 300;
+export const metadata = {
+  title: "개인정보 처리방침 | STIZ 농구교실 다산점",
+  description:
+    "STIZ 농구교실 다산점 개인정보 처리방침. 개인정보보호법 제30조에 따른 고지.",
+};
+
+// 개인정보 처리방침 각 조항을 배열로 관리 — 유지보수 용이
+const PRIVACY_SECTIONS = [
+  {
+    title: "제1조 (개인정보의 처리 목적)",
+    content: `STIZ 농구교실(이하 "학원")은 다음의 목적을 위하여 개인정보를 처리합니다. 처리하는 개인정보는 다음의 목적 이외의 용도로는 이용되지 않으며, 이용 목적이 변경되는 경우에는 별도의 동의를 받는 등 필요한 조치를 이행할 예정입니다.
+
+1. 수강 관리: 수강 신청 접수, 수업 배정, 출결 관리
+2. 수납 관리: 수강료 청구 및 납부 내역 관리
+3. 학부모 소통: 수업 안내, 공지사항 전달, 상담 진행
+4. 서비스 제공: 홈페이지 회원 관리, 학부모 마이페이지 제공`,
+  },
+  {
+    title: "제2조 (수집하는 개인정보 항목)",
+    content: `학원은 서비스 제공을 위해 다음과 같은 개인정보를 수집합니다.
+
+[학부모(회원)]
+- 필수: 이메일, 이름, 전화번호
+- 수집 방법: 홈페이지 회원가입
+
+[학생(원생)]
+- 필수: 이름, 생년월일, 성별
+- 선택: 전화번호, 학교, 학년, 주소
+- 수집 방법: 관리자 등록 (보호자 동의 하에 수집)
+
+[보호자 정보]
+- 필수: 이름, 관계
+- 선택: 전화번호
+- 수집 방법: 수강 신청서 작성`,
+  },
+  {
+    title: "제3조 (개인정보의 보유 및 이용 기간)",
+    content: `학원은 개인정보 수집 및 이용 목적이 달성된 후에는 해당 정보를 지체 없이 파기합니다.
+
+- 회원 탈퇴 시: 즉시 파기
+- 수강 종료 후: 1년간 보관 후 파기 (재등록 편의 제공 목적)
+- 법령에 따른 보존 기간이 있는 경우: 해당 기간 동안 보관
+  - 계약 또는 청약철회 등에 관한 기록: 5년 (전자상거래법)
+  - 소비자의 불만 또는 분쟁처리에 관한 기록: 3년 (전자상거래법)`,
+  },
+  {
+    title: "제4조 (개인정보의 제3자 제공)",
+    content: `학원은 원칙적으로 정보주체의 개인정보를 제3자에게 제공하지 않습니다. 다만, 다음의 경우에는 예외로 합니다.
+
+1. 정보주체가 사전에 동의한 경우
+2. 법률에 특별한 규정이 있거나 법령상 의무를 준수하기 위해 불가피한 경우
+3. 정보주체 또는 그 법정대리인이 의사표시를 할 수 없는 상태에 있거나 주소불명 등으로 사전 동의를 받을 수 없는 경우로서 명백히 정보주체 또는 제3자의 급박한 생명, 신체, 재산의 이익을 위하여 필요하다고 인정되는 경우`,
+  },
+  {
+    title: "제5조 (개인정보의 파기 절차 및 방법)",
+    content: `학원은 개인정보 보유기간의 경과, 처리목적 달성 등 개인정보가 불필요하게 되었을 때에는 지체 없이 해당 개인정보를 파기합니다.
+
+[파기 절차]
+이용자가 입력한 정보는 목적 달성 후 별도의 DB에 옮겨져 내부 방침 및 기타 관련 법령에 따라 일정기간 저장된 후 혹은 즉시 파기됩니다.
+
+[파기 방법]
+- 전자적 파일 형태: 기록을 재생할 수 없는 기술적 방법을 사용하여 삭제
+- 종이 문서: 분쇄기로 분쇄하거나 소각`,
+  },
+  {
+    title: "제6조 (정보주체의 권리 및 행사 방법)",
+    content: `정보주체는 학원에 대해 언제든지 다음 각 호의 개인정보 보호 관련 권리를 행사할 수 있습니다.
+
+1. 개인정보 열람 요구
+2. 오류 등이 있을 경우 정정 요구
+3. 삭제 요구
+4. 처리정지 요구
+
+위 권리 행사는 학원에 대해 서면, 전화, 이메일 등을 통하여 하실 수 있으며, 학원은 이에 대해 지체 없이 조치하겠습니다.
+
+정보주체가 개인정보의 오류 등에 대한 정정 또는 삭제를 요구한 경우에는 정정 또는 삭제를 완료할 때까지 당해 개인정보를 이용하거나 제공하지 않습니다.`,
+  },
+  {
+    title: "제7조 (미성년자의 개인정보 보호)",
+    content: `학원은 만 14세 미만 아동의 개인정보를 수집할 때 법정대리인(보호자)의 동의를 받아 수집합니다.
+
+- 학생 등록 시 보호자가 직접 내원하여 동의서를 작성합니다.
+- 온라인으로 수집하는 경우 법정대리인의 동의 절차를 거칩니다.
+- 법정대리인은 아동의 개인정보에 대한 열람, 정정, 삭제, 처리정지를 요구할 수 있습니다.`,
+  },
+  {
+    title: "제8조 (개인정보의 안전성 확보 조치)",
+    content: `학원은 개인정보의 안전성 확보를 위해 다음과 같은 조치를 취하고 있습니다.
+
+1. 관리적 조치: 내부관리계획 수립, 직원 교육
+2. 기술적 조치: 개인정보 처리 시스템 접근 권한 관리, 접근 통제, 암호화
+3. 물리적 조치: 전산실 및 자료 보관실 접근 통제`,
+  },
+  {
+    title: "제9조 (개인정보 보호책임자)",
+    content: `학원은 개인정보 처리에 관한 업무를 총괄해서 책임지고, 개인정보 처리와 관련한 정보주체의 불만처리 및 피해구제 등을 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.
+
+개인정보 보호책임자
+- 담당: STIZ 농구교실 다산점
+- 연락처: 홈페이지 하단 전화번호 참조
+- 이메일: 홈페이지 문의를 통해 연락
+
+정보주체는 학원의 서비스를 이용하면서 발생한 모든 개인정보 보호 관련 문의, 불만처리, 피해구제 등에 관한 사항을 개인정보 보호책임자에게 문의하실 수 있습니다.`,
+  },
+  {
+    title: "제10조 (개인정보 처리방침 변경)",
+    content: `이 개인정보 처리방침은 2026년 3월 29일부터 적용됩니다. 이전의 개인정보 처리방침은 아래에서 확인하실 수 있습니다.
+
+개인정보 처리방침이 변경되는 경우 변경 사항을 홈페이지를 통해 공지하며, 변경된 개인정보 처리방침은 공지한 날로부터 7일 후부터 효력이 발생합니다.`,
+  },
+];
+
+export default function PrivacyPage() {
+  return (
+    <PublicPageLayout>
+      {/* 페이지 히어로 — terms 페이지와 동일한 스타일 */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white py-12 md:py-14">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
+          <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
+        </div>
+        <div className="max-w-6xl mx-auto px-6 md:px-4 relative">
+          <AnimateOnScroll>
+            <p className="text-brand-orange-500 text-sm font-bold uppercase tracking-widest mb-3">
+              PRIVACY POLICY
+            </p>
+            <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">
+              개인정보 처리방침
+            </h1>
+            <p className="text-blue-200 text-lg max-w-xl">
+              개인정보보호법 제30조에 따른 개인정보 처리방침을 안내합니다.
+            </p>
+          </AnimateOnScroll>
+        </div>
+      </section>
+
+      {/* 본문 — 조항별 카드 형태 */}
+      <SectionLayout bgColor="section">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {PRIVACY_SECTIONS.map((section, idx) => (
+            <AnimateOnScroll key={idx}>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8 shadow-sm">
+                {/* 조항 제목 */}
+                <h2 className="text-lg font-bold text-brand-navy-900 mb-4">
+                  {section.title}
+                </h2>
+                {/* 조항 내용 — whitespace-pre-line으로 줄바꿈 유지 */}
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                  {section.content}
+                </div>
+              </div>
+            </AnimateOnScroll>
+          ))}
+
+          {/* 시행일 안내 */}
+          <AnimateOnScroll>
+            <p className="text-center text-sm text-gray-400 mt-8">
+              본 개인정보 처리방침은 2026년 3월 29일부터 시행됩니다.
+            </p>
+          </AnimateOnScroll>
+        </div>
+      </SectionLayout>
+    </PublicPageLayout>
+  );
+}

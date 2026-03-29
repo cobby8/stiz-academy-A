@@ -11,5 +11,7 @@ export const config = {
     "/admin/:path*",
     // /login 경로 (이미 로그인 시 리다이렉트)
     "/login",
+    // /mypage 하위 모든 경로 보호 (향후 학부모 기능용)
+    "/mypage/:path*",
   ],
 };

@@ -105,7 +105,9 @@
       "Bash(grep -oE '65:T[0-9]+,.{0,2000}')",
       "Bash(grep -oE '65:T[0-9]+,.{0,5000}')",
       "WebFetch(domain:naver.github.io)",
-      "WebFetch(domain:developers.google.com)"
+      "WebFetch(domain:developers.google.com)",
+      "Bash(grep:*)",
+      "Bash(ping -n 10 127.0.0.1)"
     ]
   }
 }

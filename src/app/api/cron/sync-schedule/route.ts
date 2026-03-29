@@ -15,10 +15,10 @@ import { syncSheetSlots } from "@/lib/syncSheetSlots";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+    // Cron 인증 필수화 — CRON_SECRET 없으면 무조건 거부 (개발환경 예외)
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-        const auth = req.headers.get("authorization");
-        if (auth !== `Bearer ${cronSecret}`) {
+    if (process.env.NODE_ENV !== "development") {
+        if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
     }

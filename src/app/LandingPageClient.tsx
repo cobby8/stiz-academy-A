@@ -26,6 +26,7 @@ import CTABanner from "@/components/landing/CTABanner";
 // Phase 0 공통 컴포넌트들
 import SectionLayout from "@/components/ui/SectionLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export default function LandingPageClient({
   initialSettings,
@@ -84,13 +85,13 @@ export default function LandingPageClient({
               <div
                 className="text-blue-100 text-base leading-relaxed [&_strong]:font-bold [&_em]:italic [&_p]:mb-1 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold"
                 dangerouslySetInnerHTML={{
-                  __html: (() => {
+                  __html: sanitizeHtml((() => {
                     const t = settings.introductionText;
                     if (!t)
                       return "아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다.";
                     if (t.includes("<")) return t;
                     return t.replace(/\n/g, "<br>");
-                  })(),
+                  })()),
                 }}
               />
             </div>

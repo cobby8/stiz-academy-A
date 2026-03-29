@@ -32,11 +32,10 @@ async function safeQuery<T = any>(sql: string): Promise<T[]> {
 }
 
 export async function GET(req: NextRequest) {
-    // Vercel Cron 인증 (CRON_SECRET 환경변수 설정 시)
+    // Cron 인증 필수화 — CRON_SECRET 없으면 무조건 거부 (개발환경 예외)
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-        const auth = req.headers.get("authorization");
-        if (auth !== `Bearer ${cronSecret}`) {
+    if (process.env.NODE_ENV !== "development") {
+        if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
     }
@@ -120,6 +119,6 @@ export async function GET(req: NextRequest) {
         });
     } catch (e) {
         console.error("[cron/backup] failed:", e);
-        return NextResponse.json({ error: String(e) }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }

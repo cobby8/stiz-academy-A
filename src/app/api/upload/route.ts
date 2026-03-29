@@ -3,6 +3,11 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { createClient } from "@/lib/supabase/server";
 
+// 허용 파일 타입 화이트리스트 — 이미지만 허용
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+// 최대 파일 크기 5MB (바이트 단위)
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
 async function trySupabaseUpload(buffer: Buffer, folder: string, filename: string, contentType: string): Promise<string | null> {
     try {
         const { createAdminClient } = await import("@/lib/supabase/admin");
@@ -42,6 +47,22 @@ export async function POST(req: Request) {
         const file = formData.get("file") as File;
         if (!file) return NextResponse.json({ error: "No file received." }, { status: 400 });
 
+        // 파일 타입 검증 — 허용된 이미지 타입만 통과
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            return NextResponse.json(
+                { error: `허용되지 않은 파일 형식입니다. (허용: JPEG, PNG, WebP, GIF)` },
+                { status: 400 }
+            );
+        }
+
+        // 파일 크기 검증 — 5MB 초과 시 거부
+        if (file.size > MAX_FILE_SIZE) {
+            return NextResponse.json(
+                { error: `파일 크기가 5MB를 초과합니다.` },
+                { status: 400 }
+            );
+        }
+
         // folder: "coaches" | "gallery" | "notices" (default: "coaches" for backward compat)
         const folder = (formData.get("folder") as string) || "coaches";
 
@@ -62,6 +83,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ url: `/uploads/${folder}/${filename}` });
     } catch (e: any) {
         console.error("[upload] Fatal error:", e);
-        return NextResponse.json({ error: e.message || "Failed to upload file." }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }

@@ -1,9 +1,18 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 없음 (대기 중)
-- **상태**: 대기
-- **현재 담당**: pm
+- **요청**: 보안 단기 조치 5건 (보안헤더, CRON필수화, 업로드제한, 에러일반화, XSS새니타이징)
+- **상태**: 진행 중
+- **현재 담당**: developer
+
+### 진행 현황
+| # | 작업 | 상태 |
+|---|------|------|
+| 1 | 보안 헤더 설정 (next.config.ts) | ✅ |
+| 2 | CRON_SECRET 필수화 | ✅ |
+| 3 | 파일 업로드 타입 제한 | ✅ |
+| 4 | API 에러 메시지 일반화 | ✅ |
+| 5 | HTML 새니타이징 (DOMPurify) | ✅ |
 - **마지막 세션**: 2026-03-29
 
 ---
@@ -12,6 +21,36 @@
 (아직 없음)
 
 ## 구현 기록 (developer)
+
+### 보안 단기 조치 5건 — 보안 등급 A 달성
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| next.config.ts | 보안 헤더 4종 추가 (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) | 수정 |
+| src/app/api/cron/backup/route.ts | CRON_SECRET 필수화 (개발환경 예외) + 에러 메시지 일반화 | 수정 |
+| src/app/api/cron/sync-schedule/route.ts | CRON_SECRET 필수화 (개발환경 예외) | 수정 |
+| src/app/api/upload/route.ts | 파일 타입 화이트리스트 (JPEG/PNG/WebP/GIF) + 5MB 크기 제한 + 에러 일반화 | 수정 |
+| src/app/api/admin/backup/route.ts | 에러 메시지 일반화 | 수정 |
+| src/app/api/admin/backup-now/route.ts | 에러 메시지 일반화 | 수정 |
+| src/app/api/admin/cloud-backups/route.ts | 에러 메시지 일반화 (GET/POST/DELETE 5곳) + console.error 추가 | 수정 |
+| src/app/api/admin/export-seed/route.ts | 에러 메시지 일반화 | 수정 |
+| src/lib/sanitize.ts | DOMPurify 새니타이징 유틸 함수 | 신규 |
+| src/app/about/page.tsx | renderHtml에 sanitizeHtml 적용 (3곳) | 수정 |
+| src/app/apply/ApplyPageClient.tsx | dangerouslySetInnerHTML에 sanitizeHtml 적용 | 수정 |
+| src/app/LandingPageClient.tsx | dangerouslySetInnerHTML에 sanitizeHtml 적용 | 수정 |
+
+**tester 참고:**
+- 테스트 방법: 개발서버에서 각 페이지 정상 렌더링 확인 + curl로 응답 헤더 확인
+- 보안 헤더 확인: `curl -I http://localhost:4000` → X-Frame-Options: DENY 등 4개 확인
+- 업로드 제한 확인: .txt 파일 업로드 시도 → 400 에러 / 5MB 초과 이미지 → 400 에러
+- XSS 확인: about, apply, 랜딩 페이지에서 HTML 콘텐츠 정상 표시되는지 확인
+- CRON 확인: 프로덕션에서 CRON_SECRET 없이 /api/cron/backup 호출 → 401
+
+**reviewer 참고:**
+- diagnostics/route.ts의 safeRaw 내부 에러는 의도적으로 유지 (관리자 전용 진단 목적)
+- isomorphic-dompurify는 SSR/CSR 양쪽 지원
+
+---
 
 ### 관리자 사이드바 "사이트" / "학원운영" 탭 추가
 
@@ -33,6 +72,46 @@
 - 정상 동작: 탭 전환이 부드럽고, 현재 페이지에 맞는 탭이 자동 선택됨
 
 ## 테스트 결과 (tester)
+
+### 보안 단기 조치 5건 검증 (2026-03-29)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| tsc --noEmit 타입 체크 | PASS | 에러 0건 |
+| 보안 헤더 — headers() 함수 존재 | PASS | next.config.ts 14~26행 |
+| 보안 헤더 — X-Frame-Options: DENY | PASS | 19행 |
+| 보안 헤더 — X-Content-Type-Options: nosniff | PASS | 20행 |
+| 보안 헤더 — Referrer-Policy: strict-origin-when-cross-origin | PASS | 21행 |
+| 보안 헤더 — Permissions-Policy: camera=(), microphone=(), geolocation=() | PASS | 22행 |
+| 보안 헤더 — 기존 설정(serverExternalPackages, images) 보존 | PASS | 4~11행 변경 없음 |
+| CRON — backup/route.ts CRON_SECRET 필수화 | PASS | 36~41행, 없으면 401 |
+| CRON — sync-schedule/route.ts CRON_SECRET 필수화 | PASS | 18~24행, 없으면 401 |
+| CRON — 개발환경(NODE_ENV=development) 예외 | PASS | 양쪽 모두 37행/20행 |
+| 업로드 — ALLOWED_TYPES 화이트리스트 | PASS | JPEG/PNG/WebP/GIF 4종 |
+| 업로드 — 5MB 크기 제한 | PASS | MAX_FILE_SIZE = 5*1024*1024, 59~64행 |
+| 업로드 — 허용되지 않은 타입 시 400 | PASS | 51~55행 |
+| 업로드 — 크기 초과 시 400 | PASS | 59~63행 |
+| 에러 일반화 — cron/backup catch | PASS | "서버 오류가 발생했습니다." + console.error |
+| 에러 일반화 — admin/backup GET/POST catch | PASS | 77~78행 일반 메시지 |
+| 에러 일반화 — admin/backup-now catch | PASS | 116~117행 |
+| 에러 일반화 — admin/cloud-backups GET/POST/DELETE catch | PASS | 3곳 모두 일반 메시지 |
+| 에러 일반화 — admin/export-seed catch | PASS | 136행 일반 메시지 |
+| 에러 일반화 — upload catch | PASS | 86행 일반 메시지 |
+| XSS — sanitize.ts 존재 + DOMPurify 사용 | PASS | isomorphic-dompurify import |
+| XSS — about/page.tsx renderHtml에 sanitizeHtml 적용 | PASS | 3경로 모두 sanitizeHtml 거침 (17~19행) |
+| XSS — ApplyPageClient.tsx sanitizeHtml 적용 | PASS | 85행 |
+| XSS — LandingPageClient.tsx sanitizeHtml 적용 | PASS | 88행 |
+| XSS — sanitize 없는 dangerouslySetInnerHTML 잔존 여부 | PASS | grep 결과 모든 곳 sanitizeHtml 적용 확인 |
+| diagnostics/route.ts 의도적 예외 확인 | PASS | 관리자 전용 진단 API, e.message 유지 (정상) |
+
+결과: 26개 중 26개 통과 / 0개 실패
+
+**경미한 발견사항 (이번 수정 범위 밖, 향후 개선 권장):**
+1. cloud-backups/route.ts 103행: AcademySettings 복원 실패 시 `(e as Error).message`가 results 객체를 통해 클라이언트로 전달됨. 관리자 전용 API이므로 위험도 낮으나, 일관성을 위해 일반화 권장.
+2. sync-schedule/route.ts: syncSheetSlots() 내부에서 `(e as Error).message`를 error 필드로 반환하고, route에서 그대로 클라이언트 응답에 포함. Cron 인증 보호 하에 있으므로 위험도 낮음.
+3. export-seed/route.ts 136행: catch 블록에 console.error가 없음 (다른 API들은 모두 있음). 디버깅 편의를 위해 추가 권장.
+
+---
 
 ### 관리자 사이드바 탭 UI 검증 (2026-03-29)
 

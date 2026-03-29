@@ -6,6 +6,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SectionLayout from "@/components/ui/SectionLayout";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 // FAQ 데이터 타입 (DB에서 가져온 FAQ 항목)
 type FaqItem = { id: string; question: string; answer: string };
@@ -81,7 +82,7 @@ function ContentBlock({ content }: { content: string }) {
         return (
             <div
                 className="prose prose-gray max-w-none text-gray-700 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: content }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
             />
         );
     }

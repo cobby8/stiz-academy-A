@@ -46,7 +46,8 @@ export async function GET() {
 
         return NextResponse.json({ files: result });
     } catch (e) {
-        return NextResponse.json({ error: String(e) }, { status: 500 });
+        console.error("[cloud-backups GET] failed:", e);
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }
 
@@ -65,7 +66,8 @@ export async function POST(req: NextRequest) {
         filename = body.filename;
         if (!filename) throw new Error("filename required");
     } catch (e) {
-        return NextResponse.json({ error: String(e) }, { status: 400 });
+        console.error("[cloud-backups POST] parse error:", e);
+        return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
     }
 
     try {
@@ -226,7 +228,8 @@ export async function POST(req: NextRequest) {
             results,
         });
     } catch (e) {
-        return NextResponse.json({ error: String(e) }, { status: 500 });
+        console.error("[cloud-backups POST] restore failed:", e);
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }
 
@@ -245,7 +248,8 @@ export async function DELETE(req: NextRequest) {
         filename = body.filename;
         if (!filename) throw new Error("filename required");
     } catch (e) {
-        return NextResponse.json({ error: String(e) }, { status: 400 });
+        console.error("[cloud-backups DELETE] parse error:", e);
+        return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
     }
 
     try {
@@ -254,6 +258,7 @@ export async function DELETE(req: NextRequest) {
         if (error) throw error;
         return NextResponse.json({ success: true, deleted: filename });
     } catch (e) {
-        return NextResponse.json({ error: String(e) }, { status: 500 });
+        console.error("[cloud-backups DELETE] failed:", e);
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }

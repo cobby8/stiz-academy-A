@@ -7,15 +7,16 @@ import Badge from "@/components/ui/Badge";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import CTABanner from "@/components/landing/CTABanner";
 import CoachBioToggle from "./CoachBioToggle";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export const revalidate = 60;
 export const metadata = { title: "학원/멤버소개 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점의 원장 인사말, 전문 코치진, 시설을 소개합니다." };
 
-// HTML 텍스트를 안전하게 렌더링하기 위한 유틸 함수
+// HTML 텍스트를 안전하게 렌더링하기 위한 유틸 함수 — sanitizeHtml로 XSS 방지
 function renderHtml(text: string | null | undefined, fallback: string) {
-    if (!text) return fallback;
-    if (text.includes("<")) return text;
-    return text.replace(/\n/g, "<br>");
+    if (!text) return sanitizeHtml(fallback);
+    if (text.includes("<")) return sanitizeHtml(text);
+    return sanitizeHtml(text.replace(/\n/g, "<br>"));
 }
 
 // 교육 이념 아이콘 카드 데이터 — 학원의 핵심 가치 4가지

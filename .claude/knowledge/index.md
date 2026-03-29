@@ -6,11 +6,12 @@
 | architecture.md | 4 | 2026-03-26 |
 | errors.md | 2 | 2026-03-26 |
 | conventions.md | 5 | 2026-03-28 |
-| decisions.md | 9 | 2026-03-29 |
+| decisions.md | 10 | 2026-03-29 |
 | lessons.md | 2 | 2026-03-26 |
 
 ## 최근 추가된 지식 (최근 5건)
-1. [decision] 보안 분석: Server Action 인증 체크 필수화 + middleware.ts 생성 결정
+1. [decision] 학부모 후기 동적화: Faq 패턴 복제 방식 + 네이버 플레이스 URL 후기 페이지 관리
+2. [decision] 보안 분석: Server Action 인증 체크 필수화 + middleware.ts 생성 결정
 2. [decision] 구글 캘린더 양방향 동기화: Service Account + 구글 진실 소스 방식 권장
 2. [convention] 메뉴 4카테고리: 학원 소개(직접) / 수업 안내 / 소식·안내 / 수업찾기
 3. [convention] 체험수업 비용 1만원 (무료 표현 금지)

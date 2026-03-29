@@ -58,6 +58,7 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'facilitiesText',
     'facilitiesImagesJSON',
     'galleryImagesJSON',
+    'naverPlaceUrl',
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
@@ -315,6 +316,7 @@ export async function updateAcademySettings(data: {
     facilitiesText?: string;
     facilitiesImagesJSON?: string;
     galleryImagesJSON?: string;
+    naverPlaceUrl?: string;
 }) {
     await requireAdmin();
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음
@@ -1382,6 +1384,80 @@ export async function deleteFaq(id: string) {
     }
     revalidatePath("/admin/faq");
     revalidatePath("/apply");
+}
+
+// ── 학부모 후기 관리 ─────────────────────────────────────────────────────────
+
+// 후기 생성
+export async function createTestimonial(data: {
+    name: string;
+    info: string;
+    text: string;
+    rating?: number;
+    order?: number;
+    isPublic?: boolean;
+}) {
+    await requireAdmin();
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Testimonial" (id, name, info, text, rating, "order", "isPublic", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+            data.name,
+            data.info,
+            data.text,
+            data.rating ?? 5,
+            data.order ?? 0,
+            data.isPublic ?? true,
+        );
+    } catch (e) {
+        console.error("Failed to create Testimonial:", e);
+        throw new Error("후기 생성 실패");
+    }
+    revalidatePath("/admin/testimonials");
+    revalidatePath("/");
+}
+
+// 후기 수정
+export async function updateTestimonial(id: string, data: {
+    name: string;
+    info: string;
+    text: string;
+    rating?: number;
+    order?: number;
+    isPublic?: boolean;
+}) {
+    await requireAdmin();
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Testimonial" SET name = $1, info = $2, text = $3, rating = $4, "order" = $5, "isPublic" = $6, "updatedAt" = NOW()
+             WHERE id = $7`,
+            data.name,
+            data.info,
+            data.text,
+            data.rating ?? 5,
+            data.order ?? 0,
+            data.isPublic ?? true,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update Testimonial:", e);
+        throw new Error("후기 수정 실패");
+    }
+    revalidatePath("/admin/testimonials");
+    revalidatePath("/");
+}
+
+// 후기 삭제
+export async function deleteTestimonial(id: string) {
+    await requireAdmin();
+    try {
+        await prisma.$executeRawUnsafe(`DELETE FROM "Testimonial" WHERE id = $1`, id);
+    } catch (e) {
+        console.error("Failed to delete Testimonial:", e);
+        throw new Error("후기 삭제 실패");
+    }
+    revalidatePath("/admin/testimonials");
+    revalidatePath("/");
 }
 
 // ── 엑셀 일괄 등록 ──────────────────────────────────────────────────────────

@@ -181,6 +181,7 @@ model AcademySettings {
   philosophyText          String?
   facilitiesText          String?
   facilitiesImagesJSON    String?
+  naverPlaceUrl           String?  // 네이버 플레이스 리뷰 URL
 }
 
 model ClassSlotOverride {
@@ -345,6 +346,19 @@ model Faq {
   answer    String
   order     Int      @default(0)
   isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
+// 학부모 후기 — 관리자가 등록/수정/삭제/순서변경 가능
+model Testimonial {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name      String   // 작성자명 (예: "김O O")
+  info      String   // 관계/정보 (예: "초3 학부모")
+  text      String   // 후기 내용
+  rating    Int      @default(5)  // 별점 1~5
+  order     Int      @default(0)  // 표시 순서 (작을수록 먼저)
+  isPublic  Boolean  @default(true)  // 공개 여부
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 }

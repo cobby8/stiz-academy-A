@@ -30,8 +30,12 @@ import { sanitizeHtml } from "@/lib/sanitize";
 
 export default function LandingPageClient({
   initialSettings,
+  testimonials,
+  naverPlaceUrl,
 }: {
   initialSettings: any;
+  testimonials?: { name: string; info: string; text: string; rating: number }[];
+  naverPlaceUrl?: string;
 }) {
   const settings = initialSettings || {};
   const phone = settings.contactPhone || "010-0000-0000";
@@ -218,7 +222,7 @@ export default function LandingPageClient({
           - CSS scroll-snap 캐러셀로 좌우 스크롤
           - 초기 하드코딩, 향후 DB 연동 가능
           ============================================= */}
-      <TestimonialCarousel />
+      <TestimonialCarousel testimonials={testimonials} naverPlaceUrl={naverPlaceUrl} />
 
       {/* =============================================
           8. CTA 배너

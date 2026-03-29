@@ -41,6 +41,7 @@ export const getAcademySettings = cache(async () => {
                 facilitiesText: r.facilitiesText ?? r.facilitiestext ?? null,
                 facilitiesImagesJSON: r.facilitiesImagesJSON ?? r.facilitiesimagesjson ?? null,
                 galleryImagesJSON: r.galleryImagesJSON ?? r.galleryimagesjson ?? null,
+                naverPlaceUrl: r.naverPlaceUrl ?? r.naverplaceurl ?? null,
             } as any;
         }
     } catch {
@@ -1256,6 +1257,59 @@ export const getAllFaqs = cache(async () => {
         }));
     } catch (e) {
         console.error("[getAllFaqs] failed:", e);
+        return [];
+    }
+});
+
+// ── 학부모 후기 조회 ─────────────────────────────────────────────────────────
+
+// 공개 후기만 조회 (랜딩 페이지용 — isPublic=true, order 오름차순)
+export const getPublicTestimonials = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, info, text, rating, "order", "isPublic", "createdAt", "updatedAt"
+             FROM "Testimonial"
+             WHERE "isPublic" = true
+             ORDER BY "order" ASC, "createdAt" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            info: r.info,
+            text: r.text,
+            rating: Number(r.rating ?? 5),
+            order: Number(r.order ?? 0),
+            isPublic: r.isPublic ?? r.ispublic ?? true,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getPublicTestimonials] failed:", e);
+        return [];
+    }
+});
+
+// 전체 후기 조회 (관리자용 — 공개/비공개 모두, order 오름차순)
+export const getAllTestimonials = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, info, text, rating, "order", "isPublic", "createdAt", "updatedAt"
+             FROM "Testimonial"
+             ORDER BY "order" ASC, "createdAt" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            info: r.info,
+            text: r.text,
+            rating: Number(r.rating ?? 5),
+            order: Number(r.order ?? 0),
+            isPublic: r.isPublic ?? r.ispublic ?? true,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getAllTestimonials] failed:", e);
         return [];
     }
 });

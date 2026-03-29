@@ -2,6 +2,12 @@
 <!-- 담당: planner-architect | 최대 30항목 -->
 <!-- "왜 A 대신 B를 선택했는지" 기술 결정의 배경과 이유를 기록 -->
 
+### 2026-03-29 학부모 후기 동적화: Faq 패턴 복제 방식 채택
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 학부모 후기를 DB로 전환할 때, 기존 Faq 모델/CRUD 패턴을 그대로 복제하는 방식 채택. 이유: (1) Faq와 구조가 거의 동일 (텍스트 + 순서 + 공개여부), (2) 검증된 패턴이라 버그 위험 최소, (3) 관리자 UI도 FaqAdminClient를 참고하면 빠르게 구현 가능. 네이버 플레이스 URL은 AcademySettings 대신 /admin/testimonials 페이지에서 관리하기로 결정 (후기와 같은 맥락에서 설정하는 것이 직관적).
+- **참조횟수**: 0
+
 ### 2026-03-29 보안 분석: Server Action 인증 체크 필수화 결정
 - **분류**: decision
 - **발견자**: planner-architect

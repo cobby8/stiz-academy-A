@@ -8,7 +8,7 @@
  * - revalidate: 60 유지 (캐싱 정책 변경 없음)
  */
 
-import { getAcademySettings } from "@/lib/queries";
+import { getAcademySettings, getPublicTestimonials } from "@/lib/queries";
 import PublicHeader from "@/components/PublicHeader";
 import PublicFooter from "@/components/PublicFooter";
 import LandingPageClient from "./LandingPageClient";
@@ -26,10 +26,15 @@ export const metadata = {
 
 export default async function Home() {
   let settings: any = null;
+  let testimonials: any[] = [];
   try {
-    settings = await getAcademySettings();
+    // 학원 설정 + 공개 후기를 병렬로 조회 (성능 최적화)
+    [settings, testimonials] = await Promise.all([
+      getAcademySettings(),
+      getPublicTestimonials(),
+    ]);
   } catch (e) {
-    console.error("Failed to load settings for landing page:", e);
+    console.error("Failed to load data for landing page:", e);
   }
 
   // 헤더/푸터에 전달할 데이터 추출
@@ -43,7 +48,11 @@ export default async function Home() {
 
       {/* 메인 콘텐츠 — LandingPageClient는 히어로~CTA까지만 담당 */}
       <main className="flex-1">
-        <LandingPageClient initialSettings={settings} />
+        <LandingPageClient
+          initialSettings={settings}
+          testimonials={testimonials}
+          naverPlaceUrl={settings?.naverPlaceUrl ?? ""}
+        />
       </main>
 
       {/* 통합 푸터 */}

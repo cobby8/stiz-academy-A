@@ -1782,3 +1782,88 @@ export const getSessionsForReportList = cache(async (limit = 50) => {
         return [];
     }
 });
+
+// ── 체험수업 CRM 조회 ──────────────────────────────────────────────────────────
+
+/**
+ * 체험 리드 목록 조회 (상태별 필터 가능, 최신순 정렬)
+ * - status 파라미터가 없으면 전체 조회
+ * - status가 있으면 해당 상태만 필터
+ */
+export const getTrialLeads = cache(async (status?: string) => {
+    try {
+        const rows = status
+            ? await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT * FROM "TrialLead" WHERE status = $1 ORDER BY "createdAt" DESC`,
+                  status
+              )
+            : await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT * FROM "TrialLead" ORDER BY "createdAt" DESC`
+              );
+
+        return rows.map((r: any) => ({
+            id: r.id,
+            childName: r.childName ?? r.childname,
+            childAge: r.childAge ?? r.childage ?? null,
+            parentName: r.parentName ?? r.parentname,
+            parentPhone: r.parentPhone ?? r.parentphone,
+            source: r.source ?? "WEBSITE",
+            status: r.status ?? "NEW",
+            scheduledDate: r.scheduledDate ?? r.scheduleddate ?? null,
+            scheduledClassId: r.scheduledClassId ?? r.scheduledclassid ?? null,
+            attendedDate: r.attendedDate ?? r.attendeddate ?? null,
+            convertedDate: r.convertedDate ?? r.converteddate ?? null,
+            convertedStudentId: r.convertedStudentId ?? r.convertedstudentid ?? null,
+            lostReason: r.lostReason ?? r.lostreason ?? null,
+            memo: r.memo ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getTrialLeads] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 체험 CRM 파이프라인 통계 — 상태별 건수 + 전환율
+ * - 각 상태(NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST)별 count
+ * - 전환율: CONVERTED / (ATTENDED + CONVERTED) * 100 (체험 참석 대비 등록 비율)
+ */
+export const getTrialStats = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT status, COUNT(*)::int AS count FROM "TrialLead" GROUP BY status`
+        );
+
+        // 상태별 건수 맵 생성
+        const statusMap: Record<string, number> = {};
+        for (const r of rows) {
+            statusMap[r.status] = r.count;
+        }
+
+        const attended = statusMap["ATTENDED"] ?? 0;
+        const converted = statusMap["CONVERTED"] ?? 0;
+        // 체험 참석 대비 전환율 (체험 참석 + 전환 완료 중 전환 비율)
+        const conversionRate = (attended + converted) > 0
+            ? Math.round((converted / (attended + converted)) * 100)
+            : 0;
+
+        return {
+            NEW: statusMap["NEW"] ?? 0,
+            CONTACTED: statusMap["CONTACTED"] ?? 0,
+            SCHEDULED: statusMap["SCHEDULED"] ?? 0,
+            ATTENDED: statusMap["ATTENDED"] ?? 0,
+            CONVERTED: statusMap["CONVERTED"] ?? 0,
+            LOST: statusMap["LOST"] ?? 0,
+            total: rows.reduce((sum, r) => sum + r.count, 0),
+            conversionRate,
+        };
+    } catch (e) {
+        console.error("[getTrialStats] failed:", e);
+        return {
+            NEW: 0, CONTACTED: 0, SCHEDULED: 0, ATTENDED: 0, CONVERTED: 0, LOST: 0,
+            total: 0, conversionRate: 0,
+        };
+    }
+});

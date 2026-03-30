@@ -2741,3 +2741,218 @@ export async function saveStudentSessionNotes(
     revalidatePath("/admin/attendance/report");
 }
 
+// ── 체험수업 CRM ─────────────────────────────────────────────────────────────
+
+/**
+ * TrialLead 테이블 DDL ensure — 테이블이 없으면 자동 생성 (멱등성 보장)
+ * 서버 재시작 후 첫 호출에서만 실행되고, 이후는 스킵
+ */
+let _trialLeadTableEnsured = false;
+export async function ensureTrialLeadTable() {
+    if (_trialLeadTableEnsured) return;
+
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "TrialLead" (
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                "childName" TEXT NOT NULL,
+                "childAge" TEXT,
+                "parentName" TEXT NOT NULL,
+                "parentPhone" TEXT NOT NULL,
+                source TEXT DEFAULT 'WEBSITE',
+                status TEXT DEFAULT 'NEW',
+                "scheduledDate" TIMESTAMPTZ,
+                "scheduledClassId" TEXT,
+                "attendedDate" TIMESTAMPTZ,
+                "convertedDate" TIMESTAMPTZ,
+                "convertedStudentId" TEXT,
+                "lostReason" TEXT,
+                memo TEXT,
+                "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+                "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+        // 인덱스 생성 (상태별 필터 + 최신순 정렬 최적화)
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "TrialLead_status_idx" ON "TrialLead" (status)`
+        );
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "TrialLead_createdAt_idx" ON "TrialLead" ("createdAt")`
+        );
+    } catch (e) {
+        console.warn("[DDL] TrialLead table ensure failed:", (e as Error).message);
+    }
+
+    _trialLeadTableEnsured = true;
+}
+
+/**
+ * 체험 리드 등록 — 새 체험 신청 건 추가
+ */
+export async function createTrialLead(data: {
+    childName: string;
+    childAge?: string;
+    parentName: string;
+    parentPhone: string;
+    source?: string;
+    memo?: string;
+}) {
+    await requireAdmin();
+    await ensureTrialLeadTable();
+
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "TrialLead" (id, "childName", "childAge", "parentName", "parentPhone", source, memo, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+            data.childName.trim(),
+            data.childAge?.trim() || null,
+            data.parentName.trim(),
+            data.parentPhone.trim(),
+            data.source || "WEBSITE",
+            data.memo?.trim() || null,
+        );
+    } catch (e) {
+        console.error("Failed to create trial lead:", e);
+        throw new Error("체험 신청 등록 실패");
+    }
+    revalidatePath("/admin/trial");
+}
+
+/**
+ * 체험 리드 수정 — 상태/메모/날짜 등 업데이트
+ * 허용 필드만 동적으로 SET절 구성 (SQL 인젝션 방지: 컬럼명은 화이트리스트)
+ */
+const TRIAL_LEAD_COLUMNS = [
+    "childName", "childAge", "parentName", "parentPhone",
+    "source", "status", "scheduledDate", "scheduledClassId",
+    "attendedDate", "convertedDate", "convertedStudentId",
+    "lostReason", "memo",
+] as const;
+
+export async function updateTrialLead(
+    id: string,
+    data: Partial<Record<(typeof TRIAL_LEAD_COLUMNS)[number], any>>
+) {
+    await requireAdmin();
+    await ensureTrialLeadTable();
+
+    // 화이트리스트에 있는 필드만 추출
+    const entries = TRIAL_LEAD_COLUMNS
+        .filter((col) => data[col] !== undefined)
+        .map((col) => [col, data[col]] as const);
+
+    if (entries.length === 0) return;
+
+    // 동적 SET절: 컬럼명은 화이트리스트에서만 허용 → SQL 인젝션 불가능, 값은 $N 바인딩
+    const setClauses = entries.map(([col], i) => {
+        // 날짜 타입 필드는 ::timestamptz 캐스팅
+        const isDate = ["scheduledDate", "attendedDate", "convertedDate"].includes(col);
+        return `"${col}" = $${i + 1}${isDate ? "::timestamptz" : ""}`;
+    }).join(", ");
+    const values = entries.map(([, val]) => val ?? null);
+
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "TrialLead" SET ${setClauses}, "updatedAt" = NOW() WHERE id = $${values.length + 1}`,
+            ...values,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update trial lead:", e);
+        throw new Error("체험 리드 수정 실패");
+    }
+    revalidatePath("/admin/trial");
+}
+
+/**
+ * 체험 리드 삭제
+ */
+export async function deleteTrialLead(id: string) {
+    await requireAdmin();
+    await ensureTrialLeadTable();
+
+    try {
+        await prisma.$executeRawUnsafe(
+            `DELETE FROM "TrialLead" WHERE id = $1`, id
+        );
+    } catch (e) {
+        console.error("Failed to delete trial lead:", e);
+        throw new Error("체험 리드 삭제 실패");
+    }
+    revalidatePath("/admin/trial");
+}
+
+/**
+ * 체험 → 정규 등록 전환
+ * 1. Student 생성 (+ 학부모 User 생성/조회)
+ * 2. TrialLead status='CONVERTED', convertedDate=NOW(), convertedStudentId=새 Student ID
+ */
+export async function convertTrialToStudent(
+    leadId: string,
+    studentData: {
+        name: string;
+        birthDate: string;
+        gender?: string | null;
+        parentName: string;
+        parentPhone?: string | null;
+        parentEmail?: string | null;
+        memo?: string | null;
+    }
+) {
+    await requireAdmin();
+    await ensureTrialLeadTable();
+
+    try {
+        // 1. 학부모 User 생성 또는 조회 (createStudent와 동일한 패턴)
+        let parentId: string;
+        const email = studentData.parentEmail?.trim() || `parent_${Date.now()}@stiz.local`;
+
+        const existing = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE email = $1 LIMIT 1`, email
+        );
+
+        if (existing.length > 0) {
+            parentId = existing[0].id;
+            await prisma.$executeRawUnsafe(
+                `UPDATE "User" SET name = $1, phone = $2, "updatedAt" = NOW() WHERE id = $3`,
+                studentData.parentName, studentData.parentPhone || null, parentId,
+            );
+        } else {
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
+                 RETURNING id`,
+                email, studentData.parentName, studentData.parentPhone || null,
+            );
+            parentId = rows[0].id;
+        }
+
+        // 2. Student 생성 (RETURNING id로 새 학생 ID 획득)
+        const studentRows = await prisma.$queryRawUnsafe<any[]>(
+            `INSERT INTO "Student" (id, name, "birthDate", gender, "parentId", memo, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5, NOW(), NOW())
+             RETURNING id`,
+            studentData.name,
+            studentData.birthDate,
+            studentData.gender || null,
+            parentId,
+            studentData.memo || null,
+        );
+        const newStudentId = studentRows[0].id;
+
+        // 3. TrialLead 전환 처리 (상태 + 전환일 + 연결 Student ID)
+        await prisma.$executeRawUnsafe(
+            `UPDATE "TrialLead"
+             SET status = 'CONVERTED', "convertedDate" = NOW(), "convertedStudentId" = $1, "updatedAt" = NOW()
+             WHERE id = $2`,
+            newStudentId, leadId,
+        );
+    } catch (e) {
+        console.error("Failed to convert trial to student:", e);
+        throw new Error("정규 등록 전환 실패");
+    }
+    revalidatePath("/admin/trial");
+    revalidatePath("/admin/students");
+    revalidatePath("/admin");
+}
+

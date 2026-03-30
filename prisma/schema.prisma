@@ -422,6 +422,29 @@ model Guardian {
   @@index([studentId])
 }
 
+// 체험수업 CRM — 체험 신청부터 정규 등록 전환까지 추적하는 리드 테이블
+model TrialLead {
+  id                 String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  childName          String
+  childAge           String?
+  parentName         String
+  parentPhone        String
+  source             String    @default("WEBSITE")   // WEBSITE, NAVER, REFERRAL, OTHER
+  status             String    @default("NEW")       // NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST
+  scheduledDate      DateTime? @db.Timestamptz(6)
+  scheduledClassId   String?
+  attendedDate       DateTime? @db.Timestamptz(6)
+  convertedDate      DateTime? @db.Timestamptz(6)
+  convertedStudentId String?
+  lostReason         String?
+  memo               String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status])
+  @@index([createdAt])
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

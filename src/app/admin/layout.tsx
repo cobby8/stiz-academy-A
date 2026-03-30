@@ -136,7 +136,8 @@ export default function AdminLayout({
                             <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />
                             <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
                             <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
-                            <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/결제" />
+                            <NavItem href="/admin/finance" active={pathname === "/admin/finance"} icon="💳" label="수납/결제" />
+                            <NavItem href="/admin/finance/billing" active={pathname.startsWith("/admin/finance/billing")} icon="📋" label="청구 설정" />
                             <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" />
                             <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
                             <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />

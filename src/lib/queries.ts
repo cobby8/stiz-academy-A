@@ -1590,3 +1590,195 @@ export const getSessionDetail = cache(async (sessionId: string) => {
         return null;
     }
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 2: 일일 수업 리포트 — 조회 함수
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 세션 리포트 상세 조회 (관리자용)
+ * - 세션 정보 + 반 + 코치 + 출석 목록 + 학생별 개별 노트
+ * - 관리자가 리포트를 작성/편집할 때 사용
+ */
+export const getSessionReport = cache(async (sessionId: string) => {
+    try {
+        // 1. 세션 기본 정보 (반 이름, 프로그램 이름, 코치 이름 포함)
+        const sRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT se.id, se."classId", se.date, se.topic, se.content,
+                    se."photosJSON", se."coachId", se.published, se."publishedAt",
+                    c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                    p.name AS program_name,
+                    co.name AS coach_name
+             FROM "Session" se
+             JOIN "Class" c ON se."classId" = c.id
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             LEFT JOIN "Coach" co ON se."coachId" = co.id
+             WHERE se.id = $1`,
+            sessionId
+        );
+        if (!sRows[0]) return null;
+        const r = sRows[0];
+
+        // 2. 출석 목록 + 학생별 노트를 병렬 조회
+        const [attendances, notes] = await Promise.all([
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT a.id, a."studentId", a.status,
+                        s.name AS student_name
+                 FROM "Attendance" a
+                 JOIN "Student" s ON a."studentId" = s.id
+                 WHERE a."sessionId" = $1
+                 ORDER BY s.name ASC`,
+                sessionId
+            ),
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT ssn.id, ssn."studentId", ssn.note, ssn.rating,
+                        s.name AS student_name
+                 FROM "StudentSessionNote" ssn
+                 JOIN "Student" s ON ssn."studentId" = s.id
+                 WHERE ssn."sessionId" = $1
+                 ORDER BY s.name ASC`,
+                sessionId
+            ),
+        ]);
+
+        return {
+            id: r.id,
+            classId: r.classId ?? r.classid,
+            date: r.date,
+            topic: r.topic ?? null,
+            content: r.content ?? null,
+            photosJSON: r.photosJSON ?? r.photosjson ?? null,
+            coachId: r.coachId ?? r.coachid ?? null,
+            coachName: r.coach_name ?? null,
+            published: r.published ?? false,
+            publishedAt: r.publishedAt ?? r.publishedat ?? null,
+            className: r.class_name,
+            dayOfWeek: r.dayOfWeek ?? r.dayofweek,
+            startTime: r.startTime ?? r.starttime,
+            endTime: r.endTime ?? r.endtime,
+            programName: r.program_name ?? null,
+            attendances: attendances.map((a: any) => ({
+                id: a.id,
+                studentId: a.studentId ?? a.studentid,
+                status: a.status,
+                studentName: a.student_name,
+            })),
+            notes: notes.map((n: any) => ({
+                id: n.id,
+                studentId: n.studentId ?? n.studentid,
+                note: n.note,
+                rating: n.rating != null ? Number(n.rating) : null,
+                studentName: n.student_name,
+            })),
+        };
+    } catch (e) {
+        console.error("[getSessionReport] failed:", e);
+        return null;
+    }
+});
+
+/**
+ * 학부모용: 내 자녀의 발행된 리포트 목록 조회
+ * - parentId로 자녀 찾기 → 자녀의 출석이 있는 세션 중 published=true인 것만
+ * - 자기 자녀 리포트만 볼 수 있도록 parentId 필터링 (보안)
+ */
+export async function getStudentReports(parentId: string, studentId?: string) {
+    try {
+        // parentId에 속한 자녀 ID 목록 (보안: 다른 사람의 자녀는 조회 불가)
+        const myStudents = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name FROM "Student" WHERE "parentId" = $1`,
+            parentId
+        );
+        if (myStudents.length === 0) return [];
+
+        // 특정 자녀만 필터할 경우 검증
+        let targetIds = myStudents.map((s: any) => s.id);
+        if (studentId) {
+            if (!targetIds.includes(studentId)) return []; // 보안: 내 자녀가 아니면 빈 배열
+            targetIds = [studentId];
+        }
+
+        const placeholders = targetIds.map((_: string, i: number) => `$${i + 1}`).join(",");
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT DISTINCT se.id AS session_id, se.date, se.topic,
+                    se."publishedAt", se."photosJSON",
+                    c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                    p.name AS program_name,
+                    co.name AS coach_name
+             FROM "Session" se
+             JOIN "Attendance" a ON a."sessionId" = se.id
+             JOIN "Class" c ON se."classId" = c.id
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             LEFT JOIN "Coach" co ON se."coachId" = co.id
+             WHERE a."studentId" IN (${placeholders})
+               AND se.published = true
+             ORDER BY se.date DESC
+             LIMIT 50`,
+            ...targetIds
+        );
+
+        return rows.map((r: any) => ({
+            sessionId: r.session_id,
+            date: r.date,
+            topic: r.topic ?? null,
+            publishedAt: r.publishedAt ?? r.publishedat ?? null,
+            photosJSON: r.photosJSON ?? r.photosjson ?? null,
+            className: r.class_name,
+            dayOfWeek: r.dayOfWeek ?? r.dayofweek,
+            startTime: r.startTime ?? r.starttime,
+            endTime: r.endTime ?? r.endtime,
+            programName: r.program_name ?? null,
+            coachName: r.coach_name ?? null,
+        }));
+    } catch (e) {
+        console.error("[getStudentReports] failed:", e);
+        return [];
+    }
+}
+
+/**
+ * 관리자용: 리포트 목록 (세션 목록 + 발행 상태)
+ * - 최근 세션을 날짜순으로 조회
+ * - 출결이 기록된 세션만 표시 (출결 없으면 리포트 의미 없음)
+ */
+export const getSessionsForReportList = cache(async (limit = 50) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT se.id, se."classId", se.date, se.topic, se.published,
+                    se."publishedAt",
+                    c.name AS class_name, c."dayOfWeek", c."startTime", c."endTime",
+                    p.name AS program_name,
+                    co.name AS coach_name,
+                    COUNT(a.id)::int AS attendance_count
+             FROM "Session" se
+             JOIN "Class" c ON se."classId" = c.id
+             LEFT JOIN "Program" p ON c."programId" = p.id
+             LEFT JOIN "Coach" co ON se."coachId" = co.id
+             LEFT JOIN "Attendance" a ON a."sessionId" = se.id
+             GROUP BY se.id, c.id, p.id, co.id
+             HAVING COUNT(a.id) > 0
+             ORDER BY se.date DESC
+             LIMIT $1`,
+            limit
+        );
+
+        return rows.map((r: any) => ({
+            id: r.id,
+            classId: r.classId ?? r.classid,
+            date: r.date,
+            topic: r.topic ?? null,
+            published: r.published ?? false,
+            publishedAt: r.publishedAt ?? r.publishedat ?? null,
+            className: r.class_name,
+            dayOfWeek: r.dayOfWeek ?? r.dayofweek,
+            startTime: r.startTime ?? r.starttime,
+            endTime: r.endTime ?? r.endtime,
+            programName: r.program_name ?? null,
+            coachName: r.coach_name ?? null,
+            attendanceCount: r.attendance_count ?? 0,
+        }));
+    } catch (e) {
+        console.error("[getSessionsForReportList] failed:", e);
+        return [];
+    }
+});

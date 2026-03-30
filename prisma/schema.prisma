@@ -34,11 +34,12 @@ model Student {
   enrollDate  DateTime?    // 입회일자
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  attendances Attendance[]
-  enrollments Enrollment[]
-  guardians   Guardian[]
-  payments    Payment[]
-  parent      User         @relation(fields: [parentId], references: [id])
+  attendances  Attendance[]
+  enrollments  Enrollment[]
+  guardians    Guardian[]
+  payments     Payment[]
+  sessionNotes StudentSessionNote[]
+  parent       User         @relation(fields: [parentId], references: [id])
 }
 
 model Program {
@@ -105,9 +106,12 @@ model Session {
   content     String?      // 수업 상세 내용
   photosJSON  String?      // 수업 사진 URL 배열 (JSON 문자열로 저장)
   coachId     String?      // 담당 코치 ID (Coach 테이블 참조용, FK 없음)
+  published   Boolean      @default(false)  // 학부모 공개 여부 (true일 때만 학부모가 열람 가능)
+  publishedAt DateTime?    // 발행 시각 (published=true로 변경된 시점)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   attendances Attendance[]
+  studentNotes StudentSessionNote[]
   class       Class        @relation(fields: [classId], references: [id])
 }
 
@@ -122,6 +126,22 @@ model Attendance {
   student   Student  @relation(fields: [studentId], references: [id])
 
   @@unique([sessionId, studentId])
+}
+
+// 학생별 수업 개별 코멘트 — 세션 리포트에서 학생마다 작성하는 메모
+model StudentSessionNote {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sessionId String
+  studentId String
+  note      String   // 코치가 작성하는 개별 코멘트 (예: "드리블 실력 많이 향상됨")
+  rating    Int?     // 수업 참여도/성과 점수 (1~5, 선택사항)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  session   Session  @relation(fields: [sessionId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id])
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
 }
 
 model Payment {

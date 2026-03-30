@@ -2562,3 +2562,182 @@ export async function bulkUpdatePaymentStatus(ids: string[], newStatus: string) 
     revalidatePath("/admin/finance");
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 2: 일일 수업 리포트 — Server Actions
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Session 테이블에 published/publishedAt 컬럼 + StudentSessionNote 테이블 자동 생성 ──
+// 마이그레이션 대신 DDL로 처리 (Phase 1 패턴과 동일)
+let _reportColumnsEnsured = false;
+export async function ensureReportColumns() {
+    if (_reportColumnsEnsured) return;
+
+    // 1. Session 테이블에 published, publishedAt 컬럼 추가
+    const sessionCols: [string, string][] = [
+        ["published", "BOOLEAN DEFAULT false"],
+        ["publishedAt", "TIMESTAMPTZ"],
+    ];
+    for (const [col, type] of sessionCols) {
+        try {
+            await prisma.$executeRawUnsafe(
+                `ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "${col}" ${type}`
+            );
+        } catch (e) {
+            console.warn(`[DDL] Session."${col}" ensure failed:`, (e as Error).message);
+        }
+    }
+
+    // 2. StudentSessionNote 테이블 생성
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "StudentSessionNote" (
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                "sessionId" TEXT NOT NULL REFERENCES "Session"(id),
+                "studentId" TEXT NOT NULL REFERENCES "Student"(id),
+                note TEXT NOT NULL,
+                rating INTEGER,
+                "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+                "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE("sessionId", "studentId")
+            )
+        `);
+        // 인덱스 생성 (학생별 조회 최적화)
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "StudentSessionNote_studentId_idx" ON "StudentSessionNote" ("studentId")`
+        );
+    } catch (e) {
+        console.warn("[DDL] StudentSessionNote table ensure failed:", (e as Error).message);
+    }
+
+    _reportColumnsEnsured = true;
+}
+
+/**
+ * 세션 리포트 저장 (수업 주제/내용/사진 + published 상태)
+ * - 기존 saveSessionLog와 유사하지만, published/publishedAt 필드도 저장
+ * - 기존 Session이 있으면 UPDATE, 없으면 INSERT하지 않음 (출결이 먼저 기록되어야 함)
+ */
+export async function saveSessionReport(data: {
+    sessionId: string;
+    topic?: string;
+    content?: string;
+    photosJSON?: string;
+    coachId?: string;
+}) {
+    await requireAdmin();
+    await ensureReportColumns();
+
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Session" SET
+                topic = $1, content = $2, "photosJSON" = $3, "coachId" = $4, "updatedAt" = NOW()
+             WHERE id = $5`,
+            data.topic || null,
+            data.content || null,
+            data.photosJSON || null,
+            data.coachId || null,
+            data.sessionId,
+        );
+    } catch (e) {
+        console.error("Failed to save session report:", e);
+        throw new Error("리포트 저장 실패");
+    }
+    revalidatePath("/admin/attendance");
+    revalidatePath("/admin/attendance/report");
+}
+
+/**
+ * 세션 리포트 발행/발행취소 토글
+ * - published=true로 변경 시 publishedAt에 현재 시각 기록
+ * - published=false로 변경 시 publishedAt 유지 (마지막 발행 시점 기록용)
+ * - 발행 시 해당 세션에 출석한 학생들의 학부모에게 알림 전송
+ */
+export async function publishSessionReport(sessionId: string, publish: boolean) {
+    await requireAdmin();
+    await ensureReportColumns();
+
+    try {
+        if (publish) {
+            // 발행: publishedAt 갱신 + 학부모 알림
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Session" SET published = true, "publishedAt" = NOW(), "updatedAt" = NOW()
+                 WHERE id = $1`,
+                sessionId,
+            );
+
+            // 해당 세션에 출석한 학생 ID 목록 조회 → 학부모 알림
+            const students = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT DISTINCT "studentId" FROM "Attendance" WHERE "sessionId" = $1`,
+                sessionId,
+            );
+            const studentIds = students.map((s: any) => s.studentId ?? s.studentid);
+            if (studentIds.length > 0) {
+                // 세션 날짜 조회 (알림 메시지용)
+                const sessionRows = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT date FROM "Session" WHERE id = $1 LIMIT 1`,
+                    sessionId,
+                );
+                const dateStr = sessionRows[0]?.date
+                    ? new Date(sessionRows[0].date).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })
+                    : "오늘";
+
+                await notifyParentsOfStudents(
+                    studentIds,
+                    "REPORT",
+                    "수업 리포트 발행",
+                    `${dateStr} 수업 리포트가 발행되었습니다.`,
+                    `/mypage/reports/${sessionId}`,
+                );
+            }
+        } else {
+            // 발행 취소: published만 false로
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Session" SET published = false, "updatedAt" = NOW()
+                 WHERE id = $1`,
+                sessionId,
+            );
+        }
+    } catch (e) {
+        console.error("Failed to publish session report:", e);
+        throw new Error("리포트 발행 상태 변경 실패");
+    }
+    revalidatePath("/admin/attendance");
+    revalidatePath("/admin/attendance/report");
+    revalidatePath("/mypage/reports");
+}
+
+/**
+ * 학생별 개별 노트 일괄 저장 (UPSERT)
+ * - 하나의 세션에 대해 여러 학생의 노트를 한번에 저장
+ * - sessionId + studentId 유니크 → 있으면 UPDATE, 없으면 INSERT
+ */
+export async function saveStudentSessionNotes(
+    sessionId: string,
+    notes: Array<{ studentId: string; note: string; rating?: number | null }>
+) {
+    await requireAdmin();
+    await ensureReportColumns();
+
+    try {
+        for (const n of notes) {
+            // 빈 노트는 건너뜀 (삭제하지 않고 무시)
+            if (!n.note.trim()) continue;
+
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "StudentSessionNote" (id, "sessionId", "studentId", note, rating, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW(), NOW())
+                 ON CONFLICT ("sessionId", "studentId")
+                 DO UPDATE SET note = $3, rating = $4, "updatedAt" = NOW()`,
+                sessionId,
+                n.studentId,
+                n.note.trim(),
+                n.rating ?? null,
+            );
+        }
+    } catch (e) {
+        console.error("Failed to save student session notes:", e);
+        throw new Error("학생별 노트 저장 실패");
+    }
+    revalidatePath("/admin/attendance/report");
+}
+

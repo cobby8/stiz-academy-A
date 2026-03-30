@@ -680,6 +680,23 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </div>
             )}
 
+            {/* 수업 리포트 바로가기 — 코치가 발행한 일일 수업 리포트 열람 */}
+            <Link
+                href="/mypage/reports"
+                className="block bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition mb-4"
+            >
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-2xl text-brand-orange-500">assignment</span>
+                        <div>
+                            <p className="font-bold text-brand-navy-900">수업 리포트</p>
+                            <p className="text-xs text-gray-500">코치가 작성한 수업 리포트를 확인하세요</p>
+                        </div>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                </div>
+            </Link>
+
             {/* 학습 피드백 섹션 - 코치가 작성한 자녀 피드백 표시 */}
             {feedbacks.length > 0 && (
                 <div>

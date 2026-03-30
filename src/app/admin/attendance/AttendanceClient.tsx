@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { saveAttendance } from "@/app/actions/admin";
 
 type ClassItem = {
@@ -105,9 +106,19 @@ export default function AttendanceClient({ classes }: { classes: ClassItem[] }) 
 
     return (
         <div className="max-w-4xl mx-auto">
-            <div className="mb-6">
-                <h1 className="text-2xl font-extrabold text-gray-900">출결 관리</h1>
-                <p className="text-gray-500 text-sm mt-1">날짜와 반을 선택하여 출결을 기록합니다.</p>
+            <div className="mb-6 flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-extrabold text-gray-900">출결 관리</h1>
+                    <p className="text-gray-500 text-sm mt-1">날짜와 반을 선택하여 출결을 기록합니다.</p>
+                </div>
+                {/* 수업 리포트 관리 페이지로 이동하는 버튼 */}
+                <Link
+                    href="/admin/attendance/report"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold bg-brand-navy-900 text-white hover:bg-gray-800 transition"
+                >
+                    <span className="material-symbols-outlined text-base">assignment</span>
+                    수업 리포트
+                </Link>
             </div>
 
             {/* Selector */}

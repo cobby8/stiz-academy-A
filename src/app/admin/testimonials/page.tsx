@@ -1,5 +1,5 @@
 import { getAllTestimonials, getAcademySettings } from "@/lib/queries";
-import TestimonialsAdminClient from "./TestimonialsAdminClient";
+import TestimonialsWrapper from "./TestimonialsWrapper";
 
 // 30초 캐시: Server Action 호출 시 즉시 무효화
 export const revalidate = 30;
@@ -11,9 +11,10 @@ export default async function AdminTestimonialsPage() {
         getAcademySettings(),
     ]);
     return (
-        <TestimonialsAdminClient
+        <TestimonialsWrapper
             testimonials={testimonials}
             naverPlaceUrl={settings?.naverPlaceUrl ?? ""}
         />
+
     );
 }

@@ -15,7 +15,7 @@ import {
     createTestimonial,
     updateTestimonial,
     deleteTestimonial,
-    updateAcademySettings,
+    updateNaverPlaceUrl,
 } from "@/app/actions/admin";
 
 // 후기 데이터 타입
@@ -54,7 +54,7 @@ export default function TestimonialsAdminClient({
 
     function handleSaveNaverUrl() {
         startTransition(async () => {
-            await updateAcademySettings({ naverPlaceUrl: naverUrl });
+            await updateNaverPlaceUrl(naverUrl);
             setNaverSaved(true);
             setTimeout(() => setNaverSaved(false), 2000);
         });

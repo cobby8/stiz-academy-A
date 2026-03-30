@@ -336,6 +336,22 @@ export async function updateAcademySettings(data: {
     revalidatePath("/admin/settings");
 }
 
+// 네이버 플레이스 URL만 단독 업데이트하는 전용 Server Action
+// — TestimonialsAdminClient에서 범용 updateAcademySettings를 import하면
+//   Next.js 16 + Turbopack SSR 시 서버 액션이 비정상 실행되어 권한 에러가 발생하므로
+//   testimonials 페이지 전용으로 분리한다.
+export async function updateNaverPlaceUrl(url: string) {
+    await requireAdmin();
+    try {
+        await rawUpsertAcademySettings({ naverPlaceUrl: url });
+    } catch (e) {
+        console.error("Failed to update naver place URL:", e);
+        throw new Error("네이버 플레이스 URL 저장에 실패했습니다.");
+    }
+    revalidatePath("/admin/testimonials");
+    revalidatePath("/");
+}
+
 export async function createCoach(data: {
     name: string;
     role: string;

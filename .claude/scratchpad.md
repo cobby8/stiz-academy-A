@@ -1,7 +1,7 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 학원 운영 고도화 Phase 5 — 보강 수업 매칭
+- **요청**: 학원 운영 고도화 Phase 6 — 스킬 트래킹 / 성장 기록
 - **상태**: developer 구현 완료 (tsc PASS)
 - **현재 담당**: developer → tester
 - **마지막 세션**: 2026-03-29
@@ -14,7 +14,7 @@
 | 3 | 체험수업 CRM | 완료 (tester 대기) |
 | 4 | 대기자 관리 | 완료 (tester 대기) |
 | 5 | 보강 수업 매칭 | 완료 (tester 대기) |
-| 6 | 스킬 트래킹 | 대기 |
+| 6 | 스킬 트래킹 | 완료 (tester 대기) |
 | 7 | 통계 대시보드 | 대기 |
 
 ---
@@ -49,6 +49,76 @@ reviewer 참고:
 - SQL은 $queryRawUnsafe/$executeRawUnsafe + $N 바인딩만 사용
 - updateMakeupStatus: MAKEUP_STATUS_WHITELIST로 SQL 인젝션 방지
 - Material Symbols Outlined 아이콘 사용 (event_repeat, close, event_busy)
+
+### Phase 6: 스킬 트래킹 / 성장 기록
+
+구현한 기능: SkillCategory + SkillRecord 모델(DDL ensure), 카테고리 CRUD + 원생 스킬 평가 일괄 기록 Server Action, 스킬 조회(카테고리별 최신/성장이력), 관리자 스킬 관리 페이지(카테고리 관리 탭 + 스킬 평가 탭 + SVG 레이더 차트 + 성장 이력 타임라인), 학부모용 스킬 열람 페이지(자녀별 레이더 차트 + 프로그레스 바 + 이력)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | SkillCategory, SkillRecord 2개 모델 추가 | 수정 |
+| src/lib/queries.ts | getSkillCategories, getStudentSkills, getSkillHistory 3개 조회 함수 | 수정 |
+| src/app/actions/admin.ts | ensureSkillTables DDL + createSkillCategory, updateSkillCategory, deleteSkillCategory, recordSkillAssessment 5개 Server Action | 수정 |
+| src/app/admin/skills/page.tsx | 서버 페이지 (revalidate:30, ensureSkillTables DDL) | 신규 |
+| src/app/admin/skills/SkillsClient.tsx | 탭2개 (카테고리 관리 CRUD + 스킬 평가: 원생선택/슬라이더/레이더차트/이력) | 신규 |
+| src/app/api/admin/skills/route.ts | GET /api/admin/skills?studentId — 원생 스킬+이력 JSON API | 신규 |
+| src/components/SkillRadarChart.tsx | 순수 SVG N각형 레이더 차트 (외부 라이브러리 없음) | 신규 |
+| src/app/mypage/skills/page.tsx | 학부모용 스킬 열람 (자녀별 레이더+프로그레스바+이력) | 신규 |
+| src/app/admin/layout.tsx | 사이드바 "학원운영" 탭에 "스킬 트래킹" 메뉴 + OPS_PATHS 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/skills → "카테고리 관리" 탭 → 드리블/슈팅/패스/수비/체력 등 추가
+- 스킬 평가: "스킬 평가" 탭 → 원생 선택 → 슬라이더로 레벨 설정 → "평가 저장"
+- 레이더 차트: 평가 저장 후 우측에 SVG 레이더 차트 업데이트 확인
+- 학부모: /mypage/skills → 로그인한 학부모의 자녀별 레이더 차트 + 이력 표시
+- 주의: 카테고리 삭제 시 해당 카테고리의 모든 평가 기록도 함께 삭제됨
+
+reviewer 참고:
+- 모든 Server Action에 requireAdmin() 첫줄 호출
+- SQL은 $queryRawUnsafe/$executeRawUnsafe + $N 바인딩만 사용
+- updateSkillCategory: ALLOWED_COLS 화이트리스트로 컬럼명 SQL 인젝션 방지
+- Material Symbols Outlined 아이콘 사용 (category, trending_up, sports_basketball, add 등)
+- 학부모 페이지 보안: parentId 매칭으로 본인 자녀만 열람
+- SkillRadarChart: 외부 라이브러리 없이 순수 SVG, 반응형 viewBox
+
+---
+
+## 리뷰 결과 (reviewer) — Phase 6: 스킬 트래킹 / 성장 기록
+
+### 종합 판정: APPROVE (필수 수정 1건 + 권장 수정 3건)
+
+### 잘된 점:
+- 모든 Server Action(createSkillCategory, updateSkillCategory, deleteSkillCategory, recordSkillAssessment)에 requireAdmin() 첫줄 호출 확인
+- SQL 전부 $queryRawUnsafe/$executeRawUnsafe + $N 파라미터 바인딩 사용 -- SQL 인젝션 위험 없음
+- updateSkillCategory에서 ALLOWED_COLS 화이트리스트로 컬럼명 검증 -- 동적 SET 절 구성이지만 안전
+- API route(/api/admin/skills)에서 requireAdmin() 인증 확인 + try-catch로 401 반환 -- 적절한 에러 처리
+- 학부모 페이지(mypage/skills) 보안: Supabase auth.getUser() -> parentId 매칭 -> 본인 자녀만 조회 -- 정상
+- DDL ensure 멱등성 확보 (CREATE TABLE IF NOT EXISTS + 인덱스 IF NOT EXISTS)
+- SkillRadarChart: 순수 SVG, 외부 라이브러리 없음, 극좌표 계산 정확 (12시 방향 시작, 비율 clamp 0~1)
+- getStudentSkills의 DISTINCT ON 패턴으로 카테고리별 최신 1건만 추출 -- 효율적
+- getSkillHistory의 categoryId 옵션 분기 처리 적절 (WHERE 절 동적 구성 + params 분리)
+- Material Symbols Outlined 아이콘 사용 (category, trending_up, sports_basketball, add, warning 등) -- convention 준수
+- Tailwind CSS만 사용, 하드코딩 색상 없음
+- 학부모 페이지 force-dynamic 적절 (실시간 인증 필요)
+- 관리자 페이지 revalidate:30 -- 캐싱 정책 준수
+
+### 필수 수정:
+
+| # | 파일 | 내용 |
+|---|------|------|
+| 1 | SkillsClient.tsx:12 | `import { getStudentSkills, getSkillHistory } from "@/lib/queries"` -- 미사용 import이자 "use client" 컴포넌트에서 서버 전용 함수(prisma) import. 실제로 원생 스킬 데이터는 fetch(`/api/admin/skills`)로 가져오고 있어 이 import는 dead code. 번들에 prisma 클라이언트가 포함될 수 있고, 빌드 시 에러 발생 가능. 삭제 필수. |
+
+### 권장 수정:
+
+| # | 파일 | 내용 |
+|---|------|------|
+| 1 | admin.ts:recordSkillAssessment | level 값 범위 검증 없음. 클라이언트에서 슬라이더로 0~maxLevel로 제한하지만, 직접 호출 시 음수나 maxLevel 초과값 입력 가능. `Math.max(0, Math.min(a.level, maxLevel))` 또는 최소한 `if (a.level < 0) throw` 검증 추가 권장 |
+| 2 | admin.ts:recordSkillAssessment (3409~3419) | assessments 배열을 for 루프로 개별 INSERT. 평가 항목이 많으면 N번 DB 왕복. 현재 카테고리 5~10개 수준이면 문제없으나, 향후 확장 시 VALUES 멀티로우 INSERT 또는 트랜잭션으로 묶는 것 권장 |
+| 3 | mypage/skills/page.tsx:41~43 | 학부모 조회 쿼리가 email로 User를 찾은 뒤 parentId로 Student를 조회하는 2단계 구조. 동작은 정확하나, 다른 학부모 페이지(mypage/reports 등)와 동일한 패턴이 반복될 수 있으므로 향후 `getParentByEmail(email)` 공용 함수로 추출 고려 |
+
+### layout.tsx 메모:
+- 사이드바에 "스킬 트래킹" 메뉴 추가 + OPS_PATHS 정상 등록 확인
+- layout.tsx line 8에 lucide-react LogOut import가 여전히 존재 (Phase 6과 무관, 기존 이슈)
 
 ---
 
@@ -206,6 +276,29 @@ reviewer 참고:
 검출된 문제: 0건 (수정 필수 항목 없음)
 
 종합: 20개 중 20개 통과 / 0개 실패 -- PASS
+
+### Phase 6: 스킬 트래킹 / 성장 기록 검증 (2026-03-29)
+
+| # | 테스트 항목 | 결과 | 비고 |
+|---|-----------|------|------|
+| 1 | tsc --noEmit | PASS | 타입 에러 0건 |
+| 2 | schema: SkillCategory + SkillRecord | PASS | SkillCategory 8필드(id gen_random_uuid, Timestamptz), SkillRecord 7필드 + 복합인덱스(studentId+categoryId) + 단독인덱스(assessedAt) |
+| 3 | queries.ts: 3개 조회함수 $queryRawUnsafe | PASS | getSkillCategories(ORDER BY order, cache), getStudentSkills(DISTINCT ON categoryId 최신1건, JOIN SkillCategory, $1 바인딩, cache), getSkillHistory(categoryId 선택파라미터 분기, LIMIT 200, cache) -- 모두 소문자 fallback(??) 적용, 에러시 빈배열 |
+| 4 | admin.ts: 5개 Action requireAdmin + 바인딩 | PASS | ensureSkillTables(CREATE TABLE IF NOT EXISTS 2개 + 인덱스 2개, _skillTablesEnsured 플래그), createSkillCategory($1~$5), updateSkillCategory(ALLOWED_COLS 화이트리스트 SET절 동적구성), deleteSkillCategory(SkillRecord 먼저 삭제후 Category 삭제), recordSkillAssessment(for-of 순회 $1~$5) -- 모두 requireAdmin() 첫줄, revalidatePath 호출 |
+| 5 | SkillRadarChart.tsx: 순수 SVG | PASS | 외부 라이브러리 0개, polygon+line+circle+text, viewBox 반응형, N<2 예외처리, 극좌표변환, ratio 클램핑(min 1 max 0) |
+| 6 | skills/page.tsx: revalidate=30 | PASS | ensureSkillTables() + Promise.all(categories, students) 병렬조회 |
+| 7 | SkillsClient: Material Symbols + Tailwind | PASS | category, trending_up, sports_basketball, add, warning, progress_activity 등 Material Symbols만 사용, brand-orange-500 CSS변수, 하드코딩 색상 없음 |
+| 8 | SkillsClient: 카테고리관리 + 평가UI | PASS | CRUD 모달(이름필수trim, 삭제confirm), 원생검색(useMemo)+select, fetch API로 /api/admin/skills, range슬라이더+버튼 레벨, 노트입력, assessedBy, level>0만 필터 저장, 레이더차트 실시간 연동, 이력 타임라인(max-h-[400px] 스크롤) |
+| 9 | mypage/skills: 보안 체크 | PASS | auth.getUser() 인증, User WHERE email=$1 parentId 조회, Student WHERE parentId=$1 본인자녀만, force-dynamic, 자녀별 카드(레이더+프로그레스바+이력slice10), 미인증/미등록/자녀없음 3가지 예외UI |
+| 10 | API route: 인증 체크 | PASS | requireAdmin() 실패시 401, studentId 없으면 400, Promise.all 병렬조회 |
+| 11 | layout.tsx: 메뉴 등록 | PASS | OPS_PATHS에 "/admin/skills" 포함, NavItem label="스킬 트래킹" 존재 |
+
+참고 사항 (비치명적, 수정 권장):
+- SkillsClient.tsx 12행: `import { getStudentSkills, getSkillHistory } from "@/lib/queries"` -- 미사용 import(dead code). 실제로는 fetch("/api/admin/skills")를 사용. "use client" 컴포넌트에서 서버 전용 함수 import는 번들 사이즈에 영향 가능. 삭제 권장.
+
+검출된 문제: 0건 (수정 필수 항목 없음)
+
+종합: 11개 중 11개 통과 / 0개 실패 -- PASS
 
 ### Phase 4: 대기자 관리 검증 (2026-03-29)
 
@@ -382,6 +475,7 @@ reviewer 참고:
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-29 | Phase 6: 스킬 트래킹 tester 검증 PASS (11항목 전체 통과) | 8개 파일 | 완료 |
 | 2026-03-29 | Phase 4: 대기자 관리 전체 구현 (Waitlist DDL + CRUD + 정원현황 + 알림) | 6개 파일 | 완료 |
 | 2026-03-29 | Phase 3: 체험수업 CRM 전체 구현 (TrialLead CRUD + 파이프라인 + 전환) | 6개 파일 | 완료 |
 | 2026-03-29 | Phase 2: 일일 수업 리포트 전체 구현 (기존 구현 확인 + tsc 에러 1건 수정) | 9개 파일 | 완료 |

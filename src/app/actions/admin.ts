@@ -3241,3 +3241,187 @@ export async function updateMakeupStatus(id: string, status: string) {
     revalidatePath("/admin/makeup");
 }
 
+// ── 스킬 트래킹 — DDL + CRUD ──────────────────────────────────────
+
+let _skillTablesEnsured = false;
+
+/**
+ * SkillCategory + SkillRecord 테이블 DDL ensure (멱등)
+ * 서버 페이지에서 호출하여 테이블이 없으면 자동으로 만든다
+ */
+export async function ensureSkillTables() {
+    if (_skillTablesEnsured) return;
+    try {
+        // 스킬 카테고리 테이블
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "SkillCategory" (
+                id TEXT PRIMARY KEY DEFAULT (gen_random_uuid())::text,
+                name TEXT NOT NULL,
+                icon TEXT,
+                "order" INT DEFAULT 0,
+                "maxLevel" INT DEFAULT 5,
+                description TEXT,
+                "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+                "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+        // 스킬 기록 테이블
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "SkillRecord" (
+                id TEXT PRIMARY KEY DEFAULT (gen_random_uuid())::text,
+                "studentId" TEXT NOT NULL,
+                "categoryId" TEXT NOT NULL,
+                level INT NOT NULL,
+                "assessedBy" TEXT NOT NULL,
+                "assessedAt" TIMESTAMPTZ DEFAULT NOW(),
+                note TEXT,
+                "createdAt" TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+        // 인덱스 멱등 생성
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "SkillRecord_studentId_categoryId_idx" ON "SkillRecord" ("studentId", "categoryId")`
+        );
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "SkillRecord_assessedAt_idx" ON "SkillRecord" ("assessedAt")`
+        );
+    } catch (e) {
+        console.warn("[DDL] SkillTables ensure failed:", (e as Error).message);
+    }
+    _skillTablesEnsured = true;
+}
+
+/**
+ * 스킬 카테고리 등록
+ */
+export async function createSkillCategory(data: {
+    name: string;
+    icon?: string;
+    order?: number;
+    maxLevel?: number;
+    description?: string;
+}) {
+    await requireAdmin();
+    await ensureSkillTables();
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "SkillCategory" (id, name, icon, "order", "maxLevel", description, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())`,
+            data.name,
+            data.icon || null,
+            data.order ?? 0,
+            data.maxLevel ?? 5,
+            data.description || null,
+        );
+    } catch (e) {
+        console.error("Failed to create skill category:", e);
+        throw new Error("카테고리 등록 실패");
+    }
+    revalidatePath("/admin/skills");
+}
+
+/**
+ * 스킬 카테고리 수정
+ */
+export async function updateSkillCategory(
+    id: string,
+    data: {
+        name?: string;
+        icon?: string;
+        order?: number;
+        maxLevel?: number;
+        description?: string;
+    },
+) {
+    await requireAdmin();
+    await ensureSkillTables();
+    // 허용된 컬럼만 동적으로 SET 절 구성 (SQL 인젝션 방지: 컬럼명은 화이트리스트)
+    const ALLOWED_COLS: Record<string, string> = {
+        name: "name",
+        icon: "icon",
+        order: '"order"',
+        maxLevel: '"maxLevel"',
+        description: "description",
+    };
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let paramIdx = 1;
+
+    for (const [key, col] of Object.entries(ALLOWED_COLS)) {
+        if (key in data) {
+            setClauses.push(`${col} = $${paramIdx}`);
+            values.push((data as any)[key] ?? null);
+            paramIdx++;
+        }
+    }
+    if (setClauses.length === 0) return;
+
+    setClauses.push(`"updatedAt" = NOW()`);
+    values.push(id);
+
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "SkillCategory" SET ${setClauses.join(", ")} WHERE id = $${paramIdx}`,
+            ...values,
+        );
+    } catch (e) {
+        console.error("Failed to update skill category:", e);
+        throw new Error("카테고리 수정 실패");
+    }
+    revalidatePath("/admin/skills");
+}
+
+/**
+ * 스킬 카테고리 삭제 — 관련 SkillRecord도 함께 삭제
+ */
+export async function deleteSkillCategory(id: string) {
+    await requireAdmin();
+    await ensureSkillTables();
+    try {
+        // 해당 카테고리의 기록도 삭제 (참조 무결성)
+        await prisma.$executeRawUnsafe(
+            `DELETE FROM "SkillRecord" WHERE "categoryId" = $1`,
+            id,
+        );
+        await prisma.$executeRawUnsafe(
+            `DELETE FROM "SkillCategory" WHERE id = $1`,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to delete skill category:", e);
+        throw new Error("카테고리 삭제 실패");
+    }
+    revalidatePath("/admin/skills");
+}
+
+/**
+ * 원생 기술 평가 일괄 기록 — 여러 카테고리 레벨을 한번에 저장
+ * assessedBy: 코치/관리자 이름
+ */
+export async function recordSkillAssessment(
+    studentId: string,
+    assessments: { categoryId: string; level: number; note?: string }[],
+    assessedBy: string,
+) {
+    await requireAdmin();
+    await ensureSkillTables();
+    try {
+        for (const a of assessments) {
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "SkillRecord" (id, "studentId", "categoryId", level, "assessedBy", "assessedAt", note, "createdAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW(), $5, NOW())`,
+                studentId,
+                a.categoryId,
+                a.level,
+                assessedBy,
+                a.note || null,
+            );
+        }
+    } catch (e) {
+        console.error("Failed to record skill assessment:", e);
+        throw new Error("스킬 평가 저장 실패");
+    }
+    revalidatePath("/admin/skills");
+    revalidatePath("/mypage/skills");
+}
+

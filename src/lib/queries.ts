@@ -2049,3 +2049,108 @@ export const getAvailableMakeupSlots = cache(
         }
     },
 );
+
+// ── 스킬 트래킹 조회 함수 ──────────────────────────────────────
+
+/**
+ * 스킬 카테고리 목록 조회 — order 순 정렬
+ */
+export const getSkillCategories = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, icon, "order", "maxLevel", description, "createdAt", "updatedAt"
+             FROM "SkillCategory"
+             ORDER BY "order" ASC, "createdAt" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            icon: r.icon ?? null,
+            order: Number(r.order ?? 0),
+            maxLevel: Number(r.maxLevel ?? r.maxlevel ?? 5),
+            description: r.description ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getSkillCategories] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 원생의 최신 스킬 조회 — 카테고리별 가장 최근 1건만 반환
+ * DISTINCT ON으로 카테고리별 최신 레코드를 추출
+ */
+export const getStudentSkills = cache(async (studentId: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT DISTINCT ON (sr."categoryId")
+                    sr.id, sr."studentId", sr."categoryId", sr.level, sr."assessedBy", sr."assessedAt", sr.note,
+                    sc.name AS category_name, sc.icon AS category_icon, sc."maxLevel" AS category_max_level
+             FROM "SkillRecord" sr
+             JOIN "SkillCategory" sc ON sr."categoryId" = sc.id
+             WHERE sr."studentId" = $1
+             ORDER BY sr."categoryId", sr."assessedAt" DESC`,
+            studentId,
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId ?? r.studentid,
+            categoryId: r.categoryId ?? r.categoryid,
+            level: Number(r.level ?? 0),
+            assessedBy: r.assessedBy ?? r.assessedby ?? "",
+            assessedAt: r.assessedAt ?? r.assessedat,
+            note: r.note ?? null,
+            categoryName: r.category_name ?? "",
+            categoryIcon: r.category_icon ?? null,
+            categoryMaxLevel: Number(r.category_max_level ?? 5),
+        }));
+    } catch (e) {
+        console.error("[getStudentSkills] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 원생 기술 성장 이력 — 시간순 정렬
+ * categoryId가 있으면 해당 카테고리만, 없으면 전체 이력
+ */
+export const getSkillHistory = cache(
+    async (studentId: string, categoryId?: string) => {
+        try {
+            // categoryId 필터 유무에 따라 쿼리 분기
+            const whereClause = categoryId
+                ? `WHERE sr."studentId" = $1 AND sr."categoryId" = $2`
+                : `WHERE sr."studentId" = $1`;
+            const params = categoryId
+                ? [studentId, categoryId]
+                : [studentId];
+
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT sr.id, sr."studentId", sr."categoryId", sr.level, sr."assessedBy", sr."assessedAt", sr.note,
+                        sc.name AS category_name, sc.icon AS category_icon
+                 FROM "SkillRecord" sr
+                 JOIN "SkillCategory" sc ON sr."categoryId" = sc.id
+                 ${whereClause}
+                 ORDER BY sr."assessedAt" DESC
+                 LIMIT 200`,
+                ...params,
+            );
+            return rows.map((r: any) => ({
+                id: r.id,
+                studentId: r.studentId ?? r.studentid,
+                categoryId: r.categoryId ?? r.categoryid,
+                level: Number(r.level ?? 0),
+                assessedBy: r.assessedBy ?? r.assessedby ?? "",
+                assessedAt: r.assessedAt ?? r.assessedat,
+                note: r.note ?? null,
+                categoryName: r.category_name ?? "",
+                categoryIcon: r.category_icon ?? null,
+            }));
+        } catch (e) {
+            console.error("[getSkillHistory] failed:", e);
+            return [];
+        }
+    },
+);

@@ -479,6 +479,33 @@ model MakeupSession {
   @@index([makeupClassId, makeupDate])
 }
 
+// 기술 카테고리 마스터 — 드리블, 슈팅, 패스 등 평가 항목을 관리
+model SkillCategory {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name        String
+  icon        String?
+  order       Int      @default(0)
+  maxLevel    Int      @default(5)
+  description String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
+// 원생별 기술 기록 — 코치가 원생의 카테고리별 레벨을 평가한 이력
+model SkillRecord {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId   String
+  categoryId  String
+  level       Int
+  assessedBy  String
+  assessedAt  DateTime @default(now()) @db.Timestamptz(6)
+  note        String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([studentId, categoryId])
+  @@index([assessedAt])
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

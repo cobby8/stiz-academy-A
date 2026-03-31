@@ -17,6 +17,7 @@ const OPS_PATHS = [
     "/admin/shuttle",
     "/admin/trial",
     "/admin/waitlist",
+    "/admin/makeup",
 ];
 
 export default function AdminLayout({
@@ -146,6 +147,7 @@ export default function AdminLayout({
                             <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
                             <NavItem href="/admin/trial" active={pathname.startsWith("/admin/trial")} icon="🤝" label="체험 CRM" />
                             <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />
+                            <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강 관리" />
 
                             <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
                             <BackupButtons />

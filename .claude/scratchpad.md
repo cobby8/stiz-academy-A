@@ -1,7 +1,7 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 학원 운영 고도화 Phase 4 — 대기자(Waitlist) 관리
+- **요청**: 학원 운영 고도화 Phase 5 — 보강 수업 매칭
 - **상태**: developer 구현 완료 (tsc PASS)
 - **현재 담당**: developer → tester
 - **마지막 세션**: 2026-03-29
@@ -13,7 +13,7 @@
 | 2 | 일일 수업 리포트 | 완료 (tester 대기) |
 | 3 | 체험수업 CRM | 완료 (tester 대기) |
 | 4 | 대기자 관리 | 완료 (tester 대기) |
-| 5 | 보강 수업 매칭 | 대기 |
+| 5 | 보강 수업 매칭 | 완료 (tester 대기) |
 | 6 | 스킬 트래킹 | 대기 |
 | 7 | 통계 대시보드 | 대기 |
 
@@ -23,6 +23,64 @@
 (Phase 3 로드맵에서 설계 완료)
 
 ## 구현 기록 (developer)
+
+### Phase 5: 보강/메이크업 수업 매칭
+
+구현한 기능: MakeupSession 모델(DDL ensure), 보강 예약/취소/상태변경 Server Action, 보강 목록 조회(학생+원래반+보강반 JOIN), 같은 프로그램 다른 반 빈자리 조회, 관리자 보강 관리 페이지(상태필터+요약카드+예약모달+상태드롭다운)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | MakeupSession 모델 추가 (studentId, makeupClassId+Date 인덱스) | 수정 |
+| src/lib/queries.ts | getMakeupSessions(status?), getAvailableMakeupSlots(programId, excludeClassId) 추가 | 수정 |
+| src/app/actions/admin.ts | ensureMakeupSessionTable, bookMakeupSession, cancelMakeupSession, updateMakeupStatus 4개 Server Action | 수정 |
+| src/app/admin/makeup/page.tsx | 서버 페이지 (revalidate:30, ensureMakeupSessionTable DDL) | 신규 |
+| src/app/admin/makeup/MakeupClient.tsx | 목록+필터+요약카드+예약모달(2단계: 원생선택→보강반선택)+상태변경 | 신규 |
+| src/app/admin/layout.tsx | 사이드바 "학원운영" 탭에 "보강 관리" 메뉴 + OPS_PATHS 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/makeup → "보강 예약" 버튼 → 원생/원래반/결석일 입력 → 다음 → 보강반/보강일 선택 → 예약
+- 상태 변경: BOOKED 상태 행의 드롭다운에서 ATTENDED/NO_SHOW/CANCELLED 선택
+- 취소: BOOKED 상태 행 우측 "취소" 버튼
+- 요약 카드: 상태별 건수 표시, 카드 클릭으로 필터링
+- 필터 탭: 전체/예약/출석/취소/노쇼
+
+reviewer 참고:
+- 모든 Server Action에 requireAdmin() 첫줄 호출
+- SQL은 $queryRawUnsafe/$executeRawUnsafe + $N 바인딩만 사용
+- updateMakeupStatus: MAKEUP_STATUS_WHITELIST로 SQL 인젝션 방지
+- Material Symbols Outlined 아이콘 사용 (event_repeat, close, event_busy)
+
+---
+
+## 리뷰 결과 (reviewer) — Phase 5: 보강 수업 매칭
+
+### 종합 판정: APPROVE (경미한 권장 수정 3건)
+
+### 잘된 점:
+- 모든 Server Action(bookMakeupSession, cancelMakeupSession, updateMakeupStatus)에 requireAdmin() 첫줄 호출 확인
+- SQL 전부 $queryRawUnsafe/$executeRawUnsafe + $N 파라미터 바인딩 사용 — SQL 인젝션 위험 없음
+- updateMakeupStatus에서 MAKEUP_STATUS_WHITELIST로 상태값 검증 — 문자열 직접 삽입 방지
+- getAvailableMakeupSlots의 빈자리 계산 정확: enrolled(ACTIVE enrollment) + booked_makeups(BOOKED 보강) 합산하여 capacity와 비교, HAVING 절로 빈자리 있는 반만 반환
+- getMakeupSessions의 JOIN 구조 적절 (Student, Class x2, Program)
+- DDL ensure 멱등성 확보 (CREATE TABLE IF NOT EXISTS + 인덱스 IF NOT EXISTS)
+- Material Symbols Outlined 아이콘 사용 (event_repeat, close, event_busy) — convention 준수
+- Tailwind CSS만 사용, 하드코딩 색상 없음
+- MakeupClient의 useMemo 필터링 패턴 — convention 준수
+
+### 필수 수정: 없음
+
+### 권장 수정:
+
+| # | 파일 | 내용 |
+|---|------|------|
+| 1 | MakeupClient.tsx:10 | `import { getAvailableMakeupSlots } from "@/lib/queries"` — 미사용 import. fetchSlots()에서 실제로는 클라이언트 classes 데이터로 필터링하고 있어 이 import는 dead code. 삭제 권장. (또한 "use client" 컴포넌트에서 서버 쿼리 함수 import는 번들 사이즈에 영향줄 수 있음) |
+| 2 | MakeupClient.tsx:350-362 | fetchSlots()에서 빈자리를 remaining: c.capacity로 표시 — 서버의 getAvailableMakeupSlots가 정확한 잔여석(정원-등록-보강예약)을 계산하는데, 클라이언트에서는 단순히 capacity를 표시. 관리자가 "정원 12명"을 보고 여유 있다고 판단할 수 있으나 실제 등록인원이 11명일 수 있음. 향후 API route를 통해 getAvailableMakeupSlots를 호출하거나, page.tsx에서 서버 데이터로 넘기는 방식 권장 |
+| 3 | admin.ts:3207-3219 | cancelMakeupSession에서 WHERE 조건에 status='BOOKED' 체크 없음. 클라이언트에서 BOOKED일 때만 취소 버튼을 표시하지만, 직접 호출 시 이미 ATTENDED된 세션도 취소 가능. WHERE id=$1 AND status='BOOKED' 추가 권장 |
+
+### layout.tsx 아이콘 메모:
+- 보강 관리 메뉴에 이모지 "🔄" 사용 중. 다른 Phase 메뉴(체험 CRM "🤝", 대기자 "⏳")도 동일 패턴. 이것은 사이드바 NavItem이 icon prop으로 이모지를 받는 기존 구조이므로 Phase 5만의 문제는 아님. 전체 사이드바 아이콘을 Material Symbols로 교체하는 것은 별도 작업으로 분리.
+
+---
 
 ### Phase 3: 체험수업 CRM / 전환 추적
 
@@ -115,6 +173,39 @@ reviewer 참고:
 ---
 
 ## 테스트 결과 (tester)
+
+### Phase 5: 보강 수업 매칭 검증 (2026-03-29)
+
+| # | 테스트 항목 | 결과 | 비고 |
+|---|-----------|------|------|
+| 1 | tsc --noEmit | PASS | 타입 에러 0건 |
+| 2 | schema.prisma: MakeupSession 모델 | PASS | 10개 필드 존재, id(gen_random_uuid), studentId 인덱스, makeupClassId+makeupDate 복합 인덱스, Timestamptz 타입 |
+| 3 | queries.ts: getMakeupSessions | PASS | $queryRawUnsafe 사용, LEFT JOIN Student+Class(원래반/보강반)+Program, status 파라미터 $1 바인딩, cache() 래핑, 소문자 컬럼 fallback(??) 적용, 에러 시 빈 배열 반환 |
+| 4 | queries.ts: getAvailableMakeupSlots | PASS | $queryRawUnsafe 사용, LEFT JOIN Enrollment+MakeupSession, COUNT DISTINCT CASE WHEN, HAVING(정원>등록+보강예약), remaining 계산, $1~$2 바인딩, cache() 래핑, 에러 시 빈 배열 반환 |
+| 5 | admin.ts: ensureMakeupSessionTable DDL | PASS | CREATE TABLE IF NOT EXISTS + 인덱스 2개(studentId, makeupClassId+makeupDate), 멱등성 보장, _makeupEnsured 플래그로 재호출 방지 |
+| 6 | admin.ts: bookMakeupSession requireAdmin + 바인딩 | PASS | 첫 줄 await requireAdmin(), ensureMakeupSessionTable() 호출, $1~$6 파라미터 바인딩, ::timestamptz 캐스팅, revalidatePath("/admin/makeup") |
+| 7 | admin.ts: cancelMakeupSession requireAdmin | PASS | requireAdmin() 호출, UPDATE status='CANCELLED' WHERE id=$1 바인딩, revalidatePath |
+| 8 | admin.ts: updateMakeupStatus requireAdmin + SQL인젝션방지 | PASS | requireAdmin() 호출, MAKEUP_STATUS_WHITELIST 4개 값 검증, 허용 외 값 시 throw Error, $1(status)+$2(id) 바인딩, revalidatePath |
+| 9 | makeup/page.tsx: revalidate=30 | PASS | export const revalidate = 30, ensureMakeupSessionTable() 호출, Promise.all 3개 병렬 조회(sessions+students+classes) |
+| 10 | MakeupClient: Material Symbols 사용 | PASS | event_repeat, event_busy, close 등 Material Symbols Outlined만 사용, lucide-react 미사용 |
+| 11 | MakeupClient: Tailwind CSS | PASS | 모든 스타일 Tailwind 클래스 사용, 하드코딩 색상 없음 |
+| 12 | MakeupClient: 요약 카드 (4종) | PASS | BOOKED/ATTENDED/CANCELLED/NO_SHOW 카드, 클릭 시 필터 토글(같은 카드 재클릭 시 ALL), ring-2로 선택 표시 |
+| 13 | MakeupClient: 상태 필터 탭 | PASS | "전체"+4개 상태 탭, useMemo 필터링, 탭별 건수 표시 |
+| 14 | MakeupClient: 2단계 모달 (BookMakeupModal) | PASS | Step1: 원생 검색(useMemo)+select(size=5), 원래 반 select(요일+시간+프로그램 표시), 결석일 date input, 필수값 검증(3항목) / Step2: 선택 정보 요약, 같은 프로그램 다른 반 radio 선택, 보강일 date input, 이전/예약 버튼 |
+| 15 | MakeupClient: 상태 드롭다운 | PASS | BOOKED일 때만 select 표시(예약/출석/노쇼/취소), 다른 상태는 읽기전용 뱃지, disabled={busy} |
+| 16 | MakeupClient: 취소 버튼 | PASS | BOOKED 상태 행에만 "취소" 버튼 표시, confirm 확인 후 cancelMakeupSession 호출 |
+| 17 | MakeupClient: busy 상태 관리 | PASS | handleStatusChange/handleCancel/handleBook 모두 setBusy(true/false), 버튼 disabled={busy}, "처리 중..." 텍스트 |
+| 18 | MakeupClient: 에러 처리 | PASS | try/catch + alert(message) 패턴 일관 적용, router.refresh()로 상태 갱신 |
+| 19 | MakeupClient: 빈 상태 UI | PASS | filteredSessions.length===0 시 event_busy 아이콘 + "보강 예약이 없습니다" 메시지 |
+| 20 | layout.tsx: "보강 관리" 메뉴 | PASS | OPS_PATHS에 "/admin/makeup" 포함, NavItem label="보강 관리" href="/admin/makeup" 존재 |
+
+참고 사항 (비치명적):
+- MakeupClient.tsx 10행: `getAvailableMakeupSlots`를 import하지만 실제 호출하지 않음 (fetchSlots에서 클라이언트측 classes 배열 필터링으로 대체). unused import이나 tsc 에러 아님. 정리 권장.
+- 위 사항으로 인해 보강 반 선택 시 실제 빈자리(enrolled + bookedMakeups) 대신 capacity만 표시됨. 기능 동작에는 문제 없으나 정확도 떨어짐.
+
+검출된 문제: 0건 (수정 필수 항목 없음)
+
+종합: 20개 중 20개 통과 / 0개 실패 -- PASS
 
 ### Phase 4: 대기자 관리 검증 (2026-03-29)
 

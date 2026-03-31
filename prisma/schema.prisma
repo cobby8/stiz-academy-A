@@ -462,6 +462,23 @@ model Waitlist {
   @@index([classId, status])
 }
 
+// 보강/메이크업 수업 예약 — 결석 시 다른 반에서 보충 수업을 받는 기록
+model MakeupSession {
+  id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId       String
+  originalClassId String    // 원래 수강 중인 반 ID
+  originalDate    DateTime  @db.Timestamptz(6) // 결석한 날짜
+  makeupClassId   String    // 보강 받을 반 ID
+  makeupDate      DateTime  @db.Timestamptz(6) // 보강 수업 날짜
+  status          String    @default("BOOKED") // BOOKED, ATTENDED, CANCELLED, NO_SHOW
+  requestId       String?   // 학부모 결석 요청 ID (ParentRequest 연결, 선택)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([studentId])
+  @@index([makeupClassId, makeupDate])
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

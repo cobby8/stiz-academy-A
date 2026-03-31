@@ -1944,3 +1944,108 @@ export const getClassCapacityInfo = cache(async () => {
         return [];
     }
 });
+
+// ── 보강(메이크업) 수업 조회 ─────────────────────────────────────────────────
+
+/**
+ * 보강 예약 목록 조회 — 학생명, 원래 반, 보강 반 정보를 JOIN
+ * status 필터를 주면 해당 상태만, 안 주면 전체 반환
+ */
+export const getMakeupSessions = cache(async (status?: string) => {
+    try {
+        // 기본 쿼리: 학생/원래반/보강반 이름을 함께 조회
+        const baseQuery = `
+            SELECT ms.id, ms."studentId", ms."originalClassId", ms."originalDate",
+                   ms."makeupClassId", ms."makeupDate", ms.status, ms."requestId",
+                   ms."createdAt", ms."updatedAt",
+                   s.name AS student_name,
+                   oc.name AS original_class_name, oc."dayOfWeek" AS original_day,
+                   mc.name AS makeup_class_name, mc."dayOfWeek" AS makeup_day,
+                   mc."startTime" AS makeup_start, mc."endTime" AS makeup_end,
+                   p.name AS program_name
+            FROM "MakeupSession" ms
+            LEFT JOIN "Student" s ON ms."studentId" = s.id
+            LEFT JOIN "Class" oc ON ms."originalClassId" = oc.id
+            LEFT JOIN "Class" mc ON ms."makeupClassId" = mc.id
+            LEFT JOIN "Program" p ON mc."programId" = p.id
+        `;
+        // 상태 필터 분기
+        const rows = status
+            ? await prisma.$queryRawUnsafe<any[]>(
+                  baseQuery + ` WHERE ms.status = $1 ORDER BY ms."createdAt" DESC`,
+                  status,
+              )
+            : await prisma.$queryRawUnsafe<any[]>(
+                  baseQuery + ` ORDER BY ms."createdAt" DESC`,
+              );
+
+        return rows.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId ?? r.studentid,
+            originalClassId: r.originalClassId ?? r.originalclassid,
+            originalDate: r.originalDate ?? r.originaldate,
+            makeupClassId: r.makeupClassId ?? r.makeupclassid,
+            makeupDate: r.makeupDate ?? r.makeupdate,
+            status: r.status ?? "BOOKED",
+            requestId: r.requestId ?? r.requestid ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            studentName: r.student_name ?? "알 수 없음",
+            originalClassName: r.original_class_name ?? "알 수 없음",
+            originalDay: r.original_day ?? "",
+            makeupClassName: r.makeup_class_name ?? "알 수 없음",
+            makeupDay: r.makeup_day ?? "",
+            makeupStart: r.makeup_start ?? "",
+            makeupEnd: r.makeup_end ?? "",
+            programName: r.program_name ?? "",
+        }));
+    } catch (e) {
+        console.error("[getMakeupSessions] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 보강 가능한 슬롯 조회 — 같은 프로그램의 다른 반에서 빈자리(정원 - 등록인원 - 예약된보강)가 있는 반 목록
+ * excludeClassId: 원래 반은 제외 (같은 반에서 보강은 의미 없음)
+ */
+export const getAvailableMakeupSlots = cache(
+    async (programId: string, excludeClassId: string) => {
+        try {
+            // 같은 프로그램의 다른 반에서 정원 여유가 있는 반 조회
+            // enrolled: ACTIVE 상태 등록인원, bookedMakeups: BOOKED 상태 보강 예약 건수
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity,
+                        COUNT(DISTINCT CASE WHEN e.status = 'ACTIVE' THEN e.id END)::int AS enrolled,
+                        COUNT(DISTINCT CASE WHEN ms.status = 'BOOKED' THEN ms.id END)::int AS booked_makeups
+                 FROM "Class" c
+                 LEFT JOIN "Enrollment" e ON c.id = e."classId"
+                 LEFT JOIN "MakeupSession" ms ON c.id = ms."makeupClassId" AND ms.status = 'BOOKED'
+                 WHERE c."programId" = $1 AND c.id != $2
+                 GROUP BY c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity
+                 HAVING c.capacity > (COUNT(DISTINCT CASE WHEN e.status = 'ACTIVE' THEN e.id END)
+                                    + COUNT(DISTINCT CASE WHEN ms.status = 'BOOKED' THEN ms.id END))
+                 ORDER BY c.name`,
+                programId,
+                excludeClassId,
+            );
+            return rows.map((r: any) => ({
+                id: r.id,
+                name: r.name,
+                dayOfWeek: r.dayOfWeek ?? r.dayofweek ?? "",
+                startTime: r.startTime ?? r.starttime ?? "",
+                endTime: r.endTime ?? r.endtime ?? "",
+                capacity: Number(r.capacity ?? 0),
+                enrolled: Number(r.enrolled ?? 0),
+                bookedMakeups: Number(r.booked_makeups ?? 0),
+                remaining: Math.max(
+                    0,
+                    Number(r.capacity ?? 0) - Number(r.enrolled ?? 0) - Number(r.booked_makeups ?? 0),
+                ),
+            }));
+        } catch (e) {
+            console.error("[getAvailableMakeupSlots] failed:", e);
+            return [];
+        }
+    },
+);

@@ -3128,3 +3128,116 @@ export async function processWaitlistResponse(id: string, accepted: boolean) {
     revalidatePath("/admin/students");
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ── 보강(메이크업) 수업 관리 ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+// DDL ensure 플래그 — 프로세스당 한 번만 실행
+let _makeupEnsured = false;
+
+/**
+ * MakeupSession 테이블 자동 생성 (멱등)
+ * 서버 페이지에서 호출하여 테이블이 없으면 자동으로 만든다
+ */
+export async function ensureMakeupSessionTable() {
+    if (_makeupEnsured) return;
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "MakeupSession" (
+                id TEXT PRIMARY KEY DEFAULT (gen_random_uuid())::text,
+                "studentId" TEXT NOT NULL,
+                "originalClassId" TEXT NOT NULL,
+                "originalDate" TIMESTAMPTZ NOT NULL,
+                "makeupClassId" TEXT NOT NULL,
+                "makeupDate" TIMESTAMPTZ NOT NULL,
+                status TEXT DEFAULT 'BOOKED',
+                "requestId" TEXT,
+                "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+                "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+        // 인덱스 멱등 생성
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "MakeupSession_studentId_idx" ON "MakeupSession" ("studentId")`
+        );
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "MakeupSession_makeupClassId_makeupDate_idx" ON "MakeupSession" ("makeupClassId", "makeupDate")`
+        );
+    } catch (e) {
+        console.warn("[DDL] MakeupSession table ensure failed:", (e as Error).message);
+    }
+    _makeupEnsured = true;
+}
+
+/**
+ * 보강 예약 — 결석한 학생에게 다른 반에서 보충 수업을 예약
+ */
+export async function bookMakeupSession(data: {
+    studentId: string;
+    originalClassId: string;
+    originalDate: string; // ISO 날짜 문자열
+    makeupClassId: string;
+    makeupDate: string;   // ISO 날짜 문자열
+    requestId?: string;
+}) {
+    await requireAdmin();
+    await ensureMakeupSessionTable();
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "MakeupSession"
+                (id, "studentId", "originalClassId", "originalDate", "makeupClassId", "makeupDate", status, "requestId", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3::timestamptz, $4, $5::timestamptz, 'BOOKED', $6, NOW(), NOW())`,
+            data.studentId,
+            data.originalClassId,
+            data.originalDate,
+            data.makeupClassId,
+            data.makeupDate,
+            data.requestId || null,
+        );
+    } catch (e) {
+        console.error("Failed to book makeup session:", e);
+        throw new Error("보강 예약 실패");
+    }
+    revalidatePath("/admin/makeup");
+}
+
+/**
+ * 보강 취소 — BOOKED 상태의 보강을 CANCELLED로 변경
+ */
+export async function cancelMakeupSession(id: string) {
+    await requireAdmin();
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "MakeupSession" SET status = 'CANCELLED', "updatedAt" = NOW() WHERE id = $1`,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to cancel makeup session:", e);
+        throw new Error("보강 취소 실패");
+    }
+    revalidatePath("/admin/makeup");
+}
+
+/**
+ * 보강 상태 변경 — BOOKED → ATTENDED / NO_SHOW / CANCELLED
+ */
+const MAKEUP_STATUS_WHITELIST = ["BOOKED", "ATTENDED", "CANCELLED", "NO_SHOW"];
+export async function updateMakeupStatus(id: string, status: string) {
+    await requireAdmin();
+    // SQL 인젝션 방지: 허용된 상태값만 사용
+    if (!MAKEUP_STATUS_WHITELIST.includes(status)) {
+        throw new Error("잘못된 상태값입니다");
+    }
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "MakeupSession" SET status = $1, "updatedAt" = NOW() WHERE id = $2`,
+            status,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to update makeup status:", e);
+        throw new Error("보강 상태 변경 실패");
+    }
+    revalidatePath("/admin/makeup");
+}
+

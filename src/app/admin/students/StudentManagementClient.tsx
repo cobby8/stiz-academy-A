@@ -121,6 +121,76 @@ function calcAge(birthDate: Date | string): number {
 }
 
 /**
+ * 학년 문자열을 간결하게 변환하는 유틸 함수
+ * "2026년 초등 4학년" -> "초4", "2026년 중등 1학년" -> "중1", "성인" -> "성인"
+ */
+function shortenGrade(grade: string | null): string {
+    if (!grade) return "-";
+    if (grade === "성인") return "성인";
+    // "초등 N학년" 패턴 매칭 (연도 접두사 무시)
+    const elemMatch = grade.match(/초등\s*(\d)/);
+    if (elemMatch) return `초${elemMatch[1]}`;
+    // "중등 N학년" 패턴 매칭
+    const midMatch = grade.match(/중등\s*(\d)/);
+    if (midMatch) return `중${midMatch[1]}`;
+    // "고등 N학년" 패턴 매칭
+    const highMatch = grade.match(/고등\s*(\d)/);
+    if (highMatch) return `고${highMatch[1]}`;
+    // 매칭 안 되면 원본 그대로
+    return grade;
+}
+
+/**
+ * 수강 반 이름을 간결하게 변환: "월요일 6교시" -> "월6"
+ * slotKey가 있으면 slotKey(예: "Mon-4") 활용, 없으면 className에서 추출
+ */
+function shortenClassName(enrollment: { dayOfWeek: string; className: string; slotKey?: string | null }): string {
+    const dayLabel = DAY_LABELS[enrollment.dayOfWeek] || enrollment.dayOfWeek;
+    // slotKey에서 교시 번호 추출 (예: "Mon-4" -> 4)
+    if (enrollment.slotKey) {
+        const match = enrollment.slotKey.match(/-(\d+)$/);
+        if (match) return `${dayLabel}${match[1]}`;
+    }
+    // className에서 교시 번호 추출 (예: "월요일 6교시" -> 6)
+    const periodMatch = enrollment.className.match(/(\d+)\s*교시/);
+    if (periodMatch) return `${dayLabel}${periodMatch[1]}`;
+    // 추출 실패 시 요일 + 반이름 축약
+    return `${dayLabel}`;
+}
+
+/**
+ * 전화번호에 하이픈 포맷 적용: "01052594903" -> "010-5259-4903"
+ */
+function formatPhone(phone: string | null): string {
+    if (!phone) return "-";
+    // 이미 하이픈이 있으면 그대로 반환
+    if (phone.includes("-")) return phone;
+    // 숫자만 추출
+    const digits = phone.replace(/\D/g, "");
+    // 010-XXXX-XXXX (11자리)
+    if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    // 02-XXXX-XXXX (10자리, 서울)
+    if (digits.length === 10 && digits.startsWith("02")) return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+    // 0XX-XXX-XXXX (10자리, 지역번호)
+    if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+    return phone;
+}
+
+/**
+ * 학부모 이름을 간결하게 표시
+ * "기타(기본 보호자)" -> "보호자", "기타(본인)" -> "본인"
+ */
+function shortenParentName(name: string | null): string {
+    if (!name) return "-";
+    if (name === "기타(기본 보호자)" || name === "기본 보호자") return "보호자";
+    if (name === "기타(본인)") return "본인";
+    // "기타(...)" 패턴에서 괄호 안의 내용만 추출
+    const etcMatch = name.match(/^기타\((.+)\)$/);
+    if (etcMatch) return etcMatch[1];
+    return name;
+}
+
+/**
  * 학생의 대표 상태를 판단하는 헬퍼 함수
  * - ACTIVE가 1개라도 있으면 "ACTIVE" (활성 수강이 있으니까)
  * - 없으면 가장 최근 enrollment의 status를 사용
@@ -582,68 +652,66 @@ export default function StudentManagementClient({
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">나이/생년월일</th>
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">성별</th>
-                                    {/* 학교/학년: 모바일에서 숨김 처리 */}
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">학교</th>
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">학년</th>
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">수강 반</th>
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">학부모</th>
-                                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">연락처</th>
-                                    <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase">관리</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">학년</th>
+                                    {/* 학교/학부모/연락처: 모바일에서 숨김 */}
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">학교</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">수강 반</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">학부모</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">연락처</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">관리</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {filtered.map((s) => (
                                     <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-5 py-3.5">
-                                            <Link href={`/admin/students/${s.id}`} className="font-bold text-gray-900 hover:text-brand-orange-500 transition-colors">
+                                        {/* 이름: 항상 표시, 클릭하면 상세 페이지로 이동 */}
+                                        <td className="px-4 py-2">
+                                            <Link href={`/admin/students/${s.id}`} className="font-bold text-gray-900 hover:text-brand-orange-500 transition-colors text-sm">
                                                 {s.name}
                                             </Link>
                                         </td>
-                                        <td className="px-5 py-3.5 text-sm text-gray-600">
-                                            <span className="font-medium">{calcAge(s.birthDate)}세</span>
-                                            <span className="text-gray-400 ml-1">({toDateStr(s.birthDate)})</span>
+                                        {/* 학년: 항상 표시, shortenGrade로 "초4" 형태 */}
+                                        <td className="px-4 py-2 text-sm text-gray-600">
+                                            {shortenGrade(s.grade)}
                                         </td>
-                                        <td className="px-5 py-3.5 text-sm text-gray-600">
-                                            {s.gender || "-"}
-                                        </td>
-                                        {/* 학교/학년: 모바일에서 숨김 */}
-                                        <td className="px-5 py-3.5 text-sm text-gray-600 hidden lg:table-cell">
+                                        {/* 학교: 모바일 숨김 */}
+                                        <td className="px-4 py-2 text-sm text-gray-600 hidden md:table-cell">
                                             {s.school || "-"}
                                         </td>
-                                        <td className="px-5 py-3.5 text-sm text-gray-600 hidden lg:table-cell">
-                                            {s.grade || "-"}
-                                        </td>
-                                        {/* 수강 반: enrollments에서 반 이름 표시 */}
-                                        <td className="px-5 py-3.5 text-sm text-gray-600 hidden lg:table-cell">
+                                        {/* 수강 반: 항상 표시, shortenClassName으로 "월6" 형태 */}
+                                        <td className="px-4 py-2 text-sm text-gray-600">
                                             {s.enrollments && s.enrollments.length > 0
                                                 ? [...s.enrollments]
                                                     .sort((a, b) => (DAY_ORDER[a.dayOfWeek] ?? 99) - (DAY_ORDER[b.dayOfWeek] ?? 99) || a.startTime.localeCompare(b.startTime))
-                                                    .map((e) => e.className).join(", ")
+                                                    .map((e) => shortenClassName(e)).join(", ")
                                                 : <span className="text-gray-300">-</span>
                                             }
                                         </td>
-                                        <td className="px-5 py-3.5 text-sm text-gray-600">
-                                            {s.parent.name || "-"}
+                                        {/* 학부모: 모바일 숨김, shortenParentName으로 간결화 */}
+                                        <td className="px-4 py-2 text-sm text-gray-600 hidden md:table-cell">
+                                            {shortenParentName(s.parent.name)}
                                         </td>
-                                        <td className="px-5 py-3.5 text-sm text-gray-600">
-                                            {s.parent.phone || "-"}
+                                        {/* 연락처: 모바일 숨김, formatPhone으로 하이픈 포맷 */}
+                                        <td className="px-4 py-2 text-sm text-gray-600 hidden md:table-cell">
+                                            {formatPhone(s.parent.phone)}
                                         </td>
-                                        <td className="px-5 py-3.5 text-right">
-                                            <div className="flex items-center gap-2 justify-end">
+                                        {/* 관리: 아이콘 버튼 3개 (수강등록, 수정, 삭제) */}
+                                        <td className="px-4 py-2 text-right">
+                                            <div className="flex items-center gap-1 justify-end">
                                                 <button
                                                     onClick={() => setEnrollModal(s.id)}
-                                                    className="text-xs text-green-600 hover:text-green-800 font-medium"
+                                                    title="수강등록"
+                                                    className="p-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition"
                                                 >
-                                                    수강등록
+                                                    <span className="material-symbols-outlined text-[20px]">how_to_reg</span>
                                                 </button>
                                                 <button
                                                     onClick={() => startEdit(s)}
-                                                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                                    title="수정"
+                                                    className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition"
                                                 >
-                                                    수정
+                                                    <span className="material-symbols-outlined text-[20px]">edit</span>
                                                 </button>
                                                 {deleteConfirm === s.id ? (
                                                     <div className="flex gap-1">
@@ -664,9 +732,10 @@ export default function StudentManagementClient({
                                                 ) : (
                                                     <button
                                                         onClick={() => setDeleteConfirm(s.id)}
-                                                        className="text-xs text-red-500 hover:text-red-700 font-medium"
+                                                        title="삭제"
+                                                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
                                                     >
-                                                        삭제
+                                                        <span className="material-symbols-outlined text-[20px]">delete</span>
                                                     </button>
                                                 )}
                                             </div>

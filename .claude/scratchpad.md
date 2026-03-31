@@ -1,21 +1,42 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: CSV -> DB Enrollment 상태 재설정 (4월 데이터 포함)
+- **요청**: 원생 관리 목록 테이블 UI 정비
 - **상태**: developer 실행 완료
 - **현재 담당**: PM 확인
 - **마지막 세션**: 2026-03-29
 
 ### 구현 기록
 
-구현한 기능: CSV 기반 Enrollment 상태 재설정 스크립트
+구현한 기능: 원생 관리 목록 테이블 UI 정비 (컬럼 축소 + 헬퍼 함수 적용 + 아이콘화 + 행 높이 축소 + 반응형)
 
 | 파일 경로 | 변경 내용 | 신규/수정 |
 |----------|----------|----------|
-| scripts/reset-enrollment-status.js | CSV 다운로드->파싱->학생그룹핑->최신월결제방법기준상태결정->DB UPDATE | 신규 |
+| src/app/admin/students/StudentManagementClient.tsx | tbody 행: 7컬럼(이름/학년/학교/수강반/학부모/연락처/관리)으로 축소, 헬퍼함수 적용, 아이콘 버튼, py-2 패딩, md:table-cell 반응형 | 수정 |
 
-실행 결과: CSV 267명 중 263명 DB 매칭, Enrollment 333건 UPDATE (ACTIVE 262, PAUSED 27, WITHDRAWN 50)
-미매칭 4명: 인코딩 깨짐 3명 + 괄호 포함 이름 1명 (수동 확인 필요)
+tester 참고:
+- 테스트 방법: /admin/students 접속 후 테이블 확인
+- 정상 동작: 학년="초4" 형태, 수강반="월6,수4" 형태, 학부모="보호자" 형태, 연락처="010-xxxx-xxxx" 하이픈, 관리=아이콘3개
+- 모바일(md 미만): 학교/학부모/연락처 숨김, 이름/학년/수강반/관리만 표시
+
+---
+
+#### 이전 구현 기록: 4월 CSV 기준 Enrollment 완전 재설정
+
+구현한 기능: 4월 CSV 기준 Enrollment 완전 재설정 (DELETE + INSERT)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| scripts/reset-enrollments-april.js | CSV에서 4월행 필터->요일별 slotKey 추출->기존 전삭제->새 INSERT | 신규 |
+
+실행 결과: 기존 339건 DELETE -> 335건 INSERT (ACTIVE 251, PAUSED 32, WITHDRAWN 52)
+- 4월 학생 197명, 1~3월만 학생 71명, DB 매칭 263명, 미매칭 5명
+- DB에 없는 slotKey 4건: Tue-1, Thu-1, Thu-5, Fri-0 (해당 수업 건너뜀)
+
+#### 수정 이력
+| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
+|------|------|----------|----------|------|
+| 1차 | 2026-03-29 | 기존 UPDATE방식 -> DELETE+INSERT 완전 재설정 | reset-enrollments-april.js | PM 요청: 4월 CSV 기준 Enrollment 완전 재설정 |
 
 ### 전체 로드맵 진행 현황
 | Phase | 기능 | 상태 |

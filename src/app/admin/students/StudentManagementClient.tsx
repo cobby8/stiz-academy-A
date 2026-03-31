@@ -323,7 +323,11 @@ export default function StudentManagementClient({
             // 수강 상태 필터: 최신 enrollment 상태 기준으로 판단
             if (filterStatus) {
                 const latestStatus = getLatestStatus(s.enrollments);
-                if (latestStatus !== filterStatus) return false;
+                if (filterStatus === "NONE") {
+                    if (latestStatus !== null) return false;
+                } else {
+                    if (latestStatus !== filterStatus) return false;
+                }
             }
             return true;
         });
@@ -335,11 +339,12 @@ export default function StudentManagementClient({
     return (
         <div className="max-w-5xl mx-auto">
             {/* 상태별 요약 카드 — 클릭하면 해당 필터 적용 */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
                 {[
                     { label: "활성", value: "ACTIVE", count: statusCounts.active, color: "bg-emerald-50 border-emerald-200 text-emerald-700", icon: "person" },
                     { label: "휴원", value: "PAUSED", count: statusCounts.paused, color: "bg-amber-50 border-amber-200 text-amber-700", icon: "pause_circle" },
                     { label: "퇴원", value: "WITHDRAWN", count: statusCounts.withdrawn, color: "bg-red-50 border-red-200 text-red-700", icon: "person_off" },
+                    { label: "미배정", value: "NONE", count: statusCounts.noEnrollment, color: "bg-purple-50 border-purple-200 text-purple-700", icon: "help_outline" },
                     { label: "전체", value: "", count: statusCounts.total, color: "bg-gray-50 border-gray-200 text-gray-700", icon: "groups" },
                 ].map((card) => (
                     <button
@@ -362,7 +367,7 @@ export default function StudentManagementClient({
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-900">원생 관리</h1>
                     <p className="text-gray-500 text-sm mt-1">
-                        {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : "전체"} 원생: {filtered.length}명
+                        {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : filterStatus === "NONE" ? "미배정" : "전체"} 원생: {filtered.length}명
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -441,6 +446,7 @@ export default function StudentManagementClient({
                     <option value="ACTIVE">활성</option>
                     <option value="PAUSED">휴원</option>
                     <option value="WITHDRAWN">퇴원</option>
+                    <option value="NONE">미배정</option>
                 </select>
                 {/* 초기화 버튼: 필터가 하나라도 설정돼 있으면 표시 */}
                 {(filterClass || filterGrade || filterSchool || filterStatus) && (

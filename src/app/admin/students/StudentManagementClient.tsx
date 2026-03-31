@@ -37,6 +37,7 @@ type Student = {
         status: string;
         dayOfWeek: string;
         startTime: string;
+        createdAt?: string;
     }[];
 };
 
@@ -117,6 +118,24 @@ function calcAge(birthDate: Date | string): number {
     const m = today.getMonth() - birth.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
     return age;
+}
+
+/**
+ * 학생의 대표 상태를 판단하는 헬퍼 함수
+ * - ACTIVE가 1개라도 있으면 "ACTIVE" (활성 수강이 있으니까)
+ * - 없으면 가장 최근 enrollment의 status를 사용
+ */
+function getLatestStatus(enrollments: Student["enrollments"]): string | null {
+    if (!enrollments || enrollments.length === 0) return null;
+    // ACTIVE가 하나라도 있으면 활성
+    if (enrollments.some((e) => e.status === "ACTIVE")) return "ACTIVE";
+    // 없으면 가장 최근 생성된 enrollment의 상태를 기준으로 판단
+    const sorted = [...enrollments].sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA; // 최신순
+    });
+    return sorted[0].status;
 }
 
 export default function StudentManagementClient({
@@ -253,6 +272,7 @@ export default function StudentManagementClient({
     }
 
     // 상태별 학생 수 집계 (요약 카드용)
+    // 최신 enrollment 기준으로 학생의 대표 상태를 판단
     const statusCounts = useMemo(() => {
         let active = 0;
         let paused = 0;
@@ -260,25 +280,27 @@ export default function StudentManagementClient({
         let noEnrollment = 0;
 
         for (const s of students) {
-            if (!s.enrollments || s.enrollments.length === 0) {
-                // Enrollment이 없는 학생 = 미배정
+            const status = getLatestStatus(s.enrollments);
+            if (!status) {
                 noEnrollment++;
-                continue;
+            } else if (status === "ACTIVE") {
+                active++;
+            } else if (status === "PAUSED") {
+                paused++;
+            } else if (status === "WITHDRAWN") {
+                withdrawn++;
+            } else {
+                noEnrollment++;
             }
-            // 가장 우선순위 높은 상태 기준으로 분류 (ACTIVE > PAUSED > WITHDRAWN)
-            const statuses = s.enrollments.map((e) => e.status);
-            if (statuses.includes("ACTIVE")) active++;
-            else if (statuses.includes("PAUSED")) paused++;
-            else if (statuses.includes("WITHDRAWN")) withdrawn++;
-            else noEnrollment++; // 알 수 없는 상태
         }
 
         return { active, paused, withdrawn, noEnrollment, total: students.length };
     }, [students]);
 
     // 검색 + 필터 조합 (AND 조건): useMemo로 캐싱하여 불필요한 재계산 방지
+    // 결과를 이름 가나다순으로 정렬
     const filtered = useMemo(() => {
-        return students.filter((s) => {
+        const result = students.filter((s) => {
             // 텍스트 검색
             if (search) {
                 const q = search.toLowerCase();
@@ -298,15 +320,16 @@ export default function StudentManagementClient({
             if (filterGrade && s.grade !== filterGrade) return false;
             // 학교 필터
             if (filterSchool && s.school !== filterSchool) return false;
-            // 수강 상태 필터: enrollments 중 해당 상태가 있는 학생
-            // Enrollment이 없는 학생은 "전체"에서만 표시됨
+            // 수강 상태 필터: 최신 enrollment 상태 기준으로 판단
             if (filterStatus) {
-                if (!s.enrollments || s.enrollments.length === 0) return false;
-                const hasStatus = s.enrollments.some((e) => e.status === filterStatus);
-                if (!hasStatus) return false;
+                const latestStatus = getLatestStatus(s.enrollments);
+                if (latestStatus !== filterStatus) return false;
             }
             return true;
         });
+        // 이름 가나다순 정렬 (기본 정렬)
+        result.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+        return result;
     }, [students, search, filterClass, filterGrade, filterSchool, filterStatus]);
 
     return (

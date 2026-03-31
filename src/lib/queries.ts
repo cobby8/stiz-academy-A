@@ -127,7 +127,8 @@ export const getStudents = cache(async () => {
                         'className', c.name,
                         'status', e.status,
                         'dayOfWeek', c."dayOfWeek",
-                        'startTime', c."startTime"
+                        'startTime', c."startTime",
+                        'createdAt', e."createdAt"
                     ))
                     FROM "Enrollment" e
                     JOIN "Class" c ON e."classId" = c.id
@@ -135,7 +136,7 @@ export const getStudents = cache(async () => {
                     ) AS enrollments
              FROM "Student" s
              LEFT JOIN "User" u ON s."parentId" = u.id
-             ORDER BY s."createdAt" DESC`
+             ORDER BY s.name ASC`
         );
         return rows.map((r: any) => ({
             id: r.id,

@@ -2956,3 +2956,175 @@ export async function convertTrialToStudent(
     revalidatePath("/admin");
 }
 
+// ── 대기자(Waitlist) 관리 ─────────────────────────────────────────────────────
+
+// DDL ensure: Waitlist 테이블이 없으면 생성 (멱등성 보장)
+let _waitlistEnsured = false;
+export async function ensureWaitlistTable() {
+    if (_waitlistEnsured) return;
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "Waitlist" (
+                id TEXT PRIMARY KEY DEFAULT (gen_random_uuid())::text,
+                "studentId" TEXT NOT NULL,
+                "classId" TEXT NOT NULL,
+                priority INT DEFAULT 0,
+                status TEXT DEFAULT 'WAITING',
+                "offeredAt" TIMESTAMPTZ,
+                "respondBy" TIMESTAMPTZ,
+                memo TEXT,
+                "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+                "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE ("studentId", "classId")
+            )
+        `);
+        // 인덱스도 멱등하게 생성
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "Waitlist_classId_status_idx" ON "Waitlist" ("classId", status)`
+        );
+    } catch (e) {
+        console.warn("[DDL] Waitlist table ensure failed:", (e as Error).message);
+    }
+    _waitlistEnsured = true;
+}
+
+/**
+ * 대기 등록 — 학생을 반 대기열에 추가
+ * priority는 해당 반의 기존 대기자 최대값 + 1로 자동 설정 (선착순)
+ */
+export async function addToWaitlist(studentId: string, classId: string, memo?: string) {
+    await requireAdmin();
+    await ensureWaitlistTable();
+    try {
+        // 해당 반의 현재 최대 priority 조회
+        const maxRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COALESCE(MAX(priority), -1)::int AS max_p FROM "Waitlist" WHERE "classId" = $1`,
+            classId,
+        );
+        const nextPriority = (maxRows[0]?.max_p ?? -1) + 1;
+
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Waitlist" (id, "studentId", "classId", priority, status, memo, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, 'WAITING', $4, NOW(), NOW())
+             ON CONFLICT ("studentId", "classId") DO UPDATE
+             SET status = 'WAITING', priority = $3, memo = $4, "updatedAt" = NOW()`,
+            studentId, classId, nextPriority, memo || null,
+        );
+    } catch (e) {
+        console.error("Failed to add to waitlist:", e);
+        throw new Error("대기 등록 실패");
+    }
+    revalidatePath("/admin/waitlist");
+    revalidatePath("/admin/classes");
+}
+
+/**
+ * 대기 취소 — 대기열에서 제거 (status를 CANCELLED로 변경)
+ */
+export async function removeFromWaitlist(id: string) {
+    await requireAdmin();
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Waitlist" SET status = 'CANCELLED', "updatedAt" = NOW() WHERE id = $1`,
+            id,
+        );
+    } catch (e) {
+        console.error("Failed to remove from waitlist:", e);
+        throw new Error("대기 취소 실패");
+    }
+    revalidatePath("/admin/waitlist");
+    revalidatePath("/admin/classes");
+}
+
+/**
+ * 자리 제안 — WAITING 상태의 대기자에게 자리를 제안
+ * offeredAt: 현재 시각, respondBy: 3일 후 (응답 기한)
+ * 학부모에게 Notification 발송
+ */
+export async function offerWaitlistSpot(id: string) {
+    await requireAdmin();
+    try {
+        // 대기자 정보 조회 (학생 ID + 반 이름 필요)
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT w."studentId", w."classId", c.name AS class_name
+             FROM "Waitlist" w
+             LEFT JOIN "Class" c ON w."classId" = c.id
+             WHERE w.id = $1 AND w.status = 'WAITING'`,
+            id,
+        );
+        if (rows.length === 0) throw new Error("대기 상태가 아닌 항목입니다");
+
+        const { studentId, class_name } = rows[0];
+        const studentid = rows[0].studentId ?? rows[0].studentid;
+
+        // 상태를 OFFERED로 변경 + 제안 시각/응답 기한 설정
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Waitlist"
+             SET status = 'OFFERED', "offeredAt" = NOW(), "respondBy" = NOW() + INTERVAL '3 days', "updatedAt" = NOW()
+             WHERE id = $1`,
+            id,
+        );
+
+        // 학부모에게 알림 발송 (자리가 났다는 안내)
+        await notifyParentsOfStudents(
+            [studentid],
+            "WAITLIST",
+            "대기 반 자리 안내",
+            `${class_name ?? "반"} 자리가 났습니다. 3일 이내 응답해주세요.`,
+            "/mypage",
+        );
+    } catch (e) {
+        console.error("Failed to offer waitlist spot:", e);
+        throw new Error("자리 제안 실패");
+    }
+    revalidatePath("/admin/waitlist");
+}
+
+/**
+ * 대기자 응답 처리
+ * accepted=true: Enrollment 생성 + status ENROLLED
+ * accepted=false: status CANCELLED
+ */
+export async function processWaitlistResponse(id: string, accepted: boolean) {
+    await requireAdmin();
+    try {
+        if (accepted) {
+            // 대기자 정보 조회
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT "studentId", "classId" FROM "Waitlist" WHERE id = $1 AND status = 'OFFERED'`,
+                id,
+            );
+            if (rows.length === 0) throw new Error("제안 상태가 아닌 항목입니다");
+
+            const studentId = rows[0].studentId ?? rows[0].studentid;
+            const classId = rows[0].classId ?? rows[0].classid;
+
+            // Enrollment 생성 (ON CONFLICT로 이미 있으면 ACTIVE로 업데이트)
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
+                 ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()`,
+                studentId, classId,
+            );
+
+            // Waitlist 상태를 ENROLLED로 변경
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Waitlist" SET status = 'ENROLLED', "updatedAt" = NOW() WHERE id = $1`,
+                id,
+            );
+        } else {
+            // 거절: CANCELLED로 변경
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Waitlist" SET status = 'CANCELLED', "updatedAt" = NOW() WHERE id = $1`,
+                id,
+            );
+        }
+    } catch (e) {
+        console.error("Failed to process waitlist response:", e);
+        throw new Error("대기자 응답 처리 실패");
+    }
+    revalidatePath("/admin/waitlist");
+    revalidatePath("/admin/classes");
+    revalidatePath("/admin/students");
+}
+

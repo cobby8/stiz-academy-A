@@ -1867,3 +1867,80 @@ export const getTrialStats = cache(async () => {
         };
     }
 });
+
+// ── 대기자(Waitlist) 조회 ────────────────────────────────────────────────────
+
+/**
+ * 전체 대기자 목록 — 학생명, 반명 JOIN + priority 순 정렬
+ */
+export const getWaitlistAll = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT w.id, w."studentId", w."classId", w.priority, w.status,
+                    w."offeredAt", w."respondBy", w.memo,
+                    w."createdAt", w."updatedAt",
+                    s.name AS student_name,
+                    c.name AS class_name, c."dayOfWeek" AS class_day,
+                    c."startTime" AS class_start, c."endTime" AS class_end
+             FROM "Waitlist" w
+             LEFT JOIN "Student" s ON w."studentId" = s.id
+             LEFT JOIN "Class" c ON w."classId" = c.id
+             ORDER BY w."classId", w.priority ASC, w."createdAt" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId ?? r.studentid,
+            classId: r.classId ?? r.classid,
+            priority: Number(r.priority ?? 0),
+            status: r.status ?? "WAITING",
+            offeredAt: r.offeredAt ?? r.offeredat ?? null,
+            respondBy: r.respondBy ?? r.respondby ?? null,
+            memo: r.memo ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+            studentName: r.student_name ?? "알 수 없음",
+            className: r.class_name ?? "알 수 없음",
+            classDay: r.class_day ?? r.class_day ?? "",
+            classStart: r.class_start ?? "",
+            classEnd: r.class_end ?? "",
+        }));
+    } catch (e) {
+        console.error("[getWaitlistAll] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 반별 정원/등록인원/잔여석/대기자수 현황
+ * - enrolled: Enrollment status='ACTIVE' 건수
+ * - waiting: Waitlist status='WAITING' 또는 'OFFERED' 건수
+ */
+export const getClassCapacityInfo = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT c.id, c.name, c."dayOfWeek", c."startTime", c."endTime",
+                    c.capacity,
+                    COUNT(DISTINCT CASE WHEN e.status = 'ACTIVE' THEN e.id END)::int AS enrolled,
+                    COUNT(DISTINCT CASE WHEN wl.status IN ('WAITING','OFFERED') THEN wl.id END)::int AS waiting
+             FROM "Class" c
+             LEFT JOIN "Enrollment" e ON c.id = e."classId"
+             LEFT JOIN "Waitlist" wl ON c.id = wl."classId"
+             GROUP BY c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity
+             ORDER BY c.name`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            dayOfWeek: r.dayOfWeek ?? r.dayofweek ?? "",
+            startTime: r.startTime ?? r.starttime ?? "",
+            endTime: r.endTime ?? r.endtime ?? "",
+            capacity: Number(r.capacity ?? 0),
+            enrolled: Number(r.enrolled ?? 0),
+            remaining: Math.max(0, Number(r.capacity ?? 0) - Number(r.enrolled ?? 0)),
+            waiting: Number(r.waiting ?? 0),
+        }));
+    } catch (e) {
+        console.error("[getClassCapacityInfo] failed:", e);
+        return [];
+    }
+});

@@ -445,6 +445,23 @@ model TrialLead {
   @@index([createdAt])
 }
 
+// 대기자 관리 — 반 정원 초과 시 대기열에 등록, 자리 생기면 제안/수락/거절 처리
+model Waitlist {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId   String
+  classId     String
+  priority    Int       @default(0)              // 우선순위 (낮을수록 먼저, 자동 증가)
+  status      String    @default("WAITING")      // WAITING, OFFERED, ENROLLED, CANCELLED
+  offeredAt   DateTime? @db.Timestamptz(6)       // 자리 제안 시각
+  respondBy   DateTime? @db.Timestamptz(6)       // 응답 기한 (offeredAt + 3일)
+  memo        String?                            // 관리자 메모
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([studentId, classId])
+  @@index([classId, status])
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

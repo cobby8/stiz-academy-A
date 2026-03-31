@@ -21,6 +21,7 @@ export default async function AdminApplyPage() {
                 enrollTitle: settings?.enrollTitle || "수강신청 안내",
                 enrollContent: settings?.enrollContent || null,
                 enrollFormUrl: settings?.enrollFormUrl || null,
+                uniformFormUrl: settings?.uniformFormUrl || null,
             }}
         />
     );

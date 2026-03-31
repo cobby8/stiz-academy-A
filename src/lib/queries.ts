@@ -42,6 +42,7 @@ export const getAcademySettings = cache(async () => {
                 facilitiesImagesJSON: r.facilitiesImagesJSON ?? r.facilitiesimagesjson ?? null,
                 galleryImagesJSON: r.galleryImagesJSON ?? r.galleryimagesjson ?? null,
                 naverPlaceUrl: r.naverPlaceUrl ?? r.naverplaceurl ?? null,
+                uniformFormUrl: r.uniformFormUrl ?? r.uniformformurl ?? null,
             } as any;
         }
     } catch {

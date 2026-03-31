@@ -12,6 +12,7 @@ interface ApplyAdminClientProps {
         enrollTitle: string;
         enrollContent: string | null;
         enrollFormUrl: string | null;
+        uniformFormUrl: string | null;
     };
 }
 
@@ -51,6 +52,9 @@ export default function ApplyAdminClient({ initialSettings }: ApplyAdminClientPr
     const [enrollContent, setEnrollContent] = useState(initialSettings.enrollContent || "");
     const [enrollFormUrl, setEnrollFormUrl] = useState(initialSettings.enrollFormUrl || "");
 
+    // 유니폼 신청 URL 상태
+    const [uniformFormUrl, setUniformFormUrl] = useState(initialSettings.uniformFormUrl || "");
+
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -67,6 +71,7 @@ export default function ApplyAdminClient({ initialSettings }: ApplyAdminClientPr
                 enrollTitle: enrollTitle.trim() || "수강신청 안내",
                 enrollContent: enrollContent.trim() || undefined,
                 enrollFormUrl: enrollFormUrl.trim() || undefined,
+                uniformFormUrl: uniformFormUrl.trim() || undefined,
             });
             setSaved(true);
             router.refresh();
@@ -189,6 +194,29 @@ export default function ApplyAdminClient({ initialSettings }: ApplyAdminClientPr
                     )}
                     {!enrollFormUrl && (
                         <p className="text-xs text-gray-400 mt-1.5">URL 미입력 시 신청 버튼이 "준비 중" 상태로 표시됩니다.</p>
+                    )}
+                </div>
+            </SectionCard>
+
+            {/* 유니폼 신청 */}
+            <SectionCard badge="유니폼" badgeColor="bg-green-50 text-green-700 border border-green-200" title="유니폼 신청 설정">
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                        구글폼 URL
+                        <span className="text-gray-400 font-normal ml-1">(유니폼 신청용 구글폼 주소를 입력하면 신청 페이지에 카드가 표시됩니다)</span>
+                    </label>
+                    <input
+                        type="url"
+                        value={uniformFormUrl}
+                        onChange={(e) => setUniformFormUrl(e.target.value)}
+                        className={INPUT}
+                        placeholder="https://docs.google.com/forms/d/e/..."
+                    />
+                    {uniformFormUrl && (
+                        <p className="text-xs text-green-600 mt-1.5">✓ 구글폼 URL 등록됨 — 유니폼 신청 카드가 신청 페이지에 표시됩니다.</p>
+                    )}
+                    {!uniformFormUrl && (
+                        <p className="text-xs text-gray-400 mt-1.5">URL 미입력 시 유니폼 신청 카드가 신청 페이지에 표시되지 않습니다.</p>
                     )}
                 </div>
             </SectionCard>

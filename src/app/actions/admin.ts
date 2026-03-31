@@ -32,6 +32,7 @@ export async function ensureAcademySettingsColumns() {
         ["facilitiesText", "TEXT"],
         ["facilitiesImagesJSON", "TEXT"],
         ["galleryImagesJSON", "TEXT"],
+        ["uniformFormUrl", "TEXT"],
     ];
     for (const [col, type] of columns) {
         try {
@@ -59,6 +60,7 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'facilitiesImagesJSON',
     'galleryImagesJSON',
     'naverPlaceUrl',
+    'uniformFormUrl',
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
@@ -317,6 +319,7 @@ export async function updateAcademySettings(data: {
     facilitiesImagesJSON?: string;
     galleryImagesJSON?: string;
     naverPlaceUrl?: string;
+    uniformFormUrl?: string;
 }) {
     await requireAdmin();
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음

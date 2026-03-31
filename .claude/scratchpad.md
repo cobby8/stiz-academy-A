@@ -20,7 +20,39 @@
 ---
 
 ## 기획설계 (planner-architect)
-(Phase 3 로드맵에서 설계 완료)
+
+### 유니폼 신청서 구글폼 연동
+
+목표: 유니폼 신청 구글폼(https://forms.gle/H7SiGSkLvMTxqv3T9)을 홈페이지 /apply 페이지에 추가
+
+만들 위치와 구조:
+| 파일 경로 | 역할 | 신규/수정 |
+|----------|------|----------|
+| src/app/actions/admin.ts | uniformFormUrl DDL + SETTINGS_ALLOWED 추가 | 수정 |
+| src/lib/queries.ts | getAcademySettings에 uniformFormUrl 반환 | 수정 |
+| src/app/admin/apply/page.tsx | uniformFormUrl 관리자 전달 | 수정 |
+| src/app/admin/apply/ApplyAdminClient.tsx | 유니폼 URL 입력 섹션 추가 | 수정 |
+| src/app/apply/page.tsx | uniformFormUrl을 ApplyPageClient에 전달 | 수정 |
+| src/app/apply/ApplyPageClient.tsx | 유니폼 카드 + FormModal 추가 | 수정 |
+
+기존 코드 연결:
+- trialFormUrl/enrollFormUrl 패턴을 100% 복제하여 uniformFormUrl 추가
+- FormModal 컴포넌트 재사용 (iframe 임베드)
+- AcademySettings DDL ensure 패턴 동일 적용
+
+실행 계획:
+| 순서 | 작업 | 담당 | 선행 조건 |
+|------|------|------|----------|
+| 1 | AcademySettings에 uniformFormUrl 필드 추가 (DDL + ALLOWED + queries) | developer | 없음 |
+| 2 | 관리자 /admin/apply에 유니폼 URL 입력 필드 추가 | developer | 1 |
+| 3 | 공개 /apply에 유니폼 신청 카드 + FormModal 추가 | developer | 1 |
+| 4 | tsc --noEmit 검증 | tester | 2, 3 |
+
+developer 주의사항:
+- 기존 trialFormUrl 패턴 그대로 복사. 새 패턴 만들지 말 것
+- queries.ts: uniformFormUrl: r.uniformFormUrl ?? r.uniformformurl ?? null (대소문자 fallback)
+- 유니폼 카드는 체험/수강 카드 아래 별도 섹션으로 배치
+- 기본값: https://forms.gle/H7SiGSkLvMTxqv3T9
 
 ## 구현 기록 (developer)
 
@@ -566,12 +598,33 @@ reviewer 참고:
 - [admin.ts:3088-3129] processWaitlistResponse(accepted=true)에서 정원 초과 방지 체크가 없음. 수락 시 해당 반의 현재 등록인원이 capacity를 초과하는지 확인하지 않고 바로 Enrollment를 생성함. 관리자가 수동 판단 후 수락하는 워크플로우이므로 의도적일 수 있으나, 실수 방지를 위해 `enrolled >= capacity`일 때 confirm/경고를 추가하면 더 안전함. 클라이언트 측에서 capacityInfo를 이미 보유하므로 handleAccept에서 프론트엔드 경고만 추가해도 충분.
 - [admin.ts:3057-3058] offerWaitlistSpot에서 `studentId`와 `studentid` 변수가 혼재. 3057줄에서 구조분해로 `studentId`를 꺼내고, 3058줄에서 다시 `rows[0].studentId ?? rows[0].studentid`로 재할당함. 3057줄의 구조분해 `studentId`는 사용되지 않고 3058줄의 `studentid`가 실제로 사용됨 — 동작에 문제는 없으나 불필요한 구조분해가 혼란을 줄 수 있음. 정리하면 가독성 향상.
 
+### 유니폼 신청서 구글폼 연동
+
+구현한 기능: AcademySettings에 uniformFormUrl 필드 추가, 관리자 /admin/apply에 유니폼 URL 입력란 추가, 공개 /apply에 유니폼 신청 카드 + iframe 모달 추가
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | AcademySettings에 uniformFormUrl String? 추가 | 수정 |
+| src/lib/queries.ts | getAcademySettings()에 uniformFormUrl 매핑 추가 | 수정 |
+| src/app/actions/admin.ts | ALLOWED_SETTINGS_COLUMNS + ensureAcademySettingsColumns + updateAcademySettings 타입에 uniformFormUrl 추가 | 수정 |
+| src/app/admin/apply/page.tsx | initialSettings에 uniformFormUrl 전달 | 수정 |
+| src/app/admin/apply/ApplyAdminClient.tsx | 유니폼 신청 URL 입력 SectionCard 추가 (수강신청 아래) | 수정 |
+| src/app/apply/page.tsx | ApplyPageClient에 uniformFormUrl props 전달 | 수정 |
+| src/app/apply/ApplyPageClient.tsx | 유니폼 신청 카드 + FormModal 추가 (uniformFormUrl 있을 때만 표시) | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/apply → 유니폼 신청 URL에 https://forms.gle/H7SiGSkLvMTxqv3T9 입력 → 저장 → /apply 페이지에서 유니폼 신청 카드 표시 확인
+- 정상 동작: URL 입력 후 저장하면 /apply 페이지 하단에 녹색 유니폼 신청 카드 표시, 클릭 시 iframe 모달로 구글폼 열림
+- URL 미입력 시: 유니폼 카드가 아예 표시되지 않음 (정상)
+- 아이콘: Material Symbols Outlined "checkroom"
+
 ---
 
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-29 | 유니폼 신청서 구글폼 연동 (uniformFormUrl 필드 + 관리자 입력 + 공개 카드/모달) | 7개 파일 | 완료 |
 | 2026-03-29 | Phase 7: 통계 대시보드 tester 검증 PASS (18항목 전체 통과) | 8개 파일 | 완료 |
 | 2026-03-29 | Phase 6: 스킬 트래킹 tester 검증 PASS (11항목 전체 통과) | 8개 파일 | 완료 |
 | 2026-03-29 | Phase 4: 대기자 관리 전체 구현 (Waitlist DDL + CRUD + 정원현황 + 알림) | 6개 파일 | 완료 |

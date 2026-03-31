@@ -227,6 +227,7 @@ model AcademySettings {
   facilitiesText          String?
   facilitiesImagesJSON    String?
   naverPlaceUrl           String?  // 네이버 플레이스 리뷰 URL
+  uniformFormUrl          String?  // 유니폼 신청 구글폼 URL
 }
 
 model ClassSlotOverride {

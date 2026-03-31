@@ -269,6 +269,18 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                 </div>
             </div>
 
+            {/* 상세 통계 링크 */}
+            <Link href="/admin/stats" className="flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 hover:from-indigo-100 hover:to-purple-100 transition shadow-sm">
+                <div className="flex items-center gap-3">
+                    <span className="text-2xl">📊</span>
+                    <div>
+                        <p className="font-bold text-indigo-800">상세 운영 통계</p>
+                        <p className="text-xs text-indigo-600 mt-0.5">매출, 출석률, 원생 추이, 체험 전환율, 코치 워크로드를 한 눈에</p>
+                    </div>
+                </div>
+                <span className="text-indigo-600 text-sm font-bold">보러가기 &rarr;</span>
+            </Link>
+
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 매출 추이 차트 */}

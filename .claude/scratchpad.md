@@ -1,7 +1,7 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 학원 운영 고도화 Phase 6 — 스킬 트래킹 / 성장 기록
+- **요청**: 학원 운영 고도화 Phase 7 — 매출/운영 통계 대시보드 강화
 - **상태**: developer 구현 완료 (tsc PASS)
 - **현재 담당**: developer → tester
 - **마지막 세션**: 2026-03-29
@@ -15,7 +15,7 @@
 | 4 | 대기자 관리 | 완료 (tester 대기) |
 | 5 | 보강 수업 매칭 | 완료 (tester 대기) |
 | 6 | 스킬 트래킹 | 완료 (tester 대기) |
-| 7 | 통계 대시보드 | 대기 |
+| 7 | 통계 대시보드 | 완료 (tester 대기) |
 
 ---
 
@@ -80,6 +80,76 @@ reviewer 참고:
 - Material Symbols Outlined 아이콘 사용 (category, trending_up, sports_basketball, add 등)
 - 학부모 페이지 보안: parentId 매칭으로 본인 자녀만 열람
 - SkillRadarChart: 외부 라이브러리 없이 순수 SVG, 반응형 viewBox
+
+### Phase 7: 매출/운영 통계 대시보드 강화
+
+구현한 기능: 12개월 매출/출석률/등록추이 집계 함수, 코치 워크로드/수납률 집계, 순수 SVG 차트 3종(LineChart/BarChart/DonutChart), 상세 통계 페이지(/admin/stats), 기존 대시보드에 상세 통계 링크 추가
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/queries.ts | getMonthlyRevenue, getMonthlyAttendanceRate, getEnrollmentTrend, getCoachWorkload, getPaymentCollectionRate 5개 집계 함수 추가 | 수정 |
+| src/components/charts/LineChart.tsx | SVG 선 그래프 (호버 툴팁, 영역 그라데이션) | 신규 |
+| src/components/charts/BarChart.tsx | SVG 막대 그래프 (max 배경 표시, 호버 값) | 신규 |
+| src/components/charts/DonutChart.tsx | SVG 도넛 차트 (중앙 퍼센트, 비율 표시) | 신규 |
+| src/app/admin/stats/page.tsx | 서버 페이지 (revalidate:30, 7개 집계 병렬 호출) | 신규 |
+| src/app/admin/stats/StatsClient.tsx | 5개 섹션(매출/출석률/원생현황/체험전환/코치워크로드) | 신규 |
+| src/app/admin/page.tsx | 기존 대시보드에 "상세 통계 보기" 링크 배너 추가 | 수정 |
+| src/app/admin/layout.tsx | 사이드바 "학원운영" 탭에 "상세 통계" 메뉴 + OPS_PATHS 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/stats → 페이지 로드 확인, 5개 섹션 모두 표시
+- 기간 토글: "최근 6개월" / "최근 12개월" 버튼 클릭 → 차트 데이터 변화 확인
+- 차트 호버: LineChart/BarChart 위에 마우스 올리면 툴팁 표시
+- KPI 카드: 이번달 매출, 출석률, 수납률, 체험 전환율 4개 카드
+- 대시보드 링크: /admin → "상세 운영 통계" 배너 클릭 → /admin/stats 이동
+- 사이드바: "학원운영" 탭 하단에 "상세 통계" 메뉴 확인
+
+reviewer 참고:
+- DB 스키마 변경 없음 — 기존 테이블만 집계 쿼리
+- SQL은 $queryRawUnsafe + $N 바인딩만 사용
+- 차트: 외부 라이브러리 없이 순수 SVG (LineChart, BarChart, DonutChart)
+- Material Symbols Outlined 아이콘 사용 (payments, event_available, group 등)
+- getTrialStats, getClassCapacityInfo는 기존 함수 재사용 (중복 구현 없음)
+- 서버 페이지에서 7개 집계 Promise.all 병렬 호출 → 응답 시간 최소화
+
+---
+
+## 리뷰 결과 (reviewer) — Phase 7: 매출/운영 통계 대시보드
+
+### 종합 판정: APPROVE (필수 수정 0건 + 권장 수정 3건)
+
+### 잘된 점:
+- 5개 집계 함수(getMonthlyRevenue, getMonthlyAttendanceRate, getEnrollmentTrend, getCoachWorkload, getPaymentCollectionRate) 모두 $queryRawUnsafe + $N 파라미터 바인딩 사용 -- SQL 인젝션 위험 없음
+- SQL 집계 정확성 확인: DATE_TRUNC('month') + TO_CHAR 조합으로 월별 그룹핑 정확, COALESCE/COUNT(CASE WHEN) 패턴 적절, ::int 캐스팅으로 BigInt 직렬화 문제 방지
+- 데이터 없는 월도 0으로 채워 반환 (Map + for 루프 패턴) -- 차트에 빈 구간 없이 연속 표시
+- getEnrollmentTrend에서 신규/퇴원 2개 쿼리를 Promise.all로 병렬 실행 -- 효율적
+- getCoachWorkload: LEFT JOIN 체인(Coach -> ClassSlotOverride -> Class -> Enrollment)으로 수업 없는 코치도 0으로 표시
+- getPaymentCollectionRate: year/month 직접 비교로 인덱스 활용 가능 (timestamp 범위 대신)
+- page.tsx에서 7개 집계 Promise.all 병렬 호출 -- 응답 시간 최소화, revalidate:30 캐싱 정책 준수
+- 모든 집계 함수에 try-catch + console.error + 안전한 기본값 반환 -- 한 함수 실패해도 전체 페이지 크래시 방지
+- SVG 차트 3종(LineChart, BarChart, DonutChart): 외부 라이브러리 없이 순수 SVG, viewBox + preserveAspectRatio로 반응형
+- LineChart: 영역 그라데이션(linearGradient) + 호버 툴팁 + 수직 가이드라인 -- 완성도 높음
+- BarChart: max 배경 막대(정원 대비) 기능 -- 반별 등록 현황 시각화에 적합
+- DonutChart: stroke-dasharray/dashoffset 계산 정확, rotate(-90) 12시 방향 시작, transition 애니메이션
+- StatsClient: KPI 요약 카드 4개 + 기간 토글(6/12개월) + 전월 대비 변화율 -- UX 완성도 양호
+- Material Symbols Outlined 아이콘 사용 (payments, event_available, group, handshake, account_balance_wallet, summarize, sports, person_add, person_remove, diversity_3, how_to_reg, trending_up/down) -- convention 준수
+- Tailwind CSS만 사용, 하드코딩 색상 없음 (hex 색상은 SVG 내부 동적 값이라 불가피)
+- FlowItem의 invertTrend 패턴 -- 퇴원은 감소가 긍정적이라는 도메인 로직을 깔끔하게 처리
+
+### 필수 수정: 없음
+
+### 권장 수정:
+
+| # | 파일 | 내용 |
+|---|------|------|
+| 1 | LineChart.tsx:59 | gradient id를 `lineGrad-${color.replace("#", "")}` 로 생성. 동일 페이지에 같은 color의 LineChart가 2개 이상 있으면 id 충돌. 현재 StatsClient에서는 모든 LineChart가 다른 color를 쓰므로 당장 문제없지만, 향후 재사용 시 충돌 가능. `useId()` 또는 `useRef(Math.random())` 등으로 고유 id 생성 권장 |
+| 2 | admin/page.tsx:275 | 상세 통계 링크 배너에 이모지 "📊" 사용. Material Symbols 아이콘으로 교체하면 일관성 향상 (예: `<span className="material-symbols-outlined text-2xl text-indigo-600">query_stats</span>`). 단, 기존 사이드바도 이모지를 쓰는 구조이므로 전체 아이콘 통일 작업 시 함께 처리해도 무방 |
+| 3 | StatsClient.tsx:306-307 | 체험 전환율 DonutChart의 max를 `ATTENDED + CONVERTED`로 계산. 이는 "체험 참석 대비 전환"이라는 라벨에 정확히 부합하나, trialStats의 conversionRate(KPI 카드)가 다른 기준(전체 대비)일 수 있어 두 수치가 달라 보일 수 있음. 라벨이나 KPI 카드 설명에 기준 차이를 명시하면 혼동 방지 |
+
+### 추가 확인:
+- layout.tsx: OPS_PATHS에 "/admin/stats" 정상 등록, 사이드바 메뉴 정상 추가
+- admin/page.tsx: Link + 배너 스타일로 상세 통계 페이지 진입점 추가 -- 적절
+- DB 스키마 변경 없음 확인 (prisma/schema.prisma 변경은 Phase 7과 무관한 기존 모델)
 
 ---
 
@@ -276,6 +346,33 @@ reviewer 참고:
 검출된 문제: 0건 (수정 필수 항목 없음)
 
 종합: 20개 중 20개 통과 / 0개 실패 -- PASS
+
+### Phase 7: 매출/운영 통계 대시보드 검증 (2026-03-29)
+
+| # | 테스트 항목 | 결과 | 비고 |
+|---|-----------|------|------|
+| 1 | tsc --noEmit | PASS | 타입 에러 0건 |
+| 2 | queries.ts: getMonthlyRevenue | PASS | $queryRawUnsafe 사용, Payment WHERE status='PAID', DATE_TRUNC+TO_CHAR 월별 집계, $1~$2 파라미터 바인딩(startStr/endStr), ::timestamp 캐스팅, N개월 배열 구성(빈 월은 0), cache() 래핑, 에러 시 빈 배열 반환 |
+| 3 | queries.ts: getMonthlyAttendanceRate | PASS | $queryRawUnsafe 사용, Attendance JOIN Session, CASE WHEN status='PRESENT' 카운트, $1~$2 바인딩, rate 계산(present/total*100 반올림), cache() 래핑, 에러 시 빈 배열 반환 |
+| 4 | queries.ts: getEnrollmentTrend | PASS | $queryRawUnsafe 사용, Promise.all 2개 병렬(신규: createdAt 기준, 퇴원: status='DROPPED'+updatedAt 기준), $1~$2 바인딩, N개월 배열(빈 월 0), cache() 래핑, 에러 시 빈 배열 반환 |
+| 5 | queries.ts: getCoachWorkload | PASS | $queryRawUnsafe 사용, Coach LEFT JOIN ClassSlotOverride+Class+Enrollment, COUNT DISTINCT slotKey(수업수)+studentId(원생수), status='ACTIVE' 필터, ORDER BY co.order, imageUrl 소문자 fallback, cache() 래핑, 에러 시 빈 배열 반환 |
+| 6 | queries.ts: getPaymentCollectionRate | PASS | $queryRawUnsafe 사용, Payment WHERE year=$1 AND month=$2, CASE WHEN status='PAID' 카운트, rate 계산(paid/total*100 반올림), 0건 시 rate=0 안전 처리, cache() 래핑, 에러 시 기본값 객체 반환 |
+| 7 | LineChart.tsx: 순수 SVG | PASS | 외부 라이브러리 0개 (recharts/d3/chart.js 없음), "use client", useState 호버, SVG viewBox 반응형, defs linearGradient 영역채우기, 수평 가이드라인 3개, 호버 시 수직 가이드라인+툴팁 rect+text, X축 라벨, data.length===0 빈 상태 처리 |
+| 8 | BarChart.tsx: 순수 SVG | PASS | 외부 라이브러리 0개, "use client", useState 호버, SVG viewBox 반응형, showMax로 정원 배경 막대, 호버 시 값 툴팁, barWidth 동적 계산(최대 40px), data.length===0 빈 상태 처리 |
+| 9 | DonutChart.tsx: 순수 SVG | PASS | 외부 라이브러리 0개, strokeDasharray/strokeDashoffset로 비율 표현, rotate(-90) 12시 시작, 중앙 퍼센트 텍스트+value/max 서브텍스트, transition-all 애니메이션, max=0 시 rate=0 안전 처리 |
+| 10 | stats/page.tsx: revalidate=30 | PASS | export const revalidate = 30, Promise.all 7개 집계 병렬 호출(getMonthlyRevenue+getMonthlyAttendanceRate+getEnrollmentTrend+getClassCapacityInfo+getTrialStats+getCoachWorkload+getPaymentCollectionRate), StatsClient에 7개 props 전달 |
+| 11 | StatsClient: Material Symbols 사용 | PASS | payments, trending_up/down, event_available, group, school, handshake, account_balance_wallet, summarize, sports, person_add, person_remove, diversity_3, how_to_reg 등 Material Symbols Outlined만 사용, lucide-react/react-icons 미사용 |
+| 12 | StatsClient: Tailwind CSS | PASS | 모든 스타일 Tailwind 클래스 사용, 하드코딩 색상 없음, 차트 color props는 hex값이나 SVG 속성용이므로 적절 |
+| 13 | StatsClient: 5개 섹션 존재 | PASS | (1) KPI 요약 카드 4개(매출/출석률/수납률/체험전환율) (2) 매출+출석률 LineChart (3) 신규퇴원 LineChart+반별정원 BarChart (4) 체험전환 DonutChart+수납률 DonutChart+원생흐름 (5) 코치 워크로드 BarChart 2개 |
+| 14 | StatsClient: 기간 토글 | PASS | useState<6|12> revenuePeriod, slice(-revenuePeriod)로 데이터 슬라이싱, 3개 차트(매출/출석률/등록추이) 동시 변경, 선택 버튼 bg-gray-900 활성 스타일 |
+| 15 | StatsClient: KPI 전월 비교 | PASS | thisMonth/lastMonth 배열 마지막/마지막-1, revDiff 퍼센트 계산, 양수 text-green-600 + trending_up, 음수 text-red-600 + trending_down, lastMonth.amount=0 시 비교 미표시 |
+| 16 | StatsClient: 서브 컴포넌트 | PASS | PipelineItem(6개 상태 컬러맵), FlowItem(icon+label+value+prev비교, invertTrend 퇴원용 역전 로직) |
+| 17 | admin/page.tsx: "상세 통계" 링크 | PASS | Link href="/admin/stats", gradient 배너(indigo-50→purple-50), "상세 운영 통계" 텍스트, hover 색상 전환 |
+| 18 | layout.tsx: "상세 통계" 메뉴 | PASS | OPS_PATHS에 "/admin/stats" 포함, NavItem href="/admin/stats" label="상세 통계" icon="📊" 존재 |
+
+검출된 문제: 0건 (수정 필수 항목 없음)
+
+종합: 18개 중 18개 통과 / 0개 실패 -- PASS
 
 ### Phase 6: 스킬 트래킹 / 성장 기록 검증 (2026-03-29)
 
@@ -475,6 +572,7 @@ reviewer 참고:
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-29 | Phase 7: 통계 대시보드 tester 검증 PASS (18항목 전체 통과) | 8개 파일 | 완료 |
 | 2026-03-29 | Phase 6: 스킬 트래킹 tester 검증 PASS (11항목 전체 통과) | 8개 파일 | 완료 |
 | 2026-03-29 | Phase 4: 대기자 관리 전체 구현 (Waitlist DDL + CRUD + 정원현황 + 알림) | 6개 파일 | 완료 |
 | 2026-03-29 | Phase 3: 체험수업 CRM 전체 구현 (TrialLead CRUD + 파이프라인 + 전환) | 6개 파일 | 완료 |

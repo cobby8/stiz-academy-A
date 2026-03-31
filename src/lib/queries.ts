@@ -2154,3 +2154,234 @@ export const getSkillHistory = cache(
         }
     },
 );
+
+// ── 통계 대시보드용 집계 함수 ─────────────────────────────────────────────────
+
+/**
+ * 월별 매출 추이 — 최근 N개월간 PAID 상태 Payment 합산
+ * getDashboardExtendedStats와 유사하지만 12개월까지 지원 + 전월 대비 변화율 포함
+ */
+export const getMonthlyRevenue = cache(async (months: number = 12) => {
+    try {
+        const now = new Date();
+        // N개월 전 1일부터
+        const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+        const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
+        // 다음 달 1일 (상한 경계)
+        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-01`;
+
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT TO_CHAR(DATE_TRUNC('month', "paidDate"), 'YYYY-MM') AS month,
+                    COALESCE(SUM(amount), 0)::int AS total,
+                    COUNT(*)::int AS count
+             FROM "Payment"
+             WHERE status = 'PAID'
+               AND "paidDate" >= $1::timestamp
+               AND "paidDate" < $2::timestamp
+             GROUP BY DATE_TRUNC('month', "paidDate")
+             ORDER BY DATE_TRUNC('month', "paidDate")`,
+            startStr, endStr
+        );
+
+        // 월별 맵 생성
+        const revenueMap = new Map<string, { total: number; count: number }>();
+        for (const r of rows) {
+            revenueMap.set(r.month, { total: Number(r.total ?? 0), count: Number(r.count ?? 0) });
+        }
+
+        // N개월 배열 구성 (과거→현재)
+        const result: { month: string; label: string; amount: number; count: number }[] = [];
+        for (let i = months - 1; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            const data = revenueMap.get(key);
+            result.push({
+                month: key,
+                label: `${d.getMonth() + 1}월`,
+                amount: data?.total ?? 0,
+                count: data?.count ?? 0,
+            });
+        }
+
+        return result;
+    } catch (e) {
+        console.error("[getMonthlyRevenue] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 월별 출석률 추이 — 최근 N개월간 Attendance PRESENT 비율
+ */
+export const getMonthlyAttendanceRate = cache(async (months: number = 12) => {
+    try {
+        const now = new Date();
+        const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+        const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
+        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-01`;
+
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT TO_CHAR(DATE_TRUNC('month', se.date), 'YYYY-MM') AS month,
+                    COUNT(*)::int AS total,
+                    COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::int AS present
+             FROM "Attendance" a
+             JOIN "Session" se ON a."sessionId" = se.id
+             WHERE se.date >= $1::timestamp
+               AND se.date < $2::timestamp
+             GROUP BY DATE_TRUNC('month', se.date)
+             ORDER BY DATE_TRUNC('month', se.date)`,
+            startStr, endStr
+        );
+
+        const attMap = new Map<string, { total: number; present: number }>();
+        for (const r of rows) {
+            attMap.set(r.month, { total: Number(r.total ?? 0), present: Number(r.present ?? 0) });
+        }
+
+        const result: { month: string; label: string; rate: number; total: number; present: number }[] = [];
+        for (let i = months - 1; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            const data = attMap.get(key);
+            const rate = data && data.total > 0 ? Math.round((data.present / data.total) * 100) : 0;
+            result.push({
+                month: key,
+                label: `${d.getMonth() + 1}월`,
+                rate,
+                total: data?.total ?? 0,
+                present: data?.present ?? 0,
+            });
+        }
+
+        return result;
+    } catch (e) {
+        console.error("[getMonthlyAttendanceRate] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 신규/퇴원 추이 — 최근 N개월간 Enrollment의 createdAt/updatedAt 기준
+ * 신규: createdAt이 해당 월에 속하는 ACTIVE 등록
+ * 퇴원: status가 DROPPED이고 updatedAt이 해당 월에 속하는 건
+ */
+export const getEnrollmentTrend = cache(async (months: number = 12) => {
+    try {
+        const now = new Date();
+        const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+        const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
+        const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-01`;
+
+        // 병렬로 신규 등록과 퇴원을 각각 조회
+        const [newRows, dropRows] = await Promise.all([
+            // 신규 등록: createdAt 기준 월별 집계
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month,
+                        COUNT(*)::int AS count
+                 FROM "Enrollment"
+                 WHERE "createdAt" >= $1::timestamp
+                   AND "createdAt" < $2::timestamp
+                 GROUP BY DATE_TRUNC('month', "createdAt")
+                 ORDER BY DATE_TRUNC('month', "createdAt")`,
+                startStr, endStr
+            ),
+            // 퇴원: status='DROPPED'이고 updatedAt 기준 월별 집계
+            prisma.$queryRawUnsafe<any[]>(
+                `SELECT TO_CHAR(DATE_TRUNC('month', "updatedAt"), 'YYYY-MM') AS month,
+                        COUNT(*)::int AS count
+                 FROM "Enrollment"
+                 WHERE status = 'DROPPED'
+                   AND "updatedAt" >= $1::timestamp
+                   AND "updatedAt" < $2::timestamp
+                 GROUP BY DATE_TRUNC('month', "updatedAt")
+                 ORDER BY DATE_TRUNC('month', "updatedAt")`,
+                startStr, endStr
+            ),
+        ]);
+
+        const newMap = new Map<string, number>();
+        for (const r of newRows) newMap.set(r.month, Number(r.count ?? 0));
+
+        const dropMap = new Map<string, number>();
+        for (const r of dropRows) dropMap.set(r.month, Number(r.count ?? 0));
+
+        const result: { month: string; label: string; newCount: number; dropCount: number }[] = [];
+        for (let i = months - 1; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            result.push({
+                month: key,
+                label: `${d.getMonth() + 1}월`,
+                newCount: newMap.get(key) ?? 0,
+                dropCount: dropMap.get(key) ?? 0,
+            });
+        }
+
+        return result;
+    } catch (e) {
+        console.error("[getEnrollmentTrend] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 코치별 워크로드 — 코치별 담당 수업 수 + 담당 원생 수
+ * ClassSlotOverride의 coachId 기준으로 수업 연결, Enrollment로 원생 수 집계
+ */
+export const getCoachWorkload = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT co.id, co.name, co."imageUrl",
+                    COUNT(DISTINCT cso."slotKey")::int AS class_count,
+                    COUNT(DISTINCT e."studentId")::int AS student_count
+             FROM "Coach" co
+             LEFT JOIN "ClassSlotOverride" cso ON cso."coachId" = co.id
+             LEFT JOIN "Class" c ON c."slotKey" = cso."slotKey"
+             LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+             GROUP BY co.id, co.name, co."imageUrl"
+             ORDER BY co."order" ASC`
+        );
+
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            imageUrl: r.imageUrl ?? r.imageurl ?? null,
+            classCount: Number(r.class_count ?? 0),
+            studentCount: Number(r.student_count ?? 0),
+        }));
+    } catch (e) {
+        console.error("[getCoachWorkload] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 수납률 — 특정 연월 기준 Payment 중 PAID 비율
+ */
+export const getPaymentCollectionRate = cache(async () => {
+    try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*)::int AS total,
+                    COUNT(CASE WHEN status = 'PAID' THEN 1 END)::int AS paid
+             FROM "Payment"
+             WHERE year = $1 AND month = $2`,
+            year, month
+        );
+
+        const total = Number(rows[0]?.total ?? 0);
+        const paid = Number(rows[0]?.paid ?? 0);
+        const rate = total > 0 ? Math.round((paid / total) * 100) : 0;
+
+        return { total, paid, unpaid: total - paid, rate };
+    } catch (e) {
+        console.error("[getPaymentCollectionRate] failed:", e);
+        return { total: 0, paid: 0, unpaid: 0, rate: 0 };
+    }
+});

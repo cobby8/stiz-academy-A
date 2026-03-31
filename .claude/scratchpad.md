@@ -664,6 +664,7 @@ tester 참고:
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-29 | 원생 관리: deleteStudent 버그 수정(FK 6개 테이블 추가) + 필터 UI 4개 + 수강반 컬럼 | admin.ts, queries.ts, StudentManagementClient.tsx | 완료 |
 | 2026-03-29 | 유니폼 신청서 구글폼 연동 (uniformFormUrl 필드 + 관리자 입력 + 공개 카드/모달) | 7개 파일 | 완료 |
 | 2026-03-29 | Phase 7: 통계 대시보드 tester 검증 PASS (18항목 전체 통과) | 8개 파일 | 완료 |
 | 2026-03-29 | Phase 6: 스킬 트래킹 tester 검증 PASS (11항목 전체 통과) | 8개 파일 | 완료 |
@@ -673,9 +674,3 @@ tester 참고:
 | 2026-03-30 | Phase 1: 수납 고도화 전체 구현 + tester PASS + reviewer 수정 3건 반영 | 9개 파일 | 완료 |
 | 2026-03-30 | 학원운영 고도화 로드맵 7 Phase 설계 | scratchpad | 완료 |
 | 2026-03-30 | 학부모 후기 SSR 권한 에러 수정 + DB User 시드 | TestimonialsWrapper, admin.ts, auth-guard | 완료 |
-| 2026-03-29 | 학부모 후기 동적화 (DB CRUD + 네이버 링크) | 9개 파일 | 완료 |
-| 2026-03-29 | 관리자 사이드바 "사이트"/"학원운영" 탭 UI | admin/layout.tsx | 완료 |
-| 2026-03-29 | 보안 단기 조치 5건 | next.config 등 12파일 | 완료 |
-| 2026-03-29 | 보안 Phase A — 미들웨어+Server Action 인증 | middleware.ts 등 | 완료 |
-| 2026-03-29 | 보안 Phase B — 개인정보 처리방침 + 동의 | privacy/page 등 | 완료 |
-| 2026-03-28 | 구글 캘린더 양방향 동기화 | googleCalendarWrite.ts 등 | 완료 |

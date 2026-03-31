@@ -116,12 +116,23 @@ export const getClasses = cache(async () => {
 /** 원생 목록 조회 (학부모 정보 포함) */
 export const getStudents = cache(async () => {
     try {
-        // 학생 목록 조회: 새 필드(phone, school, grade, address, enrollDate) 포함
+        // 학생 목록 조회: 서브쿼리로 수강(Enrollment+Class) 정보를 JSON 배열로 포함
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
                     s.phone, s.school, s.grade, s.address, s."enrollDate",
                     s."createdAt", s."updatedAt",
-                    u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email
+                    u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email,
+                    (SELECT json_agg(json_build_object(
+                        'classId', e."classId",
+                        'className', c.name,
+                        'status', e.status,
+                        'dayOfWeek', c."dayOfWeek",
+                        'startTime', c."startTime"
+                    ))
+                    FROM "Enrollment" e
+                    JOIN "Class" c ON e."classId" = c.id
+                    WHERE e."studentId" = s.id
+                    ) AS enrollments
              FROM "Student" s
              LEFT JOIN "User" u ON s."parentId" = u.id
              ORDER BY s."createdAt" DESC`
@@ -144,6 +155,8 @@ export const getStudents = cache(async () => {
                 phone: r.parent_phone ?? null,
                 email: r.parent_email ?? null,
             },
+            // 수강 정보 배열 (없으면 빈 배열)
+            enrollments: r.enrollments ?? [],
         }));
     } catch (e) {
         console.error("[getStudents] failed:", e);

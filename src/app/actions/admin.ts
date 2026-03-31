@@ -742,6 +742,13 @@ export async function updateStudent(id: string, data: {
 export async function deleteStudent(id: string) {
     await requireAdmin();
     try {
+        // FK 제약 순서: Student를 참조하는 모든 테이블을 먼저 삭제해야 함
+        await prisma.$executeRawUnsafe(`DELETE FROM "Guardian" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "StudentSessionNote" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "Feedback" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "SkillRecord" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "Waitlist" WHERE "studentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "MakeupSession" WHERE "studentId" = $1`, id);
         await prisma.$executeRawUnsafe(`DELETE FROM "Attendance" WHERE "studentId" = $1`, id);
         await prisma.$executeRawUnsafe(`DELETE FROM "Payment" WHERE "studentId" = $1`, id);
         await prisma.$executeRawUnsafe(`DELETE FROM "Enrollment" WHERE "studentId" = $1`, id);

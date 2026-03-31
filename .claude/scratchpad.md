@@ -1,24 +1,21 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 원생 관리 — 불완전 중복 정리 + 기본 필터 변경
-- **상태**: developer 구현 완료 (tsc PASS), 중복 조회 결과 보고 완료
-- **현재 담당**: PM 확인 후 POST 실행 대기
+- **요청**: CSV -> DB Enrollment 상태 재설정 (4월 데이터 포함)
+- **상태**: developer 실행 완료
+- **현재 담당**: PM 확인
 - **마지막 세션**: 2026-03-29
 
 ### 구현 기록
 
-구현한 기능: 중복 학생 정리 API + 원생 관리 기본 필터 변경
+구현한 기능: CSV 기반 Enrollment 상태 재설정 스크립트
 
 | 파일 경로 | 변경 내용 | 신규/수정 |
 |----------|----------|----------|
-| src/app/api/admin/cleanup-duplicates/route.ts | 중복 학생 조회(GET)/삭제(POST) API | 신규 |
-| src/app/admin/students/StudentManagementClient.tsx | 기본 필터 ACTIVE, 상태별 요약 카드 추가 | 수정 |
+| scripts/reset-enrollment-status.js | CSV 다운로드->파싱->학생그룹핑->최신월결제방법기준상태결정->DB UPDATE | 신규 |
 
-tester 참고:
-- 테스트 방법: /admin/students 페이지에서 상태별 카드 클릭, 필터 전환 확인
-- 정상 동작: 페이지 진입 시 "활성" 필터가 기본 적용, 카드에 상태별 인원 수 표시
-- cleanup API는 PM 승인 후 POST 실행 예정
+실행 결과: CSV 267명 중 263명 DB 매칭, Enrollment 333건 UPDATE (ACTIVE 262, PAUSED 27, WITHDRAWN 50)
+미매칭 4명: 인코딩 깨짐 3명 + 괄호 포함 이름 1명 (수동 확인 필요)
 
 ### 전체 로드맵 진행 현황
 | Phase | 기능 | 상태 |

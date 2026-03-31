@@ -32,6 +32,8 @@ model Student {
   grade       String?      // 학년 (예: "2026년 초등 5학년")
   address     String?      // 주소
   enrollDate  DateTime?    // 입회일자
+  referralSource String?   // 가입경로 (예: "지인소개", "네이버", "전단지" 등)
+  uniformStatus  String?   // 유니폼 상태 (예: "수령완료", "미수령", "추가주문" 등)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   attendances  Attendance[]
@@ -152,6 +154,7 @@ model Payment {
   dueDate       DateTime
   paidDate      DateTime?
   type          String    @default("MONTHLY")  // MONTHLY(월 수강료), SHUTTLE(셔틀), UNIFORM(유니폼), OTHER(기타)
+  method        String?                        // 결제수단: RALLYZ(랠리즈), CARD(카드), CASH(현금영수증), UNPAID(미결제)
   description   String?                        // 청구 항목 설명 (예: "4월 수강료")
   month         Int?                           // 청구 대상 월 (1~12)
   year          Int?                           // 청구 대상 연도

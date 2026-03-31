@@ -1,7 +1,7 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 학원 운영 고도화 Phase 7 — 매출/운영 통계 대시보드 강화
+- **요청**: 수강생 데이터 이관 시스템
 - **상태**: developer 구현 완료 (tsc PASS)
 - **현재 담당**: developer → tester
 - **마지막 세션**: 2026-03-29
@@ -21,38 +21,52 @@
 
 ## 기획설계 (planner-architect)
 
-### 유니폼 신청서 구글폼 연동
+### 구글 스프레드시트 수강생 데이터 -> DB 이관
 
-목표: 유니폼 신청 구글폼(https://forms.gle/H7SiGSkLvMTxqv3T9)을 홈페이지 /apply 페이지에 추가
+목표: 구글 스프레드시트 수강생 데이터 1,152행을 DB로 이관하여 학원 관리 시스템에서 통합 관리
+
+스프레드시트 구조 (38개 컬럼, gid=672309223):
+- 2개 지점: 1호점(388명), 2호점(740명)
+- 결제방법 컬럼이 상태+결제 혼합: 랠리즈(409)/카드(229)/미결제(180)/휴원(130)/퇴원(62)/추가수강(60)/현금영수증(45)
+- 수업선택: 요일별 "N교시" (1~8교시, 교시->Class 매핑 필요)
+- 같은 학생이 여러 행에 나올 수 있음 (월별 신청)
+
+PM 결정 대기 항목:
+1. 지점 처리: (A) Student.branchName 문자열 필드만 추가 vs (B) Branch 테이블 신설 -> 권장 A
+2. 이관 범위: (A) 재원 중인 학생만 vs (B) 전체 이력(휴원/퇴원 포함) -> 권장 B
+3. "교시" -> Class 매핑표: 지점+요일+교시번호 = 어떤 Class인지 매핑 정보 필요
+
+DB 스키마 변경 필요:
+- Student: branchName, uniformStatus, referralSource 추가
+- Payment: method 필드 추가 (랠리즈/카드/현금영수증)
+- Enrollment.status: "WITHDRAWN"(퇴원), "PAUSED"(휴원) 값 추가
 
 만들 위치와 구조:
 | 파일 경로 | 역할 | 신규/수정 |
 |----------|------|----------|
-| src/app/actions/admin.ts | uniformFormUrl DDL + SETTINGS_ALLOWED 추가 | 수정 |
-| src/lib/queries.ts | getAcademySettings에 uniformFormUrl 반환 | 수정 |
-| src/app/admin/apply/page.tsx | uniformFormUrl 관리자 전달 | 수정 |
-| src/app/admin/apply/ApplyAdminClient.tsx | 유니폼 URL 입력 섹션 추가 | 수정 |
-| src/app/apply/page.tsx | uniformFormUrl을 ApplyPageClient에 전달 | 수정 |
-| src/app/apply/ApplyPageClient.tsx | 유니폼 카드 + FormModal 추가 | 수정 |
-
-기존 코드 연결:
-- trialFormUrl/enrollFormUrl 패턴을 100% 복제하여 uniformFormUrl 추가
-- FormModal 컴포넌트 재사용 (iframe 임베드)
-- AcademySettings DDL ensure 패턴 동일 적용
+| prisma/schema.prisma | Student/Payment 필드 추가 | 수정 |
+| src/lib/importStudents.ts | CSV 파싱+변환+중복체크+DB삽입 로직 | 신규 |
+| src/app/api/admin/import-students/route.ts | 이관 API 엔드포인트 | 신규 |
+| src/app/admin/import/page.tsx | 관리자 이관 페이지 (서버) | 신규 |
+| src/app/admin/import/ImportClient.tsx | 이관 UI (미리보기+매핑확인+실행) | 신규 |
 
 실행 계획:
 | 순서 | 작업 | 담당 | 선행 조건 |
 |------|------|------|----------|
-| 1 | AcademySettings에 uniformFormUrl 필드 추가 (DDL + ALLOWED + queries) | developer | 없음 |
-| 2 | 관리자 /admin/apply에 유니폼 URL 입력 필드 추가 | developer | 1 |
-| 3 | 공개 /apply에 유니폼 신청 카드 + FormModal 추가 | developer | 1 |
-| 4 | tsc --noEmit 검증 | tester | 2, 3 |
+| 1 | PM 결정: 지점방식, 이관범위, 교시-Class 매핑표 | PM | 없음 |
+| 2 | DB 스키마 변경 (Student/Payment 필드 추가, migrate) | developer | 1 |
+| 3 | 이관 로직 개발 (CSV파싱+변환+중복검출+DB삽입) | developer | 2 |
+| 4 | 관리자 이관 페이지 UI (업로드+미리보기+실행) | developer | 3 |
+| 5 | 이관 실행 + 검증 (건수확인, 중복처리, 샘플비교) | developer+tester | 4 |
+| 6 | tsc + 데이터 정합성 검증 | tester | 5 |
 
 developer 주의사항:
-- 기존 trialFormUrl 패턴 그대로 복사. 새 패턴 만들지 말 것
-- queries.ts: uniformFormUrl: r.uniformFormUrl ?? r.uniformformurl ?? null (대소문자 fallback)
-- 유니폼 카드는 체험/수강 카드 아래 별도 섹션으로 배치
-- 기본값: https://forms.gle/H7SiGSkLvMTxqv3T9
+- 학생 이름+생년월일로 고유 식별 (같은 학생 여러 행 중복 방지)
+- "결제방법"에서 휴원/퇴원은 Enrollment.status로 분리
+- 날짜 변환: "2016. 8. 22" -> DateTime (KST 기준)
+- DB 쿼리: 반드시 $queryRawUnsafe/$executeRawUnsafe 사용
+- 이관 순서: User(학부모) -> Student -> Enrollment -> Payment
+- 학부모 이름+전화번호 조합으로 User 중복 체크 (같은 학부모 여러 자녀 가능)
 
 ## 구현 기록 (developer)
 
@@ -143,6 +157,32 @@ reviewer 참고:
 - Material Symbols Outlined 아이콘 사용 (payments, event_available, group 등)
 - getTrialStats, getClassCapacityInfo는 기존 함수 재사용 (중복 구현 없음)
 - 서버 페이지에서 7개 집계 Promise.all 병렬 호출 → 응답 시간 최소화
+
+### 수강생 데이터 이관 시스템
+
+구현한 기능: 스프레드시트 CSV 파싱+변환+그룹핑 유틸, preview/execute 2모드 API, 3단계 워크플로 UI (업로드→미리보기→실행), DB 삽입 (User→Student→Enrollment→Payment 순서)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | Student에 referralSource/uniformStatus, Payment에 method 필드 추가 | 수정 |
+| src/lib/importStudents.ts | CSV 파싱+날짜변환+상태/결제분리+slotKey변환+그룹핑 핵심 로직 | 신규 |
+| src/app/api/admin/import-students/route.ts | preview/execute API (requireAdmin 인증) | 신규 |
+| src/app/admin/import/page.tsx | 서버 페이지 (revalidate:30) | 신규 |
+| src/app/admin/import/ImportClient.tsx | 3단계 UI (CSV입력→미리보기테이블→실행결과) | 신규 |
+| src/app/admin/layout.tsx | 사이드바 "데이터" 섹션에 "수강생 이관" 메뉴 + OPS_PATHS 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/import → CSV 데이터 붙여넣기 또는 파일 업로드 → 미리보기 → 이관 실행
+- 미리보기: 요약 카드(전체행/고유학생/재원/휴원/퇴원/지점별), 상태 필터 탭, 학생 테이블
+- 실행 결과: User/Student/Enrollment/Payment 생성/건너뜀 카운트, 실패 목록
+- 주의: 실제 DB에 데이터가 삽입되므로 테스트 시 주의 (이관 전 백업 권장)
+
+reviewer 참고:
+- 모든 DB 쿼리: $queryRawUnsafe/$executeRawUnsafe + $N 바인딩 (PgBouncer 호환)
+- requireAdmin() 인증 가드 적용
+- 개별 학생 실패해도 나머지 계속 진행 (try-catch per student)
+- User 중복 체크: phone+role=PARENT, Student 중복 체크: name+parentId
+- Material Symbols Outlined 아이콘 사용
 
 ---
 

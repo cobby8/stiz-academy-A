@@ -619,7 +619,9 @@ export default function StudentManagementClient({
                                         {/* 수강 반: enrollments에서 반 이름 표시 */}
                                         <td className="px-5 py-3.5 text-sm text-gray-600 hidden lg:table-cell">
                                             {s.enrollments && s.enrollments.length > 0
-                                                ? s.enrollments.map((e) => e.className).join(", ")
+                                                ? [...s.enrollments]
+                                                    .sort((a, b) => (DAY_ORDER[a.dayOfWeek] ?? 99) - (DAY_ORDER[b.dayOfWeek] ?? 99) || a.startTime.localeCompare(b.startTime))
+                                                    .map((e) => e.className).join(", ")
                                                 : <span className="text-gray-300">-</span>
                                             }
                                         </td>

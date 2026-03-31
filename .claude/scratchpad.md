@@ -1,10 +1,24 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 수강생 데이터 이관 시스템
-- **상태**: developer 구현 완료 (tsc PASS)
-- **현재 담당**: developer → tester
+- **요청**: 원생 관리 — 불완전 중복 정리 + 기본 필터 변경
+- **상태**: developer 구현 완료 (tsc PASS), 중복 조회 결과 보고 완료
+- **현재 담당**: PM 확인 후 POST 실행 대기
 - **마지막 세션**: 2026-03-29
+
+### 구현 기록
+
+구현한 기능: 중복 학생 정리 API + 원생 관리 기본 필터 변경
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/api/admin/cleanup-duplicates/route.ts | 중복 학생 조회(GET)/삭제(POST) API | 신규 |
+| src/app/admin/students/StudentManagementClient.tsx | 기본 필터 ACTIVE, 상태별 요약 카드 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/students 페이지에서 상태별 카드 클릭, 필터 전환 확인
+- 정상 동작: 페이지 진입 시 "활성" 필터가 기본 적용, 카드에 상태별 인원 수 표시
+- cleanup API는 PM 승인 후 POST 실행 예정
 
 ### 전체 로드맵 진행 현황
 | Phase | 기능 | 상태 |

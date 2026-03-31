@@ -140,7 +140,8 @@ export default function StudentManagementClient({
     const [filterClass, setFilterClass] = useState("");
     const [filterGrade, setFilterGrade] = useState("");
     const [filterSchool, setFilterSchool] = useState("");
-    const [filterStatus, setFilterStatus] = useState("");
+    // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
+    const [filterStatus, setFilterStatus] = useState("ACTIVE");
 
     // 필터 선택지: 학생 데이터에서 고유값 추출 (useMemo로 캐싱)
     const gradeOptions = useMemo(() => {
@@ -251,6 +252,30 @@ export default function StudentManagementClient({
         }
     }
 
+    // 상태별 학생 수 집계 (요약 카드용)
+    const statusCounts = useMemo(() => {
+        let active = 0;
+        let paused = 0;
+        let withdrawn = 0;
+        let noEnrollment = 0;
+
+        for (const s of students) {
+            if (!s.enrollments || s.enrollments.length === 0) {
+                // Enrollment이 없는 학생 = 미배정
+                noEnrollment++;
+                continue;
+            }
+            // 가장 우선순위 높은 상태 기준으로 분류 (ACTIVE > PAUSED > WITHDRAWN)
+            const statuses = s.enrollments.map((e) => e.status);
+            if (statuses.includes("ACTIVE")) active++;
+            else if (statuses.includes("PAUSED")) paused++;
+            else if (statuses.includes("WITHDRAWN")) withdrawn++;
+            else noEnrollment++; // 알 수 없는 상태
+        }
+
+        return { active, paused, withdrawn, noEnrollment, total: students.length };
+    }, [students]);
+
     // 검색 + 필터 조합 (AND 조건): useMemo로 캐싱하여 불필요한 재계산 방지
     const filtered = useMemo(() => {
         return students.filter((s) => {
@@ -274,8 +299,10 @@ export default function StudentManagementClient({
             // 학교 필터
             if (filterSchool && s.school !== filterSchool) return false;
             // 수강 상태 필터: enrollments 중 해당 상태가 있는 학생
+            // Enrollment이 없는 학생은 "전체"에서만 표시됨
             if (filterStatus) {
-                const hasStatus = s.enrollments?.some((e) => e.status === filterStatus);
+                if (!s.enrollments || s.enrollments.length === 0) return false;
+                const hasStatus = s.enrollments.some((e) => e.status === filterStatus);
                 if (!hasStatus) return false;
             }
             return true;
@@ -284,11 +311,35 @@ export default function StudentManagementClient({
 
     return (
         <div className="max-w-5xl mx-auto">
+            {/* 상태별 요약 카드 — 클릭하면 해당 필터 적용 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                {[
+                    { label: "활성", value: "ACTIVE", count: statusCounts.active, color: "bg-emerald-50 border-emerald-200 text-emerald-700", icon: "person" },
+                    { label: "휴원", value: "PAUSED", count: statusCounts.paused, color: "bg-amber-50 border-amber-200 text-amber-700", icon: "pause_circle" },
+                    { label: "퇴원", value: "WITHDRAWN", count: statusCounts.withdrawn, color: "bg-red-50 border-red-200 text-red-700", icon: "person_off" },
+                    { label: "전체", value: "", count: statusCounts.total, color: "bg-gray-50 border-gray-200 text-gray-700", icon: "groups" },
+                ].map((card) => (
+                    <button
+                        key={card.label}
+                        onClick={() => setFilterStatus(card.value)}
+                        className={`rounded-xl border p-3 text-left transition hover:shadow-sm ${card.color} ${
+                            filterStatus === card.value ? "ring-2 ring-brand-orange-500 shadow-sm" : ""
+                        }`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-lg">{card.icon}</span>
+                            <span className="text-xs font-medium opacity-70">{card.label}</span>
+                        </div>
+                        <p className="text-2xl font-extrabold mt-1">{card.count}명</p>
+                    </button>
+                ))}
+            </div>
+
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-900">원생 관리</h1>
                     <p className="text-gray-500 text-sm mt-1">
-                        등록된 원생: {students.length}명
+                        {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : "전체"} 원생: {filtered.length}명
                     </p>
                 </div>
                 <div className="flex gap-2">

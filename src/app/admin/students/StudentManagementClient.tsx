@@ -166,13 +166,13 @@ export default function StudentManagementClient({
     const gradeOptions = useMemo(() => {
         const set = new Set<string>();
         students.forEach((s) => { if (s.grade) set.add(s.grade); });
-        return Array.from(set).sort();
+        return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"));
     }, [students]);
 
     const schoolOptions = useMemo(() => {
         const set = new Set<string>();
         students.forEach((s) => { if (s.school) set.add(s.school); });
-        return Array.from(set).sort();
+        return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"));
     }, [students]);
 
     // Form state

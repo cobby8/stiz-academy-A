@@ -90,7 +90,11 @@ export const getClasses = cache(async () => {
                     p.id AS p_id, p.name AS p_name
              FROM "Class" c
              LEFT JOIN "Program" p ON c."programId" = p.id
-             ORDER BY c."createdAt" DESC`
+             ORDER BY CASE c."dayOfWeek"
+                        WHEN 'Mon' THEN 0 WHEN 'Tue' THEN 1 WHEN 'Wed' THEN 2
+                        WHEN 'Thu' THEN 3 WHEN 'Fri' THEN 4 WHEN 'Sat' THEN 5
+                        WHEN 'Sun' THEN 6 ELSE 7 END ASC,
+                     c."startTime" ASC`
         );
         return rows.map((r: any) => ({
             id: r.id,

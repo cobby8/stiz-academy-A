@@ -7,6 +7,7 @@ import {
     createNotificationRecord,
     notifyParentsOfStudents,
     notifyAllParents,
+    sendParentSms,
 } from "@/lib/notification";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import {
@@ -2440,6 +2441,37 @@ export async function generateMonthlyInvoices(year: number, month: number) {
         }
 
         revalidatePath("/admin/finance");
+
+        // 학부모에게 수납 안내 SMS 발송 (fire-and-forget)
+        // 학생별 보호자 전화번호를 조회하여 INVOICE_PARENT 템플릿 발송
+        if (created > 0) {
+            try {
+                const stuIds = students.map((s: any) => s.id);
+                const phList = stuIds.map((_: string, i: number) => `$${i + 1}`).join(",");
+                const stuParents = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT s.id, s.name, u.phone
+                     FROM "Student" s JOIN "User" u ON s."parentId" = u.id
+                     WHERE s.id IN (${phList}) AND u.phone IS NOT NULL AND u.phone != ''`,
+                    ...stuIds,
+                );
+                for (const sp of stuParents) {
+                    const phone = sp.phone;
+                    const childName = sp.name;
+                    // 첫 번째 템플릿의 금액을 사용 (모든 학생 동일 금액 가정)
+                    const amt = templates[0]?.amount ?? 0;
+                    const safeDueDay = Math.min(Number(templates[0]?.dueDay ?? templates[0]?.dueday ?? 10), 28);
+                    sendParentSms(phone, "INVOICE_PARENT", {
+                        childName,
+                        month: String(month),
+                        amount: Number(amt).toLocaleString("ko-KR"),
+                        dueDate: `${month}월 ${safeDueDay}일`,
+                    }).catch(() => {});
+                }
+            } catch (e) {
+                console.error("[generateMonthlyInvoices SMS] failed:", e);
+            }
+        }
+
         return { created, skipped, message: `${created}건 생성, ${skipped}건 중복 스킵` };
     } catch (e) {
         console.error("Failed to generate monthly invoices:", e);
@@ -2482,6 +2514,40 @@ export async function sendUnpaidReminders(forceResend?: boolean) {
             `미납 ${unpaid.length}건 (총 ${amountStr}원)이 있습니다. 확인 부탁드립니다.`,
             "/mypage",
         );
+
+        // 학부모에게 미납 알림 SMS 발송 (fire-and-forget)
+        // 학생별로 그룹핑하여 보호자 전화번호로 UNPAID_PARENT 템플릿 발송
+        try {
+            // 학생별 미납 건수/금액 집계
+            const studentUnpaid: Record<string, { count: number; total: number }> = {};
+            for (const u of unpaid) {
+                const sid = u.studentId ?? u.studentid;
+                if (!studentUnpaid[sid]) studentUnpaid[sid] = { count: 0, total: 0 };
+                studentUnpaid[sid].count++;
+                studentUnpaid[sid].total += Number(u.amount);
+            }
+            // 학생+보호자 전화번호 조회
+            const sidList = Object.keys(studentUnpaid);
+            const phList = sidList.map((_: string, i: number) => `$${i + 1}`).join(",");
+            const stuParents = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT s.id, s.name, u.phone
+                 FROM "Student" s JOIN "User" u ON s."parentId" = u.id
+                 WHERE s.id IN (${phList}) AND u.phone IS NOT NULL AND u.phone != ''`,
+                ...sidList,
+            );
+            for (const sp of stuParents) {
+                const info = studentUnpaid[sp.id];
+                if (info && sp.phone) {
+                    sendParentSms(sp.phone, "UNPAID_PARENT", {
+                        childName: sp.name,
+                        unpaidCount: String(info.count),
+                        totalAmount: info.total.toLocaleString("ko-KR"),
+                    }).catch(() => {});
+                }
+            }
+        } catch (e) {
+            console.error("[sendUnpaidReminders SMS] failed:", e);
+        }
 
         // notifiedAt 업데이트
         const ids = unpaid.map((u: any) => u.id);
@@ -2838,6 +2904,52 @@ export async function updateTrialLead(
             ...values,
             id,
         );
+
+        // SCHEDULED로 변경되면 학부모에게 체험 일정 확정 SMS 발송
+        if (data.status === "SCHEDULED") {
+            // 해당 리드의 학부모 전화번호와 변수 조회
+            const leads = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT "childName", "parentPhone", "scheduledDate", "scheduledClassId"
+                 FROM "TrialLead" WHERE id = $1 LIMIT 1`,
+                id,
+            );
+            if (leads.length > 0) {
+                const lead = leads[0];
+                const parentPhone = lead.parentPhone ?? lead.parentphone;
+                const childName = lead.childName ?? lead.childname;
+                const scheduledDate = lead.scheduledDate ?? lead.scheduleddate;
+                const classId = lead.scheduledClassId ?? lead.scheduledclassid;
+
+                // 배정 반 이름 조회
+                let className = "";
+                if (classId) {
+                    const cls = await prisma.$queryRawUnsafe<any[]>(
+                        `SELECT name FROM "Class" WHERE id = $1 LIMIT 1`, classId,
+                    );
+                    className = cls[0]?.name || "";
+                }
+
+                // 학원 전화번호 조회
+                const settings = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+                );
+                const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
+
+                // 날짜 포맷팅
+                const dateStr = scheduledDate
+                    ? new Date(scheduledDate).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" })
+                    : "";
+
+                if (parentPhone) {
+                    sendParentSms(parentPhone, "TRIAL_SCHEDULED_PARENT", {
+                        childName: childName || "",
+                        scheduledDate: dateStr,
+                        className,
+                        academyPhone,
+                    }).catch(() => {});
+                }
+            }
+        }
     } catch (e) {
         console.error("Failed to update trial lead:", e);
         throw new Error("체험 리드 수정 실패");
@@ -3577,6 +3689,49 @@ export async function approveEnrollApplication(
     revalidatePath("/admin/trial");
     revalidatePath("/admin/students");
     revalidatePath("/admin");
+
+    // 학부모에게 수강 확정 SMS 발송 (fire-and-forget, 승인 처리와 분리)
+    try {
+        const appData = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "parentPhone", "childName", "assignedClassId"
+             FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+            applicationId,
+        );
+        if (appData.length > 0) {
+            const a = appData[0];
+            const parentPhone = a.parentPhone ?? a.parentphone;
+            const childName = a.childName ?? a.childname;
+            const assignedClassId = a.assignedClassId ?? a.assignedclassid;
+
+            // 배정 반 이름 조회
+            let className = "";
+            if (assignedClassId) {
+                // assignedClassId는 콤마 구분 가능 — 첫 번째 반 이름만 사용
+                const firstClassId = assignedClassId.split(",")[0];
+                const cls = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT name FROM "Class" WHERE id = $1 LIMIT 1`, firstClassId,
+                );
+                className = cls[0]?.name || "";
+            }
+
+            // 학원 전화번호 조회
+            const settings = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+            );
+            const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
+
+            if (parentPhone) {
+                sendParentSms(parentPhone, "ENROLL_APPROVED_PARENT", {
+                    childName: childName || "",
+                    className,
+                    academyPhone,
+                }).catch(() => {});
+            }
+        }
+    } catch (e) {
+        // SMS 실패가 승인 처리를 막으면 안 됨
+        console.error("[approveEnrollApplication SMS] failed:", e);
+    }
 }
 
 /**
@@ -3677,5 +3832,122 @@ export async function sendManualSms(
 
     const result = await sendSmsBulk(recipients, `[STIZ] ${message.trim()}`);
     return result;
+}
+
+// ── SMS 템플릿 관리 Server Actions ──────────────────────────────────────────
+
+import {
+    ensureSmsTemplates,
+    renderTemplate,
+    autoConvertKeywords as autoConvertKeywordsFn,
+    SAMPLE_VARIABLES,
+} from "@/lib/smsTemplate";
+
+/**
+ * updateSmsTemplate — 템플릿 본문/활성 상태 수정
+ *
+ * 관리자가 카드에서 메시지를 편집하거나 ON/OFF 토글을 변경할 때 호출
+ */
+export async function updateSmsTemplate(
+    id: string,
+    data: { body?: string; isActive?: boolean },
+) {
+    await requireAdmin();
+    await ensureSmsTemplates();
+
+    // 수정할 필드가 없으면 무시
+    const sets: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (data.body !== undefined) {
+        sets.push(`body = $${idx++}`);
+        values.push(data.body);
+    }
+    if (data.isActive !== undefined) {
+        sets.push(`"isActive" = $${idx++}`);
+        values.push(data.isActive);
+    }
+    if (sets.length === 0) return;
+
+    sets.push(`"updatedAt" = NOW()`);
+
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "SmsTemplate" SET ${sets.join(", ")} WHERE id = $${idx}`,
+            ...values,
+            id,
+        );
+    } catch (e) {
+        console.error("[updateSmsTemplate] failed:", e);
+        throw new Error("템플릿 수정 실패");
+    }
+
+    revalidatePath("/admin/sms/templates");
+}
+
+/**
+ * previewSmsTemplate — 미리보기: 샘플 데이터로 변수 치환한 결과 반환
+ */
+export async function previewSmsTemplate(body: string): Promise<string> {
+    await requireAdmin();
+    return renderTemplate(body, SAMPLE_VARIABLES);
+}
+
+/**
+ * autoConvertSmsKeywords — 본문의 한글 키워드를 {{변수}}로 자동 치환
+ */
+export async function autoConvertSmsKeywords(body: string): Promise<{ converted: string; changes: string[] }> {
+    await requireAdmin();
+    return autoConvertKeywordsFn(body);
+}
+
+/**
+ * resetSmsTemplate — 기본 템플릿으로 초기화
+ */
+export async function resetSmsTemplate(id: string) {
+    await requireAdmin();
+    await ensureSmsTemplates();
+
+    try {
+        // 현재 템플릿의 trigger를 조회
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT trigger FROM "SmsTemplate" WHERE id = $1 LIMIT 1`,
+            id,
+        );
+        if (rows.length === 0) throw new Error("템플릿을 찾을 수 없습니다.");
+
+        const trigger = rows[0].trigger;
+
+        // 기본 템플릿에서 해당 trigger의 body를 찾아 복원
+        const { DEFAULT_TEMPLATES } = await import("@/lib/smsTemplate") as any;
+        // smsTemplate.ts에서 DEFAULT_TEMPLATES가 export되지 않으므로 직접 매핑
+        const defaultBodies: Record<string, string> = {
+            TRIAL_NEW_ADMIN: "[STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}}) - {{parentName}}",
+            TRIAL_NEW_COACH: "[STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}})",
+            ENROLL_NEW_ADMIN: "[STIZ] 새 수강 신청\n{{childName}} ({{childGrade}}) - {{parentName}}",
+            ENROLL_NEW_COACH: "[STIZ] 새 수강 신청\n{{childName}} ({{childGrade}})",
+            TRIAL_CONFIRM_PARENT: "[STIZ] {{childName}} 체험수업 신청이 접수되었습니다.\n일정 확정 시 다시 안내드리겠습니다.\n문의: {{academyPhone}}",
+            TRIAL_SCHEDULED_PARENT: "[STIZ] {{childName}} 체험수업 일정이 확정되었습니다.\n일시: {{scheduledDate}}\n반: {{className}}\n문의: {{academyPhone}}",
+            ENROLL_CONFIRM_PARENT: "[STIZ] {{childName}} 수강 신청이 접수되었습니다.\n승인 후 안내드리겠습니다.\n문의: {{academyPhone}}",
+            ENROLL_APPROVED_PARENT: "[STIZ] {{childName}} 수강이 확정되었습니다.\n배정 반: {{className}}\n상세 안내는 별도 연락드리겠습니다.",
+            INVOICE_PARENT: "[STIZ] {{month}}월 수강료 안내\n{{childName}}: {{amount}}원\n납부기한: {{dueDate}}",
+            UNPAID_PARENT: "[STIZ] 미납 수납 안내\n{{childName}}: {{unpaidCount}}건 ({{totalAmount}}원)\n확인 부탁드립니다.",
+        };
+
+        const defaultBody = defaultBodies[trigger];
+        if (!defaultBody) throw new Error("기본 템플릿을 찾을 수 없습니다.");
+
+        await prisma.$executeRawUnsafe(
+            `UPDATE "SmsTemplate" SET body = $1, "isActive" = true, "updatedAt" = NOW() WHERE id = $2`,
+            defaultBody,
+            id,
+        );
+    } catch (e) {
+        console.error("[resetSmsTemplate] failed:", e);
+        throw new Error((e as Error).message || "템플릿 초기화 실패");
+    }
+
+    revalidatePath("/admin/sms/templates");
 }
 

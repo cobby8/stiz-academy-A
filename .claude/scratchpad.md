@@ -1,138 +1,199 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 솔라피 SMS 연동 + 코치 전화번호 관리 + 문자 발송 기능
-- **상태**: 구현 완료, tsc PASS
-- **현재 담당**: tester (검증 필요)
+- **요청**: SMS 문자 템플릿 관리 시스템 구현
+- **상태**: 구현 완료 (7단계 전부)
+- **현재 담당**: developer 완료 -> tester
 - **마지막 세션**: 2026-03-29
 
 ## 기획설계 (planner-architect)
 
-### 신청 알림 시스템 설계 (2026-03-29)
+### SMS 템플릿 관리 시스템 설계 (2026-03-29)
 
-목표: 체험/수강/유니폼 신청 시 관리자+담당선생님에게 즉시 알림
+목표: 관리자가 상황별 SMS 문자 내용을 직접 수정/ON-OFF할 수 있는 템플릿 시스템
 
 #### 현재 인프라 분석 결과
 
-이미 완성된 알림 시스템이 존재:
-- **DB 알림**: Notification 모델 + createNotificationRecord() 헬퍼 (admin.ts:1080)
-- **웹 Push**: PushSubscription 모델 + sendPushToUser() 유틸 (pushNotification.ts)
-- **VAPID 키**: .env에 설정 완료
-- **학부모 UI**: /mypage에서 알림 목록 + 읽음처리 + 푸시 ON/OFF 토글 완성
-- **기존 패턴**: createParentRequest()에서 ADMIN에게 알림 보내는 코드가 이미 구현됨 (admin.ts:1188)
+이미 완성된 SMS 인프라:
+- **솔라피 연동**: lib/sms.ts — sendSms(), sendSmsBulk() (HMAC-SHA256 인증)
+- **알림 통합**: lib/notification.ts — notifyAdmins()에서 ADMIN+Coach에게 SMS 발송 중
+- **수동 발송 UI**: /admin/sms — SmsClient.tsx (코치/직접입력 대상 수동 발송)
+- **현재 문제**: 메시지 내용이 코드에 하드코딩됨 (예: `[STIZ] 새 체험수업 신청\n${childName}...`)
 
-#### 알림 채널별 비교
+#### DB 모델 설계: SmsTemplate
 
-| 채널 | 비용 | 구현 난이도 | 인프라 | 추천 |
-|------|------|-----------|--------|------|
-| A. 대시보드 알림 | 0원 | 매우 낮음 (5줄) | Notification 모델 완성 | 1순위 |
-| B. 웹 Push | 0원 | 매우 낮음 (0줄 추가) | sendPushToUser 완성 | 1순위 |
-| C. 카카오 알림톡 | 건당 8~15원 | 높음 (API 연동) | 없음 | 나중에 |
-| D. SMS | 건당 12~20원 | 중간 | 없음 | 나중에 |
-| E. 이메일 | 무료~저렴 | 중간 | 없음 | 선택 |
-
-추천: A+B 먼저 (비용 0원, 인프라 이미 완성)
-
-#### 핵심 문제: Coach와 User가 연결되지 않음
-
-Coach 모델에 userId 필드가 없음. Coach는 프로필 데이터(이름/역할/사진)만 저장.
-User.role=INSTRUCTOR가 로그인 가능한 선생님 계정이지만 Coach와 매핑 없음.
-=> "담당 선생님에게 알림" 현재 불가
-
-추천: 일단 ADMIN에게만 알림 (체험/수강 신청은 관리자가 처리하는 업무). 선생님 알림은 Coach-User 연결 후 Phase 2로.
-
-#### 알림 트리거 3곳
-
-| 트리거 | 파일 | 함수 | 알림 내용 |
-|--------|------|------|----------|
-| 체험수업 신청 | public.ts:165 | submitTrialApplication | "새 체험수업 신청: [이름] ([학년])" -> /admin/trial |
-| 수강 신청 | public.ts:364 | submitEnrollApplication | "새 수강 신청: [이름] ([학년])" -> /admin/apply |
-| 유니폼 신청 | - | - | 구글폼이라 트리거 불가 (자체화 필요) |
-
-#### 구현 설계
-
-현재 createNotificationRecord는 admin.ts 내부 함수(export 안 됨).
-=> lib/notification.ts 신규 생성하여 공용 알림 유틸로 분리
-
-```
-lib/notification.ts (신규)
-  - createNotificationRecord(userId, type, title, message, linkUrl)
-  - notifyAdmins(type, title, message, linkUrl)  // 모든 ADMIN에게
+```prisma
+model SmsTemplate {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  trigger      String   @unique  // 트리거 코드 (아래 목록)
+  name         String            // 관리자에게 보여줄 이름 (예: "체험 신청 접수 — 관리자용")
+  target       String            // 수신 대상: ADMIN, COACH, PARENT
+  body         String            // 메시지 본문 (변수 포함: {{childName}} 등)
+  isActive     Boolean  @default(true)   // ON/OFF 토글
+  description  String?           // 이 알림이 언제 발송되는지 설명
+  variables    String?           // 사용 가능한 변수 목록 (JSON: ["childName","parentName",...])
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
 ```
 
-public.ts의 submitTrialApplication, submitEnrollApplication 끝에 notifyAdmins() 호출 추가.
-admin.ts의 기존 createNotificationRecord를 lib/notification.ts import로 교체.
+#### 트리거 목록 + 변수 + 기본 템플릿
+
+| trigger 코드 | 이름 | target | 사용 가능 변수 | 기본 메시지 | 발동 위치 |
+|---|---|---|---|---|---|
+| TRIAL_NEW_ADMIN | 체험 신청 접수 (관리자) | ADMIN | childName, childGrade, parentName, parentPhone | [STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}}) - {{parentName}} | public.ts:submitTrialApplication |
+| TRIAL_NEW_COACH | 체험 신청 접수 (코치) | COACH | childName, childGrade, parentName | [STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}}) | public.ts:submitTrialApplication |
+| ENROLL_NEW_ADMIN | 수강 신청 접수 (관리자) | ADMIN | childName, childGrade, parentName, parentPhone | [STIZ] 새 수강 신청\n{{childName}} ({{childGrade}}) - {{parentName}} | public.ts:submitEnrollApplication |
+| ENROLL_NEW_COACH | 수강 신청 접수 (코치) | COACH | childName, childGrade, parentName | [STIZ] 새 수강 신청\n{{childName}} ({{childGrade}}) | public.ts:submitEnrollApplication |
+| TRIAL_CONFIRM_PARENT | 체험 신청 확인 (학부모) | PARENT | childName, parentName, academyPhone | [STIZ] {{childName}} 체험수업 신청이 접수되었습니다. 일정 확정 시 다시 안내드리겠습니다. 문의: {{academyPhone}} | public.ts:submitTrialApplication |
+| TRIAL_SCHEDULED_PARENT | 체험 일정 확정 (학부모) | PARENT | childName, scheduledDate, className, academyPhone | [STIZ] {{childName}} 체험수업 일정이 확정되었습니다.\n일시: {{scheduledDate}}\n반: {{className}}\n문의: {{academyPhone}} | admin.ts:updateTrialLead (status->SCHEDULED) |
+| ENROLL_CONFIRM_PARENT | 수강 신청 확인 (학부모) | PARENT | childName, parentName, academyPhone | [STIZ] {{childName}} 수강 신청이 접수되었습니다. 승인 후 안내드리겠습니다. 문의: {{academyPhone}} | public.ts:submitEnrollApplication |
+| ENROLL_APPROVED_PARENT | 수강 확정 (학부모) | PARENT | childName, className, academyPhone | [STIZ] {{childName}} 수강이 확정되었습니다.\n배정 반: {{className}}\n상세 안내는 별도 연락드리겠습니다. | admin.ts:approveEnrollApplication |
+| INVOICE_PARENT | 수납 안내 (학부모) | PARENT | childName, month, amount, dueDate | [STIZ] {{month}}월 수강료 안내\n{{childName}}: {{amount}}원\n납부기한: {{dueDate}} | admin.ts:generateMonthlyInvoices |
+| UNPAID_PARENT | 미납 알림 (학부모) | PARENT | childName, unpaidCount, totalAmount | [STIZ] 미납 수납 안내\n{{childName}}: {{unpaidCount}}건 ({{totalAmount}}원)\n확인 부탁드립니다. | admin.ts:sendUnpaidReminders |
+
+#### 핵심 유틸 함수: renderSmsTemplate()
+
+```
+lib/smsTemplate.ts (신규)
+
+// DB에서 템플릿 조회 -> 변수 치환 -> 활성이면 메시지 반환, 비활성이면 null
+async function renderSmsTemplate(
+  trigger: string,
+  variables: Record<string, string>
+): Promise<string | null>
+
+// 초기 seed 데이터 삽입 (템플릿이 없으면 기본값으로 생성)
+async function ensureSmsTemplates(): Promise<void>
+```
+
+#### 발송 로직 변경 포인트
+
+현재 notification.ts의 notifyAdmins()에서 SMS 메시지를 하드코딩:
+```ts
+sendSms(admin.phone, `[STIZ] ${title}\n${message}`)
+```
+
+변경 후: renderSmsTemplate()로 대체
+```ts
+// notifyAdmins 내부에서
+const adminMsg = await renderSmsTemplate("TRIAL_NEW_ADMIN", { childName, childGrade, parentName });
+if (adminMsg) sendSms(admin.phone, adminMsg);
+
+const coachMsg = await renderSmsTemplate("TRIAL_NEW_COACH", { childName, childGrade, parentName });
+if (coachMsg) { /* 코치에게 발송 */ }
+```
+
+학부모 SMS는 현재 미구현 -> 새로 추가:
+- submitTrialApplication: TRIAL_CONFIRM_PARENT 발송 (parentPhone으로)
+- updateTrialLead (SCHEDULED): TRIAL_SCHEDULED_PARENT 발송
+- submitEnrollApplication: ENROLL_CONFIRM_PARENT 발송
+- approveEnrollApplication: ENROLL_APPROVED_PARENT 발송
+- generateMonthlyInvoices: INVOICE_PARENT 발송
+- sendUnpaidReminders: UNPAID_PARENT 발송
+
+#### 페이지/컴포넌트 설계
+
+```
+/admin/sms/templates (신규 페이지)
+  - SmsTemplateClient.tsx (신규 클라이언트 컴포넌트)
+    - 트리거별 카드 레이아웃 (10개 카드)
+    - 각 카드:
+      - 상단: 이름 + ON/OFF 토글 + 수신대상 배지
+      - 중앙: textarea (메시지 본문 편집)
+      - 변수 삽입 버튼 (클릭하면 {{변수}} 커서 위치에 삽입)
+      - 하단: 미리보기 버튼 (샘플 데이터로 치환한 결과 표시)
+      - 저장 버튼
+```
+
+기존 /admin/sms 페이지에 "템플릿 관리" 링크 추가.
+
+#### Server Action 설계
+
+```
+admin.ts에 추가:
+  - getSmsTemplates(): SmsTemplate[] 전체 조회
+  - updateSmsTemplate(id, { body, isActive }): 본문/활성 수정
+  - resetSmsTemplate(id): 기본 템플릿으로 초기화
+  - previewSmsTemplate(trigger, variables): 미리보기용 치환 결과 반환
+```
+
+#### 만들 위치와 구조
+
+| 파일 경로 | 역할 | 신규/수정 |
+|----------|------|----------|
+| prisma/schema.prisma | SmsTemplate 모델 추가 | 수정 |
+| src/lib/smsTemplate.ts | renderSmsTemplate + ensureSmsTemplates + 변수치환 로직 | 신규 |
+| src/app/admin/sms/templates/page.tsx | 템플릿 관리 서버 컴포넌트 | 신규 |
+| src/app/admin/sms/templates/SmsTemplateClient.tsx | 템플릿 편집 UI (카드+토글+미리보기) | 신규 |
+| src/app/actions/admin.ts | getSmsTemplates, updateSmsTemplate, resetSmsTemplate, previewSmsTemplate | 수정 |
+| src/lib/notification.ts | notifyAdmins SMS를 템플릿 기반으로 변경 | 수정 |
+| src/app/actions/public.ts | 학부모용 SMS 발송 추가 (TRIAL_CONFIRM, ENROLL_CONFIRM) | 수정 |
+| src/app/admin/sms/page.tsx | "템플릿 관리" 링크 추가 | 수정 |
+
+#### 기존 코드 연결
+
+- lib/sms.ts의 sendSms() -> 기존 그대로 사용 (발송 엔진)
+- lib/smsTemplate.ts -> sendSms()를 호출하기 전에 템플릿 조회+치환 담당
+- notification.ts -> smsTemplate.ts 임포트하여 하드코딩 메시지 대체
+- public.ts -> 학부모 SMS 발송 시 smsTemplate.ts 사용
+- admin.ts -> updateTrialLead, approveEnrollApplication, generateMonthlyInvoices, sendUnpaidReminders에 학부모 SMS 추가
 
 #### 실행 계획
 
 | 순서 | 작업 | 담당 | 선행 조건 |
 |------|------|------|----------|
-| 1 | PM 결정 4건 (아래 참조) | PM | 없음 |
-| 2 | lib/notification.ts 생성 (createNotificationRecord + notifyAdmins 이동) | developer | 1 |
-| 3 | admin.ts에서 notification.ts import로 교체 | developer | 2 |
-| 4 | public.ts submitTrialApplication에 notifyAdmins 추가 | developer | 2 |
-| 5 | public.ts submitEnrollApplication에 notifyAdmins 추가 | developer | 2 |
-| 6 | tsc --noEmit + 기존 알림 기능 회귀 테스트 | tester | 3,4,5 |
+| 1 | schema.prisma에 SmsTemplate 모델 추가 + migrate | developer | 없음 |
+| 2 | lib/smsTemplate.ts 생성 (renderSmsTemplate + ensureSmsTemplates + seed 데이터) | developer | 1 |
+| 3 | admin.ts에 CRUD Server Action 4개 추가 | developer | 2 |
+| 4 | /admin/sms/templates 페이지 + SmsTemplateClient.tsx | developer | 3 |
+| 5 | notification.ts 수정 (하드코딩 -> 템플릿 기반) + public.ts/admin.ts에 학부모 SMS 추가 | developer | 2 |
+| 6 | tsc --noEmit + 기능 테스트 | tester | 4,5 |
+
+#### developer 주의사항
+
+- ensureSmsTemplates()는 앱 시작 시 or 첫 조회 시 호출 (DDL 패턴). 템플릿이 0개면 기본값 10개 INSERT.
+- renderSmsTemplate()에서 DB 조회 결과를 캐싱할 필요 없음 (호출 빈도 낮음, 관리자 수정 즉시 반영 필요)
+- 학부모 SMS: parentPhone이 필수. 신청 폼에서 이미 수집하고 있으므로 별도 처리 불필요.
+- 변수 치환: body.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '') 패턴
+- 미리보기용 샘플 데이터: { childName: "홍길동", parentName: "홍부모", childGrade: "초3", ... }
+- $queryRawUnsafe 필수 (PgBouncer 호환)
+- 4단계와 5단계는 병렬 가능 (독립적)
 
 #### PM 결정 필요 사항
 
-1. **담당 선생님 알림**: 이번에 ADMIN만? 아니면 Coach-User 연결도?
-2. **유니폼 신청 자체화**: 이번 작업에 포함? (포함해야 알림 트리거 가능)
-3. **알림 타입명**: Notification.type에 "TRIAL_APPLICATION", "ENROLL_APPLICATION" 추가 -- OK?
-4. **알림 링크**: 체험 -> /admin/trial, 수강 -> /admin/apply 로 연결 -- OK?
+1. **학부모 SMS 즉시 추가?** 현재 학부모에게 SMS를 보내는 코드가 없음. 이번에 8개 트리거 중 학부모용 6개를 모두 구현할지, 관리자/코치용 4개만 먼저 할지?
+2. **academyPhone 변수**: AcademySettings.contactPhone을 사용할 것인지? (현재 DB에 있음)
+3. **수납 안내 SMS**: generateMonthlyInvoices는 학생별로 돌면서 생성하는데, SMS도 학생별로 보낼지 학부모별로 합쳐서 보낼지?
 
-#### developer 주의사항
-- createNotificationRecord 내부에서 sendPushToUser를 .catch(()=>{})로 호출 (Push 실패해도 무시)
-- public.ts는 비로그인 공개 함수이므로 notifyAdmins는 fire-and-forget (await 하지 않음, 신청 응답 지연 방지)
-- admin.ts의 기존 notifyParentsOfStudents, notifyAllParents도 notification.ts로 이동 고려 (선택)
+## 구현 기록 (developer)
 
-### 구현 기록 (developer) — 신청 알림 시스템 (2026-03-29)
+### SMS 템플릿 관리 시스템 구현 (2026-03-29)
 
-구현한 기능: 체험/수강 신청 시 관리자(ADMIN)에게 인앱 알림 + 웹 Push + SMS 발송. 헤더에 알림 벨 드롭다운.
+구현한 기능: 상황별 SMS 자동 발송 메시지를 관리자가 편집/ON-OFF할 수 있는 템플릿 시스템
 
 | 파일 경로 | 변경 내용 | 신규/수정 |
 |----------|----------|----------|
-| src/lib/notification.ts | 공용 알림 유틸 (createNotificationRecord, notifyAdmins, notifyParentsOfStudents, notifyAllParents) | 신규 |
-| src/lib/sms.ts | NHN Cloud SMS 발송 유틸 (환경변수 없으면 console.log fallback) | 신규 |
-| src/app/actions/public.ts | submitTrialApplication, submitEnrollApplication에 notifyAdmins 호출 추가 | 수정 |
-| src/app/actions/admin.ts | 내부 알림 함수 3개를 lib/notification.ts import로 교체 | 수정 |
-| src/app/api/admin/notifications/route.ts | 관리자 알림 목록 API (GET: 조회, POST: 읽음처리) | 신규 |
-| src/app/admin/layout.tsx | 헤더에 NotificationBell 컴포넌트 (벨 아이콘 + 배지 + 드롭다운) | 수정 |
+| prisma/schema.prisma | SmsTemplate 모델 추가 | 수정 |
+| src/lib/smsTemplate.ts | DDL ensure + 10개 seed + renderTemplate + autoConvertKeywords + SAMPLE_VARIABLES | 신규 |
+| src/lib/queries.ts | getSmsTemplates(), getSmsTemplate(trigger) 추가 | 수정 |
+| src/app/actions/admin.ts | updateSmsTemplate, previewSmsTemplate, autoConvertSmsKeywords, resetSmsTemplate + 학부모 SMS 연동 (updateTrialLead/approveEnroll/invoices/unpaid) | 수정 |
+| src/app/admin/sms/templates/page.tsx | 템플릿 관리 서버 컴포넌트 | 신규 |
+| src/app/admin/sms/templates/SmsTemplateClient.tsx | 탭(관리자-코치/학부모) + 카드 편집 + 변수 삽입 바 + 자동 변환 + 미리보기 + ON/OFF 토글 | 신규 |
+| src/lib/notification.ts | notifyAdmins에 smsOptions 추가 (adminTrigger/coachTrigger) + sendParentSms 신규 | 수정 |
+| src/app/actions/public.ts | submitTrialApplication/submitEnrollApplication 템플릿 기반 SMS + 학부모 SMS | 수정 |
+| src/app/admin/layout.tsx | 사이드바에 "템플릿 관리" 메뉴 추가 | 수정 |
 
 tester 참고:
-- 테스트: 체험/수강 신청 폼 제출 후 관리자 로그인하여 헤더 벨 아이콘 확인
-- 정상 동작: 벨 아이콘에 빨간 배지 숫자 표시, 클릭 시 드롭다운에 알림 목록
-- 알림 클릭 시 해당 관리 페이지(/admin/trial 또는 /admin/apply)로 이동
-- "모두 읽음" 클릭 시 배지 사라짐
-- SMS: NHN_SMS_APP_KEY 환경변수 없으면 콘솔 로그만 출력 (에러 없음)
+- 테스트 방법: /admin/sms/templates 접속 -> 탭 전환, 카드 편집, 변수 삽입, 자동 변환, 미리보기, ON/OFF 토글, 저장 확인
+- DB migrate 필요: `npx prisma migrate dev --name sms-template` (SmsTemplate 테이블 생성). DDL ensure가 있어 migrate 없이도 동작하지만 권장.
+- 정상 동작: 10개 카드 표시, 편집/저장 성공, 미리보기에 샘플 데이터 치환 결과 표시
+- SMS 실제 발송: 솔라피 환경변수 설정 필요 (미설정 시 콘솔 로그 fallback)
 
 reviewer 참고:
-- admin.ts에서 알림 함수 3개를 lib/notification.ts로 이동 — 기존 호출처 모두 import로 교체
-- public.ts의 notifyAdmins는 fire-and-forget (await 없음, .catch(() => {}))
-- 알림 API에 인증 가드 있음 (getAdminUser)
-
-### 구현 기록 (developer) — 시간표 요일별 표 뷰 (2026-03-29)
-
-구현한 기능: 시간표를 요일x시간대 테이블 형태로 볼 수 있는 "표 보기" 뷰 추가 (공개 + 관리자)
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/components/ScheduleTableView.tsx | 요일x시간대 그리드 테이블 컴포넌트 (MergedSlot[] props) | 신규 |
-| src/app/schedule/ScheduleClient.tsx | "카드/표" 뷰 토글 버튼 + ScheduleTableView 조건부 렌더링 | 수정 |
-| src/app/admin/schedule/ScheduleAdminClient.tsx | "편집/표 보기" 토글 + SheetClassSlot->MergedSlot 변환 + 표 뷰 미리보기 | 수정 |
-
-tester 참고:
-- 테스트: /schedule 페이지 상단 필터 바 우측에 "카드/표" 토글 버튼 확인
-- "표" 클릭 시 요일별 시간대 테이블로 전환, "카드" 클릭 시 기존 카드 뷰로 복귀
-- 프로그램 필터와 표 뷰 동시 동작 확인
-- 잔여석 색상: 3석이상=초록, 1~2석=노랑, 0석=빨강
-- 관리자: /admin/schedule 상단 "편집/표 보기" 토글, 표 보기 시 파란 안내 배너 표시
-- 모바일: 표가 가로 스크롤 가능한지 확인
-
-reviewer 참고:
-- ScheduleTableView는 MergedSlot[] 타입만 받아 범용적으로 사용
-- 관리자 쪽에서 SheetClassSlot+CustomSlot->MergedSlot 변환은 useMemo로 캐싱
-- Material Symbols 아이콘 사용 (group, person, grid_view, table_chart, edit)
+- notifyAdmins에 smsOptions 추가 시 기존 호출과 하위 호환 유지 (5번째 인자 optional)
+- sendParentSms는 fire-and-forget 패턴 (실패해도 메인 로직 중단 안 함)
+- public.ts의 sendParentSmsWithAcademyPhone은 모듈 내부 함수 (export 안 함)
 
 ### 미해결 리뷰 수정 사항 (이월)
 
@@ -146,18 +207,10 @@ reviewer 참고:
 
 | Phase | 기능 | 상태 |
 |-------|------|------|
-| 1 | 수납 고도화 | 완료 |
-| 2 | 일일 수업 리포트 | 완료 |
-| 3 | 체험수업 CRM | 완료 |
-| 4 | 대기자 관리 | 완료 |
-| 5 | 보강 수업 매칭 | 완료 |
-| 6 | 스킬 트래킹 | 완료 |
-| 7 | 통계 대시보드 | 완료 |
-| - | 체험/수강 신청 자체화 (A+B+C) | 완료 |
-| - | 유니폼 구글폼 연동 | 완료 |
-| - | 수강생 데이터 이관 | 완료 |
-| - | 신청 알림 시스템 | 구현 완료 |
-| - | 솔라피 SMS + 코치 전화번호 + 문자 발송 | 구현 완료 |
+| 1-7 | 수납~통계 대시보드 | 완료 |
+| - | 체험/수강 신청 자체화 + 유니폼 + 데이터 이관 | 완료 |
+| - | 신청 알림 시스템 + 솔라피 SMS | 완료 |
+| - | SMS 템플릿 관리 시스템 | 설계 완료 |
 
 ---
 
@@ -165,18 +218,14 @@ reviewer 참고:
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-03-29 | SMS 템플릿 관리 시스템 구현 7단계 (DB+유틸+CRUD+UI+발송연동+사이드바) | 구현 완료 |
+| 2026-03-29 | SMS 템플릿 관리 시스템 기획설계 (10개 트리거+DB모델+페이지+실행계획) | 설계 완료 |
 | 2026-03-29 | 솔라피 SMS 연동 + Coach phone 필드 + /admin/sms 문자 발송 페이지 | 완료 |
 | 2026-03-29 | 시간표 관리 카드+플로팅 모달 UI 리디자인 (컴팩트 카드 + 편집 모달) | 완료 |
-| 2026-03-29 | 편집모드 CustomClassSlot 요일별 통합 표시 (독립 섹션 제거) | 완료 |
 | 2026-03-29 | 시간표 요일별 표 뷰 추가 (ScheduleTableView + 카드/표 토글) | 완료 |
 | 2026-03-29 | 신청 알림 시스템 구현 (notification.ts + sms.ts + 벨 드롭다운 + API) | 완료 |
-| 2026-03-29 | 신청 알림 시스템 기획설계 (채널분석+인프라확인+실행계획) | 완료 |
 | 2026-03-29 | Phase C: 수강 신청 관리 (승인/반려 + 원생 자동 전환) | 완료 |
 | 2026-03-29 | Phase B: 수강 신청 자체화 (EnrollmentApplication + 4단계 폼) | 완료 |
 | 2026-03-29 | Phase A: 체험수업 신청 자체화 (TrialLead 확장 + 3단계 폼) | 완료 |
 | 2026-03-29 | 유니폼 신청서 구글폼 연동 (uniformFormUrl + 카드/모달) | 완료 |
-| 2026-03-29 | 원생 관리 테이블 UI 정비 + deleteStudent FK 버그 수정 | 완료 |
-| 2026-03-29 | 수강생 데이터 이관 + 4월 CSV Enrollment 재설정 | 완료 |
-| 2026-03-29 | Phase 5-7 tester+reviewer 전체 검증 PASS | 완료 |
-| 2026-03-29 | Phase 2-4 tester+reviewer 전체 검증 PASS | 완료 |
 | 2026-03-29 | 보안 단기 조치 5건 (헤더, CRON, 업로드, 에러, XSS) | 완료 |

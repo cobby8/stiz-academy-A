@@ -2495,3 +2495,62 @@ export const getEnrollApplicationStats = cache(async () => {
         return { PENDING: 0, APPROVED: 0, REJECTED: 0, CANCELLED: 0, total: 0 };
     }
 });
+
+// ── SMS 템플릿 조회 ─────────────────────────────────────────────────────────
+import { ensureSmsTemplates } from "@/lib/smsTemplate";
+
+// 전체 템플릿 목록 조회 (관리자 페이지용)
+export const getSmsTemplates = cache(async () => {
+    await ensureSmsTemplates();
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, trigger, name, target, body, "isActive", description, variables, "createdAt", "updatedAt"
+             FROM "SmsTemplate"
+             ORDER BY
+                CASE target WHEN 'ADMIN' THEN 1 WHEN 'COACH' THEN 2 WHEN 'PARENT' THEN 3 END,
+                trigger`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            trigger: r.trigger,
+            name: r.name,
+            target: r.target,
+            body: r.body,
+            isActive: r.isActive ?? r.isactive ?? true,
+            description: r.description,
+            variables: r.variables,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getSmsTemplates] failed:", e);
+        return [];
+    }
+});
+
+// 특정 트리거의 템플릿 1건 조회
+export const getSmsTemplate = cache(async (trigger: string) => {
+    await ensureSmsTemplates();
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, trigger, name, target, body, "isActive", description, variables
+             FROM "SmsTemplate" WHERE trigger = $1 LIMIT 1`,
+            trigger,
+        );
+        if (rows.length === 0) return null;
+        const r = rows[0];
+        return {
+            id: r.id,
+            trigger: r.trigger,
+            name: r.name,
+            target: r.target,
+            body: r.body,
+            isActive: r.isActive ?? r.isactive ?? true,
+            description: r.description,
+            variables: r.variables,
+        };
+    } catch (e) {
+        console.error("[getSmsTemplate] failed:", e);
+        return null;
+    }
+});

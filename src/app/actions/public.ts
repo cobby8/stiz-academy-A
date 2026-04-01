@@ -9,7 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { ensureTrialLeadTable } from "@/app/actions/admin";
-import { notifyAdmins } from "@/lib/notification";
+import { notifyAdmins, sendParentSms } from "@/lib/notification";
 
 // ── EnrollmentApplication DDL ensure (idempotent) ───────────────────────────
 // 테이블이 없으면 자동으로 생성 — DB push 없이도 동작하도록
@@ -163,13 +163,34 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
         revalidatePath("/admin/trial");
         revalidatePath("/admin");
 
+        // SMS 템플릿 변수 — 관리자/코치/학부모 공통으로 사용
+        const smsVars = {
+            childName,
+            childGrade: data.childGrade || "학년 미입력",
+            parentName,
+            parentPhone: normalizePhone(parentPhone),
+        };
+
         // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
-        // await 하지 않음 — 응답 지연 방지
+        // 템플릿 기반 SMS: TRIAL_NEW_ADMIN(관리자), TRIAL_NEW_COACH(코치)
         notifyAdmins(
             "TRIAL_APPLICATION",
             "새 체험수업 신청",
             `${childName} (${data.childGrade || "학년 미입력"}) — ${parentName}`,
             "/admin/trial",
+            {
+                adminTrigger: "TRIAL_NEW_ADMIN",
+                coachTrigger: "TRIAL_NEW_COACH",
+                variables: smsVars,
+            },
+        ).catch(() => {});
+
+        // 학부모에게 접수 확인 SMS 발송 (fire-and-forget)
+        // academyPhone은 DB에서 비동기 조회하여 포함
+        sendParentSmsWithAcademyPhone(
+            normalizePhone(parentPhone),
+            "TRIAL_CONFIRM_PARENT",
+            { childName, parentName },
         ).catch(() => {});
 
         return { success: true, id: rows[0]?.id || "ok" };
@@ -371,12 +392,33 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
         // 관리자 페이지 캐시 무효화
         revalidatePath("/admin");
 
+        // SMS 템플릿 변수
+        const smsVars = {
+            childName,
+            childGrade: data.childGrade || "학년 미입력",
+            parentName,
+            parentPhone: normalizePhone(parentPhone),
+        };
+
         // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
+        // 템플릿 기반 SMS: ENROLL_NEW_ADMIN(관리자), ENROLL_NEW_COACH(코치)
         notifyAdmins(
             "ENROLL_APPLICATION",
             "새 수강 신청",
             `${childName} (${data.childGrade || "학년 미입력"}) — ${parentName}`,
             "/admin/apply",
+            {
+                adminTrigger: "ENROLL_NEW_ADMIN",
+                coachTrigger: "ENROLL_NEW_COACH",
+                variables: smsVars,
+            },
+        ).catch(() => {});
+
+        // 학부모에게 접수 확인 SMS 발송 (fire-and-forget)
+        sendParentSmsWithAcademyPhone(
+            normalizePhone(parentPhone),
+            "ENROLL_CONFIRM_PARENT",
+            { childName, parentName },
         ).catch(() => {});
 
         return { success: true, id: rows[0]?.id || "ok" };
@@ -436,5 +478,32 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
     } catch (e) {
         console.error("[getTrialLeadForEnroll] failed:", e);
         return null;
+    }
+}
+
+// ── 학부모 SMS 발송 (academyPhone 자동 조회 포함) ─────────────────────────────
+// 학부모 PARENT 템플릿에는 {{academyPhone}} 변수가 포함된 경우가 많다.
+// AcademySettings.contactPhone을 DB에서 조회하여 variables에 자동 추가한다.
+// fire-and-forget 패턴: 실패해도 메인 로직에 영향 없음
+async function sendParentSmsWithAcademyPhone(
+    parentPhone: string,
+    trigger: string,
+    baseVars: Record<string, string>,
+) {
+    try {
+        // 학원 전화번호 조회
+        const settings = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+        );
+        const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
+
+        // 변수에 academyPhone 추가
+        const vars = { ...baseVars, academyPhone };
+
+        // sendParentSms 호출 (notification.ts)
+        const { sendParentSms: sps } = await import("@/lib/notification");
+        await sps(parentPhone, trigger, vars);
+    } catch (e) {
+        console.error(`[sendParentSmsWithAcademyPhone] trigger=${trigger} failed:`, e);
     }
 }

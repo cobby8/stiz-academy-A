@@ -564,6 +564,20 @@ model EnrollmentApplication {
   @@index([createdAt])
 }
 
+// SMS 템플릿 — 상황별 자동 발송 메시지를 관리자가 편집/ON-OFF할 수 있는 시스템
+model SmsTemplate {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  trigger     String   @unique  // 트리거 코드 (TRIAL_NEW_ADMIN, TRIAL_CONFIRM_PARENT 등)
+  name        String            // 관리자에게 보여줄 이름 (예: "체험 신청 접수 — 관리자용")
+  target      String            // 수신 대상: ADMIN, COACH, PARENT
+  body        String            // 메시지 본문 (변수 포함: {{childName}} 등)
+  isActive    Boolean  @default(true)   // ON/OFF 토글
+  description String?           // 이 알림이 언제 발송되는지 설명
+  variables   String?           // 사용 가능한 변수 목록 (JSON: ["childName","parentName",...])
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

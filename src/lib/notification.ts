@@ -39,6 +39,7 @@ export async function createNotificationRecord(data: {
 
 // ── 모든 관리자(ADMIN)에게 알림 발송 ────────────────────────────────────────
 // 인앱 알림 + 웹 Push + SMS(전화번호 있으면) 동시 발송
+// 추가: Coach 중 phone이 등록된 코치에게도 SMS 발송 (인앱 알림은 User 계정이 없으므로 생략)
 export async function notifyAdmins(
     type: string,
     title: string,
@@ -64,6 +65,18 @@ export async function notifyAdmins(
             // SMS 발송 (전화번호가 있을 때만, 실패해도 무시)
             if (admin.phone) {
                 sendSms(admin.phone, `[STIZ] ${title}\n${message}`).catch(() => {});
+            }
+        }
+
+        // Coach 중 phone이 있는 코치에게도 SMS 발송 (User 계정이 없으므로 인앱 알림은 불가)
+        const coaches = await prisma.$queryRawUnsafe<{ phone: string }[]>(
+            `SELECT phone FROM "Coach" WHERE phone IS NOT NULL AND phone != ''`
+        );
+        // ADMIN 사용자 phone과 중복되는 번호는 제외 (같은 번호로 두 번 발송 방지)
+        const adminPhones = new Set(admins.map(a => a.phone).filter(Boolean));
+        for (const coach of coaches) {
+            if (coach.phone && !adminPhones.has(coach.phone)) {
+                sendSms(coach.phone, `[STIZ] ${title}\n${message}`).catch(() => {});
             }
         }
     } catch (e) {

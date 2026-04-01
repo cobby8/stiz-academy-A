@@ -10,6 +10,7 @@ interface Coach {
     role: string;
     description: string | null;
     imageUrl: string | null;
+    phone: string | null;
     order: number;
 }
 
@@ -17,6 +18,7 @@ interface FormState {
     name: string;
     role: string;
     description: string;
+    phone: string;
     imageUrl: string;
     imageFile: File | null;
     previewUrl: string | null;
@@ -27,6 +29,7 @@ function defaultForm(coach?: Coach): FormState {
         name: coach?.name ?? "",
         role: coach?.role ?? "",
         description: coach?.description ?? "",
+        phone: coach?.phone ?? "",
         imageUrl: coach?.imageUrl ?? "",
         imageFile: null,
         previewUrl: coach?.imageUrl ?? null,
@@ -154,6 +157,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                     name: addForm.name.trim(),
                     role: addForm.role.trim(),
                     description: addForm.description.trim() || undefined,
+                    phone: addForm.phone.trim() || undefined,
                     imageUrl: imageUrl.trim() || undefined,
                     order: maxOrder + 1,
                 });
@@ -187,6 +191,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                     name: editForm.name.trim(),
                     role: editForm.role.trim(),
                     description: editForm.description.trim() || undefined,
+                    phone: editForm.phone.trim() || undefined,
                     imageUrl: imageUrl.trim() || undefined,
                 });
                 setEditId(null);
@@ -306,6 +311,20 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                                     />
                                 </div>
                             </div>
+                            {/* 전화번호 — SMS 수신용 (선택) */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    전화번호
+                                    <span className="text-gray-400 font-normal ml-1">(SMS 수신용, 선택)</span>
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={addForm.phone}
+                                    onChange={(e) => patchAdd({ phone: e.target.value })}
+                                    placeholder="예: 010-1234-5678"
+                                    className={INPUT}
+                                />
+                            </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">
                                     약력 / 소개
@@ -392,6 +411,12 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                                             {coach.role}
                                         </span>
                                     </div>
+                                    {coach.phone && (
+                                        <p className="text-xs text-gray-500">
+                                            <span className="material-symbols-outlined text-[13px] align-middle mr-0.5">phone</span>
+                                            {coach.phone}
+                                        </p>
+                                    )}
                                     {coach.description && (
                                         <p className="text-xs text-gray-500 whitespace-pre-line line-clamp-2">
                                             {coach.description}
@@ -463,6 +488,21 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                                                     className={INPUT}
                                                 />
                                             </div>
+                                        </div>
+
+                                        {/* 전화번호 — SMS 수신용 (선택) */}
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                전화번호
+                                                <span className="text-gray-400 font-normal ml-1">(SMS 수신용, 선택)</span>
+                                            </label>
+                                            <input
+                                                type="tel"
+                                                value={editForm.phone}
+                                                onChange={(e) => patchEdit({ phone: e.target.value })}
+                                                placeholder="예: 010-1234-5678"
+                                                className={INPUT}
+                                            />
                                         </div>
 
                                         <div>

@@ -275,7 +275,7 @@ export const getClassSlotOverrides = cache(async () => {
 export const getCoaches = cache(async () => {
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, name, role, description, "imageUrl", "order", "createdAt", "updatedAt"
+            `SELECT id, name, role, description, "imageUrl", phone, "order", "createdAt", "updatedAt"
              FROM "Coach" ORDER BY "order" ASC`
         );
         return rows.map((r: any) => ({ ...r, order: Number(r.order ?? 0) }));

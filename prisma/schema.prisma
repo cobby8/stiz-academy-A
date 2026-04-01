@@ -275,6 +275,7 @@ model Coach {
   role        String
   description String?
   imageUrl    String?
+  phone       String?             // SMS 수신 전화번호 (예: "01012345678")
   order       Int                 @default(0)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt

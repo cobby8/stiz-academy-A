@@ -364,20 +364,22 @@ export async function createCoach(data: {
     role: string;
     description?: string;
     imageUrl?: string;
+    phone?: string;
     order?: number;
 }) {
     await requireAdmin();
     // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
         await prisma.$executeRawUnsafe(
-            `INSERT INTO "Coach" (id, name, role, description, "imageUrl", "order", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4,
-               COALESCE($5, (SELECT COALESCE(MAX("order"), -1) + 1 FROM "Coach")),
+            `INSERT INTO "Coach" (id, name, role, description, "imageUrl", phone, "order", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5,
+               COALESCE($6, (SELECT COALESCE(MAX("order"), -1) + 1 FROM "Coach")),
                NOW(), NOW())`,
             data.name,
             data.role,
             data.description || null,
             data.imageUrl || null,
+            data.phone || null,
             data.order ?? null,
         );
         revalidatePath("/admin/coaches");
@@ -395,17 +397,19 @@ export async function updateCoach(id: string, data: {
     role: string;
     description?: string;
     imageUrl?: string;
+    phone?: string;
 }) {
     await requireAdmin();
     // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
         await prisma.$executeRawUnsafe(
-            `UPDATE "Coach" SET name = $1, role = $2, description = $3, "imageUrl" = $4, "updatedAt" = NOW()
-             WHERE id = $5`,
+            `UPDATE "Coach" SET name = $1, role = $2, description = $3, "imageUrl" = $4, phone = $5, "updatedAt" = NOW()
+             WHERE id = $6`,
             data.name,
             data.role,
             data.description || null,
             data.imageUrl || null,
+            data.phone || null,
             id,
         );
         revalidatePath("/admin/coaches");
@@ -3634,5 +3638,44 @@ export async function generateEnrollLink(trialLeadId: string): Promise<string> {
         || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:4000");
 
     return `${baseUrl}/apply/enroll?trialId=${trialLeadId}`;
+}
+
+// ── SMS 수동 발송 (관리자 전용) ──────────────────────────────────────────────
+// 관리자가 코치 또는 직접 입력한 번호로 문자를 보내는 기능
+
+import { sendSms, sendSmsBulk } from "@/lib/sms";
+
+/**
+ * getCoachPhones — SMS 발송 수신자 선택 UI용 코치 전화번호 목록 조회
+ */
+export async function getCoachPhones(): Promise<{ id: string; name: string; role: string; phone: string }[]> {
+    await requireAdmin();
+    const rows = await prisma.$queryRawUnsafe<{ id: string; name: string; role: string; phone: string }[]>(
+        `SELECT id, name, role, phone FROM "Coach" WHERE phone IS NOT NULL AND phone != '' ORDER BY "order" ASC`
+    );
+    return rows;
+}
+
+/**
+ * sendManualSms — 관리자가 수동으로 SMS 발송
+ *
+ * @param recipients  수신 번호 배열 (하이픈 포함/미포함 모두 가능)
+ * @param message     메시지 본문
+ * @returns           발송 결과 { total, success, failed }
+ */
+export async function sendManualSms(
+    recipients: string[],
+    message: string,
+): Promise<{ total: number; success: number; failed: number }> {
+    await requireAdmin();
+
+    if (!recipients.length) throw new Error("수신자를 선택해주세요.");
+    if (!message.trim()) throw new Error("메시지를 입력해주세요.");
+
+    // 발신 제한: 한 번에 100건 이하
+    if (recipients.length > 100) throw new Error("한 번에 100건 이하만 발송할 수 있습니다.");
+
+    const result = await sendSmsBulk(recipients, `[STIZ] ${message.trim()}`);
+    return result;
 }
 

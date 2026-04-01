@@ -6,6 +6,7 @@ import {
     updateTrialLead,
     deleteTrialLead,
     convertTrialToStudent,
+    generateEnrollLink,
 } from "@/app/actions/admin";
 import { useRouter } from "next/navigation";
 
@@ -361,6 +362,28 @@ export default function TrialCrmClient({
                                         >
                                             <span className="material-symbols-outlined text-xl">edit_note</span>
                                         </button>
+
+                                        {/* 수강 안내 링크 복사 — ATTENDED 상태에서만 활성 */}
+                                        {/* 체험 완료된 학부모에게 수강 신청 링크를 보낼 때 사용 */}
+                                        {lead.status === "ATTENDED" && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const link = await generateEnrollLink(lead.id);
+                                                        await navigator.clipboard.writeText(link);
+                                                        alert("수강 안내 링크가 클립보드에 복사되었습니다.\n학부모님께 보내주세요.");
+                                                    } catch (e) {
+                                                        alert((e as Error).message);
+                                                    }
+                                                }}
+                                                disabled={busy}
+                                                className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                                                title="수강 신청 링크를 복사하여 학부모에게 전달"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">content_copy</span>
+                                                수강 안내
+                                            </button>
+                                        )}
 
                                         {/* 정규 등록 전환 — ATTENDED 상태에서만 활성 */}
                                         {lead.status === "ATTENDED" && (

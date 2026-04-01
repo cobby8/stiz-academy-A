@@ -1,7 +1,7 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: Phase B — 수강 신청 자체화 (구글폼 탈피, 체험 데이터 자동 채움)
+- **요청**: Phase C — 수강 신청 관리 (관리자 승인/반려 + 원생 자동 전환)
 - **상태**: developer 구현 완료
 - **현재 담당**: tester/PM 확인
 - **마지막 세션**: 2026-03-29
@@ -86,6 +86,33 @@ reviewer 참고:
 - public.ts에 requireAdmin() 없음 (의도적 — 공개 폼)
 - trialLeadId 검증: 존재하지 않으면 null로 처리 (에러 대신 무시)
 - preferredSlotKeys는 클라이언트에서 배열로 관리, 서버에는 콤마 구분 문자열로 전달
+
+### 구현 기록 — Phase C 수강 신청 관리 (관리자 승인/반려)
+
+구현한 기능: Phase C — 수강 신청 관리 (C-1 ~ C-6 전체)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/queries.ts | getEnrollApplications, getEnrollApplicationStats 조회 함수 추가 | 수정 |
+| src/app/actions/admin.ts | approveEnrollApplication(승인+원생자동생성), rejectEnrollApplication(반려), generateEnrollLink(수강안내링크) 추가 | 수정 |
+| src/app/actions/public.ts | ensureEnrollmentApplicationTable을 export로 변경 (page.tsx에서 import 필요) | 수정 |
+| src/app/admin/apply/page.tsx | 서버 컴포넌트 전면 재작성 — 신청서+통계+반목록+설정 병렬 조회 | 수정 |
+| src/app/admin/apply/ApplyAdminClient.tsx | 전면 재작성 — 탭UI(신청서관리+설정), 상태별 파이프라인, 승인/반려/상세 모달 | 수정 |
+| src/app/admin/trial/TrialCrmClient.tsx | ATTENDED 상태에 "수강 안내 링크 복사" 버튼 추가 | 수정 |
+| src/app/admin/page.tsx | PENDING 수강 신청 배너 추가 (대시보드 상단) | 수정 |
+
+tester 참고:
+- 테스트 방법: /apply/enroll 에서 수강 신청 제출 -> /admin/apply 에서 PENDING 상태 확인 -> 승인 클릭 -> 반 선택 -> 승인 완료
+- 승인 시 자동 생성: User(PARENT) + Student + Guardian + Enrollment 레코드
+- /admin/trial 에서 ATTENDED 상태 리드의 "수강 안내" 버튼 클릭 -> 클립보드에 링크 복사됨
+- /admin 대시보드에 PENDING 건수 배너 확인
+- 반려 테스트: PENDING 신청서에서 반려 -> REJECTED 상태로 변경
+- tsc --noEmit: PASS (타입 에러 0건)
+
+reviewer 참고:
+- approveEnrollApplication: parentPhone 기준 User 조회 (기존 convertTrialToStudent은 email 기준)
+- Guardian INSERT는 ON CONFLICT 무시이나 적절한 unique 제약 없을 수 있어 catch 처리
+- generateEnrollLink: 연산자 우선순위 버그 수정 완료 (||와 삼항 연산자)
 
 ### 테스트 결과 (tester) — Phase A 체험 신청 자체화
 

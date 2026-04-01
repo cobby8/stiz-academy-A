@@ -13,7 +13,7 @@ import { ensureTrialLeadTable } from "@/app/actions/admin";
 // ── EnrollmentApplication DDL ensure (idempotent) ───────────────────────────
 // 테이블이 없으면 자동으로 생성 — DB push 없이도 동작하도록
 let _enrollTableEnsured = false;
-async function ensureEnrollmentApplicationTable() {
+export async function ensureEnrollmentApplicationTable() {
     if (_enrollTableEnsured) return;
     try {
         await prisma.$executeRawUnsafe(`

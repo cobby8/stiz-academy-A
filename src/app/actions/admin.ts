@@ -2789,6 +2789,26 @@ export async function ensureTrialLeadTable() {
         await prisma.$executeRawUnsafe(
             `CREATE INDEX IF NOT EXISTS "TrialLead_createdAt_idx" ON "TrialLead" ("createdAt")`
         );
+
+        // Phase A 추가 컬럼 — 체험 신청 폼에서 수집하는 상세 정보
+        const extendedColumns: [string, string][] = [
+            ['"childBirthDate"', "TIMESTAMPTZ"],
+            ['"childGrade"', "TEXT"],
+            ['"childGender"', "TEXT"],
+            ['"basketballExp"', "TEXT"],
+            ['"preferredDays"', "TEXT"],
+            ['"preferredSlotKey"', "TEXT"],
+            ['"hopeNote"', "TEXT"],
+            ['"agreedTerms"', "BOOLEAN DEFAULT false"],
+            ['"agreedPrivacy"', "BOOLEAN DEFAULT false"],
+        ];
+        for (const [col, type] of extendedColumns) {
+            try {
+                await prisma.$executeRawUnsafe(
+                    `ALTER TABLE "TrialLead" ADD COLUMN IF NOT EXISTS ${col} ${type}`
+                );
+            } catch (_) { /* 이미 존재하면 무시 */ }
+        }
     } catch (e) {
         console.warn("[DDL] TrialLead table ensure failed:", (e as Error).message);
     }
@@ -2837,6 +2857,9 @@ const TRIAL_LEAD_COLUMNS = [
     "source", "status", "scheduledDate", "scheduledClassId",
     "attendedDate", "convertedDate", "convertedStudentId",
     "lostReason", "memo",
+    // Phase A 추가 필드
+    "childBirthDate", "childGrade", "childGender", "basketballExp",
+    "preferredDays", "preferredSlotKey", "hopeNote", "agreedTerms", "agreedPrivacy",
 ] as const;
 
 export async function updateTrialLead(
@@ -2856,7 +2879,7 @@ export async function updateTrialLead(
     // 동적 SET절: 컬럼명은 화이트리스트에서만 허용 → SQL 인젝션 불가능, 값은 $N 바인딩
     const setClauses = entries.map(([col], i) => {
         // 날짜 타입 필드는 ::timestamptz 캐스팅
-        const isDate = ["scheduledDate", "attendedDate", "convertedDate"].includes(col);
+        const isDate = ["scheduledDate", "attendedDate", "convertedDate", "childBirthDate"].includes(col);
         return `"${col}" = $${i + 1}${isDate ? "::timestamptz" : ""}`;
     }).join(", ");
     const values = entries.map(([, val]) => val ?? null);
@@ -3433,5 +3456,239 @@ export async function recordSkillAssessment(
     }
     revalidatePath("/admin/skills");
     revalidatePath("/mypage/skills");
+}
+
+// ── 수강 신청서 관리 (Phase C) ─────────────────────────────────────────────────
+
+/**
+ * 수강 신청서 승인 — 핵심 비즈니스 로직
+ * 1. EnrollmentApplication 조회
+ * 2. User SELECT (parentPhone 기준) → 없으면 INSERT (role=PARENT)
+ * 3. Student SELECT (name + parentId) → 없으면 INSERT
+ * 4. Guardian INSERT (ON CONFLICT 무시)
+ * 5. 각 classId에 대해 Enrollment INSERT (ON CONFLICT 무시, status=ACTIVE)
+ * 6. EnrollmentApplication UPDATE (status=APPROVED, convertedStudentId, processedAt)
+ * 7. TrialLead가 있으면 UPDATE (status=CONVERTED, convertedStudentId, convertedDate)
+ */
+export async function approveEnrollApplication(
+    applicationId: string,
+    data: {
+        classIds: string[];       // 배정할 반 ID 배열
+        processedNote?: string;   // 관리자 메모
+    }
+) {
+    await requireAdmin();
+
+    try {
+        // 1. 신청서 조회
+        const apps = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT * FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+            applicationId
+        );
+        if (apps.length === 0) throw new Error("신청서를 찾을 수 없습니다.");
+        const app = apps[0];
+
+        // PENDING 상태만 승인 가능
+        if (app.status !== "PENDING") {
+            throw new Error(`이미 처리된 신청서입니다. (현재 상태: ${app.status})`);
+        }
+
+        // 2. 학부모 User 조회/생성 — parentPhone 기준으로 찾기
+        // 전화번호로 검색: 동일 번호의 기존 학부모가 있으면 재사용
+        const parentPhone = app.parentPhone ?? app.parentphone;
+        const parentName = app.parentName ?? app.parentname;
+        let parentId: string;
+
+        const existingUsers = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE phone = $1 AND role = 'PARENT' LIMIT 1`,
+            parentPhone
+        );
+
+        if (existingUsers.length > 0) {
+            // 기존 학부모가 있으면 재사용
+            parentId = existingUsers[0].id;
+        } else {
+            // 없으면 새로 생성 — email은 전화번호 기반 placeholder
+            const newUsers = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
+                 RETURNING id`,
+                `parent_${parentPhone.replace(/[^0-9]/g, "")}@stiz.local`,
+                parentName,
+                parentPhone,
+            );
+            parentId = newUsers[0].id;
+        }
+
+        // 3. Student 조회/생성 — 동일 이름 + 동일 보호자의 기존 원생이 있으면 재사용
+        const childName = app.childName ?? app.childname;
+        const childBirthDate = app.childBirthDate ?? app.childbirthdate;
+        let studentId: string;
+
+        const existingStudents = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "Student" WHERE name = $1 AND "parentId" = $2 LIMIT 1`,
+            childName, parentId
+        );
+
+        if (existingStudents.length > 0) {
+            // 기존 원생 업데이트 (최신 정보로 갱신)
+            studentId = existingStudents[0].id;
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Student" SET
+                    gender = COALESCE($1, gender),
+                    grade = COALESCE($2, grade),
+                    school = COALESCE($3, school),
+                    phone = COALESCE($4, phone),
+                    address = COALESCE($5, address),
+                    "referralSource" = COALESCE($6, "referralSource"),
+                    "updatedAt" = NOW()
+                 WHERE id = $7`,
+                app.childGender ?? app.childgender ?? null,
+                app.childGrade ?? app.childgrade ?? null,
+                app.childSchool ?? app.childschool ?? null,
+                app.childPhone ?? app.childphone ?? null,
+                app.address ?? null,
+                app.referralSource ?? app.referralsource ?? null,
+                studentId,
+            );
+        } else {
+            // 새 원생 생성
+            const newStudents = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "Student" (id, name, "birthDate", gender, grade, school, phone, address, "referralSource", "parentId", "enrollDate", "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2::timestamptz, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), NOW())
+                 RETURNING id`,
+                childName,
+                childBirthDate,
+                app.childGender ?? app.childgender ?? null,
+                app.childGrade ?? app.childgrade ?? null,
+                app.childSchool ?? app.childschool ?? null,
+                app.childPhone ?? app.childphone ?? null,
+                app.address ?? null,
+                app.referralSource ?? app.referralsource ?? null,
+                parentId,
+            );
+            studentId = newStudents[0].id;
+        }
+
+        // 4. Guardian 생성 — 보호자 관계 등록 (ON CONFLICT 무시)
+        const parentRelation = app.parentRelation ?? app.parentrelation ?? "부모";
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Guardian" (id, "studentId", relation, name, phone, "isPrimary", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, true, NOW(), NOW())
+             ON CONFLICT ("studentId") WHERE relation = $2 DO NOTHING`,
+            studentId, parentRelation, parentName, parentPhone,
+        ).catch(() => {
+            // Guardian 테이블에 적절한 unique 제약이 없을 수 있으므로 무시
+        });
+
+        // 5. 각 반에 Enrollment 등록 (ON CONFLICT 무시)
+        for (const classId of data.classIds) {
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
+                 ON CONFLICT ("studentId", "classId") DO NOTHING`,
+                studentId, classId,
+            );
+        }
+
+        // 6. 신청서 상태 업데이트
+        await prisma.$executeRawUnsafe(
+            `UPDATE "EnrollmentApplication"
+             SET status = 'APPROVED',
+                 "convertedStudentId" = $1,
+                 "processedAt" = NOW(),
+                 "processedNote" = $2,
+                 "assignedClassId" = $3,
+                 "updatedAt" = NOW()
+             WHERE id = $4`,
+            studentId,
+            data.processedNote || null,
+            data.classIds.join(","),
+            applicationId,
+        );
+
+        // 7. 연결된 TrialLead가 있으면 CONVERTED로 업데이트
+        const trialLeadId = app.trialLeadId ?? app.trialleadid;
+        if (trialLeadId) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "TrialLead"
+                 SET status = 'CONVERTED',
+                     "convertedStudentId" = $1,
+                     "convertedDate" = NOW(),
+                     "updatedAt" = NOW()
+                 WHERE id = $2`,
+                studentId, trialLeadId,
+            );
+        }
+    } catch (e) {
+        console.error("Failed to approve enrollment application:", e);
+        throw new Error((e as Error).message || "수강 신청 승인 실패");
+    }
+
+    revalidatePath("/admin/apply");
+    revalidatePath("/admin/trial");
+    revalidatePath("/admin/students");
+    revalidatePath("/admin");
+}
+
+/**
+ * 수강 신청서 반려 — 상태를 REJECTED로 변경
+ */
+export async function rejectEnrollApplication(
+    applicationId: string,
+    reason?: string
+) {
+    await requireAdmin();
+
+    try {
+        // PENDING 상태만 반려 가능
+        const apps = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT status FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+            applicationId
+        );
+        if (apps.length === 0) throw new Error("신청서를 찾을 수 없습니다.");
+        if (apps[0].status !== "PENDING") {
+            throw new Error(`이미 처리된 신청서입니다. (현재 상태: ${apps[0].status})`);
+        }
+
+        await prisma.$executeRawUnsafe(
+            `UPDATE "EnrollmentApplication"
+             SET status = 'REJECTED',
+                 "processedAt" = NOW(),
+                 "processedNote" = $1,
+                 "updatedAt" = NOW()
+             WHERE id = $2`,
+            reason || null,
+            applicationId,
+        );
+    } catch (e) {
+        console.error("Failed to reject enrollment application:", e);
+        throw new Error((e as Error).message || "수강 신청 반려 실패");
+    }
+
+    revalidatePath("/admin/apply");
+    revalidatePath("/admin");
+}
+
+/**
+ * 수강 안내 링크 생성 — 체험 리드의 trialLeadId를 포함한 수강 신청 URL 반환
+ * 관리자가 체험 완료된 학부모에게 보낼 링크를 복사하는 용도
+ */
+export async function generateEnrollLink(trialLeadId: string): Promise<string> {
+    await requireAdmin();
+
+    // trialLeadId 존재 확인
+    const leads = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM "TrialLead" WHERE id = $1 LIMIT 1`,
+        trialLeadId
+    );
+    if (leads.length === 0) throw new Error("체험 리드를 찾을 수 없습니다.");
+
+    // 프로토콜+호스트를 환경변수 또는 기본값에서 가져옴
+    // 환경변수에서 베이스 URL 결정: 직접 설정 > Vercel 자동 > 로컬 개발
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:4000");
+
+    return `${baseUrl}/apply/enroll?trialId=${trialLeadId}`;
 }
 

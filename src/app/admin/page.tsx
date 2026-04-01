@@ -2,7 +2,7 @@ import { Users, BookOpen, UserCheck, Layers, Database, CloudOff, TrendingUp, Tre
 import { Suspense } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
-import { getDashboardStats, getDashboardExtendedStats, getRecentPendingRequests, getPendingRequestCount } from "@/lib/queries";
+import { getDashboardStats, getDashboardExtendedStats, getRecentPendingRequests, getPendingRequestCount, getEnrollApplicationStats } from "@/lib/queries";
 import Link from "next/link";
 
 // 30초 캐시: 아무도 수정 안 할 때 캐시 유지, Server Action 호출 시 즉시 무효화
@@ -451,10 +451,11 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
 export default async function AdminDashboard() {
     // 빠른 쿼리만 먼저 실행 (stats, pendingRequests, pendingCount)
     // 느린 쿼리(ext, todayClasses, recentStudents)는 Suspense 안에서 별도 로딩
-    const [stats, pendingRequests, pendingCount] = await Promise.all([
+    const [stats, pendingRequests, pendingCount, enrollStats] = await Promise.all([
         getDashboardStats(),
         getRecentPendingRequests(),
         getPendingRequestCount(),
+        getEnrollApplicationStats().catch(() => ({ PENDING: 0, APPROVED: 0, REJECTED: 0, CANCELLED: 0, total: 0 })),
     ]);
 
     return (
@@ -481,6 +482,25 @@ export default async function AdminDashboard() {
                         </p>
                     </div>
                     <span className="text-yellow-600 text-sm font-bold">처리하기 &rarr;</span>
+                </Link>
+            )}
+
+            {/* 수강 신청 대기 배너 — PENDING 건수가 있을 때만 표시 */}
+            {enrollStats.PENDING > 0 && (
+                <Link href="/admin/apply"
+                    className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl p-4 hover:bg-blue-100 transition shadow-sm">
+                    <div className="bg-blue-500 text-white p-2 rounded-full">
+                        <UserPlus size={20} />
+                    </div>
+                    <div className="flex-1">
+                        <p className="font-bold text-blue-800">
+                            수강 신청 대기 {enrollStats.PENDING}건
+                        </p>
+                        <p className="text-xs text-blue-600 mt-0.5">
+                            승인 대기 중인 수강 신청서가 있습니다. 확인해주세요.
+                        </p>
+                    </div>
+                    <span className="text-blue-600 text-sm font-bold">처리하기 &rarr;</span>
                 </Link>
             )}
 

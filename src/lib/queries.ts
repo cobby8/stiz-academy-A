@@ -1837,6 +1837,15 @@ export const getTrialLeads = cache(async (status?: string) => {
             memo: r.memo ?? null,
             createdAt: r.createdAt ?? r.createdat,
             updatedAt: r.updatedAt ?? r.updatedat,
+            // Phase A 추가 필드
+            childBirthDate: r.childBirthDate ?? r.childbirthdate ?? null,
+            childGrade: r.childGrade ?? r.childgrade ?? null,
+            childGender: r.childGender ?? r.childgender ?? null,
+            basketballExp: r.basketballExp ?? r.basketballexp ?? null,
+            preferredSlotKey: r.preferredSlotKey ?? r.preferredslotkey ?? null,
+            hopeNote: r.hopeNote ?? r.hopenote ?? null,
+            agreedTerms: r.agreedTerms ?? r.agreedterms ?? false,
+            agreedPrivacy: r.agreedPrivacy ?? r.agreedprivacy ?? false,
         }));
     } catch (e) {
         console.error("[getTrialLeads] failed:", e);
@@ -2402,5 +2411,87 @@ export const getPaymentCollectionRate = cache(async () => {
     } catch (e) {
         console.error("[getPaymentCollectionRate] failed:", e);
         return { total: 0, paid: 0, unpaid: 0, rate: 0 };
+    }
+});
+
+// ── 수강 신청서 관리 (Phase C) ─────────────────────────────────────────────────
+
+/**
+ * 수강 신청서 목록 조회 — 상태별 필터 지원
+ * - status가 있으면 해당 상태만, 없으면 전체
+ * - 최신순 정렬
+ */
+export const getEnrollApplications = cache(async (status?: string) => {
+    try {
+        const rows = status
+            ? await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT * FROM "EnrollmentApplication" WHERE status = $1 ORDER BY "createdAt" DESC`,
+                  status
+              )
+            : await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT * FROM "EnrollmentApplication" ORDER BY "createdAt" DESC`
+              );
+
+        // camelCase 우선, 소문자 fallback (PgBouncer 반환 형식 대응)
+        return rows.map((r: any) => ({
+            id: r.id,
+            trialLeadId: r.trialLeadId ?? r.trialleadid ?? null,
+            childName: r.childName ?? r.childname,
+            childBirthDate: r.childBirthDate ?? r.childbirthdate,
+            childGender: r.childGender ?? r.childgender ?? null,
+            childGrade: r.childGrade ?? r.childgrade ?? null,
+            childSchool: r.childSchool ?? r.childschool ?? null,
+            childPhone: r.childPhone ?? r.childphone ?? null,
+            parentName: r.parentName ?? r.parentname,
+            parentPhone: r.parentPhone ?? r.parentphone,
+            parentRelation: r.parentRelation ?? r.parentrelation ?? null,
+            address: r.address ?? null,
+            preferredSlotKeys: r.preferredSlotKeys ?? r.preferredslotkeys ?? null,
+            assignedClassId: r.assignedClassId ?? r.assignedclassid ?? null,
+            uniformSize: r.uniformSize ?? r.uniformsize ?? null,
+            shuttleNeeded: r.shuttleNeeded ?? r.shuttleneeded ?? false,
+            shuttlePickup: r.shuttlePickup ?? r.shuttlepickup ?? null,
+            paymentMethod: r.paymentMethod ?? r.paymentmethod ?? null,
+            referralSource: r.referralSource ?? r.referralsource ?? null,
+            memo: r.memo ?? null,
+            agreedTerms: r.agreedTerms ?? r.agreedterms ?? false,
+            agreedPrivacy: r.agreedPrivacy ?? r.agreedprivacy ?? false,
+            status: r.status ?? "PENDING",
+            processedAt: r.processedAt ?? r.processedat ?? null,
+            processedNote: r.processedNote ?? r.processednote ?? null,
+            convertedStudentId: r.convertedStudentId ?? r.convertedstudentid ?? null,
+            createdAt: r.createdAt ?? r.createdat,
+            updatedAt: r.updatedAt ?? r.updatedat,
+        }));
+    } catch (e) {
+        console.error("[getEnrollApplications] failed:", e);
+        return [];
+    }
+});
+
+/**
+ * 수강 신청서 통계 — 상태별 건수
+ */
+export const getEnrollApplicationStats = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT status, COUNT(*)::int AS count FROM "EnrollmentApplication" GROUP BY status`
+        );
+
+        const statusMap: Record<string, number> = {};
+        for (const r of rows) {
+            statusMap[r.status] = r.count;
+        }
+
+        return {
+            PENDING: statusMap["PENDING"] ?? 0,
+            APPROVED: statusMap["APPROVED"] ?? 0,
+            REJECTED: statusMap["REJECTED"] ?? 0,
+            CANCELLED: statusMap["CANCELLED"] ?? 0,
+            total: rows.reduce((sum, r) => sum + r.count, 0),
+        };
+    } catch (e) {
+        console.error("[getEnrollApplicationStats] failed:", e);
+        return { PENDING: 0, APPROVED: 0, REJECTED: 0, CANCELLED: 0, total: 0 };
     }
 });

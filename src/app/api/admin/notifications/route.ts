@@ -18,8 +18,8 @@ async function getAdminUser() {
     if (!user) return null;
 
     const rows = await prisma.$queryRawUnsafe<{ id: string; role: string }[]>(
-        `SELECT id, role FROM "User" WHERE id = $1 LIMIT 1`,
-        user.id,
+        `SELECT id, role FROM "User" WHERE email = $1 LIMIT 1`,
+        user.email,
     );
     if (!rows[0] || rows[0].role !== "ADMIN") return null;
     return rows[0];

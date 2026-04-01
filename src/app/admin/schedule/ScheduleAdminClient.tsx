@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
     upsertClassSlotOverride,
@@ -10,6 +10,8 @@ import {
 } from "@/app/actions/schedule";
 import { updateAcademySettings } from "@/app/actions/admin";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
+import ScheduleTableView from "@/components/ScheduleTableView";
+import type { MergedSlot } from "@/app/schedule/ScheduleClient";
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_LABEL: Record<string, string> = {
@@ -288,6 +290,58 @@ export default function ScheduleAdminClient({
     }, {});
     const activeDays = DAY_ORDER.filter((d) => byDay[d].length > 0);
 
+    // 관리자 뷰 토글 상태 — "edit"(편집 모드) / "table"(표 미리보기)
+    const [adminViewMode, setAdminViewMode] = useState<"edit" | "table">("edit");
+
+    // SheetClassSlot + CustomSlot -> MergedSlot 변환 (표 뷰 전용)
+    // 관리자가 설정한 override 값을 반영하여 실제 공개 시간표와 동일하게 보여줌
+    const mergedSlotsForTable = useMemo<MergedSlot[]>(() => {
+        const result: MergedSlot[] = [];
+        // Google Sheets 슬롯 변환
+        for (const slot of slots) {
+            const s = stateMap[slot.slotKey];
+            const isHidden = s?.isHidden ?? false;
+            if (isHidden) continue; // 숨김 처리된 슬롯 제외
+            const coachId = s?.coachId || null;
+            const coach = coachId ? coachMap[coachId] ?? null : null;
+            result.push({
+                slotKey: slot.slotKey,
+                dayKey: slot.dayKey,
+                dayLabel: slot.dayLabel,
+                startTime: s?.startTimeOverride || slot.startTime,
+                endTime: s?.endTimeOverride || slot.endTime,
+                gradeRange: slot.gradeRange,
+                enrolled: slot.enrolled,
+                displayLabel: s?.label || `${slot.period}교시`,
+                note: s?.note || null,
+                capacity: s?.capacity ?? 12,
+                isFull: slot.enrolled >= (s?.capacity ?? 12),
+                coach: coach ? { name: coach.name, role: coach.role, imageUrl: coach.imageUrl } : null,
+                programId: s?.programId || null,
+            });
+        }
+        // 커스텀 슬롯 변환
+        for (const cs of initialCustomSlots) {
+            if (cs.isHidden) continue;
+            result.push({
+                slotKey: `custom-${cs.id}`,
+                dayKey: cs.dayKey,
+                dayLabel: DAY_LABEL[cs.dayKey] || cs.dayKey,
+                startTime: cs.startTime,
+                endTime: cs.endTime,
+                gradeRange: cs.gradeRange || "",
+                enrolled: cs.enrolled,
+                displayLabel: cs.label,
+                note: cs.note,
+                capacity: cs.capacity,
+                isFull: cs.enrolled >= cs.capacity,
+                coach: cs.coach ? { name: cs.coach.name, role: cs.coach.role, imageUrl: cs.coach.imageUrl } : null,
+                programId: cs.programId,
+            });
+        }
+        return result;
+    }, [slots, stateMap, initialCustomSlots, coachMap]);
+
     return (
         <div className="space-y-8">
             {/* Page header */}
@@ -299,6 +353,31 @@ export default function ScheduleAdminClient({
                     </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                    {/* 편집/표 뷰 토글 */}
+                    <div className="flex rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                        <button
+                            onClick={() => setAdminViewMode("edit")}
+                            className={`flex items-center gap-1 px-3 py-2 text-sm font-bold transition-colors ${
+                                adminViewMode === "edit"
+                                    ? "bg-brand-navy-900 text-white"
+                                    : "bg-white text-gray-500 hover:bg-gray-50"
+                            }`}
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>edit</span>
+                            편집
+                        </button>
+                        <button
+                            onClick={() => setAdminViewMode("table")}
+                            className={`flex items-center gap-1 px-3 py-2 text-sm font-bold transition-colors ${
+                                adminViewMode === "table"
+                                    ? "bg-brand-navy-900 text-white"
+                                    : "bg-white text-gray-500 hover:bg-gray-50"
+                            }`}
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>table_chart</span>
+                            표 보기
+                        </button>
+                    </div>
                     <button
                         onClick={() => { setSheetUrlInput(sheetUrl || ""); setShowSheetModal(true); }}
                         className={`bg-white border text-sm font-bold px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 ${hasSheetUrl ? "border-green-300 text-green-800 hover:bg-green-50" : "border-amber-300 text-amber-800 hover:bg-amber-50"}`}
@@ -314,7 +393,17 @@ export default function ScheduleAdminClient({
                 </div>
             </div>
 
-            {!hasSheetUrl && (
+            {/* 표 보기 모드 — 공개 시간표 미리보기 (편집 불가) */}
+            {adminViewMode === "table" && (
+                <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
+                        <span className="font-bold">미리보기 모드</span> — 학부모에게 보이는 시간표와 동일한 표 형태입니다. 편집하려면 "편집" 버튼을 눌러주세요.
+                    </div>
+                    <ScheduleTableView slots={mergedSlotsForTable} />
+                </div>
+            )}
+
+            {adminViewMode === "edit" && !hasSheetUrl && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800">
                     <p className="font-bold mb-1">⚠ 구글시트 URL이 설정되지 않았습니다.</p>
                     <p>
@@ -329,7 +418,7 @@ export default function ScheduleAdminClient({
                 </div>
             )}
 
-            {hasSheetUrl && slots.length === 0 && (
+            {adminViewMode === "edit" && hasSheetUrl && slots.length === 0 && (
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-10 text-center text-gray-500">
                     <p className="text-lg font-medium mb-1">시트에서 수업 데이터를 찾을 수 없습니다.</p>
                     <p className="text-sm">시트가 공개 설정인지, URL과 탭(gid)이 올바른지 확인해 주세요.</p>
@@ -337,7 +426,7 @@ export default function ScheduleAdminClient({
             )}
 
             {/* ── 구글시트 연동 수업 ── */}
-            {activeDays.map((dayKey) => (
+            {adminViewMode === "edit" && activeDays.map((dayKey) => (
                 <div key={dayKey} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className={`${DAY_COLOR[dayKey]} text-white px-5 py-3 flex items-center gap-3`}>
                         <span className="font-black text-lg">{DAY_LABEL[dayKey]}</span>
@@ -475,7 +564,7 @@ export default function ScheduleAdminClient({
             ))}
 
             {/* ── 추가 수업 (직접 등록) ── */}
-            {(initialCustomSlots.length > 0 || isAddingCustom) && (
+            {adminViewMode === "edit" && (initialCustomSlots.length > 0 || isAddingCustom) && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
                         <span className="font-bold text-gray-700 text-sm">추가 수업</span>

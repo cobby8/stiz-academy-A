@@ -111,6 +111,29 @@ reviewer 참고:
 - public.ts의 notifyAdmins는 fire-and-forget (await 없음, .catch(() => {}))
 - 알림 API에 인증 가드 있음 (getAdminUser)
 
+### 구현 기록 (developer) — 시간표 요일별 표 뷰 (2026-03-29)
+
+구현한 기능: 시간표를 요일x시간대 테이블 형태로 볼 수 있는 "표 보기" 뷰 추가 (공개 + 관리자)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/components/ScheduleTableView.tsx | 요일x시간대 그리드 테이블 컴포넌트 (MergedSlot[] props) | 신규 |
+| src/app/schedule/ScheduleClient.tsx | "카드/표" 뷰 토글 버튼 + ScheduleTableView 조건부 렌더링 | 수정 |
+| src/app/admin/schedule/ScheduleAdminClient.tsx | "편집/표 보기" 토글 + SheetClassSlot->MergedSlot 변환 + 표 뷰 미리보기 | 수정 |
+
+tester 참고:
+- 테스트: /schedule 페이지 상단 필터 바 우측에 "카드/표" 토글 버튼 확인
+- "표" 클릭 시 요일별 시간대 테이블로 전환, "카드" 클릭 시 기존 카드 뷰로 복귀
+- 프로그램 필터와 표 뷰 동시 동작 확인
+- 잔여석 색상: 3석이상=초록, 1~2석=노랑, 0석=빨강
+- 관리자: /admin/schedule 상단 "편집/표 보기" 토글, 표 보기 시 파란 안내 배너 표시
+- 모바일: 표가 가로 스크롤 가능한지 확인
+
+reviewer 참고:
+- ScheduleTableView는 MergedSlot[] 타입만 받아 범용적으로 사용
+- 관리자 쪽에서 SheetClassSlot+CustomSlot->MergedSlot 변환은 useMemo로 캐싱
+- Material Symbols 아이콘 사용 (group, person, grid_view, table_chart, edit)
+
 ### 미해결 리뷰 수정 사항 (이월)
 
 | 번호 | 파일 | 심각도 | 내용 | 상태 |
@@ -141,6 +164,7 @@ reviewer 참고:
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-03-29 | 시간표 요일별 표 뷰 추가 (ScheduleTableView + 카드/표 토글) | 완료 |
 | 2026-03-29 | 신청 알림 시스템 구현 (notification.ts + sms.ts + 벨 드롭다운 + API) | 완료 |
 | 2026-03-29 | 신청 알림 시스템 기획설계 (채널분석+인프라확인+실행계획) | 완료 |
 | 2026-03-29 | Phase C: 수강 신청 관리 (승인/반려 + 원생 자동 전환) | 완료 |

@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
+import ScheduleTableView from "@/components/ScheduleTableView";
 
 // 요일 순서 — 월~일 표시용
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -47,6 +48,8 @@ function ScheduleFilter({ programs, allSlots, phone }: {
 }) {
     const searchParams = useSearchParams();
     const filterProgramId = searchParams.get("program") ?? undefined;
+    // 카드 보기 / 표 보기 전환 상태 ("card" 기본)
+    const [viewMode, setViewMode] = useState<"card" | "table">("card");
 
     // 프로그램 필터 적용 — 선택된 프로그램이 있으면 해당 프로그램만 표시
     let slots = allSlots;
@@ -68,7 +71,7 @@ function ScheduleFilter({ programs, allSlots, phone }: {
             {/* 프로그램 필터 탭 — 디자인 개선 (둥글고 부드러운 pill 스타일) */}
             {programs.length > 0 && (
                 <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
-                    {/* 수평 스크롤 칩 — 모바일에서 자연스러운 좌우 스와이프 */}
+                    {/* 수평 스크롤 칩 + 뷰 토글 — 모바일에서 자연스러운 좌우 스와이프 */}
                     <div className="max-w-6xl mx-auto px-4 py-3 flex gap-2 items-center overflow-x-auto scrollbar-hide">
                         <a
                             href="/schedule"
@@ -93,6 +96,64 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                                 {p.name}
                             </a>
                         ))}
+
+                        {/* 뷰 모드 토글 — 카드/표 전환 버튼 (우측 끝에 배치) */}
+                        <div className="shrink-0 ml-auto flex rounded-full border border-gray-200 overflow-hidden">
+                            <button
+                                onClick={() => setViewMode("card")}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
+                                    viewMode === "card"
+                                        ? "bg-brand-navy-900 text-white"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>grid_view</span>
+                                카드
+                            </button>
+                            <button
+                                onClick={() => setViewMode("table")}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
+                                    viewMode === "table"
+                                        ? "bg-brand-navy-900 text-white"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>table_chart</span>
+                                표
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 프로그램 필터 탭이 없을 때에도 뷰 토글 표시 */}
+            {programs.length === 0 && (
+                <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
+                    <div className="max-w-6xl mx-auto px-4 py-3 flex justify-end">
+                        <div className="shrink-0 flex rounded-full border border-gray-200 overflow-hidden">
+                            <button
+                                onClick={() => setViewMode("card")}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
+                                    viewMode === "card"
+                                        ? "bg-brand-navy-900 text-white"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>grid_view</span>
+                                카드
+                            </button>
+                            <button
+                                onClick={() => setViewMode("table")}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
+                                    viewMode === "table"
+                                        ? "bg-brand-navy-900 text-white"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>table_chart</span>
+                                표
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -122,6 +183,9 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                             </p>
                             <p className="text-sm mt-2 text-gray-400">문의: {phone}</p>
                         </div>
+                    ) : viewMode === "table" ? (
+                        /* 표 보기 모드 — ScheduleTableView 렌더링 */
+                        <ScheduleTableView slots={slots} />
                     ) : (
                         <div data-tour-target="schedule-grid" className="space-y-8">
                             {activeDays.map((dayKey) => (

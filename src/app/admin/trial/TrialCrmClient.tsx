@@ -28,6 +28,15 @@ interface TrialLead {
     memo: string | null;
     createdAt: string;
     updatedAt: string;
+    // Phase A 추가 필드
+    childBirthDate: string | null;
+    childGrade: string | null;
+    childGender: string | null;
+    basketballExp: string | null;
+    preferredSlotKey: string | null;
+    hopeNote: string | null;
+    agreedTerms: boolean;
+    agreedPrivacy: boolean;
 }
 
 interface TrialStats {
@@ -57,6 +66,8 @@ const SOURCE_LABELS: Record<string, string> = {
     WEBSITE: "홈페이지",
     NAVER: "네이버",
     REFERRAL: "지인소개",
+    FLYER: "전단지",
+    PASSBY: "지나가다",
     OTHER: "기타",
 };
 
@@ -138,6 +149,12 @@ export default function TrialCrmClient({
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                         <span className="material-symbols-outlined text-3xl text-brand-orange-500">handshake</span>
                         체험수업 CRM
+                        {/* 새 신청 건수 배지 — NEW 상태가 있을 때만 표시 */}
+                        {stats.NEW > 0 && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
+                                새 신청 {stats.NEW}건
+                            </span>
+                        )}
                     </h1>
                     <p className="text-sm text-gray-500 mt-1">체험 신청부터 정규 등록까지 전환 과정을 추적합니다</p>
                 </div>
@@ -274,6 +291,35 @@ export default function TrialCrmClient({
                                                     <span>전환일: {formatDate(lead.convertedDate)}</span>
                                                 )}
                                             </div>
+                                        )}
+                                        {/* Phase A 추가 정보 — 학년, 농구경험, 희망슬롯 */}
+                                        {(lead.childGrade || lead.basketballExp || lead.preferredSlotKey) && (
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {lead.childGrade && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
+                                                        <span className="material-symbols-outlined text-xs">school</span>
+                                                        {lead.childGrade}
+                                                    </span>
+                                                )}
+                                                {lead.basketballExp && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700">
+                                                        <span className="material-symbols-outlined text-xs">sports_basketball</span>
+                                                        {lead.basketballExp}
+                                                    </span>
+                                                )}
+                                                {lead.preferredSlotKey && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700">
+                                                        <span className="material-symbols-outlined text-xs">schedule</span>
+                                                        희망: {lead.preferredSlotKey}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* 바라는 점 표시 */}
+                                        {lead.hopeNote && (
+                                            <p className="mt-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+                                                <span className="font-medium">바라는 점:</span> {lead.hopeNote}
+                                            </p>
                                         )}
                                         {/* 메모 표시 */}
                                         {lead.memo && (

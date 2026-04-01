@@ -442,6 +442,16 @@ model TrialLead {
   convertedStudentId String?
   lostReason         String?
   memo               String?
+  // Phase A 추가 필드 — 체험 신청 폼에서 수집하는 상세 정보
+  childBirthDate     DateTime? @db.Timestamptz(6)    // 아이 생년월일
+  childGrade         String?                         // 학년 (7세/초1~초6/중1~중3/성인)
+  childGender        String?                         // 성별 (남/여)
+  basketballExp      String?                         // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
+  preferredDays      String?                         // 희망 요일 콤마 구분 "Mon,Wed"
+  preferredSlotKey   String?                         // 희망 시간표 슬롯 "Mon-4"
+  hopeNote           String?                         // 바라는 점 (자유 입력)
+  agreedTerms        Boolean   @default(false)       // 이용약관 동의 여부
+  agreedPrivacy      Boolean   @default(false)       // 개인정보 수집/이용 동의 여부
   createdAt          DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 

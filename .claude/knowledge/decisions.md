@@ -2,6 +2,12 @@
 <!-- 담당: planner-architect | 최대 30항목 -->
 <!-- "왜 A 대신 B를 선택했는지" 기술 결정의 배경과 이유를 기록 -->
 
+### 2026-03-29 스프레드시트 수강생 이관: 데이터 구조 분석 및 이관 전략
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 구글 스프레드시트(gid=672309223)에 38개 컬럼, 1,152행의 수강생 데이터 확인. 핵심 발견: (1) "결제방법" 컬럼이 결제수단(랠리즈/카드/현금)과 원생상태(휴원/퇴원/이월)를 혼합 -> 이관 시 분리 필요, (2) 현재 DB에 "지점(branch)" 개념이 완전히 누락 -> Student.branchName 문자열 추가 권장 (2개 지점뿐이라 테이블까지는 불필요), (3) 수업선택이 "N교시" 형태 -> 지점+요일+교시 조합으로 Class 매핑표 필요, (4) 같은 학생이 월별 여러 행에 등장 -> 이름+생년월일로 고유 식별 필수. Payment.method, Enrollment.status 확장(WITHDRAWN/PAUSED), Student에 branchName/uniformStatus/referralSource 필드 추가 필요.
+- **참조횟수**: 0
+
 ### 2026-03-29 학부모 후기 동적화: Faq 패턴 복제 방식 채택
 - **분류**: decision
 - **발견자**: planner-architect
@@ -55,6 +61,18 @@
 - **발견자**: planner-architect
 - **내용**: Phase 1은 "DB를 주 저장소로 유지하면서 구글 캘린더에 best-effort 푸시" 방식. 구글 캘린더를 단일 진실 소스로 전환하는 것은 Phase 2로 유보. 인증은 Service Account(서버-to-서버). googleapis 패키지 사용 (Service Account JWT 서명을 직접 구현하는 것보다 안전). INSERT 시 ID는 crypto.randomUUID()로 미리 생성하여 RETURNING 없이 처리. 구글 API 실패 시 DB 저장만 유지(graceful fallback). 환경변수: GOOGLE_SERVICE_ACCOUNT_KEY(JSON 문자열), GOOGLE_CALENDAR_ID.
 - **참조횟수**: 1
+
+### 2026-03-29 체험/수강 신청 자체화: 구글폼 탈피 전략
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 현재 체험/수강 신청은 구글폼 iframe 임베드 방식. TrialLead 모델은 이미 존재하나 관리자 수동 등록만 가능. 자체 폼 전환 시 (1) TrialLead에 필드 확장(birthDate, grade, basketballExp, preferredDay, preferredSlot, hopeNote), (2) 수강 신청 전용 EnrollmentApplication 모델 신규 생성(체험 데이터 자동 채움 + 수강 추가 필드), (3) 공개 /apply/trial, /apply/enroll 폼 페이지 -> Server Action으로 DB 직접 저장, (4) 기존 /admin/trial CRM에 공개 폼 연동, (5) /admin/apply를 구글폼 URL 관리에서 수강 신청 목록 관리로 전환. TrialLead->EnrollmentApplication->Student 3단계 파이프라인 구축.
+- **참조횟수**: 0
+
+### 2026-03-29 체험-수강 연속 경험: 심층 검토 11건 보완사항
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 기본 설계 검토 결과 11건의 누락 사항 발견. 핵심 3건: (1) convertTrialToStudent가 Student만 생성하고 Enrollment/Guardian/Payment를 생성하지 않아 전환 프로세스가 끊김 -> convertAndEnroll로 확장 필요, (2) 체험 없이 직접 수강하는 경로(형제/지인추천)가 설계에 빠짐 -> EnrollmentApplication.trialLeadId를 optional로 해결, (3) ParentRequest type에 반변경(CLASS_CHANGE)/휴원(PAUSE)/퇴원(WITHDRAW)이 없어 학부모 셀프서비스 불가. 추가로 스팸방지(honeypot+rate limit), 중복감지(parentPhone 검색), 관리자 알림(대시보드 카운트), 결제안내(paymentGuideText) 등 보완 제안. PM 결정 대기: 미납시 수강상태 정책, 체험일정 선택방식, 알림 연동 범위.
+- **참조횟수**: 0
 
 ### 2026-03-26 입학 가이드 투어: 기존 시뮬레이터 공존 방식
 - **분류**: decision

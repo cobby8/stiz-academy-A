@@ -1,12 +1,93 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 원생 관리 목록 테이블 UI 정비
+- **요청**: Phase A — 체험수업 신청 자체화 (구글폼 탈피)
 - **상태**: developer 실행 완료
 - **현재 담당**: PM 확인
 - **마지막 세션**: 2026-03-29
 
+### 리뷰 결과 (reviewer)
+
+종합 판정: 수정 필요 (minor — 보안 1건 필수, 나머지 권장)
+
+잘된 점:
+- public.ts와 admin.ts를 분리하여 인증이 필요 없는 공개 Action을 명확히 구분한 설계가 좋다.
+- honeypot 스팸 방지 + 전화번호 정규화 + 클라이언트/서버 이중 검증이 잘 되어 있다.
+- 3단계 스텝 폼 UX가 깔끔하다. Step3에서 입력 정보 요약을 보여주는 것이 좋다.
+- $queryRawUnsafe 패턴 준수, Material Symbols 아이콘 통일, 시간표 슬롯 그리드 정상 구현.
+- TrialCrmClient에 SOURCE_LABELS 확장(FLYER, PASSBY)이 잘 되어 있다.
+- NavItem badge prop 추가가 깔끔하다. null/0 체크도 정확하다.
+
+필수 수정:
+- [src/app/api/admin/trial-count/route.ts] 인증 가드 누락. /api/admin/* 경로인데 requireAdmin() 없이 누구나 접근 가능하다. 민감 정보는 아니지만(건수만 반환), 프로젝트 convention(Server Action 인증 가드 패턴)에 따라 관리자 API는 인증을 거쳐야 한다. Supabase 세션 검증 또는 최소한 미들웨어에서 보호되는지 확인 필요. 사이드바에서만 호출하므로 관리자 로그인 상태에서만 접근 가능해야 한다.
+
+권장 수정:
+- [src/app/actions/public.ts:78-105] INSERT 쿼리에서 $queryRawUnsafe + 파라미터 바인딩($1~$13)을 사용하고 있어 SQL 인젝션은 안전하다. 다만 source 필드(line 102)에 사용자 입력값이 직접 들어가는데, 클라이언트에서 SELECT 옵션으로 제한하고 있지만 서버에서도 화이트리스트 검증을 추가하면 더 안전하다. (예: ["WEBSITE","NAVER","REFERRAL","FLYER","PASSBY","OTHER"].includes(data.source) || "WEBSITE")
+- [src/app/actions/public.ts:93] childAge에 childGrade를 저장하는 주석 "기존 호환"이 있다. 향후 childAge를 별도로 계산하거나 제거하는 정리가 필요해 보인다. 지금은 동작에 문제없다.
+- [src/app/actions/public.ts:48] rate limiting이 없다. developer가 언급했듯이 현재는 honeypot만 적용. 프로덕션 트래픽이 늘면 IP 기반 또는 시간 기반 rate limit 추가를 검토해야 한다. (Phase B 이후 고려)
+- [src/app/apply/trial/TrialApplicationForm.tsx:517-526] honeypot div가 absolute 위치인데 부모가 relative가 아니면 예상치 못한 위치에 렌더링될 수 있다. left[-9999px]로 화면 밖에 보내고 있어 실질적 문제는 없지만, display:none 대신 이 방식을 선택한 건 봇이 display:none을 감지하기 때문으로 올바른 접근이다.
+- [src/app/admin/layout.tsx:8] LogOut 아이콘이 lucide-react에서 import되고 있다. conventions.md에 "Material Symbols Outlined 아이콘 사용, lucide-react 금지"로 되어 있으나 이건 Phase A 범위가 아니라 기존 코드이므로 별도 정리 과제로 남겨둔다.
+
+수정 요청 테이블:
+| 번호 | 파일 | 심각도 | 내용 | 담당 |
+|------|------|--------|------|------|
+| R-1 | src/app/api/admin/trial-count/route.ts | 필수 | 인증 가드 추가 (requireAdmin 또는 Supabase 세션 검증) | developer |
+| R-2 | src/app/actions/public.ts:102 | 권장 | source 값 서버 화이트리스트 검증 추가 | developer |
+
 ### 구현 기록
+
+구현한 기능: Phase A — 체험수업 신청 자체화 (A-1 ~ A-6 전체)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | TrialLead 모델에 9개 필드 추가 (childBirthDate, childGrade, childGender, basketballExp, preferredDays, preferredSlotKey, hopeNote, agreedTerms, agreedPrivacy) | 수정 |
+| src/app/actions/admin.ts | ensureTrialLeadTable에 새 컬럼 DDL 추가, TRIAL_LEAD_COLUMNS 화이트리스트 확장, 날짜 캐스팅 보완 | 수정 |
+| src/app/actions/public.ts | 공개 Server Action (submitTrialApplication, getAvailableTrialSlots) — honeypot 스팸방지, 전화번호 정규화 | 신규 |
+| src/app/apply/trial/page.tsx | 체험수업 신청 서버 컴포넌트 — 빈자리 슬롯 + 학원설정 병렬 조회 | 신규 |
+| src/app/apply/trial/TrialApplicationForm.tsx | 3단계 스텝 폼 클라이언트 — 아이정보/보호자+시간표/동의+제출 | 신규 |
+| src/app/apply/ApplyPageClient.tsx | 체험수업 버튼을 구글폼 모달에서 /apply/trial Link로 변경 | 수정 |
+| src/app/admin/trial/TrialCrmClient.tsx | 새 신청 N건 배지, 새 필드(학년/경험/희망슬롯/바라는점) 표시, SOURCE_LABELS 확장 | 수정 |
+| src/lib/queries.ts | getTrialLeads 반환에 Phase A 필드 8개 추가 | 수정 |
+| src/app/api/admin/trial-count/route.ts | 새 체험 신청 건수 API (사이드바 배지용) | 신규 |
+| src/app/admin/layout.tsx | NavItem에 badge prop 추가, 사이드바 체험 CRM 옆 빨간 배지 표시 | 수정 |
+
+tester 참고:
+- 테스트 방법: /apply/trial 접속 → 3단계 폼 작성 → 제출 → /admin/trial에서 새 신청 확인
+- 정상 동작: Step1(아이정보) → Step2(보호자/시간표) → Step3(동의/제출) → 완료화면
+- Step2 시간표 그리드: Class 테이블에 데이터가 있어야 슬롯 표시, 없으면 "조회 가능한 시간표 없습니다" 메시지
+- /apply 페이지에서 체험수업 버튼 클릭 시 /apply/trial로 이동 (모달 X)
+- 관리자 사이드바 "체험 CRM" 옆에 빨간 배지(NEW 건수) 표시
+- honeypot 필드: 숨겨진 input에 값 넣으면 봇으로 판단하고 성공처럼 반환
+
+reviewer 참고:
+- public.ts에 requireAdmin() 없음 (의도적 — 공개 폼)
+- honeypot 스팸 방지만 적용, rate limit 없음 (필요시 추가)
+- DDL ensure 패턴으로 컬럼 자동 추가 (기존 DB에도 호환)
+
+### 테스트 결과 (tester) — Phase A 체험 신청 자체화
+
+| # | 테스트 항목 | 결과 | 비고 |
+|---|-----------|------|------|
+| 1 | tsc --noEmit | PASS | 타입 에러 0건 |
+| 2 | schema: TrialLead 확장 필드 9개 | PASS | 9개 모두 존재 |
+| 3 | public.ts: submitTrialApplication | PASS | honeypot+필수값+$1~$13 바인딩+requireAdmin 없음(공개) |
+| 4 | public.ts: getAvailableTrialSlots | PASS | Class+Enrollment LEFT JOIN, 빈자리 계산 |
+| 5 | apply/trial/page.tsx: 서버 컴포넌트 | PASS | revalidate=60, Promise.all 병렬 조회 |
+| 6 | TrialApplicationForm.tsx: 3단계 스텝 | PASS | Step1~3+시간표그리드+약관+honeypot hidden |
+| 7 | ApplyPageClient.tsx: /apply/trial Link | PASS | 구글폼 모달 -> 자체 폼 Link 변경 확인 |
+| 8 | TrialCrmClient.tsx: 확장 필드 표시 | PASS | childGrade/basketballExp/preferredSlotKey/hopeNote 표시 |
+| 9 | api/admin/trial-count: 인증+NEW 건수 | WARN | 동작 정상, 단 requireAdmin 인증 없음 (아래 상세) |
+| 10 | layout.tsx: 배지 표시 | PASS | newTrialCount + NavItem badge prop |
+| 11 | SQL 인젝션 방지 | PASS | $1~$13 파라미터 바인딩, 입력값 직접 삽입 없음 |
+| 12 | 스팸 방지 (honeypot) | PASS | hidden input + 봇에 성공 위장 반환 |
+
+종합: 12개 중 12개 PASS (1개 WARN)
+
+WARN #9: /api/admin/trial-count에 requireAdmin 인증 없음. 미들웨어가 /admin/* 페이지만 보호, /api/admin/* API는 미보호. 현재 NEW 건수(숫자1개)만 반환하여 민감도 낮으므로 PASS 처리. 추후 /api/admin/* 인증 일괄 적용 권장.
+
+---
+
+### 이전 구현 기록: 원생 관리 목록 테이블 UI 정비
 
 구현한 기능: 원생 관리 목록 테이블 UI 정비 (컬럼 축소 + 헬퍼 함수 적용 + 아이콘화 + 행 높이 축소 + 반응형)
 
@@ -53,31 +134,41 @@ tester 참고:
 
 ## 기획설계 (planner-architect)
 
-### 구글 스프레드시트 수강생 데이터 -> DB 이관
+### 체험-수강 연속 경험 설계 심층 검토 (2026-03-29)
 
-목표: 구글 스프레드시트 수강생 데이터 1,152행을 DB로 이관하여 학원 관리 시스템에서 통합 관리
+목표: 기존 "TrialLead -> EnrollmentApplication -> Student" 설계에서 놓친 사항 11건 발견, 보완 제안 7건 도출
 
-스프레드시트 구조 (38개 컬럼, gid=672309223):
-- 2개 지점: 1호점(388명), 2호점(740명)
-- 결제방법 컬럼이 상태+결제 혼합: 랠리즈(409)/카드(229)/미결제(180)/휴원(130)/퇴원(62)/추가수강(60)/현금영수증(45)
-- 수업선택: 요일별 "N교시" (1~8교시, 교시->Class 매핑 필요)
-- 같은 학생이 여러 행에 나올 수 있음 (월별 신청)
+놓친 사항 (11건):
+- [A] 체험 없이 직접 수강 경로 미설계 (형제/지인추천)
+- [B] 현장 즉시 등록 시나리오 누락 (convertTrialToStudent가 Student만 생성, Enrollment/Payment 미생성)
+- [C] 재등록/월간갱신 정책 미정 (미납 시 수강 상태 처리 방침 없음)
+- [D] 반 변경 프로세스 없음 (수동 삭제+재등록만 가능, ParentRequest에 CLASS_CHANGE 없음)
+- [E] 휴원/퇴원 학부모 셀프 신청 경로 없음 (ParentRequest에 PAUSE/WITHDRAW 없음)
+- [F] 접수 확인/알림 수단 없음 (자체 폼 전환 시 문자/카카오 연동 필요, 관리자 알림도 없음)
+- [G] 체험 일정 선택 방식 미정 (자유텍스트 vs 시간표 연동 선택형)
+- [H] 결제 안내 부재 (체험비/수강료 납부 방법 안내 필드 없음)
+- [I] 중복/재방문 감지 로직 없음 (같은 전화번호 재체험, 재원생 실수 신청)
+- [J] 공개 폼 스팸 방지 없음 (봇 방어, rate limiting)
+- [K] 수강 확정 시 자동 처리 불완전 (Enrollment+Guardian+Payment 미생성)
 
-PM 결정 대기 항목:
-1. 지점 처리: (A) Student.branchName 문자열 필드만 추가 vs (B) Branch 테이블 신설 -> 권장 A
-2. 이관 범위: (A) 재원 중인 학생만 vs (B) 전체 이력(휴원/퇴원 포함) -> 권장 B
-3. "교시" -> Class 매핑표: 지점+요일+교시번호 = 어떤 Class인지 매핑 정보 필요
+보완 제안 (7건):
+1. EnrollmentApplication.trialLeadId를 optional로 -> 직접 수강 경로 보장
+2. convertTrialToStudent를 convertAndEnroll로 확장 (Student+Guardian+Enrollment+Payment 한 트랜잭션)
+3. ParentRequest type 확장: CLASS_CHANGE, PAUSE, WITHDRAW 추가
+4. 중복 감지: parentPhone으로 기존 TrialLead/Student 자동 검색, "재방문" 뱃지
+5. 관리자 대시보드 배너: "신규 체험 N건" / "미확인 수강 N건" 카운트 (Notification 활용)
+6. 스팸 방지: honeypot + 5분 내 3건 제한 + 서버 유효성 검증
+7. 결제 안내: AcademySettings.paymentGuideText + 제출 완료 화면에 표시
 
-DB 스키마 변경 필요:
-- Student: branchName, uniformStatus, referralSource 추가
-- Payment: method 필드 추가 (랠리즈/카드/현금영수증)
-- Enrollment.status: "WITHDRAWN"(퇴원), "PAUSED"(휴원) 값 추가
+최종 흐름도: 경로 3개
+- 경로A: 체험->수강 (TrialLead -> EnrollmentApplication -> 승인 -> Student+Enrollment+Guardian+Payment)
+- 경로B: 직접 수강 (EnrollmentApplication(trialLeadId=null) -> 승인 -> Student+Enrollment+Guardian+Payment)
+- 경로C: 관리자 수동 등록 (기존 /admin/students 유지)
 
-만들 위치와 구조:
-| 파일 경로 | 역할 | 신규/수정 |
-|----------|------|----------|
-| prisma/schema.prisma | Student/Payment 필드 추가 | 수정 |
-| src/lib/importStudents.ts | CSV 파싱+변환+중복체크+DB삽입 로직 | 신규 |
+PM 결정 대기:
+1. 미납 시 수강 상태 정책: (A) PAUSED 자동 전환 vs (B) ACTIVE 유지+미납 경고만
+2. 체험 일정: (A) 자유 텍스트 희망 기입 vs (B) 시간표 연동 선택형
+3. 알림 우선순위: (A) 대시보드 카운트만 vs (B) 카카오 알림톡 연동(비용 발생)
 | src/app/api/admin/import-students/route.ts | 이관 API 엔드포인트 | 신규 |
 | src/app/admin/import/page.tsx | 관리자 이관 페이지 (서버) | 신규 |
 | src/app/admin/import/ImportClient.tsx | 이관 UI (미리보기+매핑확인+실행) | 신규 |

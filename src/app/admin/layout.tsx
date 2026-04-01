@@ -32,6 +32,8 @@ export default function AdminLayout({
     const router = useRouter();
     const [userName, setUserName] = useState<string>("");
     const [userEmail, setUserEmail] = useState<string>("");
+    // 새 체험 신청 건수 — 사이드바 배지 표시용
+    const [newTrialCount, setNewTrialCount] = useState(0);
 
     // 현재 URL 경로를 기반으로 활성 탭을 자동 결정
     // "/admin" 정확 일치(대시보드) 또는 OPS_PATHS로 시작하면 "학원운영"
@@ -57,6 +59,11 @@ export default function AdminLayout({
                 setUserEmail(user.email || "");
             }
         });
+        // 새 체험 신청 건수 조회 (사이드바 배지 표시용)
+        fetch("/api/admin/trial-count")
+            .then((r) => r.json())
+            .then((d) => setNewTrialCount(d.count ?? 0))
+            .catch(() => {});
     }, []);
 
     async function handleLogout() {
@@ -148,7 +155,7 @@ export default function AdminLayout({
                             <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" />
                             <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
                             <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
-                            <NavItem href="/admin/trial" active={pathname.startsWith("/admin/trial")} icon="🤝" label="체험 CRM" />
+                            <NavItem href="/admin/trial" active={pathname.startsWith("/admin/trial")} icon="🤝" label="체험 CRM" badge={newTrialCount} />
                             <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />
                             <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강 관리" />
                             <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬 트래킹" />
@@ -317,7 +324,7 @@ function BackupButtons() {
     );
 }
 
-function NavItem({ href, active, icon, label }: { href: string; active?: boolean; icon: string; label: string }) {
+function NavItem({ href, active, icon, label, badge }: { href: string; active?: boolean; icon: string; label: string; badge?: number }) {
     return (
         <Link
             href={href}
@@ -327,7 +334,13 @@ function NavItem({ href, active, icon, label }: { href: string; active?: boolean
                 }`}
         >
             <span className="text-xl">{icon}</span>
-            <span>{label}</span>
+            <span className="flex-1">{label}</span>
+            {/* 배지 — 새 신청 건수 등 알림 표시 */}
+            {badge != null && badge > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-red-500 text-white">
+                    {badge}
+                </span>
+            )}
         </Link>
     );
 }

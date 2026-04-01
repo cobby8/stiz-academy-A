@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -214,20 +215,14 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {trialFormUrl ? (
-                                        <Button
-                                            variant="primary"
-                                            size="md"
-                                            onClick={() => setModal("trial")}
-                                            data-tour-target="trial-apply-btn"
-                                        >
-                                            체험수업 신청하기
-                                        </Button>
-                                    ) : (
-                                        <Button variant="primary" size="md" disabled className="!bg-gray-200 !text-gray-400 cursor-not-allowed">
-                                            체험수업 신청하기 (준비 중)
-                                        </Button>
-                                    )}
+                                    {/* 체험수업 신청 — 자체 폼 페이지로 이동 (구글폼 탈피) */}
+                                    <Link
+                                        href="/apply/trial"
+                                        data-tour-target="trial-apply-btn"
+                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 text-white hover:bg-brand-orange-600 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                    >
+                                        체험수업 신청하기
+                                    </Link>
                                     {/* 약관 안내 — 독립 이용약관 페이지로 링크 */}
                                     <p className="mt-3 text-xs text-gray-400">
                                         신청 시{" "}
@@ -332,14 +327,7 @@ export default function ApplyPageClient({
                 </AnimateOnScroll>
             </SectionLayout>
 
-            {/* Google Form 모달 — 기존 로직 그대로 유지 */}
-            {modal === "trial" && trialFormUrl && (
-                <FormModal
-                    title={trialTitle}
-                    formUrl={trialFormUrl}
-                    onClose={() => setModal(null)}
-                />
-            )}
+            {/* Google Form 모달 — 수강신청/유니폼만 유지 (체험수업은 자체 폼으로 이동) */}
             {modal === "enroll" && enrollFormUrl && (
                 <FormModal
                     title={enrollTitle}

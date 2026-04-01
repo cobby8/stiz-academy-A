@@ -107,9 +107,10 @@ export async function notifyAdmins(
     },
 ) {
     try {
-        // ADMIN 역할 사용자 조회 (phone도 가져옴 — SMS 발송용)
+        // ADMIN + VICE_ADMIN 역할 사용자 조회 (phone도 가져옴 — SMS 발송용)
+        // 부원장(VICE_ADMIN)도 관리자 알림을 받아야 함
         const admins = await prisma.$queryRawUnsafe<{ id: string; phone: string | null }[]>(
-            `SELECT id, phone FROM "User" WHERE role = 'ADMIN'`
+            `SELECT id, phone FROM "User" WHERE role IN ('ADMIN', 'VICE_ADMIN')`
         );
 
         // 관리자용 SMS 메시지 결정: 템플릿 우선, 없으면 하드코딩 fallback

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guard";
+import { requireAdmin, requireOwner } from "@/lib/auth-guard";
 import {
     createNotificationRecord,
     notifyAdmins,
@@ -3985,5 +3985,155 @@ export async function resetSmsTemplate(id: string) {
     }
 
     revalidatePath("/admin/sms/templates");
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 스태프 관리 — ADMIN(원장)만 사용 가능한 권한 관리 기능
+// ══════════════════════════════════════════════════════════════════════
+
+// ── DDL: Role enum에 VICE_ADMIN 추가 + Coach.userId 컬럼 추가 ──────────────
+// Prisma migrate 없이도 안전하게 동작하도록 DDL ensure 패턴 사용
+// ALTER TYPE ... ADD VALUE는 트랜잭션 내에서 실행 불가 → IF NOT EXISTS 사용
+let _staffColumnsEnsured = false;
+export async function ensureStaffColumns() {
+    if (_staffColumnsEnsured) return;
+    try {
+        // 1) Role enum에 VICE_ADMIN 값 추가 (이미 있으면 무시)
+        await prisma.$executeRawUnsafe(
+            `DO $$ BEGIN
+               IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'VICE_ADMIN'
+                 AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'Role'))
+               THEN
+                 ALTER TYPE "Role" ADD VALUE 'VICE_ADMIN';
+               END IF;
+             END $$`
+        );
+        // 2) Coach 테이블에 userId 컬럼 추가 (이미 있으면 무시)
+        await prisma.$executeRawUnsafe(
+            `ALTER TABLE "Coach" ADD COLUMN IF NOT EXISTS "userId" TEXT UNIQUE`
+        );
+        _staffColumnsEnsured = true;
+    } catch (e) {
+        console.error("[ensureStaffColumns] DDL failed:", e);
+    }
+}
+
+/**
+ * createStaffUser — 신규 스태프 생성 (requireOwner: ADMIN만)
+ * Supabase Auth에 계정을 만들지 않고, User 테이블에만 레코드 생성
+ * (로그인이 필요하면 별도로 Supabase Auth invite를 보내야 함)
+ */
+export async function createStaffUser(data: {
+    email: string;
+    name: string;
+    phone?: string;
+    role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
+}) {
+    await requireOwner();
+    await ensureStaffColumns();
+
+    try {
+        // 이메일 중복 확인
+        const existing = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
+            data.email,
+        );
+        if (existing.length > 0) {
+            throw new Error("이미 등록된 이메일입니다.");
+        }
+
+        // User 레코드 생성
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid(), $1, $2, $3, $4::"Role", NOW(), NOW())`,
+            data.email,
+            data.name,
+            data.phone || null,
+            data.role,
+        );
+    } catch (e) {
+        console.error("[createStaffUser] failed:", e);
+        throw new Error((e as Error).message || "스태프 생성 실패");
+    }
+
+    revalidatePath("/admin/staff");
+}
+
+/**
+ * updateUserRole — 사용자 역할 변경 (requireOwner: ADMIN만)
+ * ADMIN은 다른 사용자의 역할을 변경할 수 있지만, 자기 자신을 변경할 수 없음
+ */
+export async function updateUserRole(userId: string, newRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "PARENT") {
+    const user = await requireOwner();
+    await ensureStaffColumns();
+
+    try {
+        // 자기 자신의 역할 변경 방지 (실수로 ADMIN 권한을 잃는 것 방지)
+        const targetRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT email FROM "User" WHERE id = $1 LIMIT 1`,
+            userId,
+        );
+        if (targetRows.length > 0 && targetRows[0].email === user.email) {
+            throw new Error("자기 자신의 역할은 변경할 수 없습니다.");
+        }
+
+        await prisma.$executeRawUnsafe(
+            `UPDATE "User" SET role = $1::"Role", "updatedAt" = NOW() WHERE id = $2`,
+            newRole,
+            userId,
+        );
+    } catch (e) {
+        console.error("[updateUserRole] failed:", e);
+        throw new Error((e as Error).message || "역할 변경 실패");
+    }
+
+    revalidatePath("/admin/staff");
+}
+
+/**
+ * linkCoachToUser — Coach와 User(INSTRUCTOR) 연결/해제 (requireOwner: ADMIN만)
+ * coachId가 null이면 기존 연결 해제, 값이 있으면 연결
+ */
+export async function linkCoachToUser(userId: string, coachId: string | null) {
+    await requireOwner();
+    await ensureStaffColumns();
+
+    try {
+        if (coachId) {
+            // 해당 코치가 이미 다른 유저에게 연결되어 있는지 확인
+            const linked = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT "userId" FROM "Coach" WHERE id = $1 AND "userId" IS NOT NULL AND "userId" != $2 LIMIT 1`,
+                coachId,
+                userId,
+            );
+            if (linked.length > 0) {
+                throw new Error("이 코치는 이미 다른 사용자에게 연결되어 있습니다.");
+            }
+
+            // 기존에 이 유저에게 연결된 코치가 있으면 해제
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Coach" SET "userId" = NULL, "updatedAt" = NOW() WHERE "userId" = $1`,
+                userId,
+            );
+
+            // 새 코치 연결
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Coach" SET "userId" = $1, "updatedAt" = NOW() WHERE id = $2`,
+                userId,
+                coachId,
+            );
+        } else {
+            // 연결 해제
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Coach" SET "userId" = NULL, "updatedAt" = NOW() WHERE "userId" = $1`,
+                userId,
+            );
+        }
+    } catch (e) {
+        console.error("[linkCoachToUser] failed:", e);
+        throw new Error((e as Error).message || "코치 연결 실패");
+    }
+
+    revalidatePath("/admin/staff");
 }
 

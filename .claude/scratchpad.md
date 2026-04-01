@@ -1,170 +1,14 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: SMS 문자 템플릿 관리 시스템 구현
-- **상태**: 구현 완료 (7단계 전부)
+- **요청**: 권한 체계 5단계 구현
+- **상태**: 구현 완료
 - **현재 담당**: developer 완료 -> tester
 - **마지막 세션**: 2026-03-29
 
 ## 기획설계 (planner-architect)
 
-### SMS 템플릿 관리 시스템 설계 (2026-03-29)
-
-목표: 관리자가 상황별 SMS 문자 내용을 직접 수정/ON-OFF할 수 있는 템플릿 시스템
-
-#### 현재 인프라 분석 결과
-
-이미 완성된 SMS 인프라:
-- **솔라피 연동**: lib/sms.ts — sendSms(), sendSmsBulk() (HMAC-SHA256 인증)
-- **알림 통합**: lib/notification.ts — notifyAdmins()에서 ADMIN+Coach에게 SMS 발송 중
-- **수동 발송 UI**: /admin/sms — SmsClient.tsx (코치/직접입력 대상 수동 발송)
-- **현재 문제**: 메시지 내용이 코드에 하드코딩됨 (예: `[STIZ] 새 체험수업 신청\n${childName}...`)
-
-#### DB 모델 설계: SmsTemplate
-
-```prisma
-model SmsTemplate {
-  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  trigger      String   @unique  // 트리거 코드 (아래 목록)
-  name         String            // 관리자에게 보여줄 이름 (예: "체험 신청 접수 — 관리자용")
-  target       String            // 수신 대상: ADMIN, COACH, PARENT
-  body         String            // 메시지 본문 (변수 포함: {{childName}} 등)
-  isActive     Boolean  @default(true)   // ON/OFF 토글
-  description  String?           // 이 알림이 언제 발송되는지 설명
-  variables    String?           // 사용 가능한 변수 목록 (JSON: ["childName","parentName",...])
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-}
-```
-
-#### 트리거 목록 + 변수 + 기본 템플릿
-
-| trigger 코드 | 이름 | target | 사용 가능 변수 | 기본 메시지 | 발동 위치 |
-|---|---|---|---|---|---|
-| TRIAL_NEW_ADMIN | 체험 신청 접수 (관리자) | ADMIN | childName, childGrade, parentName, parentPhone | [STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}}) - {{parentName}} | public.ts:submitTrialApplication |
-| TRIAL_NEW_COACH | 체험 신청 접수 (코치) | COACH | childName, childGrade, parentName | [STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}}) | public.ts:submitTrialApplication |
-| ENROLL_NEW_ADMIN | 수강 신청 접수 (관리자) | ADMIN | childName, childGrade, parentName, parentPhone | [STIZ] 새 수강 신청\n{{childName}} ({{childGrade}}) - {{parentName}} | public.ts:submitEnrollApplication |
-| ENROLL_NEW_COACH | 수강 신청 접수 (코치) | COACH | childName, childGrade, parentName | [STIZ] 새 수강 신청\n{{childName}} ({{childGrade}}) | public.ts:submitEnrollApplication |
-| TRIAL_CONFIRM_PARENT | 체험 신청 확인 (학부모) | PARENT | childName, parentName, academyPhone | [STIZ] {{childName}} 체험수업 신청이 접수되었습니다. 일정 확정 시 다시 안내드리겠습니다. 문의: {{academyPhone}} | public.ts:submitTrialApplication |
-| TRIAL_SCHEDULED_PARENT | 체험 일정 확정 (학부모) | PARENT | childName, scheduledDate, className, academyPhone | [STIZ] {{childName}} 체험수업 일정이 확정되었습니다.\n일시: {{scheduledDate}}\n반: {{className}}\n문의: {{academyPhone}} | admin.ts:updateTrialLead (status->SCHEDULED) |
-| ENROLL_CONFIRM_PARENT | 수강 신청 확인 (학부모) | PARENT | childName, parentName, academyPhone | [STIZ] {{childName}} 수강 신청이 접수되었습니다. 승인 후 안내드리겠습니다. 문의: {{academyPhone}} | public.ts:submitEnrollApplication |
-| ENROLL_APPROVED_PARENT | 수강 확정 (학부모) | PARENT | childName, className, academyPhone | [STIZ] {{childName}} 수강이 확정되었습니다.\n배정 반: {{className}}\n상세 안내는 별도 연락드리겠습니다. | admin.ts:approveEnrollApplication |
-| INVOICE_PARENT | 수납 안내 (학부모) | PARENT | childName, month, amount, dueDate | [STIZ] {{month}}월 수강료 안내\n{{childName}}: {{amount}}원\n납부기한: {{dueDate}} | admin.ts:generateMonthlyInvoices |
-| UNPAID_PARENT | 미납 알림 (학부모) | PARENT | childName, unpaidCount, totalAmount | [STIZ] 미납 수납 안내\n{{childName}}: {{unpaidCount}}건 ({{totalAmount}}원)\n확인 부탁드립니다. | admin.ts:sendUnpaidReminders |
-
-#### 핵심 유틸 함수: renderSmsTemplate()
-
-```
-lib/smsTemplate.ts (신규)
-
-// DB에서 템플릿 조회 -> 변수 치환 -> 활성이면 메시지 반환, 비활성이면 null
-async function renderSmsTemplate(
-  trigger: string,
-  variables: Record<string, string>
-): Promise<string | null>
-
-// 초기 seed 데이터 삽입 (템플릿이 없으면 기본값으로 생성)
-async function ensureSmsTemplates(): Promise<void>
-```
-
-#### 발송 로직 변경 포인트
-
-현재 notification.ts의 notifyAdmins()에서 SMS 메시지를 하드코딩:
-```ts
-sendSms(admin.phone, `[STIZ] ${title}\n${message}`)
-```
-
-변경 후: renderSmsTemplate()로 대체
-```ts
-// notifyAdmins 내부에서
-const adminMsg = await renderSmsTemplate("TRIAL_NEW_ADMIN", { childName, childGrade, parentName });
-if (adminMsg) sendSms(admin.phone, adminMsg);
-
-const coachMsg = await renderSmsTemplate("TRIAL_NEW_COACH", { childName, childGrade, parentName });
-if (coachMsg) { /* 코치에게 발송 */ }
-```
-
-학부모 SMS는 현재 미구현 -> 새로 추가:
-- submitTrialApplication: TRIAL_CONFIRM_PARENT 발송 (parentPhone으로)
-- updateTrialLead (SCHEDULED): TRIAL_SCHEDULED_PARENT 발송
-- submitEnrollApplication: ENROLL_CONFIRM_PARENT 발송
-- approveEnrollApplication: ENROLL_APPROVED_PARENT 발송
-- generateMonthlyInvoices: INVOICE_PARENT 발송
-- sendUnpaidReminders: UNPAID_PARENT 발송
-
-#### 페이지/컴포넌트 설계
-
-```
-/admin/sms/templates (신규 페이지)
-  - SmsTemplateClient.tsx (신규 클라이언트 컴포넌트)
-    - 트리거별 카드 레이아웃 (10개 카드)
-    - 각 카드:
-      - 상단: 이름 + ON/OFF 토글 + 수신대상 배지
-      - 중앙: textarea (메시지 본문 편집)
-      - 변수 삽입 버튼 (클릭하면 {{변수}} 커서 위치에 삽입)
-      - 하단: 미리보기 버튼 (샘플 데이터로 치환한 결과 표시)
-      - 저장 버튼
-```
-
-기존 /admin/sms 페이지에 "템플릿 관리" 링크 추가.
-
-#### Server Action 설계
-
-```
-admin.ts에 추가:
-  - getSmsTemplates(): SmsTemplate[] 전체 조회
-  - updateSmsTemplate(id, { body, isActive }): 본문/활성 수정
-  - resetSmsTemplate(id): 기본 템플릿으로 초기화
-  - previewSmsTemplate(trigger, variables): 미리보기용 치환 결과 반환
-```
-
-#### 만들 위치와 구조
-
-| 파일 경로 | 역할 | 신규/수정 |
-|----------|------|----------|
-| prisma/schema.prisma | SmsTemplate 모델 추가 | 수정 |
-| src/lib/smsTemplate.ts | renderSmsTemplate + ensureSmsTemplates + 변수치환 로직 | 신규 |
-| src/app/admin/sms/templates/page.tsx | 템플릿 관리 서버 컴포넌트 | 신규 |
-| src/app/admin/sms/templates/SmsTemplateClient.tsx | 템플릿 편집 UI (카드+토글+미리보기) | 신규 |
-| src/app/actions/admin.ts | getSmsTemplates, updateSmsTemplate, resetSmsTemplate, previewSmsTemplate | 수정 |
-| src/lib/notification.ts | notifyAdmins SMS를 템플릿 기반으로 변경 | 수정 |
-| src/app/actions/public.ts | 학부모용 SMS 발송 추가 (TRIAL_CONFIRM, ENROLL_CONFIRM) | 수정 |
-| src/app/admin/sms/page.tsx | "템플릿 관리" 링크 추가 | 수정 |
-
-#### 기존 코드 연결
-
-- lib/sms.ts의 sendSms() -> 기존 그대로 사용 (발송 엔진)
-- lib/smsTemplate.ts -> sendSms()를 호출하기 전에 템플릿 조회+치환 담당
-- notification.ts -> smsTemplate.ts 임포트하여 하드코딩 메시지 대체
-- public.ts -> 학부모 SMS 발송 시 smsTemplate.ts 사용
-- admin.ts -> updateTrialLead, approveEnrollApplication, generateMonthlyInvoices, sendUnpaidReminders에 학부모 SMS 추가
-
-#### 실행 계획
-
-| 순서 | 작업 | 담당 | 선행 조건 |
-|------|------|------|----------|
-| 1 | schema.prisma에 SmsTemplate 모델 추가 + migrate | developer | 없음 |
-| 2 | lib/smsTemplate.ts 생성 (renderSmsTemplate + ensureSmsTemplates + seed 데이터) | developer | 1 |
-| 3 | admin.ts에 CRUD Server Action 4개 추가 | developer | 2 |
-| 4 | /admin/sms/templates 페이지 + SmsTemplateClient.tsx | developer | 3 |
-| 5 | notification.ts 수정 (하드코딩 -> 템플릿 기반) + public.ts/admin.ts에 학부모 SMS 추가 | developer | 2 |
-| 6 | tsc --noEmit + 기능 테스트 | tester | 4,5 |
-
-#### developer 주의사항
-
-- ensureSmsTemplates()는 앱 시작 시 or 첫 조회 시 호출 (DDL 패턴). 템플릿이 0개면 기본값 10개 INSERT.
-- renderSmsTemplate()에서 DB 조회 결과를 캐싱할 필요 없음 (호출 빈도 낮음, 관리자 수정 즉시 반영 필요)
-- 학부모 SMS: parentPhone이 필수. 신청 폼에서 이미 수집하고 있으므로 별도 처리 불필요.
-- 변수 치환: body.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || '') 패턴
-- 미리보기용 샘플 데이터: { childName: "홍길동", parentName: "홍부모", childGrade: "초3", ... }
-- $queryRawUnsafe 필수 (PgBouncer 호환)
-- 4단계와 5단계는 병렬 가능 (독립적)
-
-#### PM 결정 필요 사항
-
-1. **학부모 SMS 즉시 추가?** 현재 학부모에게 SMS를 보내는 코드가 없음. 이번에 8개 트리거 중 학부모용 6개를 모두 구현할지, 관리자/코치용 4개만 먼저 할지?
-2. **academyPhone 변수**: AcademySettings.contactPhone을 사용할 것인지? (현재 DB에 있음)
-3. **수납 안내 SMS**: generateMonthlyInvoices는 학생별로 돌면서 생성하는데, SMS도 학생별로 보낼지 학부모별로 합쳐서 보낼지?
+(이전 SMS 템플릿 설계: 구현 완료로 정리됨)
 
 ## 구현 기록 (developer)
 
@@ -195,6 +39,52 @@ reviewer 참고:
 - sendParentSms는 fire-and-forget 패턴 (실패해도 메인 로직 중단 안 함)
 - public.ts의 sendParentSmsWithAcademyPhone은 모듈 내부 함수 (export 안 함)
 
+### 권한 체계 5단계 구현 (2026-03-29)
+
+구현한 기능: VICE_ADMIN(부원장) 역할 추가 + 스태프 관리 페이지 + Coach-User 연결
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | Role enum에 VICE_ADMIN 추가, Coach에 userId(unique) + User relation 추가 | 수정 |
+| src/lib/auth-guard.ts | requireAdmin: ADMIN+VICE_ADMIN 허용, requireOwner: ADMIN만 허용 신규 추가 | 수정 |
+| src/lib/notification.ts | notifyAdmins에서 ADMIN+VICE_ADMIN 모두 조회 | 수정 |
+| src/lib/queries.ts | getStaffUsers() + getAllCoaches() 조회 함수 추가 | 수정 |
+| src/app/actions/admin.ts | ensureStaffColumns DDL + createStaffUser + updateUserRole + linkCoachToUser (모두 requireOwner) | 수정 |
+| src/app/admin/staff/page.tsx | 스태프 관리 서버 컴포넌트 (revalidate:30) | 신규 |
+| src/app/admin/staff/StaffClient.tsx | 스태프 목록 테이블 + 역할 드롭다운 + Coach 연결 + 추가 모달 + 권한 안내 카드 | 신규 |
+| src/app/admin/layout.tsx | 사이드바 시스템 섹션에 "스태프 관리" 메뉴 + OPS_PATHS 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/staff 접속 -> 스태프 목록 확인, 역할 변경, 코치 연결, 신규 추가
+- DB migrate 필요: `npx prisma migrate dev --name staff-role` (VICE_ADMIN enum + Coach.userId). DDL ensure가 있어 migrate 없이도 동작.
+- 정상 동작: ADMIN/VICE_ADMIN/INSTRUCTOR 유저 목록 표시, 역할 변경 시 confirm 후 반영
+- requireOwner: ADMIN이 아닌 사용자가 스태프 관리 시도하면 "원장 권한이 필요합니다" 에러
+- 자기 자신 역할 변경 시도하면 "자기 자신의 역할은 변경할 수 없습니다" 에러
+
+reviewer 참고:
+- DDL ensure: ALTER TYPE ADD VALUE는 IF NOT EXISTS로 중복 실행 안전, ALTER TABLE ADD COLUMN IF NOT EXISTS도 안전
+- requireAdmin은 하위 호환 유지: 기존에 ADMIN만 통과하던 곳이 VICE_ADMIN도 통과하게 됨
+- Coach.userId는 UNIQUE로 1:1 관계 보장
+
+### 슬롯 담당 코치 SMS 타겟팅 구현 (2026-03-29)
+
+구현한 기능: 체험/수강 신청 시 해당 슬롯의 담당 코치에게만 SMS 발송 (기존: 전체 코치)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/notification.ts | getCoachPhonesBySlotKeys() 추가 + notifyAdmins에 slotKeys 옵션 추가 + 코치 SMS 분기 로직 | 수정 |
+| src/app/actions/public.ts | submitTrialApplication: preferredSlotKey -> slotKeys 전달, submitEnrollApplication: preferredSlotKeys 파싱 -> slotKeys 전달 | 수정 |
+| src/app/actions/admin.ts | notifyAdmins 임포트 추가, updateTrialLead(SCHEDULED): Class.slotKey 조회 -> 코치 알림, approveEnrollApplication: classIds -> slotKey 조회 -> 코치 알림 | 수정 |
+
+tester 참고:
+- 테스트 방법: 체험 신청 시 희망 슬롯 선택 -> 해당 슬롯 담당 코치에게만 SMS 발송 확인
+- 정상 동작: slotKey에 coachId가 설정된 경우 해당 코치에게만, 미설정 시 전체 코치에게 발송
+- 슬롯 없이 신청 시: 기존과 동일하게 전체 코치에게 발송
+
+reviewer 참고:
+- getCoachPhonesBySlotKeys: ClassSlotOverride(기본 슬롯) + CustomClassSlot(custom- 접두사) 양쪽 확인
+- notifyAdmins의 하위 호환 유지: slotKeys 미전달 시 기존 동작과 동일
+
 ### 미해결 리뷰 수정 사항 (이월)
 
 | 번호 | 파일 | 심각도 | 내용 | 상태 |
@@ -218,6 +108,8 @@ reviewer 참고:
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-03-29 | 권한 체계 5단계 (VICE_ADMIN + requireOwner + 스태프 관리 페이지 + Coach-User 연결) | 구현 완료 |
+| 2026-03-29 | 슬롯 담당 코치 SMS 타겟팅 (notifyAdmins slotKeys + public/admin 연동) | 구현 완료 |
 | 2026-03-29 | SMS 템플릿 관리 시스템 구현 7단계 (DB+유틸+CRUD+UI+발송연동+사이드바) | 구현 완료 |
 | 2026-03-29 | SMS 템플릿 관리 시스템 기획설계 (10개 트리거+DB모델+페이지+실행계획) | 설계 완료 |
 | 2026-03-29 | 솔라피 SMS 연동 + Coach phone 필드 + /admin/sms 문자 발송 페이지 | 완료 |

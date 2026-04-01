@@ -26,9 +26,10 @@ export async function requireAuth() {
 }
 
 /**
- * requireAdmin: ADMIN 역할 확인
+ * requireAdmin: ADMIN 또는 VICE_ADMIN 역할 확인
+ * - 부원장(VICE_ADMIN)도 대부분의 관리 작업을 수행할 수 있도록 허용
  * - 미인증이면 에러
- * - DB에서 role을 조회하여 ADMIN이 아니면 에러
+ * - DB에서 role을 조회하여 ADMIN/VICE_ADMIN이 아니면 에러
  * - $queryRawUnsafe 사용: PgBouncer 트랜잭션 모드 호환
  */
 export async function requireAdmin() {
@@ -40,8 +41,29 @@ export async function requireAdmin() {
     user.email
   );
 
-  if (rows.length === 0 || rows[0].role !== "ADMIN") {
+  // ADMIN 또는 VICE_ADMIN만 통과
+  if (rows.length === 0 || (rows[0].role !== "ADMIN" && rows[0].role !== "VICE_ADMIN")) {
     throw new Error("관리자 권한이 필요합니다.");
+  }
+
+  return user;
+}
+
+/**
+ * requireOwner: ADMIN(원장)만 허용
+ * - 스태프 관리, 역할 변경 등 최고 권한이 필요한 작업용
+ * - VICE_ADMIN은 차단됨 — ADMIN만 통과
+ */
+export async function requireOwner() {
+  const user = await requireAuth();
+
+  const rows = await prisma.$queryRawUnsafe<{ role: string }[]>(
+    `SELECT role FROM "User" WHERE email = $1 LIMIT 1`,
+    user.email
+  );
+
+  if (rows.length === 0 || rows[0].role !== "ADMIN") {
+    throw new Error("원장 권한이 필요합니다. (ADMIN만 가능)");
   }
 
   return user;

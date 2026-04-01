@@ -22,6 +22,7 @@ const OPS_PATHS = [
     "/admin/stats",
     "/admin/sms",
     "/admin/import",
+    "/admin/staff",
 ];
 
 export default function AdminLayout({
@@ -170,6 +171,7 @@ export default function AdminLayout({
                             <NavItem href="/admin/import" active={pathname.startsWith("/admin/import")} icon="📥" label="수강생 이관" />
 
                             <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
+                            <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프 관리" />
                             <BackupButtons />
                         </>
                     )}

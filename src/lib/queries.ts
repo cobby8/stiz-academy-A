@@ -2554,3 +2554,58 @@ export const getSmsTemplate = cache(async (trigger: string) => {
         return null;
     }
 });
+
+// ── 스태프 목록 조회 (ADMIN / VICE_ADMIN / INSTRUCTOR) ─────────────────────
+// 스태프 관리 페이지에서 사용 — role이 PARENT가 아닌 유저 + Coach 연결 정보
+export const getStaffUsers = cache(async () => {
+    try {
+        // User 테이블에서 ADMIN/VICE_ADMIN/INSTRUCTOR 조회 + Coach 연결 (LEFT JOIN)
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT u.id, u.email, u.name, u.phone, u.role, u."createdAt",
+                    c.id AS "coachId", c.name AS "coachName"
+             FROM "User" u
+             LEFT JOIN "Coach" c ON c."userId" = u.id
+             WHERE u.role IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR')
+             ORDER BY
+               CASE u.role
+                 WHEN 'ADMIN' THEN 1
+                 WHEN 'VICE_ADMIN' THEN 2
+                 WHEN 'INSTRUCTOR' THEN 3
+               END,
+               u."createdAt" ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            email: r.email,
+            name: r.name,
+            phone: r.phone,
+            role: r.role,
+            createdAt: r.createdAt ?? r.createdat,
+            coachId: r.coachId ?? r.coachid ?? null,
+            coachName: r.coachName ?? r.coachname ?? null,
+        }));
+    } catch (e) {
+        console.error("[getStaffUsers] failed:", e);
+        return [];
+    }
+});
+
+// ── 전체 코치 목록 (스태프 관리용 Coach 드롭다운) ─────────────────────────
+export const getAllCoaches = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, role, "userId"
+             FROM "Coach"
+             ORDER BY "order" ASC, name ASC`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            role: r.role,
+            userId: r.userId ?? r.userid ?? null,
+        }));
+    } catch (e) {
+        console.error("[getAllCoaches] failed:", e);
+        return [];
+    }
+});

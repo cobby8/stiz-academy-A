@@ -128,12 +128,17 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
                                                                 {slot.gradeRange}
                                                             </p>
                                                         )}
-                                                        {/* 마감 표시 — 꽉 찼을 때만 */}
-                                                        {remaining <= 0 && (
-                                                            <div className="mb-1">
-                                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">마감</span>
-                                                            </div>
-                                                        )}
+                                                        {/* 정원 인디케이터 — 색상 도트로 여유/임박/마감 표시 */}
+                                                        <div className="flex items-center gap-1 mb-1">
+                                                            <span className={`inline-block w-2 h-2 rounded-full ${
+                                                                remaining <= 0 ? "bg-red-500" : remaining <= 2 ? "bg-amber-400" : "bg-emerald-400"
+                                                            }`} />
+                                                            <span className={`text-[10px] font-bold ${
+                                                                remaining <= 0 ? "text-red-600" : remaining <= 2 ? "text-amber-600" : "text-emerald-600"
+                                                            }`}>
+                                                                {remaining <= 0 ? "마감" : remaining <= 2 ? "마감임박" : "여유"}
+                                                            </span>
+                                                        </div>
                                                         {/* 코치명 — 있을 때만 표시 */}
                                                         {slot.coach && (
                                                             <div className="flex items-center gap-1">

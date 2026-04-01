@@ -320,10 +320,17 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                                 <input
                                     type="tel"
                                     value={addForm.phone}
-                                    onChange={(e) => patchAdd({ phone: e.target.value })}
-                                    placeholder="예: 010-1234-5678"
+                                    onChange={(e) => {
+                                        const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
+                                        let formatted = nums;
+                                        if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
+                                        else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
+                                        patchAdd({ phone: formatted });
+                                    }}
+                                    placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                                     className={INPUT}
                                 />
+                                <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">
@@ -499,10 +506,18 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                                             <input
                                                 type="tel"
                                                 value={editForm.phone}
-                                                onChange={(e) => patchEdit({ phone: e.target.value })}
-                                                placeholder="예: 010-1234-5678"
+                                                onChange={(e) => {
+                                                    // 숫자만 추출 후 자동 하이픈 포맷팅
+                                                    const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
+                                                    let formatted = nums;
+                                                    if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
+                                                    else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
+                                                    patchEdit({ phone: formatted });
+                                                }}
+                                                placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                                                 className={INPUT}
                                             />
+                                            <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                                         </div>
 
                                         <div>

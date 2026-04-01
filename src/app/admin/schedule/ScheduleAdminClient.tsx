@@ -284,11 +284,18 @@ export default function ScheduleAdminClient({
         });
     }
 
-    const byDay = DAY_ORDER.reduce<Record<string, SheetClassSlot[]>>((acc, d) => {
+    // 시트 슬롯을 요일별로 그룹핑 (period 기준 정렬)
+    const sheetByDay = DAY_ORDER.reduce<Record<string, SheetClassSlot[]>>((acc, d) => {
         acc[d] = slots.filter((s) => s.dayKey === d).sort((a, b) => a.period - b.period);
         return acc;
     }, {});
-    const activeDays = DAY_ORDER.filter((d) => byDay[d].length > 0);
+    // 커스텀 슬롯도 요일별로 그룹핑 (startTime 기준 정렬)
+    const customByDay = DAY_ORDER.reduce<Record<string, CustomSlot[]>>((acc, d) => {
+        acc[d] = initialCustomSlots.filter((cs) => cs.dayKey === d).sort((a, b) => a.startTime.localeCompare(b.startTime));
+        return acc;
+    }, {});
+    // 시트 슬롯 또는 커스텀 슬롯이 하나라도 있는 요일만 표시
+    const activeDays = DAY_ORDER.filter((d) => sheetByDay[d].length > 0 || customByDay[d].length > 0);
 
     // 관리자 뷰 토글 상태 — "edit"(편집 모드) / "table"(표 미리보기)
     const [adminViewMode, setAdminViewMode] = useState<"edit" | "table">("edit");
@@ -430,10 +437,11 @@ export default function ScheduleAdminClient({
                 <div key={dayKey} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className={`${DAY_COLOR[dayKey]} text-white px-5 py-3 flex items-center gap-3`}>
                         <span className="font-black text-lg">{DAY_LABEL[dayKey]}</span>
-                        <span className="text-white/70 text-sm">{byDay[dayKey].length}개 수업</span>
+                        {/* 시트 슬롯 + 커스텀 슬롯 합산 개수 */}
+                        <span className="text-white/70 text-sm">{sheetByDay[dayKey].length + customByDay[dayKey].length}개 수업</span>
                     </div>
                     <div className="divide-y divide-gray-100">
-                        {byDay[dayKey].map((slot) => {
+                        {sheetByDay[dayKey].map((slot) => {
                             const s = getState(slot.slotKey);
                             const assignedCoach = s.coachId ? coachMap[s.coachId] : null;
                             const displayStart = s.startTimeOverride || slot.startTime;
@@ -559,20 +567,9 @@ export default function ScheduleAdminClient({
                                 </div>
                             );
                         })}
-                    </div>
-                </div>
-            ))}
-
-            {/* ── 추가 수업 (직접 등록) ── */}
-            {adminViewMode === "edit" && (initialCustomSlots.length > 0 || isAddingCustom) && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-                        <span className="font-bold text-gray-700 text-sm">추가 수업</span>
-                        <span className="text-xs text-gray-400">{initialCustomSlots.length}개</span>
-                    </div>
-                    <div className="divide-y divide-gray-100">
-                        {initialCustomSlots.map((cs) => (
-                            <div key={cs.id} className="p-5">
+                        {/* ── 같은 요일의 커스텀 슬롯을 시트 슬롯 아래에 통합 표시 ── */}
+                        {customByDay[dayKey].map((cs) => (
+                            <div key={`custom-${cs.id}`} className="p-5">
                                 {editingCustomId === cs.id ? (
                                     <div>
                                         <p className="text-sm font-bold text-gray-700 mb-3">수업 수정</p>
@@ -588,8 +585,9 @@ export default function ScheduleAdminClient({
                                     </div>
                                 ) : (
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className={`text-xs font-bold text-white px-2.5 py-1 rounded-full ${DAY_COLOR[cs.dayKey] || "bg-gray-500"}`}>
-                                            {DAY_LABEL[cs.dayKey] || cs.dayKey}
+                                        {/* "커스텀" 뱃지로 시트 슬롯과 구분 */}
+                                        <span className="bg-brand-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                                            커스텀
                                         </span>
                                         <span className="text-sm font-bold text-gray-900">{cs.label}</span>
                                         <span className="text-sm text-gray-600">{cs.startTime} ~ {cs.endTime}</span>
@@ -602,7 +600,7 @@ export default function ScheduleAdminClient({
                                             </span>
                                         )}
                                         {cs.isHidden && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">숨김</span>}
-                                        {cs.note && <span className="text-xs text-brand-orange-600">📌 {cs.note}</span>}
+                                        {cs.note && <span className="text-xs text-brand-orange-600 flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: "14px" }}>push_pin</span>{cs.note}</span>}
                                         <div className="ml-auto flex items-center gap-3">
                                             <button onClick={() => startEditCustom(cs)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">수정</button>
                                             {deletingCustomId === cs.id ? (
@@ -621,7 +619,7 @@ export default function ScheduleAdminClient({
                         ))}
                     </div>
                 </div>
-            )}
+            ))}
 
             {/* Google Sheets URL modal */}
             {showSheetModal && (

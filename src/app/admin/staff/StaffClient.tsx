@@ -4,7 +4,7 @@
  * 스태프 관리 클라이언트 컴포넌트
  * - ADMIN/VICE_ADMIN/INSTRUCTOR 유저 목록 표시
  * - 역할 변경 드롭다운 (ADMIN만 가능 — requireOwner)
- * - 신규 스태프 추가 모달
+ * - 신규 스태프 추가 모달 (전화번호 인증 필수)
  * - INSTRUCTOR일 때 Coach 연결 드롭다운
  */
 
@@ -41,6 +41,22 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
     INSTRUCTOR: { label: "코치/강사", color: "bg-blue-100 text-blue-800" },
     PARENT: { label: "학부모", color: "bg-gray-100 text-gray-600" },
 };
+
+/**
+ * 전화번호 자동 포맷팅 함수
+ * 숫자만 추출 후 000-0000-0000 형태로 변환
+ * 예: "01012345678" → "010-1234-5678"
+ */
+function formatPhone(raw: string): string {
+    // 숫자만 남김
+    const digits = raw.replace(/\D/g, "");
+    // 11자리 초과 방지
+    const trimmed = digits.slice(0, 11);
+
+    if (trimmed.length <= 3) return trimmed;
+    if (trimmed.length <= 7) return `${trimmed.slice(0, 3)}-${trimmed.slice(3)}`;
+    return `${trimmed.slice(0, 3)}-${trimmed.slice(3, 7)}-${trimmed.slice(7)}`;
+}
 
 export default function StaffClient({
     staffUsers,
@@ -115,7 +131,6 @@ export default function StaffClient({
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200">
                             <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">이름</th>
-                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">이메일</th>
                             <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">전화번호</th>
                             <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">역할</th>
                             <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">코치 연결</th>
@@ -124,7 +139,7 @@ export default function StaffClient({
                     <tbody className="divide-y divide-gray-100">
                         {staffUsers.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-6 py-12 text-center text-gray-400 text-sm">
+                                <td colSpan={4} className="px-6 py-12 text-center text-gray-400 text-sm">
                                     등록된 스태프가 없습니다.
                                 </td>
                             </tr>
@@ -145,10 +160,10 @@ export default function StaffClient({
                                                 <span className="font-medium text-gray-900">{user.name}</span>
                                             </div>
                                         </td>
-                                        {/* 이메일 */}
-                                        <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
                                         {/* 전화번호 */}
-                                        <td className="px-6 py-4 text-sm text-gray-600">{user.phone || "-"}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">
+                                            {user.phone ? formatPhone(user.phone) : "-"}
+                                        </td>
                                         {/* 역할 드롭다운 */}
                                         <td className="px-6 py-4">
                                             <select
@@ -257,7 +272,7 @@ export default function StaffClient({
     );
 }
 
-// ── 신규 스태프 추가 모달 ─────────────────────────────────────────────
+// ── 신규 스태프 추가 모달 (전화번호 인증 포함) ─────────────────────────
 function AddStaffModal({
     onClose,
     onSuccess,
@@ -267,24 +282,109 @@ function AddStaffModal({
     onSuccess: () => void;
     onError: (msg: string) => void;
 }) {
+    // 폼 상태 — email 제거, phone 필수
     const [form, setForm] = useState({
-        email: "",
         name: "",
         phone: "",
         role: "INSTRUCTOR" as "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR",
     });
+
+    // 인증 단계: "input" → "sent" → "verified"
+    const [verifyStep, setVerifyStep] = useState<"input" | "sent" | "verified">("input");
+    // 인증번호 입력값
+    const [verifyCode, setVerifyCode] = useState("");
+    // 인증 관련 메시지
+    const [verifyMsg, setVerifyMsg] = useState<{ text: string; ok: boolean } | null>(null);
+    // 인증번호 발송/검증 중 로딩
+    const [verifyLoading, setVerifyLoading] = useState(false);
+
     const [isPending, startTransition] = useTransition();
 
+    // ── 전화번호 입력 핸들러 (자동 포맷팅) ──────────────────────────
+    function handlePhoneChange(raw: string) {
+        const formatted = formatPhone(raw);
+        setForm({ ...form, phone: formatted });
+        // 전화번호가 바뀌면 인증 초기화
+        if (verifyStep !== "input") {
+            setVerifyStep("input");
+            setVerifyCode("");
+            setVerifyMsg(null);
+        }
+    }
+
+    // ── 인증번호 발송 ─────────────────────────────────────────────
+    async function handleSendCode() {
+        const digits = form.phone.replace(/-/g, "");
+        if (digits.length < 10) {
+            setVerifyMsg({ text: "올바른 전화번호를 입력해주세요.", ok: false });
+            return;
+        }
+
+        setVerifyLoading(true);
+        setVerifyMsg(null);
+
+        try {
+            const res = await fetch("/api/admin/verify-phone", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ phone: digits }),
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                setVerifyStep("sent");
+                setVerifyMsg({ text: "인증번호가 발송되었습니다. (5분 내 입력)", ok: true });
+            } else {
+                setVerifyMsg({ text: data.error || "발송 실패", ok: false });
+            }
+        } catch {
+            setVerifyMsg({ text: "인증번호 발송 중 오류가 발생했습니다.", ok: false });
+        } finally {
+            setVerifyLoading(false);
+        }
+    }
+
+    // ── 인증번호 검증 ─────────────────────────────────────────────
+    async function handleVerifyCode() {
+        if (!verifyCode.trim()) return;
+
+        const digits = form.phone.replace(/-/g, "");
+        setVerifyLoading(true);
+        setVerifyMsg(null);
+
+        try {
+            const res = await fetch("/api/admin/verify-phone", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ phone: digits, code: verifyCode.trim() }),
+            });
+            const data = await res.json();
+
+            if (res.ok && data.verified) {
+                setVerifyStep("verified");
+                setVerifyMsg({ text: "전화번호가 인증되었습니다.", ok: true });
+            } else {
+                setVerifyMsg({ text: data.error || "인증 실패", ok: false });
+            }
+        } catch {
+            setVerifyMsg({ text: "인증번호 확인 중 오류가 발생했습니다.", ok: false });
+        } finally {
+            setVerifyLoading(false);
+        }
+    }
+
+    // ── 스태프 등록 제출 ─────────────────────────────────────────
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!form.email || !form.name) return;
+        // 인증 완료되지 않으면 제출 불가
+        if (verifyStep !== "verified") return;
+        if (!form.name) return;
 
         startTransition(async () => {
             try {
                 await createStaffUser({
-                    email: form.email.trim(),
                     name: form.name.trim(),
-                    phone: form.phone.trim() || undefined,
+                    phone: form.phone.trim(),
                     role: form.role,
                 });
                 onSuccess();
@@ -293,6 +393,9 @@ function AddStaffModal({
             }
         });
     }
+
+    // 전화번호 11자리 입력 완료 여부 (포맷 포함 13자: 000-0000-0000)
+    const phoneComplete = form.phone.replace(/-/g, "").length >= 10;
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -307,18 +410,6 @@ function AddStaffModal({
 
                 {/* 폼 */}
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {/* 이메일 */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">이메일 *</label>
-                        <input
-                            type="email"
-                            value={form.email}
-                            onChange={(e) => setForm({ ...form, email: e.target.value })}
-                            required
-                            placeholder="example@stiz.kr"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
-                        />
-                    </div>
                     {/* 이름 */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">이름 *</label>
@@ -331,17 +422,83 @@ function AddStaffModal({
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                         />
                     </div>
-                    {/* 전화번호 */}
+
+                    {/* 전화번호 + 인증번호 발송 버튼 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">전화번호</label>
-                        <input
-                            type="tel"
-                            value={form.phone}
-                            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                            placeholder="01012345678"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
-                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">전화번호 *</label>
+                        <div className="flex gap-2">
+                            <input
+                                type="tel"
+                                value={form.phone}
+                                onChange={(e) => handlePhoneChange(e.target.value)}
+                                placeholder="010-1234-5678"
+                                required
+                                disabled={verifyStep === "verified"}
+                                className={`flex-1 px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500 ${
+                                    verifyStep === "verified"
+                                        ? "border-green-300 bg-green-50 text-green-800"
+                                        : "border-gray-300"
+                                }`}
+                            />
+                            {/* 인증 상태에 따라 버튼 변경 */}
+                            {verifyStep === "verified" ? (
+                                <span className="flex items-center gap-1 px-3 py-2.5 text-sm font-medium text-green-700 bg-green-100 rounded-lg">
+                                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                                    인증됨
+                                </span>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleSendCode}
+                                    disabled={!phoneComplete || verifyLoading}
+                                    className="px-4 py-2.5 text-sm font-medium text-white bg-brand-navy-900 rounded-lg hover:bg-brand-navy-800 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                >
+                                    {verifyLoading && verifyStep === "input"
+                                        ? "발송 중..."
+                                        : verifyStep === "sent"
+                                        ? "재발송"
+                                        : "인증번호 발송"}
+                                </button>
+                            )}
+                        </div>
                     </div>
+
+                    {/* 인증번호 입력 (발송 후 표시) */}
+                    {verifyStep === "sent" && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">인증번호</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={verifyCode}
+                                    onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                    placeholder="6자리 숫자"
+                                    maxLength={6}
+                                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-center tracking-[0.3em] font-mono focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyCode}
+                                    disabled={verifyCode.length < 6 || verifyLoading}
+                                    className="px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                >
+                                    {verifyLoading ? "확인 중..." : "확인"}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 인증 상태 메시지 */}
+                    {verifyMsg && (
+                        <div className={`px-3 py-2 rounded-lg text-xs font-medium ${
+                            verifyMsg.ok
+                                ? "bg-green-50 text-green-700 border border-green-200"
+                                : "bg-red-50 text-red-700 border border-red-200"
+                        }`}>
+                            {verifyMsg.text}
+                        </div>
+                    )}
+
                     {/* 역할 */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">역할 *</label>
@@ -367,7 +524,7 @@ function AddStaffModal({
                         </button>
                         <button
                             type="submit"
-                            disabled={isPending || !form.email || !form.name}
+                            disabled={isPending || verifyStep !== "verified" || !form.name}
                             className="px-4 py-2.5 text-sm font-medium text-white bg-brand-navy-900 rounded-lg hover:bg-brand-navy-800 transition-colors disabled:opacity-50"
                         >
                             {isPending ? "추가 중..." : "추가"}

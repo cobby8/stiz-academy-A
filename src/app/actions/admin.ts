@@ -4020,35 +4020,49 @@ export async function ensureStaffColumns() {
 
 /**
  * createStaffUser — 신규 스태프 생성 (requireOwner: ADMIN만)
- * Supabase Auth에 계정을 만들지 않고, User 테이블에만 레코드 생성
- * (로그인이 필요하면 별도로 Supabase Auth invite를 보내야 함)
+ *
+ * 전화번호 기반 인증 후 호출된다.
+ * - phone 필수, email은 자동 생성 (phone@staff.local)
+ * - Supabase Auth 계정 없이 User 테이블에만 레코드 생성
  */
 export async function createStaffUser(data: {
-    email: string;
     name: string;
-    phone?: string;
+    phone: string; // 필수 — 인증 완료된 전화번호
     role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
 }) {
     await requireOwner();
     await ensureStaffColumns();
 
+    // 전화번호에서 하이픈 제거 후 이메일 자동 생성
+    const cleanPhone = data.phone.replace(/-/g, "");
+    const autoEmail = `${cleanPhone}@staff.local`;
+
     try {
-        // 이메일 중복 확인
-        const existing = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
-            data.email,
+        // 전화번호 중복 확인 (같은 번호로 이미 등록된 스태프가 있는지)
+        const existingPhone = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE phone = $1 LIMIT 1`,
+            cleanPhone,
         );
-        if (existing.length > 0) {
-            throw new Error("이미 등록된 이메일입니다.");
+        if (existingPhone.length > 0) {
+            throw new Error("이미 등록된 전화번호입니다.");
         }
 
-        // User 레코드 생성
+        // 자동생성 이메일 중복 확인 (혹시 모를 충돌 방지)
+        const existingEmail = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
+            autoEmail,
+        );
+        if (existingEmail.length > 0) {
+            throw new Error("이미 등록된 전화번호입니다.");
+        }
+
+        // User 레코드 생성 — email은 phone@staff.local 자동 생성
         await prisma.$executeRawUnsafe(
             `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
              VALUES (gen_random_uuid(), $1, $2, $3, $4::"Role", NOW(), NOW())`,
-            data.email,
+            autoEmail,
             data.name,
-            data.phone || null,
+            cleanPhone,
             data.role,
         );
     } catch (e) {

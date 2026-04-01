@@ -173,6 +173,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
 
         // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
         // 템플릿 기반 SMS: TRIAL_NEW_ADMIN(관리자), TRIAL_NEW_COACH(코치)
+        // slotKeys: 희망 슬롯이 있으면 해당 슬롯 담당 코치에게만 SMS 발송
         notifyAdmins(
             "TRIAL_APPLICATION",
             "새 체험수업 신청",
@@ -182,6 +183,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
                 adminTrigger: "TRIAL_NEW_ADMIN",
                 coachTrigger: "TRIAL_NEW_COACH",
                 variables: smsVars,
+                slotKeys: data.preferredSlotKey ? [data.preferredSlotKey] : undefined,
             },
         ).catch(() => {});
 
@@ -402,6 +404,10 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
 
         // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
         // 템플릿 기반 SMS: ENROLL_NEW_ADMIN(관리자), ENROLL_NEW_COACH(코치)
+        // slotKeys: 희망 슬롯이 있으면 해당 슬롯 담당 코치에게만 SMS 발송
+        const enrollSlotKeys = data.preferredSlotKeys
+            ? data.preferredSlotKeys.split(",").map(k => k.trim()).filter(Boolean)
+            : undefined;
         notifyAdmins(
             "ENROLL_APPLICATION",
             "새 수강 신청",
@@ -411,6 +417,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                 adminTrigger: "ENROLL_NEW_ADMIN",
                 coachTrigger: "ENROLL_NEW_COACH",
                 variables: smsVars,
+                slotKeys: enrollSlotKeys,
             },
         ).catch(() => {});
 

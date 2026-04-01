@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
     createNotificationRecord,
+    notifyAdmins,
     notifyParentsOfStudents,
     notifyAllParents,
     sendParentSms,
@@ -2920,13 +2921,15 @@ export async function updateTrialLead(
                 const scheduledDate = lead.scheduledDate ?? lead.scheduleddate;
                 const classId = lead.scheduledClassId ?? lead.scheduledclassid;
 
-                // 배정 반 이름 조회
+                // 배정 반 이름 + slotKey 조회 (담당 코치 SMS용)
                 let className = "";
+                let classSlotKey: string | null = null;
                 if (classId) {
                     const cls = await prisma.$queryRawUnsafe<any[]>(
-                        `SELECT name FROM "Class" WHERE id = $1 LIMIT 1`, classId,
+                        `SELECT name, "slotKey" FROM "Class" WHERE id = $1 LIMIT 1`, classId,
                     );
                     className = cls[0]?.name || "";
+                    classSlotKey = cls[0]?.slotKey ?? cls[0]?.slotkey ?? null;
                 }
 
                 // 학원 전화번호 조회
@@ -2948,6 +2951,19 @@ export async function updateTrialLead(
                         academyPhone,
                     }).catch(() => {});
                 }
+
+                // 담당 코치에게 체험 일정 확정 알림 SMS (slotKey 기반)
+                notifyAdmins(
+                    "TRIAL_APPLICATION",
+                    "체험수업 일정 확정",
+                    `${childName || ""} — ${className} (${dateStr})`,
+                    "/admin/trial",
+                    {
+                        coachTrigger: "TRIAL_NEW_COACH",
+                        variables: { childName: childName || "", childGrade: "", parentName: "" },
+                        slotKeys: classSlotKey ? [classSlotKey] : undefined,
+                    },
+                ).catch(() => {});
             }
         }
     } catch (e) {
@@ -3703,15 +3719,22 @@ export async function approveEnrollApplication(
             const childName = a.childName ?? a.childname;
             const assignedClassId = a.assignedClassId ?? a.assignedclassid;
 
-            // 배정 반 이름 조회
+            // 배정 반 이름 + slotKey 조회 (담당 코치 SMS용)
             let className = "";
+            const approvedSlotKeys: string[] = [];
             if (assignedClassId) {
-                // assignedClassId는 콤마 구분 가능 — 첫 번째 반 이름만 사용
-                const firstClassId = assignedClassId.split(",")[0];
-                const cls = await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT name FROM "Class" WHERE id = $1 LIMIT 1`, firstClassId,
-                );
-                className = cls[0]?.name || "";
+                // assignedClassId는 콤마 구분 가능 — 모든 반의 이름과 slotKey 조회
+                const classIds = assignedClassId.split(",").map((s: string) => s.trim()).filter(Boolean);
+                for (const cid of classIds) {
+                    const cls = await prisma.$queryRawUnsafe<any[]>(
+                        `SELECT name, "slotKey" FROM "Class" WHERE id = $1 LIMIT 1`, cid,
+                    );
+                    if (cls[0]) {
+                        if (!className) className = cls[0].name || "";
+                        const sk = cls[0].slotKey ?? cls[0].slotkey;
+                        if (sk) approvedSlotKeys.push(sk);
+                    }
+                }
             }
 
             // 학원 전화번호 조회
@@ -3727,6 +3750,19 @@ export async function approveEnrollApplication(
                     academyPhone,
                 }).catch(() => {});
             }
+
+            // 담당 코치에게 수강 확정 알림 SMS (slotKey 기반)
+            notifyAdmins(
+                "ENROLL_APPLICATION",
+                "수강 신청 승인",
+                `${childName || ""} — ${className}`,
+                "/admin/apply",
+                {
+                    coachTrigger: "ENROLL_NEW_COACH",
+                    variables: { childName: childName || "", childGrade: "", parentName: "" },
+                    slotKeys: approvedSlotKeys.length > 0 ? approvedSlotKeys : undefined,
+                },
+            ).catch(() => {});
         }
     } catch (e) {
         // SMS 실패가 승인 처리를 막으면 안 됨

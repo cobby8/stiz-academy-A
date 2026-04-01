@@ -10,6 +10,56 @@ import { sendPushToUser } from "@/lib/pushNotification";
 import { sendSms } from "@/lib/sms";
 import { renderSmsTemplate } from "@/lib/smsTemplate";
 
+// ── 슬롯 → 담당 코치 전화번호 조회 ─────────────────────────────────────────
+// slotKey 배열로 해당 슬롯에 배정된 코치의 phone을 조회한다.
+// ClassSlotOverride(기본 슬롯)와 CustomClassSlot(커스텀 슬롯) 양쪽 모두 확인.
+// phone이 있는 코치만 반환하며, 중복 번호는 제거한다.
+async function getCoachPhonesBySlotKeys(slotKeys: string[]): Promise<string[]> {
+    if (slotKeys.length === 0) return [];
+
+    try {
+        const phones = new Set<string>();
+
+        // 1) ClassSlotOverride에서 slotKey로 코치 조회
+        // slotKey가 "Mon-4" 같은 기본 슬롯인 경우
+        const placeholders1 = slotKeys.map((_, i) => `$${i + 1}`).join(",");
+        const overrideCoaches = await prisma.$queryRawUnsafe<{ phone: string }[]>(
+            `SELECT DISTINCT c.phone
+             FROM "ClassSlotOverride" o
+             JOIN "Coach" c ON c.id = o."coachId"
+             WHERE o."slotKey" IN (${placeholders1})
+               AND c.phone IS NOT NULL AND c.phone != ''`,
+            ...slotKeys,
+        );
+        for (const row of overrideCoaches) {
+            if (row.phone) phones.add(row.phone);
+        }
+
+        // 2) CustomClassSlot에서 id로 코치 조회
+        // slotKey가 "custom-uuid" 형태인 경우 CustomClassSlot.id로 매칭
+        const customKeys = slotKeys.filter(k => k.startsWith("custom-"));
+        if (customKeys.length > 0) {
+            const placeholders2 = customKeys.map((_, i) => `$${i + 1}`).join(",");
+            const customCoaches = await prisma.$queryRawUnsafe<{ phone: string }[]>(
+                `SELECT DISTINCT c.phone
+                 FROM "CustomClassSlot" cs
+                 JOIN "Coach" c ON c.id = cs."coachId"
+                 WHERE cs.id IN (${placeholders2})
+                   AND c.phone IS NOT NULL AND c.phone != ''`,
+                ...customKeys,
+            );
+            for (const row of customCoaches) {
+                if (row.phone) phones.add(row.phone);
+            }
+        }
+
+        return Array.from(phones);
+    } catch (e) {
+        console.error("[getCoachPhonesBySlotKeys] failed:", e);
+        return [];
+    }
+}
+
 // ── DB 인앱 알림 생성 + 푸시 발송 ───────────────────────────────────────────
 // Notification 테이블에 레코드 저장 후, 해당 사용자에게 웹 Push도 전송
 export async function createNotificationRecord(data: {
@@ -53,6 +103,7 @@ export async function notifyAdmins(
         adminTrigger?: string;      // 관리자용 SMS 템플릿 트리거
         coachTrigger?: string;      // 코치용 SMS 템플릿 트리거
         variables?: Record<string, string>; // 템플릿 변수
+        slotKeys?: string[];        // 해당 슬롯 키 — 있으면 담당 코치에게만 SMS, 없으면 전체 코치
     },
 ) {
     try {
@@ -85,10 +136,18 @@ export async function notifyAdmins(
             }
         }
 
-        // Coach 중 phone이 있는 코치에게도 SMS 발송 (User 계정이 없으므로 인앱 알림은 불가)
-        const coaches = await prisma.$queryRawUnsafe<{ phone: string }[]>(
-            `SELECT phone FROM "Coach" WHERE phone IS NOT NULL AND phone != ''`
-        );
+        // Coach SMS 발송: slotKeys가 있으면 해당 슬롯 담당 코치에게만, 없으면 전체 코치에게
+        let coachPhones: string[];
+        if (smsOptions?.slotKeys && smsOptions.slotKeys.length > 0) {
+            // 슬롯에 배정된 담당 코치의 전화번호만 조회
+            coachPhones = await getCoachPhonesBySlotKeys(smsOptions.slotKeys);
+        } else {
+            // 전체 코치에게 발송 (기존 동작)
+            const coaches = await prisma.$queryRawUnsafe<{ phone: string }[]>(
+                `SELECT phone FROM "Coach" WHERE phone IS NOT NULL AND phone != ''`
+            );
+            coachPhones = coaches.map(c => c.phone).filter(Boolean);
+        }
 
         // 코치용 SMS 메시지 결정
         let coachSmsMsg: string | null = null;
@@ -99,9 +158,9 @@ export async function notifyAdmins(
 
         // ADMIN 사용자 phone과 중복되는 번호는 제외 (같은 번호로 두 번 발송 방지)
         const adminPhones = new Set(admins.map(a => a.phone).filter(Boolean));
-        for (const coach of coaches) {
-            if (coach.phone && !adminPhones.has(coach.phone)) {
-                sendSms(coach.phone, coachSmsMsg || coachFallback).catch(() => {});
+        for (const phone of coachPhones) {
+            if (phone && !adminPhones.has(phone)) {
+                sendSms(phone, coachSmsMsg || coachFallback).catch(() => {});
             }
         }
     } catch (e) {

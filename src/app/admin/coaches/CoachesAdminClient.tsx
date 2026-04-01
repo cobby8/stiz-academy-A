@@ -187,13 +187,22 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
             try {
                 let imageUrl = editForm.imageUrl;
                 if (editForm.imageFile) imageUrl = await uploadImage(editForm.imageFile);
-                await updateCoach(id, {
+                const updatedData = {
                     name: editForm.name.trim(),
                     role: editForm.role.trim(),
                     description: editForm.description.trim() || undefined,
                     phone: editForm.phone.trim() || undefined,
                     imageUrl: imageUrl.trim() || undefined,
-                });
+                };
+                await updateCoach(id, updatedData);
+                // 로컬 상태도 즉시 업데이트 (새로고침 없이 바로 반영)
+                setCoaches((prev) => prev.map((c) => c.id === id ? {
+                    ...c,
+                    ...updatedData,
+                    description: updatedData.description || null,
+                    phone: updatedData.phone || null,
+                    imageUrl: updatedData.imageUrl || null,
+                } : c));
                 setEditId(null);
                 router.refresh();
             } catch (e: any) {

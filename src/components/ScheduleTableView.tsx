@@ -128,18 +128,12 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
                                                                 {slot.gradeRange}
                                                             </p>
                                                         )}
-                                                        {/* 인원 / 정원 — 잔여석 색상 배지 */}
-                                                        <div className="flex items-center gap-1.5 mb-1">
-                                                            <span className="material-symbols-outlined text-gray-400" style={{ fontSize: "14px" }}>
-                                                                group
-                                                            </span>
-                                                            <span className="text-xs text-gray-600">
-                                                                {slot.enrolled}/{slot.capacity}
-                                                            </span>
-                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${remainColor(remaining)}`}>
-                                                                {remainLabel(remaining)}
-                                                            </span>
-                                                        </div>
+                                                        {/* 마감 표시 — 꽉 찼을 때만 */}
+                                                        {remaining <= 0 && (
+                                                            <div className="mb-1">
+                                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">마감</span>
+                                                            </div>
+                                                        )}
                                                         {/* 코치명 — 있을 때만 표시 */}
                                                         {slot.coach && (
                                                             <div className="flex items-center gap-1">

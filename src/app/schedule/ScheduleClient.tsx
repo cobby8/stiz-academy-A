@@ -97,63 +97,6 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                             </a>
                         ))}
 
-                        {/* 뷰 모드 토글 — 카드/표 전환 버튼 (우측 끝에 배치) */}
-                        <div className="shrink-0 ml-auto flex rounded-full border border-gray-200 overflow-hidden">
-                            <button
-                                onClick={() => setViewMode("card")}
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
-                                    viewMode === "card"
-                                        ? "bg-brand-navy-900 text-white"
-                                        : "bg-white text-gray-500 hover:bg-gray-50"
-                                }`}
-                            >
-                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>grid_view</span>
-                                카드
-                            </button>
-                            <button
-                                onClick={() => setViewMode("table")}
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
-                                    viewMode === "table"
-                                        ? "bg-brand-navy-900 text-white"
-                                        : "bg-white text-gray-500 hover:bg-gray-50"
-                                }`}
-                            >
-                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>table_chart</span>
-                                표
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 프로그램 필터 탭이 없을 때에도 뷰 토글 표시 */}
-            {programs.length === 0 && (
-                <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
-                    <div className="max-w-6xl mx-auto px-4 py-3 flex justify-end">
-                        <div className="shrink-0 flex rounded-full border border-gray-200 overflow-hidden">
-                            <button
-                                onClick={() => setViewMode("card")}
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
-                                    viewMode === "card"
-                                        ? "bg-brand-navy-900 text-white"
-                                        : "bg-white text-gray-500 hover:bg-gray-50"
-                                }`}
-                            >
-                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>grid_view</span>
-                                카드
-                            </button>
-                            <button
-                                onClick={() => setViewMode("table")}
-                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold transition-colors ${
-                                    viewMode === "table"
-                                        ? "bg-brand-navy-900 text-white"
-                                        : "bg-white text-gray-500 hover:bg-gray-50"
-                                }`}
-                            >
-                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>table_chart</span>
-                                표
-                            </button>
-                        </div>
                     </div>
                 </div>
             )}
@@ -161,6 +104,34 @@ function ScheduleFilter({ programs, allSlots, phone }: {
             {/* 시간표 그리드 — 배경색을 따뜻한 톤으로 변경 */}
             <section className="py-16 md:py-20 bg-surface-section">
                 <div className="max-w-6xl mx-auto px-4">
+                    {/* 뷰 토글 — 수업 카드 영역 오른쪽 위 */}
+                    <div className="flex justify-end mb-4">
+                        <div className="flex rounded-full border border-gray-200 overflow-hidden shadow-sm">
+                            <button
+                                onClick={() => setViewMode("card")}
+                                className={`flex items-center gap-1 px-4 py-2 text-xs font-bold transition-colors ${
+                                    viewMode === "card"
+                                        ? "bg-brand-navy-900 text-white"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>grid_view</span>
+                                카드
+                            </button>
+                            <button
+                                onClick={() => setViewMode("table")}
+                                className={`flex items-center gap-1 px-4 py-2 text-xs font-bold transition-colors ${
+                                    viewMode === "table"
+                                        ? "bg-brand-navy-900 text-white"
+                                        : "bg-white text-gray-500 hover:bg-gray-50"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>table_chart</span>
+                                표
+                            </button>
+                        </div>
+                    </div>
+
                     {/* 프로그램 필터 표시 배너 — 선택 시 상단에 안내 */}
                     {filterProgramId && selectedProgram && (
                         <div className="mb-6 bg-white border border-gray-100 rounded-2xl px-6 py-4 flex items-center justify-between gap-4 shadow-sm">
@@ -220,20 +191,12 @@ function ScheduleFilter({ programs, allSlots, phone }: {
                                                                     <span>{slot.gradeRange}</span>
                                                                 </div>
                                                             )}
-                                                            {/* 정원 프로그레스 바 — 마감/마감임박/여유 3단계 */}
-                                                            <div className="mt-2.5 pt-2 border-t border-gray-50 flex items-center gap-2">
-                                                                {slot.isFull ? (
-                                                                    <span className="shrink-0 text-xs bg-red-500 text-white font-black px-2 py-0.5 rounded-full">마감</span>
-                                                                ) : slot.enrolled > 10 ? (
-                                                                    <span className="shrink-0 text-xs bg-brand-orange-500 text-white font-black px-2 py-0.5 rounded-full">마감임박</span>
-                                                                ) : null}
-                                                                <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                                                    <div
-                                                                        className={`h-full rounded-full transition-all ${slot.isFull ? "bg-red-400" : slot.enrolled > 10 ? "bg-brand-orange-500" : "bg-green-400"}`}
-                                                                        style={{ width: `${Math.min(100, (slot.enrolled / slot.capacity) * 100)}%` }}
-                                                                    />
+                                                            {/* 마감 표시 — 꽉 찼을 때만 */}
+                                                            {slot.isFull && (
+                                                                <div className="mt-2.5 pt-2 border-t border-gray-50">
+                                                                    <span className="text-xs bg-red-500 text-white font-black px-2 py-0.5 rounded-full">마감</span>
                                                                 </div>
-                                                            </div>
+                                                            )}
                                                             {/* 메모 — 있을 때만 표시 */}
                                                             {slot.note && (
                                                                 <p className="text-sm text-brand-orange-600 mt-2 font-medium">📌 {slot.note}</p>

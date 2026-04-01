@@ -10,6 +10,60 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { ensureTrialLeadTable } from "@/app/actions/admin";
 
+// ── EnrollmentApplication DDL ensure (idempotent) ───────────────────────────
+// 테이블이 없으면 자동으로 생성 — DB push 없이도 동작하도록
+let _enrollTableEnsured = false;
+async function ensureEnrollmentApplicationTable() {
+    if (_enrollTableEnsured) return;
+    try {
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "EnrollmentApplication" (
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                "trialLeadId" TEXT,
+                "childName" TEXT NOT NULL,
+                "childBirthDate" TIMESTAMPTZ NOT NULL,
+                "childGender" TEXT,
+                "childGrade" TEXT,
+                "childSchool" TEXT,
+                "childPhone" TEXT,
+                "parentName" TEXT NOT NULL,
+                "parentPhone" TEXT NOT NULL,
+                "parentRelation" TEXT,
+                address TEXT,
+                "preferredSlotKeys" TEXT,
+                "assignedClassId" TEXT,
+                "uniformSize" TEXT,
+                "shuttleNeeded" BOOLEAN DEFAULT false,
+                "shuttlePickup" TEXT,
+                "paymentMethod" TEXT,
+                "referralSource" TEXT,
+                memo TEXT,
+                "agreedTerms" BOOLEAN DEFAULT false,
+                "agreedPrivacy" BOOLEAN DEFAULT false,
+                status TEXT DEFAULT 'PENDING',
+                "processedAt" TIMESTAMPTZ,
+                "processedNote" TEXT,
+                "convertedStudentId" TEXT,
+                "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+                "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+        // 인덱스 생성 (상태별/trialLeadId/생성일 필터 최적화)
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "EnrollmentApplication_status_idx" ON "EnrollmentApplication" (status)`
+        );
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "EnrollmentApplication_trialLeadId_idx" ON "EnrollmentApplication" ("trialLeadId")`
+        );
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "EnrollmentApplication_createdAt_idx" ON "EnrollmentApplication" ("createdAt")`
+        );
+    } catch (e) {
+        console.warn("[DDL] EnrollmentApplication ensure failed:", (e as Error).message);
+    }
+    _enrollTableEnsured = true;
+}
+
 // ── 체험수업 신청 입력 타입 ──────────────────────────────────────────────────
 interface TrialApplicationInput {
     childName: string;
@@ -181,5 +235,188 @@ export async function getAvailableTrialSlots(): Promise<AvailableSlot[]> {
     } catch (e) {
         console.error("[getAvailableTrialSlots] failed:", e);
         return [];
+    }
+}
+
+// ── 수강 신청 입력 타입 ──────────────────────────────────────────────────────
+interface EnrollApplicationInput {
+    trialLeadId?: string;        // 체험 거친 경우 TrialLead ID
+    childName: string;
+    childBirthDate: string;      // ISO 문자열 "2018-05-15"
+    childGender?: string;
+    childGrade?: string;
+    childSchool?: string;
+    childPhone?: string;
+    parentName: string;
+    parentPhone: string;
+    parentRelation?: string;
+    address?: string;
+    preferredSlotKeys?: string;  // 콤마 구분 "Mon-4,Wed-6"
+    uniformSize?: string;
+    shuttleNeeded?: boolean;
+    shuttlePickup?: string;
+    paymentMethod?: string;
+    referralSource?: string;
+    memo?: string;
+    agreedTerms: boolean;
+    agreedPrivacy: boolean;
+    honeypot?: string;           // 스팸 방지용 — 빈값이어야 정상
+}
+
+/**
+ * submitEnrollApplication — 수강 신청 (공개, 비로그인)
+ *
+ * 검증 사항:
+ * 1. honeypot 필드가 비어있어야 함 (스팸봇 차단)
+ * 2. 이름, 생년월일, 보호자이름, 전화번호 필수
+ * 3. 약관 동의 필수
+ * 4. trialLeadId가 있으면 해당 TrialLead 존재 여부 확인
+ */
+export async function submitEnrollApplication(data: EnrollApplicationInput) {
+    // 스팸봇 차단: honeypot 필드에 값이 있으면 봇으로 판단
+    if (data.honeypot) {
+        return { success: true, id: "ok" };
+    }
+
+    // 필수값 검증
+    const childName = data.childName?.trim();
+    const parentName = data.parentName?.trim();
+    const parentPhone = data.parentPhone?.trim();
+
+    if (!childName) throw new Error("아이 이름을 입력해주세요.");
+    if (!data.childBirthDate) throw new Error("아이 생년월일을 입력해주세요.");
+    if (!parentName) throw new Error("보호자 이름을 입력해주세요.");
+    if (!parentPhone) throw new Error("보호자 연락처를 입력해주세요.");
+    if (!data.agreedTerms || !data.agreedPrivacy) {
+        throw new Error("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
+    }
+
+    // 전화번호 형식 검증
+    const phoneDigits = parentPhone.replace(/\D/g, "");
+    if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+        throw new Error("올바른 전화번호를 입력해주세요.");
+    }
+
+    // DDL ensure — 테이블이 없으면 자동 생성
+    await ensureEnrollmentApplicationTable();
+
+    // trialLeadId가 있으면 존재 여부 확인
+    if (data.trialLeadId) {
+        try {
+            const lead = await prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM "TrialLead" WHERE id = $1 LIMIT 1`,
+                data.trialLeadId
+            );
+            if (lead.length === 0) {
+                // 존재하지 않는 trialLeadId는 null로 처리 (에러 대신 무시)
+                data.trialLeadId = undefined;
+            }
+        } catch {
+            data.trialLeadId = undefined;
+        }
+    }
+
+    try {
+        // EnrollmentApplication INSERT — status='PENDING'으로 생성
+        const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+            `INSERT INTO "EnrollmentApplication" (
+                id, "trialLeadId",
+                "childName", "childBirthDate", "childGender", "childGrade", "childSchool", "childPhone",
+                "parentName", "parentPhone", "parentRelation", address,
+                "preferredSlotKeys", "uniformSize", "shuttleNeeded", "shuttlePickup",
+                "paymentMethod", "referralSource", memo,
+                "agreedTerms", "agreedPrivacy",
+                status, "createdAt", "updatedAt"
+            ) VALUES (
+                gen_random_uuid()::text, $1,
+                $2, $3::timestamptz, $4, $5, $6, $7,
+                $8, $9, $10, $11,
+                $12, $13, $14, $15,
+                $16, $17, $18,
+                $19, $20,
+                'PENDING', NOW(), NOW()
+            ) RETURNING id`,
+            data.trialLeadId || null,
+            childName,
+            data.childBirthDate,
+            data.childGender || null,
+            data.childGrade || null,
+            data.childSchool || null,
+            data.childPhone || null,
+            parentName,
+            normalizePhone(parentPhone),
+            data.parentRelation || null,
+            data.address?.trim() || null,
+            data.preferredSlotKeys || null,
+            data.uniformSize || null,
+            data.shuttleNeeded || false,
+            data.shuttlePickup?.trim() || null,
+            data.paymentMethod || null,
+            data.referralSource || null,
+            data.memo?.trim() || null,
+            data.agreedTerms,
+            data.agreedPrivacy,
+        );
+
+        // 관리자 페이지 캐시 무효화
+        revalidatePath("/admin");
+
+        return { success: true, id: rows[0]?.id || "ok" };
+    } catch (e) {
+        console.error("[submitEnrollApplication] failed:", e);
+        throw new Error("수강 신청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    }
+}
+
+// ── 체험 데이터 자동 채움용 타입 ─────────────────────────────────────────────
+export interface TrialLeadForEnroll {
+    childName: string;
+    childBirthDate: string | null;
+    childGrade: string | null;
+    childGender: string | null;
+    parentName: string;
+    parentPhone: string;
+    source: string;
+}
+
+/**
+ * getTrialLeadForEnroll — 체험 거친 사람의 데이터를 수강 폼에 자동 채움
+ *
+ * 공개용이므로 관리자 메모 등 민감 정보는 제외하고
+ * 이름, 생년월일, 학년, 성별, 보호자 정보만 반환
+ */
+export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadForEnroll | null> {
+    if (!trialId) return null;
+
+    try {
+        // TrialLead 테이블이 존재하는지 먼저 확인
+        await ensureTrialLeadTable();
+
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT "childName", "childBirthDate", "childGrade", "childGender",
+                    "parentName", "parentPhone", source
+             FROM "TrialLead"
+             WHERE id = $1
+             LIMIT 1`,
+            trialId
+        );
+
+        if (rows.length === 0) return null;
+
+        const r = rows[0];
+        return {
+            childName: r.childName ?? r.childname ?? "",
+            childBirthDate: r.childBirthDate ?? r.childbirthdate
+                ? new Date(r.childBirthDate ?? r.childbirthdate).toISOString().split("T")[0]
+                : null,
+            childGrade: r.childGrade ?? r.childgrade ?? null,
+            childGender: r.childGender ?? r.childgender ?? null,
+            parentName: r.parentName ?? r.parentname ?? "",
+            parentPhone: r.parentPhone ?? r.parentphone ?? "",
+            source: r.source ?? "WEBSITE",
+        };
+    } catch (e) {
+        console.error("[getTrialLeadForEnroll] failed:", e);
+        return null;
     }
 }

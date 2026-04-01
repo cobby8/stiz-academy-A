@@ -520,6 +520,49 @@ model SkillRecord {
   @@index([assessedAt])
 }
 
+// 수강 신청서 — 구글폼 대신 자체 수강 신청 접수 (Phase B)
+model EnrollmentApplication {
+  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  trialLeadId         String?   // TrialLead 연결 (체험 거친 경우, null=직접 수강)
+  // 아이 정보
+  childName           String
+  childBirthDate      DateTime  @db.Timestamptz(6)
+  childGender         String?
+  childGrade          String?
+  childSchool         String?
+  childPhone          String?
+  // 보호자 정보
+  parentName          String
+  parentPhone         String
+  parentRelation      String?   // 부/모/기타
+  address             String?
+  // 수강 정보
+  preferredSlotKeys   String?   // 콤마 구분 "Mon-4,Wed-6"
+  assignedClassId     String?   // 관리자 배정 반
+  // 부가 정보
+  uniformSize         String?
+  shuttleNeeded       Boolean   @default(false)
+  shuttlePickup       String?
+  paymentMethod       String?
+  referralSource      String?
+  memo                String?
+  // 동의
+  agreedTerms         Boolean   @default(false)
+  agreedPrivacy       Boolean   @default(false)
+  // 처리 상태
+  status              String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  processedAt         DateTime? @db.Timestamptz(6)
+  processedNote       String?
+  convertedStudentId  String?
+  // 타임스탬프
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status])
+  @@index([trialLeadId])
+  @@index([createdAt])
+}
+
 enum Role {
   ADMIN
   INSTRUCTOR

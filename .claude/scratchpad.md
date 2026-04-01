@@ -1,38 +1,36 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: Phase A — 체험수업 신청 자체화 (구글폼 탈피)
-- **상태**: developer 실행 완료
-- **현재 담당**: PM 확인
+- **요청**: Phase B — 수강 신청 자체화 (구글폼 탈피, 체험 데이터 자동 채움)
+- **상태**: developer 구현 완료
+- **현재 담당**: tester/PM 확인
 - **마지막 세션**: 2026-03-29
 
-### 리뷰 결과 (reviewer)
+### 리뷰 결과 (reviewer) — Phase B 수강 신청 자체화
 
-종합 판정: 수정 필요 (minor — 보안 1건 필수, 나머지 권장)
+종합 판정: APPROVE (필수 수정 0건, 권장 수정 3건)
 
 잘된 점:
-- public.ts와 admin.ts를 분리하여 인증이 필요 없는 공개 Action을 명확히 구분한 설계가 좋다.
-- honeypot 스팸 방지 + 전화번호 정규화 + 클라이언트/서버 이중 검증이 잘 되어 있다.
-- 3단계 스텝 폼 UX가 깔끔하다. Step3에서 입력 정보 요약을 보여주는 것이 좋다.
-- $queryRawUnsafe 패턴 준수, Material Symbols 아이콘 통일, 시간표 슬롯 그리드 정상 구현.
-- TrialCrmClient에 SOURCE_LABELS 확장(FLYER, PASSBY)이 잘 되어 있다.
-- NavItem badge prop 추가가 깔끔하다. null/0 체크도 정확하다.
-
-필수 수정:
-- [src/app/api/admin/trial-count/route.ts] 인증 가드 누락. /api/admin/* 경로인데 requireAdmin() 없이 누구나 접근 가능하다. 민감 정보는 아니지만(건수만 반환), 프로젝트 convention(Server Action 인증 가드 패턴)에 따라 관리자 API는 인증을 거쳐야 한다. Supabase 세션 검증 또는 최소한 미들웨어에서 보호되는지 확인 필요. 사이드바에서만 호출하므로 관리자 로그인 상태에서만 접근 가능해야 한다.
+- Phase A 체험 폼과 동일한 아키텍처 패턴(honeypot, 전화번호 정규화, 클라이언트/서버 이중 검증, $queryRawUnsafe + 파라미터 바인딩)을 일관되게 적용했다. 코드 일관성이 높다.
+- 4단계 스텝 폼이 논리적으로 잘 나뉘어있다. Step4 요약에서 선택사항은 값이 있을 때만 표시하는 조건부 렌더링이 깔끔하다.
+- trialLeadId 보안 처리가 잘 되어있다: (1) 서버에서 존재 여부를 SELECT로 확인, (2) 없으면 에러 대신 null로 무시 처리, (3) 반환하는 데이터(getTrialLeadForEnroll)에서 memo/status 등 관리자 전용 필드를 제외하고 이름/생년월일/학년/성별/보호자 정보만 반환.
+- EnrollmentApplication DDL ensure 패턴이 Phase A와 동일하게 적용되어 DB push 없이도 동작한다.
+- 모든 아이콘이 Material Symbols Outlined로 통일되어 있다 (child_care, person, sports_basketball, verified, check_circle, home, arrow_back, arrow_forward, how_to_reg, expand_more, auto_fix_high, check, error, progress_activity).
+- ApplyPageClient에서 체험수업/수강신청 모두 자체 폼으로 전환하면서 유니폼만 구글폼 모달로 유지한 판단이 적절하다.
+- 수강 신청 폼에서 복수 슬롯 선택(preferredSlotKeys 배열)이 체험 폼(단일 선택)과 차별화되어 있어 실제 수강 배정에 유용하다.
+- revalidate=60으로 설정한 것이 적절하다 (공개 페이지이지만 수강 신청은 체험보다 빈자리 정보가 더 중요하므로 5분보다 짧은 1분).
 
 권장 수정:
-- [src/app/actions/public.ts:78-105] INSERT 쿼리에서 $queryRawUnsafe + 파라미터 바인딩($1~$13)을 사용하고 있어 SQL 인젝션은 안전하다. 다만 source 필드(line 102)에 사용자 입력값이 직접 들어가는데, 클라이언트에서 SELECT 옵션으로 제한하고 있지만 서버에서도 화이트리스트 검증을 추가하면 더 안전하다. (예: ["WEBSITE","NAVER","REFERRAL","FLYER","PASSBY","OTHER"].includes(data.source) || "WEBSITE")
-- [src/app/actions/public.ts:93] childAge에 childGrade를 저장하는 주석 "기존 호환"이 있다. 향후 childAge를 별도로 계산하거나 제거하는 정리가 필요해 보인다. 지금은 동작에 문제없다.
-- [src/app/actions/public.ts:48] rate limiting이 없다. developer가 언급했듯이 현재는 honeypot만 적용. 프로덕션 트래픽이 늘면 IP 기반 또는 시간 기반 rate limit 추가를 검토해야 한다. (Phase B 이후 고려)
-- [src/app/apply/trial/TrialApplicationForm.tsx:517-526] honeypot div가 absolute 위치인데 부모가 relative가 아니면 예상치 못한 위치에 렌더링될 수 있다. left[-9999px]로 화면 밖에 보내고 있어 실질적 문제는 없지만, display:none 대신 이 방식을 선택한 건 봇이 display:none을 감지하기 때문으로 올바른 접근이다.
-- [src/app/admin/layout.tsx:8] LogOut 아이콘이 lucide-react에서 import되고 있다. conventions.md에 "Material Symbols Outlined 아이콘 사용, lucide-react 금지"로 되어 있으나 이건 Phase A 범위가 아니라 기존 코드이므로 별도 정리 과제로 남겨둔다.
+- [src/app/actions/public.ts:355] referralSource 필드에 사용자 입력값이 $queryRawUnsafe 파라미터 바인딩으로 들어가므로 SQL 인젝션은 안전하다. 다만 Phase A 리뷰에서도 지적한 것처럼 source/referralSource 값을 서버에서 화이트리스트 검증하면 더 견고하다. 클라이언트 SELECT 옵션 외의 값이 들어올 가능성은 낮지만, curl 등으로 직접 Server Action 호출 시 임의 문자열이 DB에 저장될 수 있다.
+- [src/app/actions/public.ts:353] shuttleNeeded가 `data.shuttleNeeded || false`로 처리되는데, boolean 값은 `??` 연산자가 더 정확하다. `||`는 false를 falsy로 처리하므로 현재 로직에서는 문제없지만(`false || false = false`), 의도를 명확히 하려면 `data.shuttleNeeded ?? false`가 낫다.
+- [src/app/apply/enroll/EnrollApplicationForm.tsx:794] honeypot div에 `absolute left-[-9999px]`가 있는데, 부모 요소에 `relative`가 없어 의도와 다른 위치에 렌더링될 수 있다. Phase A 체험 폼과 동일한 패턴이고, left[-9999px]로 화면 밖에 보내므로 실질적 문제는 없다.
 
-수정 요청 테이블:
-| 번호 | 파일 | 심각도 | 내용 | 담당 |
-|------|------|--------|------|------|
-| R-1 | src/app/api/admin/trial-count/route.ts | 필수 | 인증 가드 추가 (requireAdmin 또는 Supabase 세션 검증) | developer |
-| R-2 | src/app/actions/public.ts:102 | 권장 | source 값 서버 화이트리스트 검증 추가 | developer |
+수정 요청 테이블 (Phase A + Phase B 통합):
+| 번호 | 파일 | 심각도 | 내용 | 담당 | 상태 |
+|------|------|--------|------|------|------|
+| R-1 | src/app/api/admin/trial-count/route.ts | 필수 | 인증 가드 추가 (Phase A 리뷰 이월) | developer | 미처리 |
+| R-2 | src/app/actions/public.ts | 권장 | source/referralSource 서버 화이트리스트 검증 (Phase A+B 공통) | developer | 미처리 |
+| R-3 | src/app/actions/public.ts:353 | 권장 | shuttleNeeded: `||` -> `??` 변경 | developer | 미처리 |
 
 ### 구현 기록
 
@@ -64,6 +62,31 @@ reviewer 참고:
 - honeypot 스팸 방지만 적용, rate limit 없음 (필요시 추가)
 - DDL ensure 패턴으로 컬럼 자동 추가 (기존 DB에도 호환)
 
+### 구현 기록 — Phase B 수강 신청 자체화
+
+구현한 기능: Phase B — 수강 신청 자체화 (B-1 ~ B-4 전체)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | EnrollmentApplication 모델 추가 (25개 필드 + 인덱스 3개) | 수정 |
+| src/app/actions/public.ts | ensureEnrollmentApplicationTable DDL ensure + submitEnrollApplication + getTrialLeadForEnroll 추가 | 수정 |
+| src/app/apply/enroll/page.tsx | 수강 신청 서버 컴포넌트 — trialId로 체험 데이터 자동 채움 + 슬롯 + 설정 병렬 조회 | 신규 |
+| src/app/apply/enroll/EnrollApplicationForm.tsx | 4단계 스텝 폼 클라이언트 — 아이정보/보호자/수강정보/확인+동의 | 신규 |
+| src/app/apply/ApplyPageClient.tsx | 수강 카드 버튼을 구글폼 모달에서 /apply/enroll Link로 변경, enroll 모달 제거 | 수정 |
+
+tester 참고:
+- 테스트 방법: /apply/enroll 접속 -> 4단계 폼 작성 -> 제출 -> DB에 EnrollmentApplication 레코드 확인
+- 체험 자동 채움 테스트: /apply/enroll?trialId=<실제ID> -> Step1에 자동 채움 배너 + 이름/생년월일 등 사전 입력됨
+- Step3 시간표 그리드: 복수 선택 가능 (체험 폼은 단일 선택이었음)
+- /apply 페이지에서 수강신청 버튼 클릭 시 /apply/enroll로 이동 (구글폼 모달 X)
+- honeypot + 전화번호 검증 + 이중 동의 체크 동일 패턴
+- DDL ensure로 테이블 자동 생성 (db push 불필요)
+
+reviewer 참고:
+- public.ts에 requireAdmin() 없음 (의도적 — 공개 폼)
+- trialLeadId 검증: 존재하지 않으면 null로 처리 (에러 대신 무시)
+- preferredSlotKeys는 클라이언트에서 배열로 관리, 서버에는 콤마 구분 문자열로 전달
+
 ### 테스트 결과 (tester) — Phase A 체험 신청 자체화
 
 | # | 테스트 항목 | 결과 | 비고 |
@@ -84,6 +107,28 @@ reviewer 참고:
 종합: 12개 중 12개 PASS (1개 WARN)
 
 WARN #9: /api/admin/trial-count에 requireAdmin 인증 없음. 미들웨어가 /admin/* 페이지만 보호, /api/admin/* API는 미보호. 현재 NEW 건수(숫자1개)만 반환하여 민감도 낮으므로 PASS 처리. 추후 /api/admin/* 인증 일괄 적용 권장.
+
+### 테스트 결과 (tester) -- Phase B 수강 신청 자체화
+
+| # | 테스트 항목 | 결과 | 비고 |
+|---|-----------|------|------|
+| 1 | tsc --noEmit | PASS | 타입 에러 0건 |
+| 2 | schema: EnrollmentApplication 모델 | PASS | 25개 필드 + 인덱스 3개(status, trialLeadId, createdAt) 정상 |
+| 3 | public.ts: submitEnrollApplication -- honeypot | PASS | honeypot 값 있으면 { success: true, id: "ok" } 반환 (봇 위장) |
+| 4 | public.ts: submitEnrollApplication -- 필수값 검증 | PASS | childName, childBirthDate, parentName, parentPhone, agreedTerms/Privacy 누락 시 throw |
+| 5 | public.ts: submitEnrollApplication -- $executeRawUnsafe | PASS | $queryRawUnsafe + $1~$20 파라미터 바인딩, 컬럼 23개 = 바인딩 20 + 리터럴 3 일치 |
+| 6 | public.ts: getTrialLeadForEnroll | PASS | trialId=$1 파라미터 바인딩, 없으면 null 반환, 민감정보(memo 등) 제외 |
+| 7 | apply/enroll/page.tsx: trialId 자동채움 | PASS | searchParams.trialId -> getTrialLeadForEnroll 호출, Promise.all 병렬 조회, revalidate=60 |
+| 8 | EnrollApplicationForm: 4단계 스텝 | PASS | Step1(아이정보 6필드) + Step2(보호자 4필드) + Step3(수강정보 7필드) + Step4(확인+약관+honeypot) |
+| 9 | EnrollApplicationForm: 시간표 복수선택 | PASS | toggleSlot으로 배열 관리, 제출 시 .join(",")로 콤마 구분 문자열 변환 |
+| 10 | EnrollApplicationForm: 셔틀 조건부 표시 | PASS | shuttleNeeded 체크 시에만 shuttlePickup 입력 필드 렌더링 (line 597) |
+| 11 | ApplyPageClient: 수강 버튼 /apply/enroll Link | PASS | line 262: Link href="/apply/enroll", enroll 모달 완전 제거, uniform 모달만 유지 |
+| 12 | SQL 인젝션 방지 | PASS | submitEnrollApplication: $1~$20 바인딩. getTrialLeadForEnroll: $1 바인딩. trialLeadId 존재확인도 $1 바인딩. 입력값 직접 SQL 삽입 없음 |
+| 13 | trialLeadId 검증 | PASS | 존재하지 않는 ID면 undefined로 전환 (에러 아닌 무시), catch도 undefined 처리 |
+| 14 | 클라이언트 검증 (Step1/2) | PASS | validateStep1: 이름/생년월일/성별/학년/학교 필수, validateStep2: 이름/전화번호(10-11자리) 필수 |
+| 15 | 서버-클라이언트 이중 검증 | PASS | 클라이언트 validateStep + 서버 submitEnrollApplication 양쪽에서 필수값/전화번호 검증 |
+
+종합: 15개 중 15개 PASS -- **PASS**
 
 ---
 
@@ -787,6 +832,7 @@ tester 참고:
 
 | 날짜 | 작업 내용 | 파일 | 상태 |
 |------|----------|------|------|
+| 2026-03-29 | Phase B: 수강 신청 자체화 (EnrollmentApplication 모델 + 4단계 스텝 폼 + 체험 자동채움 + 구글폼 탈피) | 5개 파일 | 완료 |
 | 2026-03-29 | 원생 관리: deleteStudent 버그 수정(FK 6개 테이블 추가) + 필터 UI 4개 + 수강반 컬럼 | admin.ts, queries.ts, StudentManagementClient.tsx | 완료 |
 | 2026-03-29 | 유니폼 신청서 구글폼 연동 (uniformFormUrl 필드 + 관리자 입력 + 공개 카드/모달) | 7개 파일 | 완료 |
 | 2026-03-29 | Phase 7: 통계 대시보드 tester 검증 PASS (18항목 전체 통과) | 8개 파일 | 완료 |

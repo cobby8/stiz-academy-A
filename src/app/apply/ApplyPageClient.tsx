@@ -258,19 +258,13 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {enrollFormUrl ? (
-                                        <Button
-                                            variant="secondary"
-                                            size="md"
-                                            onClick={() => setModal("enroll")}
-                                        >
-                                            수강신청하기
-                                        </Button>
-                                    ) : (
-                                        <Button variant="secondary" size="md" disabled className="!bg-gray-200 !text-gray-400 cursor-not-allowed">
-                                            수강신청하기 (준비 중)
-                                        </Button>
-                                    )}
+                                    {/* 수강 신청 — 자체 폼 페이지로 이동 (구글폼 탈피) */}
+                                    <Link
+                                        href="/apply/enroll"
+                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                    >
+                                        수강신청하기
+                                    </Link>
                                 </div>
                             </div>
                         </Card>
@@ -327,15 +321,7 @@ export default function ApplyPageClient({
                 </AnimateOnScroll>
             </SectionLayout>
 
-            {/* Google Form 모달 — 수강신청/유니폼만 유지 (체험수업은 자체 폼으로 이동) */}
-            {modal === "enroll" && enrollFormUrl && (
-                <FormModal
-                    title={enrollTitle}
-                    formUrl={enrollFormUrl}
-                    onClose={() => setModal(null)}
-                />
-            )}
-            {/* 유니폼 신청 모달 — uniformFormUrl이 있을 때만 렌더링 */}
+            {/* Google Form 모달 — 유니폼만 유지 (체험수업/수강신청은 자체 폼으로 이동) */}
             {modal === "uniform" && uniformFormUrl && (
                 <FormModal
                     title="유니폼 신청"

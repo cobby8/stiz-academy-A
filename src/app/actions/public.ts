@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { ensureTrialLeadTable } from "@/app/actions/admin";
+import { notifyAdmins } from "@/lib/notification";
 
 // ── EnrollmentApplication DDL ensure (idempotent) ───────────────────────────
 // 테이블이 없으면 자동으로 생성 — DB push 없이도 동작하도록
@@ -161,6 +162,15 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
         // 관리자 페이지 캐시 무효화 (새 신청이 바로 보이도록)
         revalidatePath("/admin/trial");
         revalidatePath("/admin");
+
+        // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
+        // await 하지 않음 — 응답 지연 방지
+        notifyAdmins(
+            "TRIAL_APPLICATION",
+            "새 체험수업 신청",
+            `${childName} (${data.childGrade || "학년 미입력"}) — ${parentName}`,
+            "/admin/trial",
+        ).catch(() => {});
 
         return { success: true, id: rows[0]?.id || "ok" };
     } catch (e) {
@@ -360,6 +370,14 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
 
         // 관리자 페이지 캐시 무효화
         revalidatePath("/admin");
+
+        // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
+        notifyAdmins(
+            "ENROLL_APPLICATION",
+            "새 수강 신청",
+            `${childName} (${data.childGrade || "학년 미입력"}) — ${parentName}`,
+            "/admin/apply",
+        ).catch(() => {});
 
         return { success: true, id: rows[0]?.id || "ok" };
     } catch (e) {

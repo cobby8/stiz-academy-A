@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
-import { sendPushToUser } from "@/lib/pushNotification";
+import {
+    createNotificationRecord,
+    notifyParentsOfStudents,
+    notifyAllParents,
+} from "@/lib/notification";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import {
     createCalendarEvent,
@@ -1074,68 +1078,8 @@ export async function deleteNotice(id: string) {
 }
 
 // ── 알림 시스템 ──────────────────────────────────────────────────────────────
-
-// 알림 생성 (내부 헬퍼 — 다른 액션에서 호출)
-// DB에 인앱 알림 저장 + 푸시 알림도 동시 발송
-async function createNotificationRecord(data: {
-    userId: string;
-    type: string;      // ATTENDANCE, NOTICE, PAYMENT
-    title: string;
-    message: string;
-    linkUrl?: string;
-}) {
-    try {
-        // 1. DB에 인앱 알림 저장
-        await prisma.$executeRawUnsafe(
-            `INSERT INTO "Notification" (id, "userId", type, title, message, "linkUrl", "isRead", "createdAt")
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, false, NOW())`,
-            data.userId, data.type, data.title, data.message, data.linkUrl || null,
-        );
-        // 2. 푸시 알림 발송 (실패해도 무시)
-        sendPushToUser(data.userId, {
-            title: data.title,
-            body: data.message,
-            url: data.linkUrl || "/mypage",
-            tag: data.type,
-        }).catch(() => {});
-    } catch (e) {
-        console.error("Failed to create notification:", e);
-    }
-}
-
-// 특정 학생들의 학부모에게 일괄 알림
-async function notifyParentsOfStudents(studentIds: string[], type: string, title: string, message: string, linkUrl?: string) {
-    try {
-        if (studentIds.length === 0) return;
-        const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(",");
-        const parents = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT DISTINCT "parentId" FROM "Student" WHERE id IN (${placeholders})`,
-            ...studentIds,
-        );
-        for (const p of parents) {
-            const parentId = p.parentId ?? p.parentid;
-            if (parentId) {
-                await createNotificationRecord({ userId: parentId, type, title, message, linkUrl });
-            }
-        }
-    } catch (e) {
-        console.error("Failed to notify parents:", e);
-    }
-}
-
-// 모든 학부모에게 알림 (공지사항 등)
-async function notifyAllParents(type: string, title: string, message: string, linkUrl?: string) {
-    try {
-        const parents = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "User" WHERE role = 'PARENT'`
-        );
-        for (const p of parents) {
-            await createNotificationRecord({ userId: p.id, type, title, message, linkUrl });
-        }
-    } catch (e) {
-        console.error("Failed to notify all parents:", e);
-    }
-}
+// createNotificationRecord, notifyParentsOfStudents, notifyAllParents는
+// src/lib/notification.ts로 이동됨 (import 참조)
 
 // 알림 읽음 처리
 export async function markNotificationRead(id: string) {

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { LogOut } from "lucide-react";
 
@@ -196,6 +196,8 @@ export default function AdminLayout({
                 <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-10">
                     <h2 className="font-bold text-gray-700">관리자 시스템</h2>
                     <div className="flex items-center gap-4">
+                        {/* 알림 벨 — 읽지 않은 알림 수 배지 + 드롭다운 */}
+                        <NotificationBell />
                         <span className="text-sm font-medium text-gray-600">{userName}님, 환영합니다.</span>
                         <div className="w-8 h-8 bg-brand-orange-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
                             {userName.charAt(0) || "A"}
@@ -342,5 +344,200 @@ function NavItem({ href, active, icon, label, badge }: { href: string; active?: 
                 </span>
             )}
         </Link>
+    );
+}
+
+// ── 알림 벨 드롭다운 컴포넌트 ────────────────────────────────────────────────
+// 헤더에 표시되는 종 모양 아이콘 + 읽지 않은 알림 수 배지 + 드롭다운 목록
+interface NotificationItem {
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    linkUrl: string | null;
+    isRead: boolean;
+    createdAt: string;
+}
+
+function NotificationBell() {
+    const [open, setOpen] = useState(false);           // 드롭다운 열림/닫힘
+    const [unreadCount, setUnreadCount] = useState(0); // 읽지 않은 수
+    const [items, setItems] = useState<NotificationItem[]>([]);
+    const [loading, setLoading] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
+
+    // 알림 목록 조회 함수
+    const fetchNotifications = useCallback(async () => {
+        try {
+            const res = await fetch("/api/admin/notifications");
+            if (!res.ok) return;
+            const data = await res.json();
+            setUnreadCount(data.unreadCount ?? 0);
+            setItems(data.notifications ?? []);
+        } catch {
+            // 조회 실패해도 무시 — 벨 아이콘은 항상 표시
+        }
+    }, []);
+
+    // 최초 로드 + 60초마다 폴링 (새 알림 확인)
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 60_000);
+        return () => clearInterval(interval);
+    }, [fetchNotifications]);
+
+    // 드롭다운 바깥 클릭 시 닫기
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        }
+        if (open) document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [open]);
+
+    // 벨 클릭 — 드롭다운 토글 + 목록 갱신
+    function handleToggle() {
+        if (!open) fetchNotifications();
+        setOpen(!open);
+    }
+
+    // 개별 알림 클릭 — 읽음 처리 + 링크 이동
+    async function handleClick(item: NotificationItem) {
+        // 읽음 처리 (fire-and-forget)
+        if (!item.isRead) {
+            fetch("/api/admin/notifications", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: item.id }),
+            }).catch(() => {});
+            // UI 즉시 반영
+            setItems(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
+            setUnreadCount(prev => Math.max(0, prev - 1));
+        }
+        // 링크가 있으면 이동
+        if (item.linkUrl) {
+            router.push(item.linkUrl);
+        }
+        setOpen(false);
+    }
+
+    // 전체 읽음 처리
+    async function handleMarkAllRead() {
+        setLoading(true);
+        try {
+            await fetch("/api/admin/notifications", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ markAllRead: true }),
+            });
+            setItems(prev => prev.map(n => ({ ...n, isRead: true })));
+            setUnreadCount(0);
+        } catch {}
+        setLoading(false);
+    }
+
+    // 시간 포맷: "방금", "3분 전", "2시간 전", "3일 전"
+    function timeAgo(dateStr: string) {
+        const diff = Date.now() - new Date(dateStr).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return "방금";
+        if (mins < 60) return `${mins}분 전`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}시간 전`;
+        const days = Math.floor(hours / 24);
+        return `${days}일 전`;
+    }
+
+    // 알림 타입별 아이콘 매핑
+    function typeIcon(type: string) {
+        switch (type) {
+            case "TRIAL_APPLICATION": return "person_add";
+            case "ENROLL_APPLICATION": return "how_to_reg";
+            case "REQUEST": return "mail";
+            case "ATTENDANCE": return "check_circle";
+            case "PAYMENT": return "payments";
+            case "NOTICE": return "campaign";
+            default: return "notifications";
+        }
+    }
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            {/* 벨 아이콘 버튼 */}
+            <button
+                onClick={handleToggle}
+                className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="알림"
+            >
+                <span className="material-symbols-outlined text-[22px]">notifications</span>
+                {/* 읽지 않은 알림 수 배지 */}
+                {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-red-500 text-white">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                )}
+            </button>
+
+            {/* 드롭다운 패널 */}
+            {open && (
+                <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                    {/* 헤더 */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                        <h3 className="font-bold text-gray-800 text-sm">알림</h3>
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={handleMarkAllRead}
+                                disabled={loading}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                                모두 읽음
+                            </button>
+                        )}
+                    </div>
+
+                    {/* 알림 목록 */}
+                    <div className="max-h-[400px] overflow-y-auto">
+                        {items.length === 0 ? (
+                            <div className="py-12 text-center text-gray-400 text-sm">
+                                <span className="material-symbols-outlined text-4xl block mb-2">notifications_off</span>
+                                알림이 없습니다
+                            </div>
+                        ) : (
+                            items.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => handleClick(item)}
+                                    className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${
+                                        !item.isRead ? "bg-blue-50/50" : ""
+                                    }`}
+                                >
+                                    {/* 타입별 아이콘 */}
+                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                                        !item.isRead ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"
+                                    }`}>
+                                        <span className="material-symbols-outlined text-[18px]">{typeIcon(item.type)}</span>
+                                    </div>
+                                    {/* 내용 */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm truncate ${!item.isRead ? "font-semibold text-gray-900" : "text-gray-600"}`}>
+                                            {item.title}
+                                        </p>
+                                        <p className="text-xs text-gray-500 truncate mt-0.5">{item.message}</p>
+                                        <p className="text-[11px] text-gray-400 mt-1">{timeAgo(item.createdAt)}</p>
+                                    </div>
+                                    {/* 읽지 않은 표시 점 */}
+                                    {!item.isRead && (
+                                        <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-2" />
+                                    )}
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

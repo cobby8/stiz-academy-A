@@ -581,6 +581,25 @@ model SmsTemplate {
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 }
 
+// 스태프 초대 링크 — 원장이 생성한 초대를 통해 스태프가 직접 가입
+model StaffInvitation {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  token       String    @unique @default(dbgenerated("(gen_random_uuid())::text")) // URL 토큰
+  name        String    // 초대 대상 이름
+  phone       String    // 초대 대상 전화번호 (하이픈 없이)
+  role        Role      @default(INSTRUCTOR) // 부여할 역할
+  status      String    @default("PENDING")  // PENDING, ACCEPTED, CANCELLED, EXPIRED
+  expiresAt   DateTime  @db.Timestamptz(6)   // 만료 시각
+  acceptedAt  DateTime? @db.Timestamptz(6)   // 수락 시각
+  acceptedUserId String? // 가입 완료된 User ID
+  createdBy   String    // 초대 생성자 (ADMIN User ID)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status])
+  @@index([phone])
+}
+
 enum Role {
   ADMIN
   VICE_ADMIN

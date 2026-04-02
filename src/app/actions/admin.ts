@@ -4151,3 +4151,193 @@ export async function linkCoachToUser(userId: string, coachId: string | null) {
     revalidatePath("/admin/staff");
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 스태프 초대 링크 시스템 — ADMIN(원장)만 초대 생성/취소/재발송 가능
+// ══════════════════════════════════════════════════════════════════════
+
+// ── DDL: StaffInvitation 테이블 자동 생성 (Prisma migrate 없이도 동작) ────────
+let _invitationTableEnsured = false;
+export async function ensureStaffInvitationTable() {
+    if (_invitationTableEnsured) return;
+    try {
+        // StaffInvitation 테이블이 없으면 생성 (IF NOT EXISTS로 안전)
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "StaffInvitation" (
+                id         TEXT PRIMARY KEY DEFAULT (gen_random_uuid())::text,
+                token      TEXT UNIQUE NOT NULL DEFAULT (gen_random_uuid())::text,
+                name       TEXT NOT NULL,
+                phone      TEXT NOT NULL,
+                role       "Role" NOT NULL DEFAULT 'INSTRUCTOR',
+                status     TEXT NOT NULL DEFAULT 'PENDING',
+                "expiresAt"     TIMESTAMPTZ NOT NULL,
+                "acceptedAt"    TIMESTAMPTZ,
+                "acceptedUserId" TEXT,
+                "createdBy"     TEXT NOT NULL,
+                "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        `);
+        // 인덱스 생성 (IF NOT EXISTS로 안전)
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "StaffInvitation_status_idx" ON "StaffInvitation" (status)`
+        );
+        await prisma.$executeRawUnsafe(
+            `CREATE INDEX IF NOT EXISTS "StaffInvitation_phone_idx" ON "StaffInvitation" (phone)`
+        );
+        _invitationTableEnsured = true;
+    } catch (e) {
+        console.error("[ensureStaffInvitationTable] DDL failed:", e);
+    }
+}
+
+/**
+ * inviteStaff — 스태프 초대 링크 생성 (requireOwner: ADMIN만)
+ * 이름 + 전화번호 + 역할을 받아서 7일 유효한 초대를 생성
+ * 생성 후 SMS로 초대 링크를 발송한다
+ */
+export async function inviteStaff(data: {
+    name: string;
+    phone: string;
+    role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
+}) {
+    const user = await requireOwner();
+    await ensureStaffInvitationTable();
+
+    // 전화번호에서 하이픈 제거
+    const cleanPhone = data.phone.replace(/-/g, "");
+
+    // 같은 번호로 PENDING 상태인 초대가 이미 있는지 확인
+    const existing = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM "StaffInvitation"
+         WHERE phone = $1 AND status = 'PENDING' AND "expiresAt" > NOW()
+         LIMIT 1`,
+        cleanPhone,
+    );
+    if (existing.length > 0) {
+        throw new Error("이미 대기 중인 초대가 있습니다. 기존 초대를 취소 후 다시 시도해주세요.");
+    }
+
+    // 이미 가입된 스태프인지 확인
+    const existingUser = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id FROM "User" WHERE phone = $1 AND role IN ('ADMIN','VICE_ADMIN','INSTRUCTOR') LIMIT 1`,
+        cleanPhone,
+    );
+    if (existingUser.length > 0) {
+        throw new Error("이미 등록된 스태프입니다.");
+    }
+
+    try {
+        // 초대 레코드 생성 — 만료: 7일 후
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `INSERT INTO "StaffInvitation" (id, token, name, phone, role, status, "expiresAt", "createdBy", "createdAt", "updatedAt")
+             VALUES (
+               (gen_random_uuid())::text,
+               (gen_random_uuid())::text,
+               $1, $2, $3::"Role", 'PENDING',
+               NOW() + INTERVAL '7 days',
+               $4, NOW(), NOW()
+             )
+             RETURNING token`,
+            data.name,
+            cleanPhone,
+            data.role,
+            user.id,
+        );
+
+        const token = rows[0]?.token;
+        if (!token) throw new Error("초대 생성 실패");
+
+        // SMS로 초대 링크 발송 (fire-and-forget)
+        const { sendSms } = await import("@/lib/sms");
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://localhost:4000";
+        const inviteUrl = `${baseUrl}/invite/${token}`;
+        sendSms(
+            cleanPhone,
+            `[STIZ 농구교실] ${data.name}님, 스태프 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
+        ).catch(() => {}); // SMS 실패해도 초대는 유효
+
+        revalidatePath("/admin/staff");
+        return { token };
+    } catch (e) {
+        console.error("[inviteStaff] failed:", e);
+        throw new Error((e as Error).message || "초대 생성 실패");
+    }
+}
+
+/**
+ * cancelInvitation — 초대 취소 (requireOwner: ADMIN만)
+ * PENDING 상태인 초대만 취소 가능
+ */
+export async function cancelInvitation(invitationId: string) {
+    await requireOwner();
+    await ensureStaffInvitationTable();
+
+    try {
+        const result = await prisma.$executeRawUnsafe(
+            `UPDATE "StaffInvitation"
+             SET status = 'CANCELLED', "updatedAt" = NOW()
+             WHERE id = $1 AND status = 'PENDING'`,
+            invitationId,
+        );
+        if (result === 0) {
+            throw new Error("취소할 수 있는 초대가 없습니다.");
+        }
+    } catch (e) {
+        console.error("[cancelInvitation] failed:", e);
+        throw new Error((e as Error).message || "초대 취소 실패");
+    }
+
+    revalidatePath("/admin/staff");
+}
+
+/**
+ * resendInvitation — 초대 SMS 재발송 (requireOwner: ADMIN만)
+ * PENDING + 만료 전인 초대만 재발송 가능. 만료된 경우 만료일을 7일 연장한다.
+ */
+export async function resendInvitation(invitationId: string) {
+    await requireOwner();
+    await ensureStaffInvitationTable();
+
+    try {
+        // 초대 정보 조회
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT token, name, phone, "expiresAt"
+             FROM "StaffInvitation"
+             WHERE id = $1 AND status = 'PENDING'
+             LIMIT 1`,
+            invitationId,
+        );
+        if (rows.length === 0) {
+            throw new Error("재발송할 수 있는 초대가 없습니다.");
+        }
+
+        const inv = rows[0];
+        const expiresAt = new Date(inv.expiresAt ?? inv.expiresat);
+
+        // 만료되었으면 7일 연장
+        if (expiresAt < new Date()) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "StaffInvitation"
+                 SET "expiresAt" = NOW() + INTERVAL '7 days', "updatedAt" = NOW()
+                 WHERE id = $1`,
+                invitationId,
+            );
+        }
+
+        // SMS 재발송
+        const { sendSms } = await import("@/lib/sms");
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://localhost:4000";
+        const inviteUrl = `${baseUrl}/invite/${inv.token}`;
+        await sendSms(
+            inv.phone,
+            `[STIZ 농구교실] ${inv.name}님, 스태프 초대 링크를 재발송합니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
+        );
+
+        revalidatePath("/admin/staff");
+        return { ok: true };
+    } catch (e) {
+        console.error("[resendInvitation] failed:", e);
+        throw new Error((e as Error).message || "초대 재발송 실패");
+    }
+}
+

@@ -2609,3 +2609,63 @@ export const getAllCoaches = cache(async () => {
         return [];
     }
 });
+
+// ── 스태프 초대 목록 조회 (관리자용) ─────────────────────────────────────────
+// PENDING/ACCEPTED/CANCELLED 상태의 초대를 최신순으로 조회
+export const getStaffInvitations = cache(async () => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, token, name, phone, role, status,
+                    "expiresAt", "acceptedAt", "acceptedUserId",
+                    "createdBy", "createdAt"
+             FROM "StaffInvitation"
+             ORDER BY "createdAt" DESC
+             LIMIT 100`
+        );
+        return rows.map((r: any) => ({
+            id: r.id,
+            token: r.token,
+            name: r.name,
+            phone: r.phone,
+            role: r.role,
+            status: r.status,
+            expiresAt: r.expiresAt ?? r.expiresat,
+            acceptedAt: r.acceptedAt ?? r.acceptedat ?? null,
+            acceptedUserId: r.acceptedUserId ?? r.accepteduserid ?? null,
+            createdBy: r.createdBy ?? r.createdby,
+            createdAt: r.createdAt ?? r.createdat,
+        }));
+    } catch (e) {
+        console.error("[getStaffInvitations] failed:", e);
+        return [];
+    }
+});
+
+// ── 토큰으로 초대 조회 (공개 — 초대 수락 페이지용) ──────────────────────────
+// PENDING 상태 + 만료 전인 초대만 유효하게 반환
+export const getInvitationByToken = cache(async (token: string) => {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, token, name, phone, role, status, "expiresAt", "createdAt"
+             FROM "StaffInvitation"
+             WHERE token = $1
+             LIMIT 1`,
+            token
+        );
+        if (rows.length === 0) return null;
+        const r = rows[0];
+        return {
+            id: r.id,
+            token: r.token,
+            name: r.name,
+            phone: r.phone,
+            role: r.role,
+            status: r.status,
+            expiresAt: r.expiresAt ?? r.expiresat,
+            createdAt: r.createdAt ?? r.createdat,
+        };
+    } catch (e) {
+        console.error("[getInvitationByToken] failed:", e);
+        return null;
+    }
+});

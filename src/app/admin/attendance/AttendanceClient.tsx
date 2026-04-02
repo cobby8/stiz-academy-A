@@ -128,6 +128,7 @@ export default function AttendanceClient({ classes }: { classes: ClassItem[] }) 
                         <label className="block text-sm font-bold text-gray-700 mb-1">날짜</label>
                         <input
                             type="date"
+                            min="2020-01-01" max="2030-12-31"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
                             className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"

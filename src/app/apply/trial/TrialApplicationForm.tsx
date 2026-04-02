@@ -264,6 +264,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                             </label>
                             <input
                                 type="date"
+                                min="1950-01-01" max="2025-12-31"
                                 value={form.childBirthDate}
                                 onChange={(e) => update("childBirthDate", e.target.value)}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500/50 focus:border-brand-orange-500 outline-none transition-colors text-gray-900"
@@ -363,10 +364,18 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                             <input
                                 type="tel"
                                 value={form.parentPhone}
-                                onChange={(e) => update("parentPhone", e.target.value)}
-                                placeholder="010-1234-5678"
+                                onChange={(e) => {
+                                    // 숫자만 추출 후 000-0000-0000 자동 포맷팅
+                                    const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
+                                    let formatted = nums;
+                                    if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
+                                    else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
+                                    update("parentPhone", formatted);
+                                }}
+                                placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500/50 focus:border-brand-orange-500 outline-none transition-colors text-gray-900"
                             />
+                            <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                         </div>
 
                         {/* 희망 체험 일정 — 시간표 그리드 */}

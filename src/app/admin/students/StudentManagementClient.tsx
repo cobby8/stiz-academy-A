@@ -554,6 +554,7 @@ export default function StudentManagementClient({
                             <label className="block text-sm font-bold text-gray-700 mb-1">생년월일 *</label>
                             <input
                                 type="date"
+                                min="1950-01-01" max="2025-12-31"
                                 value={birthDate}
                                 onChange={(e) => setBirthDate(e.target.value)}
                                 required

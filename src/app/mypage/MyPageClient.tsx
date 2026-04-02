@@ -455,7 +455,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             <label className="text-xs font-medium text-gray-500 mb-1 block">
                                 {reqType === "ABSENCE" ? "결석일" : reqType === "EARLY_LEAVE" ? "조퇴일" : "해당 날짜"} (선택)
                             </label>
-                            <input type="date" value={reqDate} onChange={e => setReqDate(e.target.value)}
+                            <input type="date" min="2020-01-01" max="2030-12-31" value={reqDate} onChange={e => setReqDate(e.target.value)}
                                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
                         </div>
 

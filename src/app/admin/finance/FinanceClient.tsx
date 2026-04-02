@@ -387,6 +387,7 @@ export default function FinanceClient({
                             <label className="block text-sm font-bold text-gray-700 mb-1">납부 기한 *</label>
                             <input
                                 type="date"
+                                min="2020-01-01" max="2030-12-31"
                                 value={dueDate}
                                 onChange={(e) => setDueDate(e.target.value)}
                                 required

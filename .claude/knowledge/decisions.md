@@ -2,6 +2,18 @@
 <!-- 담당: planner-architect | 최대 30항목 -->
 <!-- "왜 A 대신 B를 선택했는지" 기술 결정의 배경과 이유를 기록 -->
 
+### 2026-03-29 SMS 템플릿 관리: DB 기반 동적 메시지 + 변수 치환 방식
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: SMS 메시지가 코드에 하드코딩되어 관리자가 수정 불가한 문제 해결. SmsTemplate 모델(trigger+target+body+isActive)로 DB에 저장하고, renderSmsTemplate(trigger, variables)로 {{변수}} 치환 후 발송. 트리거 10개: 관리자용 2개(TRIAL_NEW_ADMIN, ENROLL_NEW_ADMIN), 코치용 2개(TRIAL_NEW_COACH, ENROLL_NEW_COACH), 학부모용 6개(TRIAL_CONFIRM, TRIAL_SCHEDULED, ENROLL_CONFIRM, ENROLL_APPROVED, INVOICE, UNPAID). trigger를 unique로 설정하여 코드에서 트리거명으로 직접 조회. 템플릿이 비활성이면 SMS 스킵. 기존 lib/sms.ts(솔라피 연동)는 그대로 유지, 위에 lib/smsTemplate.ts 계층 추가.
+- **참조횟수**: 0
+
+### 2026-03-29 신청 알림 시스템: 기존 인프라 활용 + ADMIN 우선 전략
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 체험/수강 신청 시 관리자 알림 시스템 설계. 기존 알림 인프라(Notification 모델 + PushSubscription + sendPushToUser + createNotificationRecord)가 완성되어 있어 추가 구현 최소화 가능. 핵심 결정: (1) 알림 채널은 대시보드+웹Push만(비용 0원, 인프라 완성), 카카오/SMS는 Phase 2로 유보, (2) 알림 대상은 ADMIN만 — Coach 모델에 userId가 없어 선생님 알림 불가, Coach-User 연결은 별도 작업, (3) createNotificationRecord를 admin.ts에서 lib/notification.ts로 분리하여 public.ts에서도 사용 가능하게, (4) 유니폼 신청은 구글폼이라 알림 트리거 불가(자체화 필요).
+- **참조횟수**: 0
+
 ### 2026-03-29 스프레드시트 수강생 이관: 데이터 구조 분석 및 이관 전략
 - **분류**: decision
 - **발견자**: planner-architect

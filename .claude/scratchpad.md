@@ -1,7 +1,7 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 권한 체계 5단계 구현
+- **요청**: 스태프 초대 링크 시스템
 - **상태**: 구현 완료
 - **현재 담당**: developer 완료 -> tester
 - **마지막 세션**: 2026-03-29
@@ -85,6 +85,34 @@ reviewer 참고:
 - getCoachPhonesBySlotKeys: ClassSlotOverride(기본 슬롯) + CustomClassSlot(custom- 접두사) 양쪽 확인
 - notifyAdmins의 하위 호환 유지: slotKeys 미전달 시 기존 동작과 동일
 
+### 스태프 초대 링크 시스템 구현 (2026-03-29)
+
+구현한 기능: 원장이 초대 링크를 생성하면 스태프가 직접 가입하는 시스템
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| prisma/schema.prisma | StaffInvitation 모델 (이미 존재) | 기존 |
+| src/lib/queries.ts | getStaffInvitations(), getInvitationByToken() (이미 존재) | 기존 |
+| src/app/actions/admin.ts | ensureStaffInvitationTable DDL + inviteStaff + cancelInvitation + resendInvitation (requireOwner) | 수정 |
+| src/app/actions/invite.ts | 공개 액션: getInvitation, sendInviteVerification, verifyInviteCode, acceptInvitation | 신규 |
+| src/app/admin/staff/page.tsx | invitations 전달 추가 + ensureStaffInvitationTable DDL | 수정 |
+| src/app/admin/staff/StaffClient.tsx | 초대 모달(이름+폰+역할) + 대기 초대 목록(재발송/취소) + 초대 이력 | 수정 |
+| src/app/invite/[token]/page.tsx | 초대 수락 서버 페이지 (상태별 분기: PENDING/ACCEPTED/CANCELLED/EXPIRED) | 신규 |
+| src/app/invite/[token]/InviteAcceptForm.tsx | 3단계: 정보확인->폰인증->비밀번호설정->완료 | 신규 |
+
+tester 참고:
+- 테스트 방법: /admin/staff → "초대 링크 발송" 버튼 → 이름+폰+역할 입력 → 초대 생성 확인
+- /invite/{token} 접속 → 정보확인 → 인증번호 입력 → 비밀번호 설정 → 가입 완료
+- DB migrate 필요: `npx prisma migrate dev --name staff-invitation` (DDL ensure로 migrate 없이도 동작)
+- 정상 동작: 초대 생성 시 SMS 발송, 대기 초대 목록에 표시, 재발송/취소 동작
+- acceptInvitation: Supabase Auth admin API로 계정 생성 (email={phone}@staff.stiz.kr)
+- 만료/취소/수락 완료 상태에서는 각각 적절한 에러 페이지 표시
+
+reviewer 참고:
+- Supabase Admin API (createUser + email_confirm:true)로 이메일 확인 건너뛰기
+- 인증번호는 메모리 Map (inviteVerifyMap) — 서버리스 인스턴스 간 공유 안 됨 (즉시 인증이므로 OK)
+- inviteStaff에서 revalidatePath를 return 전에 호출 (기존 패턴과 다름 — try 블록 안에서)
+
 ### 미해결 리뷰 수정 사항 (이월)
 
 | 번호 | 파일 | 심각도 | 내용 | 상태 |
@@ -108,6 +136,10 @@ reviewer 참고:
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-03-29 | 전화번호 입력 자동 포맷팅+안내문구 7곳 적용 (Trial/Enroll/CRM/Staff) | 구현 완료 |
+| 2026-03-29 | date input min/max 속성 추가 13곳 (생년월일4곳+일반날짜9곳, yyyy-mm-dd 4자리 연도 강제) | 구현 완료 |
+| 2026-03-29 | 스태프 초대 링크 시스템 (DDL+초대CRUD+공개수락액션+3단계폼+관리자UI) | 구현 완료 |
+| 2026-03-29 | 스태프 추가 폰 인증 (verify-phone API + createStaffUser phone필수 + 모달 인증UI) | 구현 완료 |
 | 2026-03-29 | 권한 체계 5단계 (VICE_ADMIN + requireOwner + 스태프 관리 페이지 + Coach-User 연결) | 구현 완료 |
 | 2026-03-29 | 슬롯 담당 코치 SMS 타겟팅 (notifyAdmins slotKeys + public/admin 연동) | 구현 완료 |
 | 2026-03-29 | SMS 템플릿 관리 시스템 구현 7단계 (DB+유틸+CRUD+UI+발송연동+사이드바) | 구현 완료 |

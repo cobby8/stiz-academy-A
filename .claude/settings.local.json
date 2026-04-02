@@ -107,7 +107,15 @@
       "WebFetch(domain:naver.github.io)",
       "WebFetch(domain:developers.google.com)",
       "Bash(grep:*)",
-      "Bash(ping -n 10 127.0.0.1)"
+      "Bash(ping -n 10 127.0.0.1)",
+      "Bash(timeout 10)",
+      "Bash(for gid:*)",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:doc-14-7c-sheets.googleusercontent.com)",
+      "Bash(python3:*)",
+      "Bash(iconv -f utf-8 -t utf-8)",
+      "Read(//c/Users/cobby/**)",
+      "Bash(npx tsx -e \":*)"
     ]
   }
 }

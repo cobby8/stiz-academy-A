@@ -595,10 +595,18 @@ function AddLeadModal({
                         <input
                             type="tel"
                             value={form.parentPhone}
-                            onChange={(e) => setForm({ ...form, parentPhone: e.target.value })}
+                            onChange={(e) => {
+                                // 숫자만 추출 후 000-0000-0000 자동 포맷팅
+                                const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
+                                let formatted = nums;
+                                if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
+                                else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
+                                setForm({ ...form, parentPhone: formatted });
+                            }}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
-                            placeholder="010-1234-5678"
+                            placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                         />
+                        <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
                     {/* 유입경로 */}
                     <div>
@@ -721,6 +729,7 @@ function ConvertModal({
                         <label className="block text-sm font-medium text-gray-700 mb-1">생년월일 *</label>
                         <input
                             type="date"
+                            min="1950-01-01" max="2025-12-31"
                             value={form.birthDate}
                             onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
@@ -752,9 +761,18 @@ function ConvertModal({
                         <input
                             type="tel"
                             value={form.parentPhone}
-                            onChange={(e) => setForm({ ...form, parentPhone: e.target.value })}
+                            onChange={(e) => {
+                                // 숫자만 추출 후 000-0000-0000 자동 포맷팅
+                                const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
+                                let formatted = nums;
+                                if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
+                                else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
+                                setForm({ ...form, parentPhone: formatted });
+                            }}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                         />
+                        <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">학부모 이메일</label>

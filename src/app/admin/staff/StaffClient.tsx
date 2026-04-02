@@ -519,10 +519,11 @@ function InviteStaffModal({
                             type="tel"
                             value={form.phone}
                             onChange={(e) => handlePhoneChange(e.target.value)}
-                            placeholder="010-1234-5678"
+                            placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                             required
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                         />
+                        <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
 
                     {/* 역할 */}
@@ -685,7 +686,7 @@ function AddStaffModal({
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">전화번호 *</label>
                         <div className="flex gap-2">
-                            <input type="tel" value={form.phone} onChange={(e) => handlePhoneChange(e.target.value)} placeholder="010-1234-5678" required disabled={verifyStep === "verified"} className={`flex-1 px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500 ${verifyStep === "verified" ? "border-green-300 bg-green-50 text-green-800" : "border-gray-300"}`} />
+                            <input type="tel" value={form.phone} onChange={(e) => handlePhoneChange(e.target.value)} placeholder="숫자만 입력 (자동 변환: 010-1234-5678)" required disabled={verifyStep === "verified"} className={`flex-1 px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500 ${verifyStep === "verified" ? "border-green-300 bg-green-50 text-green-800" : "border-gray-300"}`} />
                             {verifyStep === "verified" ? (
                                 <span className="flex items-center gap-1 px-3 py-2.5 text-sm font-medium text-green-700 bg-green-100 rounded-lg">
                                     <span className="material-symbols-outlined text-[18px]">check_circle</span>
@@ -697,6 +698,7 @@ function AddStaffModal({
                                 </button>
                             )}
                         </div>
+                        <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
                     {verifyStep === "sent" && (
                         <div>

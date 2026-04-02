@@ -544,9 +544,12 @@ model EnrollmentApplication {
   preferredSlotKeys   String?   // 콤마 구분 "Mon-4,Wed-6"
   assignedClassId     String?   // 관리자 배정 반
   // 부가 정보
+  basketballExp       String?   // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
   uniformSize         String?
   shuttleNeeded       Boolean   @default(false)
   shuttlePickup       String?
+  shuttleTime         String?   // 셔틀 희망 시간 (예: "15:30")
+  shuttleDropoff      String?   // 셔틀 하차 장소 (예: "다산자이 정문")
   paymentMethod       String?
   referralSource      String?
   memo                String?

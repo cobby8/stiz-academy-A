@@ -33,9 +33,12 @@ export async function ensureEnrollmentApplicationTable() {
                 address TEXT,
                 "preferredSlotKeys" TEXT,
                 "assignedClassId" TEXT,
+                "basketballExp" TEXT,
                 "uniformSize" TEXT,
                 "shuttleNeeded" BOOLEAN DEFAULT false,
                 "shuttlePickup" TEXT,
+                "shuttleTime" TEXT,
+                "shuttleDropoff" TEXT,
                 "paymentMethod" TEXT,
                 "referralSource" TEXT,
                 memo TEXT,
@@ -285,9 +288,12 @@ interface EnrollApplicationInput {
     parentRelation?: string;
     address?: string;
     preferredSlotKeys?: string;  // 콤마 구분 "Mon-4,Wed-6"
+    basketballExp?: string;      // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
     uniformSize?: string;
     shuttleNeeded?: boolean;
     shuttlePickup?: string;
+    shuttleTime?: string;        // 셔틀 희망 시간
+    shuttleDropoff?: string;     // 셔틀 하차 장소
     paymentMethod?: string;
     referralSource?: string;
     memo?: string;
@@ -351,12 +357,14 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
 
     try {
         // EnrollmentApplication INSERT — status='PENDING'으로 생성
+        // 23개 파라미터: basketballExp, shuttleTime, shuttleDropoff 추가
         const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
             `INSERT INTO "EnrollmentApplication" (
                 id, "trialLeadId",
                 "childName", "childBirthDate", "childGender", "childGrade", "childSchool", "childPhone",
                 "parentName", "parentPhone", "parentRelation", address,
-                "preferredSlotKeys", "uniformSize", "shuttleNeeded", "shuttlePickup",
+                "preferredSlotKeys", "basketballExp", "uniformSize",
+                "shuttleNeeded", "shuttlePickup", "shuttleTime", "shuttleDropoff",
                 "paymentMethod", "referralSource", memo,
                 "agreedTerms", "agreedPrivacy",
                 status, "createdAt", "updatedAt"
@@ -364,31 +372,35 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                 gen_random_uuid()::text, $1,
                 $2, $3::timestamptz, $4, $5, $6, $7,
                 $8, $9, $10, $11,
-                $12, $13, $14, $15,
-                $16, $17, $18,
-                $19, $20,
+                $12, $13, $14,
+                $15, $16, $17, $18,
+                $19, $20, $21,
+                $22, $23,
                 'PENDING', NOW(), NOW()
             ) RETURNING id`,
-            data.trialLeadId || null,
-            childName,
-            data.childBirthDate,
-            data.childGender || null,
-            data.childGrade || null,
-            data.childSchool || null,
-            data.childPhone || null,
-            parentName,
-            normalizePhone(parentPhone),
-            data.parentRelation || null,
-            data.address?.trim() || null,
-            data.preferredSlotKeys || null,
-            data.uniformSize || null,
-            data.shuttleNeeded || false,
-            data.shuttlePickup?.trim() || null,
-            data.paymentMethod || null,
-            data.referralSource || null,
-            data.memo?.trim() || null,
-            data.agreedTerms,
-            data.agreedPrivacy,
+            data.trialLeadId || null,           // $1
+            childName,                          // $2
+            data.childBirthDate,                // $3
+            data.childGender || null,           // $4
+            data.childGrade || null,            // $5
+            data.childSchool || null,           // $6
+            data.childPhone || null,            // $7
+            parentName,                         // $8
+            normalizePhone(parentPhone),        // $9
+            data.parentRelation || null,        // $10
+            data.address?.trim() || null,       // $11
+            data.preferredSlotKeys || null,     // $12
+            data.basketballExp || null,         // $13 (신규)
+            data.uniformSize || null,           // $14
+            data.shuttleNeeded ?? false,        // $15 (|| -> ?? 변경: R-3 수정)
+            data.shuttlePickup?.trim() || null, // $16
+            data.shuttleTime || null,           // $17 (신규)
+            data.shuttleDropoff?.trim() || null,// $18 (신규)
+            data.paymentMethod || null,         // $19
+            data.referralSource || null,        // $20
+            data.memo?.trim() || null,          // $21
+            data.agreedTerms,                   // $22
+            data.agreedPrivacy,                 // $23
         );
 
         // 관리자 페이지 캐시 무효화

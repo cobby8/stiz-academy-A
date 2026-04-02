@@ -56,6 +56,14 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 // ── 폼 데이터 타입 ──────────────────────────────────────────────────────────
+// 농구 경험 선택지
+const BASKETBALL_EXP_OPTIONS = [
+    { value: "없음", label: "없음" },
+    { value: "1년 미만", label: "1년 미만" },
+    { value: "1~3년", label: "1~3년" },
+    { value: "3년 이상", label: "3년 이상" },
+];
+
 interface FormData {
     childName: string;
     childBirthDate: string;
@@ -68,8 +76,11 @@ interface FormData {
     parentRelation: string;
     address: string;
     preferredSlotKeys: string[];  // 복수 선택 가능 ["Mon-4", "Wed-6"]
+    basketballExp: string;        // 농구 경험
     shuttleNeeded: boolean;
     shuttlePickup: string;
+    shuttleTime: string;          // 셔틀 희망 시간
+    shuttleDropoff: string;       // 셔틀 하차 장소
     referralSource: string;
     memo: string;
     agreedTerms: boolean;
@@ -101,8 +112,11 @@ export default function EnrollApplicationForm({
         parentRelation: "",
         address: "",
         preferredSlotKeys: [],
+        basketballExp: "",
         shuttleNeeded: false,
         shuttlePickup: "",
+        shuttleTime: "",
+        shuttleDropoff: "",
         referralSource: trialData?.source || "",
         memo: "",
         agreedTerms: false,
@@ -190,8 +204,11 @@ export default function EnrollApplicationForm({
                     parentRelation: form.parentRelation || undefined,
                     address: form.address || undefined,
                     preferredSlotKeys: form.preferredSlotKeys.join(",") || undefined,
+                    basketballExp: form.basketballExp || undefined,
                     shuttleNeeded: form.shuttleNeeded,
                     shuttlePickup: form.shuttlePickup || undefined,
+                    shuttleTime: form.shuttleTime || undefined,
+                    shuttleDropoff: form.shuttleDropoff || undefined,
                     referralSource: form.referralSource || undefined,
                     memo: form.memo || undefined,
                     agreedTerms: form.agreedTerms,
@@ -563,6 +580,29 @@ export default function EnrollApplicationForm({
                             )}
                         </div>
 
+                        {/* 농구 경험 — 코치가 레벨 파악에 참고 */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                농구 경험 <span className="text-gray-400 text-xs font-normal">(선택)</span>
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {BASKETBALL_EXP_OPTIONS.map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => update("basketballExp", form.basketballExp === opt.value ? "" : opt.value)}
+                                        className={`py-2.5 px-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
+                                            form.basketballExp === opt.value
+                                                ? "border-brand-orange-500 bg-brand-orange-50 text-brand-orange-600"
+                                                : "border-gray-300 text-gray-600 hover:border-gray-400"
+                                        }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         {/* 셔틀 이용 여부 */}
                         <div>
                             <label className="flex items-center gap-3 cursor-pointer">
@@ -576,19 +616,47 @@ export default function EnrollApplicationForm({
                             </label>
                         </div>
 
-                        {/* 셔틀 탑승 장소 — 셔틀 체크 시에만 표시 */}
+                        {/* 셔틀 상세 — 셔틀 체크 시에만 표시 */}
                         {form.shuttleNeeded && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    셔틀 탑승 장소
-                                </label>
-                                <input
-                                    type="text"
-                                    value={form.shuttlePickup}
-                                    onChange={(e) => update("shuttlePickup", e.target.value)}
-                                    placeholder="예: 다산 자이 아파트 정문 앞"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500/50 focus:border-brand-orange-500 outline-none transition-colors text-gray-900"
-                                />
+                            <div className="space-y-4 pl-2 border-l-2 border-brand-orange-200 ml-2">
+                                {/* 셔틀 탑승 장소 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        셔틀 탑승 장소
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={form.shuttlePickup}
+                                        onChange={(e) => update("shuttlePickup", e.target.value)}
+                                        placeholder="예: 다산 자이 아파트 정문 앞"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500/50 focus:border-brand-orange-500 outline-none transition-colors text-gray-900"
+                                    />
+                                </div>
+                                {/* 셔틀 하차 장소 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        셔틀 하차 장소 <span className="text-gray-400 text-xs font-normal">(탑승지와 다른 경우)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={form.shuttleDropoff}
+                                        onChange={(e) => update("shuttleDropoff", e.target.value)}
+                                        placeholder="예: 한강 자이 아파트 후문"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500/50 focus:border-brand-orange-500 outline-none transition-colors text-gray-900"
+                                    />
+                                </div>
+                                {/* 셔틀 희망 시간 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        셔틀 희망 시간 <span className="text-gray-400 text-xs font-normal">(선택)</span>
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={form.shuttleTime}
+                                        onChange={(e) => update("shuttleTime", e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500/50 focus:border-brand-orange-500 outline-none transition-colors text-gray-900"
+                                    />
+                                </div>
                             </div>
                         )}
 
@@ -702,10 +770,28 @@ export default function EnrollApplicationForm({
                                             <span className="text-gray-900">{selectedSlotsLabel}</span>
                                         </>
                                     )}
+                                    {form.basketballExp && (
+                                        <>
+                                            <span className="text-gray-500">농구 경험</span>
+                                            <span className="text-gray-900">{form.basketballExp}</span>
+                                        </>
+                                    )}
                                     {form.shuttleNeeded && (
                                         <>
-                                            <span className="text-gray-500">셔틀</span>
+                                            <span className="text-gray-500">셔틀 탑승</span>
                                             <span className="text-gray-900">{form.shuttlePickup || "이용 희망"}</span>
+                                        </>
+                                    )}
+                                    {form.shuttleDropoff && (
+                                        <>
+                                            <span className="text-gray-500">셔틀 하차</span>
+                                            <span className="text-gray-900">{form.shuttleDropoff}</span>
+                                        </>
+                                    )}
+                                    {form.shuttleTime && (
+                                        <>
+                                            <span className="text-gray-500">셔틀 시간</span>
+                                            <span className="text-gray-900">{form.shuttleTime}</span>
                                         </>
                                     )}
                                     {form.memo && (

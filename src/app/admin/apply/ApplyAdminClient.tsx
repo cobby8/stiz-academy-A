@@ -25,9 +25,12 @@ interface EnrollApplication {
     address: string | null;
     preferredSlotKeys: string | null;
     assignedClassId: string | null;
+    basketballExp: string | null;
     uniformSize: string | null;
     shuttleNeeded: boolean;
     shuttlePickup: string | null;
+    shuttleTime: string | null;
+    shuttleDropoff: string | null;
     paymentMethod: string | null;
     referralSource: string | null;
     memo: string | null;
@@ -386,13 +389,35 @@ export default function ApplyAdminClient({
                                                     </div>
                                                 )}
 
+                                                {/* 농구 경험 태그 */}
+                                                {app.basketballExp && (
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700">
+                                                            <span className="material-symbols-outlined text-xs">sports_basketball</span>
+                                                            농구 {app.basketballExp}
+                                                        </span>
+                                                    </div>
+                                                )}
+
                                                 {/* 셔틀 정보 */}
                                                 {app.shuttleNeeded && (
                                                     <div className="flex flex-wrap gap-2 mt-2">
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
                                                             <span className="material-symbols-outlined text-xs">directions_bus</span>
-                                                            셔틀 필요{app.shuttlePickup ? `: ${app.shuttlePickup}` : ""}
+                                                            셔틀 탑승{app.shuttlePickup ? `: ${app.shuttlePickup}` : ""}
                                                         </span>
+                                                        {app.shuttleDropoff && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
+                                                                <span className="material-symbols-outlined text-xs">pin_drop</span>
+                                                                하차: {app.shuttleDropoff}
+                                                            </span>
+                                                        )}
+                                                        {app.shuttleTime && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
+                                                                <span className="material-symbols-outlined text-xs">schedule</span>
+                                                                {app.shuttleTime}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 )}
 
@@ -828,8 +853,11 @@ function DetailModal({
                         </h3>
                         <div className="space-y-1.5 bg-gray-50 rounded-lg p-3">
                             <InfoRow label="희망 시간" value={app.preferredSlotKeys} />
+                            <InfoRow label="농구 경험" value={app.basketballExp} />
                             <InfoRow label="셔틀" value={app.shuttleNeeded} />
                             <InfoRow label="탑승지" value={app.shuttlePickup} />
+                            <InfoRow label="하차지" value={app.shuttleDropoff} />
+                            <InfoRow label="셔틀 시간" value={app.shuttleTime} />
                             <InfoRow label="유입경로" value={app.referralSource ? (SOURCE_LABELS[app.referralSource] || app.referralSource) : null} />
                         </div>
                     </div>

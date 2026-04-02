@@ -33,23 +33,16 @@ const GRADE_OPTIONS = [
     "중1", "중2", "중3", "성인",
 ];
 
-// ── 유니폼 사이즈 옵션 ──────────────────────────────────────────────────────
-const UNIFORM_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL"];
-
-// ── 결제수단 옵션 ───────────────────────────────────────────────────────────
-const PAYMENT_METHOD_OPTIONS = [
-    { value: "RALLYZ", label: "랠리즈" },
-    { value: "CARD", label: "카드" },
-    { value: "CASH", label: "현금" },
-];
-
-// ── 가입 경로 옵션 ──────────────────────────────────────────────────────────
+// ── 가입 경로 옵션 (9개) ────────────────────────────────────────────────────
 const SOURCE_OPTIONS = [
-    { value: "WEBSITE", label: "홈페이지 검색" },
-    { value: "NAVER", label: "네이버" },
-    { value: "REFERRAL", label: "지인 소개" },
-    { value: "FLYER", label: "전단지" },
-    { value: "PASSBY", label: "지나가다" },
+    { value: "REFERRAL", label: "지인소개" },
+    { value: "PASSBY", label: "지나가다 발견" },
+    { value: "NAVER_SEARCH", label: "네이버 키워드 검색" },
+    { value: "NAVER_BLOG", label: "네이버 블로그" },
+    { value: "PORTAL_OTHER", label: "기타 포털검색(다음/구글)" },
+    { value: "INSTAGRAM", label: "인스타그램" },
+    { value: "SOOMGO", label: "숨고" },
+    { value: "EXISTING_STUDENT", label: "기존 수강생" },
     { value: "OTHER", label: "기타" },
 ];
 
@@ -75,10 +68,8 @@ interface FormData {
     parentRelation: string;
     address: string;
     preferredSlotKeys: string[];  // 복수 선택 가능 ["Mon-4", "Wed-6"]
-    uniformSize: string;
     shuttleNeeded: boolean;
     shuttlePickup: string;
-    paymentMethod: string;
     referralSource: string;
     memo: string;
     agreedTerms: boolean;
@@ -110,11 +101,9 @@ export default function EnrollApplicationForm({
         parentRelation: "",
         address: "",
         preferredSlotKeys: [],
-        uniformSize: "",
         shuttleNeeded: false,
         shuttlePickup: "",
-        paymentMethod: "",
-        referralSource: trialData?.source || "WEBSITE",
+        referralSource: trialData?.source || "",
         memo: "",
         agreedTerms: false,
         agreedPrivacy: false,
@@ -201,10 +190,8 @@ export default function EnrollApplicationForm({
                     parentRelation: form.parentRelation || undefined,
                     address: form.address || undefined,
                     preferredSlotKeys: form.preferredSlotKeys.join(",") || undefined,
-                    uniformSize: form.uniformSize || undefined,
                     shuttleNeeded: form.shuttleNeeded,
                     shuttlePickup: form.shuttlePickup || undefined,
-                    paymentMethod: form.paymentMethod || undefined,
                     referralSource: form.referralSource || undefined,
                     memo: form.memo || undefined,
                     agreedTerms: form.agreedTerms,
@@ -576,27 +563,6 @@ export default function EnrollApplicationForm({
                             )}
                         </div>
 
-                        {/* 유니폼 사이즈 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">유니폼 사이즈</label>
-                            <div className="flex flex-wrap gap-2">
-                                {UNIFORM_SIZE_OPTIONS.map((size) => (
-                                    <button
-                                        key={size}
-                                        type="button"
-                                        onClick={() => update("uniformSize", form.uniformSize === size ? "" : size)}
-                                        className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                            form.uniformSize === size
-                                                ? "border-brand-orange-500 bg-brand-orange-50 text-brand-orange-600"
-                                                : "border-gray-300 text-gray-600 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {size}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
                         {/* 셔틀 이용 여부 */}
                         <div>
                             <label className="flex items-center gap-3 cursor-pointer">
@@ -625,27 +591,6 @@ export default function EnrollApplicationForm({
                                 />
                             </div>
                         )}
-
-                        {/* 희망 결제수단 (라디오) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">희망 결제수단</label>
-                            <div className="flex gap-3">
-                                {PAYMENT_METHOD_OPTIONS.map((opt) => (
-                                    <button
-                                        key={opt.value}
-                                        type="button"
-                                        onClick={() => update("paymentMethod", form.paymentMethod === opt.value ? "" : opt.value)}
-                                        className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                            form.paymentMethod === opt.value
-                                                ? "border-brand-orange-500 bg-brand-orange-50 text-brand-orange-600"
-                                                : "border-gray-300 text-gray-600 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
 
                         {/* 가입 경로 */}
                         <div>
@@ -757,24 +702,10 @@ export default function EnrollApplicationForm({
                                             <span className="text-gray-900">{selectedSlotsLabel}</span>
                                         </>
                                     )}
-                                    {form.uniformSize && (
-                                        <>
-                                            <span className="text-gray-500">유니폼</span>
-                                            <span className="text-gray-900">{form.uniformSize}</span>
-                                        </>
-                                    )}
                                     {form.shuttleNeeded && (
                                         <>
                                             <span className="text-gray-500">셔틀</span>
                                             <span className="text-gray-900">{form.shuttlePickup || "이용 희망"}</span>
-                                        </>
-                                    )}
-                                    {form.paymentMethod && (
-                                        <>
-                                            <span className="text-gray-500">결제수단</span>
-                                            <span className="text-gray-900">
-                                                {PAYMENT_METHOD_OPTIONS.find((o) => o.value === form.paymentMethod)?.label || form.paymentMethod}
-                                            </span>
                                         </>
                                     )}
                                     {form.memo && (

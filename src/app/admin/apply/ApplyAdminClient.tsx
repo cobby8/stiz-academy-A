@@ -82,14 +82,21 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     CANCELLED: { label: "취소", color: "bg-gray-100 text-gray-500", icon: "block" },
 };
 
-// 유입경로 라벨
+// 유입경로 라벨 (9개 + 레거시 호환)
 const SOURCE_LABELS: Record<string, string> = {
+    REFERRAL: "지인소개",
+    PASSBY: "지나가다 발견",
+    NAVER_SEARCH: "네이버 키워드 검색",
+    NAVER_BLOG: "네이버 블로그",
+    PORTAL_OTHER: "기타 포털검색",
+    INSTAGRAM: "인스타그램",
+    SOOMGO: "숨고",
+    EXISTING_STUDENT: "기존 수강생",
+    OTHER: "기타",
+    // 레거시 호환 (기존 데이터용)
     WEBSITE: "홈페이지",
     NAVER: "네이버",
-    REFERRAL: "지인소개",
     FLYER: "전단지",
-    PASSBY: "지나가다",
-    OTHER: "기타",
 };
 
 // 요일 한글 매핑
@@ -379,27 +386,13 @@ export default function ApplyAdminClient({
                                                     </div>
                                                 )}
 
-                                                {/* 셔틀/유니폼/결제 정보 */}
-                                                {(app.shuttleNeeded || app.uniformSize || app.paymentMethod) && (
+                                                {/* 셔틀 정보 */}
+                                                {app.shuttleNeeded && (
                                                     <div className="flex flex-wrap gap-2 mt-2">
-                                                        {app.shuttleNeeded && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
-                                                                <span className="material-symbols-outlined text-xs">directions_bus</span>
-                                                                셔틀 필요{app.shuttlePickup ? `: ${app.shuttlePickup}` : ""}
-                                                            </span>
-                                                        )}
-                                                        {app.uniformSize && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-700">
-                                                                <span className="material-symbols-outlined text-xs">checkroom</span>
-                                                                유니폼: {app.uniformSize}
-                                                            </span>
-                                                        )}
-                                                        {app.paymentMethod && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700">
-                                                                <span className="material-symbols-outlined text-xs">payments</span>
-                                                                {app.paymentMethod}
-                                                            </span>
-                                                        )}
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
+                                                            <span className="material-symbols-outlined text-xs">directions_bus</span>
+                                                            셔틀 필요{app.shuttlePickup ? `: ${app.shuttlePickup}` : ""}
+                                                        </span>
                                                     </div>
                                                 )}
 
@@ -835,10 +828,8 @@ function DetailModal({
                         </h3>
                         <div className="space-y-1.5 bg-gray-50 rounded-lg p-3">
                             <InfoRow label="희망 시간" value={app.preferredSlotKeys} />
-                            <InfoRow label="유니폼" value={app.uniformSize} />
                             <InfoRow label="셔틀" value={app.shuttleNeeded} />
                             <InfoRow label="탑승지" value={app.shuttlePickup} />
-                            <InfoRow label="결제수단" value={app.paymentMethod} />
                             <InfoRow label="유입경로" value={app.referralSource ? (SOURCE_LABELS[app.referralSource] || app.referralSource) : null} />
                         </div>
                     </div>

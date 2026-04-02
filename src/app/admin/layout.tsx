@@ -23,6 +23,7 @@ const OPS_PATHS = [
     "/admin/sms",
     "/admin/import",
     "/admin/staff",
+    "/admin/apply",
 ];
 
 export default function AdminLayout({
@@ -138,9 +139,6 @@ export default function AdminLayout({
                             <NavItem href="/admin/testimonials" active={pathname.startsWith("/admin/testimonials")} icon="⭐" label="학부모 후기" />
                             <NavItem href="/admin/terms" active={pathname.startsWith("/admin/terms")} icon="📜" label="이용약관 관리" />
 
-                            {/* 신청 관리 */}
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">신청 관리</p>
-                            <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
                         </>
                     )}
 
@@ -157,6 +155,7 @@ export default function AdminLayout({
                             <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" />
                             <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
                             <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
+                            <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
                             <NavItem href="/admin/trial" active={pathname.startsWith("/admin/trial")} icon="🤝" label="체험 CRM" badge={newTrialCount} />
                             <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />
                             <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강 관리" />

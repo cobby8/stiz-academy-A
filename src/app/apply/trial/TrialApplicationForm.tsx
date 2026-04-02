@@ -32,13 +32,16 @@ const EXP_OPTIONS = [
     { value: "3년 이상", label: "3년 이상" },
 ];
 
-// ── 가입 경로 옵션 ───────────────────────────────────────────────────────────
+// ── 가입 경로 옵션 (9개) ────────────────────────────────────────────────────
 const SOURCE_OPTIONS = [
-    { value: "WEBSITE", label: "홈페이지 검색" },
-    { value: "NAVER", label: "네이버" },
-    { value: "REFERRAL", label: "지인 소개" },
-    { value: "FLYER", label: "전단지" },
-    { value: "PASSBY", label: "지나가다" },
+    { value: "REFERRAL", label: "지인소개" },
+    { value: "PASSBY", label: "지나가다 발견" },
+    { value: "NAVER_SEARCH", label: "네이버 키워드 검색" },
+    { value: "NAVER_BLOG", label: "네이버 블로그" },
+    { value: "PORTAL_OTHER", label: "기타 포털검색(다음/구글)" },
+    { value: "INSTAGRAM", label: "인스타그램" },
+    { value: "SOOMGO", label: "숨고" },
+    { value: "EXISTING_STUDENT", label: "기존 수강생" },
     { value: "OTHER", label: "기타" },
 ];
 
@@ -75,7 +78,7 @@ const INITIAL_FORM: FormData = {
     parentPhone: "",
     preferredSlotKey: "",
     hopeNote: "",
-    source: "WEBSITE",
+    source: "",
     agreedTerms: false,
     agreedPrivacy: false,
     honeypot: "",
@@ -462,6 +465,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                                 onChange={(e) => update("source", e.target.value)}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500/50 focus:border-brand-orange-500 outline-none transition-colors text-gray-900 bg-white"
                             >
+                                <option value="">선택해주세요</option>
                                 {SOURCE_OPTIONS.map((opt) => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                                 ))}

@@ -2,6 +2,12 @@
 <!-- 담당: planner-architect | 최대 30항목 -->
 <!-- "왜 A 대신 B를 선택했는지" 기술 결정의 배경과 이유를 기록 -->
 
+### 2026-04-06 체험/수강신청 구글폼 전환: AcademySettings DB 플래그 방식
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 자체 폼(Next.js)과 구글폼(외부 링크) 사이를 관리자가 코드 배포 없이 전환할 수 있도록 AcademySettings에 useBuiltInTrialForm/useBuiltInEnrollForm boolean 컬럼 2개 추가. 환경변수 대신 DB 설정을 선택한 이유: (1) 관리자가 /admin/apply에서 즉시 토글 가능, (2) 체험/수강을 독립적으로 전환 가능, (3) 기존 AcademySettings 패턴 재사용. 자체 폼 코드는 삭제하지 않고 보존 — 플래그가 true로 돌아오면 즉시 복귀. 구글폼 전환 시 비활성화: SMS 알림, 대시보드 배지, CRM 자동연동, 수강신청 목록. 기존 trialFormUrl/enrollFormUrl 필드에 구글폼 URL이 이미 저장 가능.
+- **참조횟수**: 0
+
 ### 2026-03-29 SMS 템플릿 관리: DB 기반 동적 메시지 + 변수 치환 방식
 - **분류**: decision
 - **발견자**: planner-architect

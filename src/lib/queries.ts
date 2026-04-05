@@ -43,6 +43,9 @@ export const getAcademySettings = cache(async () => {
                 galleryImagesJSON: r.galleryImagesJSON ?? r.galleryimagesjson ?? null,
                 naverPlaceUrl: r.naverPlaceUrl ?? r.naverplaceurl ?? null,
                 uniformFormUrl: r.uniformFormUrl ?? r.uniformformurl ?? null,
+                // 자체 폼 ON/OFF 플래그 (false=구글폼 모드, true=자체 폼 모드)
+                useBuiltInTrialForm: r.useBuiltInTrialForm ?? r.usebuiltintrialform ?? false,
+                useBuiltInEnrollForm: r.useBuiltInEnrollForm ?? r.usebuiltinenrollform ?? false,
             } as any;
         }
     } catch {

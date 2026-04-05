@@ -39,6 +39,8 @@ export async function ensureAcademySettingsColumns() {
         ["facilitiesImagesJSON", "TEXT"],
         ["galleryImagesJSON", "TEXT"],
         ["uniformFormUrl", "TEXT"],
+        ["useBuiltInTrialForm", "BOOLEAN DEFAULT false"],  // 자체 폼 ON/OFF (false=구글폼)
+        ["useBuiltInEnrollForm", "BOOLEAN DEFAULT false"], // 자체 폼 ON/OFF (false=구글폼)
     ];
     for (const [col, type] of columns) {
         try {
@@ -67,6 +69,8 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'galleryImagesJSON',
     'naverPlaceUrl',
     'uniformFormUrl',
+    'useBuiltInTrialForm',
+    'useBuiltInEnrollForm',
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
@@ -326,6 +330,8 @@ export async function updateAcademySettings(data: {
     galleryImagesJSON?: string;
     naverPlaceUrl?: string;
     uniformFormUrl?: string;
+    useBuiltInTrialForm?: boolean;
+    useBuiltInEnrollForm?: boolean;
 }) {
     await requireAdmin();
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음

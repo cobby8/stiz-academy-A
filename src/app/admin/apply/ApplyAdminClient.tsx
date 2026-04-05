@@ -73,6 +73,8 @@ interface ApplyAdminClientProps {
         enrollContent: string | null;
         enrollFormUrl: string | null;
         uniformFormUrl: string | null;
+        useBuiltInTrialForm: boolean;
+        useBuiltInEnrollForm: boolean;
     };
 }
 
@@ -910,6 +912,9 @@ function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientPro
     const [enrollContent, setEnrollContent] = useState(initialSettings.enrollContent || "");
     const [enrollFormUrl, setEnrollFormUrl] = useState(initialSettings.enrollFormUrl || "");
     const [uniformFormUrl, setUniformFormUrl] = useState(initialSettings.uniformFormUrl || "");
+    // 자체 폼 ON/OFF 토글 상태 (false=구글폼 모드, true=자체 폼 모드)
+    const [useBuiltInTrialForm, setUseBuiltInTrialForm] = useState(initialSettings.useBuiltInTrialForm);
+    const [useBuiltInEnrollForm, setUseBuiltInEnrollForm] = useState(initialSettings.useBuiltInEnrollForm);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -927,6 +932,8 @@ function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientPro
                 enrollContent: enrollContent.trim() || undefined,
                 enrollFormUrl: enrollFormUrl.trim() || undefined,
                 uniformFormUrl: uniformFormUrl.trim() || undefined,
+                useBuiltInTrialForm,
+                useBuiltInEnrollForm,
             });
             setSaved(true);
             router.refresh();
@@ -945,6 +952,65 @@ function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientPro
                     {error}
                 </div>
             )}
+
+            {/* 폼 전환 — 구글폼/자체 폼 ON/OFF 토글 */}
+            <SectionCard badge="폼 전환" badgeColor="bg-purple-50 text-purple-700 border border-purple-200" title="신청 폼 모드 설정">
+                <p className="text-sm text-gray-500 dark:text-gray-400 -mt-1 mb-3">
+                    OFF = 구글폼 외부 링크로 이동 | ON = 자체 폼 페이지(/apply/trial, /apply/enroll) 사용
+                </p>
+                {/* 체험수업 토글 */}
+                <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-700">
+                    <div>
+                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">체험수업 자체 폼</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            {useBuiltInTrialForm ? "자체 폼 페이지로 이동합니다" : "구글폼 URL로 새 탭 이동합니다"}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={useBuiltInTrialForm}
+                        onClick={() => setUseBuiltInTrialForm(!useBuiltInTrialForm)}
+                        className={[
+                            "relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:ring-offset-2",
+                            useBuiltInTrialForm ? "bg-brand-orange-500 dark:bg-brand-neon-lime" : "bg-gray-300 dark:bg-gray-600",
+                        ].join(" ")}
+                    >
+                        <span
+                            className={[
+                                "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200",
+                                useBuiltInTrialForm ? "translate-x-6" : "translate-x-1",
+                            ].join(" ")}
+                        />
+                    </button>
+                </div>
+                {/* 수강신청 토글 */}
+                <div className="flex items-center justify-between py-3">
+                    <div>
+                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">수강신청 자체 폼</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            {useBuiltInEnrollForm ? "자체 폼 페이지로 이동합니다" : "구글폼 URL로 새 탭 이동합니다"}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={useBuiltInEnrollForm}
+                        onClick={() => setUseBuiltInEnrollForm(!useBuiltInEnrollForm)}
+                        className={[
+                            "relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:ring-offset-2",
+                            useBuiltInEnrollForm ? "bg-brand-orange-500 dark:bg-brand-neon-lime" : "bg-gray-300 dark:bg-gray-600",
+                        ].join(" ")}
+                    >
+                        <span
+                            className={[
+                                "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200",
+                                useBuiltInEnrollForm ? "translate-x-6" : "translate-x-1",
+                            ].join(" ")}
+                        />
+                    </button>
+                </div>
+            </SectionCard>
 
             {/* 체험수업 */}
             <SectionCard badge="체험수업" badgeColor="bg-orange-100 text-brand-orange-600 dark:text-brand-neon-lime border border-orange-200" title="체험수업 안내 설정">

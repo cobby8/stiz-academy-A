@@ -232,6 +232,8 @@ model AcademySettings {
   facilitiesImagesJSON    String?
   naverPlaceUrl           String?  // 네이버 플레이스 리뷰 URL
   uniformFormUrl          String?  // 유니폼 신청 구글폼 URL
+  useBuiltInTrialForm     Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
+  useBuiltInEnrollForm    Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
 }
 
 model ClassSlotOverride {

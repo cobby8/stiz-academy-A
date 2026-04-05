@@ -35,6 +35,8 @@ export default async function AdminApplyPage() {
                 enrollContent: settings?.enrollContent || null,
                 enrollFormUrl: settings?.enrollFormUrl || null,
                 uniformFormUrl: settings?.uniformFormUrl || null,
+                useBuiltInTrialForm: settings?.useBuiltInTrialForm ?? false,
+                useBuiltInEnrollForm: settings?.useBuiltInEnrollForm ?? false,
             }}
         />
     );

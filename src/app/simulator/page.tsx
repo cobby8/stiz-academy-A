@@ -71,6 +71,8 @@ export default async function SimulatorPage() {
                 phone={phone}
                 trialFormUrl={trialFormUrl || null}
                 enrollFormUrl={enrollFormUrl || null}
+                useBuiltInTrialForm={(settings as any).useBuiltInTrialForm ?? false}
+                useBuiltInEnrollForm={(settings as any).useBuiltInEnrollForm ?? false}
             />
         </PublicPageLayout>
     );

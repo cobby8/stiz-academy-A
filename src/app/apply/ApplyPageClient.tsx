@@ -20,6 +20,9 @@ interface ApplyPageClientProps {
     enrollContent: string | null;
     enrollFormUrl: string | null;
     uniformFormUrl: string | null;
+    // 자체 폼 ON/OFF 플래그 (false=구글폼 외부 링크, true=자체 폼 페이지)
+    useBuiltInTrialForm: boolean;
+    useBuiltInEnrollForm: boolean;
     // DB에서 가져온 FAQ 데이터 (없으면 기본 FAQ 표시)
     faqData?: FaqItem[];
 }
@@ -177,6 +180,8 @@ export default function ApplyPageClient({
     enrollContent,
     enrollFormUrl,
     uniformFormUrl,
+    useBuiltInTrialForm,
+    useBuiltInEnrollForm,
     faqData,
 }: ApplyPageClientProps) {
     // 모달 상태 — trial/enroll/uniform 중 하나 또는 null
@@ -215,14 +220,31 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {/* 체험수업 신청 — 자체 폼 페이지로 이동 (구글폼 탈피) */}
-                                    <Link
-                                        href="/apply/trial"
-                                        data-tour-target="trial-apply-btn"
-                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
-                                    >
-                                        체험수업 신청하기
-                                    </Link>
+                                    {/* 체험수업 신청 — useBuiltInTrialForm에 따라 자체 폼 또는 구글폼 분기 */}
+                                    {useBuiltInTrialForm ? (
+                                        // 자체 폼 모드: /apply/trial 페이지로 이동
+                                        <Link
+                                            href="/apply/trial"
+                                            data-tour-target="trial-apply-btn"
+                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                        >
+                                            체험수업 신청하기
+                                        </Link>
+                                    ) : trialFormUrl ? (
+                                        // 구글폼 모드: 구글폼 URL을 새 탭으로 열기
+                                        <a
+                                            href={trialFormUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            data-tour-target="trial-apply-btn"
+                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                        >
+                                            체험수업 신청하기
+                                        </a>
+                                    ) : (
+                                        // 구글폼 URL이 설정되지 않은 경우 안내
+                                        <p className="text-sm text-gray-400 italic">구글폼 URL이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
+                                    )}
                                     {/* 약관 안내 — 독립 이용약관 페이지로 링크 */}
                                     <p className="mt-3 text-xs text-gray-400">
                                         신청 시{" "}
@@ -258,13 +280,29 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {/* 수강 신청 — 자체 폼 페이지로 이동 (구글폼 탈피) */}
-                                    <Link
-                                        href="/apply/enroll"
-                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
-                                    >
-                                        수강신청하기
-                                    </Link>
+                                    {/* 수강신청 — useBuiltInEnrollForm에 따라 자체 폼 또는 구글폼 분기 */}
+                                    {useBuiltInEnrollForm ? (
+                                        // 자체 폼 모드: /apply/enroll 페이지로 이동
+                                        <Link
+                                            href="/apply/enroll"
+                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                        >
+                                            수강신청하기
+                                        </Link>
+                                    ) : enrollFormUrl ? (
+                                        // 구글폼 모드: 구글폼 URL을 새 탭으로 열기
+                                        <a
+                                            href={enrollFormUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                        >
+                                            수강신청하기
+                                        </a>
+                                    ) : (
+                                        // 구글폼 URL이 설정되지 않은 경우 안내
+                                        <p className="text-sm text-gray-400 italic">구글폼 URL이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
+                                    )}
                                 </div>
                             </div>
                         </Card>

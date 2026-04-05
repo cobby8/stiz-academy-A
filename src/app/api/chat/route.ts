@@ -71,7 +71,8 @@ const getCachedSettings = unstable_cache(
                 "trialTitle", "trialContent", "trialFormUrl",
                 "enrollContent", "shuttleInfoText", "termsOfService",
                 "introductionTitle", "introductionText",
-                "philosophyText", "facilitiesText", "youtubeUrl"
+                "philosophyText", "facilitiesText", "youtubeUrl",
+                "useBuiltInTrialForm", "useBuiltInEnrollForm"
          FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
       );
       if (rows[0]) {
@@ -98,6 +99,9 @@ const getCachedSettings = unstable_cache(
           facilitiesText: r.facilitiesText ?? r.facilitiestext ?? "",
           // 유튜브 채널 URL
           youtubeUrl: r.youtubeUrl ?? r.youtubeurl ?? "",
+          // 자체 폼 ON/OFF 플래그
+          useBuiltInTrialForm: r.useBuiltInTrialForm ?? r.usebuiltintrialform ?? false,
+          useBuiltInEnrollForm: r.useBuiltInEnrollForm ?? r.usebuiltinenrollform ?? false,
         };
       }
     } catch (e) {
@@ -117,6 +121,8 @@ const getCachedSettings = unstable_cache(
       philosophyText: "",
       facilitiesText: "",
       youtubeUrl: "",
+      useBuiltInTrialForm: false,
+      useBuiltInEnrollForm: false,
     };
   },
   ["chat-settings"],
@@ -850,21 +856,26 @@ export async function POST(request: NextRequest) {
     let actions: Array<{ label: string; url: string }> | undefined;
     let cleanReply = reply;
 
+    // 자체 폼 ON/OFF에 따라 ACTION 버튼 URL을 결정
+    // useBuiltIn*가 true이면 자체 폼 페이지, false이면 /apply 페이지(카드 섹션)로 이동
+    const trialUrl = settings.useBuiltInTrialForm ? "/apply/trial" : "/apply#trial";
+    const enrollUrl = settings.useBuiltInEnrollForm ? "/apply/enroll" : "/apply#enroll";
+
     if (reply.includes("[ACTION:BOTH]")) {
       // 체험수업 + 수강신청 둘 다 안내하는 경우
       cleanReply = reply.replace("[ACTION:BOTH]", "").trim();
       actions = [
-        { label: "체험수업 신청하기", url: "/apply#trial" },
-        { label: "수강신청하기", url: "/apply#enroll" },
+        { label: "체험수업 신청하기", url: trialUrl },
+        { label: "수강신청하기", url: enrollUrl },
       ];
     } else if (reply.includes("[ACTION:TRIAL]")) {
       // 체험수업만 안내하는 경우
       cleanReply = reply.replace("[ACTION:TRIAL]", "").trim();
-      actions = [{ label: "체험수업 신청하기", url: "/apply#trial" }];
+      actions = [{ label: "체험수업 신청하기", url: trialUrl }];
     } else if (reply.includes("[ACTION:ENROLL]")) {
       // 수강신청만 안내하는 경우
       cleanReply = reply.replace("[ACTION:ENROLL]", "").trim();
-      actions = [{ label: "수강신청하기", url: "/apply#enroll" }];
+      actions = [{ label: "수강신청하기", url: enrollUrl }];
     }
 
     // actions가 있으면 응답에 포함, 없으면 기존과 동일한 형식

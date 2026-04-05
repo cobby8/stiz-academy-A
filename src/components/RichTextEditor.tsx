@@ -53,18 +53,18 @@ export default function RichTextEditor({
 
     if (!editor) {
         return (
-            <div className="border border-gray-300 rounded-md p-4 min-h-[150px] bg-gray-50 flex items-center justify-center text-sm text-gray-400">
+            <div className="border border-gray-300 rounded-md p-4 min-h-[150px] bg-gray-50 dark:bg-gray-900 flex items-center justify-center text-sm text-gray-400">
                 에디터 로딩중...
             </div>
         );
     }
 
     return (
-        <div className="border border-gray-300 rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-brand-orange-500 focus-within:border-brand-orange-500 transition">
+        <div className="border border-gray-300 rounded-md overflow-hidden bg-white dark:bg-gray-800 focus-within:ring-2 focus-within:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus-within:border-brand-orange-500 dark:border-brand-neon-lime transition">
             {name && <input type="hidden" name={name} value={editor.getHTML()} />}
 
             {/* 툴바 */}
-            <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 bg-gray-50 text-gray-700">
+            <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200">
                 {/* 텍스트 스타일 */}
                 <button
                     type="button"
@@ -150,7 +150,7 @@ export default function RichTextEditor({
                 <button
                     type="button"
                     onClick={() => editor.chain().focus().unsetColor().run()}
-                    className="px-1.5 h-5 text-[10px] rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
+                    className="px-1.5 h-5 text-[10px] rounded border border-gray-300 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800"
                     title="색상 제거"
                 >
                     색제거

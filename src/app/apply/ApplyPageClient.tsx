@@ -45,15 +45,15 @@ function FormModal({
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col"
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col"
                 style={{ maxHeight: "90vh" }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-                    <span className="font-bold text-gray-800 text-base">{title}</span>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+                    <span className="font-bold text-gray-800 dark:text-gray-100 text-base">{title}</span>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                        className="text-gray-400 hover:text-gray-600 dark:text-gray-300 text-xl leading-none"
                     >
                         ✕
                     </button>
@@ -83,13 +83,13 @@ function ContentBlock({ content }: { content: string }) {
     if (isHtml) {
         return (
             <div
-                className="prose prose-gray max-w-none text-gray-700 leading-relaxed"
+                className="prose prose-gray max-w-none text-gray-700 dark:text-gray-200 leading-relaxed"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
             />
         );
     }
     return (
-        <p className="text-gray-700 leading-relaxed whitespace-pre-line">{content}</p>
+        <p className="text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-line">{content}</p>
     );
 }
 
@@ -142,13 +142,13 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
-        <div className="border-b border-gray-100 last:border-b-0">
+        <div className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
             {/* 질문 버튼 — 클릭 시 답변 토글 */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between py-5 px-1 text-left hover:text-brand-orange-500 transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between py-5 px-1 text-left hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors cursor-pointer"
             >
-                <span className="font-semibold text-gray-900 pr-4">{question}</span>
+                <span className="font-semibold text-gray-900 dark:text-white pr-4">{question}</span>
                 {/* 화살표 아이콘 — 열림/닫힘 상태에 따라 회전 */}
                 <svg
                     className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
@@ -162,7 +162,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
             {/* 답변 영역 — isOpen일 때만 표시 */}
             {isOpen && (
                 <div className="pb-5 px-1">
-                    <p className="text-gray-600 text-base leading-relaxed">{answer}</p>
+                    <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed">{answer}</p>
                 </div>
             )}
         </div>
@@ -219,7 +219,7 @@ export default function ApplyPageClient({
                                     <Link
                                         href="/apply/trial"
                                         data-tour-target="trial-apply-btn"
-                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 text-white hover:bg-brand-orange-600 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
                                     >
                                         체험수업 신청하기
                                     </Link>
@@ -228,7 +228,7 @@ export default function ApplyPageClient({
                                         신청 시{" "}
                                         <a
                                             href="/terms"
-                                            className="underline underline-offset-2 hover:text-brand-orange-500 transition-colors"
+                                            className="underline underline-offset-2 hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors"
                                         >
                                             이용약관
                                         </a>
@@ -243,9 +243,9 @@ export default function ApplyPageClient({
                     <AnimateOnScroll delay={150}>
                         <Card id="enroll" variant="default" className="overflow-hidden !p-0 h-full">
                             {/* 카드 헤더 — 오렌지 배경으로 차별화 */}
-                            <div className="bg-brand-orange-500 px-6 py-5">
+                            <div className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 px-6 py-5">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white/20 text-white">Enrollment</span>
+                                    <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white dark:bg-gray-800/20 text-white">Enrollment</span>
                                 </div>
                                 <h3 className="text-xl font-black text-white">{enrollTitle}</h3>
                             </div>
@@ -281,7 +281,7 @@ export default function ApplyPageClient({
                                 {/* 카드 헤더 — 그린 계열로 차별화 */}
                                 <div className="bg-emerald-600 px-6 py-5">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white/20 text-white">Uniform</span>
+                                        <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white dark:bg-gray-800/20 text-white">Uniform</span>
                                     </div>
                                     <h3 className="text-xl font-black text-white flex items-center gap-2">
                                         {/* Material Symbols Outlined 아이콘 — checkroom(옷걸이) */}
@@ -291,7 +291,7 @@ export default function ApplyPageClient({
                                 </div>
                                 {/* 카드 본문 */}
                                 <div className="px-6 py-6">
-                                    <p className="text-gray-600 text-base leading-relaxed mb-6">
+                                    <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed mb-6">
                                         모든 수강생은 입단과 동시에 유니폼을 구매해야 합니다. 아래 버튼을 눌러 간편하게 신청하세요.
                                     </p>
                                     <Button

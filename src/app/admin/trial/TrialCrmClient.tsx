@@ -59,7 +59,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     SCHEDULED: { label: "체험예정", color: "bg-purple-100 text-purple-800", icon: "event" },
     ATTENDED: { label: "체험완료", color: "bg-green-100 text-green-800", icon: "check_circle" },
     CONVERTED: { label: "등록전환", color: "bg-emerald-100 text-emerald-800", icon: "how_to_reg" },
-    LOST: { label: "이탈", color: "bg-gray-100 text-gray-500", icon: "person_off" },
+    LOST: { label: "이탈", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "person_off" },
 };
 
 // 유입경로 라벨
@@ -147,8 +147,8 @@ export default function TrialCrmClient({
             {/* 페이지 제목 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-3xl text-brand-orange-500">handshake</span>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">handshake</span>
                         체험수업 CRM
                         {/* 새 신청 건수 배지 — NEW 상태가 있을 때만 표시 */}
                         {stats.NEW > 0 && (
@@ -157,11 +157,11 @@ export default function TrialCrmClient({
                             </span>
                         )}
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">체험 신청부터 정규 등록까지 전환 과정을 추적합니다</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험 신청부터 정규 등록까지 전환 과정을 추적합니다</p>
                 </div>
                 <button
                     onClick={() => setShowAddModal(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-brand-orange-500 text-white rounded-lg hover:bg-brand-orange-600 transition-colors font-medium"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors font-medium"
                 >
                     <span className="material-symbols-outlined text-xl">person_add</span>
                     체험 신청 등록
@@ -179,23 +179,23 @@ export default function TrialCrmClient({
                             onClick={() => setFilter(filter === s ? "ALL" : s)}
                             className={`rounded-xl p-4 text-center transition-all border-2 ${
                                 filter === s
-                                    ? "border-brand-orange-500 shadow-md"
-                                    : "border-transparent hover:border-gray-200"
-                            } bg-white`}
+                                    ? "border-brand-orange-500 dark:border-brand-neon-lime shadow-md"
+                                    : "border-transparent hover:border-gray-200 dark:border-gray-700"
+                            } bg-white dark:bg-gray-800`}
                         >
                             <span className={`material-symbols-outlined text-2xl ${cfg.color.split(" ")[1]}`}>
                                 {cfg.icon}
                             </span>
-                            <p className="text-2xl font-bold text-gray-900 mt-1">{count}</p>
-                            <p className="text-xs text-gray-500">{cfg.label}</p>
+                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{count}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</p>
                         </button>
                     );
                 })}
                 {/* 전환율 카드 */}
-                <div className="rounded-xl p-4 text-center bg-white border-2 border-transparent">
+                <div className="rounded-xl p-4 text-center bg-white dark:bg-gray-800 border-2 border-transparent">
                     <span className="material-symbols-outlined text-2xl text-emerald-600">trending_up</span>
                     <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.conversionRate}%</p>
-                    <p className="text-xs text-gray-500">전환율</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">전환율</p>
                 </div>
             </div>
 
@@ -206,7 +206,7 @@ export default function TrialCrmClient({
                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                         filter === "ALL"
                             ? "bg-gray-900 text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                     }`}
                 >
                     전체 ({stats.total})
@@ -232,9 +232,9 @@ export default function TrialCrmClient({
 
             {/* ── 리드 목록 ── */}
             {filteredLeads.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                     <span className="material-symbols-outlined text-5xl text-gray-300">person_search</span>
-                    <p className="text-gray-500 mt-3">
+                    <p className="text-gray-500 dark:text-gray-400 mt-3">
                         {filter === "ALL" ? "등록된 체험 신청이 없습니다" : `"${STATUS_CONFIG[filter]?.label}" 상태의 신청이 없습니다`}
                     </p>
                 </div>
@@ -245,7 +245,7 @@ export default function TrialCrmClient({
                         return (
                             <div
                                 key={lead.id}
-                                className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow"
+                                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow"
                             >
                                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                                     {/* 왼쪽: 기본 정보 */}
@@ -255,17 +255,17 @@ export default function TrialCrmClient({
                                                 <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                                 {cfg.label}
                                             </span>
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600`}>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300`}>
                                                 {SOURCE_LABELS[lead.source] || lead.source}
                                             </span>
                                         </div>
-                                        <h3 className="text-lg font-semibold text-gray-900">
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                             {lead.childName}
                                             {lead.childAge && (
-                                                <span className="text-sm font-normal text-gray-500 ml-2">({lead.childAge})</span>
+                                                <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">({lead.childAge})</span>
                                             )}
                                         </h3>
-                                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
                                             <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-base">person</span>
                                                 {lead.parentName}
@@ -324,7 +324,7 @@ export default function TrialCrmClient({
                                         )}
                                         {/* 메모 표시 */}
                                         {lead.memo && (
-                                            <p className="mt-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2">
                                                 {lead.memo}
                                             </p>
                                         )}
@@ -344,7 +344,7 @@ export default function TrialCrmClient({
                                                 value={lead.status}
                                                 onChange={(e) => handleStatusChange(lead, e.target.value)}
                                                 disabled={busy}
-                                                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                                                className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                             >
                                                 {STATUS_ORDER.filter((s) => s !== "CONVERTED" && s !== "LOST").map((s) => (
                                                     <option key={s} value={s}>
@@ -357,7 +357,7 @@ export default function TrialCrmClient({
                                         {/* 메모 편집 버튼 */}
                                         <button
                                             onClick={() => setShowMemoModal(lead)}
-                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                            className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition-colors"
                                             title="메모 편집"
                                         >
                                             <span className="material-symbols-outlined text-xl">edit_note</span>
@@ -550,48 +550,48 @@ function AddLeadModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
-                    <span className="material-symbols-outlined text-brand-orange-500">person_add</span>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person_add</span>
                     체험 신청 등록
                 </h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* 아이 이름 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">아이 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">아이 이름 *</label>
                         <input
                             type="text"
                             value={form.childName}
                             onChange={(e) => setForm({ ...form, childName: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="홍길동"
                         />
                     </div>
                     {/* 나이/학년 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">나이/학년</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">나이/학년</label>
                         <input
                             type="text"
                             value={form.childAge}
                             onChange={(e) => setForm({ ...form, childAge: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="초등 3학년"
                         />
                     </div>
                     {/* 학부모 이름 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">학부모 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 이름 *</label>
                         <input
                             type="text"
                             value={form.parentName}
                             onChange={(e) => setForm({ ...form, parentName: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="홍부모"
                         />
                     </div>
                     {/* 연락처 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">연락처 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">연락처 *</label>
                         <input
                             type="tel"
                             value={form.parentPhone}
@@ -603,18 +603,18 @@ function AddLeadModal({
                                 else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
                                 setForm({ ...form, parentPhone: formatted });
                             }}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                         />
                         <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
                     {/* 유입경로 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">유입 경로</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">유입 경로</label>
                         <select
                             value={form.source}
                             onChange={(e) => setForm({ ...form, source: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         >
                             <option value="WEBSITE">홈페이지</option>
                             <option value="NAVER">네이버</option>
@@ -624,12 +624,12 @@ function AddLeadModal({
                     </div>
                     {/* 메모 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">메모</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">메모</label>
                         <textarea
                             value={form.memo}
                             onChange={(e) => setForm({ ...form, memo: e.target.value })}
                             rows={3}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 resize-none"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                             placeholder="추가 메모 사항"
                         />
                     </div>
@@ -638,14 +638,14 @@ function AddLeadModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                         >
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy}
-                            className="flex-1 px-4 py-2.5 bg-brand-orange-500 text-white rounded-lg hover:bg-brand-orange-600 transition-colors text-sm font-medium disabled:opacity-50"
+                            className="flex-1 px-4 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors text-sm font-medium disabled:opacity-50"
                         >
                             {busy ? "등록 중..." : "등록"}
                         </button>
@@ -707,40 +707,40 @@ function ConvertModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                     <span className="material-symbols-outlined text-emerald-500">how_to_reg</span>
                     정규 등록 전환
                 </h2>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     체험 학생 &quot;{lead.childName}&quot;을 정규 원생으로 등록합니다.
                 </p>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">아이 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">아이 이름 *</label>
                         <input
                             type="text"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">생년월일 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">생년월일 *</label>
                         <input
                             type="date"
                             min="1950-01-01" max="2025-12-31"
                             value={form.birthDate}
                             onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">성별</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">성별</label>
                         <select
                             value={form.gender}
                             onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         >
                             <option value="">선택 안함</option>
                             <option value="남">남</option>
@@ -748,16 +748,16 @@ function ConvertModal({
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">학부모 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 이름 *</label>
                         <input
                             type="text"
                             value={form.parentName}
                             onChange={(e) => setForm({ ...form, parentName: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">학부모 연락처</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 연락처</label>
                         <input
                             type="tel"
                             value={form.parentPhone}
@@ -769,35 +769,35 @@ function ConvertModal({
                                 else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
                                 setForm({ ...form, parentPhone: formatted });
                             }}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                         />
                         <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">학부모 이메일</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 이메일</label>
                         <input
                             type="email"
                             value={form.parentEmail}
                             onChange={(e) => setForm({ ...form, parentEmail: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="로그인에 사용됩니다 (선택)"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">메모</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">메모</label>
                         <textarea
                             value={form.memo}
                             onChange={(e) => setForm({ ...form, memo: e.target.value })}
                             rows={2}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 resize-none"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         />
                     </div>
                     <div className="flex gap-3 pt-2">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                         >
                             취소
                         </button>
@@ -832,28 +832,28 @@ function LostModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                     <span className="material-symbols-outlined text-red-500">person_off</span>
                     이탈 처리
                 </h2>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     &quot;{lead.childName}&quot; 체험 건을 이탈로 처리합니다.
                 </p>
                 <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">이탈 사유</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">이탈 사유</label>
                     <textarea
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         rows={3}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 resize-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         placeholder="사유를 입력하세요 (선택)"
                     />
                 </div>
                 <div className="flex gap-3">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                     >
                         취소
                     </button>
@@ -887,9 +887,9 @@ function MemoModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
-                    <span className="material-symbols-outlined text-brand-orange-500">edit_note</span>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit_note</span>
                     메모 편집
                 </h2>
                 <div className="mb-4">
@@ -897,7 +897,7 @@ function MemoModal({
                         value={memo}
                         onChange={(e) => setMemo(e.target.value)}
                         rows={4}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 resize-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         placeholder="메모를 입력하세요"
                         autoFocus
                     />
@@ -905,14 +905,14 @@ function MemoModal({
                 <div className="flex gap-3">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                     >
                         취소
                     </button>
                     <button
                         onClick={() => onSubmit(memo)}
                         disabled={busy}
-                        className="flex-1 px-4 py-2.5 bg-brand-orange-500 text-white rounded-lg hover:bg-brand-orange-600 transition-colors text-sm font-medium disabled:opacity-50"
+                        className="flex-1 px-4 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors text-sm font-medium disabled:opacity-50"
                     >
                         {busy ? "저장 중..." : "저장"}
                     </button>

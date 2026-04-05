@@ -205,13 +205,13 @@ export default function ReportEditClient({
                 <div>
                     <Link
                         href="/admin/attendance/report"
-                        className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-2"
+                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-200 flex items-center gap-1 mb-2"
                     >
                         <span className="material-symbols-outlined text-sm">arrow_back</span>
                         리포트 목록
                     </Link>
-                    <h1 className="text-2xl font-extrabold text-gray-900">수업 리포트 편집</h1>
-                    <p className="text-gray-500 text-sm mt-1">
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">수업 리포트 편집</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                         {dateStr} | {report.className} ({DAY_LABELS[report.dayOfWeek] || report.dayOfWeek} {report.startTime}~{report.endTime})
                         {report.programName && <span className="ml-2 text-gray-400">- {report.programName}</span>}
                     </p>
@@ -224,7 +224,7 @@ export default function ReportEditClient({
                             발행됨
                         </span>
                     ) : (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-500">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                             <span className="material-symbols-outlined text-base">edit_note</span>
                             미발행
                         </span>
@@ -233,8 +233,8 @@ export default function ReportEditClient({
             </div>
 
             {/* 기본 정보 카드 */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 mb-6">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined">description</span>
                     수업 정보
                 </h2>
@@ -242,23 +242,23 @@ export default function ReportEditClient({
                 <div className="space-y-4">
                     {/* 수업 주제 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">수업 주제</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">수업 주제</label>
                         <input
                             type="text"
                             value={topic}
                             onChange={(e) => { setTopic(e.target.value); setSaved(false); }}
                             placeholder="예: 드리블 연습, 3대3 미니게임"
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime"
                         />
                     </div>
 
                     {/* 담당 코치 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">담당 코치</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">담당 코치</label>
                         <select
                             value={coachId}
                             onChange={(e) => { setCoachId(e.target.value); setSaved(false); }}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 bg-white"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                         >
                             <option value="">코치 선택</option>
                             {coaches.map((c) => (
@@ -269,19 +269,19 @@ export default function ReportEditClient({
 
                     {/* 수업 내용 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">수업 내용</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">수업 내용</label>
                         <textarea
                             value={content}
                             onChange={(e) => { setContent(e.target.value); setSaved(false); }}
                             placeholder="오늘 수업에서 진행한 내용을 작성해주세요."
                             rows={4}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 resize-y"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
                         />
                     </div>
 
                     {/* 수업 사진 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">수업 사진</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">수업 사진</label>
                         {photos.length > 0 && (
                             <div className="flex flex-wrap gap-3 mb-3">
                                 {photos.map((url, i) => (
@@ -289,7 +289,7 @@ export default function ReportEditClient({
                                         <img
                                             src={url}
                                             alt={`수업 사진 ${i + 1}`}
-                                            className="w-24 h-24 object-cover rounded-lg border border-gray-200"
+                                            className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
                                             onError={(e) => {
                                                 (e.target as HTMLImageElement).src = "";
                                                 (e.target as HTMLImageElement).alt = "이미지 로드 실패";
@@ -307,7 +307,7 @@ export default function ReportEditClient({
                         )}
                         <button
                             onClick={addPhotoUrl}
-                            className="text-sm text-brand-orange-500 font-bold hover:underline flex items-center gap-1"
+                            className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline flex items-center gap-1"
                         >
                             <span className="material-symbols-outlined text-sm">add_photo_alternate</span>
                             사진 URL 추가
@@ -317,13 +317,13 @@ export default function ReportEditClient({
             </div>
 
             {/* 출석 현황 + 학생별 노트 카드 */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-                <div className="p-5 border-b border-gray-100 bg-gray-50/50">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-6">
+                <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="material-symbols-outlined">people</span>
                         출석 현황 및 학생별 코멘트
                     </h2>
-                    <p className="text-gray-500 text-xs mt-1">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                         각 학생에 대한 개별 코멘트를 작성할 수 있습니다. 학부모에게 리포트 발행 시 함께 전달됩니다.
                     </p>
                 </div>
@@ -335,14 +335,14 @@ export default function ReportEditClient({
                 ) : (
                     <div className="divide-y divide-gray-100">
                         {report.attendances.map((a) => {
-                            const statusInfo = STATUS_MAP[a.status] || { label: a.status, color: "bg-gray-100 text-gray-500" };
+                            const statusInfo = STATUS_MAP[a.status] || { label: a.status, color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" };
                             const noteData = studentNotes[a.studentId] || { note: "", rating: null };
 
                             return (
                                 <div key={a.studentId} className="px-5 py-4">
                                     {/* 학생 이름 + 출석 상태 */}
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="font-bold text-gray-900">{a.studentName}</span>
+                                        <span className="font-bold text-gray-900 dark:text-white">{a.studentName}</span>
                                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${statusInfo.color}`}>
                                             {statusInfo.label}
                                         </span>
@@ -350,7 +350,7 @@ export default function ReportEditClient({
 
                                     {/* 참여도 평점 (별 1~5) */}
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-xs text-gray-500 font-medium">참여도:</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">참여도:</span>
                                         <div className="flex gap-0.5">
                                             {[1, 2, 3, 4, 5].map((star) => (
                                                 <button
@@ -387,7 +387,7 @@ export default function ReportEditClient({
                                         onChange={(e) => updateNote(a.studentId, e.target.value)}
                                         placeholder="이 학생에 대한 코멘트를 작성하세요..."
                                         rows={2}
-                                        className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-brand-orange-500 resize-y"
+                                        className="w-full border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
                                     />
                                 </div>
                             );
@@ -397,7 +397,7 @@ export default function ReportEditClient({
             </div>
 
             {/* 하단 버튼 바 */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center justify-between">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     {/* 발행/발행취소 버튼 */}
                     <button
@@ -405,7 +405,7 @@ export default function ReportEditClient({
                         disabled={publishing}
                         className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1 ${
                             published
-                                ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                ? "bg-gray-200 text-gray-700 dark:text-gray-200 hover:bg-gray-300"
                                 : "bg-green-600 text-white hover:bg-green-700"
                         } disabled:opacity-50`}
                     >
@@ -422,7 +422,7 @@ export default function ReportEditClient({
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="bg-brand-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-1"
+                        className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-1"
                     >
                         <span className="material-symbols-outlined text-base">save</span>
                         {saving ? "저장 중..." : "저장"}

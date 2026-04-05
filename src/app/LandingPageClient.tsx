@@ -49,12 +49,12 @@ export default function LandingPageClient({
           - settings.introductionTitle, settings.introductionText 의존성 유지
           - dangerouslySetInnerHTML 유지 (Tiptap HTML 지원)
           ============================================= */}
-      <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 text-white py-8 md:py-12 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-brand-navy-900 via-blue-900 to-blue-800 dark:from-black dark:via-gray-900 dark:to-black text-white py-8 md:py-12 relative overflow-hidden transition-colors duration-300">
         {/* 장식 도형 — 배경에 깊이감과 다이나믹 느낌 부여 */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute right-0 top-0 w-[500px] h-[500px] border-[40px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3"></div>
-          <div className="absolute left-0 bottom-0 w-80 h-80 border-[30px] border-brand-orange-500/20 rounded-full -translate-x-1/3 translate-y-1/3"></div>
-          <div className="absolute right-1/4 bottom-1/4 w-32 h-32 bg-brand-orange-500/10 rounded-full blur-xl"></div>
+          <div className="absolute right-0 top-0 w-[500px] h-[500px] border-[40px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3"></div>
+          <div className="absolute left-0 bottom-0 w-80 h-80 border-[30px] border-brand-orange-500/20 dark:border-brand-neon-lime/20 rounded-full -translate-x-1/3 translate-y-1/3"></div>
+          <div className="absolute right-1/4 bottom-1/4 w-32 h-32 bg-brand-orange-500/10 dark:bg-brand-neon-cobalt/20 rounded-full blur-xl"></div>
         </div>
 
         <div className="max-w-6xl mx-auto px-4 relative">
@@ -63,20 +63,20 @@ export default function LandingPageClient({
             {/* 좌측: 비주얼 영역 — 농구 그래픽 장식 */}
             <div className="flex-1 hidden lg:flex items-center justify-center">
               <div className="relative w-64 h-64">
-                <div className="absolute inset-0 bg-brand-orange-500/20 rounded-full animate-pulse" />
-                <div className="absolute inset-4 bg-brand-orange-500/30 rounded-full" />
-                <div className="absolute inset-8 bg-brand-orange-500/20 rounded-full flex items-center justify-center">
+                <div className="absolute inset-0 bg-brand-orange-500/20 dark:bg-brand-neon-lime/20 rounded-full animate-pulse" />
+                <div className="absolute inset-4 bg-brand-orange-500/30 dark:bg-brand-neon-lime/30 rounded-full" />
+                <div className="absolute inset-8 bg-brand-orange-500/20 dark:bg-brand-neon-lime/20 rounded-full flex items-center justify-center">
                   <span className="text-7xl">🏀</span>
                 </div>
-                <div className="absolute -top-4 -right-4 w-16 h-16 border-4 border-white/20 rounded-full" />
-                <div className="absolute -bottom-2 -left-2 w-12 h-12 border-4 border-brand-orange-500/30 rounded-full" />
+                <div className="absolute -top-4 -right-4 w-16 h-16 border-4 border-white/20 dark:border-brand-neon-cobalt/30 rounded-full" />
+                <div className="absolute -bottom-2 -left-2 w-12 h-12 border-4 border-brand-orange-500/30 dark:border-brand-neon-lime/40 rounded-full" />
               </div>
             </div>
 
             {/* 우측: 텍스트 (우정렬) */}
             <div className="flex-1 max-w-xl lg:text-right">
               {/* 상단 뱃지 — 지역 No.1 포지셔닝 */}
-              <div className="inline-block bg-brand-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full mb-4 uppercase tracking-wider shadow">
+              <div className="inline-block bg-brand-orange-500 dark:bg-brand-neon-lime text-white dark:text-brand-navy-900 text-xs font-bold px-4 py-1.5 rounded-full mb-4 uppercase tracking-wider shadow dark:shadow-brand-neon-lime/30">
                 다산신도시 No.1 농구 전문 학원
               </div>
 
@@ -87,7 +87,7 @@ export default function LandingPageClient({
 
               {/* 소개 텍스트 — Tiptap HTML(dangerouslySetInnerHTML) 유지 필수 */}
               <div
-                className="text-blue-100 text-base leading-relaxed [&_strong]:font-bold [&_em]:italic [&_p]:mb-1 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold"
+                className="text-blue-100 dark:text-gray-300 [&_*]:!text-blue-100 dark:[&_*]:!text-gray-300 text-base leading-relaxed [&_strong]:font-bold [&_em]:italic [&_p]:mb-1 [&_h1]:text-2xl [&_h1]:font-black [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-bold transition-colors"
                 dangerouslySetInnerHTML={{
                   __html: sanitizeHtml((() => {
                     const t = settings.introductionText;
@@ -141,7 +141,7 @@ export default function LandingPageClient({
             >
               <div className="max-w-4xl mx-auto">
                 <AnimateOnScroll>
-                  <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200 aspect-video">
+                  <div className="rounded-2xl overflow-hidden shadow-lg dark:shadow-brand-neon-cobalt/20 border border-gray-200 dark:border-gray-800 aspect-video">
                     <iframe
                       src={`https://www.youtube.com/embed/${videoId}?rel=0`}
                       title="STIZ 농구교실 소개"
@@ -183,7 +183,7 @@ export default function LandingPageClient({
                 {displayImages.map((url, i) => (
                   <div
                     key={i}
-                    className="aspect-square relative rounded-xl overflow-hidden bg-gray-200 group"
+                    className="aspect-square relative rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 group"
                   >
                     <Image
                       src={url}
@@ -204,7 +204,7 @@ export default function LandingPageClient({
               <div className="text-center mt-8">
                 <Link
                   href="/gallery"
-                  className="inline-flex items-center gap-2 text-brand-orange-500 font-bold hover:text-brand-orange-600 transition-colors text-base"
+                  className="inline-flex items-center gap-2 text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 transition-colors text-base"
                 >
                   더 많은 사진 보기
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

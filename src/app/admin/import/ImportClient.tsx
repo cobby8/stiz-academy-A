@@ -197,15 +197,15 @@ export default function ImportClient() {
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">수강생 데이터 이관</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">수강생 데이터 이관</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             구글 스프레드시트 CSV 데이터를 DB로 이관합니다.
           </p>
         </div>
         {step !== "upload" && (
           <button
             onClick={handleReset}
-            className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 transition-colors"
           >
             <span className="material-symbols-outlined text-base align-middle mr-1">
               restart_alt
@@ -231,15 +231,15 @@ export default function ImportClient() {
 
       {/* ===== 1단계: 업로드 ===== */}
       {step === "upload" && (
-        <div className="bg-white rounded-xl shadow-sm border p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             <span className="material-symbols-outlined text-xl align-middle mr-2 text-blue-500">
               upload_file
             </span>
             CSV 데이터 입력
           </h2>
 
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             구글 스프레드시트에서 전체 데이터를 복사하여 아래에 붙여넣거나,
             CSV 파일을 업로드해주세요.
           </p>
@@ -257,7 +257,7 @@ export default function ImportClient() {
 
           {/* 파일 업로드 */}
           <div className="flex items-center gap-4">
-            <label className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer">
+            <label className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer">
               <span className="material-symbols-outlined text-base align-middle mr-1">
                 attach_file
               </span>
@@ -271,7 +271,7 @@ export default function ImportClient() {
             </label>
 
             {csvText && (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
                 {csvText.split("\n").filter((l) => l.trim()).length}행 입력됨
               </span>
             )}
@@ -348,7 +348,7 @@ export default function ImportClient() {
                 className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                   statusFilter === tab.key
                     ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                 }`}
               >
                 {tab.label} ({tab.count})
@@ -357,35 +357,35 @@ export default function ImportClient() {
           </div>
 
           {/* 학생 테이블 */}
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-gray-50 dark:bg-gray-900 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">#</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">지점</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">이름</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">학부모</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">학교/학년</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">상태</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">결제</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">수업</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">지점</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">이름</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">학부모</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">학교/학년</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">상태</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">결제</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">수업</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {filteredStudents.slice(0, 100).map((s, i) => {
-                    const statusInfo = STATUS_LABEL[s.status] || { text: s.status, color: "bg-gray-100 text-gray-800" };
+                    const statusInfo = STATUS_LABEL[s.status] || { text: s.status, color: "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100" };
                     return (
-                      <tr key={i} className="hover:bg-gray-50">
+                      <tr key={i} className="hover:bg-gray-50 dark:bg-gray-900">
                         <td className="px-4 py-3 text-gray-400">{s.rowNumber}</td>
                         <td className="px-4 py-3">{s.branch}</td>
                         <td className="px-4 py-3 font-medium">{s.name}</td>
-                        <td className="px-4 py-3 text-gray-600">
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                           {s.parentName}
                           <br />
                           <span className="text-xs text-gray-400">{s.parentPhone}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                           {s.school || "-"}
                           {s.grade && <span className="text-xs text-gray-400 ml-1">{s.grade}</span>}
                         </td>
@@ -394,7 +394,7 @@ export default function ImportClient() {
                             {statusInfo.text}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                           {s.paymentMethod ? METHOD_LABEL[s.paymentMethod] || s.paymentMethod : "-"}
                           {s.amount ? (
                             <span className="text-xs text-gray-400 ml-1">
@@ -426,7 +426,7 @@ export default function ImportClient() {
             </div>
 
             {filteredStudents.length > 100 && (
-              <div className="px-4 py-3 bg-gray-50 border-t text-sm text-gray-500">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t text-sm text-gray-500 dark:text-gray-400">
                 상위 100명만 표시됨 (전체 {filteredStudents.length}명)
               </div>
             )}
@@ -436,7 +436,7 @@ export default function ImportClient() {
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setStep("upload")}
-              className="px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
             >
               뒤로
             </button>
@@ -561,7 +561,7 @@ function StepIndicator({ current }: { current: "upload" | "preview" | "result" }
                 ? "bg-blue-100 text-blue-700"
                 : i < currentIdx
                 ? "bg-green-100 text-green-700"
-                : "bg-gray-100 text-gray-400"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-400"
             }`}
           >
             <span className="material-symbols-outlined text-base">{s.icon}</span>
@@ -586,7 +586,7 @@ function SummaryCard({
   color?: string;
 }) {
   const colorMap: Record<string, string> = {
-    gray: "text-gray-500",
+    gray: "text-gray-500 dark:text-gray-400",
     blue: "text-blue-500",
     green: "text-green-500",
     yellow: "text-yellow-500",
@@ -594,14 +594,14 @@ function SummaryCard({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-4">
       <div className="flex items-center gap-2 mb-1">
         <span className={`material-symbols-outlined text-lg ${colorMap[color]}`}>
           {icon}
         </span>
-        <span className="text-xs text-gray-500">{label}</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-gray-900">{value.toLocaleString()}</p>
+      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value.toLocaleString()}</p>
     </div>
   );
 }
@@ -617,8 +617,8 @@ function ResultCard({
   skipped: number;
 }) {
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-4">
-      <p className="text-sm font-medium text-gray-700 mb-2">{label}</p>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-4">
+      <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{label}</p>
       <div className="space-y-1">
         <div className="flex justify-between text-sm">
           <span className="text-green-600">생성</span>
@@ -626,7 +626,7 @@ function ResultCard({
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-gray-400">건너뜀 (중복)</span>
-          <span className="text-gray-500">{skipped}</span>
+          <span className="text-gray-500 dark:text-gray-400">{skipped}</span>
         </div>
       </div>
     </div>

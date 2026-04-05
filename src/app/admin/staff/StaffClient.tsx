@@ -55,14 +55,14 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
     ADMIN: { label: "원장", color: "bg-red-100 text-red-800" },
     VICE_ADMIN: { label: "부원장", color: "bg-orange-100 text-orange-800" },
     INSTRUCTOR: { label: "코치/강사", color: "bg-blue-100 text-blue-800" },
-    PARENT: { label: "학부모", color: "bg-gray-100 text-gray-600" },
+    PARENT: { label: "학부모", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
 };
 
 // 초대 상태별 라벨 + 색상
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
     PENDING: { label: "대기 중", color: "bg-yellow-100 text-yellow-800" },
     ACCEPTED: { label: "수락 완료", color: "bg-green-100 text-green-800" },
-    CANCELLED: { label: "취소됨", color: "bg-gray-100 text-gray-600" },
+    CANCELLED: { label: "취소됨", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
     EXPIRED: { label: "만료됨", color: "bg-red-100 text-red-700" },
 };
 
@@ -165,8 +165,8 @@ export default function StaffClient({
             {/* 페이지 헤더 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">스태프 관리</h1>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">스태프 관리</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         관리자, 부원장, 코치/강사 계정을 관리합니다. (원장만 변경 가능)
                     </p>
                 </div>
@@ -182,7 +182,7 @@ export default function StaffClient({
                     {/* 직접 추가 버튼 (보조) */}
                     <button
                         onClick={() => setShowModal("add")}
-                        className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
+                        className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors font-medium text-sm"
                     >
                         <span className="material-symbols-outlined text-[20px]">person_add</span>
                         직접 추가
@@ -199,7 +199,7 @@ export default function StaffClient({
 
             {/* 대기 중인 초대 목록 */}
             {pendingInvitations.length > 0 && (
-                <div className="bg-white rounded-xl border border-yellow-200 overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-yellow-200 overflow-hidden">
                     <div className="px-6 py-4 bg-yellow-50 border-b border-yellow-200">
                         <h3 className="font-semibold text-yellow-800 flex items-center gap-2">
                             <span className="material-symbols-outlined text-[20px]">mail</span>
@@ -221,12 +221,12 @@ export default function StaffClient({
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium text-gray-900">{inv.name}</span>
+                                                <span className="font-medium text-gray-900 dark:text-white">{inv.name}</span>
                                                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${rc.color}`}>
                                                     {rc.label}
                                                 </span>
                                             </div>
-                                            <div className="text-xs text-gray-500 mt-0.5">
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                                 {formatPhone(inv.phone)} | {daysLeft}일 남음
                                             </div>
                                         </div>
@@ -259,14 +259,14 @@ export default function StaffClient({
             )}
 
             {/* 스태프 목록 테이블 */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <table className="w-full">
                     <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200">
-                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">이름</th>
-                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">전화번호</th>
-                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">역할</th>
-                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">코치 연결</th>
+                        <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">이름</th>
+                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">전화번호</th>
+                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">역할</th>
+                            <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">코치 연결</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -281,16 +281,16 @@ export default function StaffClient({
                                 const rc = ROLE_CONFIG[user.role] || ROLE_CONFIG.PARENT;
                                 const isInstructor = user.role === "INSTRUCTOR";
                                 return (
-                                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={user.id} className="hover:bg-gray-50 dark:bg-gray-900 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm ${user.role === "ADMIN" ? "bg-red-500" : user.role === "VICE_ADMIN" ? "bg-orange-500" : "bg-blue-500"}`}>
                                                     {user.name.charAt(0)}
                                                 </div>
-                                                <span className="font-medium text-gray-900">{user.name}</span>
+                                                <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">
+                                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                                             {user.phone ? formatPhone(user.phone) : "-"}
                                         </td>
                                         <td className="px-6 py-4">
@@ -338,11 +338,11 @@ export default function StaffClient({
 
             {/* 완료/취소/만료 초대 이력 (접이식) */}
             {pastInvitations.length > 0 && (
-                <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <summary className="px-6 py-4 cursor-pointer text-sm font-medium text-gray-600 hover:bg-gray-50">
+                <details className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <summary className="px-6 py-4 cursor-pointer text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900">
                         초대 이력 ({pastInvitations.length}건)
                     </summary>
-                    <div className="divide-y divide-gray-100 border-t border-gray-200">
+                    <div className="divide-y divide-gray-100 border-t border-gray-200 dark:border-gray-700">
                         {pastInvitations.slice(0, 20).map((inv) => {
                             const rc = ROLE_CONFIG[inv.role] || ROLE_CONFIG.INSTRUCTOR;
                             const isExpired = inv.status === "PENDING" && new Date(inv.expiresAt) < new Date();
@@ -350,7 +350,7 @@ export default function StaffClient({
                             return (
                                 <div key={inv.id} className="px-6 py-3 flex items-center justify-between text-sm">
                                     <div className="flex items-center gap-3">
-                                        <span className="font-medium text-gray-700">{inv.name}</span>
+                                        <span className="font-medium text-gray-700 dark:text-gray-200">{inv.name}</span>
                                         <span className={`text-xs px-2 py-0.5 rounded-full ${rc.color}`}>{rc.label}</span>
                                         <span className="text-gray-400">{formatPhone(inv.phone)}</span>
                                     </div>
@@ -365,8 +365,8 @@ export default function StaffClient({
             )}
 
             {/* 역할별 권한 안내 카드 */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-[20px]">info</span>
                     역할별 권한 안내
                 </h3>
@@ -480,14 +480,14 @@ function InviteStaffModal({
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
                 {/* 모달 헤더 */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="material-symbols-outlined text-[20px]">send</span>
                         스태프 초대
                     </h2>
-                    <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                    <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:bg-gray-800">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -501,7 +501,7 @@ function InviteStaffModal({
 
                     {/* 이름 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">이름 *</label>
                         <input
                             type="text"
                             value={form.name}
@@ -514,7 +514,7 @@ function InviteStaffModal({
 
                     {/* 전화번호 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">전화번호 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">전화번호 *</label>
                         <input
                             type="tel"
                             value={form.phone}
@@ -528,7 +528,7 @@ function InviteStaffModal({
 
                     {/* 역할 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">부여할 역할 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">부여할 역할 *</label>
                         <select
                             value={form.role}
                             onChange={(e) => setForm({ ...form, role: e.target.value as any })}
@@ -545,7 +545,7 @@ function InviteStaffModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                            className="px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition-colors"
                         >
                             취소
                         </button>
@@ -671,20 +671,20 @@ function AddStaffModal({
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-bold text-gray-900">직접 스태프 추가</h2>
-                    <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">직접 스태프 추가</h2>
+                    <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:bg-gray-800">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">이름 *</label>
                         <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="홍길동" className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">전화번호 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">전화번호 *</label>
                         <div className="flex gap-2">
                             <input type="tel" value={form.phone} onChange={(e) => handlePhoneChange(e.target.value)} placeholder="숫자만 입력 (자동 변환: 010-1234-5678)" required disabled={verifyStep === "verified"} className={`flex-1 px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500 ${verifyStep === "verified" ? "border-green-300 bg-green-50 text-green-800" : "border-gray-300"}`} />
                             {verifyStep === "verified" ? (
@@ -702,7 +702,7 @@ function AddStaffModal({
                     </div>
                     {verifyStep === "sent" && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">인증번호</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">인증번호</label>
                             <div className="flex gap-2">
                                 <input type="text" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6자리 숫자" maxLength={6} className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-center tracking-[0.3em] font-mono focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500" />
                                 <button type="button" onClick={handleVerifyCode} disabled={verifyCode.length < 6 || verifyLoading} className="px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 whitespace-nowrap">
@@ -717,7 +717,7 @@ function AddStaffModal({
                         </div>
                     )}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">역할 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">역할 *</label>
                         <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500">
                             <option value="INSTRUCTOR">코치/강사</option>
                             <option value="VICE_ADMIN">부원장</option>
@@ -725,7 +725,7 @@ function AddStaffModal({
                         </select>
                     </div>
                     <div className="flex justify-end gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">취소</button>
+                        <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition-colors">취소</button>
                         <button type="submit" disabled={isPending || verifyStep !== "verified" || !form.name} className="px-4 py-2.5 text-sm font-medium text-white bg-brand-navy-900 rounded-lg hover:bg-brand-navy-800 transition-colors disabled:opacity-50">
                             {isPending ? "추가 중..." : "추가"}
                         </button>

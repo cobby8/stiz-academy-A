@@ -69,7 +69,7 @@ export default function EventDetailPanel({ event, onClose }: Props) {
             />
 
             {/* 패널 본체 — 모바일: 하단 슬라이드업, 데스크톱: 중앙 모달 */}
-            <div className="relative bg-white w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
+            <div className="relative bg-white dark:bg-gray-800 w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
 
                 {/* 모바일 핸들 바 */}
                 <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
@@ -77,19 +77,19 @@ export default function EventDetailPanel({ event, onClose }: Props) {
                 </div>
 
                 {/* 헤더 */}
-                <div className="flex items-start justify-between px-6 pt-4 pb-4 border-b border-gray-100 shrink-0">
+                <div className="flex items-start justify-between px-6 pt-4 pb-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
                     <div className="flex-1 min-w-0 pr-4">
                         <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full mb-2 border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
                             <span className={`w-2 h-2 rounded-full ${catStyle.dot}`} />
                             {event.category || "일반"}
                         </span>
-                        <h2 className="text-xl font-black text-gray-900 leading-tight break-words">
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white leading-tight break-words">
                             {event.title}
                         </h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition text-lg"
+                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-700 dark:text-gray-200 transition text-lg"
                         aria-label="닫기"
                     >
                         ✕
@@ -102,16 +102,16 @@ export default function EventDetailPanel({ event, onClose }: Props) {
                     <div className="flex items-start gap-3">
                         <span className="text-xl mt-0.5">📅</span>
                         <div>
-                            <p className="font-bold text-gray-900 text-sm">
+                            <p className="font-bold text-gray-900 dark:text-white text-sm">
                                 {formatDate(event.date, event.isAllDay)}
                             </p>
                             {isMultiDay && event.endDate && (
-                                <p className="text-sm text-gray-500 mt-0.5">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                                     ~ {formatDate(event.endDate, event.isAllDay)}
                                 </p>
                             )}
                             {event.isAllDay && (
-                                <span className="mt-1.5 inline-block text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                                <span className="mt-1.5 inline-block text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
                                     종일
                                 </span>
                             )}
@@ -122,7 +122,7 @@ export default function EventDetailPanel({ event, onClose }: Props) {
                     {event.description ? (
                         <div className="flex items-start gap-3">
                             <span className="text-xl mt-0.5">📝</span>
-                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                            <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-line">
                                 {event.description}
                             </p>
                         </div>
@@ -135,7 +135,7 @@ export default function EventDetailPanel({ event, onClose }: Props) {
 
                     {/* 구글 캘린더 원본 링크 */}
                     {event.url && (
-                        <div className="pt-1 border-t border-gray-100">
+                        <div className="pt-1 border-t border-gray-100 dark:border-gray-800">
                             <a
                                 href={event.url}
                                 target="_blank"
@@ -155,7 +155,7 @@ export default function EventDetailPanel({ event, onClose }: Props) {
                 <div className="px-6 pb-6 pt-2 shrink-0">
                     <button
                         onClick={onClose}
-                        className="w-full py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm transition"
+                        className="w-full py-3 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 text-gray-700 dark:text-gray-200 font-bold text-sm transition"
                     >
                         닫기
                     </button>

@@ -34,7 +34,7 @@ const defaultItems: TrustItem[] = [
 export default function TrustBadges({ items = defaultItems }: TrustBadgesProps) {
   return (
     // 네이비 배경으로 신뢰감 있는 느낌, 메인 히어로 바로 아래에 위치
-    <section className="bg-brand-navy-900 py-10 md:py-14">
+    <section className="bg-brand-navy-900 dark:bg-black py-10 md:py-14 transition-colors duration-300">
       <div className="max-w-6xl mx-auto px-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
           {items.map((item, index) => (

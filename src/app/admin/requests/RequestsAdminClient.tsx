@@ -8,7 +8,7 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
     ABSENCE: { label: "결석 신청", color: "bg-red-100 text-red-700" },
     SHUTTLE: { label: "셔틀 변경", color: "bg-blue-100 text-blue-700" },
     EARLY_LEAVE: { label: "조퇴 요청", color: "bg-yellow-100 text-yellow-700" },
-    OTHER: { label: "기타", color: "bg-gray-100 text-gray-700" },
+    OTHER: { label: "기타", color: "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200" },
 };
 
 const STATUS_OPTIONS = [
@@ -55,8 +55,8 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 mb-1">학부모 요청 관리</h1>
-                <p className="text-gray-500 text-sm">학부모가 접수한 결석, 셔틀 변경 등의 요청을 관리합니다.</p>
+                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1">학부모 요청 관리</h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">학부모가 접수한 결석, 셔틀 변경 등의 요청을 관리합니다.</p>
             </div>
 
             {/* 필터 탭 */}
@@ -71,8 +71,8 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                         onClick={() => setFilter(f.value)}
                         className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
                             filter === f.value
-                                ? "bg-brand-orange-500 text-white"
-                                : "bg-white border border-gray-200 text-gray-600 hover:border-brand-orange-300"
+                                ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white"
+                                : "bg-white dark:bg-gray-800 border border-gray-200 text-gray-600 dark:text-gray-300 hover:border-brand-orange-300 dark:border-brand-neon-lime"
                         }`}
                     >
                         {f.label}
@@ -83,7 +83,7 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
 
             {/* 요청 목록 */}
             {filtered.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400 shadow-sm">
                     <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">요청이 없습니다</p>
                 </div>
@@ -96,13 +96,13 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                         const isExpanded = expandedId === req.id;
 
                         return (
-                            <div key={req.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition ${
-                                req.status === "PENDING" ? "border-yellow-200" : "border-gray-100"
+                            <div key={req.id} className={`bg-white dark:bg-gray-800 rounded-2xl border shadow-sm overflow-hidden transition ${
+                                req.status === "PENDING" ? "border-yellow-200" : "border-gray-100 dark:border-gray-800"
                             }`}>
                                 {/* 요약 헤더 (클릭하면 펼침) */}
                                 <button
                                     onClick={() => setExpandedId(isExpanded ? null : req.id)}
-                                    className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-gray-50 transition"
+                                    className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-gray-50 dark:bg-gray-900 transition"
                                 >
                                     {/* 상태 아이콘 */}
                                     <div className={`p-2 rounded-full flex-shrink-0 ${statusInfo.color}`}>
@@ -114,9 +114,9 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${typeInfo.color}`}>
                                                 {typeInfo.label}
                                             </span>
-                                            <span className="font-bold text-sm text-gray-900 truncate">{req.title}</span>
+                                            <span className="font-bold text-sm text-gray-900 dark:text-white truncate">{req.title}</span>
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-0.5">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                             {req.parentName} ({req.studentName}) &middot; {new Date(req.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                                         </p>
                                     </div>
@@ -129,28 +129,28 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                     <div className="px-5 pb-5 border-t border-gray-50 space-y-4">
                                         {/* 요청 내용 */}
                                         <div className="pt-3">
-                                            <p className="text-sm text-gray-800 whitespace-pre-wrap">{req.content}</p>
+                                            <p className="text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap">{req.content}</p>
                                             {req.date && (
-                                                <p className="text-xs text-gray-500 mt-2">
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                                                     해당 날짜: <span className="font-bold">{new Date(req.date).toLocaleDateString("ko-KR")}</span>
                                                 </p>
                                             )}
                                             {req.parentPhone && (
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    연락처: <a href={`tel:${req.parentPhone}`} className="text-brand-orange-500 font-bold">{req.parentPhone}</a>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    연락처: <a href={`tel:${req.parentPhone}`} className="text-brand-orange-500 dark:text-brand-neon-lime font-bold">{req.parentPhone}</a>
                                                 </p>
                                             )}
                                         </div>
 
                                         {/* 관리자 메모 */}
                                         <div>
-                                            <label className="text-xs font-medium text-gray-500 mb-1 block">관리자 메모/답변</label>
+                                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">관리자 메모/답변</label>
                                             <textarea
                                                 value={adminNotes[req.id] ?? req.adminNote ?? ""}
                                                 onChange={e => setAdminNotes(prev => ({ ...prev, [req.id]: e.target.value }))}
                                                 placeholder="학부모에게 전달할 답변을 작성하세요"
                                                 rows={2}
-                                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none"
+                                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm resize-none"
                                             />
                                         </div>
 

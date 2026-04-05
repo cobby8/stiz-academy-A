@@ -23,13 +23,13 @@ export default async function MyPageSkillsPage() {
         return (
             <div className="flex flex-col items-center justify-center py-20 text-center">
                 <span className="material-symbols-outlined text-5xl text-gray-300 mb-4">lock</span>
-                <h2 className="text-xl font-bold text-gray-900 mb-2">로그인이 필요합니다</h2>
-                <p className="text-gray-500 mb-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">로그인이 필요합니다</h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">
                     스킬 현황은 학부모 계정으로 로그인 후 확인할 수 있습니다.
                 </p>
                 <Link
                     href="/login"
-                    className="bg-brand-orange-500 text-white font-bold px-6 py-3 rounded-xl hover:bg-orange-600 transition"
+                    className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold px-6 py-3 rounded-xl hover:bg-orange-600 transition"
                 >
                     로그인하기
                 </Link>
@@ -72,8 +72,8 @@ export default async function MyPageSkillsPage() {
     if (categories.length === 0) {
         return (
             <div className="max-w-2xl mx-auto">
-                <h1 className="text-2xl font-bold text-gray-900 mb-6">스킬 현황</h1>
-                <div className="bg-white rounded-xl border border-gray-200 py-16 text-center text-gray-400">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">스킬 현황</h1>
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 py-16 text-center text-gray-400">
                     <span className="material-symbols-outlined text-5xl mb-3 block">
                         sports_basketball
                     </span>
@@ -96,8 +96,8 @@ export default async function MyPageSkillsPage() {
 
     return (
         <div className="max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">스킬 현황</h1>
-            <p className="text-sm text-gray-500 mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">스킬 현황</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                 자녀의 기술별 성장 현황을 확인할 수 있습니다.
             </p>
 
@@ -119,11 +119,11 @@ export default async function MyPageSkillsPage() {
                     return (
                         <div
                             key={child.id}
-                            className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+                            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                         >
                             {/* 자녀 이름 헤더 */}
-                            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                                <h2 className="font-bold text-gray-900 text-lg">
+                            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+                                <h2 className="font-bold text-gray-900 dark:text-white text-lg">
                                     {child.name}
                                 </h2>
                             </div>
@@ -133,7 +133,7 @@ export default async function MyPageSkillsPage() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* 레이더 차트 */}
                                         <div className="flex flex-col items-center">
-                                            <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
                                                 종합 스킬
                                             </h3>
                                             <SkillRadarChart
@@ -144,7 +144,7 @@ export default async function MyPageSkillsPage() {
 
                                         {/* 스킬 상세 바 */}
                                         <div>
-                                            <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
                                                 항목별 레벨
                                             </h3>
                                             <div className="space-y-3">
@@ -162,7 +162,7 @@ export default async function MyPageSkillsPage() {
                                                     return (
                                                         <div key={cat.id}>
                                                             <div className="flex items-center justify-between mb-1">
-                                                                <span className="text-sm text-gray-700">
+                                                                <span className="text-sm text-gray-700 dark:text-gray-200">
                                                                     {cat.icon && (
                                                                         <span className="material-symbols-outlined text-[16px] align-middle mr-1 text-gray-400">
                                                                             {cat.icon}
@@ -175,7 +175,7 @@ export default async function MyPageSkillsPage() {
                                                                 </span>
                                                             </div>
                                                             {/* 프로그레스 바 */}
-                                                            <div className="w-full bg-gray-100 rounded-full h-2">
+                                                            <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                                                                 <div
                                                                     className="bg-orange-500 h-2 rounded-full transition-all"
                                                                     style={{
@@ -192,8 +192,8 @@ export default async function MyPageSkillsPage() {
 
                                     {/* 최근 평가 이력 */}
                                     {child.history.length > 0 && (
-                                        <div className="mt-6 pt-6 border-t border-gray-100">
-                                            <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                                        <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+                                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
                                                 최근 평가 이력
                                             </h3>
                                             <div className="space-y-2">
@@ -214,7 +214,7 @@ export default async function MyPageSkillsPage() {
                                                                     "ko-KR",
                                                                 )}
                                                             </span>
-                                                            <span className="font-medium text-gray-700">
+                                                            <span className="font-medium text-gray-700 dark:text-gray-200">
                                                                 {h.categoryName}
                                                             </span>
                                                             <span className="text-xs font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">

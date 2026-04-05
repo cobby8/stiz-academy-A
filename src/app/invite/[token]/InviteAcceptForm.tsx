@@ -128,7 +128,7 @@ export default function InviteAcceptForm({
     }
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             {/* 상단 브랜드 영역 */}
             <div className="bg-brand-navy-900 px-6 py-6 text-center">
                 <h1 className="text-white text-xl font-bold">STIZ 농구교실</h1>
@@ -158,31 +158,31 @@ export default function InviteAcceptForm({
             {step === 1 && (
                 <div className="p-6 space-y-5">
                     <div className="text-center">
-                        <h2 className="text-lg font-bold text-gray-900">{name}님, 환영합니다!</h2>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">{name}님, 환영합니다!</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             스태프로 초대되었습니다. 아래 정보를 확인해주세요.
                         </p>
                     </div>
 
                     {/* 초대 정보 카드 */}
-                    <div className="bg-gray-50 rounded-xl p-5 space-y-3">
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-5 space-y-3">
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-500">이름</span>
-                            <span className="text-sm font-medium text-gray-900">{name}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">이름</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">{name}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-500">전화번호</span>
-                            <span className="text-sm font-medium text-gray-900">{maskedPhone}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">전화번호</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">{maskedPhone}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-500">부여 역할</span>
-                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ROLE_COLORS[role] || "bg-gray-100 text-gray-800"}`}>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">부여 역할</span>
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ROLE_COLORS[role] || "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100"}`}>
                                 {roleLabel}
                             </span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-500">유효 기간</span>
-                            <span className="text-sm text-gray-700">{daysLeft}일 남음</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">유효 기간</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-200">{daysLeft}일 남음</span>
                         </div>
                     </div>
 
@@ -208,8 +208,8 @@ export default function InviteAcceptForm({
             {step === 2 && (
                 <div className="p-6 space-y-5">
                     <div className="text-center">
-                        <h2 className="text-lg font-bold text-gray-900">본인 인증</h2>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">본인 인증</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             {maskedPhone}(으)로 발송된 6자리 인증번호를 입력해주세요.
                         </p>
                     </div>
@@ -252,7 +252,7 @@ export default function InviteAcceptForm({
                         <button
                             onClick={handleResendCode}
                             disabled={isPending}
-                            className="text-xs text-gray-500 hover:text-brand-navy-700 underline disabled:opacity-50"
+                            className="text-xs text-gray-500 dark:text-gray-400 hover:text-brand-navy-700 underline disabled:opacity-50"
                         >
                             인증번호가 안 왔나요? 재발송
                         </button>
@@ -265,8 +265,8 @@ export default function InviteAcceptForm({
                 <div className="p-6 space-y-5">
                     <div className="text-center">
                         <span className="material-symbols-outlined text-[36px] text-green-500">verified</span>
-                        <h2 className="text-lg font-bold text-gray-900 mt-2">인증 완료</h2>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white mt-2">인증 완료</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             마지막으로 로그인에 사용할 비밀번호를 설정해주세요.
                         </p>
                     </div>
@@ -274,7 +274,7 @@ export default function InviteAcceptForm({
                     {/* 비밀번호 입력 */}
                     <div className="space-y-3">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">비밀번호</label>
                             <input
                                 type="password"
                                 value={password}
@@ -286,7 +286,7 @@ export default function InviteAcceptForm({
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호 확인</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">비밀번호 확인</label>
                             <input
                                 type="password"
                                 value={confirmPassword}
@@ -321,22 +321,22 @@ export default function InviteAcceptForm({
                 <div className="p-6 space-y-5 text-center">
                     <span className="material-symbols-outlined text-[48px] text-green-500">celebration</span>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">가입이 완료되었습니다!</h2>
-                        <p className="text-sm text-gray-500 mt-2">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">가입이 완료되었습니다!</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                             {name}님, {roleLabel} 역할로 등록되었습니다.
                         </p>
                     </div>
 
                     {/* 로그인 정보 안내 */}
-                    <div className="bg-gray-50 rounded-xl p-5 space-y-2 text-left">
-                        <p className="text-xs text-gray-500 font-medium uppercase">로그인 정보</p>
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-5 space-y-2 text-left">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase">로그인 정보</p>
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-500">이메일 (ID)</span>
-                            <span className="text-sm font-mono font-medium text-gray-900">{resultEmail}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">이메일 (ID)</span>
+                            <span className="text-sm font-mono font-medium text-gray-900 dark:text-white">{resultEmail}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-500">비밀번호</span>
-                            <span className="text-sm text-gray-700">방금 설정한 비밀번호</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">비밀번호</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-200">방금 설정한 비밀번호</span>
                         </div>
                     </div>
 

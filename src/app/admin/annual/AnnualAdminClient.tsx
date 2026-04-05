@@ -141,21 +141,21 @@ export default function AnnualAdminClient({
         <div className="max-w-4xl mx-auto">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-2xl font-extrabold text-gray-900">연간일정 관리</h1>
-                    <p className="text-gray-500 text-sm mt-1">학원 연간 일정을 관리합니다. 등록된 일정은 연간일정 페이지에 표시됩니다.</p>
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">연간일정 관리</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">학원 연간 일정을 관리합니다. 등록된 일정은 연간일정 페이지에 표시됩니다.</p>
                 </div>
                 <button
                     onClick={() => { resetForm(); setShowForm(true); }}
-                    className="bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
+                    className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
                 >
                     + 일정 추가
                 </button>
             </div>
 
             {/* ── 구글 캘린더 ICS URL 설정 ────────────────────────── */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
-                <h3 className="font-bold text-sm text-gray-800 mb-2">구글 캘린더 연동 (ICS)</h3>
-                <p className="text-xs text-gray-500 mb-3">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-6 shadow-sm">
+                <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 mb-2">구글 캘린더 연동 (ICS)</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                     구글 캘린더 → 설정 → 캘린더 통합 → &quot;iCal 형식의 공개 주소&quot;를 복사해 붙여넣으세요.
                     연동하면 공개 연간일정 페이지에 구글 캘린더 일정이 함께 표시됩니다.
                 </p>
@@ -165,13 +165,13 @@ export default function AnnualAdminClient({
                         value={icsUrl}
                         onChange={(e) => setIcsUrl(e.target.value)}
                         placeholder="https://calendar.google.com/calendar/ical/...@group.calendar.google.com/public/basic.ics"
-                        className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                        className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                     />
                     <button
                         type="button"
                         onClick={handleSaveIcsUrl}
                         disabled={icsSaving}
-                        className="shrink-0 bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50 text-sm"
+                        className="shrink-0 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50 text-sm"
                     >
                         {icsSaving ? "저장 중..." : "저장"}
                     </button>
@@ -185,47 +185,47 @@ export default function AnnualAdminClient({
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm space-y-4">
-                    <h3 className="font-bold text-lg text-gray-900">{editingId ? "일정 수정" : "새 일정 추가"}</h3>
+                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{editingId ? "일정 수정" : "새 일정 추가"}</h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="sm:col-span-2">
-                            <label className="block text-sm font-bold text-gray-700 mb-1">제목 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">제목 *</label>
                             <input
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 required
                                 placeholder="예: 3월 개강"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">시작일 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">시작일 *</label>
                             <input
                                 type="date"
                                 min="2020-01-01" max="2030-12-31"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">종료일 (선택)</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">종료일 (선택)</label>
                             <input
                                 type="date"
                                 min="2020-01-01" max="2030-12-31"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">카테고리</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">카테고리</label>
                             <select
                                 value={category}
                                 onChange={(e) => setCategory(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             >
                                 {CATEGORIES.map((c) => (
                                     <option key={c} value={c}>{c}</option>
@@ -233,25 +233,25 @@ export default function AnnualAdminClient({
                             </select>
                         </div>
                         <div className="sm:col-span-2">
-                            <label className="block text-sm font-bold text-gray-700 mb-1">설명 (선택)</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">설명 (선택)</label>
                             <textarea
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 rows={2}
                                 placeholder="일정에 대한 추가 설명"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                     </div>
 
                     <div className="flex gap-2 justify-end">
-                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white">
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy}
-                            className="bg-brand-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50"
+                            className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50"
                         >
                             {busy ? "저장 중..." : editingId ? "수정" : "추가"}
                         </button>
@@ -261,19 +261,19 @@ export default function AnnualAdminClient({
 
             {/* Event list */}
             {events.length === 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
                     등록된 일정이 없습니다. &quot;일정 추가&quot; 버튼으로 새 일정을 등록하세요.
                 </div>
             ) : (
                 <div className="space-y-6">
                     {years.map((year) => (
                         <div key={year}>
-                            <h2 className="text-lg font-bold text-gray-800 mb-3">{year}년</h2>
-                            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+                            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-3">{year}년</h2>
+                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100">
                                 {eventsByYear[year].map((ev) => (
-                                    <div key={ev.id} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+                                    <div key={ev.id} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:bg-gray-900 transition-colors">
                                         <div className="flex items-center gap-4 min-w-0">
-                                            <div className="text-sm font-mono text-gray-500 shrink-0 w-24">
+                                            <div className="text-sm font-mono text-gray-500 dark:text-gray-400 shrink-0 w-24">
                                                 {toDateString(ev.date).slice(5)}
                                                 {ev.endDate && ` ~ ${toDateString(ev.endDate).slice(5)}`}
                                             </div>
@@ -281,9 +281,9 @@ export default function AnnualAdminClient({
                                                 {ev.category || "일반"}
                                             </span>
                                             <div className="min-w-0">
-                                                <p className="font-bold text-gray-900 truncate">{ev.title}</p>
+                                                <p className="font-bold text-gray-900 dark:text-white truncate">{ev.title}</p>
                                                 {ev.description && (
-                                                    <p className="text-xs text-gray-500 truncate">{ev.description}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{ev.description}</p>
                                                 )}
                                             </div>
                                         </div>
@@ -305,7 +305,7 @@ export default function AnnualAdminClient({
                                                     </button>
                                                     <button
                                                         onClick={() => setDeleteConfirm(null)}
-                                                        className="text-xs text-gray-500 px-2 py-1"
+                                                        className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
                                                     >
                                                         취소
                                                     </button>

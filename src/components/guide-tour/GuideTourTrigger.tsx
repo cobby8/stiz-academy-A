@@ -1093,7 +1093,7 @@ function TourTriggerInner() {
       {/* 플로팅 입학 가이드 버튼 — 챗봇 버튼(bottom-6 right-6) 바로 위, 같은 열 */}
       <button
         onClick={startTour}
-        className="fixed right-6 z-50 w-14 h-14 rounded-full bg-white text-brand-orange-500 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center border-2 border-brand-orange-500"
+        className="fixed right-6 z-50 w-14 h-14 rounded-full bg-white dark:bg-black text-brand-orange-500 dark:text-brand-neon-lime shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center justify-center border-2 border-brand-orange-500 dark:border-brand-neon-lime"
         style={{ bottom: 88 }}
         aria-label="입학 가이드 시작"
         title="입학 가이드"
@@ -1108,26 +1108,26 @@ function TourTriggerInner() {
 
       {/* 첫 방문 자동 제안 토스트 -- 메인 페이지에서만, 3초 후 표시 */}
       {showPrompt && (
-        <div className="fixed bottom-36 right-4 z-50 bg-white rounded-2xl shadow-2xl p-5 max-w-xs border border-gray-100 animate-in slide-in-from-bottom-4">
+        <div className="fixed bottom-36 right-4 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-5 max-w-xs border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-4">
           {hasSavedPhase ? (
             <>
               {/* 이전에 중단된 투어가 있는 경우 */}
-              <p className="text-sm font-bold text-gray-900 mb-1">
+              <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">
                 이어서 볼까요? 🏀
               </p>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 이전에 보시던 둘러보기가 있어요.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={startTourFromBeginning}
-                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 dark:text-gray-300 transition-colors"
                 >
                   처음부터
                 </button>
                 <button
                   onClick={startTour}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-brand-orange-500 hover:bg-brand-orange-600 rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-xs font-bold text-white dark:text-black bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 rounded-lg transition-colors"
                 >
                   이어서 보기
                 </button>
@@ -1136,22 +1136,22 @@ function TourTriggerInner() {
           ) : (
             <>
               {/* 첫 방문 사용자 */}
-              <p className="text-sm font-bold text-gray-900 mb-1">
+              <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">
                 처음 오셨나요?
               </p>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 학원 둘러보기를 시작할까요?
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={dismissPrompt}
-                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 dark:text-gray-300 transition-colors"
                 >
                   괜찮아요
                 </button>
                 <button
                   onClick={startTour}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-brand-orange-500 hover:bg-brand-orange-600 rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-xs font-bold text-white dark:text-black bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 rounded-lg transition-colors"
                 >
                   시작하기
                 </button>

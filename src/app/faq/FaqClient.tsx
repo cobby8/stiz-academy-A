@@ -79,13 +79,13 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
+    <div className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
       {/* 질문 버튼 — 클릭 시 답변 토글 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between py-5 px-1 text-left hover:text-brand-orange-500 transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between py-5 px-1 text-left hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors cursor-pointer"
       >
-        <span className="font-semibold text-gray-900 pr-4">{question}</span>
+        <span className="font-semibold text-gray-900 dark:text-white pr-4">{question}</span>
         {/* 화살표 아이콘 — 열림/닫힘 상태에 따라 회전 */}
         <svg
           className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
@@ -104,7 +104,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
       {/* 답변 영역 — isOpen일 때만 표시 */}
       {isOpen && (
         <div className="pb-5 px-1">
-          <p className="text-gray-600 text-base leading-relaxed">{answer}</p>
+          <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed">{answer}</p>
         </div>
       )}
     </div>
@@ -118,7 +118,7 @@ export default function FaqClient({ faqData }: FaqClientProps) {
 
   return (
     // SectionLayout 대신 단순 section+div로 교체 — 독립 페이지에서는 섹션 래퍼 불필요
-    <section className="py-12 md:py-16 bg-white">
+    <section className="py-12 md:py-16 bg-white dark:bg-gray-950 transition-colors duration-300">
       <div className="max-w-6xl mx-auto px-6 md:px-4">
         <AnimateOnScroll>
           <Card variant="default" className="!p-0 max-w-3xl mx-auto">

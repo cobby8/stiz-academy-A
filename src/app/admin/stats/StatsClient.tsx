@@ -122,16 +122,16 @@ export default function StatsClient({
         <div className="max-w-7xl mx-auto space-y-8">
             {/* 페이지 헤더 */}
             <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 mb-1">상세 운영 통계</h1>
-                <p className="text-gray-500 text-sm">최근 12개월 운영 데이터를 한 눈에 확인합니다.</p>
+                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1">상세 운영 통계</h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">최근 12개월 운영 데이터를 한 눈에 확인합니다.</p>
             </div>
 
             {/* ── KPI 요약 카드 4개 ────────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* 이번 달 매출 */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500 mb-1">이번 달 매출</p>
-                    <h3 className="text-2xl font-extrabold text-gray-900">
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 매출</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {formatKRW(thisMonth?.amount ?? 0)}
                     </h3>
                     {lastMonth && lastMonth.amount > 0 && (
@@ -146,9 +146,9 @@ export default function StatsClient({
                 </div>
 
                 {/* 이번 달 출석률 */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500 mb-1">이번 달 출석률</p>
-                    <h3 className="text-2xl font-extrabold text-gray-900">
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 출석률</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {thisMonthAtt?.rate ?? 0}%
                     </h3>
                     <p className="text-xs text-gray-400 mt-1">
@@ -157,18 +157,18 @@ export default function StatsClient({
                 </div>
 
                 {/* 수납률 */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500 mb-1">이번 달 수납률</p>
-                    <h3 className="text-2xl font-extrabold text-gray-900">{collectionRate.rate}%</h3>
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 수납률</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{collectionRate.rate}%</h3>
                     <p className="text-xs text-gray-400 mt-1">
                         {collectionRate.paid}/{collectionRate.total}건 납부
                     </p>
                 </div>
 
                 {/* 체험 전환율 */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs font-medium text-gray-500 mb-1">체험 전환율</p>
-                    <h3 className="text-2xl font-extrabold text-gray-900">{trialStats.conversionRate}%</h3>
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">체험 전환율</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{trialStats.conversionRate}%</h3>
                     <p className="text-xs text-gray-400 mt-1">
                         {trialStats.CONVERTED}명 전환 / 전체 {trialStats.total}명
                     </p>
@@ -182,7 +182,7 @@ export default function StatsClient({
                     className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
                         revenuePeriod === 6
                             ? "bg-gray-900 text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                     }`}
                 >
                     최근 6개월
@@ -192,7 +192,7 @@ export default function StatsClient({
                     className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
                         revenuePeriod === 12
                             ? "bg-gray-900 text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                     }`}
                 >
                     최근 12개월
@@ -202,8 +202,8 @@ export default function StatsClient({
             {/* ── 매출 + 출석률 추이 (LineChart) ──────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 매출 추이 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-orange-500">payments</span>
                         매출 추이
                     </h3>
@@ -216,8 +216,8 @@ export default function StatsClient({
                 </div>
 
                 {/* 출석률 추이 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-emerald-500">event_available</span>
                         출석률 추이
                     </h3>
@@ -233,8 +233,8 @@ export default function StatsClient({
             {/* ── 원생 현황: 신규/퇴원 추이 + 반별 정원 ──────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 신규/퇴원 추이 — 두 개의 LineChart를 겹쳐서 표현 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-blue-500">group</span>
                         신규 등록 / 퇴원 추이
                     </h3>
@@ -243,7 +243,7 @@ export default function StatsClient({
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />
-                                <span className="text-xs text-gray-500">신규 등록</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">신규 등록</span>
                             </div>
                             <LineChart
                                 data={enrollData.map((d) => ({ label: d.label, value: d.newCount }))}
@@ -256,7 +256,7 @@ export default function StatsClient({
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="w-3 h-3 rounded-full bg-red-400 inline-block" />
-                                <span className="text-xs text-gray-500">퇴원</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">퇴원</span>
                             </div>
                             <LineChart
                                 data={enrollData.map((d) => ({ label: d.label, value: d.dropCount }))}
@@ -269,8 +269,8 @@ export default function StatsClient({
                 </div>
 
                 {/* 반별 정원 대비 등록률 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-purple-500">school</span>
                         반별 등록 현황
                     </h3>
@@ -295,8 +295,8 @@ export default function StatsClient({
             {/* ── 체험 전환 + 수납률 (DonutChart) ─────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 체험 전환율 도넛 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-orange-500">handshake</span>
                         체험 전환율
                     </h3>
@@ -321,8 +321,8 @@ export default function StatsClient({
                 </div>
 
                 {/* 수납률 도넛 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-green-500">account_balance_wallet</span>
                         이번 달 수납률
                     </h3>
@@ -337,19 +337,19 @@ export default function StatsClient({
                     </div>
                     <div className="mt-4 space-y-2">
                         <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">납부 완료</span>
+                            <span className="text-gray-500 dark:text-gray-400">납부 완료</span>
                             <span className="font-bold text-green-600">{collectionRate.paid}건</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">미납</span>
+                            <span className="text-gray-500 dark:text-gray-400">미납</span>
                             <span className="font-bold text-red-600">{collectionRate.unpaid}건</span>
                         </div>
                     </div>
                 </div>
 
                 {/* 전체 원생 흐름 요약 */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-blue-500">summarize</span>
                         이번 달 원생 흐름
                     </h3>
@@ -388,8 +388,8 @@ export default function StatsClient({
                                 />
                                 <div className="pt-2 border-t">
                                     <div className="flex justify-between">
-                                        <span className="text-sm text-gray-500">총 대기자</span>
-                                        <span className="font-bold text-gray-900">
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">총 대기자</span>
+                                        <span className="font-bold text-gray-900 dark:text-white">
                                             {classCapacity.reduce((s, c) => s + c.waiting, 0)}명
                                         </span>
                                     </div>
@@ -401,8 +401,8 @@ export default function StatsClient({
             </div>
 
             {/* ── 코치 워크로드 ───────────────────────────────────────────── */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-indigo-500">sports</span>
                     코치별 워크로드
                 </h3>
@@ -412,7 +412,7 @@ export default function StatsClient({
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* 수업 수 막대 그래프 */}
                         <div>
-                            <p className="text-sm text-gray-500 mb-2">담당 수업 수</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">담당 수업 수</p>
                             <BarChart
                                 data={coachWorkload.map((c) => ({
                                     label: c.name,
@@ -425,7 +425,7 @@ export default function StatsClient({
                         </div>
                         {/* 원생 수 막대 그래프 */}
                         <div>
-                            <p className="text-sm text-gray-500 mb-2">담당 원생 수</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">담당 원생 수</p>
                             <BarChart
                                 data={coachWorkload.map((c) => ({
                                     label: c.name,
@@ -495,10 +495,10 @@ function FlowItem({
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
                 <span className={`material-symbols-outlined text-lg ${colorMap[color] ?? ""}`}>{icon}</span>
-                <span className="text-sm text-gray-600">{label}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">{label}</span>
             </div>
             <div className="flex items-center gap-2">
-                <span className="font-bold text-gray-900">{value}명</span>
+                <span className="font-bold text-gray-900 dark:text-white">{value}명</span>
                 {diff !== null && diff !== 0 && (
                     <span className={`text-xs font-medium ${isGood ? "text-green-600" : "text-red-600"}`}>
                         {diff > 0 ? "+" : ""}{diff}

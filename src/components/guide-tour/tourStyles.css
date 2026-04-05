@@ -50,3 +50,9 @@
   from { opacity: 0; transform: translateX(-50%) translateY(20px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+
+/* 드롭다운 안에 있는 아이템이 라이브 타겟일 때 부모 항목 강제 전개 */
+.group:has(.driver-active-element) .invisible {
+  visibility: visible !important;
+  opacity: 1 !important;
+}

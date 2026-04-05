@@ -87,7 +87,7 @@ export default function DonutChart({
 
             {/* 라벨 */}
             {label && (
-                <span className="text-xs font-medium text-gray-500">{label}</span>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</span>
             )}
         </div>
     );

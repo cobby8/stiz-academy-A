@@ -28,7 +28,7 @@ export default function ChatMessage({ role, content, actions }: ChatMessageProps
             ${
               isUser
                 ? "bg-blue-500 text-white rounded-br-md" // 사용자: 파란색, 우하단 모서리 각짐
-                : "bg-gray-100 text-gray-800 rounded-bl-md" // 봇: 회색, 좌하단 모서리 각짐
+                : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-bl-md" // 봇: 회색, 좌하단 모서리 각짐
             }
           `}
         >

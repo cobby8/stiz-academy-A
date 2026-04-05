@@ -77,14 +77,14 @@ export default function SmsTemplateClient({ templates }: { templates: SmsTemplat
             {/* 페이지 헤더 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">SMS 템플릿 관리</h1>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">SMS 템플릿 관리</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         상황별 자동 발송 메시지를 편집하고 ON/OFF할 수 있습니다
                     </p>
                 </div>
                 <a
                     href="/admin/sms"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors"
                 >
                     <span className="material-symbols-outlined text-[18px]">arrow_back</span>
                     문자 발송
@@ -92,13 +92,13 @@ export default function SmsTemplateClient({ templates }: { templates: SmsTemplat
             </div>
 
             {/* 탭 전환 */}
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
                 <button
                     onClick={() => setActiveTab("staff")}
                     className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
                         activeTab === "staff"
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-[16px] align-middle mr-1">admin_panel_settings</span>
@@ -108,8 +108,8 @@ export default function SmsTemplateClient({ templates }: { templates: SmsTemplat
                     onClick={() => setActiveTab("parent")}
                     className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
                         activeTab === "parent"
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-[16px] align-middle mr-1">family_restroom</span>
@@ -244,12 +244,12 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
     const isModified = body !== template.body || isActive !== template.isActive;
 
     return (
-        <div className={`bg-white rounded-xl border ${isActive ? "border-gray-200" : "border-gray-200 opacity-60"} shadow-sm overflow-hidden`}>
+        <div className={`bg-white dark:bg-gray-800 rounded-xl border ${isActive ? "border-gray-200 dark:border-gray-700" : "border-gray-200 dark:border-gray-700 opacity-60"} shadow-sm overflow-hidden`}>
             {/* 카드 상단: 이름 + 배지 + 토글 */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <h3 className="font-semibold text-gray-900 text-sm truncate">{template.name}</h3>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${TARGET_COLORS[template.target] || "bg-gray-100 text-gray-600"}`}>
+                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate">{template.name}</h3>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${TARGET_COLORS[template.target] || "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"}`}>
                         {TARGET_LABELS[template.target] || template.target}
                     </span>
                 </div>
@@ -263,7 +263,7 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
                     title={isActive ? "발송 중 (클릭하면 OFF)" : "발송 중지 (클릭하면 ON)"}
                 >
                     <span
-                        className={`inline-block h-4 w-4 rounded-full bg-white transition-transform shadow-sm ${
+                        className={`inline-block h-4 w-4 rounded-full bg-white dark:bg-gray-800 transition-transform shadow-sm ${
                             isActive ? "translate-x-6" : "translate-x-1"
                         }`}
                     />
@@ -272,7 +272,7 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
 
             {/* 설명 */}
             {template.description && (
-                <p className="px-5 pt-3 text-xs text-gray-500">
+                <p className="px-5 pt-3 text-xs text-gray-500 dark:text-gray-400">
                     <span className="material-symbols-outlined text-[14px] align-middle mr-0.5">info</span>
                     {template.description}
                 </p>
@@ -285,7 +285,7 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
                     value={body}
                     onChange={e => { setBody(e.target.value); setPreview(null); }}
                     rows={4}
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 font-mono leading-relaxed"
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 font-mono leading-relaxed"
                     placeholder="메시지를 입력하세요..."
                 />
 
@@ -314,21 +314,21 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
 
             {/* 미리보기 영역 */}
             {preview !== null && (
-                <div className="mx-5 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="text-[11px] font-medium text-gray-500 mb-1.5">
+                <div className="mx-5 mb-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
                         <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">visibility</span>
                         미리보기 (샘플 데이터)
                     </p>
-                    <p className="text-sm text-gray-800 whitespace-pre-line font-mono">{preview}</p>
+                    <p className="text-sm text-gray-800 dark:text-gray-100 whitespace-pre-line font-mono">{preview}</p>
                 </div>
             )}
 
             {/* 하단 버튼 바 */}
-            <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-t border-gray-100">
+            <div className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
                 <div className="flex gap-2">
                     <button
                         onClick={handlePreview}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors"
                     >
                         <span className="material-symbols-outlined text-[14px]">visibility</span>
                         {preview !== null ? "닫기" : "미리보기"}
@@ -343,7 +343,7 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
                     </button>
                     <button
                         onClick={handleReset}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors"
                         title="기본 템플릿으로 초기화"
                     >
                         <span className="material-symbols-outlined text-[14px]">restart_alt</span>

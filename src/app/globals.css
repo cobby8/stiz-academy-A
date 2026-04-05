@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
 
 @theme {
   /* === 기존 색상 (절대 변경 금지) === */
@@ -26,6 +28,11 @@
   /* Surface 계열 — 순백 대신 따뜻한 톤의 배경색 */
   --color-surface-warm: #fffbf5;
   --color-surface-section: #faf5f0;
+
+  /* === Phase 1: 다크 모드 (스트릿 네온) 컬러 === */
+  --color-brand-neon-lime: #ccff00;
+  --color-brand-neon-cobalt: #0047ff;
+  --color-brand-neon-pink: #ff0055;
 }
 
 :root {
@@ -259,6 +266,19 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 0.5rem;
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+/* 다크 모드 시 rich-content 글씨 색상 반전 */
+.dark .rich-content {
+  color: #e5e7eb;
+}
+
+.dark .rich-content h1,
+.dark .rich-content h2,
+.dark .rich-content h3,
+.dark .rich-content strong,
+.dark .rich-content b {
+  color: #f3f4f6 !important;
 }
 
 /* 텍스트 정렬은 Tiptap이 inline style="text-align: ..." 로 직접 처리 */

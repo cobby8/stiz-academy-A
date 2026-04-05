@@ -31,14 +31,14 @@ export default function TermsAdminClient({
         <div className="space-y-8">
             {/* 페이지 헤더 */}
             <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">이용약관 관리</h1>
-                <p className="text-gray-500">프로그램 안내 페이지 하단 및 이용약관 독립 페이지(/terms)에 표시됩니다.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">이용약관 관리</h1>
+                <p className="text-gray-500 dark:text-gray-400">프로그램 안내 페이지 하단 및 이용약관 독립 페이지(/terms)에 표시됩니다.</p>
             </div>
 
             {/* 이용약관 에디터 */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-gray-900">이용약관 내용</h2>
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">이용약관 내용</h2>
                     <div className="flex items-center gap-3">
                         {saved && <span className="text-xs text-green-600 font-medium">저장됨</span>}
                         <button
@@ -55,7 +55,7 @@ export default function TermsAdminClient({
                     onChange={(e) => { setTerms(e.target.value); setSaved(false); }}
                     rows={16}
                     placeholder={`예시:\n제1조 (목적)\n본 약관은 STIZ 농구교실 다산점(이하 '학원')이 제공하는 교육 서비스 이용에 관한 기본적인 사항을 규정합니다.\n\n제2조 (수강료 및 환불)\n• 수강료는 매월 초에 납부합니다.\n• 개인 사정으로 인한 환불은 규정에 따릅니다.`}
-                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-gray-50 focus:bg-white resize-y font-mono leading-relaxed"
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-gray-50 focus:bg-white dark:bg-gray-800 resize-y font-mono leading-relaxed"
                 />
                 <p className="text-xs text-gray-400 mt-2">엔터키로 줄바꿈이 프론트에 그대로 적용됩니다.</p>
             </div>

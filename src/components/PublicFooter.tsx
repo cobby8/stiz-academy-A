@@ -30,18 +30,18 @@ const QUICK_LINKS = [
 
 export default function PublicFooter({ phone, address }: PublicFooterProps) {
   return (
-    <footer className="bg-gray-900 text-gray-300 pt-12 pb-8 border-t-4 border-brand-orange-500">
+    <footer className="bg-gray-50 dark:bg-black text-gray-600 dark:text-gray-300 pt-12 pb-8 border-t-4 border-brand-orange-500 dark:border-brand-neon-lime">
       <div className="max-w-6xl mx-auto px-4">
         <div className="grid md:grid-cols-3 gap-8 mb-8">
           {/* 학원 로고 + 소개 */}
           <div>
-            <div className="bg-white px-4 py-2.5 rounded-lg inline-flex items-center justify-center mb-4">
+            <div className="bg-white dark:bg-gray-900 px-4 py-2.5 rounded-lg inline-flex items-center justify-center mb-4">
               <Image
                 src="/stiz-logo.png"
                 alt="STIZ"
                 width={140}
                 height={35}
-                className="h-9 w-auto object-contain"
+                className="h-9 w-auto object-contain dark:brightness-0 dark:invert"
               />
             </div>
             <p className="text-sm text-gray-400 leading-relaxed">
@@ -53,19 +53,19 @@ export default function PublicFooter({ phone, address }: PublicFooterProps) {
 
           {/* 학원 정보 — 주소, 전화번호, 운영시간 */}
           <div>
-            <h4 className="text-white font-bold mb-4">학원 정보</h4>
-            <ul className="space-y-2 text-sm text-gray-400">
+            <h4 className="text-gray-900 dark:text-white font-bold mb-4">학원 정보</h4>
+            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
               {address && (
                 <li className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 mt-0.5 text-gray-500 shrink-0" />
+                  <MapPin className="w-4 h-4 mt-0.5 text-gray-500 dark:text-gray-400 shrink-0" />
                   <span>{address}</span>
                 </li>
               )}
               <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-gray-500 shrink-0" />
+                <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0" />
                 <span>{phone}</span>
               </li>
-              <li className="text-xs text-gray-500 mt-1">
+              <li className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 평일 13:00~21:00 / 토 09:00~18:00
               </li>
             </ul>
@@ -78,13 +78,13 @@ export default function PublicFooter({ phone, address }: PublicFooterProps) {
 
           {/* 퀵 링크 */}
           <div>
-            <h4 className="text-white font-bold mb-4">바로가기</h4>
-            <ul className="space-y-2 text-sm text-gray-400">
+            <h4 className="text-gray-900 dark:text-white font-bold mb-4">바로가기</h4>
+            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
               {QUICK_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="hover:text-white transition-colors"
+                    className="hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-white transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -95,21 +95,21 @@ export default function PublicFooter({ phone, address }: PublicFooterProps) {
         </div>
 
         {/* 저작권 표시 + 이용약관 링크 */}
-        <div className="border-t border-gray-800 pt-6 text-center text-xs text-gray-500">
+        <div className="border-t border-gray-200 dark:border-gray-800 pt-6 text-center text-xs text-gray-500 dark:text-gray-400">
           <p>&copy; 2026 STIZ Basketball Academy. All rights reserved.</p>
           {/* 독립 이용약관 페이지로 이동 */}
           {/* 이용약관 + 개인정보 처리방침 링크를 나란히 배치 */}
           <div className="flex items-center justify-center gap-3 mt-2">
             <Link
               href="/terms"
-              className="text-gray-500 hover:text-white transition-colors underline underline-offset-2"
+              className="text-gray-500 hover:text-gray-900 dark:text-white dark:hover:text-white transition-colors underline underline-offset-2"
             >
               이용약관
             </Link>
-            <span className="text-gray-700">|</span>
+            <span className="text-gray-300 dark:text-gray-700 dark:text-gray-200">|</span>
             <Link
               href="/privacy"
-              className="text-gray-500 hover:text-white transition-colors underline underline-offset-2"
+              className="text-gray-500 hover:text-gray-900 dark:text-white dark:hover:text-white transition-colors underline underline-offset-2"
             >
               개인정보 처리방침
             </Link>

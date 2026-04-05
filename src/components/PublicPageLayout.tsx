@@ -31,7 +31,7 @@ export default async function PublicPageLayout({
   const address = (settings as any).address || "";
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 flex flex-col">
+    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 flex flex-col transition-colors duration-300">
       {/* 통합 헤더 — Client Component (모바일 햄버거 메뉴 때문) */}
       <PublicHeader phone={phone} address={address} />
 

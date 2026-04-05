@@ -119,12 +119,12 @@ export default function ClassManagementClient({
         <div className="space-y-8">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">클래스(반) 관리</h1>
-                    <p className="text-gray-500">각 프로그램별 요일과 시간에 맞는 실제 반을 개설합니다.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">클래스(반) 관리</h1>
+                    <p className="text-gray-500 dark:text-gray-400">각 프로그램별 요일과 시간에 맞는 실제 반을 개설합니다.</p>
                 </div>
                 <button
                     onClick={() => { resetForm(); setShowForm(true); }}
-                    className="bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
+                    className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
                 >
                     + 반 개설
                 </button>
@@ -138,16 +138,16 @@ export default function ClassManagementClient({
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-                    <h3 className="font-bold text-lg text-gray-900">{editingId ? "반 수정" : "새 반 개설"}</h3>
+                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{editingId ? "반 수정" : "새 반 개설"}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">소속 프로그램 *</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">소속 프로그램 *</label>
                             <select
                                 value={programId}
                                 onChange={(e) => setProgramId(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-white"
+                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="">선택하세요</option>
                                 {programs.map((p) => (
@@ -156,22 +156,22 @@ export default function ClassManagementClient({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">반 이름 *</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">반 이름 *</label>
                             <input
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 required
                                 placeholder="예: 초등 저학년 A반"
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 focus:border-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">요일 *</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">요일 *</label>
                             <select
                                 value={dayOfWeek}
                                 onChange={(e) => setDayOfWeek(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 bg-white"
+                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="">선택하세요</option>
                                 {DAYS.map((d) => (
@@ -180,30 +180,30 @@ export default function ClassManagementClient({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">시작 시간</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">시작 시간</label>
                             <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 focus:border-brand-orange-500" />
+                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">종료 시간</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">종료 시간</label>
                             <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 focus:border-brand-orange-500" />
+                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">정원 (명) *</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">정원 (명) *</label>
                             <input type="number" value={capacity} onChange={(e) => setCapacity(parseInt(e.target.value) || 0)}
                                 required
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 focus:border-brand-orange-500" />
+                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
                         </div>
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">장소(코트)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">장소(코트)</label>
                             <input value={location} onChange={(e) => setLocation(e.target.value)}
                                 placeholder="예: A코트, 메인구장"
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 focus:border-brand-orange-500" />
+                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
                         </div>
                         <div className="flex items-end justify-end">
                             <div className="flex gap-2">
-                                <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+                                <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white">
                                     취소
                                 </button>
                                 <button
@@ -220,34 +220,34 @@ export default function ClassManagementClient({
             )}
 
             {/* Class List */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <h2 className="text-lg font-bold text-gray-900 p-6 border-b border-gray-100 bg-gray-50/50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
                     개설된 전체 시간표 ({classes.length}개)
                 </h2>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gray-50 dark:bg-gray-900">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">요일/시간</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">반 이름</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">참조 프로그램</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">장소/정원</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">요일/시간</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">반 이름</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">참조 프로그램</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">장소/정원</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">관리</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200">
                             {classes.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">개설된 반이 없습니다.</td>
+                                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">개설된 반이 없습니다.</td>
                                 </tr>
                             )}
                             {classes.map((cls) => (
-                                <tr key={cls.id} className="hover:bg-gray-50 transition">
+                                <tr key={cls.id} className="hover:bg-gray-50 dark:bg-gray-900 transition">
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-bold text-brand-orange-500">
+                                        <div className="text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime">
                                             {DAYS.find(d => d.value === cls.dayOfWeek)?.label || cls.dayOfWeek}
                                         </div>
-                                        <div className="text-sm text-gray-500">{cls.startTime || "-"} ~ {cls.endTime || "-"}</div>
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">{cls.startTime || "-"} ~ {cls.endTime || "-"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         {/* 반 이름 클릭 시 클래스 상세 페이지로 이동 */}
@@ -259,9 +259,9 @@ export default function ClassManagementClient({
                                         </Link>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-gray-500">{cls.program?.name || "-"}</div>
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">{cls.program?.name || "-"}</div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         <div>{cls.location || "미지정"}</div>
                                         <div>정원: {cls.capacity}명</div>
                                     </td>
@@ -284,7 +284,7 @@ export default function ClassManagementClient({
                                                     </button>
                                                     <button
                                                         onClick={() => setDeleteConfirm(null)}
-                                                        className="text-xs text-gray-500 px-2 py-1"
+                                                        className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
                                                     >
                                                         취소
                                                     </button>

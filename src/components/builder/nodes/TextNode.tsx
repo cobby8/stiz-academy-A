@@ -14,7 +14,7 @@ export const TextSettings = () => {
     return (
         <div className="space-y-4">
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">글자 크기 ({fontSize}px)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">글자 크기 ({fontSize}px)</label>
                 <input
                     type="range" min="10" max="100"
                     value={fontSize || 16}
@@ -23,7 +23,7 @@ export const TextSettings = () => {
                 />
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">글자 굵기 ({fontWeight})</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">글자 굵기 ({fontWeight})</label>
                 <input
                     type="range" min="100" max="900" step="100"
                     value={fontWeight || 400}
@@ -32,7 +32,7 @@ export const TextSettings = () => {
                 />
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">글자 색상</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">글자 색상</label>
                 <input
                     type="color"
                     value={color || "#000000"}
@@ -41,7 +41,7 @@ export const TextSettings = () => {
                 />
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">정렬</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">정렬</label>
                 <div className="flex gap-2">
                     <button type="button" onClick={() => setProp((props: any) => props.textAlign = "left")} className={`flex-1 py-1 text-sm border ${textAlign === 'left' ? 'bg-gray-200' : ''}`}>좌</button>
                     <button type="button" onClick={() => setProp((props: any) => props.textAlign = "center")} className={`flex-1 py-1 text-sm border ${textAlign === 'center' ? 'bg-gray-200' : ''}`}>중앙</button>

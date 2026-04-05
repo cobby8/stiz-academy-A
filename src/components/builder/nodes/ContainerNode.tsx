@@ -15,7 +15,7 @@ export const ContainerSettings = () => {
     return (
         <div className="space-y-4">
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">배경색</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">배경색</label>
                 <input
                     type="color"
                     value={background || "#ffffff"}
@@ -24,7 +24,7 @@ export const ContainerSettings = () => {
                 />
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">내부 여백 (Padding: {padding}px)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">내부 여백 (Padding: {padding}px)</label>
                 <input
                     type="range" min="0" max="100"
                     value={padding || 0}
@@ -33,7 +33,7 @@ export const ContainerSettings = () => {
                 />
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">내부 요소 배열 방향</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">내부 요소 배열 방향</label>
                 <select
                     value={flexDirection || "column"}
                     onChange={(e) => setProp((props: any) => props.flexDirection = e.target.value)}
@@ -44,10 +44,10 @@ export const ContainerSettings = () => {
                 </select>
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">정렬 (수직/가로 방향에 따라 다름)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">정렬 (수직/가로 방향에 따라 다름)</label>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                        <span className="text-gray-500 mb-1 block">주축 (Justify)</span>
+                        <span className="text-gray-500 dark:text-gray-400 mb-1 block">주축 (Justify)</span>
                         <select value={justify} onChange={(e) => setProp((props: any) => props.justify = e.target.value)} className="w-full border border-gray-300 rounded p-1">
                             <option value="flex-start">시작점</option>
                             <option value="center">가운데</option>
@@ -56,7 +56,7 @@ export const ContainerSettings = () => {
                         </select>
                     </div>
                     <div>
-                        <span className="text-gray-500 mb-1 block">교차축 (Align)</span>
+                        <span className="text-gray-500 dark:text-gray-400 mb-1 block">교차축 (Align)</span>
                         <select value={align} onChange={(e) => setProp((props: any) => props.align = e.target.value)} className="w-full border border-gray-300 rounded p-1">
                             <option value="stretch">늘이기 (가득참)</option>
                             <option value="flex-start">시작점</option>
@@ -126,16 +126,16 @@ export const ContainerNode = ({
                 bounds="parent"
                 lockAspectRatio={isShiftPressed}
                 handleComponent={selected ? {
-                    top: <div className="w-4 h-1 bg-brand-orange-500 absolute left-1/2 -ml-2 -top-0.5 rounded" />,
-                    right: <div className="h-4 w-1 bg-brand-orange-500 absolute top-1/2 -mt-2 -right-0.5 rounded" />,
-                    bottom: <div className="w-4 h-1 bg-brand-orange-500 absolute left-1/2 -ml-2 -bottom-0.5 rounded" />,
-                    left: <div className="h-4 w-1 bg-brand-orange-500 absolute top-1/2 -mt-2 -left-0.5 rounded" />,
-                    topRight: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -right-1.5 -top-1.5 rounded-full" />,
-                    bottomRight: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -right-1.5 -bottom-1.5 rounded-full" />,
-                    bottomLeft: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -left-1.5 -bottom-1.5 rounded-full" />,
-                    topLeft: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -left-1.5 -top-1.5 rounded-full" />
+                    top: <div className="w-4 h-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute left-1/2 -ml-2 -top-0.5 rounded" />,
+                    right: <div className="h-4 w-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute top-1/2 -mt-2 -right-0.5 rounded" />,
+                    bottom: <div className="w-4 h-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute left-1/2 -ml-2 -bottom-0.5 rounded" />,
+                    left: <div className="h-4 w-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute top-1/2 -mt-2 -left-0.5 rounded" />,
+                    topRight: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -right-1.5 -top-1.5 rounded-full" />,
+                    bottomRight: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -right-1.5 -bottom-1.5 rounded-full" />,
+                    bottomLeft: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -left-1.5 -bottom-1.5 rounded-full" />,
+                    topLeft: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -left-1.5 -top-1.5 rounded-full" />
                 } : undefined}
-                className={`transition-all ${selected ? 'z-10 ring-2 ring-brand-orange-500 ring-offset-1' : ''}`}
+                className={`transition-all ${selected ? 'z-10 ring-2 ring-brand-orange-500 dark:focus:ring-brand-neon-lime ring-offset-1' : ''}`}
                 style={{ position: 'relative', maxWidth: '100%' }}
             >
                 <div
@@ -156,7 +156,7 @@ export const ContainerNode = ({
                     className={`relative overflow-hidden ${selected ? 'bg-orange-50/10' : ''}`}
                 >
                     {selected && (
-                        <div className="absolute top-0 right-0 bg-brand-orange-500 text-white text-[10px] px-1 py-0.5 z-10 font-bold">Container</div>
+                        <div className="absolute top-0 right-0 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-[10px] px-1 py-0.5 z-10 font-bold">Container</div>
                     )}
                     {children}
                 </div>

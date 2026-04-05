@@ -169,15 +169,15 @@ export default async function AnnualPage() {
     return (
         <PublicPageLayout>
             {/* 페이지 히어로 — about/programs/schedule과 동일한 그라데이션 + 장식 도형 패턴 */}
-            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white py-12 md:py-14">
+            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 dark:from-black dark:via-gray-900 dark:to-black text-white py-12 md:py-14 transition-colors duration-300">
                 {/* 배경 장식 도형들 */}
                 <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
-                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
+                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3 transition-colors duration-300" />
+                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 dark:border-brand-neon-lime/10 rounded-full -translate-x-1/4 translate-y-1/4 transition-colors duration-300" />
                 </div>
                 <div className="max-w-6xl mx-auto px-6 md:px-4 relative">
                     <AnimateOnScroll>
-                        <p className="text-brand-orange-500 text-sm font-bold uppercase tracking-widest mb-3">ANNUAL SCHEDULE</p>
+                        <p className="text-brand-orange-500 dark:text-brand-neon-lime text-sm font-bold uppercase tracking-widest mb-3">ANNUAL SCHEDULE</p>
                         <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">연간일정표</h1>
                         <p className="text-blue-200 text-lg max-w-xl">대회, 방학, 특별 행사 일정을 확인하세요.</p>
                     </AnimateOnScroll>
@@ -185,14 +185,14 @@ export default async function AnnualPage() {
             </section>
 
             {/* 범례(Legend) — 디자인 개선: pill 뱃지 스타일로 카테고리 표시 */}
-            <section className="py-5 bg-white border-b border-gray-100">
+            <section className="py-5 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 transition-colors duration-300">
                 <div className="max-w-6xl mx-auto px-4">
                     <div className="flex flex-wrap gap-2.5 items-center">
                         <span className="text-sm font-bold text-gray-400 mr-1">구분</span>
                         {categories.map((cat) => (
-                            <div key={cat} className="inline-flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                            <div key={cat} className="inline-flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-100 dark:border-gray-700 transition-colors">
                                 <span className={`w-2.5 h-2.5 rounded-full ${CATEGORY_STYLES[cat].dot}`}></span>
-                                <span className="text-xs font-bold text-gray-600">{cat}</span>
+                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{cat}</span>
                             </div>
                         ))}
                     </div>

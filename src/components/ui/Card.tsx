@@ -23,7 +23,7 @@ interface CardBaseProps {
 // accent 카드 전용: 좌측 바 색상 지정
 interface AccentCardProps extends CardBaseProps {
   variant: 'accent';
-  accentColor?: string; // Tailwind 클래스 (예: 'bg-brand-orange-500')
+  accentColor?: string; // Tailwind 클래스 (예: 'bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900')
   imageSrc?: never;
   imageAlt?: never;
 }
@@ -50,26 +50,26 @@ type CardProps = AccentCardProps | ImageCardProps | SimpleCardProps;
 const variantStyles: Record<CardVariant, string> = {
   // 기본 카드: 흰 배경, 얇은 테두리, 호버 시 위로 뜨며 그림자 강해짐
   default: [
-    'bg-white border border-gray-100 rounded-2xl shadow-sm',
+    'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm',
     'hover:shadow-md hover:-translate-y-1',
   ].join(' '),
 
   // 강조 카드: 좌측 4px 색상 바 + 호버 시 그림자와 살짝 확대
   accent: [
-    'bg-white border border-gray-100 rounded-2xl shadow-sm',
+    'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm',
     'hover:shadow-lg hover:scale-[1.01]',
   ].join(' '),
 
   // 이미지 카드: 상단 이미지 영역 + 호버 시 그림자 강해짐
   image: [
-    'bg-white border border-gray-100 rounded-2xl shadow-md overflow-hidden',
+    'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-md overflow-hidden',
     'hover:shadow-xl',
   ].join(' '),
 
   // 정보 카드: 따뜻한 배경, 테두리 없음, 호버 시 흰 배경으로
   info: [
-    'bg-surface-section rounded-xl',
-    'hover:bg-white hover:shadow-sm',
+    'bg-surface-section dark:bg-gray-900 rounded-xl',
+    'hover:bg-white dark:hover:bg-gray-800 hover:shadow-sm',
   ].join(' '),
 };
 
@@ -77,7 +77,7 @@ export default function Card({
   variant = 'default',
   children,
   className = '',
-  accentColor = 'bg-brand-orange-500',
+  accentColor = 'bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900',
   imageSrc,
   imageAlt,
   id,

@@ -35,12 +35,12 @@ export default function CTABanner({
 }: CTABannerProps) {
   return (
     // 그라데이션 배경 + 장식 도형으로 시각적 임팩트
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 py-16 md:py-20">
+    <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 dark:from-black dark:via-gray-900 dark:to-black py-16 md:py-20 transition-colors duration-300">
       {/* 장식 도형들 — 반투명 원과 농구공 패턴으로 배경에 깊이감 */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute right-0 top-0 w-64 h-64 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
-        <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
-        <div className="absolute right-1/4 top-1/2 w-24 h-24 bg-brand-orange-500/5 rounded-full blur-xl" />
+        <div className="absolute right-0 top-0 w-64 h-64 border-[20px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3" />
+        <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 dark:border-brand-neon-lime/10 rounded-full -translate-x-1/4 translate-y-1/4" />
+        <div className="absolute right-1/4 top-1/2 w-24 h-24 bg-brand-orange-500/5 dark:bg-brand-neon-cobalt/10 rounded-full blur-xl" />
       </div>
 
       <div className="max-w-4xl mx-auto px-6 md:px-4 text-center relative">
@@ -60,7 +60,7 @@ export default function CTABanner({
             {/* 주요 CTA: 체험 신청 — 오렌지 배경으로 가장 눈에 띄게 */}
             <Link
               href={primaryHref}
-              className="inline-flex items-center justify-center bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:scale-[1.03] hover:shadow-xl shadow-lg"
+              className="inline-flex items-center justify-center bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 dark:bg-brand-neon-lime dark:hover:bg-lime-400 text-white dark:text-brand-navy-900 font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:scale-[1.03] hover:shadow-xl dark:shadow-brand-neon-lime/30 shadow-lg"
             >
               {primaryLabel}
             </Link>
@@ -69,7 +69,7 @@ export default function CTABanner({
             {showSecondary && (
               <a
                 href={`tel:${phone.replace(/-/g, '')}`}
-                className="inline-flex items-center justify-center bg-white text-brand-navy-900 font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:bg-gray-50 hover:shadow-md shadow-lg"
+                className="inline-flex items-center justify-center bg-white dark:bg-gray-800 text-brand-navy-900 dark:text-white font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-700 hover:shadow-md shadow-lg"
               >
                 {secondaryLabel} {phone}
               </a>

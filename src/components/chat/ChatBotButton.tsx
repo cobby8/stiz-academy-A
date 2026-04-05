@@ -27,8 +27,8 @@ export default function ChatBotButton() {
           className="
             fixed bottom-6 right-6 z-50
             w-14 h-14 rounded-full
-            bg-orange-500 text-white
-            shadow-lg hover:bg-orange-600
+            bg-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white dark:text-black
+            shadow-lg hover:bg-orange-600 dark:hover:bg-lime-400
             transition-all duration-200 hover:scale-105
             flex items-center justify-center
           "

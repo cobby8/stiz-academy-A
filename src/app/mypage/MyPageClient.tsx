@@ -13,7 +13,7 @@ const PAYMENT_STATUS: Record<string, { label: string; color: string }> = {
     PENDING: { label: "미납", color: "text-yellow-600 bg-yellow-50" },
     PAID: { label: "납부완료", color: "text-green-600 bg-green-50" },
     OVERDUE: { label: "연체", color: "text-red-600 bg-red-50" },
-    REFUNDED: { label: "환불", color: "text-gray-500 bg-gray-50" },
+    REFUNDED: { label: "환불", color: "text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900" },
 };
 
 function toDateStr(d: Date | string | null): string {
@@ -120,7 +120,7 @@ const FB_CATEGORIES: Record<string, { label: string; color: string }> = {
     SKILL: { label: "기술", color: "bg-blue-100 text-blue-700" },
     ATTITUDE: { label: "태도", color: "bg-green-100 text-green-700" },
     PHYSICAL: { label: "체력", color: "bg-purple-100 text-purple-700" },
-    GENERAL: { label: "종합", color: "bg-gray-100 text-gray-700" },
+    GENERAL: { label: "종합", color: "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200" },
 };
 
 type MyPageData = {
@@ -231,22 +231,22 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             <div className="bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden">
                 {/* 장식 도형들 — 공개 페이지 히어로와 동일한 패턴 */}
                 <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-0 top-0 w-40 h-40 border-[15px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
-                    <div className="absolute left-0 bottom-0 w-28 h-28 border-[10px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
+                    <div className="absolute right-0 top-0 w-40 h-40 border-[15px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3 transition-colors duration-300" />
+                    <div className="absolute left-0 bottom-0 w-28 h-28 border-[10px] border-brand-orange-500/10 dark:border-brand-neon-lime/10 rounded-full -translate-x-1/4 translate-y-1/4 transition-colors duration-300" />
                 </div>
                 <div className="relative z-10">
                     <div className="flex justify-between items-center mb-4">
                         <h1 className="text-2xl font-bold">
-                            {child.name} <span className="text-brand-orange-500 text-lg font-medium">학생</span>
+                            {child.name} <span className="text-brand-orange-500 dark:text-brand-neon-lime text-lg font-medium">학생</span>
                         </h1>
                         {data.children.length > 1 && (
                             <select
                                 value={selectedIdx}
                                 onChange={(e) => setSelectedIdx(Number(e.target.value))}
-                                className="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full text-xs font-bold transition text-white border-none"
+                                className="bg-white dark:bg-gray-800/20 hover:bg-white dark:hover:bg-gray-800/30 px-3 py-1.5 rounded-full text-xs font-bold transition text-white border-none"
                             >
                                 {data.children.map((c, i) => (
-                                    <option key={c.id} value={i} className="text-gray-900">{c.name}</option>
+                                    <option key={c.id} value={i} className="text-gray-900 dark:text-white">{c.name}</option>
                                 ))}
                             </select>
                         )}
@@ -256,14 +256,14 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                     </p>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/5">
+                        <div className="bg-white dark:bg-gray-800/10 rounded-xl p-3 backdrop-blur-sm border border-white/5">
                             <div className="text-white/60 text-xs font-medium mb-1">이번 달 출석</div>
                             <div className="text-xl font-bold">
                                 {child.attendance.present}
                                 <span className="text-sm font-normal text-white/60"> / {child.attendance.total}회</span>
                             </div>
                         </div>
-                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/5">
+                        <div className="bg-white dark:bg-gray-800/10 rounded-xl p-3 backdrop-blur-sm border border-white/5">
                             <div className="text-white/60 text-xs font-medium mb-1">결석/지각</div>
                             <div className="text-xl font-bold">
                                 {child.attendance.absent > 0 ? (
@@ -287,13 +287,13 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             <div>
                 <button
                     onClick={() => setShowNotifications(!showNotifications)}
-                    className="w-full flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition"
+                    className="w-full flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="bg-brand-orange-50 p-2 rounded-full">
-                            <Bell className="w-5 h-5 text-brand-orange-500" />
+                        <div className="bg-brand-orange-50 dark:bg-brand-neon-lime/10  p-2 rounded-full">
+                            <Bell className="w-5 h-5 text-brand-orange-500 dark:text-brand-neon-lime" />
                         </div>
-                        <span className="font-bold text-gray-900">알림</span>
+                        <span className="font-bold text-gray-900 dark:text-white">알림</span>
                         {unreadCount > 0 && (
                             <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
                                 {unreadCount}
@@ -304,7 +304,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </button>
 
                 {showNotifications && (
-                    <div className="mt-2 bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         {/* 상단 바: 푸시 설정 + 전체 읽음 */}
                         <div className="px-4 py-2 border-b border-gray-50 flex items-center justify-between">
                             {/* 푸시 알림 토글 */}
@@ -315,7 +315,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     className={`text-xs flex items-center gap-1 px-2.5 py-1 rounded-full transition ${
                                         pushEnabled
                                             ? "bg-green-100 text-green-700"
-                                            : "bg-gray-100 text-gray-500 hover:bg-orange-50 hover:text-brand-orange-500"
+                                            : "bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-orange-50 hover:text-brand-orange-500 dark:text-brand-neon-lime"
                                     }`}
                                 >
                                     {pushLoading ? "..." : pushEnabled ? (
@@ -330,7 +330,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                 <button
                                     onClick={() => startTransition(() => markAllNotificationsRead(data.parent.id))}
                                     disabled={isPending}
-                                    className="text-xs text-brand-orange-500 hover:underline flex items-center gap-1"
+                                    className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline flex items-center gap-1"
                                 >
                                     <CheckCheck size={14} /> 모두 읽음
                                 </button>
@@ -360,10 +360,10 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                         </div>
 
                                         <div className="flex-1 min-w-0">
-                                            <p className={`text-sm ${!n.isRead ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                                            <p className={`text-sm ${!n.isRead ? "font-bold text-gray-900 dark:text-white" : "text-gray-700 dark:text-gray-200"}`}>
                                                 {n.title}
                                             </p>
-                                            <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{n.message}</p>
                                             <p className="text-xs text-gray-400 mt-1">
                                                 {new Date(n.createdAt).toLocaleDateString("ko-KR", {
                                                     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
@@ -376,7 +376,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                             <button
                                                 onClick={() => startTransition(() => markNotificationRead(n.id))}
                                                 disabled={isPending}
-                                                className="text-gray-400 hover:text-brand-orange-500 p-1 flex-shrink-0"
+                                                className="text-gray-400 hover:text-brand-orange-500 dark:text-brand-neon-lime p-1 flex-shrink-0"
                                                 title="읽음 처리"
                                             >
                                                 <Check size={14} />
@@ -395,13 +395,13 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 <div className="flex gap-2">
                     <button
                         onClick={() => { setShowRequestForm(!showRequestForm); setShowRequests(false); }}
-                        className="flex-1 flex items-center justify-center gap-2 bg-brand-orange-500 text-white font-bold py-3 rounded-2xl hover:bg-brand-orange-600 transition shadow-sm"
+                        className="flex-1 flex items-center justify-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold py-3 rounded-2xl hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition shadow-sm"
                     >
                         <Send size={16} /> 학원에 요청하기
                     </button>
                     <button
                         onClick={() => { setShowRequests(!showRequests); setShowRequestForm(false); }}
-                        className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-bold px-4 py-3 rounded-2xl hover:bg-gray-50 transition shadow-sm"
+                        className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-bold px-4 py-3 rounded-2xl hover:bg-gray-50 dark:bg-gray-900 transition shadow-sm"
                     >
                         <MessageSquare size={16} />
                         내 요청
@@ -415,8 +415,8 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
                 {/* 요청 접수 폼 */}
                 {showRequestForm && (
-                    <div className="mt-3 bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
-                        <h3 className="font-bold text-gray-900">요청 접수</h3>
+                    <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 shadow-sm space-y-4">
+                        <h3 className="font-bold text-gray-900 dark:text-white">요청 접수</h3>
 
                         {/* 요청 유형 */}
                         <div className="grid grid-cols-2 gap-2">
@@ -425,8 +425,8 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     onClick={() => setReqType(t.value)}
                                     className={`py-2 px-3 rounded-xl text-sm font-bold border transition ${
                                         reqType === t.value
-                                            ? "bg-brand-orange-500 text-white border-brand-orange-500"
-                                            : "bg-gray-50 text-gray-700 border-gray-200 hover:border-brand-orange-300"
+                                            ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white border-brand-orange-500 dark:border-brand-neon-lime"
+                                            : "bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 border-gray-200 hover:border-brand-orange-300 dark:border-brand-neon-lime"
                                     }`}
                                 >
                                     {t.label}
@@ -437,11 +437,11 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         {/* 자녀 선택 (여러 명일 때) */}
                         {data.children.length > 1 && (
                             <div>
-                                <label className="text-xs font-medium text-gray-500 mb-1 block">자녀 선택</label>
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">자녀 선택</label>
                                 <select
                                     value={selectedIdx}
                                     onChange={e => setSelectedIdx(Number(e.target.value))}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm"
+                                    className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm"
                                 >
                                     {data.children.map((c, i) => (
                                         <option key={c.id} value={i}>{c.name}</option>
@@ -452,16 +452,16 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
                         {/* 날짜 */}
                         <div>
-                            <label className="text-xs font-medium text-gray-500 mb-1 block">
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">
                                 {reqType === "ABSENCE" ? "결석일" : reqType === "EARLY_LEAVE" ? "조퇴일" : "해당 날짜"} (선택)
                             </label>
                             <input type="date" min="2020-01-01" max="2030-12-31" value={reqDate} onChange={e => setReqDate(e.target.value)}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm" />
                         </div>
 
                         {/* 내용 */}
                         <div>
-                            <label className="text-xs font-medium text-gray-500 mb-1 block">상세 내용</label>
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">상세 내용</label>
                             <textarea
                                 value={reqContent}
                                 onChange={e => setReqContent(e.target.value)}
@@ -472,7 +472,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     "요청 내용을 입력해주세요"
                                 }
                                 rows={3}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm resize-none"
                             />
                         </div>
 
@@ -496,7 +496,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     setShowRequestForm(false);
                                 });
                             }}
-                            className="w-full bg-brand-orange-500 text-white font-bold py-3 rounded-xl hover:bg-brand-orange-600 transition disabled:opacity-50"
+                            className="w-full bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold py-3 rounded-xl hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition disabled:opacity-50"
                         >
                             {isPending ? "접수 중..." : "요청 접수하기"}
                         </button>
@@ -505,7 +505,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
                 {/* 내 요청 내역 */}
                 {showRequests && (
-                    <div className="mt-3 bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         {myRequests.length === 0 ? (
                             <div className="p-8 text-center text-gray-400 text-sm">요청 내역이 없습니다</div>
                         ) : (
@@ -516,12 +516,12 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     return (
                                         <div key={r.id} className="px-4 py-3">
                                             <div className="flex items-center justify-between mb-1">
-                                                <span className="text-sm font-bold text-gray-900">{r.title}</span>
+                                                <span className="text-sm font-bold text-gray-900 dark:text-white">{r.title}</span>
                                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${st.color}`}>
                                                     <StatusIcon size={12} /> {st.label}
                                                 </span>
                                             </div>
-                                            <p className="text-xs text-gray-500 line-clamp-2">{r.content}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{r.content}</p>
                                             {r.adminNote && (
                                                 <div className="mt-2 bg-blue-50 rounded-lg px-3 py-2">
                                                     <p className="text-xs text-blue-700">
@@ -547,7 +547,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                     {pendingPayments.map((p) => (
                         <div key={p.id} className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                             <div className="flex items-center gap-3 text-red-700">
-                                <div className="bg-white p-2 rounded-full shadow-sm text-red-500">
+                                <div className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm text-red-500">
                                     <CreditCard className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -571,14 +571,14 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                     <h2 className="font-bold text-brand-navy-900 mb-3 px-1">수강 중인 반</h2>
                     <div className="space-y-2">
                         {child.enrollments.map((e) => (
-                            <div key={e.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition">
+                            <div key={e.id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="font-bold text-gray-900">{e.className}</p>
-                                        <p className="text-xs text-gray-500 mt-0.5">{e.programName}</p>
+                                        <p className="font-bold text-gray-900 dark:text-white">{e.className}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{e.programName}</p>
                                     </div>
                                     <div className="text-right">
-                                        <span className="text-sm font-bold text-brand-orange-500">
+                                        <span className="text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime">
                                             {DAY_LABELS[e.dayOfWeek] || e.dayOfWeek}요일
                                         </span>
                                         <p className="text-xs text-gray-400">{e.startTime} ~ {e.endTime}</p>
@@ -594,11 +594,11 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {child.attendance.records.length > 0 && (
                 <div>
                     <h2 className="font-bold text-brand-navy-900 mb-3 px-1">이번 달 출결 기록</h2>
-                    <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         <div className="divide-y divide-gray-50">
                             {child.attendance.records.map((r, i) => (
                                 <div key={i} className="flex items-center justify-between px-4 py-3">
-                                    <span className="text-sm text-gray-700">{toDateStr(r.date)}</span>
+                                    <span className="text-sm text-gray-700 dark:text-gray-200">{toDateStr(r.date)}</span>
                                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                                         r.status === "PRESENT" ? "bg-green-100 text-green-700" :
                                         r.status === "ABSENT" ? "bg-red-100 text-red-700" :
@@ -617,14 +617,14 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {child.payments.length > 0 && (
                 <div>
                     <h2 className="font-bold text-brand-navy-900 mb-3 px-1">최근 수납 내역</h2>
-                    <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         <div className="divide-y divide-gray-50">
                             {child.payments.map((p) => {
                                 const statusInfo = PAYMENT_STATUS[p.status] || PAYMENT_STATUS.PENDING;
                                 return (
                                     <div key={p.id} className="flex items-center justify-between px-4 py-3">
                                         <div>
-                                            <p className="text-sm font-medium text-gray-900">{formatAmount(p.amount)}</p>
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{formatAmount(p.amount)}</p>
                                             <p className="text-xs text-gray-400">기한: {toDateStr(p.dueDate)}</p>
                                         </div>
                                         <div className="text-right">
@@ -645,7 +645,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
             {/* No data state */}
             {child.enrollments.length === 0 && child.payments.length === 0 && child.attendance.total === 0 && (
-                <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400 shadow-sm">
                     <CalendarCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">아직 수강/출결/수납 데이터가 없습니다.</p>
                     <p className="text-sm mt-1">학원에서 반 배정 후 데이터가 표시됩니다.</p>
@@ -657,17 +657,17 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 <div>
                     <div className="flex items-center justify-between mb-3 px-1">
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
-                            <Bell size={18} className="text-brand-orange-500" /> 공지사항
+                            <Bell size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 공지사항
                         </h2>
-                        <Link href="/notices" className="text-xs text-brand-orange-500 hover:underline">전체보기</Link>
+                        <Link href="/notices" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
                     </div>
                     <div className="space-y-2">
                         {notices.slice(0, 5).map(n => (
                             <Link key={n.id} href={`/notices/${n.id}`}
-                                className="block bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition">
+                                className="block bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition">
                                 <div className="flex items-center justify-between">
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-sm text-gray-900 truncate">{n.title}</p>
+                                        <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{n.title}</p>
                                         <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{n.content}</p>
                                     </div>
                                     <span className="text-xs text-gray-400 flex-shrink-0 ml-3">
@@ -683,14 +683,14 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {/* 수업 리포트 바로가기 — 코치가 발행한 일일 수업 리포트 열람 */}
             <Link
                 href="/mypage/reports"
-                className="block bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition mb-4"
+                className="block bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition mb-4"
             >
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-2xl text-brand-orange-500">assignment</span>
+                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
                         <div>
                             <p className="font-bold text-brand-navy-900">수업 리포트</p>
-                            <p className="text-xs text-gray-500">코치가 작성한 수업 리포트를 확인하세요</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">코치가 작성한 수업 리포트를 확인하세요</p>
                         </div>
                     </div>
                     <span className="material-symbols-outlined text-gray-300">chevron_right</span>
@@ -702,7 +702,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 <div>
                     <div className="flex items-center justify-between mb-3 px-1">
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
-                            <Star size={18} className="text-brand-orange-500" /> 학습 피드백
+                            <Star size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 학습 피드백
                         </h2>
                     </div>
                     <div className="space-y-2">
@@ -715,12 +715,12 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                 <div
                                     key={fb.id}
                                     onClick={() => setExpandedFbId(isExpanded ? null : fb.id)}
-                                    className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition cursor-pointer"
+                                    className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition cursor-pointer"
                                 >
                                     {/* 상단: 학생이름, 코치이름, 날짜 */}
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-gray-900">{fb.studentName}</span>
+                                            <span className="text-sm font-bold text-gray-900 dark:text-white">{fb.studentName}</span>
                                             {fb.coachName && (
                                                 <span className="text-xs text-gray-400">| {fb.coachName} 코치</span>
                                             )}
@@ -736,7 +736,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cat.color}`}>
                                             {cat.label}
                                         </span>
-                                        <span className="text-sm font-medium text-gray-800 flex-1 truncate">{fb.title}</span>
+                                        <span className="text-sm font-medium text-gray-800 dark:text-gray-100 flex-1 truncate">{fb.title}</span>
                                         {/* 별점 표시 (1~5) */}
                                         {fb.rating != null && fb.rating > 0 && (
                                             <span className="text-yellow-500 text-sm flex-shrink-0">
@@ -746,8 +746,8 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     </div>
                                     {/* 카드 클릭 시 내용 펼치기 */}
                                     {isExpanded && (
-                                        <div className="mt-3 pt-3 border-t border-gray-100">
-                                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.content}</p>
+                                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                            <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{fb.content}</p>
                                         </div>
                                     )}
                                 </div>
@@ -762,9 +762,9 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 <div>
                     <div className="flex items-center justify-between mb-3 px-1">
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
-                            <ImageIcon size={18} className="text-brand-orange-500" /> 수업 사진
+                            <ImageIcon size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 수업 사진
                         </h2>
-                        <Link href="/gallery" className="text-xs text-brand-orange-500 hover:underline">전체보기</Link>
+                        <Link href="/gallery" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                         {gallery.slice(0, 6).map(g => {
@@ -774,7 +774,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             if (!first) return null;
                             return (
                                 <Link key={g.id} href="/gallery"
-                                    className="aspect-square rounded-xl overflow-hidden bg-gray-100 relative group">
+                                    className="aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative group">
                                     {first.type === "image" ? (
                                         <img src={first.url} alt={g.title || ""} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                     ) : (

@@ -8,45 +8,45 @@ export const Toolbox = () => {
     const { connectors, query } = useEditor();
 
     return (
-        <div className="p-4 bg-white border-r border-gray-200 h-full overflow-y-auto">
-            <h3 className="font-bold text-gray-800 mb-4 pb-2 border-b">추가 요소</h3>
+        <div className="p-4 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-full overflow-y-auto">
+            <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 pb-2 border-b">추가 요소</h3>
             <div className="grid grid-cols-2 gap-2">
                 <button
                     ref={(ref) => { if (ref) connectors.create(ref, <ContainerNode padding={20} />); }}
-                    className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 cursor-move transition bg-gray-50"
+                    className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-gray-50 dark:bg-gray-900"
                     title="기본 박스"
                 >
-                    <Square className="w-6 h-6 mb-1 text-gray-500" />
+                    <Square className="w-6 h-6 mb-1 text-gray-500 dark:text-gray-400" />
                     <span className="text-xs font-semibold">컨테이너</span>
                 </button>
 
                 <button
                     ref={(ref) => { if (ref) connectors.create(ref, <TextNode text="텍스트를 입력하세요" fontSize={16} color="#000000" textAlign="left" fontWeight={400} />); }}
-                    className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 cursor-move transition bg-gray-50"
+                    className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-gray-50 dark:bg-gray-900"
                     title="글자 입력"
                 >
-                    <Type className="w-6 h-6 mb-1 text-gray-500" />
+                    <Type className="w-6 h-6 mb-1 text-gray-500 dark:text-gray-400" />
                     <span className="text-xs font-semibold">텍스트</span>
                 </button>
 
                 <button
                     ref={(ref) => { if (ref) connectors.create(ref, <ImageNode src="" width={100} borderRadius={8} />); }}
-                    className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 cursor-move transition bg-gray-50"
+                    className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-gray-50 dark:bg-gray-900"
                     title="사진 업로드"
                 >
-                    <ImageIcon className="w-6 h-6 mb-1 text-gray-500" />
+                    <ImageIcon className="w-6 h-6 mb-1 text-gray-500 dark:text-gray-400" />
                     <span className="text-xs font-semibold">이미지</span>
                 </button>
             </div>
 
-            <h3 className="font-bold text-gray-800 mt-8 mb-4 pb-2 border-b">특수 위젯 렌더러</h3>
+            <h3 className="font-bold text-gray-800 dark:text-gray-100 mt-8 mb-4 pb-2 border-b">특수 위젯 렌더러</h3>
             <div className="grid grid-cols-2 gap-2">
                 <button
                     ref={(ref) => { if (ref) connectors.create(ref, <ProgramsWidget />); }}
-                    className="flex flex-col items-center justify-center p-3 border border-orange-200 rounded hover:bg-orange-50 hover:border-brand-orange-500 cursor-move transition bg-orange-50/50"
+                    className="flex flex-col items-center justify-center p-3 border border-orange-200 rounded hover:bg-orange-50 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-orange-50/50"
                 >
-                    <LayoutGrid className="w-6 h-6 mb-1 text-brand-orange-500" />
-                    <span className="text-[10px] font-bold text-brand-orange-700">프로그램 목록</span>
+                    <LayoutGrid className="w-6 h-6 mb-1 text-brand-orange-500 dark:text-brand-neon-lime" />
+                    <span className="text-[10px] font-bold text-brand-orange-700 dark:text-brand-neon-lime">프로그램 목록</span>
                 </button>
 
                 <button

@@ -415,13 +415,13 @@ export default function StudentManagementClient({
                     { label: "휴원", value: "PAUSED", count: statusCounts.paused, color: "bg-amber-50 border-amber-200 text-amber-700", icon: "pause_circle" },
                     { label: "퇴원", value: "WITHDRAWN", count: statusCounts.withdrawn, color: "bg-red-50 border-red-200 text-red-700", icon: "person_off" },
                     { label: "미배정", value: "NONE", count: statusCounts.noEnrollment, color: "bg-purple-50 border-purple-200 text-purple-700", icon: "help_outline" },
-                    { label: "전체", value: "", count: statusCounts.total, color: "bg-gray-50 border-gray-200 text-gray-700", icon: "groups" },
+                    { label: "전체", value: "", count: statusCounts.total, color: "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200", icon: "groups" },
                 ].map((card) => (
                     <button
                         key={card.label}
                         onClick={() => setFilterStatus(card.value)}
                         className={`rounded-xl border p-3 text-left transition hover:shadow-sm ${card.color} ${
-                            filterStatus === card.value ? "ring-2 ring-brand-orange-500 shadow-sm" : ""
+                            filterStatus === card.value ? "ring-2 ring-brand-orange-500 dark:focus:ring-brand-neon-lime shadow-sm" : ""
                         }`}
                     >
                         <div className="flex items-center gap-2">
@@ -435,8 +435,8 @@ export default function StudentManagementClient({
 
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-2xl font-extrabold text-gray-900">원생 관리</h1>
-                    <p className="text-gray-500 text-sm mt-1">
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">원생 관리</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                         {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : filterStatus === "NONE" ? "미배정" : "전체"} 원생: {filtered.length}명
                     </p>
                 </div>
@@ -451,7 +451,7 @@ export default function StudentManagementClient({
                     {/* 기존 1명씩 수동 등록 버튼 */}
                     <button
                         onClick={() => { resetForm(); setShowForm(true); }}
-                        className="bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
+                        className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
                     >
                         + 원생 등록
                     </button>
@@ -465,7 +465,7 @@ export default function StudentManagementClient({
                     placeholder="이름, 학부모명, 전화번호, 학교명으로 검색..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full max-w-md border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                    className="w-full max-w-md border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 />
             </div>
 
@@ -475,7 +475,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterClass}
                     onChange={(e) => setFilterClass(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 반</option>
                     {classes.map((c) => (
@@ -488,7 +488,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterGrade}
                     onChange={(e) => setFilterGrade(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학년</option>
                     {gradeOptions.map((g) => (
@@ -499,7 +499,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterSchool}
                     onChange={(e) => setFilterSchool(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학교</option>
                     {schoolOptions.map((sc) => (
@@ -510,7 +510,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 상태</option>
                     <option value="ACTIVE">활성</option>
@@ -527,7 +527,7 @@ export default function StudentManagementClient({
                             setFilterSchool("");
                             setFilterStatus("");
                         }}
-                        className="text-sm text-gray-500 hover:text-gray-700 underline"
+                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-200 underline"
                     >
                         초기화
                     </button>
@@ -536,37 +536,37 @@ export default function StudentManagementClient({
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm space-y-4">
-                    <h3 className="font-bold text-lg text-gray-900">{editingId ? "원생 수정" : "새 원생 등록"}</h3>
+                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{editingId ? "원생 수정" : "새 원생 등록"}</h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">이름 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">이름 *</label>
                             <input
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 required
                                 placeholder="홍길동"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">생년월일 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">생년월일 *</label>
                             <input
                                 type="date"
                                 min="1950-01-01" max="2025-12-31"
                                 value={birthDate}
                                 onChange={(e) => setBirthDate(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">성별</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">성별</label>
                             <select
                                 value={gender}
                                 onChange={(e) => setGender(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             >
                                 <option value="">선택 안함</option>
                                 <option value="남">남</option>
@@ -574,33 +574,33 @@ export default function StudentManagementClient({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">학부모 이름 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">학부모 이름 *</label>
                             <input
                                 value={parentName}
                                 onChange={(e) => setParentName(e.target.value)}
                                 required
                                 placeholder="보호자 이름"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">학부모 연락처</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">학부모 연락처</label>
                             <input
                                 value={parentPhone}
                                 onChange={(e) => setParentPhone(e.target.value)}
                                 placeholder="010-0000-0000"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         {!editingId && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">학부모 이메일</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">학부모 이메일</label>
                                 <input
                                     type="email"
                                     value={parentEmail}
                                     onChange={(e) => setParentEmail(e.target.value)}
                                     placeholder="parent@email.com"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                 />
                             </div>
                         )}
@@ -608,15 +608,15 @@ export default function StudentManagementClient({
 
                     {/* 신규 등록 시에만 보호자 동의 확인 체크박스 표시 (수정 시에는 불필요) */}
                     {!editingId && (
-                        <div className="border-t border-gray-100 pt-4">
+                        <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
                             <label className="flex items-start gap-2 cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={guardianConsent}
                                     onChange={(e) => setGuardianConsent(e.target.checked)}
-                                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                 />
-                                <span className="text-sm text-gray-700">
+                                <span className="text-sm text-gray-700 dark:text-gray-200">
                                     보호자로부터 <strong>개인정보 수집 및 이용 동의</strong>를 받았음을 확인합니다
                                     <span className="text-red-500 ml-1">(필수)</span>
                                 </span>
@@ -628,13 +628,13 @@ export default function StudentManagementClient({
                     )}
 
                     <div className="flex gap-2 justify-end">
-                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white">
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy || (!editingId && !guardianConsent)}
-                            className="bg-brand-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50"
+                            className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50"
                         >
                             {busy ? "저장 중..." : editingId ? "수정" : "등록"}
                         </button>
@@ -644,44 +644,44 @@ export default function StudentManagementClient({
 
             {/* Student list */}
             {filtered.length === 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
                     {search ? "검색 결과가 없습니다." : "등록된 원생이 없습니다. \"원생 등록\" 버튼으로 새 원생을 등록하세요."}
                 </div>
             ) : (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                            <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">학년</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">이름</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">학년</th>
                                     {/* 학교/학부모/연락처: 모바일에서 숨김 */}
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">학교</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">수강 반</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">학부모</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">연락처</th>
-                                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">관리</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">학교</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">수강 반</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">학부모</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">연락처</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">관리</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {filtered.map((s) => (
-                                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={s.id} className="hover:bg-gray-50 dark:bg-gray-900 transition-colors">
                                         {/* 이름: 항상 표시, 클릭하면 상세 페이지로 이동 */}
                                         <td className="px-4 py-2">
-                                            <Link href={`/admin/students/${s.id}`} className="font-bold text-gray-900 hover:text-brand-orange-500 transition-colors text-sm">
+                                            <Link href={`/admin/students/${s.id}`} className="font-bold text-gray-900 hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors text-sm">
                                                 {s.name}
                                             </Link>
                                         </td>
                                         {/* 학년: 항상 표시, shortenGrade로 "초4" 형태 */}
-                                        <td className="px-4 py-2 text-sm text-gray-600">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
                                             {shortenGrade(s.grade)}
                                         </td>
                                         {/* 학교: 모바일 숨김 */}
-                                        <td className="px-4 py-2 text-sm text-gray-600 hidden md:table-cell">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {s.school || "-"}
                                         </td>
                                         {/* 수강 반: 항상 표시, shortenClassName으로 "월6" 형태 */}
-                                        <td className="px-4 py-2 text-sm text-gray-600">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
                                             {s.enrollments && s.enrollments.length > 0
                                                 ? [...s.enrollments]
                                                     .sort((a, b) => (DAY_ORDER[a.dayOfWeek] ?? 99) - (DAY_ORDER[b.dayOfWeek] ?? 99) || a.startTime.localeCompare(b.startTime))
@@ -690,11 +690,11 @@ export default function StudentManagementClient({
                                             }
                                         </td>
                                         {/* 학부모: 모바일 숨김, shortenParentName으로 간결화 */}
-                                        <td className="px-4 py-2 text-sm text-gray-600 hidden md:table-cell">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {shortenParentName(s.parent.name)}
                                         </td>
                                         {/* 연락처: 모바일 숨김, formatPhone으로 하이픈 포맷 */}
-                                        <td className="px-4 py-2 text-sm text-gray-600 hidden md:table-cell">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {formatPhone(s.parent.phone)}
                                         </td>
                                         {/* 관리: 아이콘 버튼 3개 (수강등록, 수정, 삭제) */}
@@ -725,7 +725,7 @@ export default function StudentManagementClient({
                                                         </button>
                                                         <button
                                                             onClick={() => setDeleteConfirm(null)}
-                                                            className="text-xs text-gray-500 px-2 py-1"
+                                                            className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
                                                         >
                                                             취소
                                                         </button>
@@ -762,20 +762,20 @@ export default function StudentManagementClient({
             {/* 수강 등록 모달 — 프로그램별 그룹화 + 요일/시간 표시 */}
             {enrollModal && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
-                        <h3 className="font-bold text-lg text-gray-900 mb-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4">
                             수강 등록 — {students.find(s => s.id === enrollModal)?.name}
                         </h3>
                         {classes.length === 0 ? (
-                            <p className="text-gray-500 text-sm">개설된 반이 없습니다. 먼저 반을 개설하세요.</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">개설된 반이 없습니다. 먼저 반을 개설하세요.</p>
                         ) : (
                             <div className="max-h-[60vh] overflow-y-auto space-y-4">
                                 {/* 프로그램별 그룹으로 표시 */}
                                 {groupClassesByProgram(classes).map((group) => (
                                     <div key={group.programName}>
                                         {/* 프로그램명 헤더 */}
-                                        <div className="bg-gray-100 rounded-lg px-3 py-1.5 mb-2">
-                                            <span className="text-sm font-bold text-gray-700">
+                                        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-1.5 mb-2">
+                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
                                                 {group.programName}
                                             </span>
                                             <span className="text-xs text-gray-400 ml-2">
@@ -789,11 +789,11 @@ export default function StudentManagementClient({
                                                     key={c.id}
                                                     onClick={() => handleEnroll(enrollModal!, c.id)}
                                                     disabled={busy}
-                                                    className="w-full text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-brand-orange-400 hover:bg-orange-50 transition disabled:opacity-50"
+                                                    className="w-full text-left px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-brand-orange-400 hover:bg-orange-50 transition disabled:opacity-50"
                                                 >
                                                     {/* 요일 + 교시명 + 시간 표시 */}
                                                     <div className="flex items-center justify-between">
-                                                        <span className="font-medium text-gray-900 text-sm">
+                                                        <span className="font-medium text-gray-900 dark:text-white text-sm">
                                                             {c.name}
                                                         </span>
                                                         <span className="text-xs text-gray-400">
@@ -810,7 +810,7 @@ export default function StudentManagementClient({
                         <div className="mt-4 text-right">
                             <button
                                 onClick={() => setEnrollModal(null)}
-                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white"
                             >
                                 닫기
                             </button>

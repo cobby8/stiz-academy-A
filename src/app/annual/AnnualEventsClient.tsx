@@ -130,7 +130,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
     return (
         <>
             {/* 메인 일정 영역 — 따뜻한 배경색으로 통일 */}
-            <section className="py-8 md:py-12 bg-surface-section">
+            <section className="py-8 md:py-12 bg-surface-section dark:bg-gray-900 transition-colors duration-300">
                 <div className="max-w-6xl mx-auto px-4">
 
                     {/* 연도 선택 — 가로 스크롤 */}
@@ -144,7 +144,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                     className={`px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 shrink-0 whitespace-nowrap ${
                                         selectedYear === year
                                             ? "bg-brand-navy-900 text-white shadow-md"
-                                            : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm"
                                     }`}
                                 >
                                     {year}년
@@ -155,9 +155,9 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
 
                     {/* 일정 없을 때 안내 메시지 */}
                     {filteredEvents.length === 0 ? (
-                        <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 text-gray-400 shadow-sm">
+                        <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 text-gray-400 shadow-sm">
                             <div className="text-5xl mb-4">🏀</div>
-                            <p className="text-lg font-bold text-gray-500">{selectedYear}년 등록된 일정이 없습니다.</p>
+                            <p className="text-lg font-bold text-gray-500 dark:text-gray-400">{selectedYear}년 등록된 일정이 없습니다.</p>
                             <p className="text-sm mt-2">관리자가 일정을 등록하면 여기에 표시됩니다.</p>
                         </div>
                     ) : (
@@ -182,23 +182,23 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                             onClick={() => toggleMonth(mon)}
                                             className="w-full flex items-center gap-3 mb-4 group text-left"
                                         >
-                                            <h2 className="text-xl font-black text-brand-navy-900 flex items-center gap-2.5">
+                                            <h2 className="text-xl font-black text-brand-navy-900 dark:text-white flex items-center gap-2.5 transition-colors">
                                                 {/* 월 숫자 원형 뱃지 */}
                                                 <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black transition-all duration-200 ${
                                                     isMonthOpen
                                                         ? "bg-brand-navy-900 text-white shadow-md"
-                                                        : "bg-gray-200 text-gray-600 group-hover:bg-brand-navy-900/70 group-hover:text-white"
+                                                        : "bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 group-hover:bg-brand-navy-900/70 group-hover:text-white"
                                                 }`}>
                                                     {mon + 1}
                                                 </span>
-                                                <span className={`transition-colors ${isMonthOpen ? "text-brand-navy-900" : "text-gray-500"}`}>
+                                                <span className={`transition-colors ${isMonthOpen ? "text-brand-navy-900 dark:text-brand-neon-lime" : "text-gray-500 dark:text-gray-400"}`}>
                                                     {MONTH_NAMES[mon]}
                                                 </span>
                                             </h2>
 
                                             {/* 이번 달 / 다음 달 뱃지 — pill 스타일 */}
                                             {isThisMonth && (
-                                                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-brand-orange-500 text-white leading-none shadow-sm">
+                                                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white leading-none shadow-sm">
                                                     이번 달
                                                 </span>
                                             )}
@@ -210,7 +210,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
 
                                             {/* 접혔을 때 이벤트 수 요약 */}
                                             {!isMonthOpen && (
-                                                <span className="text-xs text-gray-400 font-medium bg-white px-2.5 py-1 rounded-full border border-gray-100">
+                                                <span className="text-xs text-gray-400 font-medium bg-white dark:bg-gray-800 px-2.5 py-1 rounded-full border border-gray-100 dark:border-gray-700 transition-colors">
                                                     일정 {eventCount}개
                                                 </span>
                                             )}
@@ -223,7 +223,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
 
                                         {/* 접혔을 때 구분선 */}
                                         {!isMonthOpen && (
-                                            <div className="border-b border-gray-200/60 mb-6" />
+                                            <div className="border-b border-gray-200 dark:border-gray-700/60 mb-6" />
                                         )}
 
                                         {isMonthOpen && (
@@ -235,8 +235,8 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                     onClick={e => { e.stopPropagation(); toggleSchedule(mon); }}
                                                     className={`flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full border transition-all duration-200 ${
                                                         isScheduleOpen
-                                                            ? "bg-brand-navy-900 text-white border-brand-navy-900 shadow-md"
-                                                            : "bg-white text-brand-navy-900 border-brand-navy-900/30 hover:border-brand-navy-900 hover:shadow-sm"
+                                                            ? "bg-brand-navy-900 dark:bg-gray-700 text-white border-brand-navy-900 dark:border-gray-700 shadow-md"
+                                                            : "bg-white dark:bg-gray-800 text-brand-navy-900 dark:text-gray-300 border-brand-navy-900/30 dark:border-gray-700 hover:border-brand-navy-900 hover:shadow-sm"
                                                     }`}
                                                 >
                                                     수업일자 확인
@@ -290,27 +290,27 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                 return (
                                                     <div
                                                         key={dateKey}
-                                                        className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
+                                                        className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
                                                     >
                                                         {/* 날짜 헤더 — 더 깔끔한 디자인 */}
-                                                        <div className="px-5 py-2.5 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2">
-                                                            <span className="text-sm font-black text-gray-800">
+                                                        <div className="px-5 py-2.5 bg-gray-50/80 dark:bg-gray-700/80 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2 transition-colors">
+                                                            <span className="text-sm font-black text-gray-800 dark:text-gray-200">
                                                                 {mo}월 {day}일
                                                             </span>
-                                                            <span className="text-xs font-bold text-gray-400 bg-gray-200/70 px-2 py-0.5 rounded-full leading-none">
+                                                            <span className="text-xs font-bold text-gray-400 bg-gray-200/70 dark:bg-gray-600/70 px-2 py-0.5 rounded-full leading-none transition-colors">
                                                                 {dow}
                                                             </span>
                                                         </div>
 
                                                         {/* 이벤트 행 목록 */}
-                                                        <div className="divide-y divide-gray-50">
+                                                        <div className="divide-y divide-gray-50 dark:divide-gray-700/50 transition-colors">
                                                             {events.map(ev => {
                                                                 const cat = CATEGORY_STYLES[ev.category] ?? CATEGORY_STYLES["일반"];
                                                                 return (
                                                                     <button
                                                                         key={ev.id}
                                                                         onClick={() => setSelectedEvent(ev)}
-                                                                        className="w-full text-left px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 active:bg-gray-100 transition-colors duration-150 group"
+                                                                        className="w-full text-left px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50 dark:bg-gray-900/50 dark:hover:bg-gray-700/50 active:bg-gray-100 dark:bg-gray-800 dark:active:bg-gray-600 transition-colors duration-150 group"
                                                                     >
                                                                         {/* 카테고리 뱃지 */}
                                                                         <span className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${cat.bg} ${cat.text} ${cat.border}`}>
@@ -318,7 +318,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                                             {ev.category || "일반"}
                                                                         </span>
                                                                         {/* 이벤트 제목 + 기간 */}
-                                                                        <span className="flex-1 text-sm font-bold text-gray-900 truncate">
+                                                                        <span className="flex-1 text-sm font-bold text-gray-900 dark:text-white truncate transition-colors">
                                                                             {ev.title}
                                                                             {ev.endDate && (() => {
                                                                                 const s = new Date(ev.date);
@@ -328,7 +328,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                                                     s.getUTCMonth() === e.getUTCMonth() &&
                                                                                     s.getUTCDate() === e.getUTCDate()) return null;
                                                                                 return (
-                                                                                    <span className="ml-1.5 text-sm font-semibold text-gray-600">
+                                                                                    <span className="ml-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 transition-colors">
                                                                                         ~ {e.getUTCMonth() + 1}월 {e.getUTCDate()}일
                                                                                     </span>
                                                                                 );
@@ -341,7 +341,7 @@ export default function AnnualEventsClient({ allEvents, classDays, yearlySchedul
                                                                             </span>
                                                                         )}
                                                                         {/* 더보기 화살표 */}
-                                                                        <span className="text-gray-300 group-hover:text-brand-orange-500 transition-colors text-lg shrink-0 leading-none">
+                                                                        <span className="text-gray-300 group-hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors text-lg shrink-0 leading-none">
                                                                             ›
                                                                         </span>
                                                                     </button>

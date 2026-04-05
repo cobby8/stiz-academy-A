@@ -9,7 +9,7 @@ const PlaceholderBox = ({ icon, title, desc, connect, drag, selected }: any) => 
     <div
         ref={(ref) => { if (ref) connect(drag(ref)); }}
         style={{ outline: selected ? "2px solid #ea580c" : "none" }}
-        className="p-8 bg-gray-50 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-500 w-full my-4"
+        className="p-8 bg-gray-50 dark:bg-gray-900 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 w-full my-4"
     >
         {icon}
         <span className="font-bold">{title}</span>
@@ -29,7 +29,7 @@ export const ProgramsWidget = () => {
     if (isEditor) {
         return <PlaceholderBox
             connect={connect} drag={drag} selected={selected}
-            icon={<Trophy className="w-12 h-12 mb-3 text-brand-orange-500" />}
+            icon={<Trophy className="w-12 h-12 mb-3 text-brand-orange-500 dark:text-brand-neon-lime" />}
             title="프로그램 목록 (자동 연동 위젯)"
             desc="저장 후 실제 홈페이지에서 학원 프로그램 목록으로 자동 변환됩니다."
         />
@@ -39,29 +39,29 @@ export const ProgramsWidget = () => {
         <div ref={(ref) => { if (ref) connect(drag(ref)); }} className="w-full relative py-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full">
                 {(!programs || programs.length === 0) ? (
-                    <div className="col-span-full text-center py-12 text-gray-500 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
                         등록된 프로그램 정보가 없습니다. 관리자 페이지에서 추가해주세요.
                     </div>
                 ) : (
                     programs.map((program: any, idx: number) => (
-                        <div key={program.id} className="border border-gray-200 rounded-2xl overflow-hidden flex flex-col sm:flex-row shadow-sm hover:shadow-md transition bg-white w-full">
-                            <div className="w-full sm:w-1/3 h-32 sm:h-auto bg-gray-100 relative flex items-center justify-center p-4">
-                                <div className={`absolute inset-0 opacity-10 mix-blend-multiply ${idx % 2 === 0 ? 'bg-brand-navy-900' : 'bg-brand-orange-500'}`}></div>
+                        <div key={program.id} className="border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden flex flex-col sm:flex-row shadow-sm hover:shadow-md transition bg-white dark:bg-gray-800 w-full">
+                            <div className="w-full sm:w-1/3 h-32 sm:h-auto bg-gray-100 dark:bg-gray-800 relative flex items-center justify-center p-4">
+                                <div className={`absolute inset-0 opacity-10 mix-blend-multiply ${idx % 2 === 0 ? 'bg-brand-navy-900' : 'bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900'}`}></div>
                                 {program.targetAge && (
-                                    <div className={`absolute top-2 left-2 md:top-4 md:left-4 text-[10px] md:text-xs font-bold px-2 py-1 rounded shadow-sm ${idx % 2 === 0 ? 'bg-white text-gray-900' : 'bg-brand-orange-500 text-white'}`}>
+                                    <div className={`absolute top-2 left-2 md:top-4 md:left-4 text-[10px] md:text-xs font-bold px-2 py-1 rounded shadow-sm ${idx % 2 === 0 ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white' : 'bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white'}`}>
                                         {program.targetAge}
                                     </div>
                                 )}
-                                <Trophy className={`w-8 h-8 md:w-12 md:h-12 opacity-20 ${idx % 2 === 0 ? 'text-brand-navy-900' : 'text-brand-orange-500'}`} />
+                                <Trophy className={`w-8 h-8 md:w-12 md:h-12 opacity-20 ${idx % 2 === 0 ? 'text-brand-navy-900' : 'text-brand-orange-500 dark:text-brand-neon-lime'}`} />
                             </div>
                             <div className="p-4 md:p-6 sm:w-2/3 flex flex-col justify-center">
-                                <h3 className="text-lg md:text-2xl font-bold text-gray-900 mb-1 md:mb-2">{program.name}</h3>
-                                <p className="text-gray-600 mb-3 md:mb-4 text-xs md:text-sm leading-relaxed min-h-[40px] line-clamp-2 md:line-clamp-none whitespace-pre-line">
+                                <h3 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white mb-1 md:mb-2">{program.name}</h3>
+                                <p className="text-gray-600 dark:text-gray-300 mb-3 md:mb-4 text-xs md:text-sm leading-relaxed min-h-[40px] line-clamp-2 md:line-clamp-none whitespace-pre-line">
                                     {program.description || '상세 설명이 등록되지 않았습니다.'}
                                 </p>
                                 <div className="flex flex-col sm:flex-row flex-wrap gap-1.5 md:gap-2">
-                                    {program.frequency && <span className="bg-gray-100 text-gray-600 px-1.5 md:px-2 py-1 rounded text-[10px] md:text-xs w-fit">빈도: {program.frequency}</span>}
-                                    <span className="bg-orange-50 text-brand-orange-600 font-bold px-1.5 md:px-2 py-1 rounded text-[10px] md:text-xs border border-orange-100 w-fit">수강료: {program.price.toLocaleString()}원</span>
+                                    {program.frequency && <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-1.5 md:px-2 py-1 rounded text-[10px] md:text-xs w-fit">빈도: {program.frequency}</span>}
+                                    <span className="bg-orange-50 text-brand-orange-600 dark:text-brand-neon-lime font-bold px-1.5 md:px-2 py-1 rounded text-[10px] md:text-xs border border-orange-100 w-fit">수강료: {program.price.toLocaleString()}원</span>
                                 </div>
                             </div>
                         </div>
@@ -95,10 +95,10 @@ export const ScheduleWidget = () => {
 
     return (
         <div ref={(ref) => { if (ref) connect(drag(ref)); }} className="w-full relative py-8">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden w-full">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden w-full">
                 <div className="overflow-x-auto">
                     {(!classes || classes.length === 0) ? (
-                        <div className="text-center py-16 text-gray-500">개설된 클래스 시간표가 없습니다.</div>
+                        <div className="text-center py-16 text-gray-500 dark:text-gray-400">개설된 클래스 시간표가 없습니다.</div>
                     ) : (
                         <table className="min-w-full divide-y divide-gray-200 text-sm">
                             <thead className="bg-brand-navy-900 text-white">
@@ -112,20 +112,20 @@ export const ScheduleWidget = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {classes.map((cls: any) => (
-                                    <tr key={cls.id} className="hover:bg-gray-50 transition">
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500 font-medium">{cls.program?.name}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap"><span className="font-bold text-gray-900">{cls.name}</span></td>
+                                    <tr key={cls.id} className="hover:bg-gray-50 dark:bg-gray-900 transition">
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400 font-medium">{cls.program?.name}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap"><span className="font-bold text-gray-900 dark:text-white">{cls.name}</span></td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="inline-block px-2 py-1 bg-gray-100 rounded text-brand-orange-600 font-bold">
+                                            <span className="inline-block px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-brand-orange-600 dark:text-brand-neon-lime font-bold">
                                                 {daysInfo?.find((d: any) => d.value === cls.dayOfWeek)?.label || cls.dayOfWeek}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-700 font-medium tracking-tight">
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-700 dark:text-gray-200 font-medium tracking-tight">
                                             {cls.startTime || '-'} ~ {cls.endTime || '-'}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
                                             {cls.location && <span className="mr-3">{cls.location}</span>}
-                                            <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs">정원 {cls.capacity}명</span>
+                                            <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full text-xs">정원 {cls.capacity}명</span>
                                         </td>
                                     </tr>
                                 ))}
@@ -163,7 +163,7 @@ export const CoachesWidget = () => {
         <div ref={(ref) => { if (ref) connect(drag(ref)); }} className="w-full relative py-8">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-8 w-full">
                 {displayCoaches?.map((coach: any) => (
-                    <div key={coach.id} className="p-4 md:p-6 bg-gray-50 rounded-2xl border border-gray-100 hover:shadow-md transition text-center flex flex-col items-center">
+                    <div key={coach.id} className="p-4 md:p-6 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 hover:shadow-md transition text-center flex flex-col items-center">
                         <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-200 rounded-full mb-4 overflow-hidden relative shadow-sm">
                             {coach.imageUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -174,10 +174,10 @@ export const CoachesWidget = () => {
                                 </div>
                             )}
                         </div>
-                        <h3 className="text-base md:text-xl font-bold text-gray-900 mb-1">
-                            {coach.name} <span className="block md:inline mt-1 md:mt-0 text-xs md:text-sm font-medium text-brand-orange-500">{coach.role}</span>
+                        <h3 className="text-base md:text-xl font-bold text-gray-900 dark:text-white mb-1">
+                            {coach.name} <span className="block md:inline mt-1 md:mt-0 text-xs md:text-sm font-medium text-brand-orange-500 dark:text-brand-neon-lime">{coach.role}</span>
                         </h3>
-                        <p className="text-gray-500 text-xs md:text-sm whitespace-pre-line break-keep mt-2">
+                        <p className="text-gray-500 dark:text-gray-400 text-xs md:text-sm whitespace-pre-line break-keep mt-2">
                             {coach.description}
                         </p>
                     </div>

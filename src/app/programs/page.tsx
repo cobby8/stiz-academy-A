@@ -63,14 +63,14 @@ function getShuttleFeeDisplay(
 
 // 대상 연령에 따른 색상 매핑 — 한눈에 구분되게
 function getAgeColor(targetAge: string | null): { bg: string; text: string; border: string } {
-    if (!targetAge) return { bg: "bg-gray-50", text: "text-gray-600", border: "border-gray-200" };
+    if (!targetAge) return { bg: "bg-gray-50 dark:bg-gray-900", text: "text-gray-600 dark:text-gray-300", border: "border-gray-200 dark:border-gray-700" };
     const age = targetAge.toLowerCase();
     if (age.includes("유아") || age.includes("미취학")) return { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" };
     if (age.includes("초등") && (age.includes("저") || age.includes("1") || age.includes("2") || age.includes("3")))
         return { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" };
     if (age.includes("초등")) return { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200" };
     if (age.includes("중등") || age.includes("중학")) return { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" };
-    return { bg: "bg-gray-50", text: "text-gray-600", border: "border-gray-200" };
+    return { bg: "bg-gray-50 dark:bg-gray-900", text: "text-gray-600 dark:text-gray-300", border: "border-gray-200 dark:border-gray-700" };
 }
 
 export default async function ProgramsPage() {
@@ -82,14 +82,14 @@ export default async function ProgramsPage() {
     return (
         <PublicPageLayout>
             {/* 페이지 히어로 — 그라데이션 배경 + 장식 요소 */}
-            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white py-12 md:py-14">
+            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 dark:from-black dark:via-gray-900 dark:to-black text-white py-12 md:py-14 transition-colors duration-300">
                 <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
-                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
+                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3 transition-colors duration-300" />
+                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 dark:border-brand-neon-lime/10 rounded-full -translate-x-1/4 translate-y-1/4 transition-colors duration-300" />
                 </div>
                 <div className="max-w-6xl mx-auto px-6 md:px-4 relative">
                     <AnimateOnScroll>
-                        <p className="text-brand-orange-500 text-sm font-bold uppercase tracking-widest mb-3">PROGRAMS</p>
+                        <p className="text-brand-orange-500 dark:text-brand-neon-lime text-sm font-bold uppercase tracking-widest mb-3">PROGRAMS</p>
                         <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">프로그램 안내</h1>
                         <p className="text-blue-200 text-lg max-w-xl">수준과 연령에 맞는 최적의 프로그램을 찾아보세요.</p>
                     </AnimateOnScroll>
@@ -120,7 +120,7 @@ export default async function ProgramsPage() {
                                     <Card variant="default" className={`overflow-hidden !p-0 border-t-4 ${ageColor.border}`}>
                                         {/* 프로그램 이미지 */}
                                         {program.imageUrl && (
-                                            <div className="relative aspect-[3/1] bg-gray-100 overflow-hidden">
+                                            <div className="relative aspect-[3/1] bg-gray-100 dark:bg-gray-800 overflow-hidden">
                                                 <Image
                                                     src={program.imageUrl}
                                                     alt={program.name}
@@ -134,7 +134,7 @@ export default async function ProgramsPage() {
                                         {/* 프로그램 헤더 — 이름 + 뱃지들 */}
                                         <div className="px-5 pt-5 pb-3">
                                             <div className="flex flex-wrap items-center gap-2 mb-2">
-                                                <h3 className="text-xl font-bold text-gray-900">{program.name}</h3>
+                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{program.name}</h3>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {/* 대상 연령 뱃지 */}
@@ -152,7 +152,7 @@ export default async function ProgramsPage() {
                                                 ))}
                                                 {/* 수업 요일 뱃지 */}
                                                 {days.map((d) => (
-                                                    <span key={d} className={`text-xs font-bold px-2.5 py-1 rounded-full ${WEEKEND.has(d) ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"}`}>
+                                                    <span key={d} className={`text-xs font-bold px-2.5 py-1 rounded-full ${WEEKEND.has(d) ? "bg-orange-100 text-orange-700" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"}`}>
                                                         {DAY_OPTIONS[d]}
                                                     </span>
                                                 ))}
@@ -162,14 +162,14 @@ export default async function ProgramsPage() {
                                         {/* 프로그램 설명 */}
                                         {program.description && (
                                             <div className="px-5 pb-3">
-                                                <p className="text-gray-600 text-base leading-relaxed whitespace-pre-line">{program.description}</p>
+                                                <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed whitespace-pre-line">{program.description}</p>
                                             </div>
                                         )}
 
                                         {/* 수강료 — 다단 가격표 또는 단일 가격 */}
                                         <div className="px-5 pb-5">
                                             {tiers.length > 0 ? (
-                                                <div className="overflow-hidden rounded-xl border border-gray-200">
+                                                <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
                                                     <table className="w-full text-sm">
                                                         <thead className="bg-brand-navy-900 text-white">
                                                             <tr>
@@ -182,8 +182,8 @@ export default async function ProgramsPage() {
                                                             {tiers.map((t) => {
                                                                 const fee = getShuttleFeeDisplay(program.shuttleFeeOverride, t.key, weekend);
                                                                 return (
-                                                                    <tr key={t.key} className="hover:bg-gray-50">
-                                                                        <td className="px-4 py-3 font-semibold text-gray-800">{t.label}</td>
+                                                                    <tr key={t.key} className="hover:bg-gray-50 dark:bg-gray-900">
+                                                                        <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-100">{t.label}</td>
                                                                         <td className="px-4 py-3 text-right font-bold text-brand-navy-900">
                                                                             {Number(program[t.key]).toLocaleString()}원
                                                                         </td>
@@ -202,7 +202,7 @@ export default async function ProgramsPage() {
                                                         <p className="text-sm text-gray-400 mb-0.5">월 수강료</p>
                                                         <p className="text-3xl font-black text-brand-navy-900">
                                                             {program.price.toLocaleString()}
-                                                            <span className="text-base font-normal text-gray-500">원</span>
+                                                            <span className="text-base font-normal text-gray-500 dark:text-gray-400">원</span>
                                                         </p>
                                                     </div>
                                                     {weekend ? (
@@ -220,7 +220,7 @@ export default async function ProgramsPage() {
                                             {/* 시간표 보기 링크 */}
                                             <div className="flex justify-end mt-4">
                                                 <a href={`/schedule?program=${program.id}`}
-                                                    className="text-sm font-bold text-brand-orange-500 hover:text-orange-600 border border-brand-orange-500/50 hover:border-brand-orange-500 px-4 py-2 rounded-xl transition-all duration-200 hover:scale-[1.02]">
+                                                    className="text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime hover:text-orange-600 border border-brand-orange-500 dark:border-brand-neon-lime/50 hover:border-brand-orange-500 dark:border-brand-neon-lime px-4 py-2 rounded-xl transition-all duration-200 hover:scale-[1.02]">
                                                     시간표 보기 →
                                                 </a>
                                             </div>

@@ -140,9 +140,9 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
           inset-0 sm:inset-auto
           sm:bottom-6 sm:right-6
           sm:w-96 sm:h-[500px]
-          bg-white sm:rounded-2xl shadow-2xl
+          bg-white dark:bg-gray-800 sm:rounded-2xl shadow-2xl
           flex flex-col overflow-hidden
-          border border-gray-200
+          border border-gray-200 dark:border-gray-700
         "
       >
         {/* 상단 헤더: 제목 + 닫기 버튼 */}
@@ -166,7 +166,7 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
           {/* API 호출 중일 때 "답변 작성 중..." 표시 */}
           {isLoading && (
             <div className="flex justify-start mb-3">
-              <div className="bg-gray-100 text-gray-500 rounded-2xl rounded-bl-md px-4 py-3 text-sm">
+              <div className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-2xl rounded-bl-md px-4 py-3 text-sm">
                 <span className="animate-pulse">답변 작성 중...</span>
               </div>
             </div>
@@ -177,7 +177,7 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
         </div>
 
         {/* 하단 입력 영역 */}
-        <div className="border-t border-gray-200 p-3 flex-shrink-0">
+        <div className="border-t border-gray-200 dark:border-gray-700 p-3 flex-shrink-0">
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}

@@ -16,6 +16,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, X, ChevronDown } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 
 // 부모(Server Component)에서 전달받을 props 타입
 interface PublicHeaderProps {
@@ -110,7 +111,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
   return (
     <>
       {/* 유틸리티 바 — 운영시간 + 전화번호 (데스크탑만 표시) */}
-      <div className="bg-brand-navy-900 text-white text-xs py-2 hidden md:block">
+      <div className="bg-brand-navy-900 dark:bg-black text-white text-xs py-2 hidden md:block border-b border-white/10 dark:border-white/5">
         <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
           <span className="text-gray-300">
             평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)
@@ -123,7 +124,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
               className={[
                 "flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold transition-colors",
                 isLargeFont
-                  ? "bg-brand-orange-500 text-white"
+                  ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white"
                   : "bg-gray-700 text-gray-300 hover:bg-gray-600",
               ].join(" ")}
               aria-label={isLargeFont ? "기본 글씨 크기로 변경" : "큰 글씨 모드로 변경"}
@@ -141,8 +142,8 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
         className={[
           "sticky top-0 z-50 transition-all duration-300",
           isScrolled
-            ? "bg-white/95 backdrop-blur-md shadow-md border-b border-gray-100"
-            : "bg-white shadow-sm border-b border-gray-100",
+            ? "bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-md border-b border-gray-100 dark:border-gray-800"
+            : "bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800",
         ].join(" ")}
       >
         <div className="max-w-6xl mx-auto px-4 py-3 md:py-4 flex items-center justify-between">
@@ -153,22 +154,22 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
               alt="STIZ"
               width={180}
               height={45}
-              className="h-10 sm:h-12 w-auto object-contain"
+              className="h-10 sm:h-12 w-auto object-contain dark:brightness-0 dark:invert"
               priority
             />
-            <span className="font-extrabold text-lg sm:text-xl text-brand-navy-900">
+            <span className="font-extrabold text-lg sm:text-xl text-brand-navy-900 dark:text-white">
               다산점
             </span>
           </Link>
 
           {/* ===== 데스크탑 네비게이션 ===== */}
           {/* 순서: 학원 소개 | 수업 안내 v | 소식/안내 v | 수업찾기 | [신청하기] */}
-          <nav className="hidden md:flex items-center gap-1 font-bold text-sm text-gray-700">
+          <nav className="hidden md:flex items-center gap-1 font-bold text-sm text-gray-700 dark:text-gray-300">
             {/* 학원 소개 — 독립 링크, 맨 앞 배치 */}
             <Link
               href="/about"
               data-tour-target="nav-about"
-              className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
+              className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-brand-neon-lime/10 transition-colors"
             >
               학원 소개
             </Link>
@@ -178,7 +179,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
               <div key={group.label} className="relative group">
                 {/* 카테고리 라벨 버튼 — hover 시 드롭다운이 열린다 */}
                 <button
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-brand-neon-lime/10 transition-colors"
                 >
                   {group.label}
                   {/* 화살표 — hover 시 회전 */}
@@ -187,14 +188,14 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
 
                 {/* 드롭다운 패널 — group-hover로 보이기/숨기기 */}
                 <div className="absolute top-full left-0 pt-1 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-200">
-                  <div className="bg-white rounded-lg shadow-lg border border-gray-100 py-2 min-w-[180px]">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 py-2 min-w-[180px]">
                     {group.items.map((item) => (
                       <Link
                         key={item.href}
                         href={item.href}
                         // data-tour-target: href에서 슬래시 제거 + 해시는 하이픈으로 변환
                         data-tour-target={`nav-${item.href.slice(1).replace("#", "-")}`}
-                        className="block px-4 py-2.5 text-gray-600 hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors text-sm font-medium"
+                        className="block px-4 py-2.5 text-gray-600 dark:text-gray-300 hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-gray-700 transition-colors text-sm font-medium"
                       >
                         {item.label}
                       </Link>
@@ -208,21 +209,22 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             <Link
               href="/simulator"
               data-tour-target="nav-simulator"
-              className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 hover:bg-brand-orange-50 transition-colors"
+              className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-brand-neon-lime/10 transition-colors"
             >
               수업찾기
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-2 text-gray-700 dark:text-gray-300">
+            <ThemeToggle />
             {/* 큰글씨 모드 토글 (모바일 전용) — 유틸리티 바가 안 보이는 모바일에서도 접근 가능 */}
             <button
               onClick={toggleFontSize}
               className={[
                 "md:hidden flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors",
                 isLargeFont
-                  ? "bg-brand-orange-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                  ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700",
               ].join(" ")}
               aria-label={isLargeFont ? "기본 글씨 크기로 변경" : "큰 글씨 모드로 변경"}
             >
@@ -233,9 +235,9 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             <Link
               href="/apply"
               className={[
-                "bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold",
+                "bg-brand-orange-500 dark:bg-brand-neon-lime hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white dark:text-brand-navy-900 font-bold",
                 "px-4 py-2 rounded-xl text-sm transition-all duration-200",
-                "hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]",
+                "hover:scale-[1.02] hover:shadow-lg dark:shadow-brand-neon-lime/20 active:scale-[0.98]",
                 "hidden sm:inline-flex items-center",
               ].join(" ")}
             >
@@ -246,10 +248,10 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             <button
               data-tour-target="hamburger"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
               aria-label="메뉴 열기"
             >
-              <Menu className="w-6 h-6 text-gray-700" />
+              <Menu className="w-6 h-6" />
             </button>
           </div>
         </div>
@@ -267,20 +269,20 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
       {/* ===== 모바일 사이드바 — 카테고리 라벨 + 구분선으로 그룹핑 ===== */}
       <div
         className={[
-          "fixed top-0 right-0 z-[70] h-full w-72 bg-white shadow-2xl",
+          "fixed top-0 right-0 z-[70] h-full w-72 bg-white dark:bg-gray-900 shadow-2xl",
           "transform transition-transform duration-300 ease-in-out",
           isMobileMenuOpen ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
         {/* 사이드바 상단 — 닫기 버튼 */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
-          <span className="font-bold text-brand-navy-900">메뉴</span>
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
+          <span className="font-bold text-brand-navy-900 dark:text-white">메뉴</span>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
             aria-label="메뉴 닫기"
           >
-            <X className="w-5 h-5 text-gray-700" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -291,12 +293,12 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             href="/about"
             data-tour-target="mobile-nav-about"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="block px-6 py-3 text-gray-700 font-semibold hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
+            className="block px-6 py-3 text-gray-700 dark:text-gray-300 font-semibold hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-gray-800 hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime transition-colors"
           >
             학원 소개
           </Link>
 
-          <div className="mx-4 my-2 border-t border-gray-100" />
+          <div className="mx-4 my-2 border-t border-gray-100 dark:border-gray-800" />
 
           {/* 카테고리 그룹들 */}
           {NAV_GROUPS.map((group, groupIdx) => (
@@ -314,42 +316,42 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
                   href={item.href}
                   data-tour-target={`mobile-nav-${item.href.slice(1).replace("#", "-")}`}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="block px-6 py-2.5 text-gray-700 font-medium hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
+                  className="block px-6 py-2.5 text-gray-700 dark:text-gray-300 font-medium hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-gray-800 hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime transition-colors"
                 >
                   {item.label}
                 </Link>
               ))}
               {/* 그룹 사이 구분선 */}
               {groupIdx < NAV_GROUPS.length - 1 && (
-                <div className="mx-4 my-2 border-t border-gray-100" />
+                <div className="mx-4 my-2 border-t border-gray-100 dark:border-gray-800" />
               )}
             </div>
           ))}
 
           {/* 수업찾기 — 독립 링크, 맨 뒤 배치 */}
-          <div className="mx-4 my-2 border-t border-gray-100" />
+          <div className="mx-4 my-2 border-t border-gray-100 dark:border-gray-800" />
           <Link
             href="/simulator"
             data-tour-target="mobile-nav-simulator"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="block px-6 py-3 text-gray-700 font-semibold hover:bg-brand-orange-50 hover:text-brand-orange-500 transition-colors"
+            className="block px-6 py-3 text-gray-700 dark:text-gray-300 font-semibold hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-gray-800 hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime transition-colors"
           >
             수업찾기
           </Link>
         </nav>
 
         {/* 사이드바 하단 — 연락처 + CTA */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 bg-gray-50">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
           <Link
             href="/apply"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="block w-full bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold py-3 rounded-xl text-center transition-colors mb-3"
+            className="block w-full bg-brand-orange-500 dark:bg-brand-neon-lime hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white dark:text-brand-navy-900 font-bold py-3 rounded-xl text-center transition-colors mb-3"
           >
             신청하기
           </Link>
           <a
             href={`tel:${phone.replace(/-/g, "")}`}
-            className="block text-center text-sm text-gray-500 hover:text-brand-navy-900 transition-colors"
+            className="block text-center text-sm text-gray-500 dark:text-gray-400 hover:text-brand-navy-900 dark:hover:text-white transition-colors"
           >
             상담전화: {phone}
           </a>
@@ -359,8 +361,8 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
             className={[
               "w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-colors",
               isLargeFont
-                ? "bg-brand-orange-100 text-brand-orange-600 border border-brand-orange-200"
-                : "bg-gray-100 text-gray-600 border border-gray-200",
+                ? "bg-brand-orange-100 dark:bg-brand-neon-lime/20 text-brand-orange-600 dark:text-brand-neon-lime border border-brand-orange-200 dark:border-brand-neon-lime/30"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700",
             ].join(" ")}
           >
             <span className="text-base font-black">가</span>

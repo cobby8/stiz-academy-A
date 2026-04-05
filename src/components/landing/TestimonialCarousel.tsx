@@ -64,7 +64,7 @@ export default function TestimonialCarousel({
     >
       {/* 후기가 없으면 안내 메시지 */}
       {testimonials.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
+        <div className="text-center py-12 text-gray-400 dark:text-gray-500 dark:text-gray-400">
           <span className="material-symbols-outlined text-5xl mb-3 block">rate_review</span>
           <p className="font-medium">아직 등록된 후기가 없습니다</p>
         </div>
@@ -74,10 +74,10 @@ export default function TestimonialCarousel({
             {/* 좌측 스크롤 버튼 */}
             <button
               onClick={() => scroll('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:shadow-lg transition-shadow cursor-pointer hidden md:flex"
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-10 h-10 bg-white dark:bg-gray-800 rounded-full shadow-md flex items-center justify-center hover:shadow-lg dark:hover:bg-gray-700 dark:border dark:border-gray-700 transition-all cursor-pointer hidden md:flex"
               aria-label="이전 후기"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
@@ -95,20 +95,20 @@ export default function TestimonialCarousel({
               {testimonials.map((item, index) => (
                 <div
                   key={index}
-                  className="flex-shrink-0 w-[280px] md:w-[320px] snap-start bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+                  className="flex-shrink-0 w-[280px] md:w-[320px] snap-start bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 transition-colors"
                 >
                   {/* 별점 */}
                   <div className="text-lg mb-3">{renderStars(item.rating)}</div>
 
                   {/* 후기 내용 — 따옴표로 감싸서 후기 느낌 강조 */}
-                  <p className="text-gray-600 text-base leading-relaxed mb-4 min-h-[80px]">
+                  <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed mb-4 min-h-[80px]">
                     &ldquo;{item.text}&rdquo;
                   </p>
 
                   {/* 학부모 정보 */}
-                  <div className="border-t border-gray-100 pt-3">
-                    <p className="font-bold text-gray-900 text-base">{item.name}</p>
-                    <p className="text-sm text-gray-400">{item.info}</p>
+                  <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
+                    <p className="font-bold text-gray-900 dark:text-white text-base">{item.name}</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500 dark:text-gray-400">{item.info}</p>
                   </div>
                 </div>
               ))}
@@ -117,10 +117,10 @@ export default function TestimonialCarousel({
             {/* 우측 스크롤 버튼 */}
             <button
               onClick={() => scroll('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center hover:shadow-lg transition-shadow cursor-pointer hidden md:flex"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-10 h-10 bg-white dark:bg-gray-800 rounded-full shadow-md flex items-center justify-center hover:shadow-lg dark:hover:bg-gray-700 dark:border dark:border-gray-700 transition-all cursor-pointer hidden md:flex"
               aria-label="다음 후기"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>

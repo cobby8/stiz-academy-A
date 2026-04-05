@@ -82,7 +82,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-800", icon: "hourglass_top" },
     APPROVED: { label: "승인완료", color: "bg-green-100 text-green-800", icon: "check_circle" },
     REJECTED: { label: "반려", color: "bg-red-100 text-red-800", icon: "cancel" },
-    CANCELLED: { label: "취소", color: "bg-gray-100 text-gray-500", icon: "block" },
+    CANCELLED: { label: "취소", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "block" },
 };
 
 // 유입경로 라벨 (9개 + 레거시 호환)
@@ -162,8 +162,8 @@ export default function ApplyAdminClient({
             {/* 페이지 헤더 + 탭 전환 */}
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-3xl text-brand-orange-500">how_to_reg</span>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">how_to_reg</span>
                         수강 신청 관리
                         {/* PENDING 건수 배지 */}
                         {stats.PENDING > 0 && (
@@ -172,13 +172,13 @@ export default function ApplyAdminClient({
                             </span>
                         )}
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">수강 신청서를 확인하고 승인/반려 처리합니다</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">수강 신청서를 확인하고 승인/반려 처리합니다</p>
                 </div>
                 <a
                     href="/apply"
                     target="_blank"
                     rel="noreferrer"
-                    className="shrink-0 text-sm text-brand-navy-900 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition flex items-center gap-1.5"
+                    className="shrink-0 text-sm text-brand-navy-900 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition flex items-center gap-1.5"
                 >
                     <span className="material-symbols-outlined text-base">open_in_new</span>
                     신청 페이지 미리보기
@@ -186,13 +186,13 @@ export default function ApplyAdminClient({
             </div>
 
             {/* 탭 버튼 */}
-            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
                 <button
                     onClick={() => setActiveTab("applications")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                         activeTab === "applications"
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-lg">assignment</span>
@@ -207,8 +207,8 @@ export default function ApplyAdminClient({
                     onClick={() => setActiveTab("settings")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                         activeTab === "settings"
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-lg">settings</span>
@@ -230,15 +230,15 @@ export default function ApplyAdminClient({
                                     onClick={() => setFilter(filter === s ? "ALL" : s)}
                                     className={`rounded-xl p-4 text-center transition-all border-2 ${
                                         filter === s
-                                            ? "border-brand-orange-500 shadow-md"
-                                            : "border-transparent hover:border-gray-200"
-                                    } bg-white`}
+                                            ? "border-brand-orange-500 dark:border-brand-neon-lime shadow-md"
+                                            : "border-transparent hover:border-gray-200 dark:border-gray-700"
+                                    } bg-white dark:bg-gray-800`}
                                 >
                                     <span className={`material-symbols-outlined text-2xl ${cfg.color.split(" ")[1]}`}>
                                         {cfg.icon}
                                     </span>
-                                    <p className="text-2xl font-bold text-gray-900 mt-1">{count}</p>
-                                    <p className="text-xs text-gray-500">{cfg.label}</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{count}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</p>
                                 </button>
                             );
                         })}
@@ -247,13 +247,13 @@ export default function ApplyAdminClient({
                             onClick={() => setFilter("ALL")}
                             className={`rounded-xl p-4 text-center transition-all border-2 ${
                                 filter === "ALL"
-                                    ? "border-brand-orange-500 shadow-md"
-                                    : "border-transparent hover:border-gray-200"
-                            } bg-white`}
+                                    ? "border-brand-orange-500 dark:border-brand-neon-lime shadow-md"
+                                    : "border-transparent hover:border-gray-200 dark:border-gray-700"
+                            } bg-white dark:bg-gray-800`}
                         >
-                            <span className="material-symbols-outlined text-2xl text-gray-600">summarize</span>
-                            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
-                            <p className="text-xs text-gray-500">전체</p>
+                            <span className="material-symbols-outlined text-2xl text-gray-600 dark:text-gray-300">summarize</span>
+                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{stats.total}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">전체</p>
                         </button>
                     </div>
 
@@ -264,7 +264,7 @@ export default function ApplyAdminClient({
                             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                                 filter === "ALL"
                                     ? "bg-gray-900 text-white"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                             }`}
                         >
                             전체 ({stats.total})
@@ -290,9 +290,9 @@ export default function ApplyAdminClient({
 
                     {/* 신청서 목록 */}
                     {filteredApps.length === 0 ? (
-                        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                             <span className="material-symbols-outlined text-5xl text-gray-300">inbox</span>
-                            <p className="text-gray-500 mt-3">
+                            <p className="text-gray-500 dark:text-gray-400 mt-3">
                                 {filter === "ALL"
                                     ? "접수된 수강 신청이 없습니다"
                                     : `"${STATUS_CONFIG[filter]?.label}" 상태의 신청이 없습니다`}
@@ -306,7 +306,7 @@ export default function ApplyAdminClient({
                                 return (
                                     <div
                                         key={app.id}
-                                        className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow"
+                                        className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow"
                                     >
                                         <div className="flex flex-col md:flex-row md:items-start gap-4">
                                             {/* 왼쪽: 기본 정보 */}
@@ -318,7 +318,7 @@ export default function ApplyAdminClient({
                                                         {cfg.label}
                                                     </span>
                                                     {app.referralSource && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
                                                             {SOURCE_LABELS[app.referralSource] || app.referralSource}
                                                         </span>
                                                     )}
@@ -331,17 +331,17 @@ export default function ApplyAdminClient({
                                                 </div>
 
                                                 {/* 아이 이름 + 나이/학년 */}
-                                                <h3 className="text-lg font-semibold text-gray-900">
+                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                                     {app.childName}
                                                     {age !== null && (
-                                                        <span className="text-sm font-normal text-gray-500 ml-2">
+                                                        <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
                                                             (만 {age}세)
                                                         </span>
                                                     )}
                                                 </h3>
 
                                                 {/* 보호자 + 연락처 + 신청일 */}
-                                                <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
+                                                <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400 flex-wrap">
                                                     <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-base">person</span>
                                                         {app.parentName}
@@ -423,7 +423,7 @@ export default function ApplyAdminClient({
 
                                                 {/* 메모 */}
                                                 {app.memo && (
-                                                    <p className="mt-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                                                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2">
                                                         {app.memo}
                                                     </p>
                                                 )}
@@ -445,7 +445,7 @@ export default function ApplyAdminClient({
                                                 {/* 상세보기 */}
                                                 <button
                                                     onClick={() => setShowDetailModal(app)}
-                                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                    className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition-colors"
                                                     title="상세 보기"
                                                 >
                                                     <span className="material-symbols-outlined text-xl">visibility</span>
@@ -595,15 +595,15 @@ function ApproveModal({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
             <div
-                className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto"
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
             >
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-1">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
                     <span className="material-symbols-outlined text-green-500">check_circle</span>
                     수강 신청 승인
                 </h2>
-                <p className="text-sm text-gray-500 mb-4">
-                    <span className="font-medium text-gray-900">{app.childName}</span>을(를) 어떤 반에 배정하시겠습니까?
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    <span className="font-medium text-gray-900 dark:text-white">{app.childName}</span>을(를) 어떤 반에 배정하시겠습니까?
                 </p>
 
                 {/* 희망 시간대 안내 */}
@@ -617,13 +617,13 @@ function ApproveModal({
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* 반 선택 — 요일별 그룹 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                             배정할 반 선택 (복수 선택 가능) *
                         </label>
                         <div className="space-y-3 max-h-60 overflow-y-auto">
                             {Object.entries(classesByDay).map(([day, dayClasses]) => (
                                 <div key={day}>
-                                    <p className="text-xs font-bold text-gray-500 mb-1">
+                                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">
                                         {DAY_LABELS[day] || day}요일
                                     </p>
                                     <div className="space-y-1">
@@ -637,7 +637,7 @@ function ApproveModal({
                                                     className={`w-full text-left px-3 py-2 rounded-lg text-sm transition border ${
                                                         selected
                                                             ? "border-green-500 bg-green-50 text-green-800"
-                                                            : "border-gray-200 hover:border-gray-300 text-gray-700"
+                                                            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 text-gray-700 dark:text-gray-200"
                                                     }`}
                                                 >
                                                     <div className="flex items-center justify-between">
@@ -665,7 +665,7 @@ function ApproveModal({
 
                     {/* 관리자 메모 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">관리자 메모</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">관리자 메모</label>
                         <textarea
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
@@ -680,7 +680,7 @@ function ApproveModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition"
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-100 transition"
                         >
                             취소
                         </button>
@@ -720,18 +720,18 @@ function RejectModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-1">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
                     <span className="material-symbols-outlined text-red-500">cancel</span>
                     수강 신청 반려
                 </h2>
-                <p className="text-sm text-gray-500 mb-4">
-                    <span className="font-medium text-gray-900">{app.childName}</span>의 신청을 반려합니다.
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    <span className="font-medium text-gray-900 dark:text-white">{app.childName}</span>의 신청을 반려합니다.
                 </p>
 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">반려 사유</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">반려 사유</label>
                         <textarea
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
@@ -745,7 +745,7 @@ function RejectModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition"
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-100 transition"
                         >
                             취소
                         </button>
@@ -791,8 +791,8 @@ function DetailModal({
         const displayValue = typeof value === "boolean" ? (value ? "네" : "아니오") : value;
         return (
             <div className="flex items-start gap-2 text-sm">
-                <span className="text-gray-500 min-w-[80px] flex-shrink-0">{label}</span>
-                <span className="text-gray-900 font-medium">{displayValue}</span>
+                <span className="text-gray-500 dark:text-gray-400 min-w-[80px] flex-shrink-0">{label}</span>
+                <span className="text-gray-900 dark:text-white font-medium">{displayValue}</span>
             </div>
         );
     }
@@ -800,12 +800,12 @@ function DetailModal({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
             <div
-                className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto"
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-orange-500">assignment</span>
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
                         수강 신청 상세
                     </h2>
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
@@ -817,11 +817,11 @@ function DetailModal({
                 <div className="space-y-5">
                     {/* 아이 정보 */}
                     <div>
-                        <h3 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">child_care</span>
                             아이 정보
                         </h3>
-                        <div className="space-y-1.5 bg-gray-50 rounded-lg p-3">
+                        <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
                             <InfoRow label="이름" value={app.childName} />
                             <InfoRow label="생년월일" value={formatDate(app.childBirthDate)} />
                             <InfoRow label="성별" value={app.childGender} />
@@ -833,11 +833,11 @@ function DetailModal({
 
                     {/* 보호자 정보 */}
                     <div>
-                        <h3 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">person</span>
                             보호자 정보
                         </h3>
-                        <div className="space-y-1.5 bg-gray-50 rounded-lg p-3">
+                        <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
                             <InfoRow label="이름" value={app.parentName} />
                             <InfoRow label="연락처" value={app.parentPhone} />
                             <InfoRow label="관계" value={app.parentRelation} />
@@ -847,11 +847,11 @@ function DetailModal({
 
                     {/* 수강 정보 */}
                     <div>
-                        <h3 className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2 flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">sports_basketball</span>
                             수강 정보
                         </h3>
-                        <div className="space-y-1.5 bg-gray-50 rounded-lg p-3">
+                        <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
                             <InfoRow label="희망 시간" value={app.preferredSlotKeys} />
                             <InfoRow label="농구 경험" value={app.basketballExp} />
                             <InfoRow label="셔틀" value={app.shuttleNeeded} />
@@ -865,16 +865,16 @@ function DetailModal({
                     {/* 메모 */}
                     {app.memo && (
                         <div>
-                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">보호자 메모</h3>
-                            <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">{app.memo}</p>
+                            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">보호자 메모</h3>
+                            <p className="text-sm text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">{app.memo}</p>
                         </div>
                     )}
 
                     {/* 처리 결과 */}
                     {app.processedAt && (
                         <div>
-                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">처리 정보</h3>
-                            <div className="space-y-1.5 bg-gray-50 rounded-lg p-3">
+                            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">처리 정보</h3>
+                            <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
                                 <InfoRow label="처리일" value={formatDate(app.processedAt)} />
                                 <InfoRow label="처리메모" value={app.processedNote} />
                             </div>
@@ -885,7 +885,7 @@ function DetailModal({
                 <div className="flex justify-end mt-5">
                     <button
                         onClick={onClose}
-                        className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition font-medium text-sm"
+                        className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-200 transition font-medium text-sm"
                     >
                         닫기
                     </button>
@@ -897,7 +897,7 @@ function DetailModal({
 
 // ── 설정 탭 (기존 안내 설정) ──────────────────────────────────────────────────────
 
-const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 transition";
+const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime transition";
 const TEXTAREA = INPUT + " resize-none";
 
 function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientProps["initialSettings"] }) {
@@ -947,19 +947,19 @@ function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientPro
             )}
 
             {/* 체험수업 */}
-            <SectionCard badge="체험수업" badgeColor="bg-orange-100 text-brand-orange-600 border border-orange-200" title="체험수업 안내 설정">
+            <SectionCard badge="체험수업" badgeColor="bg-orange-100 text-brand-orange-600 dark:text-brand-neon-lime border border-orange-200" title="체험수업 안내 설정">
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">섹션 제목</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">섹션 제목</label>
                     <input type="text" value={trialTitle} onChange={(e) => setTrialTitle(e.target.value)} className={INPUT} placeholder="체험수업 안내" />
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
                         안내 내용 <span className="text-gray-400 font-normal ml-1">(체험수업 절차, 혜택, 대상 등)</span>
                     </label>
                     <textarea value={trialContent} onChange={(e) => setTrialContent(e.target.value)} rows={6} className={TEXTAREA} placeholder={"예:\n- 체험수업 1회 1만원\n- 초등학생~중학생 누구나 신청 가능"} />
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
                         구글폼 URL <span className="text-gray-400 font-normal ml-1">(기존 구글폼 백업용, 현재는 자체 폼 사용)</span>
                     </label>
                     <input type="url" value={trialFormUrl} onChange={(e) => setTrialFormUrl(e.target.value)} className={INPUT} placeholder="https://docs.google.com/forms/d/e/..." />
@@ -969,17 +969,17 @@ function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientPro
             {/* 수강신청 */}
             <SectionCard badge="수강신청" badgeColor="bg-blue-50 text-blue-700 border border-blue-200" title="수강신청 안내 설정">
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">섹션 제목</label>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">섹션 제목</label>
                     <input type="text" value={enrollTitle} onChange={(e) => setEnrollTitle(e.target.value)} className={INPUT} placeholder="수강신청 안내" />
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
                         안내 내용 <span className="text-gray-400 font-normal ml-1">(수강신청 방법, 준비물, 수강료 납부 방법 등)</span>
                     </label>
                     <textarea value={enrollContent} onChange={(e) => setEnrollContent(e.target.value)} rows={6} className={TEXTAREA} placeholder={"예:\n- 신청서 작성 후 원장님 확인\n- 수강료는 매월 1일 납부"} />
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
                         구글폼 URL <span className="text-gray-400 font-normal ml-1">(기존 구글폼 백업용, 현재는 자체 폼 사용)</span>
                     </label>
                     <input type="url" value={enrollFormUrl} onChange={(e) => setEnrollFormUrl(e.target.value)} className={INPUT} placeholder="https://docs.google.com/forms/d/e/..." />
@@ -989,7 +989,7 @@ function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientPro
             {/* 유니폼 신청 */}
             <SectionCard badge="유니폼" badgeColor="bg-green-50 text-green-700 border border-green-200" title="유니폼 신청 설정">
                 <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
                         구글폼 URL <span className="text-gray-400 font-normal ml-1">(유니폼 신청용 구글폼)</span>
                     </label>
                     <input type="url" value={uniformFormUrl} onChange={(e) => setUniformFormUrl(e.target.value)} className={INPUT} placeholder="https://docs.google.com/forms/d/e/..." />
@@ -1001,7 +1001,7 @@ function SettingsTab({ initialSettings }: { initialSettings: ApplyAdminClientPro
                 <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="bg-brand-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-3 rounded-xl transition disabled:opacity-40 shadow-sm"
+                    className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-orange-600 text-white font-bold px-8 py-3 rounded-xl transition disabled:opacity-40 shadow-sm"
                 >
                     {saving ? "저장 중..." : "저장하기"}
                 </button>
@@ -1024,10 +1024,10 @@ function SectionCard({
     children: React.ReactNode;
 }) {
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
                 <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${badgeColor}`}>{badge}</span>
-                <h2 className="text-base font-bold text-gray-800">{title}</h2>
+                <h2 className="text-base font-bold text-gray-800 dark:text-gray-100">{title}</h2>
             </div>
             <div className="p-6 space-y-4">{children}</div>
         </div>

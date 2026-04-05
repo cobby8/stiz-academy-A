@@ -12,7 +12,7 @@ const DAY_LABEL: Record<string, string> = {
 // 요일 헤더 배경색 — 기존 카드뷰와 톤 통일
 const DAY_HEADER_BG: Record<string, string> = {
     Mon: "bg-blue-600", Tue: "bg-green-600", Wed: "bg-yellow-500",
-    Thu: "bg-purple-600", Fri: "bg-red-500", Sat: "bg-brand-orange-500",
+    Thu: "bg-purple-600", Fri: "bg-red-500", Sat: "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900",
     Sun: "bg-gray-500",
 };
 
@@ -62,26 +62,26 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
     if (times.length === 0 || activeDays.length === 0) {
         return (
             <div className="text-center py-12 text-gray-400">
-                <p className="text-lg font-bold text-gray-500">표시할 시간표가 없습니다.</p>
+                <p className="text-lg font-bold text-gray-500 dark:text-gray-400">표시할 시간표가 없습니다.</p>
             </div>
         );
     }
 
     return (
         // 모바일에서 가로 스크롤 가능하도록 overflow-x-auto 적용
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 shadow-sm bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800">
             <table className="w-full min-w-[640px] border-collapse">
                 {/* 테이블 헤더 — 요일별 컬럼 */}
                 <thead>
                     <tr>
                         {/* 좌측 상단: 시간 라벨 */}
-                        <th className="sticky left-0 z-10 bg-gray-100 text-gray-500 text-xs font-bold px-3 py-3 border-b border-r border-gray-200 w-[80px] text-center">
+                        <th className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs font-bold px-3 py-3 border-b border-r border-gray-200 dark:border-gray-700 w-[80px] text-center">
                             시간
                         </th>
                         {activeDays.map((day) => (
                             <th
                                 key={day}
-                                className={`${DAY_HEADER_BG[day]} text-white text-sm font-black px-3 py-3 border-b border-gray-200 text-center min-w-[140px]`}
+                                className={`${DAY_HEADER_BG[day]} text-white text-sm font-black px-3 py-3 border-b border-gray-200 dark:border-gray-700 text-center min-w-[140px]`}
                             >
                                 {DAY_LABEL[day]}
                             </th>
@@ -90,9 +90,9 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
                 </thead>
                 <tbody>
                     {times.map((time) => (
-                        <tr key={time} className="border-b border-gray-100 last:border-b-0">
+                        <tr key={time} className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
                             {/* 시간대 셀 — 고정 컬럼 */}
-                            <td className="sticky left-0 z-10 bg-gray-50 text-gray-700 text-sm font-bold px-3 py-3 border-r border-gray-200 text-center whitespace-nowrap">
+                            <td className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 text-sm font-bold px-3 py-3 border-r border-gray-200 dark:border-gray-700 text-center whitespace-nowrap">
                                 {time}
                             </td>
                             {activeDays.map((day) => {
@@ -102,7 +102,7 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
                                     return (
                                         <td
                                             key={`${day}-${time}`}
-                                            className="bg-gray-50/50 text-gray-300 text-center px-2 py-3 border-r border-gray-100 last:border-r-0"
+                                            className="bg-gray-50 dark:bg-gray-900/50 text-gray-300 text-center px-2 py-3 border-r border-gray-100 dark:border-gray-800 last:border-r-0"
                                         >
                                             —
                                         </td>
@@ -112,7 +112,7 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
                                 return (
                                     <td
                                         key={`${day}-${time}`}
-                                        className="px-2 py-2 border-r border-gray-100 last:border-r-0 align-top"
+                                        className="px-2 py-2 border-r border-gray-100 dark:border-gray-800 last:border-r-0 align-top"
                                     >
                                         <div className="space-y-1.5">
                                             {cellSlots.map((slot) => {
@@ -120,11 +120,11 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
                                                 return (
                                                     <div
                                                         key={slot.slotKey}
-                                                        className="rounded-lg border border-gray-100 p-2.5 bg-white shadow-sm hover:shadow-md transition-shadow"
+                                                        className="rounded-lg border border-gray-100 dark:border-gray-800 p-2.5 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-shadow"
                                                     >
                                                         {/* 학년 대상 */}
                                                         {slot.gradeRange && (
-                                                            <p className="text-xs font-bold text-gray-900 mb-1 leading-tight">
+                                                            <p className="text-xs font-bold text-gray-900 dark:text-white mb-1 leading-tight">
                                                                 {slot.gradeRange}
                                                             </p>
                                                         )}
@@ -145,7 +145,7 @@ export default function ScheduleTableView({ slots }: { slots: MergedSlot[] }) {
                                                                 <span className="material-symbols-outlined text-gray-400" style={{ fontSize: "14px" }}>
                                                                     person
                                                                 </span>
-                                                                <span className="text-xs text-gray-500 truncate">
+                                                                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
                                                                     {slot.coach.name}
                                                                 </span>
                                                             </div>

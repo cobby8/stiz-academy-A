@@ -50,11 +50,11 @@ export default function ProgramAccordionTerms({
     <Card variant="default" className="!p-0 overflow-hidden">
       {/* 헤더 — hideHeader가 false일 때만 표시 */}
       {!hideHeader && (
-        <div className="py-5 px-6 border-b border-gray-100 flex items-center gap-3">
-          <span className="material-symbols-outlined text-brand-orange-500" style={{ fontSize: 24 }}>
+        <div className="py-5 px-6 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
+          <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime" style={{ fontSize: 24 }}>
             gavel
           </span>
-          <h3 className="font-bold text-gray-900 text-xl">이용약관</h3>
+          <h3 className="font-bold text-gray-900 dark:text-white text-xl">이용약관</h3>
         </div>
       )}
 
@@ -76,15 +76,15 @@ export default function ProgramAccordionTerms({
               return (
                 <div
                   key={i}
-                  className="flex items-start gap-2 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg px-4 py-2.5 -mx-1"
+                  className="flex items-start gap-2 bg-amber-50 dark:bg-brand-neon-lime/10 border-l-4 border-amber-400 dark:border-brand-neon-lime rounded-r-lg px-4 py-2.5 -mx-1 transition-colors"
                 >
                   <span
-                    className="material-symbols-outlined text-amber-500 shrink-0 mt-0.5"
+                    className="material-symbols-outlined text-amber-500 dark:text-brand-neon-lime shrink-0 mt-0.5"
                     style={{ fontSize: 18 }}
                   >
                     priority_high
                   </span>
-                  <p className="text-gray-800 text-base leading-relaxed font-medium">
+                  <p className="text-gray-800 dark:text-gray-100 text-base leading-relaxed font-medium">
                     {trimmed}
                   </p>
                 </div>
@@ -95,7 +95,7 @@ export default function ProgramAccordionTerms({
             return (
               <p
                 key={i}
-                className="text-gray-600 text-base leading-relaxed pl-1"
+                className="text-gray-600 dark:text-gray-300 text-base leading-relaxed pl-1"
               >
                 {trimmed}
               </p>

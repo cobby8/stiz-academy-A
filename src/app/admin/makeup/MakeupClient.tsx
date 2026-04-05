@@ -69,7 +69,7 @@ const DAY_LABELS: Record<string, string> = {
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     BOOKED:    { label: "예약", color: "text-blue-700", bg: "bg-blue-100" },
     ATTENDED:  { label: "출석", color: "text-green-700", bg: "bg-green-100" },
-    CANCELLED: { label: "취소", color: "text-gray-500", bg: "bg-gray-100" },
+    CANCELLED: { label: "취소", color: "text-gray-500 dark:text-gray-400", bg: "bg-gray-100 dark:bg-gray-800" },
     NO_SHOW:   { label: "노쇼", color: "text-red-700", bg: "bg-red-100" },
 };
 
@@ -155,8 +155,8 @@ export default function MakeupClient({
             {/* 페이지 제목 + 예약 버튼 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">보강 관리</h1>
-                    <p className="text-sm text-gray-500 mt-1">결석 학생의 보강 수업을 예약하고 관리합니다</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">보강 관리</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">결석 학생의 보강 수업을 예약하고 관리합니다</p>
                 </div>
                 <button
                     onClick={() => setShowBookModal(true)}
@@ -173,26 +173,26 @@ export default function MakeupClient({
                     <div
                         key={key}
                         className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                            statusFilter === key ? "ring-2 ring-blue-500 border-blue-300" : "border-gray-200"
+                            statusFilter === key ? "ring-2 ring-blue-500 border-blue-300" : "border-gray-200 dark:border-gray-700"
                         }`}
                         onClick={() => setStatusFilter(statusFilter === key ? "ALL" : key)}
                     >
-                        <p className="text-sm text-gray-500">{cfg.label}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{cfg.label}</p>
                         <p className="text-2xl font-bold mt-1">{statusCounts[key] ?? 0}</p>
                     </div>
                 ))}
             </div>
 
             {/* 상태 필터 탭 */}
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
                 {STATUS_TABS.map((tab) => (
                     <button
                         key={tab.key}
                         onClick={() => setStatusFilter(tab.key)}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                             statusFilter === tab.key
-                                ? "bg-white text-gray-900 shadow-sm"
-                                : "text-gray-500 hover:text-gray-700"
+                                ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                                : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                         }`}
                     >
                         {tab.label}
@@ -212,41 +212,41 @@ export default function MakeupClient({
                     <p>보강 예약이 없습니다</p>
                 </div>
             ) : (
-                <div className="overflow-x-auto bg-white rounded-xl border border-gray-200">
+                <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-200">
+                        <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600">원생</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600">원래 반</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600">결석일</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600">보강 반</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600">보강일</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600">상태</th>
-                                <th className="text-right px-4 py-3 font-semibold text-gray-600">관리</th>
+                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">원생</th>
+                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">원래 반</th>
+                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">결석일</th>
+                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">보강 반</th>
+                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">보강일</th>
+                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">상태</th>
+                                <th className="text-right px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">관리</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filteredSessions.map((item) => {
                                 const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.BOOKED;
                                 return (
-                                    <tr key={item.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 font-medium text-gray-900">
+                                    <tr key={item.id} className="hover:bg-gray-50 dark:bg-gray-900">
+                                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
                                             {item.studentName}
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600">
+                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                                             {item.originalClassName}
                                             <span className="text-gray-400 ml-1">
                                                 ({DAY_LABELS[item.originalDay] ?? item.originalDay})
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600">{fmtDate(item.originalDate)}</td>
-                                        <td className="px-4 py-3 text-gray-600">
+                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{fmtDate(item.originalDate)}</td>
+                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                                             {item.makeupClassName}
                                             <span className="text-gray-400 ml-1">
                                                 ({DAY_LABELS[item.makeupDay] ?? item.makeupDay})
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600">{fmtDate(item.makeupDate)}</td>
+                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{fmtDate(item.makeupDate)}</td>
                                         <td className="px-4 py-3">
                                             {/* 상태 드롭다운: BOOKED일 때만 변경 가능 */}
                                             {item.status === "BOOKED" ? (
@@ -401,13 +401,13 @@ function BookMakeupModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
                 {/* 모달 헤더 */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                    <h2 className="text-lg font-bold text-gray-900">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                         {step === 1 ? "보강 예약 - 원생/결석 정보" : "보강 예약 - 보강 반 선택"}
                     </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -417,7 +417,7 @@ function BookMakeupModal({
                         <>
                             {/* 원생 선택 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">원생 선택</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">원생 선택</label>
                                 <input
                                     type="text"
                                     placeholder="이름 검색..."
@@ -442,7 +442,7 @@ function BookMakeupModal({
 
                             {/* 원래 반 선택 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">원래 반 (결석한 반)</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">원래 반 (결석한 반)</label>
                                 <select
                                     value={originalClassId}
                                     onChange={(e) => setOriginalClassId(e.target.value)}
@@ -460,7 +460,7 @@ function BookMakeupModal({
 
                             {/* 결석일 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">결석일</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">결석일</label>
                                 <input
                                     type="date"
                                     min="2020-01-01" max="2030-12-31"
@@ -482,26 +482,26 @@ function BookMakeupModal({
                     {step === 2 && (
                         <>
                             {/* 선택된 정보 요약 */}
-                            <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+                            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-sm space-y-1">
                                 <p>
-                                    <span className="text-gray-500">원생:</span>{" "}
+                                    <span className="text-gray-500 dark:text-gray-400">원생:</span>{" "}
                                     <span className="font-medium">{students.find((s) => s.id === studentId)?.name}</span>
                                 </p>
                                 <p>
-                                    <span className="text-gray-500">원래 반:</span>{" "}
+                                    <span className="text-gray-500 dark:text-gray-400">원래 반:</span>{" "}
                                     <span className="font-medium">
                                         {selectedClass?.name} ({DAY_LABELS[selectedClass?.dayOfWeek ?? ""] ?? selectedClass?.dayOfWeek})
                                     </span>
                                 </p>
                                 <p>
-                                    <span className="text-gray-500">결석일:</span>{" "}
+                                    <span className="text-gray-500 dark:text-gray-400">결석일:</span>{" "}
                                     <span className="font-medium">{originalDate}</span>
                                 </p>
                             </div>
 
                             {/* 보강 반 선택 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                     보강 반 선택 (같은 프로그램: {selectedClass?.program?.name ?? "미지정"})
                                 </label>
                                 {loading ? (
@@ -518,7 +518,7 @@ function BookMakeupModal({
                                                 className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
                                                     makeupClassId === slot.id
                                                         ? "border-blue-500 bg-blue-50"
-                                                        : "border-gray-200 hover:border-gray-300"
+                                                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
                                                 }`}
                                             >
                                                 <input
@@ -531,7 +531,7 @@ function BookMakeupModal({
                                                 />
                                                 <div className="flex-1">
                                                     <p className="font-medium text-sm">{slot.name}</p>
-                                                    <p className="text-xs text-gray-500">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
                                                         {DAY_LABELS[slot.dayOfWeek] ?? slot.dayOfWeek}요일 {slot.startTime}~{slot.endTime}
                                                         {" / "}정원 {slot.capacity}명
                                                     </p>
@@ -544,7 +544,7 @@ function BookMakeupModal({
 
                             {/* 보강일 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">보강 수업일</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">보강 수업일</label>
                                 <input
                                     type="date"
                                     min="2020-01-01" max="2030-12-31"
@@ -557,7 +557,7 @@ function BookMakeupModal({
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setStep(1)}
-                                    className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                                    className="flex-1 py-2.5 border border-gray-300 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-900 font-medium transition-colors"
                                 >
                                     이전
                                 </button>

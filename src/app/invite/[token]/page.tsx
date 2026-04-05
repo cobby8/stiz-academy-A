@@ -30,11 +30,11 @@ export default async function InvitePage({
     // 초대가 존재하지 않는 경우
     if (!invitation) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
                     <span className="material-symbols-outlined text-[48px] text-red-400">error</span>
-                    <h1 className="text-xl font-bold text-gray-900 mt-4">유효하지 않은 초대</h1>
-                    <p className="text-sm text-gray-500 mt-2">
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white mt-4">유효하지 않은 초대</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                         존재하지 않는 초대 링크입니다. 원장에게 문의해주세요.
                     </p>
                 </div>
@@ -45,11 +45,11 @@ export default async function InvitePage({
     // 이미 수락된 초대
     if (invitation.status === "ACCEPTED") {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
                     <span className="material-symbols-outlined text-[48px] text-green-400">check_circle</span>
-                    <h1 className="text-xl font-bold text-gray-900 mt-4">이미 수락된 초대</h1>
-                    <p className="text-sm text-gray-500 mt-2">
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white mt-4">이미 수락된 초대</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                         이 초대는 이미 수락되었습니다. 로그인 페이지에서 로그인해주세요.
                     </p>
                     <a href="/login" className="inline-block mt-4 px-6 py-2.5 bg-brand-navy-900 text-white rounded-lg text-sm font-medium hover:bg-brand-navy-800 transition-colors">
@@ -63,11 +63,11 @@ export default async function InvitePage({
     // 취소된 초대
     if (invitation.status === "CANCELLED") {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
                     <span className="material-symbols-outlined text-[48px] text-gray-400">block</span>
-                    <h1 className="text-xl font-bold text-gray-900 mt-4">취소된 초대</h1>
-                    <p className="text-sm text-gray-500 mt-2">
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white mt-4">취소된 초대</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                         이 초대는 취소되었습니다. 원장에게 문의해주세요.
                     </p>
                 </div>
@@ -79,11 +79,11 @@ export default async function InvitePage({
     const expiresAt = new Date(invitation.expiresAt);
     if (expiresAt < new Date()) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
                     <span className="material-symbols-outlined text-[48px] text-orange-400">schedule</span>
-                    <h1 className="text-xl font-bold text-gray-900 mt-4">만료된 초대</h1>
-                    <p className="text-sm text-gray-500 mt-2">
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white mt-4">만료된 초대</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                         초대 링크가 만료되었습니다. 원장에게 재발송을 요청해주세요.
                     </p>
                 </div>
@@ -99,7 +99,7 @@ export default async function InvitePage({
 
     // 유효한 PENDING 초대 → 수락 폼 표시
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 <InviteAcceptForm
                     token={token}

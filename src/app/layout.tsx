@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { getAcademySettings } from "@/lib/queries";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, getFontCss } from "@/lib/fonts";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 // --- next/font/google: 빌드 시 폰트 파일을 자체 호스팅하여 외부 DNS 조회 제거, CLS 방지 ---
 import { Noto_Sans_KR, Nanum_Gothic, IBM_Plex_Sans_KR, Black_Han_Sans, Jua } from "next/font/google";
@@ -93,6 +94,7 @@ export default async function RootLayout({
         <html
             lang="ko"
             className={`${notoSansKr.variable} ${nanumGothic.variable} ${ibmPlexSansKr.variable} ${blackHanSans.variable} ${jua.variable}`}
+            suppressHydrationWarning
         >
             <head>
                 {/* PWA 테마 색상 - 브라우저 상단 바 색상을 브랜드 오렌지로 */}
@@ -111,7 +113,7 @@ export default async function RootLayout({
                 />
             </head>
             <body
-                className="antialiased selection:bg-brand-orange-500 selection:text-white"
+                className="antialiased selection:bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 selection:text-white"
                 style={
                     {
                         "--font-body": bodyFontCss,
@@ -119,7 +121,14 @@ export default async function RootLayout({
                     } as React.CSSProperties
                 }
             >
-                {children}
+                <ThemeProvider
+                    attribute="class"
+                    defaultTheme="system"
+                    enableSystem
+                    disableTransitionOnChange
+                >
+                    {children}
+                </ThemeProvider>
             </body>
         </html>
     );

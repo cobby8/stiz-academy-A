@@ -112,19 +112,19 @@ export default function SmsClient() {
     const byteLength = new TextEncoder().encode(fullMsg).length;
     const isLms = byteLength > 90;
 
-    const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 transition";
+    const INPUT = "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime transition";
 
     return (
         <div className="space-y-6 max-w-3xl">
             {/* 페이지 타이틀 */}
             <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">문자 발송</h1>
-                <p className="text-gray-500 text-sm">코치진 또는 특정 번호로 SMS를 발송합니다.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">문자 발송</h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">코치진 또는 특정 번호로 SMS를 발송합니다.</p>
             </div>
 
             {/* 수신자 선택 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-                <h2 className="font-bold text-gray-800 text-base flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                <h2 className="font-bold text-gray-800 dark:text-gray-100 text-base flex items-center gap-2">
                     <span className="material-symbols-outlined text-[20px]">group</span>
                     수신자 선택
                 </h2>
@@ -142,7 +142,7 @@ export default function SmsClient() {
                             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                                 mode === tab.key
                                     ? "bg-brand-navy-900 text-white"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                             }`}
                         >
                             <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
@@ -174,28 +174,28 @@ export default function SmsClient() {
                         ) : (
                             <>
                                 {/* 전체 선택/해제 */}
-                                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer pb-1 border-b border-gray-100">
+                                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer pb-1 border-b border-gray-100 dark:border-gray-800">
                                     <input
                                         type="checkbox"
                                         checked={selectedIds.size === coaches.length}
                                         onChange={toggleAll}
-                                        className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                                        className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                     />
                                     전체 선택 ({selectedIds.size}/{coaches.length})
                                 </label>
                                 {coaches.map(c => (
                                     <label
                                         key={c.id}
-                                        className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                                        className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 dark:bg-gray-900 cursor-pointer transition-colors"
                                     >
                                         <input
                                             type="checkbox"
                                             checked={selectedIds.has(c.id)}
                                             onChange={() => toggleCoach(c.id)}
-                                            className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                                            className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                         />
-                                        <span className="font-medium text-gray-800 text-sm">{c.name}</span>
-                                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{c.role}</span>
+                                        <span className="font-medium text-gray-800 dark:text-gray-100 text-sm">{c.name}</span>
+                                        <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full">{c.role}</span>
                                         <span className="text-xs text-gray-400 ml-auto">{c.phone}</span>
                                     </label>
                                 ))}
@@ -207,7 +207,7 @@ export default function SmsClient() {
                 {/* 직접 입력 모드 */}
                 {mode === "manual" && (
                     <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">
+                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
                             수신 번호
                             <span className="text-gray-400 font-normal ml-1">(줄바꿈 또는 콤마로 구분)</span>
                         </label>
@@ -219,7 +219,7 @@ export default function SmsClient() {
                             className={INPUT + " resize-none"}
                         />
                         {recipients.length > 0 && (
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 인식된 번호: <strong>{recipients.length}개</strong>
                             </p>
                         )}
@@ -228,8 +228,8 @@ export default function SmsClient() {
             </div>
 
             {/* 메시지 입력 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-                <h2 className="font-bold text-gray-800 text-base flex items-center gap-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-4">
+                <h2 className="font-bold text-gray-800 dark:text-gray-100 text-base flex items-center gap-2">
                     <span className="material-symbols-outlined text-[20px]">sms</span>
                     메시지 작성
                 </h2>
@@ -248,7 +248,7 @@ export default function SmsClient() {
                         <p className="text-xs text-gray-400">
                             발송 시 &quot;[STIZ] &quot; 접두사가 자동 추가됩니다
                         </p>
-                        <p className={`text-xs font-medium ${isLms ? "text-orange-500" : "text-gray-500"}`}>
+                        <p className={`text-xs font-medium ${isLms ? "text-orange-500" : "text-gray-500 dark:text-gray-400"}`}>
                             {byteLength}바이트 / {isLms ? "LMS" : "SMS"}
                         </p>
                     </div>

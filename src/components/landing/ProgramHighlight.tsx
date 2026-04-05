@@ -49,7 +49,7 @@ const programs: ProgramItem[] = [
     title: '중등반',
     ageRange: '중1~중3',
     description: '경기력 향상과 대회 준비를 위한 심화 훈련',
-    color: 'bg-brand-orange-500',
+    color: 'bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900',
     icon: '🏆',
   },
 ];
@@ -67,22 +67,22 @@ export default function ProgramHighlight() {
           <AnimateOnScroll key={program.title} delay={index * 100}>
             <Link
               href="/programs"
-              className="block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
+              className="block bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
             >
               {/* 카드 상단: 색상 바 + 아이콘 — 프로그램별 색상으로 시각 구분 */}
               <div className={`${program.color} h-2`} />
               <div className="p-5 md:p-6">
                 <div className="text-3xl mb-3">{program.icon}</div>
                 {/* 프로그램 이름 */}
-                <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-brand-orange-500 transition-colors">
+                <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors">
                   {program.title}
                 </h3>
                 {/* 대상 연령 — 뱃지 스타일 */}
-                <span className="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full mb-3">
+                <span className="inline-block bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-medium px-2 py-0.5 rounded-full mb-3">
                   {program.ageRange}
                 </span>
                 {/* 프로그램 설명 */}
-                <p className="text-base text-gray-500 leading-relaxed">
+                <p className="text-base text-gray-500 dark:text-gray-400 leading-relaxed">
                   {program.description}
                 </p>
               </div>
@@ -95,7 +95,7 @@ export default function ProgramHighlight() {
       <div className="text-center mt-10">
         <Link
           href="/programs"
-          className="inline-flex items-center gap-2 text-brand-orange-500 font-bold hover:text-brand-orange-600 transition-colors text-base"
+          className="inline-flex items-center gap-2 text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 transition-colors text-base"
         >
           전체 프로그램 보기
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

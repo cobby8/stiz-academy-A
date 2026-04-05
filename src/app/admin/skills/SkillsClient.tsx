@@ -53,21 +53,21 @@ export default function SkillsClient({ categories, students }: Props) {
             {/* 페이지 헤더 */}
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">스킬 트래킹</h1>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">스킬 트래킹</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         원생별 기술 수준을 평가하고 성장 기록을 관리합니다.
                     </p>
                 </div>
             </div>
 
             {/* 탭 전환 */}
-            <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
+            <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
                 <button
                     onClick={() => setTab("categories")}
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                         tab === "categories"
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-[18px] align-middle mr-1">
@@ -79,8 +79,8 @@ export default function SkillsClient({ categories, students }: Props) {
                     onClick={() => setTab("assessment")}
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                         tab === "assessment"
-                            ? "bg-white text-gray-900 shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-[18px] align-middle mr-1">
@@ -192,14 +192,14 @@ function CategoryTab({
     return (
         <div>
             {/* 카테고리 목록 */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h3 className="font-semibold text-gray-900">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
                         평가 카테고리 ({categories.length}개)
                     </h3>
                     <button
                         onClick={openCreate}
-                        className="flex items-center gap-1 px-4 py-2 bg-brand-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors"
+                        className="flex items-center gap-1 px-4 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors"
                     >
                         <span className="material-symbols-outlined text-[18px]">add</span>
                         카테고리 추가
@@ -218,7 +218,7 @@ function CategoryTab({
                     </div>
                 ) : (
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-500 text-xs">
+                        <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-xs">
                             <tr>
                                 <th className="text-left px-6 py-3">순서</th>
                                 <th className="text-left px-6 py-3">아이콘</th>
@@ -230,22 +230,22 @@ function CategoryTab({
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {categories.map((cat) => (
-                                <tr key={cat.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-3 text-gray-500">{cat.order}</td>
+                                <tr key={cat.id} className="hover:bg-gray-50 dark:bg-gray-900">
+                                    <td className="px-6 py-3 text-gray-500 dark:text-gray-400">{cat.order}</td>
                                     <td className="px-6 py-3">
                                         {cat.icon ? (
-                                            <span className="material-symbols-outlined text-[20px] text-gray-600">
+                                            <span className="material-symbols-outlined text-[20px] text-gray-600 dark:text-gray-300">
                                                 {cat.icon}
                                             </span>
                                         ) : (
                                             <span className="text-gray-300">-</span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-3 font-medium text-gray-900">
+                                    <td className="px-6 py-3 font-medium text-gray-900 dark:text-white">
                                         {cat.name}
                                     </td>
-                                    <td className="px-6 py-3 text-gray-600">{cat.maxLevel}</td>
-                                    <td className="px-6 py-3 text-gray-500 truncate max-w-[200px]">
+                                    <td className="px-6 py-3 text-gray-600 dark:text-gray-300">{cat.maxLevel}</td>
+                                    <td className="px-6 py-3 text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
                                         {cat.description || "-"}
                                     </td>
                                     <td className="px-6 py-3 text-right">
@@ -273,14 +273,14 @@ function CategoryTab({
             {/* 등록/수정 모달 */}
             {showForm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                             {editId ? "카테고리 수정" : "카테고리 추가"}
                         </h3>
                         <div className="space-y-4">
                             {/* 이름 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                     이름 *
                                 </label>
                                 <input
@@ -295,7 +295,7 @@ function CategoryTab({
                             </div>
                             {/* 아이콘 (Material Symbols 이름) */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                     아이콘 (Material Symbols)
                                 </label>
                                 <div className="flex items-center gap-2">
@@ -309,7 +309,7 @@ function CategoryTab({
                                         className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                     />
                                     {form.icon && (
-                                        <span className="material-symbols-outlined text-[24px] text-gray-600">
+                                        <span className="material-symbols-outlined text-[24px] text-gray-600 dark:text-gray-300">
                                             {form.icon}
                                         </span>
                                     )}
@@ -318,7 +318,7 @@ function CategoryTab({
                             {/* 순서 + 최대 레벨 */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                         순서
                                     </label>
                                     <input
@@ -334,7 +334,7 @@ function CategoryTab({
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                         최대 레벨
                                     </label>
                                     <input
@@ -354,7 +354,7 @@ function CategoryTab({
                             </div>
                             {/* 설명 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                     설명
                                 </label>
                                 <textarea
@@ -372,14 +372,14 @@ function CategoryTab({
                         <div className="flex justify-end gap-3 mt-6">
                             <button
                                 onClick={() => setShowForm(false)}
-                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-100"
                             >
                                 취소
                             </button>
                             <button
                                 onClick={handleSave}
                                 disabled={isPending || !form.name.trim()}
-                                className="px-4 py-2 bg-brand-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                                className="px-4 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
                             >
                                 {isPending ? "저장 중..." : editId ? "수정" : "추가"}
                             </button>
@@ -524,7 +524,7 @@ function AssessmentTab({
 
     if (categories.length === 0) {
         return (
-            <div className="bg-white rounded-xl border border-gray-200 py-16 text-center text-gray-400">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 py-16 text-center text-gray-400">
                 <span className="material-symbols-outlined text-5xl mb-3 block">
                     warning
                 </span>
@@ -541,8 +541,8 @@ function AssessmentTab({
             {/* 좌측: 원생 선택 + 레벨 슬라이더 */}
             <div className="lg:col-span-2 space-y-6">
                 {/* 원생 선택 */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <h3 className="font-semibold text-gray-900 mb-4">원생 선택</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-4">원생 선택</h3>
                     <div className="flex gap-3">
                         <input
                             type="text"
@@ -569,13 +569,13 @@ function AssessmentTab({
 
                 {/* 평가 입력 */}
                 {selectedStudentId && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-gray-900">
+                            <h3 className="font-semibold text-gray-900 dark:text-white">
                                 스킬 평가
                             </h3>
                             <div className="flex items-center gap-2">
-                                <label className="text-xs text-gray-500">평가자:</label>
+                                <label className="text-xs text-gray-500 dark:text-gray-400">평가자:</label>
                                 <input
                                     type="text"
                                     value={assessedBy}
@@ -599,15 +599,15 @@ function AssessmentTab({
                                     return (
                                         <div
                                             key={cat.id}
-                                            className="border border-gray-100 rounded-lg p-4"
+                                            className="border border-gray-100 dark:border-gray-800 rounded-lg p-4"
                                         >
                                             <div className="flex items-center gap-2 mb-2">
                                                 {cat.icon && (
-                                                    <span className="material-symbols-outlined text-[20px] text-gray-500">
+                                                    <span className="material-symbols-outlined text-[20px] text-gray-500 dark:text-gray-400">
                                                         {cat.icon}
                                                     </span>
                                                 )}
-                                                <span className="font-medium text-gray-800">
+                                                <span className="font-medium text-gray-800 dark:text-gray-100">
                                                     {cat.name}
                                                 </span>
                                                 <span className="ml-auto text-sm font-bold text-orange-600">
@@ -641,7 +641,7 @@ function AssessmentTab({
                                                             className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${
                                                                 val === i
                                                                     ? "bg-orange-500 text-white"
-                                                                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                                                    : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200"
                                                             }`}
                                                         >
                                                             {i}
@@ -657,7 +657,7 @@ function AssessmentTab({
                                                     handleNoteChange(cat.id, e.target.value)
                                                 }
                                                 placeholder="코멘트 (선택)"
-                                                className="w-full mt-2 border border-gray-200 rounded px-2 py-1 text-sm text-gray-600 placeholder:text-gray-300"
+                                                className="w-full mt-2 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-sm text-gray-600 dark:text-gray-300 placeholder:text-gray-300"
                                             />
                                         </div>
                                     );
@@ -667,7 +667,7 @@ function AssessmentTab({
                                 <button
                                     onClick={handleSaveAssessment}
                                     disabled={isPending}
-                                    className="w-full py-3 bg-brand-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                                    className="w-full py-3 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
                                 >
                                     {isPending ? "저장 중..." : "평가 저장"}
                                 </button>
@@ -680,8 +680,8 @@ function AssessmentTab({
             {/* 우측: 레이더 차트 + 성장 이력 */}
             <div className="space-y-6">
                 {/* 레이더 차트 */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <h3 className="font-semibold text-gray-900 mb-4 text-center">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-4 text-center">
                         스킬 레이더
                     </h3>
                     {selectedStudentId ? (
@@ -698,8 +698,8 @@ function AssessmentTab({
 
                 {/* 성장 이력 타임라인 */}
                 {selectedStudentId && history.length > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-6">
-                        <h3 className="font-semibold text-gray-900 mb-4">성장 이력</h3>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-4">성장 이력</h3>
                         <div className="space-y-3 max-h-[400px] overflow-y-auto">
                             {history.map((h) => (
                                 <div
@@ -708,7 +708,7 @@ function AssessmentTab({
                                 >
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-medium text-gray-800">
+                                            <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
                                                 {h.categoryName}
                                             </span>
                                             <span className="text-xs font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
@@ -716,7 +716,7 @@ function AssessmentTab({
                                             </span>
                                         </div>
                                         {h.note && (
-                                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                                                 {h.note}
                                             </p>
                                         )}

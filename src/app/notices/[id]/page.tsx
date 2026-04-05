@@ -38,8 +38,8 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
             {/* 페이지 히어로 — 그라데이션 + 장식 도형 + 공지 제목/날짜 */}
             <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white py-16 md:py-20">
                 <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
-                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
+                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3 transition-colors duration-300" />
+                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 dark:border-brand-neon-lime/10 rounded-full -translate-x-1/4 translate-y-1/4 transition-colors duration-300" />
                 </div>
                 <div className="max-w-4xl mx-auto px-6 md:px-4 relative">
                     <AnimateOnScroll>
@@ -77,19 +77,19 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
             </section>
 
             {/* 공지 본문 + 첨부파일 */}
-            <div className="bg-surface-section">
+            <div className="bg-surface-section dark:bg-gray-900 transition-colors duration-300">
                 <div className="max-w-4xl mx-auto px-4 py-12 md:py-16">
                     <AnimateOnScroll>
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-10">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 shadow-sm p-6 md:p-10">
                             {/* 본문 — 줄바꿈 유지 + 가독성 높은 타이포그래피 */}
-                            <div className="prose prose-gray max-w-none whitespace-pre-wrap text-gray-700 leading-loose text-[15px] md:text-base">
+                            <div className="prose prose-gray max-w-none whitespace-pre-wrap text-gray-700 dark:text-gray-200 leading-loose text-[15px] md:text-base">
                                 {notice.content}
                             </div>
 
                             {/* 첨부파일 영역 */}
                             {attachments.length > 0 && (
-                                <div className="mt-10 pt-6 border-t border-gray-100">
-                                    <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+                                <div className="mt-10 pt-6 border-t border-gray-100 dark:border-gray-800">
+                                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
                                         <Paperclip size={16} className="text-gray-400" />
                                         첨부파일 ({attachments.length}개)
                                     </h3>
@@ -100,14 +100,14 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                                                 href={a.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="flex items-center justify-between bg-gray-50 hover:bg-brand-orange-50/50 rounded-xl px-4 py-3.5 transition-colors group"
+                                                className="flex items-center justify-between bg-gray-50 hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10 /50 rounded-xl px-4 py-3.5 transition-colors group"
                                             >
-                                                <span className="text-sm text-gray-700 truncate group-hover:text-brand-orange-600 transition-colors">
+                                                <span className="text-sm text-gray-700 truncate group-hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 transition-colors">
                                                     {a.filename}
                                                 </span>
                                                 <div className="flex items-center gap-3 flex-shrink-0 ml-4">
                                                     <span className="text-xs text-gray-400">{formatSize(a.size)}</span>
-                                                    <Download size={16} className="text-gray-400 group-hover:text-brand-orange-500 transition-colors" />
+                                                    <Download size={16} className="text-gray-400 group-hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors" />
                                                 </div>
                                             </a>
                                         ))}
@@ -121,7 +121,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                     <div className="mt-8 text-center">
                         <Link
                             href="/notices"
-                            className="inline-flex items-center gap-2 text-gray-500 hover:text-brand-navy-900 text-sm font-medium transition-colors"
+                            className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-brand-navy-900 text-sm font-medium transition-colors"
                         >
                             <ArrowLeft size={16} /> 목록으로 돌아가기
                         </Link>

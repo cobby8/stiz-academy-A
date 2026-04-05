@@ -53,7 +53,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
     WAITING: { label: "대기중", color: "text-yellow-700", bg: "bg-yellow-100" },
     OFFERED: { label: "제안됨", color: "text-blue-700", bg: "bg-blue-100" },
     ENROLLED: { label: "등록완료", color: "text-green-700", bg: "bg-green-100" },
-    CANCELLED: { label: "취소", color: "text-gray-500", bg: "bg-gray-100" },
+    CANCELLED: { label: "취소", color: "text-gray-500 dark:text-gray-400", bg: "bg-gray-100 dark:bg-gray-800" },
 };
 
 export default function WaitlistClient({
@@ -161,17 +161,17 @@ export default function WaitlistClient({
             {/* 페이지 헤더 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-3xl text-brand-orange-500">hourglass_top</span>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">hourglass_top</span>
                         대기자 관리
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         반 정원 초과 시 대기열을 관리하고, 자리가 나면 학부모에게 알림을 보냅니다.
                     </p>
                 </div>
                 <button
                     onClick={() => setShowAddModal(true)}
-                    className="flex items-center gap-2 bg-brand-orange-500 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-brand-orange-600 transition-colors"
+                    className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors"
                 >
                     <span className="material-symbols-outlined text-xl">person_add</span>
                     대기 등록
@@ -187,22 +187,22 @@ export default function WaitlistClient({
                             onClick={() => setFilterClassId(filterClassId === c.id ? "ALL" : c.id)}
                             className={`p-4 rounded-xl border text-left transition-all ${
                                 filterClassId === c.id
-                                    ? "border-brand-orange-500 bg-brand-orange-50 ring-1 ring-brand-orange-500"
-                                    : "border-gray-200 bg-white hover:border-gray-300"
+                                    ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  ring-1 ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300"
                             }`}
                         >
-                            <p className="text-sm font-semibold text-gray-700 truncate">{c.name}</p>
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">{c.name}</p>
                             <p className="text-xs text-gray-400 mt-0.5">
                                 {DAY_LABELS[c.dayOfWeek] ?? c.dayOfWeek} {c.startTime}~{c.endTime}
                             </p>
                             <div className="mt-3 flex items-end gap-3">
                                 {/* 정원 바 */}
                                 <div className="flex-1">
-                                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
                                         <span>등록 {c.enrolled}/{c.capacity}</span>
                                         <span>잔여 {c.remaining}</span>
                                     </div>
-                                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                                         <div
                                             className={`h-full rounded-full transition-all ${
                                                 c.remaining <= 0 ? "bg-red-500" : c.remaining <= 2 ? "bg-yellow-500" : "bg-green-500"
@@ -239,7 +239,7 @@ export default function WaitlistClient({
                     ))}
                 </select>
 
-                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
                     <input
                         type="checkbox"
                         checked={showAll}
@@ -256,22 +256,22 @@ export default function WaitlistClient({
 
             {/* 대기자 목록 — 반별 그룹핑 */}
             {filteredList.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                     <span className="material-symbols-outlined text-5xl text-gray-300">hourglass_empty</span>
                     <p className="text-gray-400 mt-2">대기자가 없습니다</p>
                 </div>
             ) : (
                 <div className="space-y-4">
                     {Array.from(groupedByClass.entries()).map(([classId, items]) => (
-                        <div key={classId} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                        <div key={classId} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                             {/* 반 헤더 */}
-                            <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-lg text-gray-500">school</span>
-                                <span className="font-semibold text-gray-700">{items[0].className}</span>
+                            <div className="px-5 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-lg text-gray-500 dark:text-gray-400">school</span>
+                                <span className="font-semibold text-gray-700 dark:text-gray-200">{items[0].className}</span>
                                 <span className="text-xs text-gray-400">
                                     {DAY_LABELS[items[0].classDay] ?? items[0].classDay} {items[0].classStart}~{items[0].classEnd}
                                 </span>
-                                <span className="ml-auto text-xs text-gray-500">{items.length}명 대기</span>
+                                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{items.length}명 대기</span>
                             </div>
                             {/* 대기자 행 */}
                             <div className="divide-y divide-gray-100">
@@ -283,7 +283,7 @@ export default function WaitlistClient({
                                             <span className="text-sm font-mono text-gray-400 w-6 text-center">{idx + 1}</span>
                                             {/* 학생명 */}
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-semibold text-gray-800">{w.studentName}</p>
+                                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{w.studentName}</p>
                                                 {w.memo && (
                                                     <p className="text-xs text-gray-400 truncate">{w.memo}</p>
                                                 )}
@@ -406,13 +406,13 @@ function AddWaitlistModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
                 <div className="flex items-center justify-between mb-5">
-                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-orange-500">person_add</span>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person_add</span>
                         대기 등록
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -420,7 +420,7 @@ function AddWaitlistModal({
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* 학생 선택 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">학생 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학생 *</label>
                         <input
                             type="text"
                             placeholder="이름 검색..."
@@ -443,7 +443,7 @@ function AddWaitlistModal({
 
                     {/* 반 선택 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">반 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">반 *</label>
                         <select
                             value={classId}
                             onChange={(e) => setClassId(e.target.value)}
@@ -460,7 +460,7 @@ function AddWaitlistModal({
 
                     {/* 메모 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">메모 (선택)</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">메모 (선택)</label>
                         <input
                             type="text"
                             value={memo}
@@ -475,14 +475,14 @@ function AddWaitlistModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-100"
                         >
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy}
-                            className="px-5 py-2 bg-brand-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-brand-orange-600 disabled:opacity-50 transition-colors"
+                            className="px-5 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-sm font-semibold rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 disabled:opacity-50 transition-colors"
                         >
                             {busy ? "등록 중..." : "대기 등록"}
                         </button>

@@ -28,15 +28,15 @@ export const SettingsPanel = () => {
     }
 
     return (
-        <div className="p-4 bg-white border-l border-gray-200 h-full overflow-y-auto">
-            <h3 className="font-bold text-gray-800 mb-4 pb-2 border-b">디자인 설정</h3>
+        <div className="p-4 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 h-full overflow-y-auto">
+            <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 pb-2 border-b">디자인 설정</h3>
             {selected ? (
                 <div className="flex flex-col gap-6">
-                    <div className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded border border-gray-200">
-                        <span className="text-sm font-bold text-brand-orange-500">{selected.name}</span>
+                    <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded border border-gray-200 dark:border-gray-700">
+                        <span className="text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime">{selected.name}</span>
                         <div className="flex gap-2">
                             <button
-                                className="text-gray-400 hover:text-gray-900"
+                                className="text-gray-400 hover:text-gray-900 dark:text-white"
                                 onClick={() => {
                                     actions.selectNode(selected.id);
                                 }}

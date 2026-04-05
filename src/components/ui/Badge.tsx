@@ -26,7 +26,7 @@ interface BadgeProps {
 
 // 각 variant별 배경색 + 텍스트색
 const variantStyles: Record<BadgeVariant, string> = {
-  default: 'bg-brand-orange-50 text-brand-orange-600',
+  default: 'bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime',
   success: 'bg-emerald-50 text-emerald-700',
   warning: 'bg-amber-50 text-amber-700',
   error: 'bg-red-50 text-red-700',

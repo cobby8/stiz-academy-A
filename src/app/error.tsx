@@ -29,13 +29,13 @@ export default function GlobalError({
         </div>
 
         {/* 제목 + 설명 */}
-        <h1 className="text-2xl font-black text-gray-900 mb-2 break-keep">
+        <h1 className="text-2xl font-black text-gray-900 dark:text-white mb-2 break-keep">
           일시적인 문제가 발생했습니다
         </h1>
-        <p className="text-gray-500 mb-2 break-keep">
+        <p className="text-gray-500 dark:text-gray-400 mb-2 break-keep">
           페이지를 불러오는 중 오류가 발생했습니다.
         </p>
-        <p className="text-gray-500 mb-8 break-keep">
+        <p className="text-gray-500 dark:text-gray-400 mb-8 break-keep">
           문제가 계속되면 학원으로 문의해 주세요.
         </p>
 
@@ -44,7 +44,7 @@ export default function GlobalError({
           {/* 다시 시도 — reset() 호출로 에러 바운더리 초기화 */}
           <button
             onClick={() => reset()}
-            className="px-6 py-3 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold rounded-xl transition-colors"
+            className="px-6 py-3 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white font-bold rounded-xl transition-colors"
           >
             다시 시도
           </button>
@@ -52,7 +52,7 @@ export default function GlobalError({
           {/* 홈으로 돌아가기 */}
           <Link
             href="/"
-            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+            className="px-6 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 text-gray-700 dark:text-gray-200 font-bold rounded-xl transition-colors"
           >
             홈으로 돌아가기
           </Link>

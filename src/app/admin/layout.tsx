@@ -77,11 +77,11 @@ export default function AdminLayout({
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
             {/* Sidebar */}
             <aside className="w-64 bg-brand-navy-900 text-white flex-shrink-0 fixed h-full z-10 transition-transform flex flex-col">
                 <div className="p-6 border-b border-white/10 flex items-center gap-3 flex-shrink-0">
-                    <div className="bg-white px-3 py-2 rounded-md flex items-center justify-center">
+                    <div className="bg-white dark:bg-gray-800 px-3 py-2 rounded-md flex items-center justify-center">
                         <Image
                             src="/stiz-logo.png"
                             alt="STIZ Admin"
@@ -98,8 +98,8 @@ export default function AdminLayout({
                         onClick={() => setActiveTab("site")}
                         className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
                             activeTab === "site"
-                                ? "bg-white/15 text-white"
-                                : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                                ? "bg-white dark:bg-gray-800/15 text-white"
+                                : "text-white/50 hover:text-white/80 hover:bg-white dark:hover:bg-gray-800/5"
                         }`}
                     >
                         사이트
@@ -108,8 +108,8 @@ export default function AdminLayout({
                         onClick={() => setActiveTab("ops")}
                         className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
                             activeTab === "ops"
-                                ? "bg-white/15 text-white"
-                                : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                                ? "bg-white dark:bg-gray-800/15 text-white"
+                                : "text-white/50 hover:text-white/80 hover:bg-white dark:hover:bg-gray-800/5"
                         }`}
                     >
                         학원운영
@@ -121,18 +121,18 @@ export default function AdminLayout({
                     {activeTab === "site" && (
                         <>
                             {/* 학원 소개 */}
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">학원 소개</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-1">학원 소개</p>
                             <NavItem href="/admin/settings" active={pathname.startsWith("/admin/settings")} icon="🏫" label="학원 소개 관리" />
                             <NavItem href="/admin/coaches" active={pathname.startsWith("/admin/coaches")} icon="👤" label="코치/강사진 관리" />
 
                             {/* 수업 안내 */}
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">수업 안내</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-3">수업 안내</p>
                             <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램 관리" />
                             <NavItem href="/admin/schedule" active={pathname.startsWith("/admin/schedule")} icon="📅" label="수업시간표 관리" />
                             <NavItem href="/admin/annual" active={pathname.startsWith("/admin/annual")} icon="📆" label="연간일정 관리" />
 
                             {/* 소식/안내 */}
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-3">소식/안내</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-3">소식/안내</p>
                             <NavItem href="/admin/notices" active={pathname.startsWith("/admin/notices")} icon="📢" label="공지사항 관리" />
                             <NavItem href="/admin/gallery" active={pathname.startsWith("/admin/gallery")} icon="📸" label="사진/영상 갤러리" />
                             <NavItem href="/admin/faq" active={pathname.startsWith("/admin/faq")} icon="❓" label="FAQ 관리" />
@@ -145,7 +145,7 @@ export default function AdminLayout({
                     {/* ===== 학원운영 탭 메뉴 ===== */}
                     {activeTab === "ops" && (
                         <>
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-1">학원 운영</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-1">학원 운영</p>
                             <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />
                             <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
                             <NavItem href="/admin/attendance" active={pathname === "/admin/attendance"} icon="✅" label="출결 관리" />
@@ -162,14 +162,14 @@ export default function AdminLayout({
                             <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬 트래킹" />
                             <NavItem href="/admin/stats" active={pathname.startsWith("/admin/stats")} icon="📊" label="상세 통계" />
 
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">커뮤니케이션</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">커뮤니케이션</p>
                             <NavItem href="/admin/sms" active={pathname === "/admin/sms"} icon="💬" label="문자 발송" />
                             <NavItem href="/admin/sms/templates" active={pathname.startsWith("/admin/sms/templates")} icon="📋" label="템플릿 관리" />
 
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">데이터</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">데이터</p>
                             <NavItem href="/admin/import" active={pathname.startsWith("/admin/import")} icon="📥" label="수강생 이관" />
 
-                            <p className="text-gray-500 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
                             <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프 관리" />
                             <BackupButtons />
                         </>
@@ -179,7 +179,7 @@ export default function AdminLayout({
                 {/* 사용자 정보 + 로그아웃 */}
                 <div className="p-4 border-t border-white/10 flex-shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-brand-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        <div className="w-9 h-9 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                             {userName.charAt(0) || "A"}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -189,7 +189,7 @@ export default function AdminLayout({
                         <button
                             onClick={handleLogout}
                             title="로그아웃"
-                            className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
+                            className="p-1.5 text-gray-400 hover:text-white hover:bg-white dark:hover:bg-gray-800/10 rounded-lg transition-colors flex-shrink-0"
                         >
                             <LogOut size={18} />
                         </button>
@@ -199,13 +199,13 @@ export default function AdminLayout({
 
             {/* Main Content */}
             <main className="flex-1 ml-64 flex flex-col min-h-screen">
-                <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-10">
-                    <h2 className="font-bold text-gray-700">관리자 시스템</h2>
+                <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 sticky top-0 z-10">
+                    <h2 className="font-bold text-gray-700 dark:text-gray-200">관리자 시스템</h2>
                     <div className="flex items-center gap-4">
                         {/* 알림 벨 — 읽지 않은 알림 수 배지 + 드롭다운 */}
                         <NotificationBell />
-                        <span className="text-sm font-medium text-gray-600">{userName}님, 환영합니다.</span>
-                        <div className="w-8 h-8 bg-brand-orange-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{userName}님, 환영합니다.</span>
+                        <div className="w-8 h-8 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-full flex items-center justify-center text-white text-xs font-bold">
                             {userName.charAt(0) || "A"}
                         </div>
                     </div>
@@ -286,19 +286,19 @@ function BackupButtons() {
             <button
                 onClick={handleSyncSchedule}
                 disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}
             >
                 <span className="text-xl">🔄</span>
                 <span>시트 동기화</span>
             </button>
             <a
                 href="/api/admin/backup"
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white transition-colors"
             >
                 <span className="text-xl">💾</span>
                 <span>백업 다운로드</span>
             </a>
-            <label className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
+            <label className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}>
                 <span className="text-xl">📂</span>
                 <span>{busy ? "처리 중..." : "파일로 복원"}</span>
                 <input type="file" accept=".json" className="hidden" onChange={handleRestore} disabled={busy} />
@@ -306,7 +306,7 @@ function BackupButtons() {
             <button
                 onClick={handleCloudRestore}
                 disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}
             >
                 <span className="text-xl">☁️</span>
                 <span>최신 자동백업 복원</span>
@@ -314,7 +314,7 @@ function BackupButtons() {
             <button
                 onClick={handleBackupNow}
                 disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}
             >
                 <span className="text-xl">☁️</span>
                 <span>지금 클라우드에 저장</span>
@@ -322,7 +322,7 @@ function BackupButtons() {
             <a
                 href="/api/admin/export-seed"
                 download="seed-data.ts"
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white transition-colors"
             >
                 <span className="text-xl">🌱</span>
                 <span>seed 내보내기</span>
@@ -337,8 +337,8 @@ function NavItem({ href, active, icon, label, badge }: { href: string; active?: 
         <Link
             href={href}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active
-                ? "bg-brand-orange-500 text-white font-bold"
-                : "text-gray-300 hover:bg-white/10 hover:text-white"
+                ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold"
+                : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"
                 }`}
         >
             <span className="text-xl">{icon}</span>
@@ -475,7 +475,7 @@ function NotificationBell() {
             {/* 벨 아이콘 버튼 */}
             <button
                 onClick={handleToggle}
-                className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="relative p-2 text-gray-500 hover:text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition-colors"
                 title="알림"
             >
                 <span className="material-symbols-outlined text-[22px]">notifications</span>
@@ -489,10 +489,10 @@ function NotificationBell() {
 
             {/* 드롭다운 패널 */}
             {open && (
-                <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
                     {/* 헤더 */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                        <h3 className="font-bold text-gray-800 text-sm">알림</h3>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                        <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">알림</h3>
                         {unreadCount > 0 && (
                             <button
                                 onClick={handleMarkAllRead}
@@ -516,22 +516,22 @@ function NotificationBell() {
                                 <button
                                     key={item.id}
                                     onClick={() => handleClick(item)}
-                                    className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${
+                                    className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-gray-50 dark:bg-gray-900 transition-colors border-b border-gray-50 ${
                                         !item.isRead ? "bg-blue-50/50" : ""
                                     }`}
                                 >
                                     {/* 타입별 아이콘 */}
                                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                                        !item.isRead ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"
+                                        !item.isRead ? "bg-blue-100 text-blue-600" : "bg-gray-100 dark:bg-gray-800 text-gray-400"
                                     }`}>
                                         <span className="material-symbols-outlined text-[18px]">{typeIcon(item.type)}</span>
                                     </div>
                                     {/* 내용 */}
                                     <div className="flex-1 min-w-0">
-                                        <p className={`text-sm truncate ${!item.isRead ? "font-semibold text-gray-900" : "text-gray-600"}`}>
+                                        <p className={`text-sm truncate ${!item.isRead ? "font-semibold text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-300"}`}>
                                             {item.title}
                                         </p>
-                                        <p className="text-xs text-gray-500 truncate mt-0.5">{item.message}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{item.message}</p>
                                         <p className="text-[11px] text-gray-400 mt-1">{timeAgo(item.createdAt)}</p>
                                     </div>
                                     {/* 읽지 않은 표시 점 */}

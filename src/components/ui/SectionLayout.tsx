@@ -32,9 +32,9 @@ interface SectionLayoutProps {
 
 // 배경색별 Tailwind 클래스 매핑
 const bgColorStyles: Record<BgColor, string> = {
-  white: 'bg-white',
-  section: 'bg-surface-section', // #faf5f0 — 교차 섹션용
-  warm: 'bg-surface-warm',      // #fffbf5 — 메인 배경용
+  white: 'bg-white dark:bg-gray-950',
+  section: 'bg-surface-section dark:bg-gray-900', // #faf5f0 — 교차 섹션용
+  warm: 'bg-surface-warm dark:bg-gray-900',      // #fffbf5 — 메인 배경용
 };
 
 export default function SectionLayout({
@@ -47,7 +47,7 @@ export default function SectionLayout({
   className = '',
 }: SectionLayoutProps) {
   return (
-    <section id={id} className={`${bgColorStyles[bgColor]} ${className}`}>
+    <section id={id} className={`${bgColorStyles[bgColor]} ${className} transition-colors duration-300`}>
       {/*
         py-16 md:py-24: 모바일 64px / 데스크탑 96px 세로 여백
         max-w-6xl: 최대 1152px로 콘텐츠 가독성 유지
@@ -59,21 +59,21 @@ export default function SectionLayout({
           <div className="text-center mb-12 md:mb-16">
             {/* 라벨: 작은 대문자 텍스트 — "ABOUT US" 같은 섹션 구분자 */}
             {label && (
-              <p className="text-sm tracking-widest uppercase text-brand-orange-500 font-bold mb-3">
+              <p className="text-sm tracking-widest uppercase text-brand-orange-500 dark:text-brand-neon-lime font-bold mb-3">
                 {label}
               </p>
             )}
 
             {/* 제목: 크고 굵은 메인 타이틀 */}
             {title && (
-              <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4">
+              <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4">
                 {title}
               </h2>
             )}
 
             {/* 설명: 회색 보조 텍스트 */}
             {description && (
-              <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+              <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
                 {description}
               </p>
             )}

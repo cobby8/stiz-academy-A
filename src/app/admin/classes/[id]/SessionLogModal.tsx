@@ -264,18 +264,18 @@ export default function SessionLogModal({
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             {/* 모달 본체 */}
             <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* ── 헤더 ── */}
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900">
+                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-shrink-0">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                         {isEditMode ? "수업 기록 수정" : "수업 기록 추가"}
                     </h2>
                     {/* 닫기 버튼 */}
                     <button
                         onClick={handleClose}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-400 hover:text-gray-600"
+                        className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition text-gray-400 hover:text-gray-600 dark:text-gray-300"
                     >
                         {/* X 아이콘 (인라인 SVG — lucide-react 대신) */}
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -292,7 +292,7 @@ export default function SessionLogModal({
                     <div className="grid grid-cols-2 gap-4">
                         {/* 수업 날짜 */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                 수업 날짜 *
                             </label>
                             <input
@@ -300,19 +300,19 @@ export default function SessionLogModal({
                                 min="2020-01-01" max="2030-12-31"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 focus:border-transparent"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
                             />
                         </div>
 
                         {/* 코치 선택 */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                 담당 코치
                             </label>
                             <select
                                 value={coachId}
                                 onChange={(e) => setCoachId(e.target.value)}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 focus:border-transparent"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
                             >
                                 <option value="">선택 안 함</option>
                                 {coaches.map((c) => (
@@ -326,7 +326,7 @@ export default function SessionLogModal({
 
                     {/* 수업 주제 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             수업 주제
                         </label>
                         <input
@@ -334,13 +334,13 @@ export default function SessionLogModal({
                             value={topic}
                             onChange={(e) => setTopic(e.target.value)}
                             placeholder="예: 드리블 기초, 슈팅 연습"
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 focus:border-transparent"
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
                         />
                     </div>
 
                     {/* 수업 내용 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             수업 내용
                         </label>
                         <textarea
@@ -348,13 +348,13 @@ export default function SessionLogModal({
                             onChange={(e) => setContent(e.target.value)}
                             placeholder="오늘 수업에서 진행한 내용을 기록해주세요"
                             rows={3}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 focus:border-transparent resize-none"
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent resize-none"
                         />
                     </div>
 
                     {/* === 섹션 2: 사진 업로드 === */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                             수업 사진
                         </label>
 
@@ -366,7 +366,7 @@ export default function SessionLogModal({
                                         <img
                                             src={url}
                                             alt={`수업 사진 ${idx + 1}`}
-                                            className="w-full h-24 object-cover rounded-xl border border-gray-100"
+                                            className="w-full h-24 object-cover rounded-xl border border-gray-100 dark:border-gray-800"
                                         />
                                         {/* 삭제 버튼 — 호버 시 표시 */}
                                         <button
@@ -390,7 +390,7 @@ export default function SessionLogModal({
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            className="w-full border-2 border-dashed border-gray-200 rounded-xl p-4 text-sm text-gray-500 hover:border-brand-orange-300 hover:text-brand-orange-500 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="w-full border-2 border-dashed border-gray-200 rounded-xl p-4 text-sm text-gray-500 hover:border-brand-orange-300 dark:border-brand-neon-lime hover:text-brand-orange-500 dark:text-brand-neon-lime transition flex items-center justify-center gap-2 disabled:opacity-50"
                         >
                             {uploading ? (
                                 <>
@@ -427,7 +427,7 @@ export default function SessionLogModal({
                     {/* === 섹션 3: 출석 체크 === */}
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-medium text-gray-700">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                                 출석 체크
                             </label>
                             {/* 전체 일괄 변경 버튼 */}
@@ -453,12 +453,12 @@ export default function SessionLogModal({
 
                         {students.length === 0 ? (
                             // 수강생이 없는 경우 안내 메시지
-                            <div className="bg-gray-50 rounded-xl p-4 text-center text-sm text-gray-400">
+                            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 text-center text-sm text-gray-400">
                                 수강생이 없습니다
                             </div>
                         ) : (
                             // 학생 목록 + 출석/결석/지각 토글 버튼
-                            <div className="border border-gray-100 rounded-xl overflow-hidden">
+                            <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
                                 {attendances.map((att, idx) => (
                                     <div
                                         key={att.studentId}
@@ -467,7 +467,7 @@ export default function SessionLogModal({
                                         }`}
                                     >
                                         {/* 학생 이름 */}
-                                        <span className="text-sm font-medium text-gray-900">
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
                                             {att.studentName}
                                         </span>
 
@@ -483,7 +483,7 @@ export default function SessionLogModal({
                                                         className={`text-xs px-3 py-1.5 rounded-lg border transition font-medium ${
                                                             isSelected
                                                                 ? opt.color
-                                                                : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                                                                : "bg-white dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-900"
                                                         }`}
                                                     >
                                                         {opt.label}
@@ -506,18 +506,18 @@ export default function SessionLogModal({
                 </div>
 
                 {/* ── 푸터: 취소 + 저장 버튼 ── */}
-                <div className="p-6 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
+                <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 flex-shrink-0">
                     <button
                         onClick={handleClose}
                         disabled={saving}
-                        className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition disabled:opacity-50"
+                        className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 transition disabled:opacity-50"
                     >
                         취소
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={saving || uploading}
-                        className="px-6 py-2 text-sm font-bold text-white bg-brand-orange-500 rounded-xl hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-2"
+                        className="px-6 py-2 text-sm font-bold text-white bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-xl hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-2"
                     >
                         {saving ? (
                             <>

@@ -37,8 +37,8 @@ export default function LoginPage() {
       {/* 배경 장식 도형 — 공개 페이지 히어로 패턴과 통일된 반투명 원형 */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute right-0 top-0 w-96 h-96 border-[30px] border-brand-navy-900/5 rounded-full translate-x-1/3 -translate-y-1/3" />
-        <div className="absolute left-0 bottom-0 w-64 h-64 border-[20px] border-brand-orange-500/5 rounded-full -translate-x-1/4 translate-y-1/4" />
-        <div className="absolute right-1/4 bottom-1/4 w-32 h-32 border-[10px] border-brand-orange-500/5 rounded-full" />
+        <div className="absolute left-0 bottom-0 w-64 h-64 border-[20px] border-brand-orange-500 dark:border-brand-neon-lime/5 rounded-full -translate-x-1/4 translate-y-1/4" />
+        <div className="absolute right-1/4 bottom-1/4 w-32 h-32 border-[10px] border-brand-orange-500 dark:border-brand-neon-lime/5 rounded-full" />
       </div>
 
       <div className="w-full max-w-md relative z-10">
@@ -61,9 +61,9 @@ export default function LoginPage() {
         </div>
 
         {/* 카드 — 기존 구조 유지, 디자인 토큰 적용 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
           {/* 탭 — 기존 구조 유지 */}
-          <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+          <div className="flex mb-6 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
             <button
               type="button"
               onClick={() => {
@@ -75,8 +75,8 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "login"
-                  ? "bg-white text-brand-navy-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-white dark:bg-gray-800 text-brand-navy-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
               }`}
             >
               로그인
@@ -92,8 +92,8 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "signup"
-                  ? "bg-white text-brand-navy-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-white dark:bg-gray-800 text-brand-navy-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
               }`}
             >
               회원가입
@@ -113,7 +113,7 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor="name"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
                 >
                   이름
                 </label>
@@ -124,7 +124,7 @@ export default function LoginPage() {
                   required
                   autoComplete="off"
                   placeholder="홍길동"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 outline-none transition-colors"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors"
                 />
               </div>
             )}
@@ -132,7 +132,7 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-gray-700 mb-1"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
               >
                 이메일
               </label>
@@ -143,14 +143,14 @@ export default function LoginPage() {
                 required
                 autoComplete={mode === "login" ? "email" : "off"}
                 placeholder="example@email.com"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 outline-none transition-colors"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors"
               />
             </div>
 
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-1"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
               >
                 비밀번호
               </label>
@@ -164,13 +164,13 @@ export default function LoginPage() {
                   minLength={6}
                   autoComplete={mode === "login" ? "current-password" : "off"}
                   placeholder="6자 이상"
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 focus:border-brand-orange-500 outline-none transition-colors"
+                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors"
                 />
                 {/* 비밀번호 보기/숨기기 토글 버튼 — 눈 아이콘 인라인 SVG */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-300 transition-colors"
                   tabIndex={-1}
                   aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
                 >
@@ -201,14 +201,14 @@ export default function LoginPage() {
                     type="checkbox"
                     checked={agreePrivacy}
                     onChange={(e) => setAgreePrivacy(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                   />
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm text-gray-700 dark:text-gray-200">
                     <a
                       href="/privacy"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-brand-orange-500 underline underline-offset-2 hover:text-brand-orange-600"
+                      className="text-brand-orange-500 dark:text-brand-neon-lime underline underline-offset-2 hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400"
                     >
                       개인정보 수집 및 이용
                     </a>
@@ -220,14 +220,14 @@ export default function LoginPage() {
                     type="checkbox"
                     checked={agreeTerms}
                     onChange={(e) => setAgreeTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                   />
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm text-gray-700 dark:text-gray-200">
                     <a
                       href="/terms"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-brand-orange-500 underline underline-offset-2 hover:text-brand-orange-600"
+                      className="text-brand-orange-500 dark:text-brand-neon-lime underline underline-offset-2 hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400"
                     >
                       이용약관
                     </a>
@@ -244,7 +244,7 @@ export default function LoginPage() {
                 loading ||
                 (mode === "signup" && (!agreePrivacy || !agreeTerms))
               }
-              className="w-full py-2.5 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading
                 ? "처리 중..."
@@ -257,7 +257,7 @@ export default function LoginPage() {
 
         {/* 하단 링크 — 기존 구조 유지 */}
         <div className="text-center mt-6">
-          <a href="/" className="text-sm text-brand-navy-700 hover:text-brand-orange-500 transition-colors">
+          <a href="/" className="text-sm text-brand-navy-700 hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors">
             홈페이지로 돌아가기
           </a>
         </div>

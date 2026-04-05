@@ -132,20 +132,20 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
         <div className="max-w-5xl mx-auto space-y-6">
             {/* ── 상단 헤더: 뒤로가기 + 반 정보 ── */}
             <div className="flex items-center gap-4">
-                <Link href="/admin/classes" className="p-2 hover:bg-gray-100 rounded-lg transition">
-                    <ArrowLeft size={20} className="text-gray-500" />
+                <Link href="/admin/classes" className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
+                    <ArrowLeft size={20} className="text-gray-500 dark:text-gray-400" />
                 </Link>
                 <div className="flex-1">
-                    <h1 className="text-2xl font-extrabold text-gray-900">
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {classData.name}
                     </h1>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                         {/* 프로그램명 + 요일/시간 + 수강생 수/정원 */}
                         {classData.programName && <span>{classData.programName} · </span>}
                         {DAY_LABELS[classData.dayOfWeek] || classData.dayOfWeek}요일{" "}
                         {classData.startTime}~{classData.endTime}
                         {" · "}
-                        <span className="font-medium text-gray-700">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">
                             {classData.students.length}/{classData.capacity}명
                         </span>
                     </p>
@@ -155,22 +155,22 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
             {/* ── 요약 카드 3개 ── */}
             <div className="grid grid-cols-3 gap-4">
                 {/* 수강생 수 */}
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">수강생</p>
-                    <p className="text-2xl font-extrabold text-gray-900">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">수강생</p>
+                    <p className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {classData.students.length}
                         <span className="text-sm font-normal text-gray-400">/{classData.capacity}</span>
                     </p>
                 </div>
                 {/* 수업 횟수 */}
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">수업 기록</p>
-                    <p className="text-2xl font-extrabold text-gray-900">{sessions.length}회</p>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">수업 기록</p>
+                    <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{sessions.length}회</p>
                 </div>
                 {/* 평균 출석률 */}
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">평균 출석률</p>
-                    <p className="text-2xl font-extrabold text-gray-900">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">평균 출석률</p>
+                    <p className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {/* 전체 세션의 출석률 평균 계산 */}
                         {sessions.length > 0
                             ? Math.round(
@@ -184,7 +184,7 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
             </div>
 
             {/* ── 탭 네비게이션 ── */}
-            <div className="border-b border-gray-200">
+            <div className="border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex gap-6">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
@@ -195,8 +195,8 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
                                 onClick={() => setActiveTab(tab.key)}
                                 className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition ${
                                     isActive
-                                        ? "border-brand-orange-500 text-brand-orange-500"
-                                        : "border-transparent text-gray-500 hover:text-gray-700"
+                                        ? "border-brand-orange-500 dark:border-brand-neon-lime text-brand-orange-500 dark:text-brand-neon-lime"
+                                        : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-200"
                                 }`}
                             >
                                 <Icon size={16} />
@@ -204,7 +204,7 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
                                 {/* 카운트 뱃지 */}
                                 {tab.count !== undefined && (
                                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                                        isActive ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"
+                                        isActive ? "bg-orange-100 text-orange-700" : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                                     }`}>
                                         {tab.count}
                                     </span>
@@ -256,44 +256,44 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
 function StudentsTab({ students }: { students: ClassData["students"] }) {
     if (students.length === 0) {
         return (
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
                 <Users size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">등록된 수강생이 없습니다</p>
+                <p className="text-gray-500 dark:text-gray-400">등록된 수강생이 없습니다</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                     <thead>
-                        <tr className="border-b border-gray-100 bg-gray-50">
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">이름</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">성별</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">학교</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">학년</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">연락처</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">등록일</th>
+                        <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">이름</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">성별</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">학교</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">학년</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">연락처</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">등록일</th>
                         </tr>
                     </thead>
                     <tbody>
                         {students.map((s) => (
-                            <tr key={s.enrollmentId} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                            <tr key={s.enrollmentId} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-900 transition">
                                 {/* 학생 이름 — 클릭하면 학생 상세 페이지로 이동 */}
                                 <td className="py-3 px-4">
                                     <Link
                                         href={`/admin/students/${s.studentId}`}
-                                        className="font-medium text-gray-900 hover:text-brand-orange-500 transition"
+                                        className="font-medium text-gray-900 hover:text-brand-orange-500 dark:text-brand-neon-lime transition"
                                     >
                                         {s.studentName}
                                     </Link>
                                 </td>
-                                <td className="py-3 px-4 text-gray-600">{s.gender || "-"}</td>
-                                <td className="py-3 px-4 text-gray-600">{s.school || "-"}</td>
-                                <td className="py-3 px-4 text-gray-600">{s.grade || "-"}</td>
-                                <td className="py-3 px-4 text-gray-600">{s.phone || "-"}</td>
-                                <td className="py-3 px-4 text-gray-500">{toDateStr(s.enrolledAt)}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.gender || "-"}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.school || "-"}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.grade || "-"}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.phone || "-"}</td>
+                                <td className="py-3 px-4 text-gray-500 dark:text-gray-400">{toDateStr(s.enrolledAt)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -318,7 +318,7 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
             <div className="flex justify-end">
                 <button
                     onClick={onAddSession}
-                    className="flex items-center gap-2 bg-brand-orange-500 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-orange-600 transition"
+                    className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-orange-600 transition"
                 >
                     <Plus size={16} />
                     수업 기록 추가
@@ -326,9 +326,9 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
             </div>
 
             {sessions.length === 0 ? (
-                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
                     <BookOpen size={40} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-gray-500">수업 기록이 없습니다</p>
+                    <p className="text-gray-500 dark:text-gray-400">수업 기록이 없습니다</p>
                     <p className="text-xs text-gray-400 mt-1">위 버튼으로 첫 수업을 기록해보세요</p>
                 </div>
             ) : (
@@ -357,13 +357,13 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                             <div
                                 key={s.id}
                                 onClick={() => onEditSession(s.id)}
-                                className={`bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex gap-4 hover:shadow-md transition cursor-pointer ${
+                                className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 flex gap-4 hover:shadow-md transition cursor-pointer ${
                                     loadingSession ? "opacity-50 pointer-events-none" : ""
                                 }`}
                             >
                                 {/* 사진 썸네일 — 사진이 있을 때만 표시 */}
                                 {firstPhotoUrl && (
-                                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
                                         <img
                                             src={firstPhotoUrl}
                                             alt="수업 사진"
@@ -373,7 +373,7 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                                 )}
                                 {/* 사진 없을 때 아이콘 placeholder */}
                                 {!firstPhotoUrl && (
-                                    <div className="w-20 h-20 rounded-xl bg-gray-50 flex-shrink-0 flex items-center justify-center">
+                                    <div className="w-20 h-20 rounded-xl bg-gray-50 dark:bg-gray-900 flex-shrink-0 flex items-center justify-center">
                                         <Camera size={24} className="text-gray-300" />
                                     </div>
                                 )}
@@ -381,26 +381,26 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                                 {/* 수업 기록 텍스트 정보 */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-bold text-gray-900">{toDateStr(s.date)}</span>
+                                        <span className="font-bold text-gray-900 dark:text-white">{toDateStr(s.date)}</span>
                                         {s.coachName && (
-                                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                            <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">
                                                 {s.coachName} 코치
                                             </span>
                                         )}
                                     </div>
                                     {/* 수업 주제 */}
                                     {s.topic && (
-                                        <p className="text-sm text-gray-700 font-medium truncate">{s.topic}</p>
+                                        <p className="text-sm text-gray-700 dark:text-gray-200 font-medium truncate">{s.topic}</p>
                                     )}
                                     {/* 출석률 바 */}
                                     <div className="flex items-center gap-2 mt-2">
-                                        <div className="flex-1 bg-gray-100 rounded-full h-1.5 max-w-[120px]">
+                                        <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 max-w-[120px]">
                                             <div
                                                 className="bg-green-500 rounded-full h-1.5 transition-all"
                                                 style={{ width: `${rate}%` }}
                                             />
                                         </div>
-                                        <span className="text-xs text-gray-500">
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">
                                             출석 {s.presentCount}/{s.attendanceCount}명 ({rate}%)
                                         </span>
                                     </div>
@@ -420,24 +420,24 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
 function AttendanceTab({ sessions }: { sessions: SessionRow[] }) {
     if (sessions.length === 0) {
         return (
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
                 <CalendarCheck size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">출석 기록이 없습니다</p>
+                <p className="text-gray-500 dark:text-gray-400">출석 기록이 없습니다</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                     <thead>
-                        <tr className="border-b border-gray-100 bg-gray-50">
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">날짜</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">코치</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">출석</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">결석/지각</th>
-                            <th className="text-left py-3 px-4 text-xs text-gray-500 font-medium">출석률</th>
+                        <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">날짜</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">코치</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">출석</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">결석/지각</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">출석률</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -450,9 +450,9 @@ function AttendanceTab({ sessions }: { sessions: SessionRow[] }) {
                             const absentOrLate = s.attendanceCount - s.presentCount;
 
                             return (
-                                <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
-                                    <td className="py-3 px-4 font-medium text-gray-900">{toDateStr(s.date)}</td>
-                                    <td className="py-3 px-4 text-gray-600">{s.coachName || "-"}</td>
+                                <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-900 transition">
+                                    <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">{toDateStr(s.date)}</td>
+                                    <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.coachName || "-"}</td>
                                     <td className="py-3 px-4">
                                         <span className="text-green-700 font-medium">{s.presentCount}명</span>
                                     </td>

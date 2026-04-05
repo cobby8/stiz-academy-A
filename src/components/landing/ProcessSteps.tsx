@@ -65,12 +65,12 @@ export default function ProcessSteps() {
             <div className="flex flex-col items-center text-center relative">
               {/* 모바일 세로 연결선: 마지막 단계 제외 */}
               {index < steps.length - 1 && (
-                <div className="absolute left-1/2 top-full w-px h-6 bg-gray-200 md:hidden" />
+                <div className="absolute left-1/2 top-full w-px h-6 bg-gray-200 dark:bg-gray-700 md:hidden" />
               )}
 
               {/* 단계 번호 원 — 오렌지 배경으로 눈에 띄게 */}
               <div className="relative mb-4">
-                <div className="w-16 h-16 rounded-full bg-brand-orange-500 text-white flex items-center justify-center text-2xl font-black shadow-lg">
+                <div className="w-16 h-16 rounded-full bg-brand-orange-500 dark:bg-brand-neon-lime text-white dark:text-brand-navy-900 flex items-center justify-center text-2xl font-black shadow-lg dark:shadow-brand-neon-lime/20">
                   {step.number}
                 </div>
                 {/* 아이콘 — 원의 오른쪽 상단에 작게 배치 */}
@@ -80,18 +80,18 @@ export default function ProcessSteps() {
               </div>
 
               {/* 단계 제목 */}
-              <h3 className="text-lg font-bold text-gray-900 mb-2">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
                 {step.title}
               </h3>
 
               {/* 단계 설명 */}
-              <p className="text-base text-gray-500 leading-relaxed max-w-[220px]">
+              <p className="text-base text-gray-500 dark:text-gray-400 leading-relaxed max-w-[220px]">
                 {step.description}
               </p>
 
               {/* 데스크탑 가로 화살표: 마지막 단계 제외 */}
               {index < steps.length - 1 && (
-                <div className="hidden md:block absolute top-8 -right-4 text-gray-300">
+                <div className="hidden md:block absolute top-8 -right-4 text-gray-300 dark:text-gray-700 dark:text-gray-200">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>

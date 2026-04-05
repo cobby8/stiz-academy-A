@@ -35,7 +35,7 @@ export const ImageSettings = () => {
             <div className="h-px bg-gray-200 my-4" />
 
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">모서리 둥글기 ({borderRadius}px)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">모서리 둥글기 ({borderRadius}px)</label>
                 <input
                     type="range" min="0" max="100"
                     value={borderRadius || 0}
@@ -44,7 +44,7 @@ export const ImageSettings = () => {
                 />
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">이미지 맞춤 방식</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">이미지 맞춤 방식</label>
                 <select
                     value={objectFit || "cover"}
                     onChange={(e) => setProp((props: any) => props.objectFit = e.target.value)}
@@ -186,7 +186,7 @@ export const ImageNode = ({
                         <p className="text-gray-400">자르기를 원하는 영역을 드래그하여 선택하세요.</p>
                     </div>
 
-                    <div className="bg-white/10 p-4 rounded-xl shadow-2xl overflow-hidden max-h-[60vh] flex items-center justify-center max-w-4xl w-full relative z-10">
+                    <div className="bg-white dark:bg-gray-800/10 p-4 rounded-xl shadow-2xl overflow-hidden max-h-[60vh] flex items-center justify-center max-w-4xl w-full relative z-10">
                         <ReactCrop crop={crop} onChange={c => setCrop(c)} className="max-h-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img ref={imageRef} src={src} className="max-h-[55vh] object-contain mx-auto shadow-lg" alt="Crop target" />
@@ -196,7 +196,7 @@ export const ImageNode = ({
                     <div className="flex gap-4 mt-8 relative z-10">
                         <button
                             onClick={getCroppedImg}
-                            className="bg-brand-orange-500 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-orange-600 hover:scale-105 transition shadow-lg"
+                            className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-orange-600 hover:scale-105 transition shadow-lg"
                         >
                             <Check className="w-5 h-5" /> 이대로 자르기 적용
                         </button>
@@ -240,17 +240,17 @@ export const ImageNode = ({
                     bounds="parent"
                     lockAspectRatio={isShiftPressed}
                     handleComponent={selected ? {
-                        top: <div className="w-4 h-1 bg-brand-orange-500 absolute left-1/2 -ml-2 -top-0.5 rounded" />,
-                        right: <div className="h-4 w-1 bg-brand-orange-500 absolute top-1/2 -mt-2 -right-0.5 rounded" />,
-                        bottom: <div className="w-4 h-1 bg-brand-orange-500 absolute left-1/2 -ml-2 -bottom-0.5 rounded" />,
-                        left: <div className="h-4 w-1 bg-brand-orange-500 absolute top-1/2 -mt-2 -left-0.5 rounded" />,
-                        topRight: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -right-1.5 -top-1.5 rounded-full" />,
-                        bottomRight: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -right-1.5 -bottom-1.5 rounded-full" />,
-                        bottomLeft: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -left-1.5 -bottom-1.5 rounded-full" />,
-                        topLeft: <div className="w-3 h-3 bg-white border-2 border-brand-orange-500 absolute -left-1.5 -top-1.5 rounded-full" />
+                        top: <div className="w-4 h-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute left-1/2 -ml-2 -top-0.5 rounded" />,
+                        right: <div className="h-4 w-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute top-1/2 -mt-2 -right-0.5 rounded" />,
+                        bottom: <div className="w-4 h-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute left-1/2 -ml-2 -bottom-0.5 rounded" />,
+                        left: <div className="h-4 w-1 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 absolute top-1/2 -mt-2 -left-0.5 rounded" />,
+                        topRight: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -right-1.5 -top-1.5 rounded-full" />,
+                        bottomRight: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -right-1.5 -bottom-1.5 rounded-full" />,
+                        bottomLeft: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -left-1.5 -bottom-1.5 rounded-full" />,
+                        topLeft: <div className="w-3 h-3 bg-white dark:bg-gray-800 border-2 border-brand-orange-500 dark:border-brand-neon-lime absolute -left-1.5 -top-1.5 rounded-full" />
                     } : undefined}
                     style={{ position: 'relative', maxWidth: '100%' }}
-                    className={`${selected ? 'z-10 ring-2 ring-brand-orange-500 ring-offset-1' : ''}`}
+                    className={`${selected ? 'z-10 ring-2 ring-brand-orange-500 dark:focus:ring-brand-neon-lime ring-offset-1' : ''}`}
                 >
                     <div
                         style={{
@@ -259,7 +259,7 @@ export const ImageNode = ({
                             outline: selected ? "2px solid #ea580c" : "none",
                             outlineOffset: "2px",
                         }}
-                        className={`relative flex items-center justify-center overflow-hidden w-full h-full ${!src ? 'bg-gray-100 min-h-[100px] border-2 border-dashed border-gray-300' : ''}`}
+                        className={`relative flex items-center justify-center overflow-hidden w-full h-full ${!src ? 'bg-gray-100 dark:bg-gray-800 min-h-[100px] border-2 border-dashed border-gray-300' : ''}`}
                     >
                         {src ? (
                             // eslint-disable-next-line @next/next/no-img-element

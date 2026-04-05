@@ -27,7 +27,7 @@ export const HeaderFooterWidget = () => {
             >
                 {/* Visual Fake Header */}
                 <div className="bg-brand-navy-900 text-white text-xs py-1 text-center font-bold">에디터 상단 GNB 영역 (고정 연동)</div>
-                <header className="bg-white shadow border-b border-gray-100 p-4">
+                <header className="bg-white dark:bg-gray-800 shadow border-b border-gray-100 dark:border-gray-800 p-4">
                     <div className="flex items-center justify-between pointer-events-none opacity-50">
                         <div className="flex gap-2 items-center">
                             <div className="w-8 h-8 bg-gray-200 rounded shrink-0"></div>
@@ -41,7 +41,7 @@ export const HeaderFooterWidget = () => {
                     </div>
                 </header>
 
-                <div className="bg-gray-100 p-8 text-center text-sm text-gray-500 border-y border-dashed border-gray-300">
+                <div className="bg-gray-100 dark:bg-gray-800 p-8 text-center text-sm text-gray-500 dark:text-gray-400 border-y border-dashed border-gray-300">
                     ⬆️ 헤더 상단 영역<br /><br />
                     (이 영역 아래에 블록을 추가하세요)<br /><br />
                     ⬇️ 푸터 하단 영역

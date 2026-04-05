@@ -28,10 +28,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantStyles: Record<ButtonVariant, string> = {
   // Primary: 오렌지 배경 → 호버 시 한 단계 진한 오렌지 + 살짝 커짐
   primary: [
-    'bg-brand-orange-500 text-white',
-    'hover:bg-brand-orange-600 hover:scale-[1.02] hover:shadow-lg',
+    'bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white',
+    'hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg',
     'active:scale-[0.98]',
-    'focus:ring-2 focus:ring-brand-orange-500/50 focus:ring-offset-2',
+    'focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2',
     'rounded-xl',
   ].join(' '),
 
@@ -40,34 +40,34 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-brand-navy-900 text-white',
     'hover:bg-brand-navy-800 hover:scale-[1.02]',
     'active:scale-[0.98]',
-    'focus:ring-2 focus:ring-brand-orange-500/50 focus:ring-offset-2',
+    'focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2',
     'rounded-xl',
   ].join(' '),
 
   // Ghost: 투명 배경 + 오렌지 텍스트/테두리 → 호버 시 배경에 살짝 오렌지 톤
   ghost: [
-    'bg-transparent text-brand-orange-500 border border-brand-orange-500/50',
-    'hover:bg-brand-orange-50 hover:border-brand-orange-500',
+    'bg-transparent text-brand-orange-500 dark:text-brand-neon-lime border border-brand-orange-500 dark:border-brand-neon-lime/50',
+    'hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  hover:border-brand-orange-500 dark:border-brand-neon-lime',
     'active:scale-[0.98]',
-    'focus:ring-2 focus:ring-brand-orange-500/50 focus:ring-offset-2',
+    'focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2',
     'rounded-xl',
   ].join(' '),
 
   // White: 흰 배경 + 네이비 텍스트 → 어두운 배경 위에서 사용
   white: [
-    'bg-white text-brand-navy-900 border border-gray-200',
-    'hover:bg-gray-50 hover:shadow-md',
+    'bg-white dark:bg-gray-800 text-brand-navy-900 border border-gray-200 dark:border-gray-700',
+    'hover:bg-gray-50 dark:bg-gray-900 hover:shadow-md',
     'active:scale-[0.98]',
-    'focus:ring-2 focus:ring-brand-orange-500/50 focus:ring-offset-2',
+    'focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2',
     'rounded-xl',
   ].join(' '),
 
   // CTA Large: 큰 행동 유도 버튼 — 히어로/배너에서 사용
   cta: [
-    'bg-brand-orange-500 text-white font-bold',
-    'hover:bg-brand-orange-600 hover:scale-[1.03] hover:shadow-xl',
+    'bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold',
+    'hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.03] hover:shadow-xl',
     'active:scale-[0.98]',
-    'focus:ring-2 focus:ring-brand-orange-500/50 focus:ring-offset-2',
+    'focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2',
     'rounded-2xl', // CTA는 더 둥글게
   ].join(' '),
 };

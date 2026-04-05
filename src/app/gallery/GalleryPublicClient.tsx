@@ -61,7 +61,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
                     if (media.length === 0) return null;
                     return media.map((m, mi) => (
                         <div key={`${post.id}-${mi}`}
-                            className="aspect-square rounded-2xl overflow-hidden bg-gray-100 cursor-pointer relative group shadow-sm hover:shadow-lg transition-all duration-300"
+                            className="aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer relative group shadow-sm hover:shadow-lg transition-all duration-300"
                             onClick={() => setLightbox({ postIdx: pi, mediaIdx: mi })}>
                             {/* 미디어 — 이미지 또는 동영상 */}
                             {m.type === "image" ? (
@@ -168,7 +168,7 @@ function LightboxOverlay({
             {/* 닫기 버튼 */}
             <button
                 onClick={onClose}
-                className="absolute top-4 right-4 text-white/60 hover:text-white z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
+                className="absolute top-4 right-4 text-white/60 hover:text-white z-10 p-2 rounded-full hover:bg-white dark:hover:bg-gray-800/10 transition-colors"
                 aria-label="닫기"
             >
                 <span className="material-symbols-outlined" style={{ fontSize: 28 }}>close</span>
@@ -183,7 +183,7 @@ function LightboxOverlay({
             {flatIdx > 0 && (
                 <button
                     onClick={e => { e.stopPropagation(); onPrev(); }}
-                    className="absolute left-2 md:left-6 text-white/40 hover:text-white z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
+                    className="absolute left-2 md:left-6 text-white/40 hover:text-white z-10 p-2 rounded-full hover:bg-white dark:hover:bg-gray-800/10 transition-colors"
                     aria-label="이전 사진"
                 >
                     <span className="material-symbols-outlined" style={{ fontSize: 36 }}>chevron_left</span>
@@ -194,7 +194,7 @@ function LightboxOverlay({
             {flatIdx < total - 1 && (
                 <button
                     onClick={e => { e.stopPropagation(); onNext(); }}
-                    className="absolute right-2 md:right-6 text-white/40 hover:text-white z-10 p-2 rounded-full hover:bg-white/10 transition-colors"
+                    className="absolute right-2 md:right-6 text-white/40 hover:text-white z-10 p-2 rounded-full hover:bg-white dark:hover:bg-gray-800/10 transition-colors"
                     aria-label="다음 사진"
                 >
                     <span className="material-symbols-outlined" style={{ fontSize: 36 }}>chevron_right</span>

@@ -183,7 +183,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                     </button>
                 ))}
                 {form.rating > 0 && (
-                    <span className="text-sm text-gray-500 ml-2 self-center">{form.rating}점</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 self-center">{form.rating}점</span>
                 )}
             </div>
         );
@@ -194,8 +194,8 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
             {/* 헤더: 제목 + 피드백 작성 버튼 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">학습 피드백 관리</h1>
-                    <p className="text-gray-500 text-sm mt-1">
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">학습 피드백 관리</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                         원생별 학습 피드백을 작성하고 관리합니다. (총 {feedbacks.length}건)
                     </p>
                 </div>
@@ -211,7 +211,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                             setShowForm(true);
                         }
                     }}
-                    className="px-5 py-2.5 bg-brand-orange-500 text-white rounded-xl font-medium hover:bg-brand-orange-600 transition-colors"
+                    className="px-5 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors"
                 >
                     {showForm && !editingId ? "닫기" : "피드백 작성"}
                 </button>
@@ -221,9 +221,9 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
             {showForm && (
                 <form
                     onSubmit={handleSubmit}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4"
+                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 space-y-4"
                 >
-                    <h2 className="text-lg font-bold text-gray-800">
+                    <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
                         {editingId ? "피드백 수정" : "새 피드백 작성"}
                     </h2>
 
@@ -231,14 +231,14 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* 학생 드롭다운 - 수정 시에는 변경 불가 */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                 학생 <span className="text-red-500">*</span>
                             </label>
                             <select
                                 value={form.studentId}
                                 onChange={(e) => setForm({ ...form, studentId: e.target.value })}
                                 disabled={!!editingId}
-                                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 disabled:bg-gray-100"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-gray-100 dark:bg-gray-800"
                             >
                                 <option value="">학생을 선택하세요</option>
                                 {students.map((s) => (
@@ -249,14 +249,14 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
 
                         {/* 코치 드롭다운 - 수정 시에는 변경 불가 */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                 코치 <span className="text-red-500">*</span>
                             </label>
                             <select
                                 value={form.coachId}
                                 onChange={(e) => setForm({ ...form, coachId: e.target.value })}
                                 disabled={!!editingId}
-                                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 disabled:bg-gray-100"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-gray-100 dark:bg-gray-800"
                             >
                                 <option value="">코치를 선택하세요</option>
                                 {coaches.map((c) => (
@@ -269,21 +269,21 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                     {/* 날짜 + 카테고리 (2열) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">수업 날짜</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">수업 날짜</label>
                             <input
                                 type="date"
                                 min="2020-01-01" max="2030-12-31"
                                 value={form.sessionDate}
                                 onChange={(e) => setForm({ ...form, sessionDate: e.target.value })}
-                                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">카테고리</label>
                             <select
                                 value={form.category}
                                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             >
                                 {Object.entries(CATEGORIES).map(([key, { label }]) => (
                                     <option key={key} value={key}>{label}</option>
@@ -294,7 +294,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
 
                     {/* 제목 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             제목 <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -302,13 +302,13 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                             value={form.title}
                             onChange={(e) => setForm({ ...form, title: e.target.value })}
                             placeholder="피드백 제목을 입력하세요"
-                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500"
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
 
                     {/* 내용 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             내용 <span className="text-red-500">*</span>
                         </label>
                         <textarea
@@ -316,14 +316,14 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                             onChange={(e) => setForm({ ...form, content: e.target.value })}
                             placeholder="학습 피드백 내용을 상세히 작성하세요"
                             rows={4}
-                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 resize-none"
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         />
                     </div>
 
                     {/* 평점 + 공개여부 */}
                     <div className="flex items-center justify-between flex-wrap gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">평점</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">평점</label>
                             {renderStarInput()}
                         </div>
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -331,9 +331,9 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                                 type="checkbox"
                                 checked={form.isPublic}
                                 onChange={(e) => setForm({ ...form, isPublic: e.target.checked })}
-                                className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500"
+                                className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
-                            <span className="text-sm text-gray-700">학부모에게 공개</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-200">학부모에게 공개</span>
                         </label>
                     </div>
 
@@ -342,7 +342,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                         <button
                             type="submit"
                             disabled={isPending}
-                            className="px-6 py-2.5 bg-brand-orange-500 text-white rounded-xl font-medium hover:bg-brand-orange-600 transition-colors disabled:opacity-50"
+                            className="px-6 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors disabled:opacity-50"
                         >
                             {isPending ? "저장 중..." : editingId ? "수정 완료" : "피드백 저장"}
                         </button>
@@ -352,7 +352,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                                 setShowForm(false);
                                 resetForm();
                             }}
-                            className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                            className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-200 transition-colors"
                         >
                             취소
                         </button>
@@ -362,7 +362,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
 
             {/* 피드백 목록 (카드형) */}
             {feedbacks.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-12 text-center">
                     <p className="text-gray-400 text-lg">아직 작성된 피드백이 없습니다.</p>
                     <p className="text-gray-400 text-sm mt-1">상단의 "피드백 작성" 버튼을 눌러 첫 피드백을 작성해보세요.</p>
                 </div>
@@ -380,13 +380,13 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                         return (
                             <div
                                 key={fb.id}
-                                className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+                                className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden"
                             >
                                 {/* 카드 헤더 (클릭하면 펼치기/접기) */}
                                 <button
                                     type="button"
                                     onClick={() => setExpandedId(isExpanded ? null : fb.id)}
-                                    className="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 transition-colors"
+                                    className="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 dark:bg-gray-900 transition-colors"
                                 >
                                     {/* 카테고리 뱃지 */}
                                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${cat.color}`}>
@@ -394,15 +394,15 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                                     </span>
 
                                     {/* 학생 이름 */}
-                                    <span className="font-bold text-gray-800 min-w-[60px]">
+                                    <span className="font-bold text-gray-800 dark:text-gray-100 min-w-[60px]">
                                         {fb.studentName}
                                     </span>
 
                                     {/* 제목 */}
-                                    <span className="text-gray-700 flex-1 truncate">{fb.title}</span>
+                                    <span className="text-gray-700 dark:text-gray-200 flex-1 truncate">{fb.title}</span>
 
                                     {/* 코치 이름 */}
-                                    <span className="text-sm text-gray-500">{fb.coachName} 코치</span>
+                                    <span className="text-sm text-gray-500 dark:text-gray-400">{fb.coachName} 코치</span>
 
                                     {/* 날짜 */}
                                     <span className="text-sm text-gray-400 min-w-[80px] text-right">
@@ -427,18 +427,18 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
 
                                 {/* 펼쳐진 내용 */}
                                 {isExpanded && (
-                                    <div className="px-6 pb-5 border-t border-gray-100">
+                                    <div className="px-6 pb-5 border-t border-gray-100 dark:border-gray-800">
                                         {/* 피드백 내용 (줄바꿈 유지) */}
-                                        <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap mt-4">
+                                        <p className="text-gray-700 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap mt-4">
                                             {fb.content}
                                         </p>
 
                                         {/* 수정/삭제 버튼 */}
-                                        <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                        <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                                             <button
                                                 onClick={() => handleEdit(fb)}
                                                 disabled={isPending}
-                                                className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                                                className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
                                             >
                                                 수정
                                             </button>

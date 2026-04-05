@@ -277,19 +277,19 @@ export default function ExcelUploadModal({
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
             {/* 모달 본체 */}
             <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* ── 헤더 ── */}
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900">
+                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-shrink-0">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                         {step === "upload" && "엑셀 파일 업로드"}
                         {step === "preview" && "업로드 미리보기"}
                         {step === "result" && "등록 결과"}
                     </h2>
                     <button
                         onClick={handleClose}
-                        className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition"
+                        className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-400 hover:text-gray-600 dark:text-gray-300 transition"
                     >
                         {/* X 아이콘 (SVG) */}
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -312,8 +312,8 @@ export default function ExcelUploadModal({
                                     flex flex-col items-center justify-center w-full h-48
                                     border-2 border-dashed rounded-xl cursor-pointer transition
                                     ${isDragging
-                                        ? "border-brand-orange-500 bg-orange-50"
-                                        : "border-gray-300 hover:bg-gray-50"
+                                        ? "border-brand-orange-500 dark:border-brand-neon-lime bg-orange-50"
+                                        : "border-gray-300 hover:bg-gray-50 dark:bg-gray-900"
                                     }
                                     ${loading ? "opacity-50 pointer-events-none" : ""}
                                 `}
@@ -325,8 +325,8 @@ export default function ExcelUploadModal({
                                 {loading ? (
                                     // 로딩 스피너
                                     <div className="flex flex-col items-center gap-3">
-                                        <div className="w-8 h-8 border-3 border-brand-orange-500 border-t-transparent rounded-full animate-spin" />
-                                        <span className="text-sm text-gray-500">엑셀 파일을 분석하고 있습니다...</span>
+                                        <div className="w-8 h-8 border-3 border-brand-orange-500 dark:border-brand-neon-lime border-t-transparent rounded-full animate-spin" />
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">엑셀 파일을 분석하고 있습니다...</span>
                                     </div>
                                 ) : (
                                     <>
@@ -344,7 +344,7 @@ export default function ExcelUploadModal({
                                                 d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
                                             />
                                         </svg>
-                                        <span className="text-sm font-medium text-gray-600">
+                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
                                             엑셀 파일을 여기에 끌어다 놓거나 클릭하여 선택
                                         </span>
                                         <span className="text-xs text-gray-400 mt-1">
@@ -370,8 +370,8 @@ export default function ExcelUploadModal({
                             )}
 
                             {/* 안내 텍스트 */}
-                            <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600 space-y-1">
-                                <p className="font-medium text-gray-700">랠리즈 엑셀 파일 형식</p>
+                            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                                <p className="font-medium text-gray-700 dark:text-gray-200">랠리즈 엑셀 파일 형식</p>
                                 <p>랠리즈에서 다운로드한 원생 목록 엑셀 파일을 그대로 업로드하세요.</p>
                                 <p>학생명, 보호자 정보, 학교, 학년, 생년월일 등이 자동으로 인식됩니다.</p>
                             </div>
@@ -399,8 +399,8 @@ export default function ExcelUploadModal({
                             </div>
 
                             {/* 중복 처리 옵션 */}
-                            <div className="bg-gray-50 rounded-lg p-4">
-                                <p className="text-sm font-medium text-gray-700 mb-2">
+                            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                                     이름+생년월일이 같은 기존 학생이 있을 때:
                                 </p>
                                 <div className="flex gap-4">
@@ -411,9 +411,9 @@ export default function ExcelUploadModal({
                                             value="skip"
                                             checked={duplicateMode === "skip"}
                                             onChange={() => setDuplicateMode("skip")}
-                                            className="text-brand-orange-500 focus:ring-brand-orange-500"
+                                            className="text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                         />
-                                        <span className="text-sm text-gray-700">건너뛰기 (기본)</span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-200">건너뛰기 (기본)</span>
                                     </label>
                                     <label className="flex items-center gap-2 cursor-pointer">
                                         <input
@@ -422,9 +422,9 @@ export default function ExcelUploadModal({
                                             value="overwrite"
                                             checked={duplicateMode === "overwrite"}
                                             onChange={() => setDuplicateMode("overwrite")}
-                                            className="text-brand-orange-500 focus:ring-brand-orange-500"
+                                            className="text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                         />
-                                        <span className="text-sm text-gray-700">덮어쓰기 (기존 정보 업데이트)</span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-200">덮어쓰기 (기존 정보 업데이트)</span>
                                     </label>
                                 </div>
                             </div>
@@ -446,27 +446,27 @@ export default function ExcelUploadModal({
                             )}
 
                             {/* 미리보기 테이블 — 스크롤 가능 */}
-                            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                 <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                                     <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                        <thead className="bg-gray-50 sticky top-0">
+                                        <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
                                             <tr>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">행</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">클래스</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">생년월일</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">성별</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">학교</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">학년</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">보호자1</th>
-                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">전화번호</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">행</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">이름</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">클래스</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">생년월일</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">성별</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">학교</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">학년</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">보호자1</th>
+                                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">전화번호</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
                                             {parsedStudents.map((s, i) => (
-                                                <tr key={i} className="hover:bg-gray-50">
+                                                <tr key={i} className="hover:bg-gray-50 dark:bg-gray-900">
                                                     <td className="px-3 py-2 text-gray-400">{s.rowNumber}</td>
-                                                    <td className="px-3 py-2 font-medium text-gray-900">{s.name}</td>
+                                                    <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">{s.name}</td>
                                                     {/* 클래스 매칭 상태: 매칭 성공=초록, 실패=회색 */}
                                                     <td className="px-3 py-2">
                                                         {s.className ? (
@@ -483,14 +483,14 @@ export default function ExcelUploadModal({
                                                             <span className="text-xs text-gray-300">-</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-3 py-2 text-gray-600">{formatDate(s.birthDate)}</td>
-                                                    <td className="px-3 py-2 text-gray-600">{formatGender(s.gender)}</td>
-                                                    <td className="px-3 py-2 text-gray-600">{s.school || "-"}</td>
-                                                    <td className="px-3 py-2 text-gray-600">{s.grade || "-"}</td>
-                                                    <td className="px-3 py-2 text-gray-600">
+                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{formatDate(s.birthDate)}</td>
+                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{formatGender(s.gender)}</td>
+                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{s.school || "-"}</td>
+                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{s.grade || "-"}</td>
+                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
                                                         {s.guardian1Relation || "-"}
                                                     </td>
-                                                    <td className="px-3 py-2 text-gray-600">
+                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
                                                         {s.guardian1Phone || "-"}
                                                     </td>
                                                 </tr>
@@ -595,12 +595,12 @@ export default function ExcelUploadModal({
                 </div>
 
                 {/* ── 하단 버튼 영역 ── */}
-                <div className="p-6 border-t border-gray-100 flex justify-end gap-3 flex-shrink-0">
+                <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 flex-shrink-0">
                     {/* 화면 1: 업로드 — 취소 버튼만 */}
                     {step === "upload" && (
                         <button
                             onClick={handleClose}
-                            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl transition"
+                            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-xl transition"
                         >
                             취소
                         </button>
@@ -612,14 +612,14 @@ export default function ExcelUploadModal({
                             <button
                                 onClick={handleClose}
                                 disabled={loading}
-                                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl transition disabled:opacity-50"
+                                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-xl transition disabled:opacity-50"
                             >
                                 취소
                             </button>
                             <button
                                 onClick={handleBulkCreate}
                                 disabled={loading || parsedStudents.length === 0}
-                                className="px-6 py-2 bg-brand-orange-500 text-white font-bold rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
+                                className="px-6 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
                             >
                                 {loading ? (
                                     <span className="flex items-center gap-2">
@@ -637,7 +637,7 @@ export default function ExcelUploadModal({
                     {step === "result" && (
                         <button
                             onClick={handleFinish}
-                            className="px-6 py-2 bg-brand-orange-500 text-white font-bold rounded-xl hover:bg-orange-600 transition"
+                            className="px-6 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold rounded-xl hover:bg-orange-600 transition"
                         >
                             확인
                         </button>

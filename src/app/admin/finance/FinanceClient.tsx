@@ -47,7 +47,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     PENDING: { label: "미납", color: "bg-yellow-100 text-yellow-700" },
     PAID: { label: "납부완료", color: "bg-green-100 text-green-700" },
     OVERDUE: { label: "연체", color: "bg-red-100 text-red-700" },
-    REFUNDED: { label: "환불", color: "bg-gray-100 text-gray-600" },
+    REFUNDED: { label: "환불", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
 };
 
 // 청구 유형 라벨
@@ -272,8 +272,8 @@ export default function FinanceClient({
             {/* 헤더 + 액션 버튼 */}
             <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
                 <div>
-                    <h1 className="text-2xl font-extrabold text-gray-900">수납/결제 관리</h1>
-                    <p className="text-gray-500 text-sm mt-1">원생별 수납 현황을 관리합니다.</p>
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">수납/결제 관리</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">원생별 수납 현황을 관리합니다.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {/* 이달 청구서 생성 버튼 */}
@@ -297,7 +297,7 @@ export default function FinanceClient({
                     {/* 수동 추가 버튼 */}
                     <button
                         onClick={() => setShowForm(!showForm)}
-                        className="bg-brand-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition text-sm"
+                        className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition text-sm"
                     >
                         + 수납 기록 추가
                     </button>
@@ -306,29 +306,29 @@ export default function FinanceClient({
 
             {/* 월 네비게이션 */}
             <div className="flex items-center gap-4 mb-6">
-                <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 font-bold">&larr;</button>
-                <span className="text-lg font-bold text-gray-900">{year}년 {month}월</span>
-                <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 font-bold">&rarr;</button>
+                <button onClick={prevMonth} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-300 font-bold">&larr;</button>
+                <span className="text-lg font-bold text-gray-900 dark:text-white">{year}년 {month}월</span>
+                <button onClick={nextMonth} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-300 font-bold">&rarr;</button>
             </div>
 
             {/* 요약 카드 (4개: 총 청구/수납/미납/수납률) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 font-medium">총 청구</p>
-                    <p className="text-xl font-extrabold text-gray-900 mt-1">{formatAmount(summary.totalAmount)}</p>
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 청구</p>
+                    <p className="text-xl font-extrabold text-gray-900 dark:text-white mt-1">{formatAmount(summary.totalAmount)}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{summary.totalCount}건</p>
                 </div>
-                <div className="bg-white border border-green-200 rounded-xl p-4">
+                <div className="bg-white dark:bg-gray-800 border border-green-200 rounded-xl p-4">
                     <p className="text-xs text-green-600 font-medium">납부완료</p>
                     <p className="text-xl font-extrabold text-green-700 mt-1">{formatAmount(summary.paidAmount)}</p>
                     <p className="text-xs text-green-500 mt-0.5">{summary.paidCount}건</p>
                 </div>
-                <div className="bg-white border border-yellow-200 rounded-xl p-4">
+                <div className="bg-white dark:bg-gray-800 border border-yellow-200 rounded-xl p-4">
                     <p className="text-xs text-yellow-600 font-medium">미납/연체</p>
                     <p className="text-xl font-extrabold text-yellow-700 mt-1">{formatAmount(summary.unpaidAmount)}</p>
                     <p className="text-xs text-yellow-500 mt-0.5">{summary.unpaidCount}건</p>
                 </div>
-                <div className="bg-white border border-blue-200 rounded-xl p-4">
+                <div className="bg-white dark:bg-gray-800 border border-blue-200 rounded-xl p-4">
                     <p className="text-xs text-blue-600 font-medium">수납률</p>
                     <p className="text-xl font-extrabold text-blue-700 mt-1">{payRate}%</p>
                     <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
@@ -355,16 +355,16 @@ export default function FinanceClient({
 
             {/* 수동 생성 폼 */}
             {showForm && (
-                <form onSubmit={handleCreate} className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm space-y-4">
-                    <h3 className="font-bold text-lg text-gray-900">새 수납 기록</h3>
+                <form onSubmit={handleCreate} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">새 수납 기록</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">원생 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">원생 *</label>
                             <select
                                 value={studentId}
                                 onChange={(e) => setStudentId(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 bg-white"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="">선택하세요</option>
                                 {students.map((s) => (
@@ -373,33 +373,33 @@ export default function FinanceClient({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">금액 (원) *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">금액 (원) *</label>
                             <input
                                 type="number"
                                 value={amount || ""}
                                 onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
                                 required
                                 placeholder="100000"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">납부 기한 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">납부 기한 *</label>
                             <input
                                 type="date"
                                 min="2020-01-01" max="2030-12-31"
                                 value={dueDate}
                                 onChange={(e) => setDueDate(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">유형</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">유형</label>
                             <select
                                 value={paymentType}
                                 onChange={(e) => setPaymentType(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 bg-white"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="MONTHLY">월 수강료</option>
                                 <option value="SHUTTLE">셔틀</option>
@@ -408,11 +408,11 @@ export default function FinanceClient({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">상태</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">상태</label>
                             <select
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 bg-white"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="PENDING">미납</option>
                                 <option value="PAID">납부완료</option>
@@ -420,19 +420,19 @@ export default function FinanceClient({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">설명 (선택)</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">설명 (선택)</label>
                             <input
                                 type="text"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="예: 4월 수강료"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500"
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                     </div>
                     <div className="flex gap-2 justify-end">
-                        <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600">취소</button>
-                        <button type="submit" disabled={busy} className="bg-brand-orange-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50">
+                        <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">취소</button>
+                        <button type="submit" disabled={busy} className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50">
                             {busy ? "저장 중..." : "추가"}
                         </button>
                     </div>
@@ -441,14 +441,14 @@ export default function FinanceClient({
 
             {/* 수납 목록 테이블 */}
             {payments.length === 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
                     {year}년 {month}월 수납 기록이 없습니다.
                 </div>
             ) : (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                            <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
                                     {/* 전체 선택 체크박스 */}
                                     <th className="px-3 py-3 text-center">
@@ -459,20 +459,20 @@ export default function FinanceClient({
                                             className="rounded border-gray-300"
                                         />
                                     </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">원생</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">유형</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">금액</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">납부기한</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">납부일</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">관리</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">원생</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">유형</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">금액</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">납부기한</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">납부일</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">상태</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">관리</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {payments.map((p) => {
                                     const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.PENDING;
                                     return (
-                                        <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
+                                        <tr key={p.id} className={`hover:bg-gray-50 dark:bg-gray-900 transition-colors ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
                                             {/* 개별 체크박스 */}
                                             <td className="px-3 py-3.5 text-center">
                                                 <input
@@ -483,7 +483,7 @@ export default function FinanceClient({
                                                 />
                                             </td>
                                             <td className="px-4 py-3.5">
-                                                <span className="font-medium text-gray-900">{p.studentName}</span>
+                                                <span className="font-medium text-gray-900 dark:text-white">{p.studentName}</span>
                                                 {p.description && (
                                                     <p className="text-xs text-gray-400 mt-0.5">{p.description}</p>
                                                 )}
@@ -491,12 +491,12 @@ export default function FinanceClient({
                                                     <span className="text-[10px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded ml-1">자동</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3.5 text-sm text-gray-600">
+                                            <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">
                                                 {TYPE_LABELS[p.type] || p.type}
                                             </td>
-                                            <td className="px-4 py-3.5 text-sm text-gray-700 font-mono">{formatAmount(p.amount)}</td>
-                                            <td className="px-4 py-3.5 text-sm text-gray-600">{toDateStr(p.dueDate)}</td>
-                                            <td className="px-4 py-3.5 text-sm text-gray-600">{toDateStr(p.paidDate)}</td>
+                                            <td className="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-200 font-mono">{formatAmount(p.amount)}</td>
+                                            <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">{toDateStr(p.dueDate)}</td>
+                                            <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">{toDateStr(p.paidDate)}</td>
                                             <td className="px-4 py-3.5">
                                                 <span className={`text-xs font-bold px-2 py-1 rounded-full ${statusInfo.color}`}>
                                                     {statusInfo.label}
@@ -531,7 +531,7 @@ export default function FinanceClient({
                                                         <button
                                                             onClick={() => handleStatusChange(p.id, "REFUNDED")}
                                                             disabled={busy}
-                                                            className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                                                            className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-200 font-medium"
                                                         >
                                                             환불
                                                         </button>
@@ -541,7 +541,7 @@ export default function FinanceClient({
                                                             <button onClick={() => handleDelete(p.id)} disabled={busy}
                                                                 className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold disabled:opacity-50">확인</button>
                                                             <button onClick={() => setDeleteConfirm(null)}
-                                                                className="text-xs text-gray-500 px-2 py-1">취소</button>
+                                                                className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">취소</button>
                                                         </div>
                                                     ) : (
                                                         <button onClick={() => setDeleteConfirm(p.id)}

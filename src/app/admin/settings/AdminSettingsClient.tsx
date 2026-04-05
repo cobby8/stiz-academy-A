@@ -10,7 +10,7 @@ import dynamic from "next/dynamic";
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
     ssr: false,
     loading: () => (
-        <div className="border border-gray-300 rounded-md p-4 min-h-[150px] bg-gray-50 flex items-center justify-center text-sm text-gray-400">
+        <div className="border border-gray-300 rounded-md p-4 min-h-[150px] bg-gray-50 dark:bg-gray-900 flex items-center justify-center text-sm text-gray-400">
             에디터 로딩중...
         </div>
     ),
@@ -39,19 +39,19 @@ function FontCard({ option, selected, name, onSelect }: {
     return (
         <label
             className={`cursor-pointer rounded-xl border-2 p-3.5 transition-all flex flex-col gap-1.5 ${
-                selected ? "border-brand-orange-500 bg-orange-50 shadow-sm" : "border-gray-200 hover:border-gray-300 bg-white"
+                selected ? "border-brand-orange-500 dark:border-brand-neon-lime bg-orange-50 shadow-sm" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 bg-white dark:bg-gray-800"
             }`}
             onClick={() => onSelect(option.key)}
         >
             <input type="radio" name={name} value={option.key} checked={selected} onChange={() => onSelect(option.key)} className="sr-only" />
             <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-800">{option.name}</span>
+                <span className="text-xs font-bold text-gray-800 dark:text-gray-100">{option.name}</span>
                 {option.tag && (
-                    <span className="text-[10px] bg-brand-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold">{option.tag}</span>
+                    <span className="text-[10px] bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-1.5 py-0.5 rounded-full font-bold">{option.tag}</span>
                 )}
-                {selected && <span className="ml-auto text-brand-orange-500 text-sm">✓</span>}
+                {selected && <span className="ml-auto text-brand-orange-500 dark:text-brand-neon-lime text-sm">✓</span>}
             </div>
-            <p style={{ fontFamily: option.css === "inherit" ? undefined : option.css }} className="text-sm text-gray-600 leading-snug truncate">
+            <p style={{ fontFamily: option.css === "inherit" ? undefined : option.css }} className="text-sm text-gray-600 dark:text-gray-300 leading-snug truncate">
                 {option.sample}
             </p>
             <p className="text-[10px] text-gray-400">{option.nameEn}</p>
@@ -62,7 +62,7 @@ function FontCard({ option, selected, name, onSelect }: {
 // ─── 섹션 헤더 ────────────────────────────────────────────────────────────────
 function SectionHeader({ title }: { title: string }) {
     return (
-        <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 pb-2 mb-2 inline-block">
+        <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 dark:border-brand-neon-lime pb-2 mb-2 inline-block">
             {title}
         </h2>
     );
@@ -129,7 +129,7 @@ export default function AdminSettingsClient({
     }
 
     return (
-        <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-gray-900">
             {fetchError && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm">
                     데이터베이스 연결에 문제가 발생했습니다. 새 스키마 동기화(db push)가 필요합니다.
@@ -148,7 +148,7 @@ export default function AdminSettingsClient({
                 </div>
             )}
 
-            <div className="max-w-3xl mx-auto space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+            <div className="max-w-3xl mx-auto space-y-8 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                 <form action={saveBasicSettings} className="space-y-8">
 
                     {/* ── 폰트 설정 ───────────────────────────────────────── */}
@@ -166,7 +166,7 @@ export default function AdminSettingsClient({
                         </div>
 
                         <div className="mb-6">
-                            <label className="block text-sm font-bold text-gray-700 mb-3">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">
                                 본문 폰트
                                 <span className="text-xs text-gray-400 font-normal ml-2">일반 텍스트, 설명문</span>
                             </label>
@@ -178,7 +178,7 @@ export default function AdminSettingsClient({
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-3">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">
                                 제목 폰트
                                 <span className="text-xs text-gray-400 font-normal ml-2">H1~H3 제목에 적용</span>
                             </label>
@@ -191,13 +191,13 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 학원 소개 문구 ───────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100">
+                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         <SectionHeader title="학원 소개 문구" />
 
                         <div className="space-y-5">
                             {/* 메인 타이틀 */}
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">
                                     메인 타이틀
                                 </label>
                                 <AppliesTo pages={["홈페이지 메인 히어로 제목"]} />
@@ -206,13 +206,13 @@ export default function AdminSettingsClient({
                                     type="text"
                                     defaultValue={initialSettings?.introductionTitle || ""}
                                     placeholder="예: 다산신도시 No.1 스티즈농구교실"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
 
                             {/* 원장 인사말 */}
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">
                                     원장 인사말 / 학원 소개
                                 </label>
                                 <AppliesTo pages={["홈페이지 메인 히어로 소개 문구", "학원소개 페이지 원장 인사말"]} />
@@ -229,7 +229,7 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 교육 이념 ──────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100">
+                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         <SectionHeader title="교육 이념" />
                         <AppliesTo pages={["학원소개 페이지 (원장 인사말 아래)"]} />
                         <p className="text-xs text-gray-400 mb-2">
@@ -243,13 +243,13 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 시설 소개 ──────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100">
+                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         <SectionHeader title="시설 소개" />
                         <AppliesTo pages={["학원소개 페이지 (코치진 아래)"]} />
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">시설 설명</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">시설 설명</label>
                                 <p className="text-xs text-gray-400 mb-2">비워두면 섹션이 숨겨집니다.</p>
                                 <RichTextEditor
                                     value={facilitiesText}
@@ -259,7 +259,7 @@ export default function AdminSettingsClient({
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">시설 사진 URL</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">시설 사진 URL</label>
                                 <p className="text-xs text-gray-400 mb-2">
                                     Supabase Storage 또는 외부 이미지 URL을 한 줄에 하나씩 입력합니다.
                                 </p>
@@ -274,7 +274,7 @@ export default function AdminSettingsClient({
                                                 setFacilityImages(next);
                                             }}
                                             placeholder="https://..."
-                                            className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                                            className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                         />
                                         <button
                                             type="button"
@@ -288,7 +288,7 @@ export default function AdminSettingsClient({
                                 <button
                                     type="button"
                                     onClick={() => setFacilityImages([...facilityImages, ""])}
-                                    className="text-sm text-brand-orange-500 font-bold hover:underline"
+                                    className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline"
                                 >
                                     + 사진 URL 추가
                                 </button>
@@ -297,7 +297,7 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 포토갤러리 ──────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100">
+                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         <SectionHeader title="포토 갤러리" />
                         <AppliesTo pages={["홈페이지 (메인 랜딩)"]} />
                         <p className="text-xs text-gray-400 mb-2">
@@ -314,7 +314,7 @@ export default function AdminSettingsClient({
                                         setGalleryImages(next);
                                     }}
                                     placeholder="https://..."
-                                    className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                                    className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                 />
                                 <button
                                     type="button"
@@ -328,43 +328,43 @@ export default function AdminSettingsClient({
                         <button
                             type="button"
                             onClick={() => setGalleryImages([...galleryImages, ""])}
-                            className="text-sm text-brand-orange-500 font-bold hover:underline"
+                            className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline"
                         >
                             + 사진 URL 추가
                         </button>
                     </section>
 
                     {/* ── 연락처 ───────────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100">
+                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         <SectionHeader title="연락처 및 위치" />
                         <AppliesTo pages={["모든 페이지 헤더 전화버튼", "학원소개 페이지 CTA", "홈 푸터"]} />
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">대표 전화번호</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">대표 전화번호</label>
                                 <input
                                     name="contactPhone"
                                     type="text"
                                     defaultValue={initialSettings?.contactPhone || ""}
                                     placeholder="010-0000-0000"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">오시는 길 (주소)</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">오시는 길 (주소)</label>
                                 <input
                                     name="address"
                                     type="text"
                                     defaultValue={initialSettings?.address || ""}
                                     placeholder="경기도 남양주시 다산동 ..."
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
                         </div>
                     </section>
 
                     {/* ── 유튜브 영상 ───────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100">
+                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         <SectionHeader title="메인페이지 유튜브 영상" />
                         <AppliesTo pages={["메인 페이지 (홍보 영상)"]} />
                         <input
@@ -372,16 +372,16 @@ export default function AdminSettingsClient({
                             type="text"
                             defaultValue={initialSettings?.youtubeUrl || ""}
                             placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX  또는 <iframe ...> 코드"
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-orange-500 transition font-mono"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                         />
                         <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
                     </section>
 
                     {/* 저장 */}
-                    <div className="pt-4 border-t border-gray-100 flex justify-end">
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-end">
                         <ConfirmSubmitButton
                             confirmMessage="변경 사항을 저장하시겠습니까?"
-                            className="bg-brand-orange-500 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-orange-600 transition shadow"
+                            className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-orange-600 transition shadow"
                         >
                             저장하기
                         </ConfirmSubmitButton>

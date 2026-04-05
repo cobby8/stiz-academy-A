@@ -74,15 +74,15 @@ export default async function AboutPage() {
     return (
         <PublicPageLayout>
             {/* 페이지 히어로 — 그라데이션 배경 + 장식 요소 (Phase 0 패턴 적용) */}
-            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white py-12 md:py-14">
+            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 dark:from-black dark:via-gray-900 dark:to-black text-white py-12 md:py-14 transition-colors duration-300">
                 {/* 배경 장식 도형들 */}
                 <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 rounded-full translate-x-1/3 -translate-y-1/3" />
-                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 rounded-full -translate-x-1/4 translate-y-1/4" />
+                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3 transition-colors duration-300" />
+                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 dark:border-brand-neon-lime/10 rounded-full -translate-x-1/4 translate-y-1/4 transition-colors duration-300" />
                 </div>
                 <div className="max-w-6xl mx-auto px-6 md:px-4 relative">
                     <AnimateOnScroll>
-                        <p className="text-brand-orange-500 text-sm font-bold uppercase tracking-widest mb-3">ABOUT US</p>
+                        <p className="text-brand-orange-500 dark:text-brand-neon-lime text-sm font-bold uppercase tracking-widest mb-3">ABOUT US</p>
                         <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">학원/멤버소개</h1>
                         <p className="text-blue-200 text-lg max-w-xl">스티즈 농구교실 다산점의 교육 철학과 전문 코치진을 소개합니다.</p>
                     </AnimateOnScroll>
@@ -99,7 +99,7 @@ export default async function AboutPage() {
                                 {/* 좌: 인사말 텍스트 */}
                                 <AnimateOnScroll>
                                     <div
-                                        className="rich-content prose prose-gray prose-p:text-base prose-p:leading-relaxed max-w-none"
+                                        className="rich-content prose prose-gray dark:prose-invert dark:[&_*]:!text-gray-100 prose-p:text-base prose-p:leading-relaxed max-w-none transition-colors"
                                         dangerouslySetInnerHTML={{
                                             __html: renderHtml(
                                                 settings.introductionText,
@@ -113,7 +113,7 @@ export default async function AboutPage() {
                                 {headCoach?.imageUrl && (
                                     <AnimateOnScroll delay={200}>
                                         <div className="flex flex-col items-center mx-auto md:mx-0">
-                                            <div className="w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden bg-gray-100 shadow-md">
+                                            <div className="w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-md">
                                                 <Image
                                                     src={headCoach.imageUrl}
                                                     alt={headCoach.name}
@@ -122,7 +122,7 @@ export default async function AboutPage() {
                                                     className="w-full h-full object-cover"
                                                 />
                                             </div>
-                                            <p className="mt-3 font-bold text-gray-900">{headCoach.name}</p>
+                                            <p className="mt-3 font-bold text-gray-900 dark:text-gray-100 transition-colors">{headCoach.name}</p>
                                             <Badge variant="default" size="sm">대표원장</Badge>
                                         </div>
                                     </AnimateOnScroll>
@@ -151,7 +151,7 @@ export default async function AboutPage() {
                                 {PHILOSOPHY_CARDS.map((card, i) => (
                                     <div key={i} className="flex flex-col items-center text-center gap-1.5 py-5 px-3 md:py-6 md:px-4">
                                         <h4 className="text-lg md:text-xl font-black text-brand-navy-900 tracking-tight">{card.title}</h4>
-                                        <p className="text-sm md:text-base text-gray-500 leading-relaxed">{card.description}</p>
+                                        <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 leading-relaxed">{card.description}</p>
                                     </div>
                                 ))}
                             </div>
@@ -166,7 +166,7 @@ export default async function AboutPage() {
                                 {PHILOSOPHY_CARDS.map((card, i) => (
                                     <div key={i} className="flex flex-col items-center text-center gap-1.5 py-5 px-3 md:py-6 md:px-4">
                                         <h4 className="text-lg md:text-xl font-black text-brand-navy-900 tracking-tight">{card.title}</h4>
-                                        <p className="text-sm md:text-base text-gray-500 leading-relaxed">{card.description}</p>
+                                        <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 leading-relaxed">{card.description}</p>
                                     </div>
                                 ))}
                             </div>
@@ -183,7 +183,7 @@ export default async function AboutPage() {
                             <AnimateOnScroll key={coach.id} delay={i * 100}>
                                 <Card variant="default" className="overflow-hidden !p-0">
                                     {/* 코치 사진 영역 — 정방형 (1:1) */}
-                                    <div className="relative aspect-square bg-gray-100 overflow-hidden">
+                                    <div className="relative aspect-square bg-gray-100 dark:bg-gray-800 overflow-hidden">
                                         {coach.imageUrl ? (
                                             <Image
                                                 src={coach.imageUrl}
@@ -202,7 +202,7 @@ export default async function AboutPage() {
                                     {/* 코치 정보 영역 */}
                                     <div className="p-5">
                                         <div className="flex items-center gap-3 mb-2">
-                                            <h3 className="text-lg font-bold text-gray-900">{coach.name}</h3>
+                                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{coach.name}</h3>
                                             <Badge variant="default" size="sm">{coach.role}</Badge>
                                         </div>
 
@@ -223,7 +223,7 @@ export default async function AboutPage() {
                     {settings.facilitiesText && (
                         <AnimateOnScroll>
                             <div
-                                className="rich-content prose prose-gray max-w-none mb-10"
+                                className="rich-content prose prose-gray dark:prose-invert max-w-none mb-10 transition-colors"
                                 dangerouslySetInnerHTML={{
                                     __html: renderHtml(settings.facilitiesText, ""),
                                 }}
@@ -270,12 +270,12 @@ export default async function AboutPage() {
                                 />
                             </div>
                             {/* 주소 텍스트 — 아이콘 + 클립보드 복사 없이 심플하게 */}
-                            <div className="flex items-start gap-3 text-gray-700">
-                                <span className="material-symbols-outlined text-brand-orange-500 text-2xl mt-0.5 shrink-0">location_on</span>
+                            <div className="flex items-start gap-3 text-gray-700 dark:text-gray-200">
+                                <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime text-2xl mt-0.5 shrink-0">location_on</span>
                                 <div>
-                                    <p className="font-bold text-lg text-gray-900">{settings.address}</p>
+                                    <p className="font-bold text-lg text-gray-900 dark:text-white">{settings.address}</p>
                                     {phone && (
-                                        <p className="mt-1 text-gray-500">
+                                        <p className="mt-1 text-gray-500 dark:text-gray-400">
                                             상담문의: <a href={`tel:${phone.replace(/-/g, "")}`} className="text-brand-navy-900 font-semibold hover:underline">{phone}</a>
                                         </p>
                                     )}

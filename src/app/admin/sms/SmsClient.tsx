@@ -112,7 +112,7 @@ export default function SmsClient() {
     const byteLength = new TextEncoder().encode(fullMsg).length;
     const isLms = byteLength > 90;
 
-    const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm dark:text-white bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime transition";
+    const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm dark:text-white bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime transition";
 
     return (
         <div className="space-y-6 max-w-3xl">

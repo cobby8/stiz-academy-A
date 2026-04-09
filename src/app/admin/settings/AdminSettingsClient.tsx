@@ -206,7 +206,7 @@ export default function AdminSettingsClient({
                                     type="text"
                                     defaultValue={initialSettings?.introductionTitle || ""}
                                     placeholder="예: 다산신도시 No.1 스티즈농구교실"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
 
@@ -274,7 +274,7 @@ export default function AdminSettingsClient({
                                                 setFacilityImages(next);
                                             }}
                                             placeholder="https://..."
-                                            className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                                            className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                         />
                                         <button
                                             type="button"
@@ -314,7 +314,7 @@ export default function AdminSettingsClient({
                                         setGalleryImages(next);
                                     }}
                                     placeholder="https://..."
-                                    className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                                    className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                 />
                                 <button
                                     type="button"
@@ -347,7 +347,7 @@ export default function AdminSettingsClient({
                                     type="text"
                                     defaultValue={initialSettings?.contactPhone || ""}
                                     placeholder="010-0000-0000"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
                             <div>
@@ -357,7 +357,7 @@ export default function AdminSettingsClient({
                                     type="text"
                                     defaultValue={initialSettings?.address || ""}
                                     placeholder="경기도 남양주시 다산동 ..."
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
                         </div>
@@ -372,7 +372,7 @@ export default function AdminSettingsClient({
                             type="text"
                             defaultValue={initialSettings?.youtubeUrl || ""}
                             placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX  또는 <iframe ...> 코드"
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                         />
                         <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
                     </section>

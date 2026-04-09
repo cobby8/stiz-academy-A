@@ -165,7 +165,7 @@ export default function AnnualAdminClient({
                         value={icsUrl}
                         onChange={(e) => setIcsUrl(e.target.value)}
                         placeholder="https://calendar.google.com/calendar/ical/...@group.calendar.google.com/public/basic.ics"
-                        className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                        className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                     />
                     <button
                         type="button"

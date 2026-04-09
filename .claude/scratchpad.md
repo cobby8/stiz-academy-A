@@ -157,6 +157,26 @@ tester 참고:
 - 취소 버튼 hover 시 글씨가 검정으로 바뀌지 않고 흰색 유지
 - tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
 
+### 다크모드 focus:bg-white 포커스 배경 수정 (2026-04-06)
+
+구현한 기능: 다크모드에서 input/textarea 포커스 시 배경이 흰색으로 바뀌어 글씨가 안 보이는 문제 수정 (dark:focus:bg-gray-700 추가)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/annual/AnnualAdminClient.tsx | 인라인 input에 dark:focus:bg-gray-700 추가 | 수정 |
+| src/app/admin/coaches/CoachesAdminClient.tsx | INPUT 상수에 dark:focus:bg-gray-700 추가 | 수정 |
+| src/app/admin/apply/ApplyAdminClient.tsx | INPUT 상수에 dark:focus:bg-gray-700 추가 | 수정 |
+| src/app/admin/programs/ProgramsAdminClient.tsx | INPUT 상수 + 인라인 input 총 2곳에 dark:focus:bg-gray-700 추가 | 수정 |
+| src/app/admin/schedule/ScheduleAdminClient.tsx | INPUT + TIME_INPUT 상수 + 인라인 input 총 3곳에 dark:focus:bg-gray-700 추가 | 수정 |
+| src/app/admin/settings/AdminSettingsClient.tsx | 인라인 input 6곳에 dark:focus:bg-gray-700 추가 | 수정 |
+| src/app/admin/sms/SmsClient.tsx | INPUT 상수에 dark:focus:bg-gray-700 추가 | 수정 |
+| src/app/admin/terms/TermsAdminClient.tsx | 인라인 textarea에 dark:focus:bg-gray-700 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: 다크모드에서 관리자 페이지의 input/textarea를 클릭(포커스)하여 배경색 확인
+- 정상 동작: 포커스 시 라이트모드는 흰색 배경, 다크모드는 gray-700 배경으로 글씨가 잘 보임
+- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
+
 ## 테스트 결과 (tester)
 
 ### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)
@@ -194,6 +214,7 @@ tester 참고:
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-04-06 | 다크모드 focus:bg-white 포커스 배경 수정 — 8파일 16곳 dark:focus:bg-gray-700 추가 | 완료 |
 | 2026-04-06 | 구글폼 전환 ON/OFF 기능 검증 — 14항목 전체 통과 | 테스트 완료 |
 | 2026-04-06 | 체험/수강신청 구글폼 전환 ON/OFF 설계 — AcademySettings 플래그 방식 | 설계 완료 |
 | 2026-03-29 | 수강신청 3필드 추가 (basketballExp, shuttleTime, shuttleDropoff) | 완료 |

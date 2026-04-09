@@ -159,7 +159,7 @@ function displayShuttleFee(
 
 // ── CSS shortcuts ─────────────────────────────────────────────────────────────
 
-const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-gray-50 focus:bg-white dark:bg-gray-800";
+const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800";
 
 // ── Day Badge Selector ────────────────────────────────────────────────────────
 
@@ -286,7 +286,7 @@ function ProgramFormFields({
                                                     value={val}
                                                     onChange={(e) => p({ [tier.key]: e.target.value } as any)}
                                                     placeholder="미제공"
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm pr-7 bg-gray-50 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime placeholder:text-gray-300"
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm pr-7 bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime placeholder:text-gray-300"
                                                 />
                                                 <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">원</span>
                                             </div>

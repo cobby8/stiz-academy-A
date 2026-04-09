@@ -180,7 +180,7 @@ export default function ApplyAdminClient({
                     href="/apply"
                     target="_blank"
                     rel="noreferrer"
-                    className="shrink-0 text-sm text-brand-navy-900 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition flex items-center gap-1.5"
+                    className="shrink-0 text-sm text-brand-navy-900 dark:text-white border border-gray-300 dark:border-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900 transition flex items-center gap-1.5"
                 >
                     <span className="material-symbols-outlined text-base">open_in_new</span>
                     신청 페이지 미리보기

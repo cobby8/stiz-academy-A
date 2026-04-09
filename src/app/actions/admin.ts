@@ -349,6 +349,8 @@ export async function updateAcademySettings(data: {
     revalidatePath("/");
     revalidatePath("/about");
     revalidatePath("/admin/settings");
+    revalidatePath("/admin/apply");
+    revalidatePath("/apply");
 }
 
 // 네이버 플레이스 URL만 단독 업데이트하는 전용 Server Action

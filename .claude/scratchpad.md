@@ -177,6 +177,29 @@ tester 참고:
 - 정상 동작: 포커스 시 라이트모드는 흰색 배경, 다크모드는 gray-700 배경으로 글씨가 잘 보임
 - tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
 
+### [debugger] useBuiltIn* 토글 OFF 저장 후 복원 버그 분석 (2026-04-06)
+
+원인: updateAcademySettings에서 revalidatePath("/admin/apply")가 누락. 저장은 DB에 성공하지만, /admin/apply 페이지의 ISR 캐시(30초)가 무효화되지 않아 이전 값이 반환됨.
+
+#### 수정 제안
+| 파일 | 위치 | 수정 내용 |
+|------|------|----------|
+| src/app/actions/admin.ts | 349-351줄 revalidatePath 블록 | revalidatePath("/admin/apply") + revalidatePath("/apply") 추가 |
+
+### 버튼 다크모드 + 토글 캐시 무효화 버그 수정 (2026-04-06)
+
+구현한 기능: 2건 버그 수정 (다크모드 버튼 텍스트 + 설정 저장 후 캐시 무효화 누락)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/apply/ApplyAdminClient.tsx | "신청 페이지 미리보기" 버튼에 dark:text-white, dark:border-gray-600, dark:hover:bg-gray-800 추가 | 수정 |
+| src/app/actions/admin.ts | updateAcademySettings에 revalidatePath("/admin/apply") + revalidatePath("/apply") 추가 | 수정 |
+
+tester 참고:
+- 수정1: 다크모드에서 "신청 페이지 미리보기" 버튼 텍스트/테두리가 보이는지 확인
+- 수정2: /admin/apply 설정 탭에서 토글 변경 후 저장 -> 새로고침 없이 값이 유지되는지 확인
+- tsc --noEmit: 기존 ThemeProvider 에러만 존재
+
 ## 테스트 결과 (tester)
 
 ### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)

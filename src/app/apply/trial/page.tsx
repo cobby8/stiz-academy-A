@@ -2,6 +2,7 @@
  * 체험수업 신청 페이지 — 서버 컴포넌트
  * 시간표에서 빈자리 슬롯을 조회한 뒤 클라이언트 폼에 전달
  */
+import { redirect } from "next/navigation";
 import { getAcademySettings } from "@/lib/queries";
 import { getAvailableTrialSlots } from "@/app/actions/public";
 import PublicPageLayout from "@/components/PublicPageLayout";
@@ -20,6 +21,11 @@ export default async function TrialApplyPage() {
         getAvailableTrialSlots(),
         getAcademySettings() as Promise<any>,
     ]);
+
+    // 구글폼 모드일 때: 자체 폼 대신 구글폼 URL 또는 /apply로 리다이렉트
+    if (!settings?.useBuiltInTrialForm) {
+        redirect(settings?.trialFormUrl || "/apply");
+    }
 
     const phone = settings?.contactPhone || "010-0000-0000";
 

@@ -4,6 +4,7 @@
  * searchParams.trialId가 있으면 체험 데이터를 자동 채움하고,
  * 빈자리 슬롯 목록을 조회하여 클라이언트 폼에 전달한다.
  */
+import { redirect } from "next/navigation";
 import { getAcademySettings } from "@/lib/queries";
 import { getAvailableTrialSlots, getTrialLeadForEnroll } from "@/app/actions/public";
 import PublicPageLayout from "@/components/PublicPageLayout";
@@ -30,6 +31,11 @@ export default async function EnrollApplyPage({
         getAvailableTrialSlots(),
         getAcademySettings() as Promise<any>,
     ]);
+
+    // 구글폼 모드일 때: 자체 폼 대신 구글폼 URL 또는 /apply로 리다이렉트
+    if (!settings?.useBuiltInEnrollForm) {
+        redirect(settings?.enrollFormUrl || "/apply");
+    }
 
     const phone = settings?.contactPhone || "010-0000-0000";
 

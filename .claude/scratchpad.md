@@ -115,6 +115,21 @@ reviewer 참고:
 - DDL은 ALTER TABLE ADD COLUMN IF NOT EXISTS 패턴 준수
 - 기본값 false = 구글폼 모드로 시작 (PM 지시 반영)
 
+### /apply/trial, /apply/enroll 구글폼 모드 리다이렉트 추가 (2026-04-06)
+
+구현한 기능: 구글폼 모드(useBuiltIn*Form = false)일 때 /apply/trial, /apply/enroll 직접 접근 시 구글폼 URL 또는 /apply로 서버 리다이렉트
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/apply/trial/page.tsx | useBuiltInTrialForm false일 때 redirect 추가 + next/navigation import | 수정 |
+| src/app/apply/enroll/page.tsx | useBuiltInEnrollForm false일 때 redirect 추가 + next/navigation import | 수정 |
+
+tester 참고:
+- 테스트 방법: DB에서 useBuiltInTrialForm/useBuiltInEnrollForm이 false 상태에서 /apply/trial, /apply/enroll에 직접 접속
+- 정상 동작: 구글폼 URL이 설정되어 있으면 해당 URL로 리다이렉트, 없으면 /apply로 리다이렉트
+- 토글 ON(자체 폼 모드)일 때는 기존과 동일하게 자체 폼 표시
+- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
+
 ### 다크모드 검정 글씨 + 로고 배경 수정 (2026-04-06)
 
 구현한 기능: 다크모드에서 input 필드 테두리/글씨색이 안 보이는 문제 + 로고 배경색 + hover 시 검정 글씨 문제 수정

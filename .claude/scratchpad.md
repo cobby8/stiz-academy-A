@@ -115,6 +115,33 @@ reviewer 참고:
 - DDL은 ALTER TABLE ADD COLUMN IF NOT EXISTS 패턴 준수
 - 기본값 false = 구글폼 모드로 시작 (PM 지시 반영)
 
+### 다크모드 검정 글씨 + 로고 배경 수정 (2026-04-06)
+
+구현한 기능: 다크모드에서 input 필드 테두리/글씨색이 안 보이는 문제 + 로고 배경색 + hover 시 검정 글씨 문제 수정
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/layout.tsx | 로고 배경 dark:bg-gray-800 -> dark:bg-white | 수정 |
+| src/app/admin/annual/AnnualAdminClient.tsx | 취소 버튼에 dark:hover:text-white 추가 | 수정 |
+| src/app/admin/classes/ClassManagementClient.tsx | 취소 버튼에 dark:hover:text-white 추가 | 수정 |
+| src/app/admin/students/StudentManagementClient.tsx | 취소 버튼 2곳에 dark:hover:text-white 추가 | 수정 |
+| src/app/admin/apply/ApplyAdminClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
+| src/app/admin/coaches/CoachesAdminClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
+| src/app/admin/programs/ProgramsAdminClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
+| src/app/admin/schedule/ScheduleAdminClient.tsx | INPUT + TIME_INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
+| src/app/admin/sms/SmsClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
+| src/app/admin/makeup/MakeupClient.tsx | 개별 input/select 6곳에 dark:border-gray-600 + dark:text-white + dark:bg-gray-800 추가 | 수정 |
+| src/app/admin/skills/SkillsClient.tsx | 개별 input/select/textarea 8곳에 dark:border-gray-600 + dark:text-white + dark:bg-gray-800 추가 | 수정 |
+| src/app/admin/finance/FinanceClient.tsx | 개별 input/select 7곳에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
+| src/app/admin/staff/StaffClient.tsx | 개별 input/select 8곳에 dark:border-gray-600 + dark:text-white + dark:bg-gray-800 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: 브라우저 다크모드 또는 시스템 다크모드에서 관리자 페이지 전체 순회
+- 정상 동작: 모든 input/select/textarea의 테두리가 보이고 글씨가 흰색으로 표시됨
+- 로고 배경이 항상 흰색으로 유지됨
+- 취소 버튼 hover 시 글씨가 검정으로 바뀌지 않고 흰색 유지
+- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
+
 ## 테스트 결과 (tester)
 
 ### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)

@@ -423,12 +423,12 @@ function BookMakeupModal({
                                     placeholder="이름 검색..."
                                     value={studentSearch}
                                     onChange={(e) => setStudentSearch(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm mb-2"
                                 />
                                 <select
                                     value={studentId}
                                     onChange={(e) => setStudentId(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
                                     size={5}
                                 >
                                     <option value="">-- 원생 선택 --</option>
@@ -446,7 +446,7 @@ function BookMakeupModal({
                                 <select
                                     value={originalClassId}
                                     onChange={(e) => setOriginalClassId(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
                                 >
                                     <option value="">-- 반 선택 --</option>
                                     {classes.map((c) => (
@@ -466,7 +466,7 @@ function BookMakeupModal({
                                     min="2020-01-01" max="2030-12-31"
                                     value={originalDate}
                                     onChange={(e) => setOriginalDate(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
                                 />
                             </div>
 
@@ -550,7 +550,7 @@ function BookMakeupModal({
                                     min="2020-01-01" max="2030-12-31"
                                     value={makeupDate}
                                     onChange={(e) => setMakeupDate(e.target.value)}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
                                 />
                             </div>
 

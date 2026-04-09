@@ -290,7 +290,7 @@ function CategoryTab({
                                         setForm((f) => ({ ...f, name: e.target.value }))
                                     }
                                     placeholder="예: 드리블"
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                 />
                             </div>
                             {/* 아이콘 (Material Symbols 이름) */}
@@ -306,7 +306,7 @@ function CategoryTab({
                                             setForm((f) => ({ ...f, icon: e.target.value }))
                                         }
                                         placeholder="예: sports_basketball"
-                                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                        className="flex-1 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                     />
                                     {form.icon && (
                                         <span className="material-symbols-outlined text-[24px] text-gray-600 dark:text-gray-300">
@@ -330,7 +330,7 @@ function CategoryTab({
                                                 order: parseInt(e.target.value) || 0,
                                             }))
                                         }
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                        className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                     />
                                 </div>
                                 <div>
@@ -348,7 +348,7 @@ function CategoryTab({
                                                 maxLevel: parseInt(e.target.value) || 5,
                                             }))
                                         }
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                        className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                     />
                                 </div>
                             </div>
@@ -364,7 +364,7 @@ function CategoryTab({
                                     }
                                     placeholder="이 카테고리에 대한 간단한 설명"
                                     rows={2}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                 />
                             </div>
                         </div>
@@ -549,12 +549,12 @@ function AssessmentTab({
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="원생 이름으로 검색..."
-                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                            className="flex-1 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                         />
                         <select
                             value={selectedStudentId}
                             onChange={(e) => handleSelectStudent(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 min-w-[200px]"
+                            className="border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 min-w-[200px]"
                         >
                             <option value="">-- 원생 선택 --</option>
                             {filteredStudents.map((s) => (
@@ -580,7 +580,7 @@ function AssessmentTab({
                                     type="text"
                                     value={assessedBy}
                                     onChange={(e) => setAssessedBy(e.target.value)}
-                                    className="border border-gray-300 rounded px-2 py-1 text-sm w-24"
+                                    className="border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded px-2 py-1 text-sm w-24"
                                 />
                             </div>
                         </div>

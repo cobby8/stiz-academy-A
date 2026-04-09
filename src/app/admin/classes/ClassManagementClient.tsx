@@ -203,7 +203,7 @@ export default function ClassManagementClient({
                         </div>
                         <div className="flex items-end justify-end">
                             <div className="flex gap-2">
-                                <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white">
+                                <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                                     취소
                                 </button>
                                 <button

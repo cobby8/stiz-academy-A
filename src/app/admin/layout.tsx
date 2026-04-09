@@ -81,7 +81,7 @@ export default function AdminLayout({
             {/* Sidebar */}
             <aside className="w-64 bg-brand-navy-900 text-white flex-shrink-0 fixed h-full z-10 transition-transform flex flex-col">
                 <div className="p-6 border-b border-white/10 flex items-center gap-3 flex-shrink-0">
-                    <div className="bg-white dark:bg-gray-800 px-3 py-2 rounded-md flex items-center justify-center">
+                    <div className="bg-white dark:bg-white px-3 py-2 rounded-md flex items-center justify-center">
                         <Image
                             src="/stiz-logo.png"
                             alt="STIZ Admin"

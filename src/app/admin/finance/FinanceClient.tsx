@@ -364,7 +364,7 @@ export default function FinanceClient({
                                 value={studentId}
                                 onChange={(e) => setStudentId(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="">선택하세요</option>
                                 {students.map((s) => (
@@ -380,7 +380,7 @@ export default function FinanceClient({
                                 onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
                                 required
                                 placeholder="100000"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
@@ -391,7 +391,7 @@ export default function FinanceClient({
                                 value={dueDate}
                                 onChange={(e) => setDueDate(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
@@ -399,7 +399,7 @@ export default function FinanceClient({
                             <select
                                 value={paymentType}
                                 onChange={(e) => setPaymentType(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="MONTHLY">월 수강료</option>
                                 <option value="SHUTTLE">셔틀</option>
@@ -412,7 +412,7 @@ export default function FinanceClient({
                             <select
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="PENDING">미납</option>
                                 <option value="PAID">납부완료</option>
@@ -426,7 +426,7 @@ export default function FinanceClient({
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="예: 4월 수강료"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                     </div>

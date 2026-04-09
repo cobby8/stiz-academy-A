@@ -182,7 +182,7 @@ export default function StaffClient({
                     {/* 직접 추가 버튼 (보조) */}
                     <button
                         onClick={() => setShowModal("add")}
-                        className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors font-medium text-sm"
+                        className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors font-medium text-sm"
                     >
                         <span className="material-symbols-outlined text-[20px]">person_add</span>
                         직접 추가
@@ -312,7 +312,7 @@ export default function StaffClient({
                                                     value={user.coachId || ""}
                                                     onChange={(e) => handleCoachLink(user.id, e.target.value)}
                                                     disabled={isPending}
-                                                    className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
+                                                    className="text-sm border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                                                 >
                                                     <option value="">-- 미연결 --</option>
                                                     {coaches.map((c) => {
@@ -508,7 +508,7 @@ function InviteStaffModal({
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
                             required
                             placeholder="홍길동"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
+                            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                         />
                     </div>
 
@@ -521,7 +521,7 @@ function InviteStaffModal({
                             onChange={(e) => handlePhoneChange(e.target.value)}
                             placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                             required
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
+                            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                         />
                         <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
@@ -532,7 +532,7 @@ function InviteStaffModal({
                         <select
                             value={form.role}
                             onChange={(e) => setForm({ ...form, role: e.target.value as any })}
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
+                            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                         >
                             <option value="INSTRUCTOR">코치/강사</option>
                             <option value="VICE_ADMIN">부원장</option>
@@ -681,7 +681,7 @@ function AddStaffModal({
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">이름 *</label>
-                        <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="홍길동" className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500" />
+                        <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="홍길동" className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">전화번호 *</label>
@@ -704,7 +704,7 @@ function AddStaffModal({
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">인증번호</label>
                             <div className="flex gap-2">
-                                <input type="text" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6자리 숫자" maxLength={6} className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-center tracking-[0.3em] font-mono focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500" />
+                                <input type="text" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6자리 숫자" maxLength={6} className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm text-center tracking-[0.3em] font-mono focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500" />
                                 <button type="button" onClick={handleVerifyCode} disabled={verifyCode.length < 6 || verifyLoading} className="px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 whitespace-nowrap">
                                     {verifyLoading ? "확인 중..." : "확인"}
                                 </button>
@@ -718,7 +718,7 @@ function AddStaffModal({
                     )}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">역할 *</label>
-                        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500">
+                        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })} className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500">
                             <option value="INSTRUCTOR">코치/강사</option>
                             <option value="VICE_ADMIN">부원장</option>
                             <option value="ADMIN">원장</option>

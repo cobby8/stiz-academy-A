@@ -245,7 +245,7 @@ export default function AnnualAdminClient({
                     </div>
 
                     <div className="flex gap-2 justify-end">
-                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white">
+                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                             취소
                         </button>
                         <button

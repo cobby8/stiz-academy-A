@@ -7,6 +7,13 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
+// 값을 불리언으로 안전 변환 (TEXT 컬럼에서 'false' 문자열이 올 수 있음)
+const toBool = (v: any, fallback: boolean): boolean => {
+    if (v === true || v === 'true') return true;
+    if (v === false || v === 'false') return false;
+    return fallback;
+};
+
 export const getAcademySettings = cache(async () => {
     // PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe 사용 (prepared statement 우회)
     try {
@@ -44,8 +51,9 @@ export const getAcademySettings = cache(async () => {
                 naverPlaceUrl: r.naverPlaceUrl ?? r.naverplaceurl ?? null,
                 uniformFormUrl: r.uniformFormUrl ?? r.uniformformurl ?? null,
                 // 자체 폼 ON/OFF 플래그 (false=구글폼 모드, true=자체 폼 모드)
-                useBuiltInTrialForm: r.useBuiltInTrialForm ?? r.usebuiltintrialform ?? false,
-                useBuiltInEnrollForm: r.useBuiltInEnrollForm ?? r.usebuiltinenrollform ?? false,
+                // TEXT 컬럼에서 'false' 문자열이 올 수 있어 toBool로 안전 변환
+                useBuiltInTrialForm: toBool(r.useBuiltInTrialForm ?? r.usebuiltintrialform, false),
+                useBuiltInEnrollForm: toBool(r.useBuiltInEnrollForm ?? r.usebuiltinenrollform, false),
             } as any;
         }
     } catch {

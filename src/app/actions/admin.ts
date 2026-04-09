@@ -101,8 +101,10 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
             if (missingCol) {
                 // 해당 컬럼만 추가 후 재시도
                 try {
+                    // useBuiltIn* 컬럼은 boolean이므로 TEXT가 아닌 BOOLEAN으로 생성
+                    const colType = missingCol.startsWith('useBuiltIn') ? 'BOOLEAN DEFAULT false' : 'TEXT';
                     await prisma.$executeRawUnsafe(
-                        `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${missingCol}" TEXT`
+                        `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${missingCol}" ${colType}`
                     );
                 } catch {}
             } else {

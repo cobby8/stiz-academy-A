@@ -200,6 +200,21 @@ tester 참고:
 - 수정2: /admin/apply 설정 탭에서 토글 변경 후 저장 -> 새로고침 없이 값이 유지되는지 확인
 - tsc --noEmit: 기존 ThemeProvider 에러만 존재
 
+### useBuiltIn* TEXT 컬럼 boolean 판단 실패 버그 수정 (2026-04-06)
+
+구현한 기능: useBuiltInTrialForm/useBuiltInEnrollForm이 TEXT 컬럼에 저장될 때 문자열 'false'가 truthy로 판단되는 버그 수정
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/queries.ts | toBool 헬퍼 함수 추가 + useBuiltIn* 필드에 적용 (문자열 'false'/'true' 안전 변환) | 수정 |
+| src/app/actions/admin.ts | DDL ensure에서 useBuiltIn* 컬럼은 BOOLEAN DEFAULT false로 생성 (TEXT 대신) | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/apply 설정 탭에서 토글 OFF 저장 후 새로고침, 토글이 OFF 상태로 유지되는지 확인
+- 정상 동작: 토글 OFF(=구글폼 모드) 저장 후 새로고침해도 OFF 유지됨
+- 핵심 수정: queries.ts에서 ?? 연산자 대신 toBool 함수로 'false' 문자열을 false boolean으로 변환
+- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
+
 ## 테스트 결과 (tester)
 
 ### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)

@@ -106,7 +106,7 @@ export default function PublicFooter({ phone, address }: PublicFooterProps) {
             >
               이용약관
             </Link>
-            <span className="text-gray-300 dark:text-gray-700 dark:text-gray-200">|</span>
+            <span className="text-gray-300 dark:text-gray-600">|</span>
             <Link
               href="/privacy"
               className="text-gray-500 hover:text-gray-900 dark:text-white dark:hover:text-white transition-colors underline underline-offset-2"

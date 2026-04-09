@@ -147,10 +147,10 @@ export default async function AboutPage() {
                     </AnimateOnScroll>
                     <AnimateOnScroll delay={200}>
                         <Card variant="default" className="!p-0">
-                            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 dark:divide-gray-700">
                                 {PHILOSOPHY_CARDS.map((card, i) => (
                                     <div key={i} className="flex flex-col items-center text-center gap-1.5 py-5 px-3 md:py-6 md:px-4">
-                                        <h4 className="text-lg md:text-xl font-black text-brand-navy-900 tracking-tight">{card.title}</h4>
+                                        <h4 className="text-lg md:text-xl font-black text-brand-navy-900 dark:text-white tracking-tight">{card.title}</h4>
                                         <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 leading-relaxed">{card.description}</p>
                                     </div>
                                 ))}
@@ -162,10 +162,10 @@ export default async function AboutPage() {
                 <SectionLayout label="PHILOSOPHY" title="교육 이념" description="STIZ 농구교실이 추구하는 가치" bgColor="section">
                     <AnimateOnScroll>
                         <Card variant="default" className="!p-0">
-                            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                            <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-100 dark:divide-gray-700">
                                 {PHILOSOPHY_CARDS.map((card, i) => (
                                     <div key={i} className="flex flex-col items-center text-center gap-1.5 py-5 px-3 md:py-6 md:px-4">
-                                        <h4 className="text-lg md:text-xl font-black text-brand-navy-900 tracking-tight">{card.title}</h4>
+                                        <h4 className="text-lg md:text-xl font-black text-brand-navy-900 dark:text-white tracking-tight">{card.title}</h4>
                                         <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 leading-relaxed">{card.description}</p>
                                     </div>
                                 ))}
@@ -276,7 +276,7 @@ export default async function AboutPage() {
                                     <p className="font-bold text-lg text-gray-900 dark:text-white">{settings.address}</p>
                                     {phone && (
                                         <p className="mt-1 text-gray-500 dark:text-gray-400">
-                                            상담문의: <a href={`tel:${phone.replace(/-/g, "")}`} className="text-brand-navy-900 font-semibold hover:underline">{phone}</a>
+                                            상담문의: <a href={`tel:${phone.replace(/-/g, "")}`} className="text-brand-navy-900 dark:text-brand-neon-lime font-semibold hover:underline">{phone}</a>
                                         </p>
                                     )}
                                 </div>

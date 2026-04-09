@@ -232,6 +232,40 @@ tester 참고:
 - 정상 동작: 입력 필드 배경이 어두운 회색(gray-800), 글씨가 흰색, 테두리가 gray-600으로 표시
 - tsc --noEmit: 통과 (에러 없음)
 
+### 라이트/다크모드 가시성 전수조사 + 수정 (2026-04-06)
+
+구현한 기능: 공개 페이지 + 공용 컴포넌트 전체에서 라이트/다크모드 배지/텍스트/버튼 가시성 문제 전수조사 및 수정
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/apply/ApplyPageClient.tsx | Enrollment 배지 bg-white->bg-white/20 (라이트모드 가시성), Uniform 배지 동일, 수강신청 h3에 dark:text-brand-navy-900 | 수정 |
+| src/components/ui/Badge.tsx | success/warning/error/info variant에 다크모드 배경+텍스트 추가 | 수정 |
+| src/components/ui/Button.tsx | white variant에 dark:text-white + hover 수정(dark:bg-gray-900->dark:hover:bg-gray-700) | 수정 |
+| src/components/landing/ProcessSteps.tsx | 화살표 중복 dark 클래스 수정 (dark:text-gray-700 dark:text-gray-200 -> dark:text-gray-500) | 수정 |
+| src/components/landing/CTABanner.tsx | 중복 dark 클래스 제거 + 보조CTA hover 수정 | 수정 |
+| src/components/landing/TestimonialCarousel.tsx | 중복 dark 클래스 제거 + 빈 별 dark:text-gray-600 추가 | 수정 |
+| src/components/PublicHeader.tsx | 드롭다운 아이템 기본 dark:bg 제거 (hover만 유지) | 수정 |
+| src/components/PublicFooter.tsx | 구분자 중복 dark 클래스 수정 | 수정 |
+| src/app/page.tsx | 메인 페이지 dark:bg-gray-800 -> dark:bg-black (다른 페이지와 일관성) | 수정 |
+| src/app/about/page.tsx | 교육 이념 제목 dark:text-white, divide 다크모드, 전화번호 링크 dark:text 추가 | 수정 |
+| src/app/programs/page.tsx | 연령 배지 다크모드 4종, 가격표 hover/텍스트/셔틀비 다크모드, tbody divide 다크모드 | 수정 |
+| src/app/simulator/SimulatorClient.tsx | 중복 dark 클래스 전체 정리, 수강신청 버튼 다크모드, time/green badge 다크모드 | 수정 |
+| src/app/privacy/page.tsx | 조항 제목 dark:text-white 추가 | 수정 |
+| src/app/faq/page.tsx | 히어로 섹션 다크모드 그라데이션 + transition 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: 브라우저 라이트/다크 모드에서 /apply, /, /about, /programs, /simulator, /faq, /privacy 전체 순회
+- /apply: Enrollment/Uniform 배지가 라이트모드에서 반투명 배경으로 보임 (기존: 흰 배경에 흰 글씨로 안 보였음)
+- Badge 컴포넌트: success(초록), warning(노랑), error(빨강), info(하늘) 배지가 다크모드에서도 배경+텍스트 보임
+- /programs: 가격표가 다크모드에서 글씨/배경/hover 정상 표시
+- /simulator: 수강신청 버튼이 다크모드에서 네온라임 테두리+텍스트로 보임
+- tsc --noEmit: 통과 (EXIT_CODE=0)
+
+reviewer 참고:
+- 자체 폼 파일(/apply/trial/*, /apply/enroll/*) 수정 없음
+- 중복 dark 클래스 다수 정리 (같은 속성에 dark: 두 번 적용되어 마지막 값만 유효하던 문제)
+- 기존 라이트모드 스타일은 모두 보존, 다크모드 대응만 추가/수정
+
 ## 테스트 결과 (tester)
 
 ### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)
@@ -269,6 +303,7 @@ tester 참고:
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-04-06 | 라이트/다크모드 가시성 전수조사 — 14파일 배지/버튼/텍스트/중복dark 수정 | 완료 |
 | 2026-04-06 | 다크모드 focus:bg-white 포커스 배경 수정 — 8파일 16곳 dark:focus:bg-gray-700 추가 | 완료 |
 | 2026-04-06 | 구글폼 전환 ON/OFF 기능 검증 — 14항목 전체 통과 | 테스트 완료 |
 | 2026-04-06 | 체험/수강신청 구글폼 전환 ON/OFF 설계 — AcademySettings 플래그 방식 | 설계 완료 |

@@ -195,7 +195,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
                         href={item.href}
                         // data-tour-target: href에서 슬래시 제거 + 해시는 하이픈으로 변환
                         data-tour-target={`nav-${item.href.slice(1).replace("#", "-")}`}
-                        className="block px-4 py-2.5 text-gray-600 dark:text-gray-300 hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+                        className="block px-4 py-2.5 text-gray-600 dark:text-gray-300 hover:text-brand-orange-500 dark:hover:text-brand-neon-lime hover:bg-brand-orange-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
                       >
                         {item.label}
                       </Link>

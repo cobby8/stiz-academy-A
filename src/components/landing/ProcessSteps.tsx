@@ -91,7 +91,7 @@ export default function ProcessSteps() {
 
               {/* 데스크탑 가로 화살표: 마지막 단계 제외 */}
               {index < steps.length - 1 && (
-                <div className="hidden md:block absolute top-8 -right-4 text-gray-300 dark:text-gray-700 dark:text-gray-200">
+                <div className="hidden md:block absolute top-8 -right-4 text-gray-300 dark:text-gray-500">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>

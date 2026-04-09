@@ -55,8 +55,8 @@ const variantStyles: Record<ButtonVariant, string> = {
 
   // White: 흰 배경 + 네이비 텍스트 → 어두운 배경 위에서 사용
   white: [
-    'bg-white dark:bg-gray-800 text-brand-navy-900 border border-gray-200 dark:border-gray-700',
-    'hover:bg-gray-50 dark:bg-gray-900 hover:shadow-md',
+    'bg-white dark:bg-gray-800 text-brand-navy-900 dark:text-white border border-gray-200 dark:border-gray-700',
+    'hover:bg-gray-50 dark:hover:bg-gray-700 hover:shadow-md',
     'active:scale-[0.98]',
     'focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2',
     'rounded-xl',

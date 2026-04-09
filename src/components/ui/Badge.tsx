@@ -27,10 +27,10 @@ interface BadgeProps {
 // 각 variant별 배경색 + 텍스트색
 const variantStyles: Record<BadgeVariant, string> = {
   default: 'bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime',
-  success: 'bg-emerald-50 text-emerald-700',
-  warning: 'bg-amber-50 text-amber-700',
-  error: 'bg-red-50 text-red-700',
-  info: 'bg-brand-sky-50 text-brand-sky-500',
+  success: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+  warning: 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  error: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+  info: 'bg-brand-sky-50 dark:bg-brand-sky-500/10 text-brand-sky-500 dark:text-brand-sky-400',
 };
 
 // 크기별 패딩/폰트

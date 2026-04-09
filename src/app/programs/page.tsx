@@ -65,11 +65,11 @@ function getShuttleFeeDisplay(
 function getAgeColor(targetAge: string | null): { bg: string; text: string; border: string } {
     if (!targetAge) return { bg: "bg-gray-50 dark:bg-gray-900", text: "text-gray-600 dark:text-gray-300", border: "border-gray-200 dark:border-gray-700" };
     const age = targetAge.toLowerCase();
-    if (age.includes("유아") || age.includes("미취학")) return { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" };
+    if (age.includes("유아") || age.includes("미취학")) return { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-700" };
     if (age.includes("초등") && (age.includes("저") || age.includes("1") || age.includes("2") || age.includes("3")))
-        return { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" };
-    if (age.includes("초등")) return { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200" };
-    if (age.includes("중등") || age.includes("중학")) return { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" };
+        return { bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", border: "border-blue-200 dark:border-blue-700" };
+    if (age.includes("초등")) return { bg: "bg-sky-50 dark:bg-sky-900/30", text: "text-sky-700 dark:text-sky-400", border: "border-sky-200 dark:border-sky-700" };
+    if (age.includes("중등") || age.includes("중학")) return { bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-400", border: "border-purple-200 dark:border-purple-700" };
     return { bg: "bg-gray-50 dark:bg-gray-900", text: "text-gray-600 dark:text-gray-300", border: "border-gray-200 dark:border-gray-700" };
 }
 
@@ -169,7 +169,7 @@ export default async function ProgramsPage() {
                                         {/* 수강료 — 다단 가격표 또는 단일 가격 */}
                                         <div className="px-5 pb-5">
                                             {tiers.length > 0 ? (
-                                                <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                                                <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-900">
                                                     <table className="w-full text-sm">
                                                         <thead className="bg-brand-navy-900 text-white">
                                                             <tr>
@@ -178,16 +178,16 @@ export default async function ProgramsPage() {
                                                                 <th className="px-4 py-2.5 text-right font-bold">셔틀비</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y divide-gray-100">
+                                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                                             {tiers.map((t) => {
                                                                 const fee = getShuttleFeeDisplay(program.shuttleFeeOverride, t.key, weekend);
                                                                 return (
-                                                                    <tr key={t.key} className="hover:bg-gray-50 dark:bg-gray-900">
+                                                                    <tr key={t.key} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                                                                         <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-100">{t.label}</td>
-                                                                        <td className="px-4 py-3 text-right font-bold text-brand-navy-900">
+                                                                        <td className="px-4 py-3 text-right font-bold text-brand-navy-900 dark:text-white">
                                                                             {Number(program[t.key]).toLocaleString()}원
                                                                         </td>
-                                                                        <td className="px-4 py-3 text-right text-blue-600 font-medium">
+                                                                        <td className="px-4 py-3 text-right text-blue-600 dark:text-blue-400 font-medium">
                                                                             {fee ? fee : <span className="text-gray-400 font-normal">운행 없음</span>}
                                                                         </td>
                                                                     </tr>
@@ -200,13 +200,13 @@ export default async function ProgramsPage() {
                                                 <div className="flex flex-wrap items-center gap-6">
                                                     <div>
                                                         <p className="text-sm text-gray-400 mb-0.5">월 수강료</p>
-                                                        <p className="text-3xl font-black text-brand-navy-900">
+                                                        <p className="text-3xl font-black text-brand-navy-900 dark:text-white">
                                                             {program.price.toLocaleString()}
                                                             <span className="text-base font-normal text-gray-500 dark:text-gray-400">원</span>
                                                         </p>
                                                     </div>
                                                     {weekend ? (
-                                                        <p className="text-sm text-orange-600 font-medium">셔틀 운행 없음</p>
+                                                        <p className="text-sm text-orange-600 dark:text-orange-400 font-medium">셔틀 운행 없음</p>
                                                     ) : program.shuttleFeeOverride === 0 ? (
                                                         <p className="text-sm text-gray-400">셔틀 없음</p>
                                                     ) : program.shuttleFeeOverride != null && program.shuttleFeeOverride > 0 ? (

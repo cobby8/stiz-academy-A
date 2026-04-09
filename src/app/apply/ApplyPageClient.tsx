@@ -266,9 +266,9 @@ export default function ApplyPageClient({
                             {/* 카드 헤더 — 오렌지 배경으로 차별화 */}
                             <div className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 px-6 py-5">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white dark:bg-gray-800/20 text-white">Enrollment</span>
+                                    <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white/20 text-white dark:bg-brand-navy-900/30 dark:text-brand-neon-lime">Enrollment</span>
                                 </div>
-                                <h3 className="text-xl font-black text-white">{enrollTitle}</h3>
+                                <h3 className="text-xl font-black text-white dark:text-brand-navy-900">{enrollTitle}</h3>
                             </div>
                             {/* 카드 본문 */}
                             <div className="px-6 py-6">
@@ -317,7 +317,7 @@ export default function ApplyPageClient({
                                 {/* 카드 헤더 — 그린 계열로 차별화 */}
                                 <div className="bg-emerald-600 px-6 py-5">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white dark:bg-gray-800/20 text-white">Uniform</span>
+                                        <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white/20 text-white">Uniform</span>
                                     </div>
                                     <h3 className="text-xl font-black text-white flex items-center gap-2">
                                         {/* Material Symbols Outlined 아이콘 — checkroom(옷걸이) */}

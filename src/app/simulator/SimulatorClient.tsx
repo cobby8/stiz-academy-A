@@ -189,7 +189,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                     "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300",
                                     step >= s
                                         ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white shadow-md"
-                                        : "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 dark:text-gray-400",
+                                        : "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-400",
                                 ].join(" ")}
                             >
                                 {s}
@@ -212,7 +212,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                         <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white mb-2 break-keep">
                             아이의 학년을 선택해 주세요
                         </h2>
-                        <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 text-sm mb-6 break-keep">
+                        <p className="text-gray-500 dark:text-gray-400 dark:text-gray-400 text-sm mb-6 break-keep">
                             학년에 맞는 수업을 찾아드릴게요.
                         </p>
 
@@ -240,7 +240,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                 "w-full mt-6 py-3.5 rounded-xl font-bold text-base transition-all duration-200",
                                 selectedGrade
                                     ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white shadow-md hover:shadow-lg active:scale-[0.98]"
-                                    : "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 dark:text-gray-400 cursor-not-allowed",
+                                    : "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-400 cursor-not-allowed",
                             ].join(" ")}
                         >
                             다음 단계
@@ -254,7 +254,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                         <h2 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white mb-2 break-keep">
                             원하는 요일과 시간대를 선택해 주세요
                         </h2>
-                        <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 text-sm mb-6 break-keep">
+                        <p className="text-gray-500 dark:text-gray-400 dark:text-gray-400 text-sm mb-6 break-keep">
                             선택 안 하면 전체 요일/시간으로 검색합니다.
                         </p>
 
@@ -265,7 +265,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                             </span>
                             <button
                                 onClick={goBack}
-                                className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 dark:text-brand-neon-lime dark:hover:text-lime-400 font-bold"
+                                className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 font-bold"
                             >
                                 변경
                             </button>
@@ -341,7 +341,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                 <h2 className="text-lg font-black text-gray-900 dark:text-white">검색 결과</h2>
                                 <button
                                     onClick={reset}
-                                    className="text-sm text-brand-orange-500 dark:text-brand-neon-lime hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 dark:text-brand-neon-lime dark:hover:text-lime-400 font-bold"
+                                    className="text-sm text-brand-orange-500 dark:text-brand-neon-lime hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 font-bold"
                                 >
                                     처음부터
                                 </button>
@@ -358,14 +358,14 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                         </span>
                                     ))
                                 ) : (
-                                    <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 px-3 py-1 rounded-full font-bold">전체 요일</span>
+                                    <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 dark:text-gray-400 px-3 py-1 rounded-full font-bold">전체 요일</span>
                                 )}
                                 {selectedTime !== "all" && (
-                                    <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-bold">
+                                    <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-3 py-1 rounded-full font-bold">
                                         {TIME_OPTIONS.find((t) => t.key === selectedTime)?.label}
                                     </span>
                                 )}
-                                <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full font-bold">
+                                <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full font-bold">
                                     {filteredSlots.length}개 수업
                                 </span>
                             </div>
@@ -378,7 +378,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                 <p className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-2 break-keep">
                                     해당 조건에 맞는 수업이 없습니다
                                 </p>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 mb-6 break-keep">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-400 mb-6 break-keep">
                                     다른 요일이나 시간대를 선택해 보시거나, 전화로 문의해 주세요.
                                 </p>
                                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -447,21 +447,21 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
 
                                                         {/* 시간 */}
                                                         <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200 mb-1">
-                                                            <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400">&#x23F0;</span>
+                                                            <span className="text-gray-400 dark:text-gray-400">&#x23F0;</span>
                                                             <span className="font-semibold">{slot.startTime} ~ {slot.endTime}</span>
                                                         </div>
 
                                                         {/* 대상 학년 */}
                                                         {slot.gradeRange && (
                                                             <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300 mb-1">
-                                                                <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400">&#x1F393;</span>
+                                                                <span className="text-gray-400 dark:text-gray-400">&#x1F393;</span>
                                                                 <span>{slot.gradeRange}</span>
                                                             </div>
                                                         )}
 
                                                         {/* 정원 프로그레스 바 */}
                                                         <div className="mt-2.5 pt-2 border-t border-gray-50 dark:border-gray-700 flex items-center gap-2">
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 font-medium shrink-0">
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-400 font-medium shrink-0">
                                                                 {slot.enrolled}/{slot.capacity}명
                                                             </span>
                                                             <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
@@ -502,7 +502,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                                             <p className="text-xs font-bold text-gray-800 dark:text-gray-100 text-center leading-tight truncate w-full">
                                                                 {slot.coach.name}
                                                             </p>
-                                                            <p className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400 text-center leading-tight truncate w-full">
+                                                            <p className="text-xs text-gray-400 dark:text-gray-400 text-center leading-tight truncate w-full">
                                                                 {slot.coach.role}
                                                             </p>
                                                         </div>
@@ -548,7 +548,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                         {useBuiltInEnrollForm ? (
                                             <Link
                                                 href="/apply/enroll"
-                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 text-brand-navy-900 hover:bg-brand-navy-900 hover:text-white active:scale-[0.98] transition-all duration-200 text-center"
+                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 dark:border-brand-neon-lime text-brand-navy-900 dark:text-brand-neon-lime hover:bg-brand-navy-900 dark:hover:bg-brand-neon-lime hover:text-white dark:hover:text-brand-navy-900 active:scale-[0.98] transition-all duration-200 text-center"
                                             >
                                                 수강신청
                                             </Link>
@@ -557,14 +557,14 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                                 href={enrollFormUrl}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 text-brand-navy-900 hover:bg-brand-navy-900 hover:text-white active:scale-[0.98] transition-all duration-200 text-center"
+                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 dark:border-brand-neon-lime text-brand-navy-900 dark:text-brand-neon-lime hover:bg-brand-navy-900 dark:hover:bg-brand-neon-lime hover:text-white dark:hover:text-brand-navy-900 active:scale-[0.98] transition-all duration-200 text-center"
                                             >
                                                 수강신청
                                             </a>
                                         ) : (
                                             <Link
                                                 href="/apply#enroll"
-                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 text-brand-navy-900 hover:bg-brand-navy-900 hover:text-white active:scale-[0.98] transition-all duration-200 text-center"
+                                                className="px-6 py-3.5 rounded-xl font-bold text-sm border-2 border-brand-navy-900 dark:border-brand-neon-lime text-brand-navy-900 dark:text-brand-neon-lime hover:bg-brand-navy-900 dark:hover:bg-brand-neon-lime hover:text-white dark:hover:text-brand-navy-900 active:scale-[0.98] transition-all duration-200 text-center"
                                             >
                                                 수강신청
                                             </Link>
@@ -576,7 +576,7 @@ export default function SimulatorClient({ allSlots, programs, phone, trialFormUr
                                 <div className="mt-4 text-center">
                                     <button
                                         onClick={() => setStep(2)}
-                                        className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:text-gray-200 font-medium transition-colors"
+                                        className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 font-medium transition-colors"
                                     >
                                         &#8592; 조건 변경하기
                                     </button>

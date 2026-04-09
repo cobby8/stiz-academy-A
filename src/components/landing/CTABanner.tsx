@@ -60,7 +60,7 @@ export default function CTABanner({
             {/* 주요 CTA: 체험 신청 — 오렌지 배경으로 가장 눈에 띄게 */}
             <Link
               href={primaryHref}
-              className="inline-flex items-center justify-center bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 dark:bg-brand-neon-lime dark:hover:bg-lime-400 text-white dark:text-brand-navy-900 font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:scale-[1.03] hover:shadow-xl dark:shadow-brand-neon-lime/30 shadow-lg"
+              className="inline-flex items-center justify-center bg-brand-orange-500 dark:bg-brand-neon-lime hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white dark:text-brand-navy-900 font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:scale-[1.03] hover:shadow-xl dark:shadow-brand-neon-lime/30 shadow-lg"
             >
               {primaryLabel}
             </Link>
@@ -69,7 +69,7 @@ export default function CTABanner({
             {showSecondary && (
               <a
                 href={`tel:${phone.replace(/-/g, '')}`}
-                className="inline-flex items-center justify-center bg-white dark:bg-gray-800 text-brand-navy-900 dark:text-white font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-700 hover:shadow-md shadow-lg"
+                className="inline-flex items-center justify-center bg-white dark:bg-gray-800 text-brand-navy-900 dark:text-white font-bold text-lg px-10 py-4 rounded-2xl transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:shadow-md shadow-lg"
               >
                 {secondaryLabel} {phone}
               </a>

@@ -147,7 +147,7 @@ export default function PrivacyPage() {
             <AnimateOnScroll key={idx}>
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 md:p-8 shadow-sm">
                 {/* 조항 제목 */}
-                <h2 className="text-lg font-bold text-brand-navy-900 mb-4">
+                <h2 className="text-lg font-bold text-brand-navy-900 dark:text-white mb-4">
                   {section.title}
                 </h2>
                 {/* 조항 내용 — whitespace-pre-line으로 줄바꿈 유지 */}

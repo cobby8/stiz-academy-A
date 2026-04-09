@@ -48,7 +48,7 @@ export default function TestimonialCarousel({
     return Array.from({ length: 5 }, (_, i) => (
       <span
         key={i}
-        className={i < rating ? 'text-yellow-400' : 'text-gray-200'}
+        className={i < rating ? 'text-yellow-400' : 'text-gray-200 dark:text-gray-600'}
       >
         &#9733;
       </span>
@@ -64,7 +64,7 @@ export default function TestimonialCarousel({
     >
       {/* 후기가 없으면 안내 메시지 */}
       {testimonials.length === 0 ? (
-        <div className="text-center py-12 text-gray-400 dark:text-gray-500 dark:text-gray-400">
+        <div className="text-center py-12 text-gray-400 dark:text-gray-400">
           <span className="material-symbols-outlined text-5xl mb-3 block">rate_review</span>
           <p className="font-medium">아직 등록된 후기가 없습니다</p>
         </div>
@@ -108,7 +108,7 @@ export default function TestimonialCarousel({
                   {/* 학부모 정보 */}
                   <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
                     <p className="font-bold text-gray-900 dark:text-white text-base">{item.name}</p>
-                    <p className="text-sm text-gray-400 dark:text-gray-500 dark:text-gray-400">{item.info}</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-400">{item.info}</p>
                   </div>
                 </div>
               ))}

@@ -42,7 +42,7 @@ export default async function Home() {
   const address = settings?.address || "";
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-800 text-gray-900 dark:text-white flex flex-col">
+    <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white flex flex-col">
       {/* 통합 헤더 */}
       <PublicHeader phone={phone} address={address} />
 

@@ -231,16 +231,15 @@ export default function ApplyPageClient({
                                             체험수업 신청하기
                                         </Link>
                                     ) : trialFormUrl ? (
-                                        // 구글폼 모드: 구글폼 URL을 새 탭으로 열기
-                                        <a
-                                            href={trialFormUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                        // 구글폼 모드: 플로팅 모달로 구글폼 표시
+                                        <button
+                                            type="button"
+                                            onClick={() => setModal("trial")}
                                             data-tour-target="trial-apply-btn"
                                             className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
                                         >
                                             체험수업 신청하기
-                                        </a>
+                                        </button>
                                     ) : (
                                         // 구글폼 URL이 설정되지 않은 경우 안내
                                         <p className="text-sm text-gray-400 italic">구글폼 URL이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
@@ -290,15 +289,14 @@ export default function ApplyPageClient({
                                             수강신청하기
                                         </Link>
                                     ) : enrollFormUrl ? (
-                                        // 구글폼 모드: 구글폼 URL을 새 탭으로 열기
-                                        <a
-                                            href={enrollFormUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                        // 구글폼 모드: 플로팅 모달로 구글폼 표시
+                                        <button
+                                            type="button"
+                                            onClick={() => setModal("enroll")}
                                             className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
                                         >
                                             수강신청하기
-                                        </a>
+                                        </button>
                                     ) : (
                                         // 구글폼 URL이 설정되지 않은 경우 안내
                                         <p className="text-sm text-gray-400 italic">구글폼 URL이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
@@ -359,7 +357,21 @@ export default function ApplyPageClient({
                 </AnimateOnScroll>
             </SectionLayout>
 
-            {/* Google Form 모달 — 유니폼만 유지 (체험수업/수강신청은 자체 폼으로 이동) */}
+            {/* Google Form 모달 — 구글폼 모드일 때 플로팅으로 표시 */}
+            {modal === "trial" && trialFormUrl && (
+                <FormModal
+                    title="체험수업 신청"
+                    formUrl={trialFormUrl}
+                    onClose={() => setModal(null)}
+                />
+            )}
+            {modal === "enroll" && enrollFormUrl && (
+                <FormModal
+                    title="수강신청"
+                    formUrl={enrollFormUrl}
+                    onClose={() => setModal(null)}
+                />
+            )}
             {modal === "uniform" && uniformFormUrl && (
                 <FormModal
                     title="유니폼 신청"

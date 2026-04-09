@@ -465,7 +465,7 @@ export default function StudentManagementClient({
                     placeholder="이름, 학부모명, 전화번호, 학교명으로 검색..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full max-w-md border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 />
             </div>
 
@@ -475,7 +475,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterClass}
                     onChange={(e) => setFilterClass(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 반</option>
                     {classes.map((c) => (
@@ -488,7 +488,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterGrade}
                     onChange={(e) => setFilterGrade(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학년</option>
                     {gradeOptions.map((g) => (
@@ -499,7 +499,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterSchool}
                     onChange={(e) => setFilterSchool(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학교</option>
                     {schoolOptions.map((sc) => (
@@ -510,7 +510,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 상태</option>
                     <option value="ACTIVE">활성</option>
@@ -547,7 +547,7 @@ export default function StudentManagementClient({
                                 onChange={(e) => setName(e.target.value)}
                                 required
                                 placeholder="홍길동"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
@@ -558,7 +558,7 @@ export default function StudentManagementClient({
                                 value={birthDate}
                                 onChange={(e) => setBirthDate(e.target.value)}
                                 required
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
@@ -566,7 +566,7 @@ export default function StudentManagementClient({
                             <select
                                 value={gender}
                                 onChange={(e) => setGender(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             >
                                 <option value="">선택 안함</option>
                                 <option value="남">남</option>
@@ -580,7 +580,7 @@ export default function StudentManagementClient({
                                 onChange={(e) => setParentName(e.target.value)}
                                 required
                                 placeholder="보호자 이름"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
@@ -589,7 +589,7 @@ export default function StudentManagementClient({
                                 value={parentPhone}
                                 onChange={(e) => setParentPhone(e.target.value)}
                                 placeholder="010-0000-0000"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         {!editingId && (
@@ -600,7 +600,7 @@ export default function StudentManagementClient({
                                     value={parentEmail}
                                     onChange={(e) => setParentEmail(e.target.value)}
                                     placeholder="parent@email.com"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                 />
                             </div>
                         )}

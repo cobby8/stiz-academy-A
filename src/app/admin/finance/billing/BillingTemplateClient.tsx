@@ -173,7 +173,7 @@ export default function BillingTemplateClient({
                                 onChange={(e) => setName(e.target.value)}
                                 required
                                 placeholder="예: 초등 주3회 수강료"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         {/* 금액 */}
@@ -185,7 +185,7 @@ export default function BillingTemplateClient({
                                 onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
                                 required
                                 placeholder="150000"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         {/* 유형 */}
@@ -194,7 +194,7 @@ export default function BillingTemplateClient({
                             <select
                                 value={type}
                                 onChange={(e) => setType(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="MONTHLY">월 수강료</option>
                                 <option value="SHUTTLE">셔틀</option>
@@ -211,7 +211,7 @@ export default function BillingTemplateClient({
                                 max={28}
                                 value={dueDay}
                                 onChange={(e) => setDueDay(parseInt(e.target.value) || 10)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                             <p className="text-xs text-gray-400 mt-1">1~28일 (29~31일은 월에 따라 불안정)</p>
                         </div>
@@ -221,7 +221,7 @@ export default function BillingTemplateClient({
                             <select
                                 value={programId}
                                 onChange={(e) => setProgramId(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="">전체 수강생</option>
                                 {programs.map((p) => (
@@ -237,7 +237,7 @@ export default function BillingTemplateClient({
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="청구서에 표시될 설명"
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                     </div>

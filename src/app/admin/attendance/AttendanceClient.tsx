@@ -131,7 +131,7 @@ export default function AttendanceClient({ classes }: { classes: ClassItem[] }) 
                             min="2020-01-01" max="2030-12-31"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
                     <div>

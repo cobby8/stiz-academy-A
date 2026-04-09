@@ -215,6 +215,23 @@ tester 참고:
 - 핵심 수정: queries.ts에서 ?? 연산자 대신 toBool 함수로 'false' 문자열을 false boolean으로 변환
 - tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
 
+### 다크모드 input/select/textarea 배경/글씨/테두리 일괄 수정 (2026-04-06)
+
+구현한 기능: dark:bg-gray-800 dark:text-white dark:border-gray-600이 누락된 input/select/textarea에 다크모드 스타일 일괄 추가
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/attendance/AttendanceClient.tsx | date input 1곳에 dark 3속성 추가 | 수정 |
+| src/app/admin/attendance/report/[sessionId]/ReportEditClient.tsx | input 1곳 dark:bg+text 추가, textarea 1곳 dark 3속성 추가, select 1곳 dark:text+border 추가 | 수정 |
+| src/app/admin/annual/AnnualAdminClient.tsx | input 3곳 + select 1곳 + textarea 1곳에 dark 3속성 추가 | 수정 |
+| src/app/admin/students/StudentManagementClient.tsx | 검색 input 1곳 + 필터 select 4곳 + 폼 input/select 6곳에 dark 3속성 추가 | 수정 |
+| src/app/admin/finance/billing/BillingTemplateClient.tsx | input 4곳 dark 3속성 추가 + select 2곳 dark:text+border 추가 | 수정 |
+
+tester 참고:
+- 테스트 방법: 다크모드에서 출석, 출석보고서, 연간일정, 원생관리, 청구템플릿 페이지의 모든 입력 필드 확인
+- 정상 동작: 입력 필드 배경이 어두운 회색(gray-800), 글씨가 흰색, 테두리가 gray-600으로 표시
+- tsc --noEmit: 통과 (에러 없음)
+
 ## 테스트 결과 (tester)
 
 ### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)

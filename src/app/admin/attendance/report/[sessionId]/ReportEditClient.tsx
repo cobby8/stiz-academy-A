@@ -248,7 +248,7 @@ export default function ReportEditClient({
                             value={topic}
                             onChange={(e) => { setTopic(e.target.value); setSaved(false); }}
                             placeholder="예: 드리블 연습, 3대3 미니게임"
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime"
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500"
                         />
                     </div>
 
@@ -258,7 +258,7 @@ export default function ReportEditClient({
                         <select
                             value={coachId}
                             onChange={(e) => { setCoachId(e.target.value); setSaved(false); }}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                         >
                             <option value="">코치 선택</option>
                             {coaches.map((c) => (
@@ -275,7 +275,7 @@ export default function ReportEditClient({
                             onChange={(e) => { setContent(e.target.value); setSaved(false); }}
                             placeholder="오늘 수업에서 진행한 내용을 작성해주세요."
                             rows={4}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
                         />
                     </div>
 

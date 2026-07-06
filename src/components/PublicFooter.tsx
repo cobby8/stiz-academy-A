@@ -4,7 +4,7 @@
  * 메인 랜딩과 서브페이지 양쪽에서 사용하던 푸터를 하나로 통합.
  * Server Component 가능 — 상태/이벤트가 없으므로 'use client' 불필요.
  *
- * props로 settings 데이터(phone, address)를 부모에서 받아온다.
+ * props로 settings 데이터(phone, address, footer 문구, 소셜 링크)를 부모에서 받아온다.
  */
 
 import Link from "next/link";
@@ -16,6 +16,12 @@ interface PublicFooterProps {
   phone: string;
   address: string;
   operatingHours?: string;
+  footerDescription?: string;
+  footerCopyright?: string;
+  instagramUrl?: string;
+  youtubeUrl?: string;
+  naverPlaceUrl?: string;
+  kakaoChannelUrl?: string;
 }
 
 // 퀵 링크 목록 — 헤더 메뉴와 동일하게 7개 전부 포함
@@ -30,9 +36,50 @@ const QUICK_LINKS = [
 ];
 
 const DEFAULT_OPERATING_HOURS = "평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)";
+const DEFAULT_FOOTER_DESCRIPTION = "아이들이 농구를 통해 협동심과\n건강한 체력을 기를 수 있도록 지도합니다.";
+const DEFAULT_FOOTER_COPYRIGHT = "© 2026 STIZ Basketball Academy. All rights reserved.";
 
-export default function PublicFooter({ phone, address, operatingHours }: PublicFooterProps) {
+function normalizeExternalUrl(url?: string) {
+  const raw = url?.trim();
+  const iframeSrc = raw?.match(/src=["']([^"']+)["']/i)?.[1];
+  const firstUrl = raw?.match(/https?:\/\/[^\s"'>]+/i)?.[0];
+  const trimmed = iframeSrc || firstUrl || raw;
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("<")) return "";
+  return `https://${trimmed}`;
+}
+
+function normalizeInstagramUrl(url?: string) {
+  const trimmed = url?.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("@")) {
+    return `https://www.instagram.com/${trimmed.slice(1)}`;
+  }
+  return normalizeExternalUrl(trimmed);
+}
+
+export default function PublicFooter({
+  phone,
+  address,
+  operatingHours,
+  footerDescription,
+  footerCopyright,
+  instagramUrl,
+  youtubeUrl,
+  naverPlaceUrl,
+  kakaoChannelUrl,
+}: PublicFooterProps) {
   const displayOperatingHours = operatingHours?.trim() || DEFAULT_OPERATING_HOURS;
+  const displayFooterDescription = footerDescription?.trim() || DEFAULT_FOOTER_DESCRIPTION;
+  const displayFooterCopyright = footerCopyright?.trim() || DEFAULT_FOOTER_COPYRIGHT;
+  const footerDescriptionLines = displayFooterDescription.split("\n");
+  const socialLinks = [
+    { label: "Instagram", href: normalizeInstagramUrl(instagramUrl) },
+    { label: "YouTube", href: normalizeExternalUrl(youtubeUrl) },
+    { label: "네이버 플레이스", href: normalizeExternalUrl(naverPlaceUrl) },
+    { label: "카카오 채널", href: normalizeExternalUrl(kakaoChannelUrl) },
+  ].filter((link) => link.href);
 
   return (
     <footer className="bg-gray-50 dark:bg-black text-gray-600 dark:text-gray-300 pt-12 pb-8 border-t-4 border-brand-orange-500 dark:border-brand-neon-lime">
@@ -50,9 +97,12 @@ export default function PublicFooter({ phone, address, operatingHours }: PublicF
               />
             </div>
             <p className="text-sm text-gray-400 leading-relaxed">
-              아이들이 농구를 통해 협동심과
-              <br />
-              건강한 체력을 기를 수 있도록 지도합니다.
+              {footerDescriptionLines.map((line, idx) => (
+                <span key={`${line}-${idx}`}>
+                  {line}
+                  {idx < footerDescriptionLines.length - 1 && <br />}
+                </span>
+              ))}
             </p>
           </div>
 
@@ -76,9 +126,21 @@ export default function PublicFooter({ phone, address, operatingHours }: PublicF
             </ul>
 
             {/* 소셜미디어 아이콘 영역 — 향후 인스타그램 등 추가 예정 */}
-            <div className="mt-4 flex gap-3">
-              {/* 현재는 빈 공간만 준비. Phase 2 이후에 아이콘 추가 가능 */}
-            </div>
+            {socialLinks.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {socialLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full border border-gray-200 dark:border-gray-700 px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-300 hover:border-brand-orange-500 hover:text-brand-orange-500 dark:hover:border-brand-neon-lime dark:hover:text-brand-neon-lime transition"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 퀵 링크 */}
@@ -101,7 +163,7 @@ export default function PublicFooter({ phone, address, operatingHours }: PublicF
 
         {/* 저작권 표시 + 이용약관 링크 */}
         <div className="border-t border-gray-200 dark:border-gray-800 pt-6 text-center text-xs text-gray-500 dark:text-gray-400">
-          <p>&copy; 2026 STIZ Basketball Academy. All rights reserved.</p>
+          <p>{displayFooterCopyright}</p>
           {/* 독립 이용약관 페이지로 이동 */}
           {/* 이용약관 + 개인정보 처리방침 링크를 나란히 배치 */}
           <div className="flex items-center justify-center gap-3 mt-2">

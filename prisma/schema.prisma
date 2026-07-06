@@ -212,6 +212,9 @@ model AcademySettings {
   contactPhone            String?
   address                 String?
   operatingHours          String?
+  privacyPolicy           String?
+  footerDescription       String?
+  footerCopyright         String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   pageDesignJSON          String?
@@ -228,6 +231,10 @@ model AcademySettings {
   enrollFormUrl           String?
   googleSheetsScheduleUrl String?
   youtubeUrl              String?
+  instagramUrl            String?
+  instagramBusinessAccountId String?
+  instagramAutoPublishEnabled Boolean @default(false)
+  kakaoChannelUrl         String?
   philosophyText          String?
   facilitiesText          String?
   facilitiesImagesJSON    String?
@@ -314,11 +321,20 @@ model GalleryPost {
   caption   String?
   mediaJSON String   @default("[]")
   isPublic  Boolean  @default(true)
+  source    String   @default("WEBSITE")
+  externalId String?
+  externalUrl String?
+  instagramMediaId String?
+  instagramPermalink String?
+  instagramPublishedAt DateTime? @db.Timestamptz(6)
+  instagramPublishError String?
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([classId])
   @@index([createdAt])
+  @@index([source])
+  @@index([externalId])
 }
 
 model Notice {

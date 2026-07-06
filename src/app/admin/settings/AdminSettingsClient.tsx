@@ -113,6 +113,7 @@ export default function AdminSettingsClient({
             formData.forEach((value, key) => {
                 if (typeof value === "string") data[key] = value;
             });
+            data.instagramAutoPublishEnabled = formData.get("instagramAutoPublishEnabled") === "true";
             data.introductionText = introText;
             data.philosophyText = philosophyText;
             data.facilitiesText = facilitiesText;
@@ -386,6 +387,96 @@ export default function AdminSettingsClient({
                             className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                         />
                         <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
+                    </section>
+
+                    {/* ── 푸터 및 소셜 링크 ─────────────────────────────────── */}
+                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                        <SectionHeader title="푸터 및 소셜 링크" />
+                        <AppliesTo pages={["모든 공개 페이지 푸터"]} />
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">푸터 소개 문구</label>
+                                <textarea
+                                    name="footerDescription"
+                                    defaultValue={initialSettings?.footerDescription || ""}
+                                    rows={3}
+                                    placeholder={"아이들이 농구를 통해 협동심과\n건강한 체력을 기를 수 있도록 지도합니다."}
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition resize-y"
+                                />
+                                <p className="text-xs text-gray-400 mt-1.5">비워두면 기본 소개 문구가 표시됩니다.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">저작권 문구</label>
+                                <input
+                                    name="footerCopyright"
+                                    type="text"
+                                    defaultValue={initialSettings?.footerCopyright || ""}
+                                    placeholder="© 2026 STIZ Basketball Academy. All rights reserved."
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                />
+                                <p className="text-xs text-gray-400 mt-1.5">비워두면 기본 저작권 문구가 표시됩니다.</p>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">인스타그램 URL</label>
+                                    <input
+                                        name="instagramUrl"
+                                        type="text"
+                                        defaultValue={initialSettings?.instagramUrl || ""}
+                                        placeholder="https://www.instagram.com/stiz... 또는 @stiz..."
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">Instagram Business Account ID</label>
+                                    <input
+                                        name="instagramBusinessAccountId"
+                                        type="text"
+                                        defaultValue={initialSettings?.instagramBusinessAccountId || ""}
+                                        placeholder="예: 1784..."
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1.5">인스타그램 게시물 가져오기와 자동 업로드에 사용됩니다. 액세스 토큰은 서버 환경변수에만 저장합니다.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">네이버 플레이스 URL</label>
+                                    <input
+                                        name="naverPlaceUrl"
+                                        type="url"
+                                        defaultValue={initialSettings?.naverPlaceUrl || ""}
+                                        placeholder="https://naver.me/..."
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">카카오 채널 URL</label>
+                                    <input
+                                        name="kakaoChannelUrl"
+                                        type="url"
+                                        defaultValue={initialSettings?.kakaoChannelUrl || ""}
+                                        placeholder="https://pf.kakao.com/..."
+                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    />
+                                </div>
+                            </div>
+                            <label className="flex items-start gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 text-sm">
+                                <input
+                                    type="checkbox"
+                                    name="instagramAutoPublishEnabled"
+                                    value="true"
+                                    defaultChecked={initialSettings?.instagramAutoPublishEnabled === true}
+                                    className="mt-1 rounded border-gray-300"
+                                />
+                                <span>
+                                    <span className="block font-bold text-gray-700 dark:text-gray-200">갤러리 새 게시물 인스타그램 자동 업로드</span>
+                                    <span className="block text-xs text-gray-400 mt-1">켜면 관리자 갤러리에 새 공개 게시물을 만들 때 첫 번째 이미지를 인스타그램에도 발행합니다. 서버 환경변수 `INSTAGRAM_ACCESS_TOKEN`이 필요합니다.</span>
+                                </span>
+                            </label>
+                            <p className="text-xs text-gray-400">입력된 링크만 푸터에 표시됩니다. 유튜브 링크는 위 홍보 영상 URL을 함께 사용합니다.</p>
+                        </div>
                     </section>
 
                     {/* 저장 */}

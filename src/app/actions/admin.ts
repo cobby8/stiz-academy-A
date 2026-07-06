@@ -16,11 +16,19 @@ import {
     updateCalendarEvent,
     deleteCalendarEvent,
 } from "@/lib/googleCalendarWrite";
+import { fetchRecentInstagramMedia, publishGalleryPostToInstagram, toGalleryMediaJSON } from "@/lib/instagram";
+import { getAcademySettings } from "@/lib/queries";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
 // $executeRaw 태그드 템플릿은 prepared statement(extended protocol)를 사용해 PgBouncer가 차단
 let _columnsEnsured = false;
+const BOOLEAN_SETTINGS_COLUMNS = new Set([
+    "instagramAutoPublishEnabled",
+    "useBuiltInTrialForm",
+    "useBuiltInEnrollForm",
+]);
+
 export async function ensureAcademySettingsColumns() {
     if (_columnsEnsured) return;
     const columns: [string, string][] = [
@@ -39,6 +47,13 @@ export async function ensureAcademySettingsColumns() {
         ["facilitiesImagesJSON", "TEXT"],
         ["galleryImagesJSON", "TEXT"],
         ["operatingHours", "TEXT"],
+        ["privacyPolicy", "TEXT"],
+        ["footerDescription", "TEXT"],
+        ["footerCopyright", "TEXT"],
+        ["instagramUrl", "TEXT"],
+        ["instagramBusinessAccountId", "TEXT"],
+        ["instagramAutoPublishEnabled", "BOOLEAN DEFAULT false"],
+        ["kakaoChannelUrl", "TEXT"],
         ["uniformFormUrl", "TEXT"],
         ["useBuiltInTrialForm", "BOOLEAN DEFAULT false"],  // 자체 폼 ON/OFF (false=구글폼)
         ["useBuiltInEnrollForm", "BOOLEAN DEFAULT false"], // 자체 폼 ON/OFF (false=구글폼)
@@ -58,12 +73,13 @@ export async function ensureAcademySettingsColumns() {
 // ── Prisma 모델 클라이언트 없이 raw SQL 로 upsert (RETURNING 우회) ──────────────
 const ALLOWED_SETTINGS_COLUMNS = [
     'introductionTitle', 'introductionText', 'shuttleInfoText',
-    'contactPhone', 'address', 'operatingHours', 'termsOfService', 'pageDesignJSON',
+    'contactPhone', 'address', 'operatingHours', 'privacyPolicy', 'termsOfService', 'pageDesignJSON',
+    'footerDescription', 'footerCopyright',
     'googleCalendarIcsUrl', 'googleSheetsScheduleUrl', 'classDays',
     'siteBodyFont', 'siteHeadingFont',
     'trialTitle', 'trialContent', 'trialFormUrl',
     'enrollTitle', 'enrollContent', 'enrollFormUrl',
-    'youtubeUrl',
+    'youtubeUrl', 'instagramUrl', 'instagramBusinessAccountId', 'instagramAutoPublishEnabled', 'kakaoChannelUrl',
     'philosophyText',
     'facilitiesText',
     'facilitiesImagesJSON',
@@ -102,8 +118,7 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
             if (missingCol) {
                 // 해당 컬럼만 추가 후 재시도
                 try {
-                    // useBuiltIn* 컬럼은 boolean이므로 TEXT가 아닌 BOOLEAN으로 생성
-                    const colType = missingCol.startsWith('useBuiltIn') ? 'BOOLEAN DEFAULT false' : 'TEXT';
+                    const colType = BOOLEAN_SETTINGS_COLUMNS.has(missingCol) ? 'BOOLEAN DEFAULT false' : 'TEXT';
                     await prisma.$executeRawUnsafe(
                         `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${missingCol}" ${colType}`
                     );
@@ -320,6 +335,9 @@ export async function updateAcademySettings(data: {
     siteBodyFont?: string;
     siteHeadingFont?: string;
     termsOfService?: string;
+    privacyPolicy?: string;
+    footerDescription?: string;
+    footerCopyright?: string;
     trialTitle?: string;
     trialContent?: string;
     trialFormUrl?: string;
@@ -327,6 +345,10 @@ export async function updateAcademySettings(data: {
     enrollContent?: string;
     enrollFormUrl?: string;
     youtubeUrl?: string;
+    instagramUrl?: string;
+    instagramBusinessAccountId?: string;
+    instagramAutoPublishEnabled?: boolean;
+    kakaoChannelUrl?: string;
     philosophyText?: string;
     facilitiesText?: string;
     facilitiesImagesJSON?: string;
@@ -948,6 +970,34 @@ export async function deletePayment(id: string) {
     revalidatePath("/admin/finance");
 }
 
+let _galleryInstagramColumnsEnsured = false;
+async function ensureGalleryPostInstagramColumns() {
+    if (_galleryInstagramColumnsEnsured) return;
+    const columns: [string, string][] = [
+        ["source", "TEXT DEFAULT 'WEBSITE'"],
+        ["externalId", "TEXT"],
+        ["externalUrl", "TEXT"],
+        ["instagramMediaId", "TEXT"],
+        ["instagramPermalink", "TEXT"],
+        ["instagramPublishedAt", "TIMESTAMPTZ"],
+        ["instagramPublishError", "TEXT"],
+    ];
+    for (const [col, type] of columns) {
+        try {
+            await prisma.$executeRawUnsafe(
+                `ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "${col}" ${type}`
+            );
+        } catch (e) {
+            console.warn(`[DDL] GalleryPost column "${col}" ensure failed:`, (e as Error).message);
+        }
+    }
+    _galleryInstagramColumnsEnsured = true;
+}
+
+function galleryInstagramCaption(title?: string | null, caption?: string | null) {
+    return [title?.trim(), caption?.trim()].filter(Boolean).join("\n\n");
+}
+
 // ── 갤러리 관리 ──────────────────────────────────────────────────────────────
 export async function createGalleryPost(data: {
     classId?: string | null;
@@ -957,16 +1007,46 @@ export async function createGalleryPost(data: {
     isPublic?: boolean;
 }) {
     await requireAdmin();
+    let postId: string | null = null;
     try {
-        await prisma.$executeRawUnsafe(
+        await ensureGalleryPostInstagramColumns();
+        const rows = await prisma.$queryRawUnsafe<any[]>(
             `INSERT INTO "GalleryPost" (id, "classId", title, caption, "mediaJSON", "isPublic", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())`,
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())
+             RETURNING id`,
             data.classId || null,
             data.title || null,
             data.caption || null,
             data.mediaJSON,
             data.isPublic !== false,
         );
+        postId = rows[0]?.id ?? null;
+
+        if (postId && data.isPublic !== false) {
+            const settings = await getAcademySettings() as any;
+            if (settings.instagramAutoPublishEnabled) {
+                const result = await publishGalleryPostToInstagram({
+                    businessAccountId: settings.instagramBusinessAccountId,
+                    caption: galleryInstagramCaption(data.title, data.caption),
+                    mediaJSON: data.mediaJSON,
+                });
+                if (result.attempted) {
+                    await prisma.$executeRawUnsafe(
+                        `UPDATE "GalleryPost"
+                         SET "instagramMediaId" = $1,
+                             "instagramPermalink" = $2,
+                             "instagramPublishedAt" = $3,
+                             "instagramPublishError" = $4
+                         WHERE id = $5`,
+                        result.ok ? result.instagramMediaId ?? null : null,
+                        result.ok ? result.permalink ?? null : null,
+                        result.ok ? new Date() : null,
+                        result.ok ? null : result.error ?? null,
+                        postId,
+                    );
+                }
+            }
+        }
     } catch (e) {
         console.error("Failed to create gallery post:", e);
         throw new Error("갤러리 게시물 생성 실패");
@@ -975,6 +1055,70 @@ export async function createGalleryPost(data: {
     revalidatePath("/gallery");
     revalidatePath("/mypage");
     revalidatePath("/");
+}
+
+export async function syncInstagramGalleryPosts() {
+    await requireAdmin();
+    await ensureGalleryPostInstagramColumns();
+    const settings = await getAcademySettings() as any;
+    const result = await fetchRecentInstagramMedia({
+        businessAccountId: settings.instagramBusinessAccountId,
+        limit: 25,
+    });
+
+    if (!result.ok) {
+        return {
+            ok: false,
+            imported: 0,
+            skipped: 0,
+            message: result.reason,
+        };
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    for (const media of result.media) {
+        const mediaJSON = toGalleryMediaJSON(media);
+        if (mediaJSON === "[]") {
+            skipped += 1;
+            continue;
+        }
+
+        const existing = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "GalleryPost" WHERE source = 'INSTAGRAM' AND "externalId" = $1 LIMIT 1`,
+            media.id,
+        );
+        if (existing.length > 0) {
+            skipped += 1;
+            continue;
+        }
+
+        const caption = media.caption?.trim() || null;
+        const title = caption ? caption.split("\n")[0].slice(0, 80) : "Instagram 게시물";
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "GalleryPost"
+                (id, title, caption, "mediaJSON", "isPublic", source, "externalId", "externalUrl", "createdAt", "updatedAt")
+             VALUES
+                (gen_random_uuid()::text, $1, $2, $3, true, 'INSTAGRAM', $4, $5, COALESCE($6::timestamptz, NOW()), NOW())`,
+            title,
+            caption,
+            mediaJSON,
+            media.id,
+            media.permalink ?? null,
+            media.timestamp ?? null,
+        );
+        imported += 1;
+    }
+
+    revalidatePath("/admin/gallery");
+    revalidatePath("/gallery");
+    revalidatePath("/");
+    return {
+        ok: true,
+        imported,
+        skipped,
+        message: `인스타그램 게시물 ${imported}개를 가져왔고 ${skipped}개는 건너뛰었습니다.`,
+    };
 }
 
 export async function updateGalleryPost(id: string, data: {

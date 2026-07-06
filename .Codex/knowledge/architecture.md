@@ -33,6 +33,10 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - `AcademySettings.galleryImagesJSON`은 아직 DB/관리자에 남아 있지만 홈 표시 기준에서는 제외됐다.
 - 공개 페이지 상단 바와 푸터 운영시간은 `AcademySettings.operatingHours`를 사용한다.
 - 운영시간 값이 비어 있으면 기본 문구를 보여주므로, 설정 입력 전에도 공개 페이지가 깨지지 않는다.
+- 개인정보처리방침은 `AcademySettings.privacyPolicy`에 저장하고 `/admin/privacy`에서 관리한다. 값이 비어 있으면 기본 정책 문구를 표시한다.
+- 공개 푸터의 소개 문구, 저작권 문구, Instagram/YouTube/네이버 플레이스/카카오 채널 링크는 `AcademySettings` 설정값을 사용한다.
+- `GalleryPost`는 `source`, `externalId`, `externalUrl`, `instagramMediaId`, `instagramPermalink`, `instagramPublishedAt`, `instagramPublishError`로 인스타그램 가져오기/발행 상태를 기록할 수 있다.
+- 인스타그램 API 토큰은 DB에 저장하지 않고 서버 환경변수 `INSTAGRAM_ACCESS_TOKEN` 또는 `META_ACCESS_TOKEN`으로 읽는다.
 
 ## 현재 확인된 상태
 - 타입 체크는 통과한다.

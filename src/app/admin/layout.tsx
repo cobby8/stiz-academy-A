@@ -138,6 +138,7 @@ export default function AdminLayout({
                             <NavItem href="/admin/faq" active={pathname.startsWith("/admin/faq")} icon="❓" label="FAQ 관리" />
                             <NavItem href="/admin/testimonials" active={pathname.startsWith("/admin/testimonials")} icon="⭐" label="학부모 후기" />
                             <NavItem href="/admin/terms" active={pathname.startsWith("/admin/terms")} icon="📜" label="이용약관 관리" />
+                            <NavItem href="/admin/privacy" active={pathname.startsWith("/admin/privacy")} icon="🔐" label="개인정보처리방침" />
 
                         </>
                     )}

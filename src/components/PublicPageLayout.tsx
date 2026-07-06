@@ -30,6 +30,12 @@ export default async function PublicPageLayout({
   const phone = (settings as any).contactPhone || "010-0000-0000";
   const address = (settings as any).address || "";
   const operatingHours = (settings as any).operatingHours || "";
+  const footerDescription = (settings as any).footerDescription || "";
+  const footerCopyright = (settings as any).footerCopyright || "";
+  const instagramUrl = (settings as any).instagramUrl || "";
+  const youtubeUrl = (settings as any).youtubeUrl || "";
+  const naverPlaceUrl = (settings as any).naverPlaceUrl || "";
+  const kakaoChannelUrl = (settings as any).kakaoChannelUrl || "";
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 flex flex-col transition-colors duration-300">
@@ -40,7 +46,17 @@ export default async function PublicPageLayout({
       <main className="flex-1">{children}</main>
 
       {/* 통합 푸터 — Server Component */}
-      <PublicFooter phone={phone} address={address} operatingHours={operatingHours} />
+      <PublicFooter
+        phone={phone}
+        address={address}
+        operatingHours={operatingHours}
+        footerDescription={footerDescription}
+        footerCopyright={footerCopyright}
+        instagramUrl={instagramUrl}
+        youtubeUrl={youtubeUrl}
+        naverPlaceUrl={naverPlaceUrl}
+        kakaoChannelUrl={kakaoChannelUrl}
+      />
 
       {/* 학부모 상담 챗봇 — 모든 공개 페이지 우하단에 플로팅 버튼 */}
       <ChatBotButton />

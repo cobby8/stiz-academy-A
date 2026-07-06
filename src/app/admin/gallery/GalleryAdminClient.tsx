@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createGalleryPost, updateGalleryPost, deleteGalleryPost } from "@/app/actions/admin";
+import { createGalleryPost, updateGalleryPost, deleteGalleryPost, syncInstagramGalleryPosts } from "@/app/actions/admin";
 import { Plus, Trash2, Edit2, Eye, EyeOff, X, Upload, Image as ImageIcon } from "lucide-react";
 
 type MediaItem = { url: string; type: "image" | "video" };
@@ -16,8 +16,31 @@ type GalleryPost = {
     className: string | null;
 };
 type ClassInfo = { id: string; name: string; program?: { name: string } | null };
+type InstagramStatus = {
+    profileUrl: string;
+    businessAccountId: string;
+    autoPublishEnabled: boolean;
+    hasAccessToken: boolean;
+    hasBusinessAccountId: boolean;
+};
 
-export default function GalleryAdminClient({ posts, classes }: { posts: GalleryPost[]; classes: ClassInfo[] }) {
+function normalizeInstagramProfileUrl(url: string) {
+    const trimmed = url.trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith("@")) return `https://www.instagram.com/${trimmed.slice(1)}`;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+}
+
+export default function GalleryAdminClient({
+    posts,
+    classes,
+    instagramStatus,
+}: {
+    posts: GalleryPost[];
+    classes: ClassInfo[];
+    instagramStatus?: InstagramStatus;
+}) {
     const [isPending, startTransition] = useTransition();
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
@@ -27,6 +50,10 @@ export default function GalleryAdminClient({ posts, classes }: { posts: GalleryP
     const [isPublic, setIsPublic] = useState(true);
     const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
     const [uploading, setUploading] = useState(false);
+    const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+    const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
+    const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");
 
     function resetForm() {
         setEditId(null);
@@ -101,6 +128,14 @@ export default function GalleryAdminClient({ posts, classes }: { posts: GalleryP
         });
     }
 
+    function handleInstagramSync() {
+        setSyncMessage(null);
+        startTransition(async () => {
+            const result = await syncInstagramGalleryPosts();
+            setSyncMessage(result.message);
+        });
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -115,6 +150,54 @@ export default function GalleryAdminClient({ posts, classes }: { posts: GalleryP
                     <Plus size={18} /> 새 게시물
                 </button>
             </div>
+
+            {instagramStatus && (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Instagram 연동</h2>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${instagramReady ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+                                {instagramReady ? "준비 완료" : "설정 필요"}
+                            </span>
+                            {instagramStatus.autoPublishEnabled && (
+                                <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700">
+                                    자동 업로드 ON
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            기존 인스타 게시물을 갤러리로 가져오고, 설정이 완료되면 새 갤러리 게시물을 인스타그램에도 발행합니다.
+                        </p>
+                        {!instagramReady && (
+                            <p className="text-xs text-amber-600 mt-1">
+                                관리자 설정의 Instagram Business Account ID와 서버 환경변수 INSTAGRAM_ACCESS_TOKEN이 필요합니다.
+                            </p>
+                        )}
+                        {syncMessage && (
+                            <p className="text-xs text-green-600 mt-1 font-medium">{syncMessage}</p>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        {instagramProfileUrl && (
+                            <a
+                                href={instagramProfileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 hover:border-brand-orange-500 hover:text-brand-orange-500 transition"
+                            >
+                                프로필 열기
+                            </a>
+                        )}
+                        <button
+                            onClick={handleInstagramSync}
+                            disabled={!instagramReady || isPending}
+                            className="px-3 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-gray-700 transition disabled:opacity-40"
+                        >
+                            {isPending ? "가져오는 중..." : "인스타 가져오기"}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Form Modal */}
             {showForm && (

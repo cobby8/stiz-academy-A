@@ -29,6 +29,14 @@ ALTER TABLE "CustomClassSlot" ADD COLUMN IF NOT EXISTS "programId" TEXT;
 
 -- [AcademySettings] 이용약관 + 체험/수강신청 콘텐츠 컬럼
 ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "termsOfService" TEXT;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "operatingHours" TEXT;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "privacyPolicy" TEXT;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "footerDescription" TEXT;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "footerCopyright" TEXT;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "instagramUrl" TEXT;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "instagramBusinessAccountId" TEXT;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "instagramAutoPublishEnabled" BOOLEAN DEFAULT false;
+ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "kakaoChannelUrl" TEXT;
 ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialTitle"    TEXT DEFAULT '체험수업 안내';
 ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialContent"  TEXT;
 ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "trialFormUrl"  TEXT;
@@ -41,3 +49,12 @@ ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "classDays"     TEXT;
 ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "siteBodyFont"  TEXT DEFAULT 'system';
 ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "siteHeadingFont" TEXT DEFAULT 'system';
 ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "pageDesignJSON" TEXT;
+
+-- [GalleryPost] Instagram import/publish metadata
+ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "source" TEXT DEFAULT 'WEBSITE';
+ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "externalId" TEXT;
+ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "externalUrl" TEXT;
+ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramMediaId" TEXT;
+ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramPermalink" TEXT;
+ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramPublishedAt" TIMESTAMPTZ;
+ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramPublishError" TEXT;

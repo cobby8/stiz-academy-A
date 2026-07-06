@@ -43,6 +43,12 @@ export default async function Home() {
   const phone = settings?.contactPhone || "010-0000-0000";
   const address = settings?.address || "";
   const operatingHours = settings?.operatingHours || "";
+  const footerDescription = settings?.footerDescription || "";
+  const footerCopyright = settings?.footerCopyright || "";
+  const instagramUrl = settings?.instagramUrl || "";
+  const youtubeUrl = settings?.youtubeUrl || "";
+  const naverPlaceUrl = settings?.naverPlaceUrl || "";
+  const kakaoChannelUrl = settings?.kakaoChannelUrl || "";
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white flex flex-col">
@@ -55,12 +61,22 @@ export default async function Home() {
           initialSettings={settings}
           testimonials={testimonials}
           galleryPosts={galleryPosts}
-          naverPlaceUrl={settings?.naverPlaceUrl ?? ""}
+          naverPlaceUrl={naverPlaceUrl}
         />
       </main>
 
       {/* 통합 푸터 */}
-      <PublicFooter phone={phone} address={address} operatingHours={operatingHours} />
+      <PublicFooter
+        phone={phone}
+        address={address}
+        operatingHours={operatingHours}
+        footerDescription={footerDescription}
+        footerCopyright={footerCopyright}
+        instagramUrl={instagramUrl}
+        youtubeUrl={youtubeUrl}
+        naverPlaceUrl={naverPlaceUrl}
+        kakaoChannelUrl={kakaoChannelUrl}
+      />
 
       {/* 챗봇 버튼 — 다른 페이지는 PublicPageLayout에서 렌더링하지만, 메인 페이지는 직접 추가 */}
       <ChatBotButton />

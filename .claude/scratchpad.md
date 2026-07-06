@@ -114,6 +114,37 @@
 - 검증: `npx tsc --noEmit` EXIT=0, `npm run build` EXIT=0.
 - 범위 밖(미구현): 이미지 정렬/크기조절(3), 표/유튜브(4), sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7).
 
+### 구현 기록 — 공지 리치 에디터 강화 3단계 (2026-07-06)
+
+📝 구현한 기능: 본문 이미지의 **좌/중/우 정렬 + 드래그 크기조절**. `@tiptap/extension-image`를 확장한 커스텀 `ResizableImage`(React NodeView)로 교체. **Underline 중복 등록 제거**(reviewer 권장 반영). 신규 패키지 설치 **없음**.
+
+**상태: 3단계 완료, 4단계(표/유튜브) 대기.**
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/components/extensions/ResizableImage.tsx | Image 확장 + width/align 속성 + React NodeView(정렬 툴바·모서리 리사이즈 핸들) | 신규 |
+| src/components/RichTextEditor.tsx | Image→ResizableImage 교체, Underline import/등록 제거(StarterKit 내장) | 수정 |
+
+**★ 정렬/크기 마크업 표현 방식 (5단계 sanitize 허용목록에 반드시 반영할 것):**
+- **정렬**: `<img class="align-left|align-center|align-right" data-align="left|center|right">` — class(스타일용)와 data-align(파싱용)을 **둘 다** 렌더. 정렬 미지정(기본) 이미지는 두 속성 모두 없음(하위호환 유지).
+  → sanitize: `allowedClasses.img = ['align-left','align-center','align-right']` + `allowedAttributes.img += ['data-align']` 필요.
+- **크기**: `<img width="320">` — 정수 px, HTML `width` 속성. (sanitize-html 기본 img width 허용됨 → 별도 추가 불필요 예상, 5단계에서 확인만)
+- 가드: 최소 40px, 최대 = 에디터 본문 폭(`editor.view.dom.clientWidth`). 비율은 height:auto로 자동 유지.
+- 정렬 구현: NodeView 바깥 래퍼 div의 `text-align`으로 인라인블록 이미지를 좌/중/우 배치. **기본값(align=null)은 가운데 정렬**(기존 `.ProseMirror img{margin:0 auto}` 동작 보존). 5·6단계 공개 렌더 CSS는 `.notice-content img.align-left{margin-right:auto}` 등으로 대응 예정.
+
+**의존성 판단(re-resizable)**: 설치돼 있으나 **사용 안 함**. NodeView 안에서 라이브러리가 자체 크기 state를 관리해 노드 속성(단일 진실 원천)과 동기화가 복잡·불안정. 무의존 커스텀 핸들(mousedown→document mousemove/mouseup→updateAttributes)이 더 단순·안전하여 채택.
+
+💡 tester 참고:
+- 테스트 방법: dev(포트 4000) → `/admin/settings` 소개글/이념/시설 에디터. (관리자 로그인 벽이면 빌드/코드로 확인)
+- 정상 동작: (1)본문 이미지 클릭 시 주황 테두리 + 위쪽에 정렬 툴바(좌/중/우, Material Symbols) + 네 모서리 핸들 표시, (2)정렬 버튼 클릭 시 이미지가 좌/중/우로 이동(같은 버튼 재클릭 시 기본=중앙으로 토글 해제), (3)모서리 핸들 드래그로 폭 조절(오른쪽 끌면 커지고 왼쪽 핸들은 반대), (4)폭 40px 미만/본문폭 초과로는 안 커짐.
+- 회귀 확인 필수: 밑줄 버튼(U)이 여전히 켜짐/꺼짐 동작(StarterKit 내장으로 전환됨). 이미지 삽입 3경로(버튼·드래그·붙여넣기)와 setImage가 그대로 동작. 설정 페이지 저장/재로드 정상.
+- 주의할 입력: 기존에 정렬/폭 없이 삽입된 이미지(하위호환, 가운데 정렬로 표시돼야 함).
+
+⚠️ reviewer 참고:
+- 봐줄 부분: (1)startResize의 document mousemove/mouseup 리스너 등록·해제(누수 없는지), (2)width 가드(min 40 / max 본문폭) 및 좌측 핸들 부호 반전, (3)align 토글(같은 값 재클릭 시 null) UX, (4)NodeView props 타입(ReactNodeViewProps) 사용, (5)Underline 제거 후 밑줄 정상 동작 여부.
+- 검증: `npx tsc --noEmit` EXIT=0, `npm run build` EXIT=0.
+- 범위 밖(미구현): 표/유튜브(4), sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7). ★정렬/크기 마크업이 현재 sanitize.ts를 통과 못 해 설정 소개글 저장 시 잘릴 수 있음(5단계에서 해결 예정, 정상).
+
 ## 테스트 결과 (tester)
 
 ### 테스트 결과 — 공지 리치 에디터 1~2단계 검증 (2026-07-06)
@@ -135,6 +166,26 @@
 📊 종합: 11개 중 10개 통과 / 1개 미실시(로그인 벽, 비치명) / 0개 실패
 
 **판정: 1~2단계 커밋 가능.** 코드 정합성·타입·빌드 통과, 설정 페이지 회귀 없음. (Underline 중복 등록은 reviewer 권장수정과 동일 — 비치명 정리 후보)
+
+### 테스트 결과 — 공지 리치 에디터 3단계 검증 (2026-07-06)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| tsc --noEmit | ✅ 통과 | EXIT=0 |
+| npm run build | ✅ 통과 | EXIT=0 |
+| /admin/settings 컴파일 | ✅ 통과 | ○ static, revalidate 30s |
+| Underline 회귀(import 제거 후 밑줄 동작) | ✅ 통과 | StarterKit 3.20 내장(dist L84-85 `if(this.options.underline!==false) push(Underline)`). toggleUnderline/isActive('underline') 그대로 동작. RichTextEditor에서 Underline import/등록 완전 제거 → 중복경고 해소 |
+| 2단계 3경로 호환(버튼/드래그/붙여넣기) | ✅ 통과 | ResizableImage.extend가 Image의 node name="image" + setImage 명령 상속. handlePaste/handleDrop의 `schema.nodes.image.create`, onPickImage의 `setImage` 모두 유효(tsc EXIT=0이 setImage 타입 존재 방증) |
+| 리사이즈 리스너 등록/해제 | ⚠️ 조건부통과 | 정상흐름 무누수: 리스너는 mousedown 시점에만 등록, onUp(mouseup)에서 mousemove/mouseup 둘 다 removeEventListener. 다만 드래그 중(마우스 누른 채) NodeView 언마운트 시 mouseup 전까지 리스너 잔존(mouseup에 자가치유). useEffect cleanup 없음 — 극희박 케이스, 비치명 |
+| width 가드(min40/max본문폭) | ✅ 통과 | MIN_WIDTH=40, max=editor.view.dom.clientWidth. Math.max/min 클램프. 좌측핸들 부호반전(sign=-1) 적용 |
+| 비율 유지 / updateAttributes | ✅ 통과 | img style height:auto(비율 자동), updateAttributes({width:next}) 호출 |
+| align/width 저장→재로드 왕복 | ✅ 통과 | width: parseHTML(getAttribute→parseInt)↔renderHTML({width}). align: parseHTML(data-align 우선, class fallback)↔renderHTML({class:'align-N','data-align':N}). getHTML은 renderHTML(toDOM) 사용 → img에 width/class/data-align 직렬화. 정렬 미지정 시 두 속성 모두 미출력(하위호환) |
+| 정렬툴바 아이콘(Material Symbols) | ✅ 통과 | material-symbols-outlined 폰트 layout.tsx L112 전역 로드 |
+| 실제 dev 렌더(클릭/드래그) | ⚠️ 미실시 | /admin/settings 관리자 로그인 벽으로 브라우저 조작 불가(비치명, 사전 보고됨). build 컴파일 성공으로 렌더 가능성 확인 |
+
+📊 종합: 11개 중 9개 통과 / 2개 조건부·미실시(비치명) / 0개 실패
+
+**판정: 3단계 커밋 가능.** 타입·빌드·설정페이지 컴파일 통과, Underline 회귀 없음(내장 전환 정상), 2단계 3경로 호환 유지, align/width 왕복 및 width 가드 정상. 참고: 정렬/크기 마크업(class/data-align)이 현 sanitize.ts 미통과로 저장 시 잘리는 것은 5단계 범위(정상). 리스너 언마운트 cleanup 부재는 극희박·자가치유 케이스로 비치명(개선 후보).
 
 ## 리뷰 결과 (reviewer) — 공지 리치 에디터 1~2단계 (2026-07-06)
 
@@ -162,6 +213,38 @@
 
 📌 범위 밖(미구현 정상): 이미지 정렬/크기(3), 표/유튜브(4), sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7).
 
+## 리뷰 결과 (reviewer) — 공지 리치 에디터 3단계 (이미지 정렬/크기조절) (2026-07-06)
+
+📊 **종합 판정: 통과 (커밋 OK)** — 치명 이슈 없음. 리스너 누수 없음(자기정리 보장). 속성 왕복·크기가드·기존경로 호환 양호.
+
+🔦 **리스너 누수 여부 (최우선) — 누수 없음**:
+- `startResize`가 document에 `mousemove`/`mouseup` 등록, `onUp`이 **둘 다** removeEventListener. `mouseup`은 document 전역이라 마우스를 이미지 밖·에디터 밖·창 안 어디서 놓아도 반드시 발화 → 정상 종료 경로에서 리스너 확실히 제거.
+- 리스너 중복 등록: 1 mousedown → 1쌍만 등록, onUp이 자기 클로저를 제거하므로 세션 간 누적 없음(좀비 핸들러 자기치유).
+- 유일한 이론적 틈: **드래그 도중 NodeView/에디터 언마운트**. useEffect cleanup이 없어 mouseup 전까지 핸들러 잔존하나, document mouseup이 뒤이어 발화하면 즉시 정리됨. 그 사이 onMove의 updateAttributes는 삭제된 노드에 대해 TipTap이 no-op 처리(throw 안 함) → 무해·자기치유. 지속 누수 아님.
+- → 커밋 차단 사유 아님. 방어적 강화(useEffect cleanup)는 권장 수준.
+
+✅ 잘된 점:
+- **크기 가드 견고**: MIN_WIDTH 40 + max=`editor.view.dom.clientWidth`로 clamp(`Math.max/min`), 좌측핸들(nw/sw) sign 반전 정확, height:auto+maxWidth:100%로 비율유지·컨테이너 넘침 방지 3중.
+- **속성 왕복 안전**: width parseHTML(parseInt)↔renderHTML(값 있을 때만 width), align은 data-align 우선+class fallback 이중 파싱. 기본(null)이면 두 속성 모두 미출력 → 기존 이미지 하위호환 유지.
+- **불량값 자기치유**: width가 0/NaN이면 renderHTML·NodeView 모두 falsy로 처리해 미적용(자연폭). 드래그론 음수 생성 불가(clamp). 손편집 음수만 무해하게 무시됨.
+- **기존 3경로 호환**: Image 확장이라 name='image' 유지 → `schema.nodes.image.create`(드롭·붙여넣기)·`setImage`(툴바) 그대로 동작. width/align default=null이라 삽입 마크업 불변.
+- **Underline 제거 정상**: StarterKit 3.20 내장으로 toggleUnderline/isActive('underline') 유지, 밑줄 회귀 없음(tester 확인).
+- Material Symbols 아이콘(정렬 툴바), 정렬 버튼 title 제공, 브랜드색 CSS변수(var(--color-brand-orange-500)) 사용.
+
+🔴 필수 수정: 없음
+
+🟡 권장 수정:
+- [ResizableImage.tsx:45~72] 리사이즈 리스너에 **useEffect cleanup(또는 Pointer Events + setPointerCapture)** 방어 추가 — 언마운트-도중-드래그 시 확실 정리. 현재도 mouseup 자기정리로 실무상 안전하나, 방어적 견고성 향상.
+- [ResizableImage.tsx:58 onMove] onMove에서 `ev.preventDefault()` 미호출 → 드래그 중 브라우저 텍스트/이미지 네이티브 선택이 겹쳐 UX 지터 가능. preventDefault로 매끈해짐.
+
+🔵 사소 (선택, 커밋 무관):
+- [ResizableImage.tsx:89] 핸들 `border: '2px solid #fff'` 하드코딩(대비용 흰 테두리, 불가피 성격). rgba 효과색(그림자/눌림)도 마찬가지 — CSS변수 대체 불필요.
+- 리사이즈 핸들(span)에 title/aria-label 없음 — 정렬 버튼과 달리 접근성 라벨 부재. `role/aria-label="크기 조절"` 고려.
+- 핸들은 onMouseDown만 → 터치기기 리사이즈 미지원(admin 데스크톱 위주라 허용 범위).
+- [handle의 maxWidth=clientWidth] 드래그 중 창 리사이즈 시 max 값이 시작시점 고정(무시 가능).
+
+📌 범위 밖(정상): 정렬/크기 마크업의 sanitize 미통과는 5단계 사안. 표/유튜브(4)·공지적용(6)·붙여넣기정제(7) 이후 단계.
+
 ## 미해결 리뷰 수정 사항 (이월)
 | 번호 | 파일 | 심각도 | 내용 | 상태 |
 |------|------|--------|------|------|
@@ -175,6 +258,9 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-06 | 공지 리치에디터 3단계 테스트 — tsc/build EXIT=0, Underline회귀無, 2단계 3경로 호환, align/width 왕복·가드 정상, 9/11통과·0실패 | 테스트통과(커밋OK) |
+| 2026-07-06 | 공지 리치에디터 3단계 리뷰 — 리스너누수 없음(자기정리 보장), 크기가드/속성왕복/기존경로 양호, 치명0·권장2(cleanup·preventDefault) | 리뷰통과(커밋OK) |
+| 2026-07-06 | 공지 리치에디터 3단계 구현 — 이미지 정렬(좌/중/우)+드래그 크기조절 커스텀 ResizableImage NodeView, Underline중복제거, 무설치, tsc/build EXIT=0 | 구현완료(tester대기) |
 | 2026-07-06 | 공지 리치에디터 1~2단계 리뷰 — 링크보안/업로드견고성/인터페이스 통과, 치명0·권장1(Underline중복) | 리뷰통과(커밋OK) |
 | 2026-07-06 | 공지 리치에디터 1~2단계 구현 — 툴바(목록/인용/구분선/링크/글자크기)+이미지업로드 3경로, 무설치, tsc/build EXIT=0 | 구현완료(tester대기) |
 | 2026-07-06 | 공지 리치 에디터 강화 기획 — 7단계 계획+sanitize확장안+패키지목록, 사용자 결정 2건 대기 | 기획완료 |

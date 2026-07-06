@@ -4,9 +4,8 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Color } from '@tiptap/extension-color'
 import { TextStyle } from '@tiptap/extension-text-style'
-import { Underline } from '@tiptap/extension-underline'
 import { TextAlign } from '@tiptap/extension-text-align'
-import { Image } from '@tiptap/extension-image'
+import { ResizableImage } from '@/components/extensions/ResizableImage'
 import { FontSize } from '@/components/extensions/FontSize'
 import { useEffect, useRef, useState } from 'react'
 
@@ -87,10 +86,12 @@ export default function RichTextEditor({
             TextStyle,
             FontSize, // 글자 크기 확장 (TextStyle 기반) — 이제 툴바에 연결됨
             Color,
-            Underline,
+            // Underline은 StarterKit 3.20에 내장되어 있어 별도 등록을 제거함(중복 방지).
+            // 밑줄 버튼(toggleUnderline / isActive('underline'))은 그대로 동작한다.
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
-            // 본문 인라인 이미지 노드 — 넓은 이미지는 CSS(.ProseMirror img)가 100%로 축소
-            Image.configure({ inline: false }),
+            // 본문 이미지 노드 — 좌/중/우 정렬 + 드래그 크기조절을 지원하는 커스텀 확장.
+            // 삽입/드롭/붙여넣기(setImage, schema.nodes.image)는 그대로 유지됨.
+            ResizableImage.configure({ inline: false }),
         ],
         content: value,
         immediatelyRender: false,

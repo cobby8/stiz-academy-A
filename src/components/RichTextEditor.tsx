@@ -7,6 +7,10 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import { TextAlign } from '@tiptap/extension-text-align'
 import { ResizableImage } from '@/components/extensions/ResizableImage'
 import { FontSize } from '@/components/extensions/FontSize'
+// 표: TableKit 하나로 표/행/헤더/셀 4개 확장을 한 번에 묶어 등록한다 (v3에서 통합됨)
+import { TableKit } from '@tiptap/extension-table'
+// 유튜브: URL을 넣으면 <iframe> 임베드로 바꿔주는 확장
+import { Youtube } from '@tiptap/extension-youtube'
 import { useEffect, useRef, useState } from 'react'
 
 // 업로드 사전 검증 기준 — 서버(/api/upload)와 동일하게 맞춰 잘못된 파일을 미리 거른다.
@@ -38,6 +42,9 @@ export default function RichTextEditor({
     // 링크 입력 팝업 열림 상태 + 입력 중인 URL 값
     const [linkPopupOpen, setLinkPopupOpen] = useState(false);
     const [linkUrl, setLinkUrl] = useState("");
+    // 유튜브 입력 팝업 열림 상태 + 입력 중인 URL 값 (링크 팝업과 같은 패턴)
+    const [ytPopupOpen, setYtPopupOpen] = useState(false);
+    const [ytUrl, setYtUrl] = useState("");
 
     // ── 이미지 파일 1개를 서버에 업로드하고 최종 URL을 돌려준다. 실패 시 null ──
     // 왜 함수로 분리? 툴바 버튼/드래그&드롭/붙여넣기 3경로가 같은 업로드 로직을 공유하기 때문.
@@ -92,6 +99,19 @@ export default function RichTextEditor({
             // 본문 이미지 노드 — 좌/중/우 정렬 + 드래그 크기조절을 지원하는 커스텀 확장.
             // 삽입/드롭/붙여넣기(setImage, schema.nodes.image)는 그대로 유지됨.
             ResizableImage.configure({ inline: false }),
+            // 표 — resizable:true 로 열 너비를 드래그로 조절할 수 있게 한다.
+            // TableKit 하나가 table/tableRow/tableHeader/tableCell 노드를 모두 등록한다.
+            TableKit.configure({
+                table: { resizable: true },
+            }),
+            // 유튜브 임베드 — 16:9 반응형은 globals.css(div[data-youtube-video])에서 처리.
+            // width/height 는 iframe 기본값이며 CSS가 컨테이너 비율로 덮어쓴다.
+            Youtube.configure({
+                controls: true,   // 재생 컨트롤 표시
+                nocookie: false,  // 표준 youtube.com/embed 도메인 사용 (5단계 sanitize 화이트리스트 대상)
+                width: 640,
+                height: 360,      // 16:9 기본 비율
+            }),
         ],
         content: value,
         immediatelyRender: false,
@@ -193,6 +213,38 @@ export default function RichTextEditor({
     function removeLink() {
         editor?.chain().focus().extendMarkRange('link').unsetLink().run();
         setLinkPopupOpen(false);
+    }
+
+    // ── 표 삽입: 헤더행 포함 기본 3x3 ──
+    function insertTable() {
+        editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    }
+
+    // ── 유튜브 URL 검증: youtube.com / youtu.be 도메인만 허용 (그 외 임의 iframe 차단) ──
+    // 왜? 유튜브 외 임의 URL을 iframe으로 넣으면 보안 위험(XSS/피싱). 도메인을 화이트리스트로 좁힌다.
+    function isYoutubeUrl(url: string): boolean {
+        return /^(?:https?:\/\/)?(?:(?:www|m|music)\.)?(?:youtube\.com|youtu\.be)\/.+/i.test(url.trim());
+    }
+
+    // ── 유튜브 팝업 열기 ──
+    function openYtPopup() {
+        setYtUrl('https://');
+        setYtPopupOpen(true);
+    }
+
+    // ── 유튜브 삽입: 도메인 검증 통과 시에만 임베드 ──
+    function applyYoutube() {
+        if (!editor) return;
+        const url = ytUrl.trim();
+        if (!url || url === 'https://') { setYtPopupOpen(false); return; }
+        if (!isYoutubeUrl(url)) {
+            alert('유튜브 주소만 넣을 수 있어요 (youtube.com 또는 youtu.be)');
+            return;
+        }
+        // setYoutubeVideo 는 확장 내부에서도 유효성 검사를 한 번 더 한다(이중 방어).
+        editor.chain().focus().setYoutubeVideo({ src: url }).run();
+        setYtPopupOpen(false);
+        setYtUrl('');
     }
 
     if (!editor) {
@@ -375,6 +427,38 @@ export default function RichTextEditor({
 
                 <div className="w-px h-5 bg-gray-300 mx-0.5" />
 
+                {/* 표 / 유튜브 (Material Symbols 아이콘) */}
+                <button
+                    type="button"
+                    onClick={insertTable}
+                    className={iconBtn(editor.isActive('table'))}
+                    title="표 삽입 (3x3)"
+                >
+                    <span className="material-symbols-outlined text-[18px] leading-none">grid_on</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={openYtPopup}
+                    className={iconBtn(false)}
+                    title="유튜브 영상 삽입"
+                >
+                    <span className="material-symbols-outlined text-[18px] leading-none">smart_display</span>
+                </button>
+
+                {/* 표 편집 도구 — 커서가 표 안에 있을 때만 노출 */}
+                {editor.isActive('table') && (
+                    <>
+                        <div className="w-px h-5 bg-gray-300 mx-0.5" />
+                        <button type="button" onClick={() => editor.chain().focus().addRowAfter().run()} className="px-1.5 h-6 text-[11px] rounded hover:bg-gray-200" title="아래에 행 추가">행+</button>
+                        <button type="button" onClick={() => editor.chain().focus().deleteRow().run()} className="px-1.5 h-6 text-[11px] rounded hover:bg-gray-200" title="현재 행 삭제">행−</button>
+                        <button type="button" onClick={() => editor.chain().focus().addColumnAfter().run()} className="px-1.5 h-6 text-[11px] rounded hover:bg-gray-200" title="오른쪽에 열 추가">열+</button>
+                        <button type="button" onClick={() => editor.chain().focus().deleteColumn().run()} className="px-1.5 h-6 text-[11px] rounded hover:bg-gray-200" title="현재 열 삭제">열−</button>
+                        <button type="button" onClick={() => editor.chain().focus().deleteTable().run()} className="px-1.5 h-6 text-[11px] rounded hover:bg-gray-200" title="표 전체 삭제">표삭제</button>
+                    </>
+                )}
+
+                <div className="w-px h-5 bg-gray-300 mx-0.5" />
+
                 {/* 색상 */}
                 <input
                     type="color"
@@ -420,6 +504,23 @@ export default function RichTextEditor({
                     <button type="button" onClick={applyLink} className="h-8 px-3 text-sm rounded bg-brand-orange-500 text-white hover:bg-brand-orange-600">적용</button>
                     <button type="button" onClick={removeLink} className="h-8 px-3 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">링크 제거</button>
                     <button type="button" onClick={() => setLinkPopupOpen(false)} className="h-8 px-3 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">취소</button>
+                </div>
+            )}
+
+            {/* 유튜브 입력 팝업 — 링크 팝업과 동일한 한 줄 패턴 */}
+            {ytPopupOpen && (
+                <div className="flex flex-wrap items-center gap-2 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900">
+                    <input
+                        type="text"
+                        value={ytUrl}
+                        onChange={e => setYtUrl(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyYoutube(); } }}
+                        placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
+                        autoFocus
+                        className="flex-1 min-w-[180px] h-8 px-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                    />
+                    <button type="button" onClick={applyYoutube} className="h-8 px-3 text-sm rounded bg-brand-orange-500 text-white hover:bg-brand-orange-600">삽입</button>
+                    <button type="button" onClick={() => setYtPopupOpen(false)} className="h-8 px-3 text-sm rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">취소</button>
                 </div>
             )}
 

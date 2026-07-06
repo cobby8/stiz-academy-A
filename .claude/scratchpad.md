@@ -145,6 +145,75 @@
 - 검증: `npx tsc --noEmit` EXIT=0, `npm run build` EXIT=0.
 - 범위 밖(미구현): 표/유튜브(4), sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7). ★정렬/크기 마크업이 현재 sanitize.ts를 통과 못 해 설정 소개글 저장 시 잘릴 수 있음(5단계에서 해결 예정, 정상).
 
+### 구현 기록 — 공지 리치 에디터 강화 4단계 (2026-07-06)
+
+📝 구현한 기능: 공유 TipTap 에디터에 **표(table) 삽입/편집 + 유튜브 임베드** 추가.
+
+**상태: 4단계 완료, 5단계(sanitize.ts 보안 확장) 대기.**
+
+**설치 패키지 (TipTap 3.20.0 정확 일치, package.json 반영 `^3.20.0`):**
+- `@tiptap/extension-table@3.20.0` — v3에서 `TableKit`(Table+TableRow+TableHeader+TableCell 전부) 한 패키지에 통합. 기획서의 서브패키지 3개(table-row/header/cell)는 v3에서 불필요 → 미설치.
+- `@tiptap/extension-youtube@3.20.0`
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| package.json | @tiptap/extension-table, @tiptap/extension-youtube 추가 | 수정 |
+| src/components/RichTextEditor.tsx | TableKit(resizable)·Youtube 확장 등록, 툴바 "표 삽입"(3x3 헤더행)·"유튜브" 버튼, 표 편집도구(행+/행−/열+/열−/표삭제, 표 안일 때만 노출), 유튜브 URL 입력줄(도메인검증) | 수정 |
+| src/app/globals.css | .ProseMirror 표 스타일(테두리/헤더배경 color-mix, selectedCell, column-resize-handle, tableWrapper) + 유튜브 16:9 반응형(div[data-youtube-video]) | 수정 |
+
+**구현 상세:**
+- 표: `insertTable({rows:3, cols:3, withHeaderRow:true})`. `TableKit.configure({table:{resizable:true}})`로 열 너비 드래그 조절. 편집도구는 `editor.isActive('table')`일 때만 툴바에 인라인 노출(addRowAfter/deleteRow/addColumnAfter/deleteColumn/deleteTable).
+- 유튜브: 툴바 버튼 → 링크와 동일한 인라인 입력줄 → `isYoutubeUrl()`(youtube.com/youtu.be만) 앱검증 후 `setYoutubeVideo({src})`. 확장 내부에서도 재검증(이중 방어). controls:true, nocookie:false, 640x360.
+- 아이콘: Material Symbols Outlined(grid_on, smart_display) — 컨벤션 준수. 표편집/유튜브입력줄은 기존 링크팝업 패턴 답습.
+- CSS 색상: 하드코딩 hex 없음. 테두리/헤더배경은 `color-mix(in srgb, currentColor N%, transparent)`(라이트/다크 자동), 하이라이트·리사이즈핸들은 `var(--color-brand-orange-500)`.
+
+**★★ 5단계 sanitize.ts 대비 — 실제 생성 마크업 (확장 dist 소스 직접 확인) ★★**
+
+▶ **표** (`editor.getHTML()` 직렬화 결과):
+```html
+<table style="min-width: 75px">          <!-- 열 조절 시 style="width: Npx" -->
+  <colgroup>
+    <col>                                 <!-- 열마다 1개. 조절하면 <col style="width: 120px"> -->
+  </colgroup>
+  <tbody>
+    <tr>
+      <th colspan="1" rowspan="1"><p>...</p></th>   <!-- 헤더행: <th> -->
+    </tr>
+    <tr>
+      <td colspan="1" rowspan="1"><p>...</p></td>
+    </tr>
+  </tbody>
+</table>
+```
+- ⚠️ **`<thead>` 미생성** — 헤더 셀도 `<tbody>` 안 첫 `<tr>`에 `<th>`로 들어감. (기획서엔 thead 언급됐으나 실제로 안 나옴)
+- 태그: `table, colgroup, col, tbody, tr, th, td` (기획서엔 colgroup/col 누락 — 반드시 추가!)
+- 속성: **th/td** → `colspan`, `rowspan`, `colwidth`(리사이즈 시 생기는 쉼표구분 정수, 예 `colwidth="120"` 또는 `"120,80"`); **table** → `style`(min-width/width); **col** → `style`(width:Npx).
+- 5단계 sanitize 할 일: allowedTags에 `colgroup`,`col` 추가(table/tbody/tr/th/td는 sanitize-html defaults에 이미 있음). `allowedAttributes`의 td/th에 `colspan,rowspan,colwidth` 추가. `allowedStyles`에 table/col의 `width`,`min-width` 허용(px). thead는 defaults에 있으니 미생성이라도 무해.
+
+▶ **유튜브** (`editor.getHTML()` 직렬화 결과):
+```html
+<div data-youtube-video="">
+  <iframe width="640" height="360" allowfullscreen="true"
+          src="https://www.youtube.com/embed/VIDEO_ID?..."></iframe>
+</div>
+```
+- **src 도메인(화이트리스트 핵심)**: 항상 `https://www.youtube.com/embed/<VIDEO_ID>` 로 **정규화**됨(입력이 youtu.be/watch?v= 무엇이든). nocookie:true였다면 `https://www.youtube-nocookie.com/embed/`. 현재 설정 nocookie:false → **`www.youtube.com`만** 나옴.
+- 태그: `div`(data-youtube-video 속성), `iframe`.
+- iframe 속성: `src, width, height, allowfullscreen`(옵션 더 켜면 추가 가능하나 현재 이 4개).
+- 5단계 sanitize 할 일: allowedTags에 `iframe` 추가; div에 `data-youtube-video` 속성 허용; iframe에 `src,width,height,allowfullscreen,frameborder,allow` 허용; **`allowedIframeHostnames: ['www.youtube.com','www.youtube-nocookie.com']`** (실제 src가 www.youtube.com/embed로 정규화되므로 youtu.be는 화이트리스트에 불필요). script/onclick/javascript: 차단은 현행 유지.
+
+💡 tester 참고:
+- 테스트: dev(포트 4000) → `/admin/settings` 소개글/이념/시설 에디터. (관리자 로그인 벽이면 build/코드로 확인)
+- 정상 동작: (1)"표" 버튼(grid_on) 클릭 → 3x3 표(첫 행 헤더 굵게·배경) 삽입, (2)표 안 클릭 시 툴바에 행+/행−/열+/열−/표삭제 노출·동작, (3)열 경계 드래그로 너비 조절, (4)"유튜브" 버튼(smart_display) → 입력줄에 유튜브 URL 넣고 삽입 → 16:9 영상 임베드, (5)유튜브 아닌 URL(예 vimeo)·빈값 → "유튜브 주소만" 안내 후 거부.
+- 주의할 입력: `https://youtu.be/xxx`, `https://www.youtube.com/watch?v=xxx`, `https://m.youtube.com/...`, `music.youtube.com` (모두 허용) / `https://evil.com`, `javascript:...` (거부).
+- **회귀 확인 필수**: 설정 페이지 저장/재로드 정상, 기존 1~3단계 기능(툴바·이미지업로드·정렬/리사이즈) 불변.
+- ⚠️ **표/유튜브는 현재 sanitize.ts 미통과** → 설정 소개글 저장 시 잘림(정상, 5단계에서 해결). 편집화면 표시·삽입 동작만 이번 검증 대상.
+
+⚠️ reviewer 참고:
+- 봐줄 부분: (1)isYoutubeUrl 정규식이 youtube 도메인만 정확히 통과시키는지(우회 여부), (2)표 편집도구 조건부 노출(isActive('table')) 리렌더 동작, (3)color-mix 색상이 하드코딩 규칙 위반 아닌지(currentColor 파생), (4)TableKit resizable 등록이 기존 확장과 충돌 없는지.
+- 검증: `npx tsc --noEmit` EXIT=0, `npm run build` EXIT=0, /admin/settings ○ static 30s(회귀 없음).
+- 범위 밖(미구현): sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7).
+
 ## 테스트 결과 (tester)
 
 ### 테스트 결과 — 공지 리치 에디터 1~2단계 검증 (2026-07-06)
@@ -186,6 +255,30 @@
 📊 종합: 11개 중 9개 통과 / 2개 조건부·미실시(비치명) / 0개 실패
 
 **판정: 3단계 커밋 가능.** 타입·빌드·설정페이지 컴파일 통과, Underline 회귀 없음(내장 전환 정상), 2단계 3경로 호환 유지, align/width 왕복 및 width 가드 정상. 참고: 정렬/크기 마크업(class/data-align)이 현 sanitize.ts 미통과로 저장 시 잘리는 것은 5단계 범위(정상). 리스너 언마운트 cleanup 부재는 극희박·자가치유 케이스로 비치명(개선 후보).
+
+### 테스트 결과 — 공지 리치 에디터 4단계 검증 (표+유튜브) (2026-07-06)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| tsc --noEmit | ✅ 통과 | EXIT=0 |
+| npm run build | ✅ 통과 | EXIT=0, ✓ Compiled successfully |
+| /admin/settings 컴파일(회귀) | ✅ 통과 | ○ static, revalidate 30s (변동 없음) |
+| 패키지 설치(table/youtube @3.20.0) | ✅ 통과 | node_modules 실측 둘 다 3.20.0. v3 TableKit 1개가 table/row/header/cell 통합(서브패키지 3개 불필요 확인) |
+| 유튜브 도메인 검증(보안) | ✅ 통과 | 공격벡터 15/15. evil.com·youtube.com.evil.com·youtu.be.evil.com·myyoutube.com·javascript:·vimeo·data: 전부 거부. app정규식(youtube.com/youtu.be만)+확장 isValidYoutubeUrl 이중 AND 게이트 |
+| iframe src 정규화 | ✅ 통과 | 확장 getYoutubeEmbedUrl: nocookie:false→항상 `https://www.youtube.com/embed/<ID>`로 정규화(입력이 youtu.be/watch?v= 무엇이든). 임의 도메인 src 불가 |
+| setYoutubeVideo 명령 존재 | ✅ 통과 | dist L176 setYoutubeVideo, L177 내부 isValidYoutubeUrl 재검증(이중 방어) |
+| 표 명령어 TableKit 일치 | ✅ 통과 | insertTable/addRowAfter/deleteRow/addColumnAfter/deleteColumn/deleteTable 전부 dist 존재. TableKit export 확인 |
+| 표 편집도구 조건부 노출 | ✅ 통과 | node name="table" 확인 → `editor.isActive('table')` 유효. 표 안일 때만 행+/행−/열+/열−/표삭제 렌더(useEditor 선택변경 리렌더 표준 패턴) |
+| 1~3단계 회귀(확장 등록 순서/충돌) | ✅ 통과 | StarterKit/TextStyle/FontSize/Color/TextAlign/ResizableImage/TableKit/Youtube 순 충돌 없음. StarterKit에 table/youtube 미포함 |
+| 밑줄(Underline) 회귀 | ✅ 통과 | StarterKit 3.20 내장 유지, 별도 import 없음. toggleUnderline 동작 |
+| 이미지 3경로 회귀 | ✅ 통과 | ResizableImage=Image.extend라 name='image' 유지 → 버튼/드래그/붙여넣기 setImage·schema.nodes.image 그대로. tsc EXIT=0 |
+| CSS 하드코딩 색상(표/유튜브 블록) | ✅ 통과 | globals.css 252~320 블록: color-mix(currentColor)·var(--color-brand-orange-500)만. 하드코딩 hex 없음(7~40행 hex는 CSS변수 정의 자체) |
+| 설정 페이지 인터페이스 불변 | ✅ 통과 | RichTextEditor props(value/onChange/name/placeholder/uploadFolder) 변동 없음 |
+| 실제 dev 렌더(클릭/삽입) | ⚠️ 미실시 | /admin/settings 관리자 로그인 벽(비치명, 사전 합의됨). build 컴파일 성공으로 렌더 가능성 확인. dev서버 미기동(정리 불필요) |
+
+📊 종합: 15개 중 14개 통과 / 1개 미실시(로그인 벽, 비치명) / 0개 실패
+
+**판정: 4단계 커밋 가능.** 타입·빌드·설정페이지 컴파일 통과, 유튜브 도메인 화이트리스트가 공격벡터 15/15 차단 + src를 www.youtube.com/embed로 강제 정규화(보안 견고), 표 명령어 TableKit 일치, 1~3단계 회귀 없음. 참고: 표/유튜브 마크업이 현 sanitize.ts 미통과로 설정 소개글 저장 시 잘리는 것은 **5단계 범위(정상)** — 이번 검증은 편집화면 삽입/동작 대상.
 
 ## 리뷰 결과 (reviewer) — 공지 리치 에디터 1~2단계 (2026-07-06)
 
@@ -245,6 +338,38 @@
 
 📌 범위 밖(정상): 정렬/크기 마크업의 sanitize 미통과는 5단계 사안. 표/유튜브(4)·공지적용(6)·붙여넣기정제(7) 이후 단계.
 
+## 리뷰 결과 (reviewer) — 공지 리치 에디터 4단계 (표+유튜브) (2026-07-06)
+
+📊 **종합 판정: 통과 (커밋 OK)** — 치명 이슈 없음. 유튜브 도메인 검증 **우회 불가**(3중 방어), 1~3단계 회귀 없음, 표 편집도구 안전.
+
+🔐 **유튜브 도메인 검증 (최우선) — 우회 불가 결론**:
+- **앱 검증(isYoutubeUrl)**: `/^(?:https?:\/\/)?(?:(?:www|m|music)\.)?(?:youtube\.com|youtu\.be)\/.+/i` — `^` 앵커 + 호스트 직후 `/` 강제라 서브도메인 사칭·userinfo 트릭 모두 차단.
+  - `evil-youtube.com` → `youtube.com`이 문자열 시작에서 안 맞음 → **거부** ✅
+  - `youtube.com.evil.com/` → `youtube.com` 뒤가 `.`(슬래시 아님) → **거부** ✅
+  - `youtube.com@evil.com/` → `youtube.com` 뒤 `@` → **거부** ✅ (실제 host=evil.com인 userinfo 트릭 방어)
+  - `javascript:youtube.com/x`, `data:...youtube.com/` → 시작이 `j`/`d` → **거부** ✅
+- **확장 정규화(2차 방어)**: extension-youtube 3.20 `getEmbedUrlFromYoutubeUrl`가 자체 YOUTUBE_REGEX(host=youtube.com/youtu.be/youtube-nocookie.com로 앵커)로 재검증 후 **항상 `https://www.youtube.com/embed/<ID>`로 정규화**. `/embed/` 포함 URL을 원본 반환하는 분기도 그 앞의 host 앵커 정규식을 통과해야만 도달 → 임의 도메인 iframe src 생성 경로 없음. 검증 실패 시 null 반환 → 삽입 안 됨(거부).
+- **sanitize allowedIframeHostnames(3차, 5단계)**: 최종 렌더 방어선. 위 2중을 뚫어도 여기서 차단.
+- → **입력→정규화→sanitize 3중 방어 모두 youtube host로 수렴. 우회 경로 발견 못 함.**
+
+✅ 잘된 점:
+- 표/유튜브 확장 등록 이름 충돌 없음(table/tableRow/tableCell/tableHeader, youtube, image 각기 고유). tsc/build EXIT=0로 확장 조합 정상.
+- 표 편집도구가 `editor.isActive('table')` 조건부 렌더 → 표 밖에서는 버튼 자체가 안 보여 no-op 걱정 없음. insertTable은 어디서든 안전 실행.
+- 유튜브 입력줄이 링크 팝업과 동일 패턴(일관성), 빈값/`https://`만 입력 시 조기 종료 가드.
+- CSS: 하드코딩 hex 0개. 테두리/헤더배경 `color-mix(in srgb, currentColor N%, transparent)`(라이트/다크 자동 적응 — color-mix 사용 적정), 하이라이트/리사이즈핸들 `var(--color-brand-orange-500)`. 유튜브 16:9 `aspect-ratio` 반응형 + tableWrapper `overflow-x:auto`(가로 스크롤 격리) 양호.
+- 표/유튜브 신규 버튼 아이콘 Material Symbols(grid_on, smart_display) — conventions 준수.
+
+🔴 필수 수정: 없음
+
+🟡 권장 수정: 없음 (치명·기능결함 없음)
+
+🔵 사소 (선택, 커밋 무관):
+- [RichTextEditor.tsx:236 applyYoutube] 앱 검증은 통과하나 확장이 video ID를 못 뽑는 URL(예 `youtube.com/channel/UCxxx`, `list=` 없는 재생목록 URL)은 확장이 null 반환 → **조용히 미삽입**(팝업만 닫힘, 안내 없음). 드물지만 사용자가 "왜 안 들어가지" 혼란 가능. `setYoutubeVideo().run()` 반환값(false) 확인해 실패 시 alert 하면 개선. 보안·기능결함 아님.
+- [452~456 표편집 버튼, 260 iconBtn 등] `hover:bg-gray-200`에 `dark:` variant 부재 → 다크모드 미세 부조화. 기존 툴바 패턴 답습이라 이번 신규만의 문제 아님(전체 후속 통일 후보).
+- 표편집 텍스트 버튼(행+/행−/열+/열−/표삭제)은 Material Symbols 아닌 텍스트 라벨 — admin 내부 소형 컨트롤이라 허용 범위. 접근성 title은 제공됨.
+
+📌 범위 밖(정상): 표/유튜브 마크업의 sanitize 통과는 5단계(colgroup/col·iframe·allowedIframeHostnames 추가). 현재 설정페이지 저장 시 잘리는 것은 예정된 동작. 공지 적용(6)·붙여넣기 정제(7) 후속.
+
 ## 미해결 리뷰 수정 사항 (이월)
 | 번호 | 파일 | 심각도 | 내용 | 상태 |
 |------|------|--------|------|------|
@@ -258,6 +383,9 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-06 | 공지 리치에디터 4단계 리뷰 — 유튜브검증 우회불가(앱앵커+확장정규화+sanitize 3중방어), 표편집 조건부노출 안전, 확장이름 무충돌, color-mix/CSS변수 준수. 치명0·권장0·사소2 | 리뷰통과(커밋OK) |
+| 2026-07-06 | 공지 리치에디터 4단계 테스트 — tsc/build EXIT=0, /admin/settings 회귀無, 유튜브 도메인검증 공격벡터 15/15 차단+src www.youtube.com/embed 정규화, 표 명령어 TableKit 일치, 1~3단계 회귀無. 14/15통과·0실패 | 테스트통과(커밋OK) |
+| 2026-07-06 | 공지 리치에디터 4단계 구현 — 표(TableKit resizable 3x3+행/열편집)+유튜브임베드(도메인검증). extension-table/youtube@3.20.0 설치, tsc/build EXIT=0. 5단계 마크업(colgroup/col·thead없음·iframe src정규화) 기록 | 구현완료(tester대기) |
 | 2026-07-06 | 공지 리치에디터 3단계 테스트 — tsc/build EXIT=0, Underline회귀無, 2단계 3경로 호환, align/width 왕복·가드 정상, 9/11통과·0실패 | 테스트통과(커밋OK) |
 | 2026-07-06 | 공지 리치에디터 3단계 리뷰 — 리스너누수 없음(자기정리 보장), 크기가드/속성왕복/기존경로 양호, 치명0·권장2(cleanup·preventDefault) | 리뷰통과(커밋OK) |
 | 2026-07-06 | 공지 리치에디터 3단계 구현 — 이미지 정렬(좌/중/우)+드래그 크기조절 커스텀 ResizableImage NodeView, Underline중복제거, 무설치, tsc/build EXIT=0 | 구현완료(tester대기) |

@@ -42,11 +42,12 @@ export default async function Home() {
   // 헤더/푸터에 전달할 데이터 추출
   const phone = settings?.contactPhone || "010-0000-0000";
   const address = settings?.address || "";
+  const operatingHours = settings?.operatingHours || "";
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white flex flex-col">
       {/* 통합 헤더 */}
-      <PublicHeader phone={phone} address={address} />
+      <PublicHeader phone={phone} address={address} operatingHours={operatingHours} />
 
       {/* 메인 콘텐츠 — LandingPageClient는 히어로~CTA까지만 담당 */}
       <main className="flex-1">
@@ -59,7 +60,7 @@ export default async function Home() {
       </main>
 
       {/* 통합 푸터 */}
-      <PublicFooter phone={phone} address={address} />
+      <PublicFooter phone={phone} address={address} operatingHours={operatingHours} />
 
       {/* 챗봇 버튼 — 다른 페이지는 PublicPageLayout에서 렌더링하지만, 메인 페이지는 직접 추가 */}
       <ChatBotButton />

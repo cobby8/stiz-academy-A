@@ -38,6 +38,7 @@ export async function ensureAcademySettingsColumns() {
         ["facilitiesText", "TEXT"],
         ["facilitiesImagesJSON", "TEXT"],
         ["galleryImagesJSON", "TEXT"],
+        ["operatingHours", "TEXT"],
         ["uniformFormUrl", "TEXT"],
         ["useBuiltInTrialForm", "BOOLEAN DEFAULT false"],  // 자체 폼 ON/OFF (false=구글폼)
         ["useBuiltInEnrollForm", "BOOLEAN DEFAULT false"], // 자체 폼 ON/OFF (false=구글폼)
@@ -57,7 +58,7 @@ export async function ensureAcademySettingsColumns() {
 // ── Prisma 모델 클라이언트 없이 raw SQL 로 upsert (RETURNING 우회) ──────────────
 const ALLOWED_SETTINGS_COLUMNS = [
     'introductionTitle', 'introductionText', 'shuttleInfoText',
-    'contactPhone', 'address', 'termsOfService', 'pageDesignJSON',
+    'contactPhone', 'address', 'operatingHours', 'termsOfService', 'pageDesignJSON',
     'googleCalendarIcsUrl', 'googleSheetsScheduleUrl', 'classDays',
     'siteBodyFont', 'siteHeadingFont',
     'trialTitle', 'trialContent', 'trialFormUrl',
@@ -330,6 +331,7 @@ export async function updateAcademySettings(data: {
     facilitiesText?: string;
     facilitiesImagesJSON?: string;
     galleryImagesJSON?: string;
+    operatingHours?: string;
     naverPlaceUrl?: string;
     uniformFormUrl?: string;
     useBuiltInTrialForm?: boolean;
@@ -350,6 +352,15 @@ export async function updateAcademySettings(data: {
     }
     revalidatePath("/");
     revalidatePath("/about");
+    revalidatePath("/programs");
+    revalidatePath("/schedule");
+    revalidatePath("/annual");
+    revalidatePath("/gallery");
+    revalidatePath("/notices");
+    revalidatePath("/faq");
+    revalidatePath("/terms");
+    revalidatePath("/privacy");
+    revalidatePath("/simulator");
     revalidatePath("/admin/settings");
     revalidatePath("/admin/apply");
     revalidatePath("/apply");

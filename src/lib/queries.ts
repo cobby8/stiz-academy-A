@@ -30,6 +30,7 @@ export const getAcademySettings = cache(async () => {
                 shuttleInfoText: r.shuttleInfoText ?? r.shuttleinfotext ?? null,
                 contactPhone: r.contactPhone ?? r.contactphone ?? null,
                 address: r.address ?? null,
+                operatingHours: r.operatingHours ?? r.operatinghours ?? null,
                 pageDesignJSON: r.pageDesignJSON ?? r.pagedesignjson ?? null,
                 googleCalendarIcsUrl: r.googleCalendarIcsUrl ?? r.googlecalendaricsurl ?? null,
                 googleSheetsScheduleUrl: r.googleSheetsScheduleUrl ?? r.googlesheetsscheduleurl ?? null,
@@ -62,6 +63,7 @@ export const getAcademySettings = cache(async () => {
     return {
         pageDesignJSON: null,
         contactPhone: "010-0000-0000",
+        operatingHours: "평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)",
         address: "다산신도시 체육관",
     } as any;
 });

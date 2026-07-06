@@ -29,17 +29,18 @@ export default async function PublicPageLayout({
   const settings = await getAcademySettings();
   const phone = (settings as any).contactPhone || "010-0000-0000";
   const address = (settings as any).address || "";
+  const operatingHours = (settings as any).operatingHours || "";
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 flex flex-col transition-colors duration-300">
       {/* 통합 헤더 — Client Component (모바일 햄버거 메뉴 때문) */}
-      <PublicHeader phone={phone} address={address} />
+      <PublicHeader phone={phone} address={address} operatingHours={operatingHours} />
 
       {/* 페이지 콘텐츠 영역 — 서브페이지의 children이 여기에 들어감 */}
       <main className="flex-1">{children}</main>
 
       {/* 통합 푸터 — Server Component */}
-      <PublicFooter phone={phone} address={address} />
+      <PublicFooter phone={phone} address={address} operatingHours={operatingHours} />
 
       {/* 학부모 상담 챗봇 — 모든 공개 페이지 우하단에 플로팅 버튼 */}
       <ChatBotButton />

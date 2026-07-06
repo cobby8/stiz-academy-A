@@ -351,6 +351,17 @@ export default function AdminSettingsClient({
                                 />
                             </div>
                             <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">운영시간</label>
+                                <input
+                                    name="operatingHours"
+                                    type="text"
+                                    defaultValue={initialSettings?.operatingHours || ""}
+                                    placeholder="평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)"
+                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                />
+                                <p className="text-xs text-gray-400 mt-1.5">비워두면 기본 운영시간이 표시됩니다. 모든 공개 페이지의 상단 바와 푸터에 함께 반영됩니다.</p>
+                            </div>
+                            <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">오시는 길 (주소)</label>
                                 <input
                                     name="address"

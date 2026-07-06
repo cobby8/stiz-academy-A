@@ -15,6 +15,7 @@ import { MapPin, Phone } from "lucide-react";
 interface PublicFooterProps {
   phone: string;
   address: string;
+  operatingHours?: string;
 }
 
 // 퀵 링크 목록 — 헤더 메뉴와 동일하게 7개 전부 포함
@@ -28,7 +29,11 @@ const QUICK_LINKS = [
   { href: "/apply", label: "체험/수강신청" },
 ];
 
-export default function PublicFooter({ phone, address }: PublicFooterProps) {
+const DEFAULT_OPERATING_HOURS = "평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)";
+
+export default function PublicFooter({ phone, address, operatingHours }: PublicFooterProps) {
+  const displayOperatingHours = operatingHours?.trim() || DEFAULT_OPERATING_HOURS;
+
   return (
     <footer className="bg-gray-50 dark:bg-black text-gray-600 dark:text-gray-300 pt-12 pb-8 border-t-4 border-brand-orange-500 dark:border-brand-neon-lime">
       <div className="max-w-6xl mx-auto px-4">
@@ -66,7 +71,7 @@ export default function PublicFooter({ phone, address }: PublicFooterProps) {
                 <span>{phone}</span>
               </li>
               <li className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                평일 13:00~21:00 / 토 09:00~18:00
+                {displayOperatingHours}
               </li>
             </ul>
 

@@ -22,6 +22,7 @@ import { ThemeToggle } from "./ThemeToggle";
 interface PublicHeaderProps {
   phone: string;
   address: string;
+  operatingHours?: string;
 }
 
 // ---------- 메뉴 데이터 구조 ----------
@@ -53,7 +54,9 @@ const NAV_STANDALONE = [
   { href: "/simulator", label: "수업찾기" },
 ];
 
-export default function PublicHeader({ phone, address }: PublicHeaderProps) {
+const DEFAULT_OPERATING_HOURS = "평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)";
+
+export default function PublicHeader({ phone, address, operatingHours }: PublicHeaderProps) {
   // 모바일 사이드바 열림/닫힘 상태
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -62,6 +65,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
 
   // 큰글씨 모드 상태 — localStorage에 저장하여 새로고침 후에도 유지
   const [isLargeFont, setIsLargeFont] = useState(false);
+  const displayOperatingHours = operatingHours?.trim() || DEFAULT_OPERATING_HOURS;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -113,9 +117,7 @@ export default function PublicHeader({ phone, address }: PublicHeaderProps) {
       {/* 유틸리티 바 — 운영시간 + 전화번호 (데스크탑만 표시) */}
       <div className="bg-brand-navy-900 dark:bg-black text-white text-xs py-2 hidden md:block border-b border-white/10 dark:border-white/5">
         <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
-          <span className="text-gray-300">
-            평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)
-          </span>
+          <span className="text-gray-300">{displayOperatingHours}</span>
           <div className="flex items-center gap-3">
             <span>상담문의: {phone}</span>
             {/* 큰글씨 모드 토글 — 학부모 편의를 위한 글씨 크기 변경 버튼 */}

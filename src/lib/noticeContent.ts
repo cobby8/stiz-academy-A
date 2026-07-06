@@ -79,3 +79,63 @@ export function hasUrl(text: string | null | undefined): boolean {
     if (!text) return false;
     return /(https?:\/\/|www\.)\S+/i.test(text);
 }
+
+/**
+ * content가 리치 에디터(HTML)로 저장된 새 공지인지, 옛 순수 텍스트 공지인지 판별한다.
+ * - 블록/인라인 HTML 태그가 하나라도 있으면 HTML로 간주 → 상세 페이지에서 sanitizeHtml 경로로 렌더.
+ * - 태그가 전혀 없으면 옛 순수 텍스트 공지 → 기존 toNoticeHtml 경로(줄바꿈 유지 + URL 자동 링크).
+ * ⚠️ 오탐(순수 텍스트를 HTML로 판정)이 나더라도, HTML 경로는 반드시 sanitizeHtml을 거치므로 무해하다.
+ *    안전을 위해 "태그가 보이면 HTML" 쪽으로 넓게 판별한다.
+ */
+export function isHtmlContent(content: string | null | undefined): boolean {
+    if (!content) return false;
+    // 리치 에디터가 만들어내는 대표 여는 태그를 하나라도 포함하면 HTML로 본다.
+    return /<(?:p|div|br|img|table|thead|tbody|tr|td|th|ul|ol|li|h[1-6]|blockquote|iframe|figure|hr|strong|em|u|s|del|ins|mark|sub|sup|pre|code|span|a|colgroup|col)\b[^>]*>/i.test(
+        content,
+    );
+}
+
+/**
+ * 목록 미리보기용: 공지 본문에서 HTML 태그를 제거해 "순수 텍스트"만 남긴다.
+ * - 6단계에서 새 공지 본문이 HTML(<p>...</p><ul>...)로 저장되면서, 목록 미리보기가
+ *   그 원문을 그대로 출력해 raw 태그 문자열이 사용자에게 노출되는 회귀를 막는다.
+ * - 옛 순수 텍스트 공지(태그 없음)는 태그 제거의 영향을 받지 않고 원문이 그대로 유지된다(하위호환).
+ * - 상세 렌더가 아니라 미리보기 전용이다. (line-clamp/글자수 제한 등 기존 자르기 로직은 호출부에서 유지)
+ */
+export function stripHtmlForPreview(content: string | null | undefined): string {
+    if (!content) return "";
+    // 옛 순수 텍스트 공지는 태그가 없으므로 태그 제거를 건너뛴다.
+    // (예: "3 < 5" 같은 부등호가 <...>로 오인돼 지워지는 손실 방지 → 원문 그대로 유지)
+    if (!isHtmlContent(content)) {
+        // plain 공지의 줄바꿈만 한 칸으로 정리해 한 줄 미리보기로 만든다(엔티티 디코드는 불필요 — 순수 텍스트라 원문 그대로).
+        return content.replace(/\s+/g, " ").trim();
+    }
+    return (
+        content
+            // 1) 모든 HTML 태그 제거 → 자리에 공백을 넣어 단어가 붙지 않게 한다(예: "<p>가</p><p>나</p>" → "가 나")
+            .replace(/<[^>]*>/g, " ")
+            // 2) 자주 쓰는 HTML 엔티티만 최소한으로 디코드(태그 제거로 남은 &amp; 등을 원문자로)
+            .replace(/&nbsp;/gi, " ")
+            .replace(/&lt;/gi, "<")
+            .replace(/&gt;/gi, ">")
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;/gi, "'")
+            .replace(/&amp;/gi, "&") // &amp;는 다른 엔티티 복원 이후 마지막에 처리(이중 이스케이프 방지)
+            // 3) 태그 제거로 생긴 연속 공백/줄바꿈을 한 칸으로 정리하고 양끝 공백 제거
+            .replace(/\s+/g, " ")
+            .trim()
+    );
+}
+
+/**
+ * 옛 순수 텍스트 공지를 리치 에디터의 초기값(HTML)으로 변환한다.
+ * - 수정 화면에서 옛 공지를 열 때, 줄바꿈이 사라지지 않도록 각 줄을 <br>로 이어 붙인다.
+ *   (에디터가 문자열을 HTML로 파싱하면 \n 같은 공백을 접어버려 줄바꿈이 사라지기 때문)
+ * - 사용자가 입력했던 <, > 등은 escapeHtml로 이스케이프해 태그로 오해되지 않게 한다.
+ */
+export function plainToEditorHtml(text: string | null | undefined): string {
+    if (!text) return "";
+    // 각 줄을 이스케이프한 뒤 <br>로 이어 하나의 문단으로 감싼다(기존 whitespace-pre-wrap 표시와 동일한 줄바꿈).
+    const lines = text.split(/\r?\n/).map(escapeHtml);
+    return `<p>${lines.join("<br>")}</p>`;
+}

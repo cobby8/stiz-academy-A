@@ -6,7 +6,8 @@ import CTABanner from "@/components/landing/CTABanner";
 import Link from "next/link";
 import { ArrowLeft, Paperclip, Download, Pin } from "lucide-react";
 import { notFound } from "next/navigation";
-import { toNoticeHtml, isImageAttachment } from "@/lib/noticeContent";
+import { toNoticeHtml, isImageAttachment, isHtmlContent } from "@/lib/noticeContent";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export const revalidate = 60;
 
@@ -85,11 +86,22 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                 <div className="max-w-4xl mx-auto px-4 py-12 md:py-16">
                     <AnimateOnScroll>
                         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 shadow-sm p-6 md:p-10">
-                            {/* 본문 — 줄바꿈 유지 + 본문 내 URL 자동 하이퍼링크(안전 HTML로 렌더) */}
-                            <div
-                                className="max-w-none whitespace-pre-wrap text-gray-700 dark:text-gray-200 leading-loose text-[15px] md:text-base [overflow-wrap:anywhere]"
-                                dangerouslySetInnerHTML={{ __html: toNoticeHtml(notice.content) }}
-                            />
+                            {/* 본문 — 새 공지(리치 에디터 HTML)와 옛 공지(순수 텍스트)를 판별해 각기 안전하게 렌더 */}
+                            {isHtmlContent(notice.content) ? (
+                                // 리치 에디터로 작성된 HTML 공지: XSS 제거(sanitizeHtml, jsdom 미사용) 후 .notice-content 서식 적용
+                                // ⚠️ 반드시 sanitizeHtml을 거친다 — 원문을 그대로 넣으면 XSS 위험. sanitize.ts는 sanitize-html(순수 JS)이라 500 안전.
+                                // .notice-content 는 line-height/font-size를 자체 지정하므로 글자색만 컨테이너에서 상속시킨다(라이트/다크 대응).
+                                <div
+                                    className="notice-content max-w-none text-gray-700 dark:text-gray-200 [overflow-wrap:anywhere]"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(notice.content) }}
+                                />
+                            ) : (
+                                // 옛 순수 텍스트 공지(하위호환): 줄바꿈 유지 + URL 자동 링크(toNoticeHtml이 이미 이스케이프해 안전, sanitize 미경유 → 500 위험 없음)
+                                <div
+                                    className="max-w-none whitespace-pre-wrap text-gray-700 dark:text-gray-200 leading-loose text-[15px] md:text-base [overflow-wrap:anywhere]"
+                                    dangerouslySetInnerHTML={{ __html: toNoticeHtml(notice.content) }}
+                                />
+                            )}
 
                             {/* 이미지 첨부 — 본문 아래에 이미지로 크게 노출 (클릭 시 원본 열기) */}
                             {imageAtts.length > 0 && (

@@ -4,7 +4,7 @@ import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import Badge from "@/components/ui/Badge";
 import CTABanner from "@/components/landing/CTABanner";
 import Link from "next/link";
-import { isImageAttachment } from "@/lib/noticeContent";
+import { isImageAttachment, stripHtmlForPreview } from "@/lib/noticeContent";
 // Material Symbols Outlined 아이콘 사용 (프로젝트 conventions: lucide-react 금지)
 
 export const revalidate = 60;
@@ -94,8 +94,8 @@ export default async function NoticesPage() {
                                                         <h2 className="font-bold text-gray-900 dark:text-white truncate transition-colors">{n.title}</h2>
                                                     </div>
 
-                                                    {/* 내용 미리보기 — 2줄 제한 */}
-                                                    <p className="text-base text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed transition-colors">{n.content}</p>
+                                                    {/* 내용 미리보기 — 2줄 제한. HTML 공지는 태그를 제거해 순수 텍스트만 노출(raw 태그 노출 방지) */}
+                                                    <p className="text-base text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed transition-colors">{stripHtmlForPreview(n.content)}</p>
 
                                                     {/* 하단 메타 정보 */}
                                                     <div className="flex items-center gap-3 mt-2.5">

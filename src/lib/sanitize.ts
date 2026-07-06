@@ -82,8 +82,10 @@ export function sanitizeHtml(dirty: string): string {
             img: ["align-left", "align-center", "align-right"],
         },
         // style 속성 안에서 허용할 CSS 속성 (그 외는 제거)
-        // ⚠️ sanitize-html은 `allowedStyles[태그] || allowedStyles['*']` 로 동작한다(합집합 아님, override).
-        //    → table/col에 전용 항목을 두면 '*'의 색상/정렬 등은 적용되지 않고 width 계열만 남는다.
+        // ℹ️ sanitize-html은 태그별 규칙과 '*' 규칙을 deepmerge(병합)한다 — override가 아니다.
+        //    → table/col도 '*'의 색상/정렬 등 + 아래 width 계열을 함께 허용한다.
+        //    보안상 안전한 이유: position/expression/url() 같은 위험 값은 어느 목록에도 없어 통째로 제거되고,
+        //    width 계열은 PX_VALUE(px 숫자)만 통과시키므로 위험 값이 새어 들어올 수 없다.
         allowedStyles: {
             "*": {
                 color: [/.*/],

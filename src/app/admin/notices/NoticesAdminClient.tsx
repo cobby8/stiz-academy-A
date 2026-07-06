@@ -3,7 +3,19 @@
 import { useState, useTransition } from "react";
 import { createNotice, updateNotice, deleteNotice } from "@/app/actions/admin";
 import { Plus, Trash2, Edit2, Pin, X, Upload, Paperclip, Bell } from "lucide-react";
-import { isImageAttachment } from "@/lib/noticeContent";
+import { isImageAttachment, isHtmlContent, plainToEditorHtml, stripHtmlForPreview } from "@/lib/noticeContent";
+import RichTextEditor from "@/components/RichTextEditor";
+
+// 리치 에디터가 비어있으면 getHTML()이 "<p></p>"를 반환하므로, 태그를 걷어내 실제 내용 유무를 판단한다.
+// 이미지/표/영상만 있는 공지(텍스트 0)도 유효하므로, 그런 미디어 태그가 있으면 "내용 있음"으로 본다.
+function isEmptyContent(html: string): boolean {
+    if (/<(?:img|iframe|table)\b/i.test(html)) return false;
+    const text = html
+        .replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;/gi, " ")
+        .trim();
+    return text.length === 0;
+}
 
 type Attachment = { url: string; filename: string; size: number };
 type NoticeData = {
@@ -44,7 +56,9 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
     function startEdit(n: NoticeData) {
         setEditId(n.id);
         setFormTitle(n.title);
-        setContent(n.content);
+        // 옛 순수 텍스트 공지는 줄바꿈이 사라지지 않도록 HTML로 변환해 에디터에 넣고,
+        // 이미 HTML(리치 에디터로 쓴 공지)이면 그대로 초기값으로 로드한다.
+        setContent(isHtmlContent(n.content) ? n.content : plainToEditorHtml(n.content));
         setTargetType(n.targetType);
         setSelectedClassIds(n.targetClassIds ? n.targetClassIds.split(",").map(s => s.trim()) : []);
         setIsPinned(n.isPinned);
@@ -76,7 +90,8 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
 
     function handleSubmit() {
         if (!formTitle.trim()) { alert("제목을 입력해주세요."); return; }
-        if (!content.trim()) { alert("내용을 입력해주세요."); return; }
+        // 리치 에디터는 빈 상태에서도 "<p></p>"를 내보내므로 태그를 걷어내 실제 내용 유무로 검사한다.
+        if (isEmptyContent(content)) { alert("내용을 입력해주세요."); return; }
         if (targetType === "CLASS" && selectedClassIds.length === 0) { alert("대상 반을 선택해주세요."); return; }
         const payload = {
             title: formTitle,
@@ -136,10 +151,15 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">내용</label>
-                                <textarea value={content} onChange={e => setContent(e.target.value)}
-                                    rows={6} placeholder="공지 내용을 입력하세요"
-                                    className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm" />
-                                <p className="text-xs text-gray-400 mt-1">http:// 또는 https:// 로 시작하는 주소를 입력하면 공지에서 자동으로 클릭 가능한 링크가 됩니다.</p>
+                                {/* 리치 에디터 — 굵게/색상/목록/링크/이미지/표/영상 등 서식 지원. 저장은 기존 content 컬럼(HTML)에 그대로 들어간다.
+                                    본문에 넣은 이미지는 "notices" 폴더로 업로드된다(하단 첨부와 폴더 공유). */}
+                                <RichTextEditor
+                                    value={content}
+                                    onChange={setContent}
+                                    uploadFolder="notices"
+                                    placeholder="공지 내용을 입력하세요"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">굵게·색상·목록·링크·이미지·표·영상 등 다양한 서식을 사용할 수 있어요. 이미지는 본문에 직접 넣거나, 아래 &apos;첨부파일&apos;로 넣으면 본문 아래에 크게 표시됩니다.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">공지 대상</label>
@@ -232,7 +252,8 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                             {n.isPinned && <Pin size={14} className="text-brand-orange-500 dark:text-brand-neon-lime flex-shrink-0" />}
                                             <h3 className="font-bold text-gray-900 dark:text-white truncate">{n.title}</h3>
                                         </div>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">{n.content}</p>
+                                        {/* 목록 미리보기 — HTML 공지는 태그 제거 후 순수 텍스트만 노출(raw 태그 노출 방지) */}
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">{stripHtmlForPreview(n.content)}</p>
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                                                 n.targetType === "ALL" ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"

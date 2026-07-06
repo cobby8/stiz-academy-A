@@ -214,6 +214,44 @@
 - 검증: `npx tsc --noEmit` EXIT=0, `npm run build` EXIT=0, /admin/settings ○ static 30s(회귀 없음).
 - 범위 밖(미구현): sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7).
 
+### 구현 기록 — 공지 리치 에디터 강화 5단계 (2026-07-06)
+
+📝 구현한 기능: **sanitize.ts 보안 허용목록 확장**(3·4단계 마크업이 안전하게 통과) + **공개 렌더용 `.notice-content` 스타일 정의**(globals.css). 신규 패키지 없음.
+
+**상태: 5단계 완료, 6단계(공지 page.tsx plain/HTML 판별 렌더 + .notice-content 적용) 대기.**
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/sanitize.ts | iframe(유튜브 화이트리스트)·img정렬/크기·표(colgroup/col·colspan/rowspan/colwidth·width style) 허용 추가, exclusiveFilter로 비유튜브 iframe 제거 | 수정 |
+| src/app/globals.css | `.notice-content` 공개 렌더 스타일 정의(표/유튜브16:9/이미지정렬/목록/인용/링크). 색상 하드코딩 0(상속+CSS변수) | 수정 |
+
+**★ sanitize.ts 최종 허용목록 요약:**
+- **ALLOWED_TAGS 추가**: `iframe`(신규), `div`/`colgroup`/`col`(defaults에 이미 있으나 명시). thead/tbody/tr/th/td/table은 defaults.
+- **iframe**: 속성 `src,width,height,allowfullscreen,frameborder,allow`. `allowedIframeHostnames:['www.youtube.com','www.youtube-nocookie.com']`(★보안핵심, 그외 host 차단). `allowedSchemesByTag.iframe=['https']`(http 차단). `exclusiveFilter`로 src 사라진 빈 iframe 통째 제거(evil.com/data:/http 잔여껍데기 제거).
+- **img**: `allowedAttributes.img += ['data-align']`(width는 기존 허용), `allowedClasses.img=['align-left','align-center','align-right']`(그외 class 제거).
+- **표**: `td/th`에 `colspan,rowspan,colwidth`. `allowedStyles.table={width,min-width: px만}`, `allowedStyles.col={width: px만}` — sanitize-html의 `allowedStyles[태그]||['*']` override 특성 이용해 표/col style에서 색상/position 자동 배제.
+- **div**: `data-youtube-video` 속성만.
+- **기존 보존(회귀無)**: script/onclick/onerror/javascript: 차단, span color·목록·인용·링크(rel 자동부여) 전부 유지.
+
+**XSS 단위 테스트 결과 (tsx로 실제 sanitizeHtml 함수 실행): 35 PASS / 0 FAIL**
+- [A]정상 마크업 통과 19/19: img정렬/크기, 표(colgroup/col/th/td/colwidth/min-width), 유튜브 iframe(youtube.com+nocookie), 회귀(span color/ul·li/blockquote/a+rel).
+- [B]공격 차단 16/16: `<script>`, evil.com iframe(껍데기까지 제거), youtube.com.evil.com, 경로트릭, http유튜브, javascript: iframe/링크, onclick, iframe onload, table style position/top, p style position, img onerror, data: iframe.
+
+**`.notice-content` 스타일 요점(6단계가 사용):**
+- 본문 글자색 **미선언(상속)** → 공지 페이지 Tailwind text-* 클래스로 라이트/다크 자동 대응, 하드코딩 hex 0.
+- 표 테두리/헤더배경 = `color-mix(currentColor …)`, 링크/인용선 = `var(--color-brand-orange-*)`(다크는 400). 유튜브 `div[data-youtube-video]` 16:9 aspect-ratio 반응형. 이미지 정렬 `img.align-left/center/right`는 margin 방식(기본=가운데, 하위호환).
+
+💡 tester 참고:
+- 테스트 방법: (1)위 XSS 단위테스트 재현 — `npx tsx`로 `sanitizeHtml` import 후 케이스 실행. (2)`/admin/settings` 소개글 에디터에 표/유튜브/정렬이미지 삽입→저장→about/apply/Landing 공개페이지에서 이제 잘리지 않고 렌더되는지(설정 소개글은 이미 sanitizeHtml 경유). 
+- 정상 동작: 유튜브/표/정렬이미지가 저장 후에도 유지. evil.com iframe·script·onclick은 제거.
+- ⚠️ 공지 상세(`/notices/[id]`)는 아직 sanitizeHtml 미적용(toNoticeHtml `return out` 유지) — 6단계에서 판별 렌더 전환 예정. 이번 단계 대상 아님.
+- 회귀 확인: about/apply/Landing 소개글 기존 서식(굵게/색상/목록/링크/이미지) 정상 렌더(순수 추가형 변경).
+
+⚠️ reviewer 참고:
+- 봐줄 부분: (1)allowedIframeHostnames 2개 + allowedSchemesByTag.iframe=https + exclusiveFilter 3중 방어가 우회 불가인지, (2)`allowedStyles[태그]||['*']` override 해석이 맞는지(table/col에서 색상 배제 실제 동작 — 테스트 통과), (3)allowedClasses.img가 다른 태그 class에 영향 없는지(회귀), (4)`.notice-content` 하드코딩 색상 0·CSS변수만인지.
+- 검증: `npx tsc --noEmit` EXIT=0, `npm run build` EXIT=0, XSS 35/35.
+- 범위 밖(미구현): 공지 판별 렌더+.notice-content 적용(6), 붙여넣기 정제(7).
+
 ## 테스트 결과 (tester)
 
 ### 테스트 결과 — 공지 리치 에디터 1~2단계 검증 (2026-07-06)
@@ -279,6 +317,31 @@
 📊 종합: 15개 중 14개 통과 / 1개 미실시(로그인 벽, 비치명) / 0개 실패
 
 **판정: 4단계 커밋 가능.** 타입·빌드·설정페이지 컴파일 통과, 유튜브 도메인 화이트리스트가 공격벡터 15/15 차단 + src를 www.youtube.com/embed로 강제 정규화(보안 견고), 표 명령어 TableKit 일치, 1~3단계 회귀 없음. 참고: 표/유튜브 마크업이 현 sanitize.ts 미통과로 설정 소개글 저장 시 잘리는 것은 **5단계 범위(정상)** — 이번 검증은 편집화면 삽입/동작 대상.
+
+### 테스트 결과 — 공지 리치 에디터 5단계 검증 (sanitize 보안 + .notice-content) (2026-07-06)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| tsc --noEmit | ✅ 통과 | EXIT=0 |
+| npm run build | ✅ 통과 | EXIT=0. /notices/[id] ƒ(Dynamic)·/about·/apply ○(static) 정상 컴파일 |
+| **[XSS 차단] script/onclick/onerror/onload** | ✅ 통과 | `<script>`, `<img onerror>`, `onclick`, `<iframe onload>` 모두 제거(속성·페이로드 소거) |
+| **[XSS 차단] 비유튜브 iframe 완전 제거** | ✅ 통과 | `src="https://evil.com/x"` → 빈 껍데기까지 통째 삭제(exclusiveFilter). `<iframe`·`evil.com` 흔적 0 |
+| **[XSS 차단] 유튜브 사칭/트릭** | ✅ 통과 | `youtube.com.evil.com`, 경로트릭 `evil.com/www.youtube.com`, http(비https) 유튜브 전부 제거 |
+| **[XSS 차단] javascript:/data: iframe·링크** | ✅ 통과 | js:/data: iframe·링크 모두 스킴 차단(iframe은 껍데기까지 제거). data: 링크 제거 |
+| **[XSS 차단] 위험 스타일** | ✅ 통과 | table/p `position`, `expression(...)` 제거. col `background`/`position` 제거(width px만 잔존) |
+| **[XSS 차단] 기타** | ✅ 통과 | img class 임의값(align 외) 제거, `<svg onload>` 제거, `<style>` 태그 통째 제거 |
+| **[보존] 이미지 정렬** | ✅ 통과 | align-left/center/right class + data-align + width 3속성 왕복 보존 |
+| **[보존] 유튜브 iframe** | ✅ 통과 | www.youtube.com/embed + youtube-nocookie.com + data-youtube-video 래퍼 보존 |
+| **[보존] 표** | ✅ 통과 | colgroup/col/th/td + colspan/rowspan/colwidth + min-width/width:px style 보존 |
+| **[보존] 기존 서식** | ✅ 통과 | span color, ul/ol/li, blockquote, 링크+rel(noopener 자동), hr, text-align, img data: URI, u/s 모두 보존 |
+| **공지 500 회귀 방지** | ✅ 통과 | sanitize.ts는 `sanitize-html`(htmlparser2) 유지 — jsdom/isomorphic-dompurify 미사용(주석에만 존재). /notices/[id]는 `toNoticeHtml`(sanitize 미경유, noticeContent.ts `return out`) 유지 → 500 재발 경로 없음 |
+| **설정 소개글 회귀** | ✅ 통과 | about/apply/Landing 3곳 모두 sanitizeHtml 경유. 5단계는 순수 추가형(allowedTags/Attributes 추가만, 기존 span·목록·링크 허용 유지) → 기존 서식 보존 |
+| 실제 dev 브라우저 렌더 | ⚠️ 미실시 | /admin·공개페이지 렌더는 6단계(공지 적용) 이후 대상. sanitizeHtml은 tsx로 실함수 직접 실행 검증(브라우저 불필요) |
+
+📊 XSS 단위테스트: **33개 중 33개 통과 / 0개 실패** (차단 18 + 보존 15, tsx로 sanitize.ts의 sanitizeHtml 실함수 실행)
+📊 종합: 15개 항목 중 14개 통과 / 1개 미실시(6단계 범위, 비치명) / **0개 실패**
+
+**판정: 5단계 커밋 가능.** 3중 방어(allowedIframeHostnames 2개 + allowedSchemesByTag.iframe=https + exclusiveFilter)가 요청된 모든 XSS 벡터를 차단. 정상 마크업(이미지정렬/표/유튜브/기존서식) 전부 보존. **공지 500 회귀 없음**(sanitize-html 유지 + /notices/[id] toNoticeHtml 미경유 유지). 설정 소개글 3곳은 순수 추가형이라 회귀 없음. 수정 요청 없음.
 
 ## 리뷰 결과 (reviewer) — 공지 리치 에디터 1~2단계 (2026-07-06)
 
@@ -370,6 +433,48 @@
 
 📌 범위 밖(정상): 표/유튜브 마크업의 sanitize 통과는 5단계(colgroup/col·iframe·allowedIframeHostnames 추가). 현재 설정페이지 저장 시 잘리는 것은 예정된 동작. 공지 적용(6)·붙여넣기 정제(7) 후속.
 
+## 리뷰 결과 (reviewer) — 공지 리치 에디터 5단계 (sanitize 확장 + .notice-content) (2026-07-06)
+
+📊 **종합 판정: 통과 (커밋 OK)** — 치명 이슈 없음. **iframe 허용 우회 불가 확정**(sanitize-html 2.17.5 소스 정독 + 함수 실행 검증). 순수 추가형, 회귀 없음. 권장 1건(주석 정정, 보안 무해).
+
+🔐 **iframe 안전성 (최우선) — 우회 경로 발견 못 함 (실측 확정)**:
+sanitize-html 2.17.5 실제 소스(index.js L409~442, naughtyHref L734~744)를 읽고 실제 sanitizeHtml을 돌려 확인. **3중 방어가 순차로 걸림**:
+1. **스킴(1차)**: iframe src에 naughtyHref가 `allowedSchemesByTag.iframe=['https']` 적용 → http/data/javascript 전부 src 삭제. (실측: `http://www.youtube.com/embed/x`, `data:...` → 빈 출력)
+2. **호스트명 정확일치(2차)**: `hostname === parsed.url.hostname`(WHATWG URL 파서, **정확 일치**, endsWith 아님). 서브도메인 사칭·userinfo 트릭 모두 실제 host로 파싱돼 차단.
+   - 실측 `https://youtube.com.evil.com/embed/x` → host=`youtube.com.evil.com` ≠ 화이트리스트 → **빈 출력** ✅
+   - 실측 `https://www.youtube.com@evil.com/embed/x` → host=`evil.com`(userinfo 무시) → **빈 출력** ✅
+3. **exclusiveFilter(3차)**: 위에서 src가 삭제된 iframe은 `!frame.attribs.src` → 여는 태그째 result에서 잘라냄(빈 껍데기도 안 남음). 실측 위 케이스 모두 완전 제거.
+- **srcdoc 차단 확인(중요)**: iframe 대표 XSS 벡터 srcdoc은 allowedAttributes.iframe에 없어 제거됨. 실측 `srcdoc="<script>…"` → 출력에서 srcdoc 사라지고 src(youtube)만 남음 ✅
+- **정상 유튜브 통과**: `https://www.youtube.com/embed/abc` 유지 ✅. 4단계 확장이 src를 www.youtube.com/embed로 정규화 → 화이트리스트 2개로 충분.
+- **`allow` 속성**: 값 미필터(예 `allow="camera;microphone;clipboard-read"` 그대로 통과) — 그러나 **iframe src가 youtube로 고정**되므로 기능 권한은 youtube 오리진에만 부여됨. 공격자가 프레임을 딴 데로 못 돌리므로 실질 위험 없음(콘텐츠는 관리자 작성) → 정보성.
+
+🎨 **allowedStyles — position/expression-속성/url/behavior 차단은 유지되나, 개발자 주석이 실제 동작과 반대 (권장 정정)**:
+- ⚠️ **sanitize.ts:84~86 주석 오류**: "sanitize-html은 `allowedStyles[태그] || ['*']`로 override 동작 → table/col은 width계열만 남는다"라고 적혀 있으나, **2.17.5 실제 filterCss(L793~800)는 태그규칙과 '*'가 둘 다 있으면 `deepmerge`(합집합)** 한다. override 아님.
+  - 실측: `<table style="width:100px;color:red;text-align:center;position:fixed;top:0">` → **`width:100px;color:red;text-align:center`** 남고 position/top만 제거. 즉 table/col도 '*'의 color/text-align/font 계열을 **함께 허용**(주석의 "width만"은 사실과 다름).
+  - ✅ **보안 결론은 안전**: 노린 목표(position/expression-as-property/url()/behavior 차단)는 실제로 달성 — 이들이 어느 목록에도 없어 통째 제거. width 계열은 PX_VALUE 정규식으로 px만 통과.
+  - → **치명 아님(보안 무해)**. 다만 주석이 향후 유지보수자를 오도할 수 있어 **정정 권장**.
+
+✅ 잘된 점:
+- **iframe 3중 방어**(스킴 https + 호스트 정확일치 + exclusiveFilter)로 evil host/http/data/javascript/srcdoc 전부 차단 — 실측 우회 실패.
+- **allowedClasses.img 견고**: `align-left/center/right` 3종만 통과, 임의 class 주입 불가. 실측 `class="align-left evilclass" onerror=…` → `class="align-left"`만, onerror 제거 ✅. 다른 태그 class는 무제한(회귀 방지).
+- **회귀 없음(순수 추가형)**: script/object/embed/form/style/textarea 여전히 차단(실측 `<object>/<embed>/<form>` → `<p>ok</p>`만). 모든 on* 핸들러 차단('*'가 class/style만 허용). a rel 자동부여·span color·목록·인용 유지.
+- **.notice-content CSS**: 하드코딩 hex 0개(currentColor + color-mix + var(--color-brand-orange-*)), 다크모드 대응(`.dark .notice-content a` + 나머지 상속/currentColor 자동적응), 유튜브 16:9 aspect-ratio·표 tableWrapper overflow-x 격리 양호. 컨벤션 준수.
+- **sanitize-html 유지**(공지 500 재발 방지): isomorphic-dompurify/jsdom 미사용 확인.
+
+🔴 필수 수정: 없음
+
+🟡 권장 수정:
+- [sanitize.ts:84~86] allowedStyles override 주석을 실제 동작(deepmerge 병합)에 맞게 정정. 보안 무해하나 오해 소지. (developer)
+
+🔵 사소/정보 (선택, 커밋 무관):
+- [sanitize.ts:88~90] `color`/`background-color`: `[/.*/]`는 `expression(alert(1))` 같은 레거시 IE 값도 통과(실측 확인). **모든 요소 공통 + 기존('*')부터 존재 → 5단계 신규 아님**, 모던 브라우저 무해. 신경 쓰이면 값 regex를 좁힐 수 있음(선택).
+- iframe `allow` 값 미필터(위 설명, youtube 고정이라 무해).
+- img `data:` 스킴 허용 — img 컨텍스트라 스크립트 실행 불가(안전 범위).
+
+📌 범위 밖(정상): 공지 상세 판별 렌더 + .notice-content 실제 적용은 6단계. 붙여넣기 정제는 7단계.
+
+---
+
 ## 미해결 리뷰 수정 사항 (이월)
 | 번호 | 파일 | 심각도 | 내용 | 상태 |
 |------|------|--------|------|------|
@@ -383,6 +488,9 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-06 | 공지 리치에디터 5단계 리뷰(보안집중) — sanitize-html 2.17.5 소스정독+실함수실행 검증. iframe 3중방어(https스킴+호스트정확일치+exclusiveFilter) 우회불가 확정(evil host/userinfo/http/data/srcdoc 실측차단). 회귀無(script/object/embed/form 차단). 치명0·권장1(allowedStyles 주석이 실제 deepmerge와 반대—보안무해, 정정권장)·사소3 | 리뷰통과(커밋OK) |
+| 2026-07-06 | 공지 리치에디터 5단계 테스트 — XSS 33/33(차단18+보존15) tsx 실함수 실행, tsc/build EXIT=0, 공지500 회귀無(sanitize-html유지·/notices toNoticeHtml미경유), 설정소개글3곳 순수추가형. 14/15통과·0실패 | 테스트통과(커밋OK) |
+| 2026-07-06 | 공지 리치에디터 5단계 구현 — sanitize.ts 확장(유튜브 iframe 화이트리스트+exclusiveFilter, img정렬/크기, 표 colgroup/col·colspan/colwidth·width style)+`.notice-content` 공개렌더 스타일(하드코딩색0). XSS단위테스트 35/35 PASS, tsc/build EXIT=0 | 구현완료(tester대기) |
 | 2026-07-06 | 공지 리치에디터 4단계 리뷰 — 유튜브검증 우회불가(앱앵커+확장정규화+sanitize 3중방어), 표편집 조건부노출 안전, 확장이름 무충돌, color-mix/CSS변수 준수. 치명0·권장0·사소2 | 리뷰통과(커밋OK) |
 | 2026-07-06 | 공지 리치에디터 4단계 테스트 — tsc/build EXIT=0, /admin/settings 회귀無, 유튜브 도메인검증 공격벡터 15/15 차단+src www.youtube.com/embed 정규화, 표 명령어 TableKit 일치, 1~3단계 회귀無. 14/15통과·0실패 | 테스트통과(커밋OK) |
 | 2026-07-06 | 공지 리치에디터 4단계 구현 — 표(TableKit resizable 3x3+행/열편집)+유튜브임베드(도메인검증). extension-table/youtube@3.20.0 설치, tsc/build EXIT=0. 5단계 마크업(colgroup/col·thead없음·iframe src정규화) 기록 | 구현완료(tester대기) |

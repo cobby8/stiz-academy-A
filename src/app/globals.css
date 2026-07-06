@@ -399,3 +399,178 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* 텍스트 정렬은 Tiptap이 inline style="text-align: ..." 로 직접 처리 */
+
+/* ──────────────────────────────────────────────────────────────────
+   notice-content: 공지 상세(HTML 본문)를 공개 페이지에서 렌더링할 때 사용
+   (5단계에서 정의만 하고, 실제 적용은 6단계에서 공지 page.tsx가 붙인다)
+
+   ★ 색상 정책: 본문 글자색은 부모 컨테이너에서 '상속'받는다(color 미선언).
+     → 공지 페이지의 Tailwind text-* 클래스가 라이트/다크를 이미 처리하므로,
+       여기서 색을 하드코딩하지 않아도 두 테마 모두 자동 대응된다.
+     테두리/헤더배경은 currentColor 기반 color-mix, 강조색은 브랜드 CSS 변수만 사용.
+     (하드코딩 색상 금지 규칙 준수 — hex 리터럴 0개)
+
+   Tailwind v4 base reset이 목록 마커·strong/em·blockquote 등을 초기화하므로
+   여기서 명시적으로 복원한다.
+────────────────────────────────────────────────────────────────── */
+.notice-content {
+  line-height: 1.9;
+  font-size: 1.0625rem;
+  word-break: break-word; /* 긴 URL/단어가 레이아웃을 밀지 않도록 */
+}
+
+.notice-content p {
+  margin: 0 0 0.85rem;
+}
+
+/* 인라인 서식 복원 (reset 대응) */
+.notice-content strong,
+.notice-content b {
+  font-weight: 700;
+}
+.notice-content em,
+.notice-content i {
+  font-style: italic;
+}
+.notice-content u {
+  text-decoration: underline;
+}
+.notice-content s,
+.notice-content strike,
+.notice-content del {
+  text-decoration: line-through;
+}
+
+/* 제목 — 색은 상속(하드코딩 금지), 크기/여백만 지정 */
+.notice-content h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.3;
+  margin: 1.25rem 0 0.5rem;
+  font-family: var(--font-heading, var(--font-body, sans-serif));
+}
+.notice-content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 1rem 0 0.5rem;
+  font-family: var(--font-heading, var(--font-body, sans-serif));
+}
+.notice-content h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0.75rem 0 0.375rem;
+  font-family: var(--font-heading, var(--font-body, sans-serif));
+}
+
+/* 목록 마커 복원 */
+.notice-content ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.notice-content ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.notice-content li {
+  margin: 0.15rem 0;
+}
+
+/* 인용구 — 좌측 브랜드색 선 (CSS 변수) */
+.notice-content blockquote {
+  border-left: 3px solid var(--color-brand-orange-500);
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  opacity: 0.9;
+}
+
+/* 구분선 */
+.notice-content hr {
+  border: none;
+  border-top: 1px solid currentColor;
+  opacity: 0.25;
+  margin: 1rem 0;
+}
+
+/* 링크 — 브랜드색 (CSS 변수) */
+.notice-content a {
+  color: var(--color-brand-orange-600);
+  text-decoration: underline;
+}
+.dark .notice-content a {
+  color: var(--color-brand-orange-400);
+}
+
+/* 이미지 — 기본은 블록·가운데 정렬(에디터 기본값과 일치),
+   width 속성(정수 px)은 그대로 두되 max-width로 컨테이너 넘침 방지. */
+.notice-content img {
+  display: block;
+  max-width: 100%;
+  height: auto; /* width 속성이 있어도 비율 유지 */
+  border-radius: 0.5rem;
+  margin: 0.5rem auto; /* 정렬 미지정 = 가운데 (하위호환) */
+}
+/* 정렬 class — sanitize가 align-left/center/right 3종만 통과시킨다.
+   display:block 이미지의 좌우 margin으로 정렬(float 대신 margin 방식). */
+.notice-content img.align-left {
+  margin-left: 0;
+  margin-right: auto;
+}
+.notice-content img.align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+.notice-content img.align-right {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* 표 — 편집화면(.ProseMirror)과 동일한 톤(테두리/헤더배경).
+   하드코딩 색상 금지 → currentColor 기반 color-mix + 브랜드 변수. */
+.notice-content table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0.75rem 0;
+}
+.notice-content table td,
+.notice-content table th {
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  padding: 0.4rem 0.6rem;
+  vertical-align: top;
+}
+.notice-content table th {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font-weight: 700;
+  text-align: left;
+}
+.notice-content table p {
+  margin: 0;
+}
+/* 표가 화면보다 넓으면 가로 스크롤(레이아웃 격리) */
+.notice-content .tableWrapper,
+.notice-content figure.table {
+  overflow-x: auto;
+}
+
+/* 유튜브 임베드 — 16:9 반응형 컨테이너.
+   확장이 iframe에 고정 640x360을 넣지만, 래퍼 div[data-youtube-video]를
+   비율 컨테이너로 만들어 화면 폭에 맞춘다(편집화면과 동일 규칙). */
+.notice-content div[data-youtube-video] {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0.75rem auto;
+  aspect-ratio: 16 / 9;
+}
+.notice-content div[data-youtube-video] iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0.5rem;
+}

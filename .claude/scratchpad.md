@@ -266,7 +266,90 @@ reviewer 참고:
 - 중복 dark 클래스 다수 정리 (같은 속성에 dark: 두 번 적용되어 마지막 값만 유효하던 문제)
 - 기존 라이트모드 스타일은 모두 보존, 다크모드 대응만 추가/수정
 
+### [debugger] 공지 상세 500 (jsdom ERR_REQUIRE_ESM) 원인 분석 (2026-07-06)
+
+증상: https://stiz-dasan.kr/notices/[id] → 500. 커밋 dadb81e 이후 발생.
+
+프로덕션 로그로 확정한 원인:
+`Failed to load external module jsdom: ERR_REQUIRE_ESM (@exodus/bytes/encoding-lite.js from html-encoding-sniffer)`
+- dadb81e가 `/notices/[id]/page.tsx`에 `toNoticeHtml(notice.content)`를 추가 → `noticeContent.ts` → `sanitizeHtml`(@/lib/sanitize) → `isomorphic-dompurify` → `jsdom`.
+- jsdom 전이 의존성이 ESM 전용이라 Vercel 서버리스(Next16 Turbopack)가 require 시 터짐. 모듈 평가 시점 에러라 라우트 서버 청크 로딩 자체 실패 → 공지 데이터 무관하게 500.
+- 배제된 가설: DB 컬럼 누락(getNoticeById는 기존 컬럼만 SELECT), sanitize 라이브러리 로직(raw Node에선 정상), 특정 공지 데이터. 동적 라우트라 모든 공지가 500.
+- 참고: /, /about, /apply도 같은 에러 로그 존재(count 1698, users 66, first 2026-03-29=sanitize 도입 시점). 정적 프리렌더라 사용자엔 잠재화, ISR 재검증만 실패. 동적 라우트 notices/[id]만 사용자 500 노출.
+
+수정 방안(승인 대기 — 코드 미변경):
+| 우선 | 파일 | 위치 | 변경 |
+|------|------|------|------|
+| 즉시 | src/lib/noticeContent.ts | line 14 import + toNoticeHtml 끝 `return sanitizeHtml(out)` | import 제거 + `return out;` (출력이 이미 escapeHtml로 안전, sanitize 불필요) |
+| 근본(별건) | 전역 | isomorphic-dompurify 사용처 | jsdom 비의존 새니타이저 교체 등 별도 작업 (about/landing/apply ISR 복구) |
+
+참고(무관): 로컬 dev 서버는 untracked `src/middleware.ts` ↔ `src/proxy.ts` 충돌로 부팅 실패(로컬 재현 차단). 프로덕션엔 proxy.ts만 있어 500과 무관. 로컬 개발 편의상 untracked middleware.ts 정리 권장(별건).
+
+### 공지 상세 500(jsdom ERR_REQUIRE_ESM) 근본 해결 (2026-07-06) — developer
+
+📝 구현한 기능: 공지 상세 500 즉시 해결(Step1) + jsdom 의존 제거로 전역 서버 sanitize 정상화(Step2)
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/noticeContent.ts | sanitize import 제거 + `return sanitizeHtml(out)` → `return out` (출력이 이미 escape로 안전) | 수정 |
+| src/lib/sanitize.ts | isomorphic-dompurify(jsdom) → sanitize-html(htmlparser2) 교체. 함수 시그니처 동일, TipTap 서식/색상/정렬/이미지/링크 보존 허용목록 구성 | 수정 |
+| package.json | +sanitize-html, +@types/sanitize-html / -isomorphic-dompurify, -@types/dompurify | 수정 |
+| package-lock.json | 위 반영 (42패키지 제거=jsdom계열, sanitize-html 13패키지 추가) | 수정 |
+| (로컬) src/middleware.ts | 빌드 차단 원인(proxy.ts와 충돌, untracked)이라 스크래치패드로 백업 이동 | 삭제(untracked) |
+
+Step2 방법 선택: (B) sanitize-html 채택. (A) serverExternalPackages는 Vercel 런타임에서만 재현되는 에러라 로컬 검증 불가 → jsdom을 트리에서 완전 제거하는 B가 근본적이고 로컬 빌드로 검증 가능. 상세는 decisions.md 2026-07-06 참고.
+
+💡 tester 참고:
+- 테스트 방법: 배포 후 /notices/[id](공지 상세) 접속 → 200 정상, 본문 이미지·링크가 그대로 렌더링되는지 확인. /, /about, /apply 소개글 서식(굵게/색상/정렬/이미지) 유지 확인.
+- 정상 동작: 공지 상세 500 사라짐, 소개글 리치텍스트 서식 그대로 표시.
+- 로컬 검증 완료: npm run build EXIT=0 (61페이지 프리렌더 성공, /notices/[id] 동적 라우트 컴파일). sanitize 단위 동작 테스트 통과(리치서식/이미지/링크href·target 보존, <script>·onclick·javascript: 제거).
+- 주의: middleware.ts는 untracked였고 proxy.ts가 상위호환이라 로컬 백업 후 제거함(기능 손실 없음). 프로덕션엔 원래 proxy.ts만 존재.
+
+⚠️ reviewer 참고:
+- sanitize-html 허용목록이 넓음(관리자 전용 콘텐츠라 의도적). javascript:·이벤트핸들러·script는 차단 확인됨.
+- simpleTransform 3번째 인자 merge 기본값(true) 사용 — false로 하면 href까지 지워지는 버그가 있어 초기 1회 실수 후 수정함.
+
+## 리뷰 결과 (reviewer)
+
+### 공지 500 근본 해결 — 보안(XSS) 리뷰 (2026-07-06)
+
+📊 종합 판정: **통과 (이대로 커밋 OK)**
+
+✅ 잘된 점:
+- jsdom 의존을 트리에서 완전 제거하는 방향(sanitize-html)이 근본적이고 로컬 빌드로 검증 가능해 올바른 선택.
+- 함수 시그니처(string→string) 유지 → about/apply/landing 호출부 무수정 호환 확인.
+- 위험 요소 차단 런타임 검증 완료(아래).
+
+🔒 XSS 안전성 검증 (실제 sanitize-html 런타임 테스트로 확인):
+- `<script>`, `<iframe>`, `<svg><script>`, `<form>/<input>`, `<object>/<embed>` → 전부 제거됨.
+- `onclick`/`onerror` 등 이벤트핸들러 속성 → 제거(태그·src는 보존).
+- `<a href="javascript:...">`, `<a href="data:text/html...">` → href 제거(링크텍스트만 남음). allowedSchemes(http/https/mailto/tel) 정상 작동.
+- defaults.allowedTags에 script/iframe/style 미포함 확인. img만 명시 추가, iframe은 미추가 → OK.
+- 서식 보존 확인: 굵게/색상(color)/정렬(text-align)/data:이미지/링크 target=_blank(+rel noopener 자동부여) 모두 유지.
+- noticeContent.toNoticeHtml: 모든 사용자 텍스트 escapeHtml 처리 + href는 정규식상 http(s)/www.로만 시작(www.는 https:// 프리픽스) → javascript: 스킴 진입 불가, href·표시문구 모두 escape로 속성 이스케이프 이탈 불가. sanitize 제거해도 안전(출력 이전과 동일 → 기능 패리티 유지). **안전.**
+
+🟡 권장(사소, 커밋 차단 아님):
+- [sanitize.ts:57-66] allowedStyles 값 정규식이 전부 `/.*/`로 과도하게 느슨함. 실제 테스트상 `color:expression(...)`(레거시 IE 전용, 현대 브라우저 무시)와 `background-color:url(...)`(무효값이라 요청 안 감)이 살아남음 → 현대 브라우저에서 실질 위험 없음. 여유 시 값 패턴을 색상/키워드/단위 정도로 좁히면 방어 강화. **지금 고칠 필요는 없음.**
+
+기능/호환 판정: about/apply/landing은 관리자 리치텍스트 렌더용이며 새 허용목록이 서식·색상·정렬·이미지·링크를 보존하므로 기능 손실 없음(전역 속성이 class/style로 좁아져 id/data-* 등은 탈락하나 표시상 무관).
+
 ## 테스트 결과 (tester)
+
+### 공지 상세 500 근본 해결(jsdom 제거) 검증 (2026-07-06)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| 1. 타입체크 `npx tsc --noEmit` | ✅ 통과 | EXIT=0, src 타입 에러 0개 |
+| 2. 빌드 `npm run build` | ✅ 통과 | EXIT=0, "Compiled successfully" |
+| 2-1. `/notices/[id]` 동적 라우트 | ✅ 통과 | ƒ (Dynamic) 정상 컴파일 |
+| 2-2. `/about`·`/apply`·`/notices` 정적 | ✅ 통과 | 모두 ○ (Static) 프리렌더 |
+| 3. jsdom 완전 제거 | ✅ 통과 | `npm ls jsdom isomorphic-dompurify` → empty, package-lock 검색 0회 (jsdom·iso-dompurify 둘 다), sanitize-html만 존재 |
+| 4. sanitize XSS 안전성 (실행 검증) | ✅ 통과 | 실제 sanitize.ts import해 13케이스 실행: strong/em/h1/color/text-align/img(src·data)/a(href·target)/rel 보존, script·onclick·onerror·javascript: 제거 → 13/13 |
+| 5. 공지 렌더링 회귀 | ✅ 통과 | toNoticeHtml이 escape+화이트리스트 `<a>`만 출력(sanitize 미의존), page.tsx가 결과를 dangerouslySetInnerHTML로 그대로 렌더, 이미지 첨부는 별도 `<img>`로 정상 노출 |
+
+📊 종합: 8개 중 8개 통과 / 0개 실패 → **커밋 가능**
+
+참고: sanitizeHtml 사용처 3곳(about·apply·landing)도 새 sanitize-html 기반으로 정상 빌드됨.
 
 ### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)
 
@@ -303,6 +386,9 @@ reviewer 참고:
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-06 | 공지 500 근본 해결 리뷰 — XSS 런타임 검증(script/iframe/onclick/js·data링크 차단 확인), 통과 판정 | 리뷰 완료 |
+| 2026-07-06 | 공지 500 근본 해결 — noticeContent sanitize 제거 + sanitize.ts를 sanitize-html로 교체(jsdom 제거), build EXIT=0 | 구현완료 |
+| 2026-07-06 | 공지 상세 500 원인 규명 — isomorphic-dompurify(jsdom) ERR_REQUIRE_ESM, 수정안 제시(코드 미변경) | 분석완료 |
 | 2026-04-06 | 라이트/다크모드 가시성 전수조사 — 14파일 배지/버튼/텍스트/중복dark 수정 | 완료 |
 | 2026-04-06 | 다크모드 focus:bg-white 포커스 배경 수정 — 8파일 16곳 dark:focus:bg-gray-700 추가 | 완료 |
 | 2026-04-06 | 구글폼 전환 ON/OFF 기능 검증 — 14항목 전체 통과 | 테스트 완료 |

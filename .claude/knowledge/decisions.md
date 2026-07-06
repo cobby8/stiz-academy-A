@@ -2,6 +2,12 @@
 <!-- 담당: planner-architect | 최대 30항목 -->
 <!-- "왜 A 대신 B를 선택했는지" 기술 결정의 배경과 이유를 기록 -->
 
+### 2026-07-06 서버 HTML 새니타이저: isomorphic-dompurify → sanitize-html 교체
+- **분류**: decision
+- **발견자**: developer
+- **내용**: isomorphic-dompurify는 서버에서 jsdom을 끌어오는데, jsdom 전이 의존(@exodus/bytes)이 ESM 전용이라 Vercel 서버리스(Next 16 Turbopack)가 require()로 로딩하다 ERR_REQUIRE_ESM → 해당 라우트 500(공지 상세) + 정적 페이지 ISR 재검증 실패(/,/about,/apply). 대안 검토: (A) next.config serverExternalPackages에 추가 — 변경 최소지만 Vercel 런타임에서만 재현되는 에러라 **로컬 빌드로 검증 불가**(raw Node에선 정상). (B) jsdom 비의존 라이브러리 sanitize-html(htmlparser2 기반 순수 JS)로 교체 — jsdom을 트리에서 완전 제거하여 근본 해결, 로컬 빌드로 검증 가능. **B 채택.** 정화 대상이 관리자 TipTap 리치텍스트라 허용목록을 넓게(서식/색상/정렬/이미지/링크 보존) 잡고 script·이벤트핸들러·javascript: 링크만 제거. sanitize.ts 래퍼로 흡수해 호출부(about/apply/landing) 3곳은 무변경. isomorphic-dompurify·@types/dompurify 제거(42패키지, jsdom 포함).
+- **참조횟수**: 0
+
 ### 2026-04-06 체험/수강신청 구글폼 전환: AcademySettings DB 플래그 방식
 - **분류**: decision
 - **발견자**: planner-architect

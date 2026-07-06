@@ -2,6 +2,12 @@
 <!-- 담당: planner-architect | 최대 30항목 -->
 <!-- "왜 A 대신 B를 선택했는지" 기술 결정의 배경과 이유를 기록 -->
 
+### 2026-07-06 공지 리치 에디터 강화: 공유 TipTap 강화 + plain/HTML 혼재 렌더 + 유튜브 iframe 화이트리스트
+- **분류**: decision
+- **발견자**: planner-architect
+- **내용**: 공지를 리치 에디터화. 핵심 결정: (1) 리스트/인용/구분선/링크는 StarterKit 3.20에 이미 내장이라 **새 패키지 없이 툴바 버튼만** 추가, 표·유튜브만 @tiptap/extension-table·extension-youtube 신규 설치. (2) 이미지 정렬(좌/중/우)+드래그 크기조절은 서드파티(3.x 호환 불확실) 대신 **커스텀 ResizableImage NodeView**로 구현, 드래그 핸들은 이미 설치된 re-resizable 재활용. (3) 이미지 업로드는 신규 스토리지 없이 기존 `/api/upload`(버킷 uploads, folder=notices) 재사용 — 툴바/드래그드롭/붙여넣기 3경로. (4) 공지 content가 plain text→HTML로 바뀌므로 렌더는 **HTML 태그 유무로 판별**(HTML이면 sanitizeHtml, 아니면 기존 toNoticeHtml) → 기존 plain 공지 하위호환. (5) 유튜브 iframe은 sanitize-html allowedIframeHostnames로 **youtube 도메인만 화이트리스트**(임의 iframe XSS 차단). (6) RichTextEditor는 설정 페이지와 공유 — 강화 시 소개글 에디터도 함께 강화됨(회귀 확인). 하단 이미지 첨부(attachmentsJSON)는 본문 삽입과 공존 유지(기존 UX 보존). 위험 낮은 순 7단계(패키지/툴바→업로드→이미지정렬크기→표/유튜브→sanitize+렌더스타일→공지적용→붙여넣기정제).
+- **참조횟수**: 0
+
 ### 2026-07-06 서버 HTML 새니타이저: isomorphic-dompurify → sanitize-html 교체
 - **분류**: decision
 - **발견자**: developer

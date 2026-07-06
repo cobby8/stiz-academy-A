@@ -1,384 +1,173 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 체험수업/수강신청 폼을 구글폼 외부 링크 방식으로 전환 (복귀 가능하게)
-- **상태**: 기획설계 완료 -> developer 대기
+- **요청**: 공지사항 글쓰기 에디터를 "완성도 높은 리치 에디터"로 강화 (기획 단계)
+- **상태**: 기획설계 완료 → 사용자 결정 대기 → developer 대기
 - **현재 담당**: planner-architect 완료
-- **마지막 세션**: 2026-04-06
+- **마지막 세션**: 2026-07-06
 
-## 기획설계 (planner-architect)
+## 진행 현황
+| 항목 | 상태 |
+|------|------|
+| 공지 리치에디터 강화 기획 | 완료 (사용자 결정 2건 대기) |
+| 미푸시 커밋 | 별도 확인 필요 |
 
-### 구글폼 전환 ON/OFF 설계
+---
 
-**목표**: 체험수업 신청과 수강신청을 자체 폼에서 구글폼 외부 링크로 전환하되, 나중에 다시 자체 폼으로 1분 만에 복귀할 수 있게 만든다.
+## 기획설계 (planner-architect) — 공지 리치 에디터 강화
 
-**전환 방식: AcademySettings에 `useBuiltInForm` 플래그 추가**
+🎯 **목표**: 공지사항 작성을 순수 textarea에서 "이미지 위치/정렬/크기 + 표/리스트/인용/구분선 + 링크UI/유튜브 + 드래그·붙여넣기 업로드"가 되는 완성도 높은 리치 에디터로 강화한다.
 
-DB의 AcademySettings 테이블에 `useBuiltInTrialForm` (boolean, 기본값 true)과 `useBuiltInEnrollForm` (boolean, 기본값 true) 컬럼 2개를 추가한다. 이 값이 false이면 구글폼 URL(이미 저장되어 있는 trialFormUrl/enrollFormUrl)로 외부 이동하고, true이면 현재처럼 자체 폼(/apply/trial, /apply/enroll)으로 이동한다.
+### 📌 현황 요약 (코드 재확인 완료)
+- **공지 작성**(`src/app/admin/notices/NoticesAdminClient.tsx`): 순수 `<textarea>` + content는 **plain text** 저장. 이미지는 본문이 아니라 "첨부파일"(attachmentsJSON)로 하단 별도 노출.
+- **공지 렌더**(`src/app/notices/[id]/page.tsx`): `dangerouslySetInnerHTML={{__html: toNoticeHtml(content)}}` + `whitespace-pre-wrap`. toNoticeHtml은 전부 escape + URL만 `<a>`로 변환(HTML 아님).
+- **TipTap 에디터**(`src/components/RichTextEditor.tsx`): **설정 페이지(소개글/이념/시설) 단 1곳만** 사용. 공지에는 미적용. 등록 확장 = StarterKit/TextStyle/Color/Underline/TextAlign 뿐. FontSize.ts는 구현됐으나 미등록.
+- **StarterKit 3.20 내장 확인**: blockquote·bullet/ordered-list·horizontal-rule·**link**·dropcursor·gapcursor·underline 전부 포함 → 리스트/인용/구분선/링크는 **패키지 추가 없이** 툴바 버튼만 필요. 표·유튜브만 신규 설치.
+- **이미지 업로드 인프라 완비**: `/api/upload`(POST) — 버킷 `uploads`, folder 파라미터(notices), 5MB·이미지타입 제한, 로그인 인증, 반환 `{url}`. 에디터 인라인 삽입에 그대로 재사용 가능.
+- **sanitize**(`src/lib/sanitize.ts`): sanitize-html 기반. defaults에 table/thead/tbody/tr/td/th·blockquote·hr·ul/ol/li **이미 허용**. iframe만 없음 → 유튜브용 추가 필요.
 
-비유: 건물 입구에 "자체 접수 창구"와 "외부 접수 창구" 두 개가 있는데, 스위치 하나로 어느 쪽 문을 열지 결정하는 것.
+### ⚠️ 사용자 결정 필요 2건 (진행 전 확인)
+1. **공지 저장 포맷 전환**: plain text → HTML. 기존 공지(plain)와 새 공지(HTML) 혼재 → 렌더에서 판별(HTML 태그 유무). 기존 공지는 그대로 보임(안전). **동의 필요**.
+2. **하단 이미지 첨부 유지 여부**: 본문 삽입이 가능해지면 기존 "첨부→하단 노출"과 중복. 권장 = **첨부 기능 유지 + 본문 삽입 추가(공존)**. 기존 UX 보존.
 
-왜 환경변수가 아닌 DB 설정인가:
-- 관리자가 코드 배포 없이 /admin/apply 설정 탭에서 ON/OFF 가능
-- 체험/수강을 독립적으로 전환 가능 (체험만 구글폼, 수강은 자체 폼 등)
-- 이미 AcademySettings 패턴이 확립되어 있어 추가 비용 최소
+### 📦 필요 패키지 (TipTap 3.20 호환)
+| 패키지 | 용도 | 신규? |
+|--------|------|-------|
+| @tiptap/extension-table | 표(Table/Row/Cell/Header 포함) | 신규 설치 |
+| @tiptap/extension-youtube | 유튜브 임베드(iframe) | 신규 설치 |
+| (기존) @tiptap/extension-image | 이미지 노드 | 설치됨, 등록만 |
+| (기존) StarterKit 내장 Link/List/Blockquote/Hr/Dropcursor | 링크·리스트·인용·구분선 | 설치됨, 툴바만 |
+| (기존) re-resizable | 이미지 드래그 리사이즈 핸들 | 설치됨(빌더용), 재활용 |
+| 커스텀 ResizableImage 확장 | 이미지 정렬(좌/중/우)+크기 | 신규 코드(NodeView) |
 
-**영향 범위 분석**
+### 🖼️ 이미지 업로드 방식
+- 기존 `/api/upload` 재사용(folder=`notices`, 버킷 `uploads`). 신규 스토리지·API 불필요.
+- 3경로: (1)툴바 이미지 버튼→파일선택, (2)에디터에 파일 드래그&드롭, (3)클립보드 붙여넣기. 셋 다 업로드 후 반환 url을 에디터에 삽입.
+- 정렬/크기: 커스텀 ResizableImage NodeView가 `data-align`(class) + `width`(style/attr) 저장. 드래그 핸들은 re-resizable 재활용.
 
-구글폼 전환 시 비활성화되는 기능:
-1. SMS 알림 (체험/수강 신청 시 관리자+코치+학부모 자동 SMS) -- 구글폼에는 훅이 없음
-2. 관리자 대시보드 신규 신청 건수 배지 -- TrialLead에 NEW 상태가 안 들어옴
-3. 체험 CRM 자동 연동 -- 구글폼 데이터는 구글 시트에 쌓임, DB에 안 들어옴
-4. 수강 신청 목록 관리 (/admin/apply) -- EnrollmentApplication에 데이터 안 쌓임
-5. 스팸 방지 (honeypot) -- 구글폼 자체 스팸 방지 사용
-6. 슬롯 담당 코치 SMS 타겟팅 -- 구글폼에서는 불가
+### 🔒 sanitize.ts 확장안 (보안 핵심)
+- **iframe 추가**: allowedTags에 `iframe`, 속성 `src·width·height·frameborder·allow·allowfullscreen·class·style`.
+- **유튜브만 허용**: `allowedIframeHostnames: ['www.youtube.com','youtube.com','www.youtube-nocookie.com','youtu.be']` (sanitize-html 옵션) → 그 외 도메인 iframe 전부 제거.
+- **img 정렬/크기**: `data-align` 속성 허용(정렬은 class 기반 권장, style 최소화). width/height는 이미 허용.
+- **표**: colspan/rowspan(td/th) 허용. 나머지 표 태그는 이미 defaults.
+- allowedStyles에 이미지/표 폭 등 필요 최소만 추가. script·onclick·javascript: 차단은 현행 유지.
 
-유지되는 기능:
-1. /apply 페이지 자체 (카드 UI, FAQ, 안내 내용)
-2. 유니폼 구글폼 (이미 구글폼)
-3. 관리자 수동 체험 등록 (/admin/trial에서 직접 추가)
-4. 시뮬레이터 (/simulator) -- 링크만 변경
-5. 챗봇 안내 -- 링크 대상만 변경
+### 🎨 렌더 파이프라인 영향
+- **판별 렌더**: content에 HTML 태그(`<p`,`<img`,`<table` 등) 있으면 `sanitizeHtml(content)`, 없으면 기존 `toNoticeHtml(content)`(plain 공지 하위호환).
+- HTML 공지는 `whitespace-pre-wrap` 제거 + `.notice-content` prose 스타일 적용(표 테두리, 유튜브 16:9 반응형, 이미지 정렬 class, 리스트 마커, blockquote 좌측선). 하드코딩 색상 금지 → CSS 변수.
 
-**📍 만들 위치와 구조**
+### 📋 실행 계획 (위험 낮은 순, 각 단계 developer 후 소검증)
+| 순서 | 작업 | 담당 | 위험도 | 선행 |
+|------|------|------|--------|------|
+| 1 | 패키지 설치 + 에디터 확장/툴바 강화(리스트·인용·구분선·링크UI팝업 + FontSize 등록). 설정 페이지에서 먼저 검증 | developer | 낮음 | 없음 |
+| 2 | 이미지 업로드 3경로(툴바버튼+드래그&드롭+붙여넣기), /api/upload 재사용 | developer | 중 | 1 |
+| 3 | 이미지 정렬(좌/중/우)+드래그 크기조절 커스텀 ResizableImage NodeView | developer | 높음 | 2 |
+| 4 | 표 삽입 + 유튜브 URL 임베드(extension-table/youtube + 툴바) | developer | 중 | 1 |
+| 5 | sanitize.ts 보안 확장(iframe youtube 화이트리스트+img/표 속성) + 공개 렌더 .notice-content 스타일 | developer | 중(보안) | 3,4 |
+| 6 | 공지 적용(textarea→RichTextEditor) + 렌더 plain/HTML 판별 + 첨부 공존 | developer | 높음 | 5 |
+| 7 | 붙여넣기 정제(transformPastedHTML) + 통합 검증 | tester + reviewer (병렬) | 낮음 | 6 |
 
-| 파일 경로 | 역할 | 신규/수정 |
-|----------|------|----------|
-| prisma/schema.prisma | AcademySettings에 useBuiltInTrialForm, useBuiltInEnrollForm 추가 | 수정 |
-| src/app/actions/admin.ts | ensureAcademySettingsColumns DDL에 2개 컬럼 추가 + SETTINGS_KEYS에 추가 | 수정 |
-| src/lib/queries.ts | getAcademySettings에서 새 필드 반환 | 수정 |
-| src/app/apply/page.tsx | settings에서 useBuiltIn* 읽어서 ApplyPageClient에 전달 | 수정 |
-| src/app/apply/ApplyPageClient.tsx | useBuiltIn*에 따라 Link 대상 분기 (/apply/trial vs 구글폼 URL) | 수정 |
-| src/app/simulator/SimulatorClient.tsx | useBuiltIn*에 따라 CTA 링크 분기 | 수정 |
-| src/app/simulator/page.tsx | useBuiltIn* 전달 | 수정 |
-| src/app/admin/apply/ApplyAdminClient.tsx | 설정 탭에 ON/OFF 토글 2개 추가 | 수정 |
-| src/app/admin/apply/page.tsx | useBuiltIn* 전달 | 수정 |
-| src/app/api/chat/route.ts | 챗봇 ACTION 링크도 분기 | 수정 |
+### ⚠️ developer 주의사항
+- **RichTextEditor는 공유 컴포넌트** — 강화하면 설정 페이지 소개글 에디터도 같이 강화됨(이득이나, 설정 저장/렌더 회귀 확인). 공지 전용 옵션이 필요하면 prop(예: `variant`)로 분기.
+- 기존 plain 공지 렌더 **절대 깨뜨리지 말 것**(판별 렌더로 하위호환).
+- 하단 이미지 첨부(attachmentsJSON) 기능 **보존**.
+- iframe은 **반드시 youtube 도메인 화이트리스트** — 임의 iframe 삽입 차단(XSS).
+- 하드코딩 색상 금지(CSS 변수), 아이콘은 기존 에디터가 lucide/인라인 SVG 사용 중 → 공개 페이지 신규 UI는 Material Symbols 규칙 확인.
+- DB content 컬럼 재사용(스키마 변경 불필요). 저장 시 서버 sanitize는 렌더에서 하므로 저장은 raw 유지 가능(현행 패턴).
 
-**기존 코드 연결**:
-- ApplyPageClient.tsx에는 이미 FormModal(구글폼 iframe)이 남아있어 재활용 가능
-- AcademySettings에 이미 trialFormUrl/enrollFormUrl 필드가 저장되어 있음
-- /apply/trial, /apply/enroll 자체 폼 파일은 그대로 보존 (코드 삭제 없음)
-
-**📋 실행 계획**
-
-| 순서 | 작업 | 담당 | 선행 조건 |
-|------|------|------|----------|
-| 1 | schema.prisma + DDL ensure에 useBuiltInTrialForm/useBuiltInEnrollForm 추가 | developer | 없음 |
-| 2 | queries.ts + admin.ts SETTINGS_KEYS에 새 필드 추가 | developer | 1 |
-| 3 | /apply 페이지: ApplyPageClient에서 useBuiltIn* false일 때 구글폼 URL로 외부 이동 (새 탭) | developer | 2 |
-| 4 | /admin/apply 설정 탭에 ON/OFF 토글 UI 추가 | developer | 2 |
-| 5 | 시뮬레이터 + 챗봇 링크 분기 처리 | developer | 2 |
-| 6 | tsc --noEmit + 수동 테스트 | tester | 3,4,5 |
-
-**developer 주의사항**:
-- 자체 폼 파일 (/apply/trial/*, /apply/enroll/*, actions/public.ts의 submit* 함수) 절대 삭제/수정하지 말 것
-- useBuiltIn*가 false이고 구글폼 URL이 비어있으면 "구글폼 URL이 설정되지 않았습니다" 안내 표시
-- 구글폼 링크는 새 탭(target="_blank")으로 열기 (사이트를 벗어나지 않게)
-- DDL ensure 패턴 따를 것: ALTER TABLE ADD COLUMN IF NOT EXISTS
-- 현재 기본값은 false로 설정 (= 구글폼 모드로 시작) -- PM 확인 필요
-
-**복귀 방법** (나중에 다시 자체 폼으로 돌아올 때):
-1. /admin/apply -> 설정 탭 -> "자체 폼 사용" 토글을 ON으로 변경
-2. 저장 클릭
-3. 끝. 코드 변경이나 배포 없이 즉시 전환됨.
+---
 
 ## 구현 기록 (developer)
 
-### 구글폼 전환 ON/OFF 구현 (2026-04-06)
+### 구현 기록 — 공지 리치 에디터 강화 1~2단계 (2026-07-06)
 
-구현한 기능: AcademySettings의 useBuiltInTrialForm/useBuiltInEnrollForm 플래그에 따라 체험수업/수강신청 버튼이 자체 폼 또는 구글폼 외부 링크로 분기되는 시스템
+📝 구현한 기능: 공유 TipTap 에디터(RichTextEditor)에 **툴바 강화(1단계)** + **이미지 업로드 3경로(2단계)** 추가. 신규 패키지 설치 **없음**(StarterKit 3.20 내장 + 설치된 extension-image 재활용).
 
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| prisma/schema.prisma | AcademySettings에 useBuiltInTrialForm, useBuiltInEnrollForm Boolean 추가 | 수정 |
-| src/app/actions/admin.ts | DDL ensure에 2개 컬럼 + ALLOWED_SETTINGS_COLUMNS + updateAcademySettings 타입 추가 | 수정 |
-| src/lib/queries.ts | getAcademySettings 반환 객체에 useBuiltIn* 필드 추가 | 수정 |
-| src/app/apply/page.tsx | ApplyPageClient에 useBuiltIn* prop 전달 | 수정 |
-| src/app/apply/ApplyPageClient.tsx | 체험/수강 버튼을 useBuiltIn*에 따라 3분기 (자체폼/구글폼/URL미설정) | 수정 |
-| src/app/admin/apply/page.tsx | initialSettings에 useBuiltIn* 전달 | 수정 |
-| src/app/admin/apply/ApplyAdminClient.tsx | 타입 추가 + SettingsTab에 토글 UI 2개 + handleSave에 저장 로직 | 수정 |
-| src/app/simulator/page.tsx | SimulatorClient에 useBuiltIn* 전달 | 수정 |
-| src/app/simulator/SimulatorClient.tsx | CTA 버튼을 useBuiltIn*에 따라 3분기 (자체폼/구글폼/폴백) | 수정 |
-| src/app/api/chat/route.ts | SELECT + 반환객체에 useBuiltIn* 추가 + ACTION URL 분기 | 수정 |
-
-tester 참고:
-- 테스트 방법: /admin/apply > 설정 탭에서 "폼 전환" 섹션의 토글을 ON/OFF 후 저장, /apply 페이지에서 버튼 동작 확인
-- 정상 동작 (기본값 OFF): 체험/수강 버튼 클릭 시 구글폼 URL이 있으면 새 탭으로 열림, 없으면 "구글폼 URL이 설정되지 않았습니다" 안내
-- 정상 동작 (토글 ON): 체험/수강 버튼 클릭 시 /apply/trial, /apply/enroll 자체 폼으로 이동
-- /simulator 페이지 CTA 버튼도 동일하게 분기 확인
-- 챗봇에서 체험/수강 안내 시 ACTION 버튼 URL이 토글 상태에 따라 바뀌는지 확인
-- tsc --noEmit 통과 확인 (기존 ThemeProvider 에러만 존재)
-
-reviewer 참고:
-- 자체 폼 파일들(/apply/trial/*, /apply/enroll/*, actions/public.ts) 일절 수정하지 않음
-- DDL은 ALTER TABLE ADD COLUMN IF NOT EXISTS 패턴 준수
-- 기본값 false = 구글폼 모드로 시작 (PM 지시 반영)
-
-### /apply/trial, /apply/enroll 구글폼 모드 리다이렉트 추가 (2026-04-06)
-
-구현한 기능: 구글폼 모드(useBuiltIn*Form = false)일 때 /apply/trial, /apply/enroll 직접 접근 시 구글폼 URL 또는 /apply로 서버 리다이렉트
+**상태: 1~2단계 완료, 3단계(이미지 정렬/드래그 크기조절 NodeView) 대기.**
 
 | 파일 경로 | 변경 내용 | 신규/수정 |
 |----------|----------|----------|
-| src/app/apply/trial/page.tsx | useBuiltInTrialForm false일 때 redirect 추가 + next/navigation import | 수정 |
-| src/app/apply/enroll/page.tsx | useBuiltInEnrollForm false일 때 redirect 추가 + next/navigation import | 수정 |
+| src/components/RichTextEditor.tsx | 툴바에 목록/인용/구분선/링크팝업/글자크기 추가, Image 확장 등록, 이미지 업로드 3경로(버튼·드래그·붙여넣기) + 로딩 오버레이 | 수정 |
+| src/app/globals.css | .ProseMirror 목록/인용/구분선/링크 스타일 추가(Tailwind reset 복원, CSS변수 사용) | 수정 |
 
-tester 참고:
-- 테스트 방법: DB에서 useBuiltInTrialForm/useBuiltInEnrollForm이 false 상태에서 /apply/trial, /apply/enroll에 직접 접속
-- 정상 동작: 구글폼 URL이 설정되어 있으면 해당 URL로 리다이렉트, 없으면 /apply로 리다이렉트
-- 토글 ON(자체 폼 모드)일 때는 기존과 동일하게 자체 폼 표시
-- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
+**1단계 상세:**
+- 글자 크기 드롭다운(FontSize 확장 연결 — 기존 미등록이던 것을 등록+툴바 노출), 글머리표/순서 목록, 인용구, 가로 구분선, 링크 팝업(툴바 아래 인라인 입력 한 줄: 적용/링크제거/취소).
+- 링크는 http/https/mailto만 허용(스킴 없으면 https:// 자동 부여, 그 외 차단). StarterKit 내장 Link를 openOnClick:false/target=_blank/rel=noopener로 구성.
+- 기존 버튼(굵게/기울임/밑줄/색상/정렬)은 그대로 보존.
 
-### 다크모드 검정 글씨 + 로고 배경 수정 (2026-04-06)
-
-구현한 기능: 다크모드에서 input 필드 테두리/글씨색이 안 보이는 문제 + 로고 배경색 + hover 시 검정 글씨 문제 수정
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/app/admin/layout.tsx | 로고 배경 dark:bg-gray-800 -> dark:bg-white | 수정 |
-| src/app/admin/annual/AnnualAdminClient.tsx | 취소 버튼에 dark:hover:text-white 추가 | 수정 |
-| src/app/admin/classes/ClassManagementClient.tsx | 취소 버튼에 dark:hover:text-white 추가 | 수정 |
-| src/app/admin/students/StudentManagementClient.tsx | 취소 버튼 2곳에 dark:hover:text-white 추가 | 수정 |
-| src/app/admin/apply/ApplyAdminClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
-| src/app/admin/coaches/CoachesAdminClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
-| src/app/admin/programs/ProgramsAdminClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
-| src/app/admin/schedule/ScheduleAdminClient.tsx | INPUT + TIME_INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
-| src/app/admin/sms/SmsClient.tsx | INPUT 상수에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
-| src/app/admin/makeup/MakeupClient.tsx | 개별 input/select 6곳에 dark:border-gray-600 + dark:text-white + dark:bg-gray-800 추가 | 수정 |
-| src/app/admin/skills/SkillsClient.tsx | 개별 input/select/textarea 8곳에 dark:border-gray-600 + dark:text-white + dark:bg-gray-800 추가 | 수정 |
-| src/app/admin/finance/FinanceClient.tsx | 개별 input/select 7곳에 dark:border-gray-600 + dark:text-white 추가 | 수정 |
-| src/app/admin/staff/StaffClient.tsx | 개별 input/select 8곳에 dark:border-gray-600 + dark:text-white + dark:bg-gray-800 추가 | 수정 |
-
-tester 참고:
-- 테스트 방법: 브라우저 다크모드 또는 시스템 다크모드에서 관리자 페이지 전체 순회
-- 정상 동작: 모든 input/select/textarea의 테두리가 보이고 글씨가 흰색으로 표시됨
-- 로고 배경이 항상 흰색으로 유지됨
-- 취소 버튼 hover 시 글씨가 검정으로 바뀌지 않고 흰색 유지
-- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
-
-### 다크모드 focus:bg-white 포커스 배경 수정 (2026-04-06)
-
-구현한 기능: 다크모드에서 input/textarea 포커스 시 배경이 흰색으로 바뀌어 글씨가 안 보이는 문제 수정 (dark:focus:bg-gray-700 추가)
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/app/admin/annual/AnnualAdminClient.tsx | 인라인 input에 dark:focus:bg-gray-700 추가 | 수정 |
-| src/app/admin/coaches/CoachesAdminClient.tsx | INPUT 상수에 dark:focus:bg-gray-700 추가 | 수정 |
-| src/app/admin/apply/ApplyAdminClient.tsx | INPUT 상수에 dark:focus:bg-gray-700 추가 | 수정 |
-| src/app/admin/programs/ProgramsAdminClient.tsx | INPUT 상수 + 인라인 input 총 2곳에 dark:focus:bg-gray-700 추가 | 수정 |
-| src/app/admin/schedule/ScheduleAdminClient.tsx | INPUT + TIME_INPUT 상수 + 인라인 input 총 3곳에 dark:focus:bg-gray-700 추가 | 수정 |
-| src/app/admin/settings/AdminSettingsClient.tsx | 인라인 input 6곳에 dark:focus:bg-gray-700 추가 | 수정 |
-| src/app/admin/sms/SmsClient.tsx | INPUT 상수에 dark:focus:bg-gray-700 추가 | 수정 |
-| src/app/admin/terms/TermsAdminClient.tsx | 인라인 textarea에 dark:focus:bg-gray-700 추가 | 수정 |
-
-tester 참고:
-- 테스트 방법: 다크모드에서 관리자 페이지의 input/textarea를 클릭(포커스)하여 배경색 확인
-- 정상 동작: 포커스 시 라이트모드는 흰색 배경, 다크모드는 gray-700 배경으로 글씨가 잘 보임
-- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
-
-### [debugger] useBuiltIn* 토글 OFF 저장 후 복원 버그 분석 (2026-04-06)
-
-원인: updateAcademySettings에서 revalidatePath("/admin/apply")가 누락. 저장은 DB에 성공하지만, /admin/apply 페이지의 ISR 캐시(30초)가 무효화되지 않아 이전 값이 반환됨.
-
-#### 수정 제안
-| 파일 | 위치 | 수정 내용 |
-|------|------|----------|
-| src/app/actions/admin.ts | 349-351줄 revalidatePath 블록 | revalidatePath("/admin/apply") + revalidatePath("/apply") 추가 |
-
-### 버튼 다크모드 + 토글 캐시 무효화 버그 수정 (2026-04-06)
-
-구현한 기능: 2건 버그 수정 (다크모드 버튼 텍스트 + 설정 저장 후 캐시 무효화 누락)
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/app/admin/apply/ApplyAdminClient.tsx | "신청 페이지 미리보기" 버튼에 dark:text-white, dark:border-gray-600, dark:hover:bg-gray-800 추가 | 수정 |
-| src/app/actions/admin.ts | updateAcademySettings에 revalidatePath("/admin/apply") + revalidatePath("/apply") 추가 | 수정 |
-
-tester 참고:
-- 수정1: 다크모드에서 "신청 페이지 미리보기" 버튼 텍스트/테두리가 보이는지 확인
-- 수정2: /admin/apply 설정 탭에서 토글 변경 후 저장 -> 새로고침 없이 값이 유지되는지 확인
-- tsc --noEmit: 기존 ThemeProvider 에러만 존재
-
-### useBuiltIn* TEXT 컬럼 boolean 판단 실패 버그 수정 (2026-04-06)
-
-구현한 기능: useBuiltInTrialForm/useBuiltInEnrollForm이 TEXT 컬럼에 저장될 때 문자열 'false'가 truthy로 판단되는 버그 수정
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/lib/queries.ts | toBool 헬퍼 함수 추가 + useBuiltIn* 필드에 적용 (문자열 'false'/'true' 안전 변환) | 수정 |
-| src/app/actions/admin.ts | DDL ensure에서 useBuiltIn* 컬럼은 BOOLEAN DEFAULT false로 생성 (TEXT 대신) | 수정 |
-
-tester 참고:
-- 테스트 방법: /admin/apply 설정 탭에서 토글 OFF 저장 후 새로고침, 토글이 OFF 상태로 유지되는지 확인
-- 정상 동작: 토글 OFF(=구글폼 모드) 저장 후 새로고침해도 OFF 유지됨
-- 핵심 수정: queries.ts에서 ?? 연산자 대신 toBool 함수로 'false' 문자열을 false boolean으로 변환
-- tsc --noEmit: 기존 ThemeProvider 에러만 존재 (이번 수정과 무관)
-
-### 다크모드 input/select/textarea 배경/글씨/테두리 일괄 수정 (2026-04-06)
-
-구현한 기능: dark:bg-gray-800 dark:text-white dark:border-gray-600이 누락된 input/select/textarea에 다크모드 스타일 일괄 추가
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/app/admin/attendance/AttendanceClient.tsx | date input 1곳에 dark 3속성 추가 | 수정 |
-| src/app/admin/attendance/report/[sessionId]/ReportEditClient.tsx | input 1곳 dark:bg+text 추가, textarea 1곳 dark 3속성 추가, select 1곳 dark:text+border 추가 | 수정 |
-| src/app/admin/annual/AnnualAdminClient.tsx | input 3곳 + select 1곳 + textarea 1곳에 dark 3속성 추가 | 수정 |
-| src/app/admin/students/StudentManagementClient.tsx | 검색 input 1곳 + 필터 select 4곳 + 폼 input/select 6곳에 dark 3속성 추가 | 수정 |
-| src/app/admin/finance/billing/BillingTemplateClient.tsx | input 4곳 dark 3속성 추가 + select 2곳 dark:text+border 추가 | 수정 |
-
-tester 참고:
-- 테스트 방법: 다크모드에서 출석, 출석보고서, 연간일정, 원생관리, 청구템플릿 페이지의 모든 입력 필드 확인
-- 정상 동작: 입력 필드 배경이 어두운 회색(gray-800), 글씨가 흰색, 테두리가 gray-600으로 표시
-- tsc --noEmit: 통과 (에러 없음)
-
-### 라이트/다크모드 가시성 전수조사 + 수정 (2026-04-06)
-
-구현한 기능: 공개 페이지 + 공용 컴포넌트 전체에서 라이트/다크모드 배지/텍스트/버튼 가시성 문제 전수조사 및 수정
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/app/apply/ApplyPageClient.tsx | Enrollment 배지 bg-white->bg-white/20 (라이트모드 가시성), Uniform 배지 동일, 수강신청 h3에 dark:text-brand-navy-900 | 수정 |
-| src/components/ui/Badge.tsx | success/warning/error/info variant에 다크모드 배경+텍스트 추가 | 수정 |
-| src/components/ui/Button.tsx | white variant에 dark:text-white + hover 수정(dark:bg-gray-900->dark:hover:bg-gray-700) | 수정 |
-| src/components/landing/ProcessSteps.tsx | 화살표 중복 dark 클래스 수정 (dark:text-gray-700 dark:text-gray-200 -> dark:text-gray-500) | 수정 |
-| src/components/landing/CTABanner.tsx | 중복 dark 클래스 제거 + 보조CTA hover 수정 | 수정 |
-| src/components/landing/TestimonialCarousel.tsx | 중복 dark 클래스 제거 + 빈 별 dark:text-gray-600 추가 | 수정 |
-| src/components/PublicHeader.tsx | 드롭다운 아이템 기본 dark:bg 제거 (hover만 유지) | 수정 |
-| src/components/PublicFooter.tsx | 구분자 중복 dark 클래스 수정 | 수정 |
-| src/app/page.tsx | 메인 페이지 dark:bg-gray-800 -> dark:bg-black (다른 페이지와 일관성) | 수정 |
-| src/app/about/page.tsx | 교육 이념 제목 dark:text-white, divide 다크모드, 전화번호 링크 dark:text 추가 | 수정 |
-| src/app/programs/page.tsx | 연령 배지 다크모드 4종, 가격표 hover/텍스트/셔틀비 다크모드, tbody divide 다크모드 | 수정 |
-| src/app/simulator/SimulatorClient.tsx | 중복 dark 클래스 전체 정리, 수강신청 버튼 다크모드, time/green badge 다크모드 | 수정 |
-| src/app/privacy/page.tsx | 조항 제목 dark:text-white 추가 | 수정 |
-| src/app/faq/page.tsx | 히어로 섹션 다크모드 그라데이션 + transition 추가 | 수정 |
-
-tester 참고:
-- 테스트 방법: 브라우저 라이트/다크 모드에서 /apply, /, /about, /programs, /simulator, /faq, /privacy 전체 순회
-- /apply: Enrollment/Uniform 배지가 라이트모드에서 반투명 배경으로 보임 (기존: 흰 배경에 흰 글씨로 안 보였음)
-- Badge 컴포넌트: success(초록), warning(노랑), error(빨강), info(하늘) 배지가 다크모드에서도 배경+텍스트 보임
-- /programs: 가격표가 다크모드에서 글씨/배경/hover 정상 표시
-- /simulator: 수강신청 버튼이 다크모드에서 네온라임 테두리+텍스트로 보임
-- tsc --noEmit: 통과 (EXIT_CODE=0)
-
-reviewer 참고:
-- 자체 폼 파일(/apply/trial/*, /apply/enroll/*) 수정 없음
-- 중복 dark 클래스 다수 정리 (같은 속성에 dark: 두 번 적용되어 마지막 값만 유효하던 문제)
-- 기존 라이트모드 스타일은 모두 보존, 다크모드 대응만 추가/수정
-
-### [debugger] 공지 상세 500 (jsdom ERR_REQUIRE_ESM) 원인 분석 (2026-07-06)
-
-증상: https://stiz-dasan.kr/notices/[id] → 500. 커밋 dadb81e 이후 발생.
-
-프로덕션 로그로 확정한 원인:
-`Failed to load external module jsdom: ERR_REQUIRE_ESM (@exodus/bytes/encoding-lite.js from html-encoding-sniffer)`
-- dadb81e가 `/notices/[id]/page.tsx`에 `toNoticeHtml(notice.content)`를 추가 → `noticeContent.ts` → `sanitizeHtml`(@/lib/sanitize) → `isomorphic-dompurify` → `jsdom`.
-- jsdom 전이 의존성이 ESM 전용이라 Vercel 서버리스(Next16 Turbopack)가 require 시 터짐. 모듈 평가 시점 에러라 라우트 서버 청크 로딩 자체 실패 → 공지 데이터 무관하게 500.
-- 배제된 가설: DB 컬럼 누락(getNoticeById는 기존 컬럼만 SELECT), sanitize 라이브러리 로직(raw Node에선 정상), 특정 공지 데이터. 동적 라우트라 모든 공지가 500.
-- 참고: /, /about, /apply도 같은 에러 로그 존재(count 1698, users 66, first 2026-03-29=sanitize 도입 시점). 정적 프리렌더라 사용자엔 잠재화, ISR 재검증만 실패. 동적 라우트 notices/[id]만 사용자 500 노출.
-
-수정 방안(승인 대기 — 코드 미변경):
-| 우선 | 파일 | 위치 | 변경 |
-|------|------|------|------|
-| 즉시 | src/lib/noticeContent.ts | line 14 import + toNoticeHtml 끝 `return sanitizeHtml(out)` | import 제거 + `return out;` (출력이 이미 escapeHtml로 안전, sanitize 불필요) |
-| 근본(별건) | 전역 | isomorphic-dompurify 사용처 | jsdom 비의존 새니타이저 교체 등 별도 작업 (about/landing/apply ISR 복구) |
-
-참고(무관): 로컬 dev 서버는 untracked `src/middleware.ts` ↔ `src/proxy.ts` 충돌로 부팅 실패(로컬 재현 차단). 프로덕션엔 proxy.ts만 있어 500과 무관. 로컬 개발 편의상 untracked middleware.ts 정리 권장(별건).
-
-### 공지 상세 500(jsdom ERR_REQUIRE_ESM) 근본 해결 (2026-07-06) — developer
-
-📝 구현한 기능: 공지 상세 500 즉시 해결(Step1) + jsdom 의존 제거로 전역 서버 sanitize 정상화(Step2)
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| src/lib/noticeContent.ts | sanitize import 제거 + `return sanitizeHtml(out)` → `return out` (출력이 이미 escape로 안전) | 수정 |
-| src/lib/sanitize.ts | isomorphic-dompurify(jsdom) → sanitize-html(htmlparser2) 교체. 함수 시그니처 동일, TipTap 서식/색상/정렬/이미지/링크 보존 허용목록 구성 | 수정 |
-| package.json | +sanitize-html, +@types/sanitize-html / -isomorphic-dompurify, -@types/dompurify | 수정 |
-| package-lock.json | 위 반영 (42패키지 제거=jsdom계열, sanitize-html 13패키지 추가) | 수정 |
-| (로컬) src/middleware.ts | 빌드 차단 원인(proxy.ts와 충돌, untracked)이라 스크래치패드로 백업 이동 | 삭제(untracked) |
-
-Step2 방법 선택: (B) sanitize-html 채택. (A) serverExternalPackages는 Vercel 런타임에서만 재현되는 에러라 로컬 검증 불가 → jsdom을 트리에서 완전 제거하는 B가 근본적이고 로컬 빌드로 검증 가능. 상세는 decisions.md 2026-07-06 참고.
+**2단계 상세:**
+- @tiptap/extension-image 등록(inline:false). 3경로 모두 기존 `/api/upload` 재사용(FormData: file+folder, 응답 {url}, 5MB·이미지타입·관리자인증).
+  1. 툴바 이미지 버튼 → 숨은 file input → 업로드 → 커서 위치 삽입
+  2. 드래그&드롭 → editorProps.handleDrop, 놓은 좌표(posAtCoords)에 삽입(내부 이동 moved는 통과)
+  3. Ctrl+V 붙여넣기 → editorProps.handlePaste, 클립보드 이미지 감지 시 업로드 후 삽입
+- 업로드 중 반투명 로딩 오버레이 표시. 검증/실패 시에만 alert(정상 시 무알림).
+- uploadFolder prop 추가(기본 "editor", 공지 적용 시 "notices" 전달용) — 설정 페이지는 기본값 사용.
 
 💡 tester 참고:
-- 테스트 방법: 배포 후 /notices/[id](공지 상세) 접속 → 200 정상, 본문 이미지·링크가 그대로 렌더링되는지 확인. /, /about, /apply 소개글 서식(굵게/색상/정렬/이미지) 유지 확인.
-- 정상 동작: 공지 상세 500 사라짐, 소개글 리치텍스트 서식 그대로 표시.
-- 로컬 검증 완료: npm run build EXIT=0 (61페이지 프리렌더 성공, /notices/[id] 동적 라우트 컴파일). sanitize 단위 동작 테스트 통과(리치서식/이미지/링크href·target 보존, <script>·onclick·javascript: 제거).
-- 주의: middleware.ts는 untracked였고 proxy.ts가 상위호환이라 로컬 백업 후 제거함(기능 손실 없음). 프로덕션엔 원래 proxy.ts만 존재.
+- 테스트 방법: 개발서버(포트 4000) → `/admin/settings` 접속 → 소개글/이념/시설 에디터에서 검증.
+- 정상 동작: (1)목록/인용/구분선/글자크기 버튼 클릭 시 서식 적용·해제, (2)링크 버튼→URL 입력 후 적용 시 링크 생성, 링크제거 동작, (3)이미지 버튼으로 파일 선택 업로드, (4)이미지 파일을 에디터에 드래그, (5)이미지 캡처 후 Ctrl+V — 셋 다 본문에 이미지 삽입 + 업로드 중 오버레이.
+- 주의할 입력: 5MB 초과/비이미지 파일(거부 alert), 링크에 `javascript:...`(차단), 스킴 없는 도메인(자동 https://), mailto: 주소(허용).
+- **회귀 확인 필수**: 설정 페이지 소개글 저장/재로드가 기존처럼 동작하는지(공유 컴포넌트라 같이 강화됨).
 
 ⚠️ reviewer 참고:
-- sanitize-html 허용목록이 넓음(관리자 전용 콘텐츠라 의도적). javascript:·이벤트핸들러·script는 차단 확인됨.
-- simpleTransform 3번째 인자 merge 기본값(true) 사용 — false로 하면 href까지 지워지는 버그가 있어 초기 1회 실수 후 수정함.
-
-## 리뷰 결과 (reviewer)
-
-### 공지 500 근본 해결 — 보안(XSS) 리뷰 (2026-07-06)
-
-📊 종합 판정: **통과 (이대로 커밋 OK)**
-
-✅ 잘된 점:
-- jsdom 의존을 트리에서 완전 제거하는 방향(sanitize-html)이 근본적이고 로컬 빌드로 검증 가능해 올바른 선택.
-- 함수 시그니처(string→string) 유지 → about/apply/landing 호출부 무수정 호환 확인.
-- 위험 요소 차단 런타임 검증 완료(아래).
-
-🔒 XSS 안전성 검증 (실제 sanitize-html 런타임 테스트로 확인):
-- `<script>`, `<iframe>`, `<svg><script>`, `<form>/<input>`, `<object>/<embed>` → 전부 제거됨.
-- `onclick`/`onerror` 등 이벤트핸들러 속성 → 제거(태그·src는 보존).
-- `<a href="javascript:...">`, `<a href="data:text/html...">` → href 제거(링크텍스트만 남음). allowedSchemes(http/https/mailto/tel) 정상 작동.
-- defaults.allowedTags에 script/iframe/style 미포함 확인. img만 명시 추가, iframe은 미추가 → OK.
-- 서식 보존 확인: 굵게/색상(color)/정렬(text-align)/data:이미지/링크 target=_blank(+rel noopener 자동부여) 모두 유지.
-- noticeContent.toNoticeHtml: 모든 사용자 텍스트 escapeHtml 처리 + href는 정규식상 http(s)/www.로만 시작(www.는 https:// 프리픽스) → javascript: 스킴 진입 불가, href·표시문구 모두 escape로 속성 이스케이프 이탈 불가. sanitize 제거해도 안전(출력 이전과 동일 → 기능 패리티 유지). **안전.**
-
-🟡 권장(사소, 커밋 차단 아님):
-- [sanitize.ts:57-66] allowedStyles 값 정규식이 전부 `/.*/`로 과도하게 느슨함. 실제 테스트상 `color:expression(...)`(레거시 IE 전용, 현대 브라우저 무시)와 `background-color:url(...)`(무효값이라 요청 안 감)이 살아남음 → 현대 브라우저에서 실질 위험 없음. 여유 시 값 패턴을 색상/키워드/단위 정도로 좁히면 방어 강화. **지금 고칠 필요는 없음.**
-
-기능/호환 판정: about/apply/landing은 관리자 리치텍스트 렌더용이며 새 허용목록이 서식·색상·정렬·이미지·링크를 보존하므로 기능 손실 없음(전역 속성이 class/style로 좁아져 id/data-* 등은 탈락하나 표시상 무관).
+- 특별히 봐줄 부분: (1)handleDrop/handlePaste에서 view 직접 조작(schema.nodes.image.create + tr.insert) — 위치 계산·XSS 관점, (2)링크 스킴 검증 로직(http/https/mailto 화이트리스트)이 충분한지, (3)기존 Underline이 StarterKit 3.20에도 내장돼 중복 등록 상태(기존부터 존재, 동작엔 무해)이나 정리 여부 판단.
+- 검증: `npx tsc --noEmit` EXIT=0, `npm run build` EXIT=0.
+- 범위 밖(미구현): 이미지 정렬/크기조절(3), 표/유튜브(4), sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7).
 
 ## 테스트 결과 (tester)
 
-### 공지 상세 500 근본 해결(jsdom 제거) 검증 (2026-07-06)
+### 테스트 결과 — 공지 리치 에디터 1~2단계 검증 (2026-07-06)
 
 | 테스트 항목 | 결과 | 비고 |
 |-----------|------|------|
-| 1. 타입체크 `npx tsc --noEmit` | ✅ 통과 | EXIT=0, src 타입 에러 0개 |
-| 2. 빌드 `npm run build` | ✅ 통과 | EXIT=0, "Compiled successfully" |
-| 2-1. `/notices/[id]` 동적 라우트 | ✅ 통과 | ƒ (Dynamic) 정상 컴파일 |
-| 2-2. `/about`·`/apply`·`/notices` 정적 | ✅ 통과 | 모두 ○ (Static) 프리렌더 |
-| 3. jsdom 완전 제거 | ✅ 통과 | `npm ls jsdom isomorphic-dompurify` → empty, package-lock 검색 0회 (jsdom·iso-dompurify 둘 다), sanitize-html만 존재 |
-| 4. sanitize XSS 안전성 (실행 검증) | ✅ 통과 | 실제 sanitize.ts import해 13케이스 실행: strong/em/h1/color/text-align/img(src·data)/a(href·target)/rel 보존, script·onclick·onerror·javascript: 제거 → 13/13 |
-| 5. 공지 렌더링 회귀 | ✅ 통과 | toNoticeHtml이 escape+화이트리스트 `<a>`만 출력(sanitize 미의존), page.tsx가 결과를 dangerouslySetInnerHTML로 그대로 렌더, 이미지 첨부는 별도 `<img>`로 정상 노출 |
+| tsc --noEmit | ✅ 통과 | EXIT=0 |
+| npm run build | ✅ 통과 | EXIT=0, /admin/settings 정상 컴파일(○ static, revalidate 30s) |
+| 링크 스킴 제한(javascript: 차단) | ✅ 통과 | 이중 방어: 앱 레벨(스킴없으면 https:// 자동 후 http/https/mailto 화이트리스트 검증) + StarterKit Link protocols:['http','https','mailto']. `javascript:alert(1)` → `https://javascript:alert(1)`로 무해화 |
+| 이미지 업로드 3경로 /api/upload 정합성 | ✅ 통과 | 버튼/handleDrop/handlePaste 모두 FormData(file+folder)→{url} 계약 일치. route.ts 필드명·응답형식 동일 |
+| Image 확장 등록 | ✅ 통과 | Image.configure({inline:false}). @tiptap/extension-image ^3.20.0 설치 확인 |
+| Link 확장 등록 | ✅ 통과 | StarterKit이 Link 항상 등록(dist line 70). configure({link}) 정상 반영 |
+| FontSize 확장 등록 | ✅ 통과 | 미등록→등록+툴바 드롭다운 연결(setFontSize/unsetFontSize) |
+| Underline 중복 등록 에러 여부 | ✅ 통과 | StarterKit이 Underline 기본 내장(dist line 84-85) + 별도 import 중복. 빌드/타입 에러 없음(런타임 console.warn 수준, 치명 아님) |
+| 설정 페이지 회귀(인터페이스 유지) | ✅ 통과 | value/onChange/placeholder 그대로. name/uploadFolder는 optional·기본값("editor") 하위호환. 소개글/이념/시설 3곳 로직 불변 |
+| CSS 하드코딩 색상 여부 | ✅ 통과 | globals.css 신규 스타일 모두 var(--color-*)/currentColor |
+| 실제 dev 렌더 확인 | ⚠️ 미실시 | /admin/settings 관리자 로그인 벽으로 브라우저 렌더 확인 불가(비치명). build 컴파일 성공으로 렌더 가능성 확인 |
 
-📊 종합: 8개 중 8개 통과 / 0개 실패 → **커밋 가능**
+📊 종합: 11개 중 10개 통과 / 1개 미실시(로그인 벽, 비치명) / 0개 실패
 
-참고: sanitizeHtml 사용처 3곳(about·apply·landing)도 새 sanitize-html 기반으로 정상 빌드됨.
+**판정: 1~2단계 커밋 가능.** 코드 정합성·타입·빌드 통과, 설정 페이지 회귀 없음. (Underline 중복 등록은 reviewer 권장수정과 동일 — 비치명 정리 후보)
 
-### 구글폼 전환 ON/OFF 기능 검증 (2026-04-06)
+## 리뷰 결과 (reviewer) — 공지 리치 에디터 1~2단계 (2026-07-06)
 
-| 테스트 항목 | 결과 | 비고 |
-|-----------|------|------|
-| tsc --noEmit | 통과 | 기존 ThemeProvider 에러만 존재 (알려진 문제) |
-| schema.prisma: useBuiltInTrialForm/EnrollForm 필드 | 통과 | Boolean @default(false) 올바름 |
-| admin.ts: DDL ensure 패턴 | 통과 | ALTER TABLE ADD COLUMN IF NOT EXISTS + BOOLEAN DEFAULT false |
-| admin.ts: ALLOWED_SETTINGS_COLUMNS | 통과 | useBuiltInTrialForm, useBuiltInEnrollForm 모두 포함 |
-| admin.ts: updateAcademySettings 타입 | 통과 | boolean 타입으로 선언됨 |
-| queries.ts: getAcademySettings 반환 | 통과 | SELECT * + camelCase/lowercase fallback + 기본값 false |
-| ApplyPageClient.tsx: 3분기 로직 | 통과 | true=자체폼(Link), false+URL=구글폼(a target=_blank), false+noURL=안내문구 |
-| ApplyAdminClient.tsx: 토글 UI + 저장 | 통과 | role=switch, aria-checked, handleSave에 전달 |
-| SimulatorClient.tsx: CTA 3분기 | 통과 | 체험/수강 모두 true=Link, false+URL=a target=_blank, false+noURL=/apply#anchor |
-| chat/route.ts: SELECT + ACTION URL 분기 | 통과 | SELECT에 명시적 포함, true=/apply/trial, false=/apply#trial |
-| apply/page.tsx prop 전달 | 통과 | ?? false 기본값 |
-| admin/apply/page.tsx prop 전달 | 통과 | ?? false 기본값 |
-| simulator/page.tsx prop 전달 | 통과 | ?? false 기본값 |
-| 자체 폼 파일 미수정 확인 | 통과 | trial/*, enroll/*, actions/public.ts 변경 없음 |
+📊 **종합 판정: 통과 (커밋 OK)** — 치명 이슈 없음. 링크 보안·업로드 견고성·인터페이스 보존 모두 양호.
 
-종합: 14개 중 14개 통과 / 0개 실패
+✅ 잘된 점:
+- **링크 스킴 검증이 안전**: "스킴 없으면 https:// 부여 → 그다음 검증" 순서라 `javascript:`/`data:`가 우회 불가. 예) `javascript:alert(1)` → `https://javascript:alert(1)`(무해한 깨진 https)로 중화됨. StarterKit `protocols:['http','https','mailto']` 화이트리스트로 autolink까지 이중 방어.
+- **업로드 상태 정리 확실**: uploadImageFile이 try/catch/finally로 성공·실패 무관 `setUploading(false)`. 사전 타입/크기 검증(서버와 동일 기준)으로 불필요한 요청 차단.
+- **3경로 공통 함수화**(uploadImageFile)로 중복 제거, moved 체크로 내부 드래그 이동 보존, 비이미지 파일은 false 반환해 기본 동작에 위임.
+- **인터페이스 보존**: value/onChange/name/placeholder 유지 + uploadFolder는 optional 기본값 → 설정 페이지(AdminSettingsClient) 회귀 없음.
+- **CSS 변수/currentColor 사용**(globals.css .ProseMirror)로 하드코딩 색상 회피, Tailwind reset 복원 주석 명확.
+
+🔴 필수 수정: 없음
+
+🟡 권장 수정:
+- [RichTextEditor.tsx:7,90] **Underline 중복 등록** — StarterKit 3.20에 underline 내장이므로 별도 `Underline` import+등록은 중복. 콘솔에 "Duplicate extension names" 경고 발생 가능(동작은 무해). import/extensions에서 제거 권장.
+
+🔵 사소 (선택, 커밋 무관):
+- [uploadImageFile] 동시 업로드 시 `uploading` 불리언이 먼저 끝난 요청의 finally에서 조기 해제 → 오버레이가 남은 업로드 전에 사라질 수 있음. 카운터(useRef)로 개선 가능(희박한 케이스).
+- [handleDrop:131] `pos`를 업로드 전에 캡처 → 업로드 지연 중 문서가 줄어들면 `tr.insert(pos, …)` 범위 초과 가능(RangeError, 매우 희박). `Math.min(pos, doc.content.size)` 클램프로 방어 가능.
+- 중복 업로드 요청 가드 없음(이미지 버튼 연타/업로드 중 드롭). 필요 시 uploading 중 무시.
+- 툴바 `iconBtn`·`hover:bg-gray-200` 등 dark: variant 부재(기존 패턴 답습) — 다크모드 미세 부조화.
+- 아이콘이 인라인 SVG(비-lucide). admin 내부라 허용 범위지만 프로젝트 컨벤션은 Material Symbols → 후속 단계에서 통일 고려.
+- 퀵컬러 하드코딩 hex(`#f97316`,`#1e3a8a`)는 **콘텐츠에 저장되는 실제 색상값**이라 CSS 변수로 대체 불가(불가피). 브랜드 토큰과 값 일치만 확인.
+
+📌 범위 밖(미구현 정상): 이미지 정렬/크기(3), 표/유튜브(4), sanitize 확장(5), 공지 적용(6), 붙여넣기 정제(7).
 
 ## 미해결 리뷰 수정 사항 (이월)
-
 | 번호 | 파일 | 심각도 | 내용 | 상태 |
 |------|------|--------|------|------|
 | R-1 | api/admin/trial-count/route.ts | 필수 | 인증 가드 추가 | 미처리 |
 | R-2 | actions/public.ts | 권장 | source/referralSource 서버 화이트리스트 검증 | 미처리 |
-| R-3 | actions/public.ts:353 | 권장 | shuttleNeeded: `||` -> `??` 변경 | 미처리 |
+| R-3 | actions/public.ts:353 | 권장 | shuttleNeeded: `\|\|` → `??` 변경 | 미처리 |
 
 ---
 
@@ -386,17 +175,15 @@ Step2 방법 선택: (B) sanitize-html 채택. (A) serverExternalPackages는 Ver
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
-| 2026-07-06 | 공지 500 근본 해결 리뷰 — XSS 런타임 검증(script/iframe/onclick/js·data링크 차단 확인), 통과 판정 | 리뷰 완료 |
-| 2026-07-06 | 공지 500 근본 해결 — noticeContent sanitize 제거 + sanitize.ts를 sanitize-html로 교체(jsdom 제거), build EXIT=0 | 구현완료 |
-| 2026-07-06 | 공지 상세 500 원인 규명 — isomorphic-dompurify(jsdom) ERR_REQUIRE_ESM, 수정안 제시(코드 미변경) | 분석완료 |
-| 2026-04-06 | 라이트/다크모드 가시성 전수조사 — 14파일 배지/버튼/텍스트/중복dark 수정 | 완료 |
-| 2026-04-06 | 다크모드 focus:bg-white 포커스 배경 수정 — 8파일 16곳 dark:focus:bg-gray-700 추가 | 완료 |
-| 2026-04-06 | 구글폼 전환 ON/OFF 기능 검증 — 14항목 전체 통과 | 테스트 완료 |
-| 2026-04-06 | 체험/수강신청 구글폼 전환 ON/OFF 설계 — AcademySettings 플래그 방식 | 설계 완료 |
-| 2026-03-29 | 수강신청 3필드 추가 (basketballExp, shuttleTime, shuttleDropoff) | 완료 |
-| 2026-03-29 | 신청폼 UI 정리 5건 (유니폼/결제수단 삭제, 가입경로 9개 등) | 완료 |
-| 2026-03-29 | 전화번호 자동포맷 + date min/max + 스태프 초대링크 + 폰인증 | 완료 |
-| 2026-03-29 | 권한 5단계 + 코치 SMS 타겟팅 + SMS 템플릿 시스템 | 완료 |
+| 2026-07-06 | 공지 리치에디터 1~2단계 리뷰 — 링크보안/업로드견고성/인터페이스 통과, 치명0·권장1(Underline중복) | 리뷰통과(커밋OK) |
+| 2026-07-06 | 공지 리치에디터 1~2단계 구현 — 툴바(목록/인용/구분선/링크/글자크기)+이미지업로드 3경로, 무설치, tsc/build EXIT=0 | 구현완료(tester대기) |
+| 2026-07-06 | 공지 리치 에디터 강화 기획 — 7단계 계획+sanitize확장안+패키지목록, 사용자 결정 2건 대기 | 기획완료 |
+| 2026-07-06 | 공지 500 근본 해결 리뷰 — XSS 런타임 검증, 통과 판정 | 완료 |
+| 2026-07-06 | 공지 500 근본 해결 — sanitize.ts를 sanitize-html로 교체(jsdom 제거), build EXIT=0 | 완료 |
+| 2026-07-06 | 공지 상세 500 원인 규명 — isomorphic-dompurify(jsdom) ERR_REQUIRE_ESM | 완료 |
+| 2026-04-06 | 라이트/다크모드 가시성 전수조사 — 14파일 수정 | 완료 |
+| 2026-04-06 | 다크모드 focus:bg-white 포커스 배경 수정 — 8파일 16곳 | 완료 |
+| 2026-04-06 | 구글폼 전환 ON/OFF — AcademySettings 플래그, 14항목 검증 통과 | 완료 |
+| 2026-03-29 | 수강신청 3필드 추가 + 신청폼 UI 정리 | 완료 |
+| 2026-03-29 | 권한 5단계 + 코치 SMS 타겟팅 + SMS 템플릿 | 완료 |
 | 2026-03-29 | 솔라피 SMS + 시간표 UI 리디자인 + 알림 시스템 | 완료 |
-| 2026-03-29 | 체험/수강 신청 자체화 (Phase A+B+C) + 유니폼 구글폼 연동 | 완료 |
-| 2026-03-29 | 보안 단기 조치 5건 (헤더, CRON, 업로드, 에러, XSS) | 완료 |

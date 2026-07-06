@@ -8,8 +8,8 @@
  * - 듀얼 CTA: "체험 신청"(Primary) + "프로그램 보기"(Ghost)
  * - TrustBadges, ProgramHighlight, ProcessSteps, TestimonialCarousel, CTABanner 추가
  * - 기존 유튜브/갤러리 섹션은 SectionLayout으로 감싸서 스타일 개선
- * - settings 데이터 의존성 모두 유지 (introductionTitle, introductionText,
- *   youtubeUrl, galleryImagesJSON, contactPhone, address)
+ * - settings 데이터 의존성 유지 (introductionTitle, introductionText, youtubeUrl)
+ * - 갤러리 하이라이트는 관리자 갤러리 `GalleryPost` 공개 이미지 사용
  * - dangerouslySetInnerHTML 유지 (Tiptap HTML 지원)
  * - revalidate 값 변경 없음 (page.tsx에서 관리)
  */
@@ -200,7 +200,7 @@ export default function LandingPageClient({
 
       {/* =============================================
           6. 갤러리 하이라이트
-          - settings.galleryImagesJSON에서 최근 사진 8장까지 표시
+          - 공개 GalleryPost 이미지에서 최근 사진 8장까지 표시
           - SectionLayout으로 감싸서 스타일 통일
           - "더보기" 링크 → /gallery
           ============================================= */}

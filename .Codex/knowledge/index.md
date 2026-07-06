@@ -2,7 +2,7 @@
 
 - 기준일: 2026-07-06
 - 문서 수: 5
-- 최근 지식: 개인정보처리방침, 푸터 문구, SNS 링크, 인스타그램 갤러리 연동 기반이 관리자 설정과 갤러리 관리로 연결됐다.
+- 최근 지식: 메인/공개 갤러리 사진 관리는 `GalleryPost`와 `/admin/gallery`로 통일했고, 관리자 설정의 낡은 `galleryImagesJSON` 입력 UI는 제거했다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -16,7 +16,7 @@
 - DB는 Supabase PostgreSQL이고 Prisma를 사용한다.
 - Supabase PgBouncer 호환 때문에 DB 접근에 `$queryRawUnsafe` 패턴이 많다.
 - 공개 홈페이지와 관리자 페이지가 같은 Next.js 앱 안에 있다.
-- 메인 홈 갤러리는 `GalleryPost`를 기준으로 통합했고, 기존 `AcademySettings.galleryImagesJSON`은 아직 삭제하지 않았다.
+- 메인 홈 갤러리는 `GalleryPost`를 기준으로 통합했고, 사진 관리는 `/admin/gallery`에서 한다.
 - 운영시간은 관리자 설정에서 입력하면 공개 페이지 상단 바와 푸터에 함께 반영된다.
 - 개인정보처리방침은 `/admin/privacy`에서 관리하고 `/privacy`가 설정값을 표시한다.
 - 푸터 소개/저작권/SNS 링크는 관리자 설정에서 관리한다.

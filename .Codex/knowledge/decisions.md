@@ -7,7 +7,12 @@
 ## 2026-07-06: 메인 홈 갤러리 기준 데이터 통합
 - 결정: 메인 홈의 활동 사진 섹션은 `AcademySettings.galleryImagesJSON` 대신 공개 `GalleryPost` 데이터를 사용한다.
 - 이유: `/gallery`와 메인 홈이 서로 다른 사진 저장소를 보면 관리자가 같은 사진을 두 번 관리해야 한다. 사진첩을 한 권으로 합치듯 `GalleryPost`를 기준으로 통합하면 인스타그램 연동도 한 지점에서 처리할 수 있다.
-- 후속: 기존 `galleryImagesJSON` 관리 UI는 바로 삭제하지 않고, 인스타그램 연동과 관리자 설정 정리 단계에서 제거/마이그레이션 여부를 결정한다.
+- 후속: 기존 `galleryImagesJSON` 관리 UI는 제거했고, 사진 관리는 `/admin/gallery`로 안내한다.
+
+## 2026-07-06: 관리자 설정의 구 갤러리 입력 제거
+- 결정: `/admin/settings`의 포토 갤러리 URL 입력은 제거하고 `/admin/gallery` 이동 안내로 대체한다.
+- 이유: 공개 홈과 `/gallery`가 이미 `GalleryPost`를 기준으로 동작하므로, `galleryImagesJSON` 입력은 화면에 반영되지 않는 낡은 리모컨 버튼처럼 관리자를 혼란스럽게 한다.
+- 후속: `AcademySettings.galleryImagesJSON` DB 필드는 당장 삭제하지 않고 호환용으로 남긴다.
 
 ## 2026-07-06: 운영시간 관리자 설정 연동
 - 결정: 공개 페이지 상단 바와 푸터 운영시간은 `AcademySettings.operatingHours`로 제어한다.

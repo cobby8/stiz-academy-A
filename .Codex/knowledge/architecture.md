@@ -30,7 +30,8 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 ## 홈페이지-관리자 연결 상태
 - 메인 홈 활동 사진 섹션은 공개 `GalleryPost` 이미지 데이터를 사용한다.
 - `/gallery`도 `GalleryPost`를 사용하므로 홈과 갤러리 페이지의 기준 데이터가 통합됐다.
-- `AcademySettings.galleryImagesJSON`은 아직 DB/관리자에 남아 있지만 홈 표시 기준에서는 제외됐다.
+- 과거 `AcademySettings.galleryImagesJSON` 필드는 호환용으로 남아 있지만, 관리자 설정 화면에서는 더 이상 편집하지 않는다.
+- 공개 사진 관리는 `/admin/gallery`의 `GalleryPost` 게시물로 통일한다.
 - 공개 페이지 상단 바와 푸터 운영시간은 `AcademySettings.operatingHours`를 사용한다.
 - 운영시간 값이 비어 있으면 기본 문구를 보여주므로, 설정 입력 전에도 공개 페이지가 깨지지 않는다.
 - 개인정보처리방침은 `AcademySettings.privacyPolicy`에 저장하고 `/admin/privacy`에서 관리한다. 값이 비어 있으면 기본 정책 문구를 표시한다.

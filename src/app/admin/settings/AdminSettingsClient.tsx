@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
 import { updateAcademySettings } from "@/app/actions/admin";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, type FontOption } from "@/lib/fonts";
@@ -93,13 +94,6 @@ export default function AdminSettingsClient({
         } catch {}
         return [];
     });
-    const [galleryImages, setGalleryImages] = useState<string[]>(() => {
-        try {
-            if (initialSettings?.galleryImagesJSON) return JSON.parse(initialSettings.galleryImagesJSON);
-        } catch {}
-        return [];
-    });
-
     const bodyFontCss = BODY_FONT_OPTIONS.find(f => f.key === bodyFont)?.css ?? "";
     const headingFontCss = headingFont === "same-as-body"
         ? bodyFontCss
@@ -118,7 +112,6 @@ export default function AdminSettingsClient({
             data.philosophyText = philosophyText;
             data.facilitiesText = facilitiesText;
             data.facilitiesImagesJSON = JSON.stringify(facilityImages.filter(u => u.trim()));
-            data.galleryImagesJSON = JSON.stringify(galleryImages.filter(u => u.trim()));
             data.siteBodyFont = bodyFont;
             data.siteHeadingFont = headingFont;
             await updateAcademySettings(data);
@@ -297,42 +290,24 @@ export default function AdminSettingsClient({
                         </div>
                     </section>
 
-                    {/* ── 포토갤러리 ──────────────────────────────────────── */}
+                    {/* ── 포토갤러리 관리 안내 ─────────────────────────────── */}
                     <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         <SectionHeader title="포토 갤러리" />
-                        <AppliesTo pages={["홈페이지 (메인 랜딩)"]} />
-                        <p className="text-xs text-gray-400 mb-2">
-                            홈페이지에 표시할 학원 활동 사진 URL을 입력합니다. 비워두면 갤러리 섹션이 숨겨집니다.
-                        </p>
-                        {galleryImages.map((url, i) => (
-                            <div key={i} className="flex gap-2 mb-2">
-                                <input
-                                    type="url"
-                                    value={url}
-                                    onChange={(e) => {
-                                        const next = [...galleryImages];
-                                        next[i] = e.target.value;
-                                        setGalleryImages(next);
-                                    }}
-                                    placeholder="https://..."
-                                    className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setGalleryImages(galleryImages.filter((_, j) => j !== i))}
-                                    className="text-red-400 hover:text-red-600 px-2 font-bold text-lg"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={() => setGalleryImages([...galleryImages, ""])}
-                            className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline"
-                        >
-                            + 사진 URL 추가
-                        </button>
+                        <AppliesTo pages={["홈페이지 메인 활동 사진", "포토갤러리 페이지"]} />
+                        <div className="rounded-xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/20 p-4">
+                            <p className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                                사진과 영상은 전용 갤러리 관리에서 등록합니다.
+                            </p>
+                            <p className="text-xs text-blue-700 dark:text-blue-200 mt-1 leading-relaxed">
+                                메인 활동 사진과 /gallery 페이지는 모두 같은 갤러리 게시물 데이터를 사용합니다. 사진을 한 번 등록하면 메인과 갤러리에 함께 반영됩니다.
+                            </p>
+                            <Link
+                                href="/admin/gallery"
+                                className="inline-flex items-center justify-center mt-3 rounded-lg bg-brand-navy-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 transition"
+                            >
+                                사진/영상 갤러리 관리로 이동
+                            </Link>
+                        </div>
                     </section>
 
                     {/* ── 연락처 ───────────────────────────────────────────── */}

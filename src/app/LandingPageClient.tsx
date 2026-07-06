@@ -28,17 +28,59 @@ import SectionLayout from "@/components/ui/SectionLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import { sanitizeHtml } from "@/lib/sanitize";
 
+type GalleryPost = {
+  id: string;
+  title: string | null;
+  caption: string | null;
+  mediaJSON: string;
+  createdAt: Date | string;
+  className?: string | null;
+};
+
+type GalleryMediaItem = {
+  url: string;
+  type: "image" | "video";
+  alt: string;
+};
+
+function getGalleryMediaItems(posts: GalleryPost[]): GalleryMediaItem[] {
+  return posts.flatMap((post) => {
+    try {
+      const media = JSON.parse(post.mediaJSON);
+      if (!Array.isArray(media)) return [];
+
+      return media
+        .filter((item): item is { url: string; type?: string } => {
+          return typeof item?.url === "string" && item.url.trim().length > 0;
+        })
+        .map((item, index) => ({
+          url: item.url,
+          type: item.type === "video" ? "video" : "image",
+          alt: post.title || post.caption || `Gallery media ${index + 1}`,
+        }));
+    } catch {
+      return [];
+    }
+  });
+}
+
 export default function LandingPageClient({
   initialSettings,
   testimonials,
+  galleryPosts = [],
   naverPlaceUrl,
 }: {
   initialSettings: any;
   testimonials?: { name: string; info: string; text: string; rating: number }[];
+  galleryPosts?: GalleryPost[];
   naverPlaceUrl?: string;
 }) {
   const settings = initialSettings || {};
   const phone = settings.contactPhone || "010-0000-0000";
+  const galleryMediaItems = getGalleryMediaItems(galleryPosts).slice(0, 8);
+  const displayImages = galleryMediaItems
+    .filter((item) => item.type === "image")
+    .map((item) => item.url);
 
   return (
     <>
@@ -162,16 +204,8 @@ export default function LandingPageClient({
           - SectionLayout으로 감싸서 스타일 통일
           - "더보기" 링크 → /gallery
           ============================================= */}
-      {(() => {
-        let galleryImages: string[] = [];
-        try {
-          if (settings.galleryImagesJSON)
-            galleryImages = JSON.parse(settings.galleryImagesJSON);
-        } catch {}
-        if (galleryImages.length === 0) return null;
+      {displayImages.length > 0 && (
         // 최대 8장까지만 표시
-        const displayImages = galleryImages.slice(0, 8);
-        return (
           <SectionLayout
             label="GALLERY"
             title="학원 활동 사진"
@@ -200,7 +234,7 @@ export default function LandingPageClient({
             </AnimateOnScroll>
 
             {/* 갤러리 더보기 링크 */}
-            {galleryImages.length > 8 && (
+            {galleryPosts.length > 0 && (
               <div className="text-center mt-8">
                 <Link
                   href="/gallery"
@@ -214,8 +248,7 @@ export default function LandingPageClient({
               </div>
             )}
           </SectionLayout>
-        );
-      })()}
+      )}
 
       {/* =============================================
           7. 학부모 후기 섹션

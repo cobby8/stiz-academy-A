@@ -16,7 +16,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 공개 홈페이지: `/`, `/about`, `/programs`, `/schedule`, `/annual`, `/gallery`, `/notices`, `/faq`, `/apply`
 - 학부모 영역: `/mypage`, `/mypage/reports`, `/mypage/skills`
 - 관리자 사이트 관리: 학원 소개, 코치, 프로그램, 시간표, 일정, 공지, 갤러리, FAQ, 후기, 약관
-- 관리자 운영 관리: 원생, 출결, 수납, 청구, 요청, 피드백, 체험 CRM, 대기자, 보강, 스킬, 통계, SMS, 수강생 이관, 스태프
+- 관리자 운영 관리: 원생, 출결, 수납, 청구, 요청, 피드백, 체험 CRM, 대기자, 보강, 통계, SMS, 수강생 이관, 스태프
 
 ## 주요 데이터 모델
 - 사용자/권한: `User`, `StaffInvitation`, `Role`
@@ -27,8 +27,12 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 커뮤니케이션: `Notification`, `PushSubscription`, `SmsTemplate`, `ParentRequest`, `Feedback`
 - 신청/운영 확장: `TrialLead`, `EnrollmentApplication`, `Waitlist`, `MakeupSession`, `SkillCategory`, `SkillRecord`
 
+## 홈페이지-관리자 연결 상태
+- 메인 홈 활동 사진 섹션은 공개 `GalleryPost` 이미지 데이터를 사용한다.
+- `/gallery`도 `GalleryPost`를 사용하므로 홈과 갤러리 페이지의 기준 데이터가 통합됐다.
+- `AcademySettings.galleryImagesJSON`은 아직 DB/관리자에 남아 있지만 홈 표시 기준에서는 제외됐다.
+
 ## 현재 확인된 상태
 - 타입 체크는 통과한다.
-- 전체 lint는 실패한다. 주된 원인은 `any` 타입, 루트 임시 JS 스크립트의 `require()`, React 19 lint 규칙 위반이다.
+- 전체 lint는 실패한다. 주된 원인은 기존 `any`, 루트 임시 JS 스크립트의 `require()`, React 19 lint 규칙 위반이다.
 - 개발 서버 기본 포트는 4000이다.
-- 현재 4000번 포트에 실행 중인 프로세스는 확인되지 않았다.

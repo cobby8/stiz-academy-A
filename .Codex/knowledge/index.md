@@ -2,7 +2,7 @@
 
 - 기준일: 2026-07-06
 - 문서 수: 5
-- 최근 지식: 현재 프로젝트는 Cafe24 쇼핑몰이 아니라 STIZ 농구교실 다산점 홈페이지와 학원관리 플랫폼이다.
+- 최근 지식: 메인 홈 활동 사진 섹션은 관리자 갤러리 `GalleryPost`의 공개 이미지 데이터를 사용한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -12,8 +12,9 @@
 - [lessons.md](lessons.md): 작업 중 배운 교훈
 
 ## 현재 요약
-- 공개 홈페이지와 관리자 시스템이 하나의 Next.js 앱 안에 있다.
+- 현재 프로젝트는 Cafe24 쇼핑몰이 아니라 STIZ 농구교실 다산점 홈페이지와 학원관리 플랫폼이다.
 - DB는 Supabase PostgreSQL이고 Prisma를 사용한다.
-- Supabase PgBouncer 호환 때문에 DB 접근에 `$queryRawUnsafe` 사용 패턴이 많다.
-- 사용자-facing 기능은 공개 홈페이지, 체험/수강 신청, 학부모 마이페이지, 관리자 운영 기능으로 나뉜다.
-- 다음 고도화는 기록 기준으로 작은 단위부터 진행한다.
+- Supabase PgBouncer 호환 때문에 DB 접근에 `$queryRawUnsafe` 패턴이 많다.
+- 공개 홈페이지와 관리자 페이지가 같은 Next.js 앱 안에 있다.
+- 메인 홈 갤러리는 `GalleryPost`를 기준으로 통합했고, 기존 `AcademySettings.galleryImagesJSON`은 아직 삭제하지 않았다.
+- 다음 고도화는 홈페이지에 보이지만 관리자에서 제어되지 않는 고정 문구/정책/운영시간부터 단계적으로 편입한다.

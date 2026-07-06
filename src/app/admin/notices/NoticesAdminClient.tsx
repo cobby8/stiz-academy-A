@@ -41,6 +41,8 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
     const [isPinned, setIsPinned] = useState(false);
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     const [uploading, setUploading] = useState(false);
+    // 본문(리치 에디터) 이미지 업로드 진행 상태 — 하단 첨부용 uploading과 별개로 추적한다.
+    const [editorUploading, setEditorUploading] = useState(false);
 
     function resetForm() {
         setEditId(null);
@@ -92,6 +94,8 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
         if (!formTitle.trim()) { alert("제목을 입력해주세요."); return; }
         // 리치 에디터는 빈 상태에서도 "<p></p>"를 내보내므로 태그를 걷어내 실제 내용 유무로 검사한다.
         if (isEmptyContent(content)) { alert("내용을 입력해주세요."); return; }
+        // 본문 이미지가 아직 업로드 중이면 미완 이미지가 저장될 수 있어 잠시 대기시킨다.
+        if (editorUploading) { alert("본문 이미지 업로드가 끝날 때까지 잠시 기다려주세요."); return; }
         if (targetType === "CLASS" && selectedClassIds.length === 0) { alert("대상 반을 선택해주세요."); return; }
         const payload = {
             title: formTitle,
@@ -158,6 +162,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                     onChange={setContent}
                                     uploadFolder="notices"
                                     placeholder="공지 내용을 입력하세요"
+                                    onUploadingChange={setEditorUploading}
                                 />
                                 <p className="text-xs text-gray-400 mt-1">굵게·색상·목록·링크·이미지·표·영상 등 다양한 서식을 사용할 수 있어요. 이미지는 본문에 직접 넣거나, 아래 &apos;첨부파일&apos;로 넣으면 본문 아래에 크게 표시됩니다.</p>
                             </div>
@@ -223,9 +228,9 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                         </div>
                         <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">
                             <button onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-xl transition">취소</button>
-                            <button onClick={handleSubmit} disabled={isPending || uploading}
+                            <button onClick={handleSubmit} disabled={isPending || uploading || editorUploading}
                                 className="px-6 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold rounded-xl hover:bg-orange-600 transition disabled:opacity-50">
-                                {isPending ? "저장 중..." : editId ? "수정" : "등록"}
+                                {isPending ? "저장 중..." : editorUploading ? "이미지 업로드 중..." : editId ? "수정" : "등록"}
                             </button>
                         </div>
                     </div>

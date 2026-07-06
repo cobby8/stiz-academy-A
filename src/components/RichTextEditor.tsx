@@ -20,18 +20,107 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 // 글자 크기 드롭다운 선택지 — "기본"은 fontSize를 제거(원래 크기)한다는 의미
 const FONT_SIZES = ['기본', '12px', '14px', '16px', '18px', '20px', '24px', '30px'];
 
+// ── 외부(워드/한글/웹) 붙여넣기 HTML 정제 ──
+// 왜? 워드나 웹페이지에서 복사하면 인라인 style, 클래스, 메타 태그, 빈 태그,
+// 워드 조건부 주석 등 지저분한 잔재가 잔뜩 딸려온다. 이를 걷어내 "깔끔한 편집 경험"을 만든다.
+// (보안 최종 방어는 렌더 시 sanitizeHtml이 한 번 더 하므로, 여기선 편집 편의가 목적)
+// ⚠️ DOMParser는 브라우저 전용 API — 이 컴포넌트가 "use client"라 안전하게 쓸 수 있다.
+//    jsdom/isomorphic-dompurify는 서버 500 이력이 있어 절대 도입하지 않는다.
+
+// 붙여넣기 후에도 "남길" 인라인 style 속성 — 에디터가 실제로 지원하는 서식만.
+// (굵게=font-weight, 기울임=font-style, 밑줄=text-decoration, 색상=color, 정렬=text-align)
+const KEEP_STYLE_PROPS = new Set([
+    'color', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line',
+]);
+
+// 붙여넣기 후에도 "남길" 요소 속성 — 그 외(class, id, lang, on* 등)는 전부 제거.
+// data-pm-slice는 에디터 내부 복사-붙여넣기의 구조 정보라 유지(내부 붙여넣기 정확도 보존).
+const KEEP_ATTRS = new Set([
+    'href', 'src', 'alt', 'title', 'colspan', 'rowspan', 'colwidth',
+    'width', 'height', 'data-align', 'data-youtube-video', 'data-pm-slice',
+]);
+
+// 요소의 껍데기만 벗기고 자식(내용)을 부모로 끌어올린다. (예: <o:p>텍스트</o:p> → 텍스트)
+function unwrapElement(el: Element) {
+    const parent = el.parentNode;
+    if (!parent) return;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+}
+
+// 붙여넣은 HTML 문자열을 받아 정제된 HTML 문자열을 돌려준다.
+function cleanPastedHtml(html: string): string {
+    // 브라우저가 아니거나 DOMParser가 없으면(만약의 SSR 경로) 원본 그대로 반환
+    if (typeof window === 'undefined' || typeof DOMParser === 'undefined') return html;
+    try {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const body = doc.body;
+        if (!body) return html;
+
+        // 1) 통째로 제거: 스타일/스크립트/메타/링크/제목 (내용까지 삭제)
+        body.querySelectorAll('style, script, meta, link, title').forEach(el => el.remove());
+
+        // 2) 주석 노드 제거 — 워드 조건부 주석 <!--[if gte mso 9]> ... <![endif]--> 포함
+        const walker = doc.createTreeWalker(body, NodeFilter.SHOW_COMMENT);
+        const comments: Comment[] = [];
+        while (walker.nextNode()) comments.push(walker.currentNode as Comment);
+        comments.forEach(c => c.parentNode?.removeChild(c));
+
+        // 3) 모든 요소 순회하며 정리 (정적 스냅샷 후 처리 — 순회 중 DOM을 바꿔도 안전)
+        const els = Array.from(body.querySelectorAll('*'));
+        for (const el of els) {
+            const tag = el.tagName.toLowerCase();
+
+            // 3-1) 워드 네임스페이스 태그(o:p, w:*, v:* 등 콜론 포함)는 껍데기만 벗겨 텍스트 보존
+            if (tag.includes(':')) { unwrapElement(el); continue; }
+
+            // 3-2) 속성 정리 — 화이트리스트 밖은 전부 제거, style은 지원 속성만 재구성
+            for (const attr of Array.from(el.attributes)) {
+                const name = attr.name.toLowerCase();
+                if (name === 'style') continue; // style은 아래에서 별도 처리
+                if (!KEEP_ATTRS.has(name)) el.removeAttribute(attr.name);
+            }
+            const style = el.getAttribute('style');
+            if (style) {
+                // "color:red; mso-x:y; margin:0" → 지원 속성만 남기고 mso-* 제거
+                const kept = style.split(';')
+                    .map(s => s.trim())
+                    .filter(Boolean)
+                    .filter(decl => {
+                        const prop = decl.split(':')[0].trim().toLowerCase();
+                        return KEEP_STYLE_PROPS.has(prop) && !/mso-/i.test(decl);
+                    });
+                if (kept.length) el.setAttribute('style', kept.join('; '));
+                else el.removeAttribute('style');
+            }
+        }
+
+        // 4) 속성이 하나도 없는 빈 <span>은 껍데기 제거(워드가 만드는 중첩 span 정리) — 텍스트 보존
+        Array.from(body.querySelectorAll('span')).forEach(span => {
+            if (span.attributes.length === 0) unwrapElement(span);
+        });
+
+        return body.innerHTML;
+    } catch {
+        // 어떤 이유로든 정제가 실패해도 붙여넣기 자체가 막히지 않도록 원본 반환
+        return html;
+    }
+}
+
 export default function RichTextEditor({
     value,
     onChange,
     name,
     placeholder,
     uploadFolder = "editor", // 업로드된 이미지를 저장할 Storage 폴더명 (공지에서는 "notices"를 넘길 수 있음)
+    onUploadingChange, // 본문 이미지 업로드 진행 상태를 부모에게 알림 (제출 버튼 잠금용)
 }: {
     value: string;
     onChange?: (val: string) => void;
     name?: string;
     placeholder?: string;
     uploadFolder?: string;
+    onUploadingChange?: (uploading: boolean) => void;
 }) {
     // 마지막으로 에디터가 직접 emit한 HTML 추적 (외부 value 변경과 구분)
     const lastEmittedHTML = useRef<string>("");
@@ -117,6 +206,12 @@ export default function RichTextEditor({
         immediatelyRender: false,
         // ProseMirror 레벨에서 드래그&드롭 / 붙여넣기 이미지를 가로채 업로드 처리
         editorProps: {
+            // ── 외부 붙여넣기 HTML 정제 ──
+            // 이미지 파일 붙여넣기는 아래 handlePaste가 먼저 처리(true 반환)하므로 이 경로로 안 온다.
+            // 여기는 워드/한글/웹의 "HTML 텍스트" 붙여넣기만 통과 → cleanPastedHtml로 잔재 제거.
+            transformPastedHTML(html) {
+                return cleanPastedHtml(html);
+            },
             // ── 경로 3: 클립보드 이미지 붙여넣기(Ctrl+V) ──
             handlePaste(view, event) {
                 const items = event.clipboardData?.items;
@@ -172,6 +267,11 @@ export default function RichTextEditor({
             lastEmittedHTML.current = editor.getHTML();
         }
     }, [editor, value]);
+
+    // 본문 이미지 업로드 진행 상태를 부모(공지 폼 등)에 전달 — 업로드 중 제출을 막기 위함
+    useEffect(() => {
+        onUploadingChange?.(uploading);
+    }, [uploading, onUploadingChange]);
 
     // ── 경로 1: 툴바 이미지 버튼 → 파일 선택창에서 고른 파일 업로드 후 삽입 ──
     async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {

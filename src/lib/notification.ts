@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { sendPushToUser } from "@/lib/pushNotification";
+import { sendPushToUser, sendPushToAllParents } from "@/lib/pushNotification";
 import { sendSms } from "@/lib/sms";
 import { renderSmsTemplate } from "@/lib/smsTemplate";
 
@@ -222,14 +222,27 @@ export async function notifyAllParents(
     message: string,
     linkUrl?: string,
 ) {
+    // 1) 인앱 알림을 "단일 INSERT ... SELECT"로 일괄 생성한다.
+    //    학부모가 몇 명이든 DB 왕복 1회로 끝나므로, 기존의 258명 순차 INSERT가
+    //    유발하던 서버리스 타임아웃(Vercel 30초 제한) 문제를 근본적으로 제거한다.
     try {
-        const parents = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "User" WHERE role = 'PARENT'`
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "Notification" (id, "userId", type, title, message, "linkUrl", "isRead", "createdAt")
+             SELECT gen_random_uuid()::text, u.id, $1, $2, $3, $4, false, NOW()
+             FROM "User" u WHERE u.role = 'PARENT'`,
+            type, title, message, linkUrl || null,
         );
-        for (const p of parents) {
-            await createNotificationRecord({ userId: p.id, type, title, message, linkUrl });
-        }
     } catch (e) {
-        console.error("[notifyAllParents] failed:", e);
+        console.error("[notifyAllParents] insert failed:", e);
     }
+
+    // 2) 웹 푸시는 비차단(non-blocking)·베스트에포트로 전송한다.
+    //    await 하지 않으므로 공지 등록 응답을 지연시키지 않는다.
+    //    (구독이 없거나 VAPID 미설정이면 내부에서 즉시 반환)
+    void sendPushToAllParents({
+        title,
+        body: message,
+        url: linkUrl || "/notices",
+        tag: type,
+    }).catch((e) => console.error("[notifyAllParents] push failed:", e));
 }

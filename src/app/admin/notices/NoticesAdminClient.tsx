@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { createNotice, updateNotice, deleteNotice } from "@/app/actions/admin";
 import { Plus, Trash2, Edit2, Pin, X, Upload, Paperclip, Bell } from "lucide-react";
+import { isImageAttachment } from "@/lib/noticeContent";
 
 type Attachment = { url: string; filename: string; size: number };
 type NoticeData = {
@@ -86,12 +87,17 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
             isPinned,
         };
         startTransition(async () => {
-            if (editId) {
-                await updateNotice(editId, payload);
-            } else {
-                await createNotice(payload);
+            try {
+                if (editId) {
+                    await updateNotice(editId, payload);
+                } else {
+                    await createNotice(payload);
+                }
+                resetForm();
+            } catch (e) {
+                console.error("공지 저장 실패:", e);
+                alert("공지 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.\n(문제가 계속되면 관리자에게 문의하세요.)");
             }
-            resetForm();
         });
     }
 
@@ -133,6 +139,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                 <textarea value={content} onChange={e => setContent(e.target.value)}
                                     rows={6} placeholder="공지 내용을 입력하세요"
                                     className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm" />
+                                <p className="text-xs text-gray-400 mt-1">http:// 또는 https:// 로 시작하는 주소를 입력하면 공지에서 자동으로 클릭 가능한 링크가 됩니다.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">공지 대상</label>
@@ -165,16 +172,23 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">첨부파일</label>
                                 <label className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-brand-orange-500 dark:text-brand-neon-lime cursor-pointer transition">
-                                    <Paperclip size={16} /> {uploading ? "업로드 중..." : "파일 첨부"}
-                                    <input type="file" className="hidden" multiple onChange={e => handleFileUpload(e.target.files)} disabled={uploading} />
+                                    <Paperclip size={16} /> {uploading ? "업로드 중..." : "이미지 첨부"}
+                                    <input type="file" accept="image/*" className="hidden" multiple onChange={e => handleFileUpload(e.target.files)} disabled={uploading} />
                                 </label>
+                                <p className="text-xs text-gray-400 mt-1">첨부한 이미지는 공지 본문 아래에 크게 표시됩니다. (JPG·PNG·WebP·GIF, 최대 5MB)</p>
                                 {attachments.length > 0 && (
                                     <div className="mt-2 space-y-1">
                                         {attachments.map((a, i) => (
-                                            <div key={i} className="flex items-center justify-between bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2">
-                                                <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{a.filename}</span>
+                                            <div key={i} className="flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    {isImageAttachment(a) && (
+                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                        <img src={a.url} alt="" className="w-9 h-9 rounded object-cover border border-gray-200 dark:border-gray-700 shrink-0" />
+                                                    )}
+                                                    <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{a.filename}</span>
+                                                </div>
                                                 <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
-                                                    className="text-gray-400 hover:text-red-500">
+                                                    className="text-gray-400 hover:text-red-500 shrink-0">
                                                     <X size={14} />
                                                 </button>
                                             </div>

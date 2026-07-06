@@ -4,6 +4,7 @@ import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import Badge from "@/components/ui/Badge";
 import CTABanner from "@/components/landing/CTABanner";
 import Link from "next/link";
+import { isImageAttachment } from "@/lib/noticeContent";
 // Material Symbols Outlined 아이콘 사용 (프로젝트 conventions: lucide-react 금지)
 
 export const revalidate = 60;
@@ -53,6 +54,8 @@ export default async function NoticesPage() {
                                 // 첨부파일 JSON 파싱
                                 let atts: { url: string; filename: string }[] = [];
                                 try { atts = n.attachmentsJSON ? JSON.parse(n.attachmentsJSON) : []; } catch {}
+                                // 목록 썸네일용 — 첫 이미지 첨부
+                                const firstImage = atts.find(isImageAttachment);
 
                                 // 공지 카테고리 결정 — 고정된 공지는 "중요", 아니면 "안내"
                                 const category = n.isPinned ? "important" : "general";
@@ -108,6 +111,19 @@ export default async function NoticesPage() {
                                                         )}
                                                     </div>
                                                 </div>
+
+                                                {/* 우측: 이미지 첨부 썸네일 (있을 때만) */}
+                                                {firstImage && (
+                                                    <div className="hidden sm:block shrink-0">
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                        <img
+                                                            src={firstImage.url}
+                                                            alt=""
+                                                            loading="lazy"
+                                                            className="w-20 h-20 rounded-xl object-cover border border-gray-100 dark:border-gray-700"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         </Link>
                                     </AnimateOnScroll>

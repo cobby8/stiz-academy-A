@@ -6,6 +6,7 @@ import CTABanner from "@/components/landing/CTABanner";
 import Link from "next/link";
 import { ArrowLeft, Paperclip, Download, Pin } from "lucide-react";
 import { notFound } from "next/navigation";
+import { toNoticeHtml, isImageAttachment } from "@/lib/noticeContent";
 
 export const revalidate = 60;
 
@@ -25,6 +26,9 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
     // 첨부파일 JSON 파싱
     let attachments: { url: string; filename: string; size: number }[] = [];
     try { attachments = notice.attachmentsJSON ? JSON.parse(notice.attachmentsJSON) : []; } catch {}
+    // 이미지 첨부(본문 아래 인라인 노출)와 그 외 파일(다운로드 링크)로 분리
+    const imageAtts = attachments.filter(isImageAttachment);
+    const fileAtts = attachments.filter(a => !isImageAttachment(a));
 
     // 파일 크기 포맷 함수
     function formatSize(bytes: number) {
@@ -81,33 +85,51 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                 <div className="max-w-4xl mx-auto px-4 py-12 md:py-16">
                     <AnimateOnScroll>
                         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 shadow-sm p-6 md:p-10">
-                            {/* 본문 — 줄바꿈 유지 + 가독성 높은 타이포그래피 */}
-                            <div className="prose prose-gray max-w-none whitespace-pre-wrap text-gray-700 dark:text-gray-200 leading-loose text-[15px] md:text-base">
-                                {notice.content}
-                            </div>
+                            {/* 본문 — 줄바꿈 유지 + 본문 내 URL 자동 하이퍼링크(안전 HTML로 렌더) */}
+                            <div
+                                className="max-w-none whitespace-pre-wrap text-gray-700 dark:text-gray-200 leading-loose text-[15px] md:text-base [overflow-wrap:anywhere]"
+                                dangerouslySetInnerHTML={{ __html: toNoticeHtml(notice.content) }}
+                            />
 
-                            {/* 첨부파일 영역 */}
-                            {attachments.length > 0 && (
+                            {/* 이미지 첨부 — 본문 아래에 이미지로 크게 노출 (클릭 시 원본 열기) */}
+                            {imageAtts.length > 0 && (
+                                <div className="mt-8 space-y-4">
+                                    {imageAtts.map((a, i) => (
+                                        <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="block group">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                src={a.url}
+                                                alt={a.filename || `공지 이미지 ${i + 1}`}
+                                                loading="lazy"
+                                                className="w-full rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm group-hover:shadow-md transition-shadow"
+                                            />
+                                        </a>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* 이미지 외 첨부파일 — 다운로드 링크 */}
+                            {fileAtts.length > 0 && (
                                 <div className="mt-10 pt-6 border-t border-gray-100 dark:border-gray-800">
                                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
                                         <Paperclip size={16} className="text-gray-400" />
-                                        첨부파일 ({attachments.length}개)
+                                        첨부파일 ({fileAtts.length}개)
                                     </h3>
                                     <div className="space-y-2">
-                                        {attachments.map((a, i) => (
+                                        {fileAtts.map((a, i) => (
                                             <a
                                                 key={i}
                                                 href={a.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="flex items-center justify-between bg-gray-50 hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10 /50 rounded-xl px-4 py-3.5 transition-colors group"
+                                                className="flex items-center justify-between bg-gray-50 hover:bg-brand-orange-50 dark:bg-gray-900 dark:hover:bg-gray-800 rounded-xl px-4 py-3.5 transition-colors group"
                                             >
-                                                <span className="text-sm text-gray-700 truncate group-hover:text-brand-orange-600 dark:text-brand-neon-lime dark:hover:text-lime-400 transition-colors">
+                                                <span className="text-sm text-gray-700 dark:text-gray-200 truncate group-hover:text-brand-orange-600 dark:group-hover:text-brand-neon-lime transition-colors">
                                                     {a.filename}
                                                 </span>
                                                 <div className="flex items-center gap-3 flex-shrink-0 ml-4">
                                                     <span className="text-xs text-gray-400">{formatSize(a.size)}</span>
-                                                    <Download size={16} className="text-gray-400 group-hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors" />
+                                                    <Download size={16} className="text-gray-400 group-hover:text-brand-orange-500 dark:group-hover:text-brand-neon-lime transition-colors" />
                                                 </div>
                                             </a>
                                         ))}

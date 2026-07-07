@@ -35,3 +35,8 @@
 - Supabase PgBouncer 트랜잭션 모드 호환을 위해 raw SQL 패턴을 유지한다.
 - 공개 페이지는 ISR 캐싱을 사용하고, 관리자/마이페이지는 실시간성이 필요한 곳에 동적 렌더링을 사용한다.
 - Google Sheets CSV 기반 시간표 연동을 유지한다.
+
+## 2026-07-07: 인스타그램 갤러리 자동 누적은 cron과 공통 동기화 함수로 처리
+- 결정: 수동 `인스타 가져오기` 버튼과 Vercel cron `/api/cron/instagram-gallery`가 `syncInstagramGalleryPostsToDb`를 함께 사용한다.
+- 이유: 버튼과 자동 작업이 다른 로직을 쓰면 중복 저장, 캐시 갱신, 오류 처리가 갈라진다. 공통 함수로 묶으면 새 인스타 게시물이 올라왔을 때 같은 중복 기준(`externalId`)으로 `GalleryPost`에 누적된다.
+- 후속: Vercel 요금제의 cron 실행 주기 제한을 배포 후 확인하고, 시간당 실행이 막히면 스케줄을 낮추거나 플랜을 조정한다.

@@ -50,7 +50,7 @@ export default function GalleryAdminClient({
     const [isPublic, setIsPublic] = useState(true);
     const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
     const [uploading, setUploading] = useState(false);
-    const [syncMessage, setSyncMessage] = useState<string | null>(null);
+    const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
 
     const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
     const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");
@@ -129,10 +129,18 @@ export default function GalleryAdminClient({
     }
 
     function handleInstagramSync() {
-        setSyncMessage(null);
+        setSyncResult(null);
         startTransition(async () => {
-            const result = await syncInstagramGalleryPosts();
-            setSyncMessage(result.message);
+            try {
+                const result = await syncInstagramGalleryPosts();
+                setSyncResult({ ok: result.ok, message: result.message });
+            } catch (error) {
+                console.error("Instagram sync failed:", error);
+                setSyncResult({
+                    ok: false,
+                    message: "인스타그램 가져오기 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                });
+            }
         });
     }
 
@@ -173,8 +181,10 @@ export default function GalleryAdminClient({
                                 관리자 설정의 Instagram Business Account ID와 서버 환경변수 INSTAGRAM_ACCESS_TOKEN이 필요합니다.
                             </p>
                         )}
-                        {syncMessage && (
-                            <p className="text-xs text-green-600 mt-1 font-medium">{syncMessage}</p>
+                        {syncResult && (
+                            <p className={`text-xs mt-1 font-medium ${syncResult.ok ? "text-green-600" : "text-red-600"}`}>
+                                {syncResult.message}
+                            </p>
                         )}
                     </div>
                     <div className="flex gap-2">

@@ -16,7 +16,8 @@ import {
     updateCalendarEvent,
     deleteCalendarEvent,
 } from "@/lib/googleCalendarWrite";
-import { fetchRecentInstagramMedia, publishGalleryPostToInstagram, toGalleryMediaJSON } from "@/lib/instagram";
+import { publishGalleryPostToInstagram } from "@/lib/instagram";
+import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
 import { getAcademySettings } from "@/lib/queries";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
@@ -1059,66 +1060,16 @@ export async function createGalleryPost(data: {
 
 export async function syncInstagramGalleryPosts() {
     await requireAdmin();
-    await ensureGalleryPostInstagramColumns();
     const settings = await getAcademySettings() as any;
-    const result = await fetchRecentInstagramMedia({
+    const result = await syncInstagramGalleryPostsToDb({
         businessAccountId: settings.instagramBusinessAccountId,
         limit: 25,
     });
 
-    if (!result.ok) {
-        return {
-            ok: false,
-            imported: 0,
-            skipped: 0,
-            message: result.reason,
-        };
-    }
-
-    let imported = 0;
-    let skipped = 0;
-    for (const media of result.media) {
-        const mediaJSON = toGalleryMediaJSON(media);
-        if (mediaJSON === "[]") {
-            skipped += 1;
-            continue;
-        }
-
-        const existing = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "GalleryPost" WHERE source = 'INSTAGRAM' AND "externalId" = $1 LIMIT 1`,
-            media.id,
-        );
-        if (existing.length > 0) {
-            skipped += 1;
-            continue;
-        }
-
-        const caption = media.caption?.trim() || null;
-        const title = caption ? caption.split("\n")[0].slice(0, 80) : "Instagram 게시물";
-        await prisma.$executeRawUnsafe(
-            `INSERT INTO "GalleryPost"
-                (id, title, caption, "mediaJSON", "isPublic", source, "externalId", "externalUrl", "createdAt", "updatedAt")
-             VALUES
-                (gen_random_uuid()::text, $1, $2, $3, true, 'INSTAGRAM', $4, $5, COALESCE($6::timestamptz, NOW()), NOW())`,
-            title,
-            caption,
-            mediaJSON,
-            media.id,
-            media.permalink ?? null,
-            media.timestamp ?? null,
-        );
-        imported += 1;
-    }
-
     revalidatePath("/admin/gallery");
     revalidatePath("/gallery");
     revalidatePath("/");
-    return {
-        ok: true,
-        imported,
-        skipped,
-        message: `인스타그램 게시물 ${imported}개를 가져왔고 ${skipped}개는 건너뛰었습니다.`,
-    };
+    return result;
 }
 
 export async function updateGalleryPost(id: string, data: {

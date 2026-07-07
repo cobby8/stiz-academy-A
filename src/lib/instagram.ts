@@ -133,10 +133,31 @@ export async function fetchRecentInstagramMedia({
     limit: String(limit),
     access_token: accessToken,
   });
-  const res = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media?${params.toString()}`, {
-    cache: "no-store",
-  });
-  const body = await res.json() as InstagramApiError & { data?: InstagramRemoteMedia[] };
+  let res: Response;
+  try {
+    res = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media?${params.toString()}`, {
+      cache: "no-store",
+    });
+  } catch (error) {
+    console.error("[instagram] media fetch failed:", error);
+    return {
+      ok: false as const,
+      reason: "인스타그램 API에 연결하지 못했습니다.",
+      media: [] as InstagramRemoteMedia[],
+    };
+  }
+
+  let body: InstagramApiError & { data?: InstagramRemoteMedia[] };
+  try {
+    body = await res.json() as InstagramApiError & { data?: InstagramRemoteMedia[] };
+  } catch (error) {
+    console.error("[instagram] media response parse failed:", error);
+    return {
+      ok: false as const,
+      reason: "인스타그램 API 응답을 읽지 못했습니다.",
+      media: [] as InstagramRemoteMedia[],
+    };
+  }
 
   if (!res.ok) {
     return {

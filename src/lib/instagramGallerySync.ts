@@ -1,0 +1,185 @@
+import { prisma } from "@/lib/prisma";
+import {
+  fetchRecentInstagramMedia,
+  toGalleryMediaJSON,
+  type InstagramRemoteMedia,
+} from "@/lib/instagram";
+
+export type InstagramGallerySyncResult = {
+  ok: boolean;
+  imported: number;
+  skipped: number;
+  fetched: number;
+  message: string;
+};
+
+type InstagramGalleryInsert = {
+  title: string;
+  caption: string | null;
+  mediaJSON: string;
+  externalId: string;
+  externalUrl: string | null;
+  publishedAt: string | null;
+};
+
+let galleryInstagramColumnsEnsured = false;
+
+export async function ensureGalleryPostInstagramColumns() {
+  if (galleryInstagramColumnsEnsured) return;
+
+  const columns: [string, string][] = [
+    ["source", "TEXT DEFAULT 'WEBSITE'"],
+    ["externalId", "TEXT"],
+    ["externalUrl", "TEXT"],
+    ["instagramMediaId", "TEXT"],
+    ["instagramPermalink", "TEXT"],
+    ["instagramPublishedAt", "TIMESTAMPTZ"],
+    ["instagramPublishError", "TEXT"],
+  ];
+
+  for (const [col, type] of columns) {
+    try {
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "${col}" ${type}`,
+      );
+    } catch (error) {
+      console.warn(`[instagram/gallery-sync] ensure column "${col}" failed:`, (error as Error).message);
+    }
+  }
+
+  galleryInstagramColumnsEnsured = true;
+}
+
+function toInsertRow(media: InstagramRemoteMedia): InstagramGalleryInsert | null {
+  const mediaJSON = toGalleryMediaJSON(media);
+  if (mediaJSON === "[]") return null;
+
+  const caption = media.caption?.trim() || null;
+  const title = caption ? caption.split("\n")[0].slice(0, 80) : "Instagram 게시물";
+
+  return {
+    title,
+    caption,
+    mediaJSON,
+    externalId: media.id,
+    externalUrl: media.permalink ?? null,
+    publishedAt: media.timestamp ?? null,
+  };
+}
+
+export async function syncInstagramGalleryPostsToDb({
+  businessAccountId,
+  limit = 25,
+}: {
+  businessAccountId?: string | null;
+  limit?: number;
+}): Promise<InstagramGallerySyncResult> {
+  try {
+    await ensureGalleryPostInstagramColumns();
+
+    const result = await fetchRecentInstagramMedia({ businessAccountId, limit });
+    if (!result.ok) {
+      return {
+        ok: false,
+        imported: 0,
+        skipped: 0,
+        fetched: 0,
+        message: result.reason,
+      };
+    }
+
+    const candidates = result.media
+      .map(toInsertRow)
+      .filter((row): row is InstagramGalleryInsert => row !== null);
+
+    if (candidates.length === 0) {
+      return {
+        ok: true,
+        imported: 0,
+        skipped: result.media.length,
+        fetched: result.media.length,
+        message: `인스타그램 게시물 0개를 가져왔고 ${result.media.length}개는 건너뛰었습니다.`,
+      };
+    }
+
+    const idPlaceholders = candidates.map((_, index) => `$${index + 1}`).join(", ");
+    const existingRows = await prisma.$queryRawUnsafe<Array<{ externalId: string }>>(
+      `SELECT "externalId" AS "externalId"
+       FROM "GalleryPost"
+       WHERE source = 'INSTAGRAM'
+         AND "externalId" IN (${idPlaceholders})`,
+      ...candidates.map((row) => row.externalId),
+    );
+    const existingIds = new Set(existingRows.map((row) => row.externalId).filter(Boolean));
+    const rowsToInsert = candidates.filter((row) => !existingIds.has(row.externalId));
+
+    if (rowsToInsert.length === 0) {
+      return {
+        ok: true,
+        imported: 0,
+        skipped: result.media.length,
+        fetched: result.media.length,
+        message: `인스타그램 게시물 0개를 가져왔고 ${result.media.length}개는 건너뛰었습니다.`,
+      };
+    }
+
+    const valuesSql = rowsToInsert
+      .map((_, rowIndex) => {
+        const base = rowIndex * 6;
+        return `($${base + 1}::text, $${base + 2}::text, $${base + 3}::text, $${base + 4}::text, $${base + 5}::text, $${base + 6}::timestamptz)`;
+      })
+      .join(", ");
+    const values = rowsToInsert.flatMap((row) => [
+      row.title,
+      row.caption,
+      row.mediaJSON,
+      row.externalId,
+      row.externalUrl,
+      row.publishedAt,
+    ]);
+
+    const insertedRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `INSERT INTO "GalleryPost"
+          (id, title, caption, "mediaJSON", "isPublic", source, "externalId", "externalUrl", "createdAt", "updatedAt")
+       SELECT gen_random_uuid()::text,
+              incoming.title,
+              incoming.caption,
+              incoming.media_json,
+              true,
+              'INSTAGRAM',
+              incoming.external_id,
+              incoming.external_url,
+              COALESCE(incoming.published_at, NOW()),
+              NOW()
+       FROM (VALUES ${valuesSql}) AS incoming(title, caption, media_json, external_id, external_url, published_at)
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM "GalleryPost" g
+         WHERE g.source = 'INSTAGRAM'
+           AND g."externalId" = incoming.external_id
+       )
+       RETURNING id`,
+      ...values,
+    );
+
+    const imported = insertedRows.length;
+    const skipped = result.media.length - imported;
+
+    return {
+      ok: true,
+      imported,
+      skipped,
+      fetched: result.media.length,
+      message: `인스타그램 게시물 ${imported}개를 가져왔고 ${skipped}개는 건너뛰었습니다.`,
+    };
+  } catch (error) {
+    console.error("[instagram/gallery-sync] failed:", error);
+    return {
+      ok: false,
+      imported: 0,
+      skipped: 0,
+      fetched: 0,
+      message: "인스타그램 동기화 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+}

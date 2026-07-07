@@ -91,9 +91,11 @@ export default function AdminLayout({
 
             {/* Sidebar */}
             <aside
-                className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-72 max-w-[85vw] flex-shrink-0 flex-col bg-brand-navy-900 text-white transition-transform duration-200 md:h-full md:w-64 md:translate-x-0 ${
-                    mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-                }`}
+                className={`${
+                    mobileMenuOpen
+                        ? "fixed inset-y-0 left-0 z-40 flex h-dvh w-72 max-w-[85vw]"
+                        : "hidden"
+                } flex-shrink-0 flex-col bg-brand-navy-900 text-white md:fixed md:inset-y-0 md:left-0 md:z-10 md:flex md:h-full md:w-64 md:max-w-none`}
             >
                 <div className="p-6 border-b border-white/10 flex items-center gap-3 flex-shrink-0">
                     <div className="bg-white dark:bg-white px-3 py-2 rounded-md flex items-center justify-center">

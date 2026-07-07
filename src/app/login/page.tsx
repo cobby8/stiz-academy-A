@@ -6,6 +6,7 @@ import Image from "next/image";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [signupRole, setSignupRole] = useState<"PARENT" | "INSTRUCTOR">("PARENT");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // 비밀번호 보기/숨기기 토글 상태
@@ -62,10 +63,9 @@ export default function LoginPage() {
             />
           </div>
           <h1 className="text-2xl font-bold text-brand-navy-900 dark:text-white">
-            스티즈농구교실
+            STIZ 로그인
           </h1>
-          {/* "관리자 시스템" -> "학부모/관리자 로그인"으로 변경 — 학부모도 여기서 로그인 */}
-          <p className="text-brand-navy-700 dark:text-gray-300 mt-1">학부모/관리자 로그인</p>
+          <p className="text-brand-navy-700 dark:text-gray-300 mt-1">계정 권한에 맞는 화면으로 이동합니다</p>
         </div>
 
         {/* 카드 — 기존 구조 유지, 디자인 토큰 적용 */}
@@ -80,6 +80,7 @@ export default function LoginPage() {
                 setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
                 setAgreePrivacy(false); // 동의 체크박스 초기화
                 setAgreeTerms(false);
+                setSignupRole("PARENT");
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "login"
@@ -97,6 +98,7 @@ export default function LoginPage() {
                 setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
                 setAgreePrivacy(false);
                 setAgreeTerms(false);
+                setSignupRole("PARENT");
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "signup"
@@ -104,7 +106,7 @@ export default function LoginPage() {
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white"
               }`}
             >
-              회원가입
+              계정 만들기
             </button>
           </div>
 
@@ -118,24 +120,60 @@ export default function LoginPage() {
           {/* 폼 — 기존 구조 100% 유지, 포커스 색상만 브랜드 오렌지로 통일 */}
           <form action={handleSubmit} className="space-y-4">
             <input type="hidden" name="redirectTo" value={redirectTo} />
+            {mode === "signup" && <input type="hidden" name="signupRole" value={signupRole} />}
             {mode === "signup" && (
-              <div>
-                <label
-                  htmlFor="name"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
-                >
-                  이름
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  autoComplete="off"
-                  placeholder="홍길동"
-                  className="w-full px-4 py-2.5 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-gray-600 dark:bg-gray-950 dark:text-white dark:placeholder:text-gray-500 outline-none transition-colors"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    계정 유형
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSignupRole("PARENT")}
+                      className={`min-h-12 rounded-lg border px-3 text-sm font-bold transition-colors ${
+                        signupRole === "PARENT"
+                          ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300"
+                      }`}
+                    >
+                      학부모
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignupRole("INSTRUCTOR")}
+                      className={`min-h-12 rounded-lg border px-3 text-sm font-bold transition-colors ${
+                        signupRole === "INSTRUCTOR"
+                          ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300"
+                      }`}
+                    >
+                      선생님
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                    로그인은 하나로 통합되고, 가입 시 선택한 유형에 따라 기본 화면이 달라집니다.
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="name"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
+                  >
+                    이름
+                  </label>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required
+                    autoComplete="off"
+                    placeholder="홍길동"
+                    className="w-full px-4 py-2.5 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-gray-600 dark:bg-gray-950 dark:text-white dark:placeholder:text-gray-500 outline-none transition-colors"
+                  />
+                </div>
+              </>
             )}
 
             <div>
@@ -259,7 +297,7 @@ export default function LoginPage() {
                 ? "처리 중..."
                 : mode === "login"
                   ? "로그인"
-                  : "회원가입"}
+                  : `${signupRole === "INSTRUCTOR" ? "선생님" : "학부모"} 계정 만들기`}
             </button>
           </form>
         </div>

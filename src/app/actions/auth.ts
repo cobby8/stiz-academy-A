@@ -2,21 +2,62 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import {
+  defaultPathForRole,
+  normalizeAppRole,
+  resolveRedirectForRole,
+  type AppRole,
+} from "@/lib/auth-routes";
+
+function normalizeSignupRole(value: FormDataEntryValue | null): "PARENT" | "INSTRUCTOR" {
+  return value === "INSTRUCTOR" ? "INSTRUCTOR" : "PARENT";
+}
+
+async function getRoleByEmail(email?: string | null): Promise<AppRole | null> {
+  if (!email) return null;
+
+  const rows = await prisma.$queryRawUnsafe<Array<{ role: string }>>(
+    `SELECT role FROM "User" WHERE email = $1 LIMIT 1`,
+    email,
+  );
+
+  return rows[0] ? normalizeAppRole(rows[0].role) : null;
+}
+
+async function upsertSignupUser(data: {
+  id: string;
+  email: string;
+  name: string;
+  role: "PARENT" | "INSTRUCTOR";
+}) {
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "User" (id, email, name, role, "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4::"Role", NOW(), NOW())
+     ON CONFLICT (email) DO UPDATE
+     SET name = EXCLUDED.name,
+         role = EXCLUDED.role,
+         "updatedAt" = NOW()`,
+    data.id,
+    data.email,
+    data.name,
+    data.role,
+  );
+}
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const email = String(formData.get("email") || "").trim();
+  const password = String(formData.get("password") || "");
   const redirectTo = formData.get("redirectTo") as string | null;
-  const safeRedirectTo = redirectTo?.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/admin";
 
   if (!email || !password) {
     return { error: "이메일과 비밀번호를 입력해주세요." };
   }
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -26,25 +67,34 @@ export async function login(formData: FormData) {
       return { error: "이메일 또는 비밀번호가 올바르지 않습니다." };
     }
     if (error.message === "Email not confirmed") {
-      return { error: "이메일 인증이 필요합니다. 받은 편지함을 확인하거나, Supabase 대시보드에서 이메일 인증을 비활성화하세요." };
+      return { error: "이메일 인증이 필요합니다. 받은 인증 메일을 확인해주세요." };
     }
     return { error: `로그인 오류: ${error.message}` };
   }
 
+  const role =
+    (await getRoleByEmail(data.user?.email)) ||
+    normalizeAppRole(data.user?.user_metadata?.role);
+  const destination = resolveRedirectForRole(role, redirectTo);
+
+  await supabase.auth.updateUser({
+    data: {
+      ...data.user?.user_metadata,
+      role,
+    },
+  });
+
   revalidatePath("/", "layout");
-  redirect(safeRedirectTo);
+  redirect(destination);
 }
 
 export async function signup(formData: FormData) {
   const supabase = await createClient();
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const name = formData.get("name") as string;
-  const redirectTo = formData.get("redirectTo") as string | null;
-  const safeRedirectTo = redirectTo?.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/admin";
-  // 보안: role은 서버에서 PARENT로 고정 (클라이언트 입력값 무시)
-  const role = "PARENT";
+  const email = String(formData.get("email") || "").trim();
+  const password = String(formData.get("password") || "");
+  const name = String(formData.get("name") || "").trim();
+  const role = normalizeSignupRole(formData.get("signupRole"));
 
   if (!email || !password || !name) {
     return { error: "모든 필수 항목을 입력해주세요." };
@@ -54,7 +104,7 @@ export async function signup(formData: FormData) {
     return { error: "비밀번호는 6자 이상이어야 합니다." };
   }
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -72,8 +122,19 @@ export async function signup(formData: FormData) {
     return { error: "회원가입 중 오류가 발생했습니다." };
   }
 
+  if (!data.user) {
+    return { error: "계정 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  await upsertSignupUser({
+    id: data.user.id,
+    email,
+    name,
+    role,
+  });
+
   revalidatePath("/", "layout");
-  redirect(safeRedirectTo);
+  redirect(defaultPathForRole(role));
 }
 
 export async function logout() {

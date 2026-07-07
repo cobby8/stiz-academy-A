@@ -17,7 +17,7 @@
     },
     {
       "path": "/api/cron/instagram-gallery",
-      "schedule": "10 * * * *"
+      "schedule": "10 18 * * *"
     }
   ]
 }

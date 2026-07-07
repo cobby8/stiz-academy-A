@@ -28,9 +28,10 @@ type InstagramApiError = {
   };
 };
 
-function graphBaseUrl() {
+function graphBaseUrl(accessToken = getAccessToken()) {
   const version = process.env.META_GRAPH_API_VERSION?.trim();
-  return version ? `https://graph.facebook.com/${version}` : "https://graph.facebook.com";
+  const host = accessToken.startsWith("IG") ? "https://graph.instagram.com" : "https://graph.facebook.com";
+  return version ? `${host}/${version}` : host;
 }
 
 function getAccessToken() {
@@ -132,7 +133,7 @@ export async function fetchRecentInstagramMedia({
     limit: String(limit),
     access_token: accessToken,
   });
-  const res = await fetch(`${graphBaseUrl()}/${resolvedBusinessAccountId}/media?${params.toString()}`, {
+  const res = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media?${params.toString()}`, {
     cache: "no-store",
   });
   const body = await res.json() as InstagramApiError & { data?: InstagramRemoteMedia[] };
@@ -185,7 +186,7 @@ export async function publishGalleryPostToInstagram({
     caption: caption?.trim() || "",
     access_token: accessToken,
   });
-  const createRes = await fetch(`${graphBaseUrl()}/${resolvedBusinessAccountId}/media`, {
+  const createRes = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media`, {
     method: "POST",
     body: createParams,
   });
@@ -202,7 +203,7 @@ export async function publishGalleryPostToInstagram({
     creation_id: createBody.id,
     access_token: accessToken,
   });
-  const publishRes = await fetch(`${graphBaseUrl()}/${resolvedBusinessAccountId}/media_publish`, {
+  const publishRes = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media_publish`, {
     method: "POST",
     body: publishParams,
   });
@@ -221,7 +222,7 @@ export async function publishGalleryPostToInstagram({
       fields: "permalink",
       access_token: accessToken,
     });
-    const permalinkRes = await fetch(`${graphBaseUrl()}/${publishBody.id}?${permalinkParams.toString()}`, {
+    const permalinkRes = await fetch(`${graphBaseUrl(accessToken)}/${publishBody.id}?${permalinkParams.toString()}`, {
       cache: "no-store",
     });
     const permalinkBody = await permalinkRes.json() as { permalink?: string };

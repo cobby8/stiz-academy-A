@@ -2,8 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowRight, Camera, CheckCircle2, Loader2, RefreshCcw, Save, Sparkles, UploadCloud } from "lucide-react";
-import { createSocialPostDraft, saveSocialPostDraft } from "@/app/actions/social-posts";
+import { ArrowRight, Camera, CheckCircle2, Loader2, RefreshCcw, Save, Send, Sparkles, UploadCloud } from "lucide-react";
+import { createSocialPostDraft, publishSocialPostDraft, saveSocialPostDraft } from "@/app/actions/social-posts";
 import InstagramFeedPreview, {
   type InstagramPreviewMediaItem,
 } from "@/components/instagram/InstagramFeedPreview";
@@ -106,6 +106,8 @@ export default function QuickPostClient({
   const [isPending, startTransition] = useTransition();
   const busy = isPending;
   const canApprove = currentUser.role === "ADMIN" || currentUser.role === "VICE_ADMIN";
+  const isPublished = draft?.status === "PUBLISHED";
+  const hasInstagramIssue = draft?.status === "FAILED";
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -137,7 +139,7 @@ export default function QuickPostClient({
         setDraft(result.draft);
         setCaption(result.draft.caption || "");
         setHashtags(result.draft.hashtags || "");
-        setMessage("관리자에게 게시 요청이 완료되었습니다. 최종 게시는 관리자 페이지에서 진행됩니다.");
+        setMessage("AI 초안이 만들어졌습니다. 문구를 확인한 뒤 바로 게시할 수 있습니다.");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "초안을 만들지 못했습니다.");
         setMessage(null);
@@ -162,9 +164,41 @@ export default function QuickPostClient({
           isPublic: draft.isPublic,
         });
         setDraft(result.draft);
-        setMessage("수정 내용이 저장됐고 게시 요청은 계속 대기 중입니다.");
+        setMessage("수정 내용이 저장됐습니다.");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "저장하지 못했습니다.");
+      }
+    });
+  }
+
+  function handlePublish() {
+    if (!draft) return;
+
+    setError(null);
+    setMessage("게시를 진행 중입니다. 홈페이지 갤러리에 먼저 반영하고 인스타그램 게시를 시도합니다.");
+    startTransition(async () => {
+      try {
+        const saved = await saveSocialPostDraft(draft.id, {
+          title: draft.title,
+          caption,
+          hashtags,
+          lessonType,
+          memo,
+          isPublic: draft.isPublic,
+        });
+        const result = await publishSocialPostDraft(saved.draft.id);
+        setDraft(result.draft);
+
+        if (result.ok) {
+          setMessage("게시가 완료됐습니다. 홈페이지 갤러리와 인스타그램에 반영됐습니다.");
+          return;
+        }
+
+        setMessage("홈페이지 갤러리에는 게시됐습니다. 인스타그램 게시만 확인이 필요합니다.");
+        setError(result.error || "인스타그램 게시 설정을 확인해주세요.");
+      } catch (caught) {
+        setMessage(null);
+        setError(caught instanceof Error ? caught.message : "게시하지 못했습니다.");
       }
     });
   }
@@ -255,18 +289,25 @@ export default function QuickPostClient({
             <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
               <div className="flex items-center gap-2 text-sm font-black">
                 <CheckCircle2 size={18} />
-                관리자에게 게시 요청 완료
+                {isPublished
+                  ? "게시 완료"
+                  : hasInstagramIssue
+                    ? "홈페이지 게시 완료"
+                    : "AI 초안 준비 완료"}
               </div>
               <p className="mt-2 text-xs leading-5 text-green-700">
-                이 초안은 관리자 페이지의 선생님 업로드 대기 목록에 올라가 있습니다.
-                관리자가 확인 후 홈페이지 갤러리와 인스타그램에 게시합니다.
+                {isPublished
+                  ? "홈페이지 갤러리와 인스타그램 게시가 완료됐습니다."
+                  : hasInstagramIssue
+                    ? "사진은 홈페이지 갤러리에 올라갔고, 인스타그램 게시만 다시 시도하거나 관리자 설정을 확인하면 됩니다."
+                    : "문구를 확인하고 필요한 부분을 수정한 뒤 바로 게시할 수 있습니다."}
               </p>
               {canApprove && (
                 <Link
                   href="/admin/gallery"
                   className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-green-700 px-3 text-sm font-black text-white"
                 >
-                  관리자 게시 화면 열기
+                  관리자 갤러리 보기
                   <ArrowRight size={17} />
                 </Link>
               )}
@@ -276,7 +317,7 @@ export default function QuickPostClient({
               mediaItems={mediaItems}
               caption={caption}
               hashtags={hashtags}
-              editable
+              editable={!isPublished}
               onCaptionChange={setCaption}
               onHashtagsChange={setHashtags}
             />
@@ -285,12 +326,23 @@ export default function QuickPostClient({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={busy}
+                disabled={busy || isPublished}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-navy-900 px-3 text-sm font-black text-white disabled:opacity-60"
               >
                 <Save size={18} />
-                수정 저장하고 게시 요청 유지
+                수정 저장
               </button>
+              {!isPublished && (
+                <button
+                  type="button"
+                  onClick={handlePublish}
+                  disabled={busy}
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-3 text-sm font-black text-white disabled:opacity-60"
+                >
+                  <Send size={18} />
+                  {hasInstagramIssue ? "인스타그램 다시 게시" : "바로 게시"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={resetFlow}
@@ -308,7 +360,7 @@ export default function QuickPostClient({
           <div className="rounded-lg border border-dashed border-gray-300 bg-white/70 p-6 text-center text-gray-500">
             <UploadCloud className="mx-auto mb-2 h-9 w-9 text-gray-400" />
             <p className="text-sm font-bold">사진을 고르면 인스타 피드 형태로 미리보기가 만들어집니다.</p>
-            <p className="mt-1 text-xs">최종 게시는 관리자 승인 후 진행됩니다.</p>
+            <p className="mt-1 text-xs">문구를 확인한 뒤 승인 과정 없이 바로 게시할 수 있습니다.</p>
           </div>
         )}
 

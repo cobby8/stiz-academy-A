@@ -135,11 +135,15 @@ export async function rejectSocialPostDraft(id: string) {
 }
 
 export async function publishSocialPostDraft(id: string) {
-  await requireAdmin();
+  const staff = await requireStaff();
 
   const currentDraft = await getSocialPostDraftById(id);
   if (!currentDraft || (currentDraft.status !== "READY" && currentDraft.status !== "FAILED")) {
     throw new Error("게시할 수 있는 초안을 찾지 못했습니다.");
+  }
+
+  if (staff.appUserRole === "INSTRUCTOR" && currentDraft.authorUserId !== staff.appUserId) {
+    throw new Error("본인이 작성한 초안만 바로 게시할 수 있습니다.");
   }
 
   const mediaItems = parseSocialDraftMedia(currentDraft.mediaJSON).filter((item) => item.type === "image");

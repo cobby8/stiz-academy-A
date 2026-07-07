@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, Loader2, RefreshCcw, Save, Sparkles, UploadCloud } from "lucide-react";
+import { ArrowRight, Camera, CheckCircle2, Loader2, RefreshCcw, Save, Sparkles, UploadCloud } from "lucide-react";
 import { createSocialPostDraft, saveSocialPostDraft } from "@/app/actions/social-posts";
 import InstagramFeedPreview, {
   type InstagramPreviewMediaItem,
@@ -105,6 +105,7 @@ export default function QuickPostClient({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const busy = isPending;
+  const canApprove = currentUser.role === "ADMIN" || currentUser.role === "VICE_ADMIN";
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -136,7 +137,7 @@ export default function QuickPostClient({
         setDraft(result.draft);
         setCaption(result.draft.caption || "");
         setHashtags(result.draft.hashtags || "");
-        setMessage("관리자 검토 대기 초안이 만들어졌습니다.");
+        setMessage("관리자에게 게시 요청이 완료되었습니다. 최종 게시는 관리자 페이지에서 진행됩니다.");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "초안을 만들지 못했습니다.");
         setMessage(null);
@@ -161,7 +162,7 @@ export default function QuickPostClient({
           isPublic: draft.isPublic,
         });
         setDraft(result.draft);
-        setMessage("수정 내용이 저장되었습니다.");
+        setMessage("수정 내용이 저장됐고 게시 요청은 계속 대기 중입니다.");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "저장하지 못했습니다.");
       }
@@ -251,6 +252,26 @@ export default function QuickPostClient({
 
         {draft && (
           <section className="space-y-3">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
+              <div className="flex items-center gap-2 text-sm font-black">
+                <CheckCircle2 size={18} />
+                관리자에게 게시 요청 완료
+              </div>
+              <p className="mt-2 text-xs leading-5 text-green-700">
+                이 초안은 관리자 페이지의 선생님 업로드 대기 목록에 올라가 있습니다.
+                관리자가 확인 후 홈페이지 갤러리와 인스타그램에 게시합니다.
+              </p>
+              {canApprove && (
+                <Link
+                  href="/admin/gallery"
+                  className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-green-700 px-3 text-sm font-black text-white"
+                >
+                  관리자 게시 화면 열기
+                  <ArrowRight size={17} />
+                </Link>
+              )}
+            </div>
+
             <InstagramFeedPreview
               mediaItems={mediaItems}
               caption={caption}
@@ -260,7 +281,7 @@ export default function QuickPostClient({
               onHashtagsChange={setHashtags}
             />
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <button
                 type="button"
                 onClick={handleSave}
@@ -268,7 +289,7 @@ export default function QuickPostClient({
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-navy-900 px-3 text-sm font-black text-white disabled:opacity-60"
               >
                 <Save size={18} />
-                수정 저장
+                수정 저장하고 게시 요청 유지
               </button>
               <button
                 type="button"

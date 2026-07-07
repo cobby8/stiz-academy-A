@@ -289,7 +289,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
         </div>
 
         {/* 사이드바 메뉴 — 순서: 학원 소개 → 수업 안내 → 소식/안내 → 수업찾기 */}
-        <nav className="py-2 overflow-y-auto" style={{ maxHeight: "calc(100% - 200px)" }}>
+        <nav className="py-2 overflow-y-auto" style={{ maxHeight: "calc(100% - 260px)" }}>
           {/* 학원 소개 — 독립 링크, 맨 앞 배치 */}
           <Link
             href="/about"
@@ -344,6 +344,22 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
 
         {/* 사이드바 하단 — 연락처 + CTA */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <Link
+              href="/staff/quick-post"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex min-h-11 items-center justify-center rounded-xl border border-brand-orange-200 bg-white text-sm font-bold text-brand-orange-600 transition-colors hover:bg-brand-orange-50 dark:border-brand-neon-lime/30 dark:bg-gray-900 dark:text-brand-neon-lime"
+            >
+              사진 올리기
+            </Link>
+            <Link
+              href="/admin"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+            >
+              관리자
+            </Link>
+          </div>
           <Link
             href="/apply"
             onClick={() => setIsMobileMenuOpen(false)}

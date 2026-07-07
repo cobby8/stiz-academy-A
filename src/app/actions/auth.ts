@@ -9,6 +9,8 @@ export async function login(formData: FormData) {
 
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+  const redirectTo = formData.get("redirectTo") as string | null;
+  const safeRedirectTo = redirectTo?.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/admin";
 
   if (!email || !password) {
     return { error: "이메일과 비밀번호를 입력해주세요." };
@@ -30,7 +32,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/admin");
+  redirect(safeRedirectTo);
 }
 
 export async function signup(formData: FormData) {
@@ -39,6 +41,8 @@ export async function signup(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
   const name = formData.get("name") as string;
+  const redirectTo = formData.get("redirectTo") as string | null;
+  const safeRedirectTo = redirectTo?.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/admin";
   // 보안: role은 서버에서 PARENT로 고정 (클라이언트 입력값 무시)
   const role = "PARENT";
 
@@ -69,7 +73,7 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/admin");
+  redirect(safeRedirectTo);
 }
 
 export async function logout() {

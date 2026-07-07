@@ -20,5 +20,20 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "사진 올리기",
+      "short_name": "사진",
+      "description": "수업 사진을 빠르게 업로드",
+      "url": "/staff/quick-post",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

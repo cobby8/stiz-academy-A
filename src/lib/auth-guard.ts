@@ -49,6 +49,41 @@ export async function requireAdmin() {
   return user;
 }
 
+export type StaffRole = "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
+
+export type StaffAuthUser = Awaited<ReturnType<typeof requireAuth>> & {
+  appUserId: string;
+  appUserName: string;
+  appUserRole: StaffRole;
+};
+
+/**
+ * requireStaff: ADMIN, VICE_ADMIN, INSTRUCTOR allowed.
+ * This protects staff-only workflows without opening the full admin area.
+ */
+export async function requireStaff(): Promise<StaffAuthUser> {
+  const user = await requireAuth();
+
+  const rows = await prisma.$queryRawUnsafe<{ id: string; name: string | null; role: string }[]>(
+    `SELECT id, name, role FROM "User" WHERE email = $1 LIMIT 1`,
+    user.email
+  );
+
+  const appUser = rows[0];
+  if (
+    !appUser ||
+    (appUser.role !== "ADMIN" && appUser.role !== "VICE_ADMIN" && appUser.role !== "INSTRUCTOR")
+  ) {
+    throw new Error("Staff permission is required.");
+  }
+
+  return Object.assign(user, {
+    appUserId: appUser.id,
+    appUserName: appUser.name || user.email || "STIZ Staff",
+    appUserRole: appUser.role as StaffRole,
+  });
+}
+
 /**
  * requireOwner: ADMIN(원장)만 허용
  * - 스태프 관리, 역할 변경 등 최고 권한이 필요한 작업용

@@ -28,6 +28,24 @@ type InstagramApiError = {
   };
 };
 
+type InstagramPublishResult =
+  | {
+      attempted: false;
+      ok: false;
+      skippedReason: string;
+    }
+  | {
+      attempted: true;
+      ok: false;
+      error: string;
+    }
+  | {
+      attempted: true;
+      ok: true;
+      instagramMediaId: string;
+      permalink: string | null;
+    };
+
 function graphBaseUrl(accessToken = getAccessToken()) {
   const version = process.env.META_GRAPH_API_VERSION?.trim();
   const host = accessToken.startsWith("IG") ? "https://graph.instagram.com" : "https://graph.facebook.com";
@@ -80,6 +98,31 @@ function parseGalleryMedia(mediaJSON: string): GalleryMediaItem[] {
   }
 }
 
+async function createMediaContainer({
+  accessToken,
+  businessAccountId,
+  params,
+  fallback,
+}: {
+  accessToken: string;
+  businessAccountId: string;
+  params: URLSearchParams;
+  fallback: string;
+}) {
+  const res = await fetch(`${graphBaseUrl(accessToken)}/${businessAccountId}/media`, {
+    method: "POST",
+    body: params,
+  });
+  const body = (await res.json()) as InstagramApiError & { id?: string };
+  if (!res.ok || !body.id) {
+    return {
+      ok: false as const,
+      error: apiErrorMessage(body, fallback),
+    };
+  }
+  return { ok: true as const, id: body.id };
+}
+
 export function getInstagramRuntimeStatus(businessAccountId?: string | null) {
   const accessToken = getAccessToken();
   const resolvedBusinessAccountId = getBusinessAccountId(businessAccountId);
@@ -123,7 +166,7 @@ export async function fetchRecentInstagramMedia({
   if (!accessToken || !resolvedBusinessAccountId) {
     return {
       ok: false as const,
-      reason: "INSTAGRAM_ACCESS_TOKEN과 Instagram Business Account ID가 필요합니다.",
+      reason: "Instagram access token and business account ID are required.",
       media: [] as InstagramRemoteMedia[],
     };
   }
@@ -133,6 +176,7 @@ export async function fetchRecentInstagramMedia({
     limit: String(limit),
     access_token: accessToken,
   });
+
   let res: Response;
   try {
     res = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media?${params.toString()}`, {
@@ -142,19 +186,19 @@ export async function fetchRecentInstagramMedia({
     console.error("[instagram] media fetch failed:", error);
     return {
       ok: false as const,
-      reason: "인스타그램 API에 연결하지 못했습니다.",
+      reason: "Instagram API에 연결하지 못했습니다.",
       media: [] as InstagramRemoteMedia[],
     };
   }
 
   let body: InstagramApiError & { data?: InstagramRemoteMedia[] };
   try {
-    body = await res.json() as InstagramApiError & { data?: InstagramRemoteMedia[] };
+    body = (await res.json()) as InstagramApiError & { data?: InstagramRemoteMedia[] };
   } catch (error) {
     console.error("[instagram] media response parse failed:", error);
     return {
       ok: false as const,
-      reason: "인스타그램 API 응답을 읽지 못했습니다.",
+      reason: "Instagram API 응답을 읽지 못했습니다.",
       media: [] as InstagramRemoteMedia[],
     };
   }
@@ -181,7 +225,7 @@ export async function publishGalleryPostToInstagram({
   businessAccountId?: string | null;
   caption?: string | null;
   mediaJSON: string;
-}) {
+}): Promise<InstagramPublishResult> {
   const accessToken = getAccessToken();
   const resolvedBusinessAccountId = getBusinessAccountId(businessAccountId);
   if (!accessToken || !resolvedBusinessAccountId) {
@@ -192,9 +236,13 @@ export async function publishGalleryPostToInstagram({
     };
   }
 
-  const image = parseGalleryMedia(mediaJSON).find((item) => item.type === "image");
-  const imageUrl = image ? toAbsoluteMediaUrl(image.url) : "";
-  if (!imageUrl) {
+  const imageUrls = parseGalleryMedia(mediaJSON)
+    .filter((item) => item.type === "image")
+    .map((item) => toAbsoluteMediaUrl(item.url))
+    .filter(Boolean)
+    .slice(0, 10);
+
+  if (imageUrls.length === 0) {
     return {
       attempted: false,
       ok: false,
@@ -202,33 +250,74 @@ export async function publishGalleryPostToInstagram({
     };
   }
 
-  const createParams = new URLSearchParams({
-    image_url: imageUrl,
-    caption: caption?.trim() || "",
-    access_token: accessToken,
-  });
-  const createRes = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media`, {
-    method: "POST",
-    body: createParams,
-  });
-  const createBody = await createRes.json() as InstagramApiError & { id?: string };
-  if (!createRes.ok || !createBody.id) {
-    return {
-      attempted: true,
-      ok: false,
-      error: apiErrorMessage(createBody, "인스타그램 미디어 컨테이너 생성에 실패했습니다."),
-    };
+  const captionText = caption?.trim() || "";
+  let creationId: string;
+
+  if (imageUrls.length === 1) {
+    const createResult = await createMediaContainer({
+      accessToken,
+      businessAccountId: resolvedBusinessAccountId,
+      params: new URLSearchParams({
+        image_url: imageUrls[0],
+        caption: captionText,
+        access_token: accessToken,
+      }),
+      fallback: "인스타그램 미디어 컨테이너 생성에 실패했습니다.",
+    });
+
+    if (!createResult.ok) {
+      return { attempted: true, ok: false, error: createResult.error };
+    }
+    creationId = createResult.id;
+  } else {
+    const childIds: string[] = [];
+
+    for (const imageUrl of imageUrls) {
+      const childResult = await createMediaContainer({
+        accessToken,
+        businessAccountId: resolvedBusinessAccountId,
+        params: new URLSearchParams({
+          image_url: imageUrl,
+          is_carousel_item: "true",
+          access_token: accessToken,
+        }),
+        fallback: "인스타그램 캐러셀 이미지 준비에 실패했습니다.",
+      });
+
+      if (!childResult.ok) {
+        return { attempted: true, ok: false, error: childResult.error };
+      }
+
+      childIds.push(childResult.id);
+    }
+
+    const carouselResult = await createMediaContainer({
+      accessToken,
+      businessAccountId: resolvedBusinessAccountId,
+      params: new URLSearchParams({
+        media_type: "CAROUSEL",
+        children: childIds.join(","),
+        caption: captionText,
+        access_token: accessToken,
+      }),
+      fallback: "인스타그램 캐러셀 게시물 생성에 실패했습니다.",
+    });
+
+    if (!carouselResult.ok) {
+      return { attempted: true, ok: false, error: carouselResult.error };
+    }
+    creationId = carouselResult.id;
   }
 
   const publishParams = new URLSearchParams({
-    creation_id: createBody.id,
+    creation_id: creationId,
     access_token: accessToken,
   });
   const publishRes = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media_publish`, {
     method: "POST",
     body: publishParams,
   });
-  const publishBody = await publishRes.json() as InstagramApiError & { id?: string };
+  const publishBody = (await publishRes.json()) as InstagramApiError & { id?: string };
   if (!publishRes.ok || !publishBody.id) {
     return {
       attempted: true,
@@ -246,7 +335,7 @@ export async function publishGalleryPostToInstagram({
     const permalinkRes = await fetch(`${graphBaseUrl(accessToken)}/${publishBody.id}?${permalinkParams.toString()}`, {
       cache: "no-store",
     });
-    const permalinkBody = await permalinkRes.json() as { permalink?: string };
+    const permalinkBody = (await permalinkRes.json()) as { permalink?: string };
     permalink = permalinkBody.permalink || null;
   } catch {
     permalink = null;

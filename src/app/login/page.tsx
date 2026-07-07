@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { login, signup } from "@/app/actions/auth";
 import Image from "next/image";
 
@@ -13,6 +13,14 @@ export default function LoginPage() {
   // 개인정보보호법 준수: 회원가입 시 동의 체크박스 상태
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [redirectTo, setRedirectTo] = useState("/admin");
+
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get("redirect");
+    if (value?.startsWith("/") && !value.startsWith("//")) {
+      setRedirectTo(value);
+    }
+  }, []);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
@@ -109,6 +117,7 @@ export default function LoginPage() {
 
           {/* 폼 — 기존 구조 100% 유지, 포커스 색상만 브랜드 오렌지로 통일 */}
           <form action={handleSubmit} className="space-y-4">
+            <input type="hidden" name="redirectTo" value={redirectTo} />
             {mode === "signup" && (
               <div>
                 <label

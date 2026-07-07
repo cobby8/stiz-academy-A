@@ -35,6 +35,7 @@ export default function AdminLayout({
     const router = useRouter();
     const [userName, setUserName] = useState<string>("");
     const [userEmail, setUserEmail] = useState<string>("");
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     // 새 체험 신청 건수 — 사이드바 배지 표시용
     const [newTrialCount, setNewTrialCount] = useState(0);
 
@@ -52,7 +53,8 @@ export default function AdminLayout({
     // URL이 바뀌면 탭도 자동 전환 (다른 탭의 메뉴를 직접 URL로 접근했을 때)
     useEffect(() => {
         setActiveTab(autoTab);
-    }, [autoTab]);
+        setMobileMenuOpen(false);
+    }, [autoTab, pathname]);
 
     useEffect(() => {
         const supabase = createClient();
@@ -78,8 +80,21 @@ export default function AdminLayout({
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+            {mobileMenuOpen && (
+                <button
+                    type="button"
+                    aria-label="관리자 메뉴 닫기"
+                    className="fixed inset-0 z-30 bg-black/45 md:hidden"
+                    onClick={() => setMobileMenuOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="w-64 bg-brand-navy-900 text-white flex-shrink-0 fixed h-full z-10 transition-transform flex flex-col">
+            <aside
+                className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-72 max-w-[85vw] flex-shrink-0 flex-col bg-brand-navy-900 text-white transition-transform duration-200 md:h-full md:w-64 md:translate-x-0 ${
+                    mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+                }`}
+            >
                 <div className="p-6 border-b border-white/10 flex items-center gap-3 flex-shrink-0">
                     <div className="bg-white dark:bg-white px-3 py-2 rounded-md flex items-center justify-center">
                         <Image
@@ -200,19 +215,29 @@ export default function AdminLayout({
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 ml-64 flex flex-col min-h-screen">
-                <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 sticky top-0 z-10">
-                    <h2 className="font-bold text-gray-700 dark:text-gray-200">관리자 시스템</h2>
-                    <div className="flex items-center gap-4">
+            <main className="flex min-h-screen w-full min-w-0 flex-1 flex-col md:ml-64">
+                <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 dark:bg-gray-800 dark:border-gray-700 md:h-16 md:px-8">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <button
+                            type="button"
+                            aria-label="관리자 메뉴 열기"
+                            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700 md:hidden"
+                            onClick={() => setMobileMenuOpen(true)}
+                        >
+                            <span className="material-symbols-outlined text-[22px]">menu</span>
+                        </button>
+                        <h2 className="truncate font-bold text-gray-700 dark:text-gray-200">관리자 시스템</h2>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2 md:gap-4">
                         {/* 알림 벨 — 읽지 않은 알림 수 배지 + 드롭다운 */}
                         <NotificationBell />
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{userName}님, 환영합니다.</span>
-                        <div className="w-8 h-8 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        <span className="hidden text-sm font-medium text-gray-600 dark:text-gray-300 sm:inline">{userName}님, 환영합니다.</span>
+                        <div className="w-8 h-8 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                             {userName.charAt(0) || "A"}
                         </div>
                     </div>
                 </header>
-                <div className="p-8 flex-1">
+                <div className="w-full min-w-0 flex-1 p-4 md:p-8">
                     {children}
                 </div>
             </main>
@@ -491,7 +516,7 @@ function NotificationBell() {
 
             {/* 드롭다운 패널 */}
             {open && (
-                <div className="absolute right-0 top-full mt-2 w-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-sm bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden sm:w-96">
                     {/* 헤더 */}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">알림</h3>

@@ -21,10 +21,11 @@ import {
 import { createGalleryPost, deleteGalleryPost, syncInstagramGalleryPosts, updateGalleryPost } from "@/app/actions/admin";
 import { publishSocialPostDraft, rejectSocialPostDraft, saveSocialPostDraft } from "@/app/actions/social-posts";
 import InstagramFeedPreview from "@/components/instagram/InstagramFeedPreview";
-import { compressImageForUpload } from "@/lib/clientImageCompression";
+import { uploadImagesWithProgress } from "@/lib/clientImageUpload";
 import type { SocialPostDraft } from "@/lib/socialDrafts";
 
 type MediaItem = { url: string; type: "image" | "video" };
+type UploadProgress = { done: number; total: number };
 type GalleryPost = {
   id: string;
   classId: string | null;
@@ -82,9 +83,11 @@ export default function GalleryAdminClient({
   const [isPublic, setIsPublic] = useState(true);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
   const [formMessage, setFormMessage] = useState<{ ok: boolean; message: string } | null>(null);
+  const [pageMessage, setPageMessage] = useState<{ ok: boolean; message: string } | null>(null);
 
   const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
   const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");
@@ -113,33 +116,32 @@ export default function GalleryAdminClient({
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploading(true);
-    setFormMessage(null);
-    const newItems: MediaItem[] = [];
-    const failedNames: string[] = [];
+    setUploadProgress({ done: 0, total: files.length });
+    setFormMessage({ ok: true, message: "사진을 압축하고 업로드하는 중입니다." });
 
-    for (const file of Array.from(files)) {
-      try {
-        const compressed = await compressImageForUpload(file);
-        const fd = new FormData();
-        fd.append("file", compressed);
-        fd.append("folder", "gallery");
-        const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (data.url) {
-          newItems.push({ url: data.url, type: "image" });
-        } else {
-          failedNames.push(file.name);
-        }
-      } catch (error) {
-        console.error("Upload failed:", error);
-        failedNames.push(file.name);
+    try {
+      const { items, failedNames } = await uploadImagesWithProgress(files, {
+        folder: "gallery",
+        onProgress: (done, total) => setUploadProgress({ done, total }),
+      });
+
+      setMediaItems((prev) => [...prev, ...items]);
+
+      if (items.length === 0) {
+        setFormMessage({ ok: false, message: "업로드된 사진이 없습니다. 사진을 다시 선택해주세요." });
+        return;
       }
-    }
 
-    setMediaItems((prev) => [...prev, ...newItems]);
-    setUploading(false);
-    if (failedNames.length > 0) {
-      alert(`업로드하지 못한 사진이 있습니다: ${failedNames.join(", ")}`);
+      setFormMessage({
+        ok: failedNames.length === 0,
+        message:
+          failedNames.length === 0
+            ? `${items.length}장 업로드 완료. 등록 버튼을 누르면 게시됩니다.`
+            : `${items.length}장 업로드 완료, ${failedNames.length}장은 업로드하지 못했습니다.`,
+      });
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -149,10 +151,10 @@ export default function GalleryAdminClient({
 
   function handleSubmit() {
     if (mediaItems.length === 0) {
-      alert("사진을 최소 1장 업로드해주세요.");
+      setFormMessage({ ok: false, message: "사진을 최소 1장 업로드해주세요." });
       return;
     }
-    setFormMessage(null);
+    setFormMessage({ ok: true, message: editId ? "게시물을 수정하는 중입니다." : "게시물을 등록하는 중입니다." });
 
     const payload = {
       classId: classId || null,
@@ -164,8 +166,15 @@ export default function GalleryAdminClient({
 
     startTransition(async () => {
       try {
+        const wasEdit = Boolean(editId);
         if (editId) await updateGalleryPost(editId, payload);
         else await createGalleryPost(payload);
+        setPageMessage({
+          ok: true,
+          message: wasEdit
+            ? "갤러리 게시물이 수정됐습니다."
+            : "갤러리 게시물이 등록됐습니다. 공개 상태라면 홈페이지에 바로 반영됩니다.",
+        });
         resetForm();
       } catch (error) {
         setFormMessage({
@@ -285,6 +294,29 @@ export default function GalleryAdminClient({
           </button>
         </div>
       </div>
+
+      {pageMessage && (
+        <div
+          className={`flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm font-bold ${
+            pageMessage.ok
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={18} />
+            <span>{pageMessage.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPageMessage(null)}
+            className="rounded p-0.5 opacity-70 transition hover:opacity-100"
+            aria-label="메시지 닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {instagramStatus && (
         <section className="rounded-lg border border-gray-100 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -508,7 +540,9 @@ export default function GalleryAdminClient({
                 <label className="flex h-32 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 transition hover:bg-gray-50 dark:bg-gray-900">
                   <Upload className="mb-2 text-gray-400" size={24} />
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {uploading ? "업로드 중..." : "클릭해서 사진 선택"}
+                    {uploading && uploadProgress
+                      ? `${uploadProgress.done}/${uploadProgress.total}장 업로드 중...`
+                      : "클릭해서 사진 선택"}
                   </span>
                   <span className="mt-1 text-xs text-gray-400">여러 장 선택 가능</span>
                   <input
@@ -520,6 +554,22 @@ export default function GalleryAdminClient({
                     disabled={uploading}
                   />
                 </label>
+                {uploading && uploadProgress && uploadProgress.total > 0 && (
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs font-medium text-gray-500">
+                      <span>사진 업로드</span>
+                      <span>
+                        {uploadProgress.done}/{uploadProgress.total}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full bg-brand-orange-500 transition-all"
+                        style={{ width: `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
                 {mediaItems.length > 0 && (
                   <div className="mt-3 grid grid-cols-4 gap-2">
                     {mediaItems.map((item, index) => (

@@ -28,7 +28,7 @@ type InstagramApiError = {
   };
 };
 
-type InstagramPublishResult =
+export type InstagramPublishResult =
   | {
       attempted: false;
       ok: false;
@@ -96,6 +96,14 @@ function parseGalleryMedia(mediaJSON: string): GalleryMediaItem[] {
   } catch {
     return [];
   }
+}
+
+function normalizeMediaItems(mediaItems: GalleryMediaItem[]) {
+  return mediaItems
+    .filter((item) => item.type === "image")
+    .map((item) => toAbsoluteMediaUrl(item.url))
+    .filter(Boolean)
+    .slice(0, 10);
 }
 
 async function createMediaContainer({
@@ -226,6 +234,25 @@ export async function publishGalleryPostToInstagram({
   caption?: string | null;
   mediaJSON: string;
 }): Promise<InstagramPublishResult> {
+  return publishMediaItemsToInstagram({
+    businessAccountId,
+    caption,
+    mediaItems: parseGalleryMedia(mediaJSON),
+    placement: "FEED",
+  });
+}
+
+export async function publishMediaItemsToInstagram({
+  businessAccountId,
+  caption,
+  mediaItems,
+  placement = "FEED",
+}: {
+  businessAccountId?: string | null;
+  caption?: string | null;
+  mediaItems: GalleryMediaItem[];
+  placement?: "FEED" | "STORY";
+}): Promise<InstagramPublishResult> {
   const accessToken = getAccessToken();
   const resolvedBusinessAccountId = getBusinessAccountId(businessAccountId);
   if (!accessToken || !resolvedBusinessAccountId) {
@@ -236,11 +263,7 @@ export async function publishGalleryPostToInstagram({
     };
   }
 
-  const imageUrls = parseGalleryMedia(mediaJSON)
-    .filter((item) => item.type === "image")
-    .map((item) => toAbsoluteMediaUrl(item.url))
-    .filter(Boolean)
-    .slice(0, 10);
+  const imageUrls = normalizeMediaItems(mediaItems);
 
   if (imageUrls.length === 0) {
     return {
@@ -253,7 +276,23 @@ export async function publishGalleryPostToInstagram({
   const captionText = caption?.trim() || "";
   let creationId: string;
 
-  if (imageUrls.length === 1) {
+  if (placement === "STORY") {
+    const createResult = await createMediaContainer({
+      accessToken,
+      businessAccountId: resolvedBusinessAccountId,
+      params: new URLSearchParams({
+        image_url: imageUrls[0],
+        media_type: "STORIES",
+        access_token: accessToken,
+      }),
+      fallback: "인스타그램 스토리 미디어 생성에 실패했습니다.",
+    });
+
+    if (!createResult.ok) {
+      return { attempted: true, ok: false, error: createResult.error };
+    }
+    creationId = createResult.id;
+  } else if (imageUrls.length === 1) {
     const createResult = await createMediaContainer({
       accessToken,
       businessAccountId: resolvedBusinessAccountId,

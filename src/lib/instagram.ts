@@ -74,9 +74,15 @@ function apiErrorMessage(body: InstagramApiError, fallback: string) {
 
 const MEDIA_CONTAINER_STATUS_ATTEMPTS = 8;
 const MEDIA_CONTAINER_STATUS_DELAY_MS = 1500;
+const MEDIA_PUBLISH_ATTEMPTS = 4;
+const MEDIA_PUBLISH_RETRY_DELAY_MS = 2500;
 
 type InstagramContainerStatus = InstagramApiError & {
   status_code?: string;
+};
+
+type InstagramPublishBody = InstagramApiError & {
+  id?: string;
 };
 
 function wait(ms: number) {
@@ -89,6 +95,11 @@ function isContainerReady(statusCode?: string) {
 
 function isContainerFailed(statusCode?: string) {
   return statusCode === "ERROR" || statusCode === "EXPIRED";
+}
+
+function isRetryablePublishError(body: InstagramPublishBody) {
+  const message = body.error?.message?.toLowerCase() || "";
+  return message.includes("media id is not available");
 }
 
 async function fetchMediaContainerStatus({
@@ -225,6 +236,46 @@ async function createMediaContainer({
     };
   }
   return { ok: true as const, id: body.id };
+}
+
+async function publishMediaContainer({
+  accessToken,
+  businessAccountId,
+  creationId,
+}: {
+  accessToken: string;
+  businessAccountId: string;
+  creationId: string;
+}) {
+  let lastError = "인스타그램 게시물 발행에 실패했습니다.";
+
+  for (let attempt = 1; attempt <= MEDIA_PUBLISH_ATTEMPTS; attempt++) {
+    const publishParams = new URLSearchParams({
+      creation_id: creationId,
+      access_token: accessToken,
+    });
+
+    const publishRes = await fetch(`${graphBaseUrl(accessToken)}/${businessAccountId}/media_publish`, {
+      method: "POST",
+      body: publishParams,
+    });
+    const publishBody = (await publishRes.json()) as InstagramPublishBody;
+
+    if (publishRes.ok && publishBody.id) {
+      return { ok: true as const, id: publishBody.id };
+    }
+
+    lastError = apiErrorMessage(publishBody, lastError);
+
+    // Meta가 FINISHED 상태를 준 뒤에도 media_publish 인덱싱이 늦을 때가 있어 한 번 더 흡수한다.
+    if (!isRetryablePublishError(publishBody) || attempt >= MEDIA_PUBLISH_ATTEMPTS) {
+      return { ok: false as const, error: lastError };
+    }
+
+    await wait(MEDIA_PUBLISH_RETRY_DELAY_MS * attempt);
+  }
+
+  return { ok: false as const, error: lastError };
 }
 
 export function getInstagramRuntimeStatus(businessAccountId?: string | null) {
@@ -484,20 +535,16 @@ export async function publishMediaItemsToInstagram({
     }
   }
 
-  const publishParams = new URLSearchParams({
-    creation_id: creationId,
-    access_token: accessToken,
+  const publishResult = await publishMediaContainer({
+    accessToken,
+    businessAccountId: resolvedBusinessAccountId,
+    creationId,
   });
-  const publishRes = await fetch(`${graphBaseUrl(accessToken)}/${resolvedBusinessAccountId}/media_publish`, {
-    method: "POST",
-    body: publishParams,
-  });
-  const publishBody = (await publishRes.json()) as InstagramApiError & { id?: string };
-  if (!publishRes.ok || !publishBody.id) {
+  if (!publishResult.ok) {
     return {
       attempted: true,
       ok: false,
-      error: apiErrorMessage(publishBody, "인스타그램 게시물 발행에 실패했습니다."),
+      error: publishResult.error,
     };
   }
 
@@ -507,7 +554,7 @@ export async function publishMediaItemsToInstagram({
       fields: "permalink",
       access_token: accessToken,
     });
-    const permalinkRes = await fetch(`${graphBaseUrl(accessToken)}/${publishBody.id}?${permalinkParams.toString()}`, {
+    const permalinkRes = await fetch(`${graphBaseUrl(accessToken)}/${publishResult.id}?${permalinkParams.toString()}`, {
       cache: "no-store",
     });
     const permalinkBody = (await permalinkRes.json()) as { permalink?: string };
@@ -519,7 +566,7 @@ export async function publishMediaItemsToInstagram({
   return {
     attempted: true,
     ok: true,
-    instagramMediaId: publishBody.id,
+    instagramMediaId: publishResult.id,
     permalink,
   };
 }

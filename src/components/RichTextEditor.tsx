@@ -12,10 +12,10 @@ import { TableKit } from '@tiptap/extension-table'
 // 유튜브: URL을 넣으면 <iframe> 임베드로 바꿔주는 확장
 import { Youtube } from '@tiptap/extension-youtube'
 import { useEffect, useRef, useState } from 'react'
+import { CLIENT_IMAGE_ALLOWED_TYPES, compressImageForUpload } from '@/lib/clientImageCompression'
 
 // 업로드 사전 검증 기준 — 서버(/api/upload)와 동일하게 맞춰 잘못된 파일을 미리 거른다.
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_IMAGE_TYPES = CLIENT_IMAGE_ALLOWED_TYPES;
 
 // 글자 크기 드롭다운 선택지 — "기본"은 fontSize를 제거(원래 크기)한다는 의미
 const FONT_SIZES = ['기본', '12px', '14px', '16px', '18px', '20px', '24px', '30px'];
@@ -138,21 +138,18 @@ export default function RichTextEditor({
     // ── 이미지 파일 1개를 서버에 업로드하고 최종 URL을 돌려준다. 실패 시 null ──
     // 왜 함수로 분리? 툴바 버튼/드래그&드롭/붙여넣기 3경로가 같은 업로드 로직을 공유하기 때문.
     async function uploadImageFile(file: File): Promise<string | null> {
-        // 1) 타입/크기 사전 검증 — 서버까지 안 가고 즉시 안내
+        // 1) 타입 사전 검증 — 서버까지 안 가고 즉시 안내
         if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
             alert('이미지 파일만 넣을 수 있어요 (JPG, PNG, WebP, GIF)');
             return null;
         }
-        if (file.size > MAX_IMAGE_SIZE) {
-            alert('이미지 용량은 5MB 이하만 가능해요');
-            return null;
-        }
-        // 2) 기존 /api/upload 재사용 — FormData에 file + folder를 담아 전송
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('folder', uploadFolder);
         setUploading(true); // 로딩 표시 시작
         try {
+            // 2) 브라우저에서 먼저 웹용 JPG로 압축한 뒤 서버에 전송한다.
+            const compressed = await compressImageForUpload(file);
+            const fd = new FormData();
+            fd.append('file', compressed);
+            fd.append('folder', uploadFolder);
             const res = await fetch('/api/upload', { method: 'POST', body: fd });
             const data = await res.json();
             if (!res.ok || !data.url) {
@@ -160,8 +157,8 @@ export default function RichTextEditor({
                 return null;
             }
             return data.url as string;
-        } catch {
-            alert('이미지 업로드 중 오류가 발생했어요');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : '이미지 업로드 중 오류가 발생했어요');
             return null;
         } finally {
             setUploading(false); // 성공/실패 상관없이 로딩 종료

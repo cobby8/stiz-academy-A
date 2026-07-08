@@ -7,73 +7,11 @@ import { createSocialPostDraft, publishSocialPostDraft, saveSocialPostDraft } fr
 import InstagramFeedPreview, {
   type InstagramPreviewMediaItem,
 } from "@/components/instagram/InstagramFeedPreview";
+import { compressImageForUpload } from "@/lib/clientImageCompression";
 import type { SocialPostDraft } from "@/lib/socialDrafts";
 
 const LESSON_TYPES = ["정규 수업", "기초반", "심화반", "게임 수업", "특강", "대회 준비"];
 const MAX_UPLOAD_COUNT = 10;
-const MAX_IMAGE_EDGE = 1600;
-
-async function loadImage(file: File) {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image();
-    image.src = url;
-    await image.decode();
-    return image;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-async function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error("이미지 압축에 실패했습니다."));
-      },
-      "image/jpeg",
-      quality,
-    );
-  });
-}
-
-async function compressImage(file: File) {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("사진 파일만 업로드할 수 있습니다.");
-  }
-
-  if (file.type === "image/gif" && file.size <= 5 * 1024 * 1024) {
-    return file;
-  }
-
-  try {
-    const image = await loadImage(file);
-    const ratio = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.width, image.height));
-    const width = Math.max(1, Math.round(image.width * ratio));
-    const height = Math.max(1, Math.round(image.height * ratio));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("이미지 변환을 준비하지 못했습니다.");
-    context.drawImage(image, 0, 0, width, height);
-
-    let blob = await canvasToBlob(canvas, 0.82);
-    if (blob.size > 4.6 * 1024 * 1024) {
-      blob = await canvasToBlob(canvas, 0.68);
-    }
-
-    const filename = file.name.replace(/\.[^.]+$/, "") || "stiz-photo";
-    return new File([blob], `${filename}.jpg`, { type: "image/jpeg" });
-  } catch (error) {
-    if (file.size <= 5 * 1024 * 1024 && ["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      return file;
-    }
-    throw error;
-  }
-}
 
 async function uploadImage(file: File): Promise<InstagramPreviewMediaItem> {
   const fd = new FormData();
@@ -124,7 +62,7 @@ export default function QuickPostClient({
         const uploaded: InstagramPreviewMediaItem[] = [];
 
         for (const file of selected) {
-          const compressed = await compressImage(file);
+          const compressed = await compressImageForUpload(file);
           uploaded.push(await uploadImage(compressed));
         }
 

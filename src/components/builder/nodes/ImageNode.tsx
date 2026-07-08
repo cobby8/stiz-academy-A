@@ -6,6 +6,7 @@ import { Resizable } from "re-resizable";
 import ReactCrop, { Crop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { ImageIcon, Crop as CropIcon, Check, X } from "lucide-react";
+import { compressImageForUpload } from "@/lib/clientImageCompression";
 
 export const ImageSettings = () => {
     const { actions: { setProp, setCustom }, borderRadius, objectFit, isCropModalOpen, hasImage } = useNode((node) => ({
@@ -107,10 +108,10 @@ export const ImageNode = ({
         const file = e.target.files?.[0];
         if (!file) return;
 
-        const formData = new FormData();
-        formData.append("file", file);
-
         try {
+            const compressed = await compressImageForUpload(file);
+            const formData = new FormData();
+            formData.append("file", compressed);
             const res = await fetch("/api/upload", { method: "POST", body: formData });
             const data = await res.json();
             if (data.url) {
@@ -119,6 +120,7 @@ export const ImageNode = ({
             }
         } catch (error) {
             console.error("Upload failed", error);
+            alert(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
         }
     };
 
@@ -153,10 +155,11 @@ export const ImageNode = ({
         canvas.toBlob(async (blob) => {
             if (!blob) return;
             const file = new File([blob], "cropped.jpg", { type: "image/jpeg" });
-            const formData = new FormData();
-            formData.append("file", file);
 
             try {
+                const compressed = await compressImageForUpload(file, { maxEdge: 1400, targetBytes: 900 * 1024 });
+                const formData = new FormData();
+                formData.append("file", compressed);
                 const res = await fetch("/api/upload", { method: "POST", body: formData });
                 const data = await res.json();
                 if (data.url) {
@@ -164,9 +167,10 @@ export const ImageNode = ({
                 }
             } catch (error) {
                 console.error("Upload failed", error);
+                alert(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
             }
             setCustom((custom: any) => custom.isCropModalOpen = false);
-        }, "image/jpeg", 0.95);
+        }, "image/jpeg", 0.82);
     };
 
     return (

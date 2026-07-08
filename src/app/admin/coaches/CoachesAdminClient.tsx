@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createCoach, updateCoach, deleteCoach, reorderCoaches } from "@/app/actions/admin";
+import { compressImageForUpload } from "@/lib/clientImageCompression";
 
 interface Coach {
     id: string;
@@ -37,8 +38,9 @@ function defaultForm(coach?: Coach): FormState {
 }
 
 async function uploadImage(file: File): Promise<string> {
+    const compressed = await compressImageForUpload(file, { maxEdge: 1200, targetBytes: 600 * 1024 });
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", compressed);
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     if (!res.ok) throw new Error("이미지 업로드 실패");
     const json = await res.json();

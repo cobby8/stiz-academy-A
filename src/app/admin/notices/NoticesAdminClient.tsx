@@ -6,6 +6,7 @@ import { prepareNoticeSocialCampaign, publishNoticeSocialCampaign } from "@/app/
 import { Plus, Trash2, Edit2, Pin, X, Paperclip, Bell, Megaphone, Copy, ExternalLink } from "lucide-react";
 import { isImageAttachment, isHtmlContent, plainToEditorHtml, stripHtmlForPreview } from "@/lib/noticeContent";
 import RichTextEditor from "@/components/RichTextEditor";
+import { compressImageForUpload } from "@/lib/clientImageCompression";
 
 // 리치 에디터가 비어있으면 getHTML()이 "<p></p>"를 반환하므로, 태그를 걷어내 실제 내용 유무를 판단한다.
 // 이미지/표/영상만 있는 공지(텍스트 0)도 유효하므로, 그런 미디어 태그가 있으면 "내용 있음"으로 본다.
@@ -80,19 +81,29 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
     async function handleFileUpload(files: FileList | null) {
         if (!files || files.length === 0) return;
         setUploading(true);
+        const failedNames: string[] = [];
         for (const file of Array.from(files)) {
-            const fd = new FormData();
-            fd.append("file", file);
-            fd.append("folder", "notices");
             try {
+                const compressed = await compressImageForUpload(file);
+                const fd = new FormData();
+                fd.append("file", compressed);
+                fd.append("folder", "notices");
                 const res = await fetch("/api/upload", { method: "POST", body: fd });
                 const data = await res.json();
                 if (data.url) {
-                    setAttachments(prev => [...prev, { url: data.url, filename: file.name, size: file.size }]);
+                    setAttachments(prev => [...prev, { url: data.url, filename: file.name, size: compressed.size }]);
+                } else {
+                    failedNames.push(file.name);
                 }
-            } catch (e) { console.error("Upload failed:", e); }
+            } catch (e) {
+                console.error("Upload failed:", e);
+                failedNames.push(file.name);
+            }
         }
         setUploading(false);
+        if (failedNames.length > 0) {
+            alert(`업로드하지 못한 첨부 이미지가 있습니다: ${failedNames.join(", ")}`);
+        }
     }
 
     function toggleClassId(id: string) {

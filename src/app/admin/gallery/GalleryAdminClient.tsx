@@ -21,6 +21,7 @@ import {
 import { createGalleryPost, deleteGalleryPost, syncInstagramGalleryPosts, updateGalleryPost } from "@/app/actions/admin";
 import { publishSocialPostDraft, rejectSocialPostDraft, saveSocialPostDraft } from "@/app/actions/social-posts";
 import InstagramFeedPreview from "@/components/instagram/InstagramFeedPreview";
+import { compressImageForUpload } from "@/lib/clientImageCompression";
 import type { SocialPostDraft } from "@/lib/socialDrafts";
 
 type MediaItem = { url: string; type: "image" | "video" };
@@ -111,25 +112,32 @@ export default function GalleryAdminClient({
     if (!files || files.length === 0) return;
     setUploading(true);
     const newItems: MediaItem[] = [];
+    const failedNames: string[] = [];
 
     for (const file of Array.from(files)) {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("folder", "gallery");
-
       try {
+        const compressed = await compressImageForUpload(file);
+        const fd = new FormData();
+        fd.append("file", compressed);
+        fd.append("folder", "gallery");
         const res = await fetch("/api/upload", { method: "POST", body: fd });
         const data = await res.json();
         if (data.url) {
           newItems.push({ url: data.url, type: "image" });
+        } else {
+          failedNames.push(file.name);
         }
       } catch (error) {
         console.error("Upload failed:", error);
+        failedNames.push(file.name);
       }
     }
 
     setMediaItems((prev) => [...prev, ...newItems]);
     setUploading(false);
+    if (failedNames.length > 0) {
+      alert(`업로드하지 못한 사진이 있습니다: ${failedNames.join(", ")}`);
+    }
   }
 
   function removeMedia(index: number) {

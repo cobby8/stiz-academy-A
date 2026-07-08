@@ -38,6 +38,12 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 개인정보처리방침은 `AcademySettings.privacyPolicy`에 저장하고 `/admin/privacy`에서 관리한다.
 - Instagram/YouTube/네이버 플레이스/카카오 채널 링크는 `AcademySettings` 설정값을 사용한다.
 
+## 이미지 업로드
+- 주요 이미지 업로드 화면은 `/api/upload` 전 `compressImageForUpload`를 거친다.
+- 브라우저 `canvas`로 사진 긴 변을 줄이고 JPG 품질을 단계적으로 낮춰 저장소에 들어가는 원본 용량을 줄인다.
+- GIF는 움직임 보존을 위해 재압축하지 않고 5MB 이하만 허용한다.
+- 적용 영역은 선생님 빠른 업로드, 관리자 갤러리, 공지 본문/첨부, 코치 사진, 수업 로그, 페이지 빌더 이미지다.
+
 ## 인스타그램 연동
 - Instagram API 토큰은 DB에 저장하지 않고 서버 환경변수 `INSTAGRAM_ACCESS_TOKEN` 또는 `META_ACCESS_TOKEN`로 읽는다.
 - Instagram Business Account ID와 자동 업로드 ON/OFF는 관리자 설정에서 관리한다.

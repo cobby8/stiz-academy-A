@@ -13,6 +13,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { saveSessionLog } from "@/app/actions/admin";
+import { compressImageForUpload } from "@/lib/clientImageCompression";
 
 // ── 출석 상태 옵션 (AttendanceClient와 동일 패턴) ──
 const STATUS_OPTIONS = [
@@ -156,8 +157,9 @@ export default function SessionLogModal({
 
             // 각 파일을 순차적으로 업로드 (병렬 처리 시 서버 부하 방지)
             for (const file of Array.from(files)) {
+                const compressed = await compressImageForUpload(file);
                 const formData = new FormData();
-                formData.append("file", file);
+                formData.append("file", compressed);
                 formData.append("folder", "class-logs");    // 사진 저장 폴더
 
                 const res = await fetch("/api/upload", {

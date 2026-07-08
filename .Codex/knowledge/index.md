@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 공개 갤러리 목록은 서버 렌더링으로 유지하고 전체화면 라이트박스 본체는 클릭 후 동적 로드하도록 분리했다.
 - 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 전환해 정적 홈 섹션의 초기 JS 부담을 줄였다.
 - 2026-07-09: 공개 페이지의 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리했다.
 - 2026-07-09: 전역 폰트 preload 폭증과 미설정 Meta Pixel 강제 로드를 제거하고, `AcademySettings` 서버 캐시를 추가했다.
@@ -7,13 +8,12 @@
 - 2026-07-08: 홈 히어로에 공개 공지 목록을 가볍게 표시하고, 인스타 CDN 이미지를 Next Image 최적화 허용 목록에 추가했다.
 - 2026-07-08: 선생님/관리자 초안 게시에서 홈페이지 갤러리 반영과 인스타그램 게시를 분리하고 `PUBLISHING` 재시도 UI를 둔다.
 - 2026-07-08: 선생님/관리자 갤러리 업로드는 공통 `uploadImagesWithProgress` 도우미로 압축 후 3장씩 병렬 업로드하고 진행률을 표시한다.
-- 2026-07-08: 어두운 배경 위 메뉴/아이콘 hover는 순백 `bg-white` 대신 `bg-white/10`처럼 반투명 배경을 사용해 글자 대비를 유지한다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 공개 홈 섹션은 서버 컴포넌트로 두고, 후기 캐러셀처럼 실제 클릭/브라우저 상태가 필요한 작은 부분만 Client Component로 남긴다.
+- 최근 지식: 공개 갤러리처럼 목록은 정적 렌더링이 가능한 화면은 서버 HTML로 그리고, 전체화면 뷰어 같은 무거운 상호작용 본체만 클릭 후 동적 로드한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -47,3 +47,4 @@
 - 공개 페이지의 챗봇은 `ChatBotButton`만 초기 로드하고, `ChatPanel`은 버튼 클릭 후 `next/dynamic`으로 로드한다.
 - 입학 가이드 투어는 `GuideTourLazyTrigger`를 공개 페이지에 붙이고, 기존 `GuideTourTrigger` 본체는 클릭, `?tour=` URL, 첫 방문 예열 시점에 로드한다.
 - 홈 `LandingPageClient`는 서버 컴포넌트로 렌더링하고, `TestimonialCarousel` 같은 상호작용 섬만 클라이언트로 남겨 첫 화면 entry JS를 줄인다.
+- 공개 갤러리는 `GalleryPublicClient`를 서버 렌더링으로 두고, `GalleryLightboxController`가 클릭만 감지하며 `GalleryLightboxOverlay`는 클릭 후 동적 로드한다.

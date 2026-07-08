@@ -68,6 +68,10 @@
 - 결정: `LandingPageClient`의 파일 단위 `use client`를 제거하고, 후기 캐러셀처럼 실제 브라우저 상호작용이 필요한 하위 컴포넌트만 Client Component로 유지한다.
 - 이유: 홈 히어로, 신뢰 지표, 과정 안내, 갤러리 하이라이트, CTA는 대부분 정적 렌더링으로 충분하다. 전체를 클라이언트로 묶으면 첫 진입 JS가 커지므로, 서버에서 먼저 HTML을 만들고 작은 상호작용 섬만 hydration한다. 빌드 산출물 기준 홈 entry JS는 4개 합계 약 0.25MB로 확인했다.
 
+## 2026-07-09: 공개 갤러리 라이트박스는 클릭 후 로드한다
+- 결정: 갤러리 그리드는 서버 렌더링으로 만들고, 클릭 감지용 `GalleryLightboxController`만 초기 로드하며, 전체화면 `GalleryLightboxOverlay`는 동적 로드한다.
+- 이유: 방문자는 갤러리 목록을 먼저 훑고 일부만 사진을 크게 본다. 라이트박스 키보드 이벤트, 스크롤 잠금, 큰 미디어 뷰어 코드를 첫 화면에 싣지 않아도 기본 탐색은 가능하다. 빌드 산출물 기준 `/gallery` entry JS는 4개 합계 약 0.25MB이며 라이트박스 본체는 초기 manifest에서 빠진 것을 확인했다.
+
 ## 2026-07-07: `SocialPostDraft`는 raw SQL 보강 테이블로 둔다
 - 결정: Prisma schema 마이그레이션 대신 `CREATE TABLE IF NOT EXISTS "SocialPostDraft"` 패턴을 사용한다.
 - 이유: 기존 프로젝트가 Supabase PgBouncer 호환을 위해 raw SQL 보강 패턴을 많이 쓰고 있으며, 이번 기능은 독립 초안 테이블이라 점진 도입이 안전하다.

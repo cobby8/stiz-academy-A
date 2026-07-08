@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 홈 클라이언트 경계 축소
+- 작업명: 갤러리 라이트박스 지연 로딩
 - 상태: 검증 완료
-- 범위: 메인 홈 랜딩 콘텐츠
+- 범위: 공개 포토갤러리
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -29,9 +29,11 @@
 | 전역 속도 병목 개선 | 완료 | 홈 폰트 preload 561개→0개, 리소스 참조 630개→90개 |
 | 플로팅 도구 지연 로딩 | 완료 | 챗봇 패널/가이드 투어 본체를 첫 렌더에서 분리 |
 | 홈 클라이언트 경계 축소 | 완료 | 정적 홈 섹션을 서버 렌더링으로 전환하고 후기 캐러셀만 클라이언트 유지 |
+| 갤러리 라이트박스 지연 로딩 | 완료 | 갤러리 목록은 서버 렌더링, 전체화면 라이트박스는 클릭 후 로드 |
 | 타입 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 공개 갤러리 목록을 서버 렌더링으로 돌리고 라이트박스 본체를 클릭 후 동적 로드하도록 분리함.
 - 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 돌려 첫 화면 전용 entry JS를 약 0.25MB 수준으로 줄임.
 - 2026-07-09: 공개 페이지 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리해 첫 렌더 부담을 줄임.
 - 2026-07-09: 전역 `next/font` preload를 끄고, Meta Pixel을 환경변수 있을 때만 로드하며, `AcademySettings` 서버 캐시/무효화를 추가.
@@ -41,17 +43,16 @@
 - 2026-07-08: 홈페이지 갤러리 게시와 인스타그램 게시를 분리하고 `PUBLISHING` 상태/재시도 UI를 추가해 외부 게시 지연이 화면 성공 메시지를 막지 않게 개선.
 - 2026-07-08: 선생님 빠른 업로드와 관리자 갤러리 수동 업로드에 3장 병렬 업로드, 진행률 표시, 성공 메시지/다음 행동 버튼을 추가.
 - 2026-07-08: 관리자 사이드바 탭/메뉴 hover, 갤러리 라이트박스 버튼, 마이페이지 학생 선택의 흰 배경/흰 글씨 대비 충돌을 보강.
-- 2026-07-08: 공지 상세 리치 HTML 본문에서 신청 URL이 자동 링크되도록 `sanitizeHtml` 옵션을 추가하고 `npx.cmd tsc --noEmit` 통과.
 
 ## 구현 기록
-- 변경 파일: `src/app/LandingPageClient.tsx`
-- 주요 변경: 홈 본문 전체를 클라이언트 컴포넌트로 묶던 `use client`를 제거하고, 클릭/스크롤이 필요한 후기 캐러셀 등 하위 Client Component만 브라우저에서 실행되도록 경계를 축소.
-- 적용 범위: 메인 홈 첫 렌더 JS.
+- 변경 파일: `src/app/gallery/GalleryPublicClient.tsx`, `src/app/gallery/GalleryLightboxController.tsx`, `src/app/gallery/GalleryLightboxOverlay.tsx`
+- 주요 변경: 갤러리 그리드는 서버 HTML로 렌더하고, 클릭 이벤트만 작은 컨트롤러가 담당하며, 전체화면 라이트박스 본체는 `next/dynamic`으로 클릭 후 로드.
+- 적용 범위: 공개 포토갤러리 첫 렌더 JS와 이미지 로딩.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과
-- 산출물 확인: 홈 client reference manifest에서 `LandingPageClient`/`ChatPanel`/`GuideTourTrigger` 미포함, 홈 entry JS 4개 합계 265,411 bytes(약 0.25MB)
+- 산출물 확인: `/gallery` client reference manifest에서 `GalleryPublicClient`/`GalleryLightboxOverlay` 미포함, `GalleryLightboxController`만 초기 포함, `/gallery` entry JS 4개 합계 261,639 bytes(약 0.25MB)
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 갤러리 라이트박스 지연 로딩, 공개 페이지 CSS/JS chunk 추가 분석, 관리자 페이지별 무거운 클라이언트 모듈 분리.
+- 다음 속도 개선 후보: 관리자 공지 리치 에디터 지연 로딩, 공개 페이지 CSS/JS chunk 추가 분석, 관리자 페이지별 무거운 클라이언트 모듈 분리.

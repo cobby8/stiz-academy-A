@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 전환해 정적 홈 섹션의 초기 JS 부담을 줄였다.
 - 2026-07-09: 공개 페이지의 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리했다.
 - 2026-07-09: 전역 폰트 preload 폭증과 미설정 Meta Pixel 강제 로드를 제거하고, `AcademySettings` 서버 캐시를 추가했다.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 진입점을 추가했다.
@@ -7,13 +8,12 @@
 - 2026-07-08: 선생님/관리자 초안 게시에서 홈페이지 갤러리 반영과 인스타그램 게시를 분리하고 `PUBLISHING` 재시도 UI를 둔다.
 - 2026-07-08: 선생님/관리자 갤러리 업로드는 공통 `uploadImagesWithProgress` 도우미로 압축 후 3장씩 병렬 업로드하고 진행률을 표시한다.
 - 2026-07-08: 어두운 배경 위 메뉴/아이콘 hover는 순백 `bg-white` 대신 `bg-white/10`처럼 반투명 배경을 사용해 글자 대비를 유지한다.
-- 2026-07-08: 리치 에디터 공지 본문의 일반 URL은 공지 상세 렌더링에서만 자동 링크화한다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 공개 페이지 플로팅 도구는 버튼만 가볍게 먼저 렌더하고, 챗봇 패널/가이드 투어 본체처럼 큰 상호작용 코드는 클릭 또는 지연 시점에 동적 로드한다.
+- 최근 지식: 공개 홈 섹션은 서버 컴포넌트로 두고, 후기 캐러셀처럼 실제 클릭/브라우저 상태가 필요한 작은 부분만 Client Component로 남긴다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -46,3 +46,4 @@
 - `getAcademySettings()`는 5분 서버 캐시와 `academy-settings` 태그를 사용하며, 관리자 설정 저장 시 `revalidateTag(..., { expire: 0 })`로 즉시 무효화한다.
 - 공개 페이지의 챗봇은 `ChatBotButton`만 초기 로드하고, `ChatPanel`은 버튼 클릭 후 `next/dynamic`으로 로드한다.
 - 입학 가이드 투어는 `GuideTourLazyTrigger`를 공개 페이지에 붙이고, 기존 `GuideTourTrigger` 본체는 클릭, `?tour=` URL, 첫 방문 예열 시점에 로드한다.
+- 홈 `LandingPageClient`는 서버 컴포넌트로 렌더링하고, `TestimonialCarousel` 같은 상호작용 섬만 클라이언트로 남겨 첫 화면 entry JS를 줄인다.

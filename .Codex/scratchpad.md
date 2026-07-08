@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 가이드 투어/챗봇 지연 로딩
+- 작업명: 홈 클라이언트 경계 축소
 - 상태: 검증 완료
-- 범위: 공개 페이지 플로팅 챗봇, 입학 가이드 투어
+- 범위: 메인 홈 랜딩 콘텐츠
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -28,9 +28,11 @@
 | 로그아웃 진입점 | 완료 | 공개 헤더와 마이페이지 헤더에서 기존 `logout()` 액션 노출 |
 | 전역 속도 병목 개선 | 완료 | 홈 폰트 preload 561개→0개, 리소스 참조 630개→90개 |
 | 플로팅 도구 지연 로딩 | 완료 | 챗봇 패널/가이드 투어 본체를 첫 렌더에서 분리 |
+| 홈 클라이언트 경계 축소 | 완료 | 정적 홈 섹션을 서버 렌더링으로 전환하고 후기 캐러셀만 클라이언트 유지 |
 | 타입 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 돌려 첫 화면 전용 entry JS를 약 0.25MB 수준으로 줄임.
 - 2026-07-09: 공개 페이지 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리해 첫 렌더 부담을 줄임.
 - 2026-07-09: 전역 `next/font` preload를 끄고, Meta Pixel을 환경변수 있을 때만 로드하며, `AcademySettings` 서버 캐시/무효화를 추가.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 버튼을 추가.
@@ -40,17 +42,16 @@
 - 2026-07-08: 선생님 빠른 업로드와 관리자 갤러리 수동 업로드에 3장 병렬 업로드, 진행률 표시, 성공 메시지/다음 행동 버튼을 추가.
 - 2026-07-08: 관리자 사이드바 탭/메뉴 hover, 갤러리 라이트박스 버튼, 마이페이지 학생 선택의 흰 배경/흰 글씨 대비 충돌을 보강.
 - 2026-07-08: 공지 상세 리치 HTML 본문에서 신청 URL이 자동 링크되도록 `sanitizeHtml` 옵션을 추가하고 `npx.cmd tsc --noEmit` 통과.
-- 2026-07-08: `/admin` 서버 권한 체크, `/api/upload` 스태프 권한 체크, PC 로그인/역할별 진입점, 갤러리 저장 오류 메시지 처리 보강.
 
 ## 구현 기록
-- 변경 파일: `src/components/chat/ChatBotButton.tsx`, `src/components/guide-tour/GuideTourLazyTrigger.tsx`, `src/components/guide-tour/GuideTourTrigger.tsx`, `src/components/PublicPageLayout.tsx`, `src/app/page.tsx`
-- 주요 변경: 챗봇 버튼은 유지하되 `ChatPanel`을 클릭 후 로드하고, 가이드 투어는 가벼운 런처를 먼저 렌더한 뒤 클릭/투어 URL/첫 방문 예열 시 본체를 로드.
-- 적용 범위: 홈 및 공개 서브페이지 플로팅 도구.
+- 변경 파일: `src/app/LandingPageClient.tsx`
+- 주요 변경: 홈 본문 전체를 클라이언트 컴포넌트로 묶던 `use client`를 제거하고, 클릭/스크롤이 필요한 후기 캐러셀 등 하위 Client Component만 브라우저에서 실행되도록 경계를 축소.
+- 적용 범위: 메인 홈 첫 렌더 JS.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과
-- 산출물 확인: 홈 초기 HTML에 `GuideTourTrigger`/`ChatPanel` 코드 미포함, 홈 초기 chunk 참조 21개→20개, 약 1.96MB→1.94MB
+- 산출물 확인: 홈 client reference manifest에서 `LandingPageClient`/`ChatPanel`/`GuideTourTrigger` 미포함, 홈 entry JS 4개 합계 265,411 bytes(약 0.25MB)
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 홈 `LandingPageClient` 서버 컴포넌트 분리, 갤러리 라이트박스 지연 로딩, 공개 페이지 CSS/JS chunk 추가 분석.
+- 다음 속도 개선 후보: 갤러리 라이트박스 지연 로딩, 공개 페이지 CSS/JS chunk 추가 분석, 관리자 페이지별 무거운 클라이언트 모듈 분리.

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { login, signup } from "@/app/actions/auth";
 import Image from "next/image";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -33,9 +34,12 @@ export default function LoginPage() {
       if (result?.error) {
         setError(result.error);
       }
-    } catch {
-      // redirect는 에러로 throw됨 — 정상 동작
-    } finally {
+      setLoading(false);
+    } catch (err) {
+      if (isRedirectError(err)) {
+        throw err;
+      }
+      setError(err instanceof Error ? err.message : "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
       setLoading(false);
     }
   }
@@ -284,6 +288,21 @@ export default function LoginPage() {
               </div>
             )}
 
+            {loading && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 rounded-lg border border-brand-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-brand-orange-700 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
+              >
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+                <span>
+                  {mode === "login"
+                    ? "로그인 중입니다. 이동할 때까지 잠시만 기다려 주세요."
+                    : "계정을 만드는 중입니다. 잠시만 기다려 주세요."}
+                </span>
+              </div>
+            )}
+
             {/* 제출 버튼 — 회원가입 모드에서는 두 체크박스 모두 체크해야 활성화 */}
             <button
               type="submit"
@@ -291,13 +310,20 @@ export default function LoginPage() {
                 loading ||
                 (mode === "signup" && (!agreePrivacy || !agreeTerms))
               }
-              className="w-full py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex min-h-11 w-full items-center justify-center gap-2 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-brand-orange-600 dark:hover:bg-lime-400 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading
-                ? "처리 중..."
-                : mode === "login"
-                  ? "로그인"
-                  : `${signupRole === "INSTRUCTOR" ? "선생님" : "학부모"} 계정 만들기`}
+              {loading && (
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+              )}
+              <span>
+                {loading
+                  ? mode === "login"
+                    ? "로그인 중..."
+                    : "계정 생성 중..."
+                  : mode === "login"
+                    ? "로그인"
+                    : `${signupRole === "INSTRUCTOR" ? "선생님" : "학부모"} 계정 만들기`}
+              </span>
             </button>
           </form>
         </div>

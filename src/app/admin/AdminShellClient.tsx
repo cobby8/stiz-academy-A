@@ -4,8 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { LogOut } from "lucide-react";
+import { logout } from "@/app/actions/auth";
 
 // "학원운영" 탭에 속하는 경로 목록 — 이 경로로 시작하면 학원운영 탭 활성화
 const OPS_PATHS = [
@@ -28,13 +28,16 @@ const OPS_PATHS = [
 
 export default function AdminShellClient({
     children,
+    initialUserName,
+    initialUserEmail,
 }: {
     children: React.ReactNode;
+    initialUserName: string;
+    initialUserEmail: string;
 }) {
     const pathname = usePathname() || "/admin";
-    const router = useRouter();
-    const [userName, setUserName] = useState<string>("");
-    const [userEmail, setUserEmail] = useState<string>("");
+    const userName = initialUserName;
+    const userEmail = initialUserEmail;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     // 새 체험 신청 건수 — 사이드바 배지 표시용
     const [newTrialCount, setNewTrialCount] = useState(0);
@@ -57,26 +60,16 @@ export default function AdminShellClient({
     }, [autoTab, pathname]);
 
     useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            if (user) {
-                setUserName(user.user_metadata?.name || "관리자");
-                setUserEmail(user.email || "");
-            }
-        });
-        // 새 체험 신청 건수 조회 (사이드바 배지 표시용)
-        fetch("/api/admin/trial-count")
-            .then((r) => r.json())
-            .then((d) => setNewTrialCount(d.count ?? 0))
-            .catch(() => {});
-    }, []);
+        const timer = window.setTimeout(() => {
+            // 새 체험 신청 건수 조회 (사이드바 배지 표시용)
+            fetch("/api/admin/trial-count")
+                .then((r) => r.json())
+                .then((d) => setNewTrialCount(d.count ?? 0))
+                .catch(() => {});
+        }, 1200);
 
-    async function handleLogout() {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        router.push("/login");
-        router.refresh();
-    }
+        return () => window.clearTimeout(timer);
+    }, []);
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
@@ -205,13 +198,15 @@ export default function AdminShellClient({
                             <p className="text-sm font-medium text-white truncate">{userName}</p>
                             <p className="text-xs text-gray-400 truncate">{userEmail}</p>
                         </div>
-                        <button
-                            onClick={handleLogout}
-                            title="로그아웃"
-                            className="p-1.5 text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors flex-shrink-0"
-                        >
-                            <LogOut size={18} />
-                        </button>
+                        <form action={logout} className="flex-shrink-0">
+                            <button
+                                type="submit"
+                                title="로그아웃"
+                                className="p-1.5 text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
+                            >
+                                <LogOut size={18} />
+                            </button>
+                        </form>
                     </div>
                 </div>
             </aside>
@@ -417,9 +412,12 @@ function NotificationBell() {
 
     // 최초 로드 + 60초마다 폴링 (새 알림 확인)
     useEffect(() => {
-        fetchNotifications();
+        const timer = window.setTimeout(fetchNotifications, 1500);
         const interval = setInterval(fetchNotifications, 60_000);
-        return () => clearInterval(interval);
+        return () => {
+            window.clearTimeout(timer);
+            clearInterval(interval);
+        };
     }, [fetchNotifications]);
 
     // 드롭다운 바깥 클릭 시 닫기

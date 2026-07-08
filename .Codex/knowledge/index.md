@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 관리자 shell이 서버 인증 정보를 재사용하고 알림/체험 카운트 API 호출을 첫 렌더 뒤로 지연하도록 바꿨다.
 - 2026-07-09: 공개 헤더, 테마 토글, 챗봇 버튼의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: 공개 헤더의 Supabase 계정 상태 확인을 `PublicAccountControls` 동적 컴포넌트로 분리했다.
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달이 열릴 때만 동적 로드하도록 변경했다.
@@ -7,13 +8,12 @@
 - 2026-07-09: 공개 페이지의 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리했다.
 - 2026-07-09: 전역 폰트 preload 폭증과 미설정 Meta Pixel 강제 로드를 제거하고, `AcademySettings` 서버 캐시를 추가했다.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 진입점을 추가했다.
-- 2026-07-08: 홈 히어로에 공개 공지 목록을 가볍게 표시하고, 인스타 CDN 이미지를 Next Image 최적화 허용 목록에 추가했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 공개 첫 화면 공통 컴포넌트의 단순 아이콘은 Material Symbols를 우선 사용해 별도 아이콘 JS import를 줄인다.
+- 최근 지식: 관리자 shell처럼 서버에서 이미 인증한 정보는 클라이언트가 다시 Supabase로 조회하지 않고, 보조 API 호출은 첫 렌더 뒤로 미룬다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -51,3 +51,4 @@
 - `/admin/notices`는 목록 초기 진입에서 `RichTextEditor`를 싣지 않고, 새 공지/수정 모달 렌더 시 `next/dynamic`으로 로드한다.
 - 공개 헤더는 메뉴/테마/큰글씨 상태만 직접 관리하고, Supabase 계정 확인과 로그아웃 UI는 `PublicAccountControls`를 동적 로드한다.
 - 공개 헤더, 테마 토글, 챗봇 버튼처럼 모든 공개 페이지에 붙는 단순 아이콘은 `lucide-react` 대신 Material Symbols 텍스트 아이콘을 사용한다.
+- 관리자 shell은 `requireAdmin()`에서 받은 사용자 이름/이메일을 사용하고, 로그아웃은 서버 액션으로 처리하며, 알림/체험 카운트 조회는 첫 렌더 후 지연 실행한다.

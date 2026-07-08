@@ -7,11 +7,20 @@ export default async function AdminLayout({
 }: {
     children: React.ReactNode;
 }) {
+    let adminUser: Awaited<ReturnType<typeof requireAdmin>>;
+
     try {
-        await requireAdmin();
+        adminUser = await requireAdmin();
     } catch {
         redirect("/login?redirect=/admin");
     }
 
-    return <AdminShellClient>{children}</AdminShellClient>;
+    return (
+        <AdminShellClient
+            initialUserName={adminUser.user_metadata?.name || "관리자"}
+            initialUserEmail={adminUser.email || ""}
+        >
+            {children}
+        </AdminShellClient>
+    );
 }

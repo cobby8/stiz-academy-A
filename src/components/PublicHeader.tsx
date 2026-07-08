@@ -19,6 +19,7 @@ import { Menu, X, ChevronDown } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { createClient } from "@/lib/supabase/client";
 import { defaultPathForRole, normalizeAppRole, type AppRole } from "@/lib/auth-routes";
+import { logout } from "@/app/actions/auth";
 
 // 부모(Server Component)에서 전달받을 props 타입
 interface PublicHeaderProps {
@@ -70,6 +71,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
   const [appRole, setAppRole] = useState<AppRole | null>(null);
   const displayOperatingHours = operatingHours?.trim() || DEFAULT_OPERATING_HOURS;
   const accountHref = appRole ? defaultPathForRole(appRole) : "/login";
+  const isLoggedIn = appRole !== null;
   const accountLabel =
     appRole === "ADMIN" || appRole === "VICE_ADMIN"
       ? "관리자"
@@ -272,6 +274,21 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
               {accountLabel}
             </Link>
 
+            {isLoggedIn && (
+              <form action={logout} className="hidden md:block">
+                <button
+                  type="submit"
+                  className={[
+                    "inline-flex items-center rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold",
+                    "text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900",
+                    "dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
+                  ].join(" ")}
+                >
+                  로그아웃
+                </button>
+              </form>
+            )}
+
             {/* CTA 버튼 — "신청하기"로 변경 */}
             <Link
               href="/apply"
@@ -391,13 +408,24 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
             >
               {accountLabel}
             </Link>
-            <Link
-              href="/staff/quick-post"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-            >
-              사진 올리기
-            </Link>
+            {isLoggedIn ? (
+              <form action={logout}>
+                <button
+                  type="submit"
+                  className="flex min-h-11 w-full items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                >
+                  로그아웃
+                </button>
+              </form>
+            ) : (
+              <Link
+                href="/staff/quick-post"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+              >
+                사진 올리기
+              </Link>
+            )}
           </div>
           <Link
             href="/apply"

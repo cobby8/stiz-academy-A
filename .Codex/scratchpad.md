@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 인스타 게시 서버 큐/cron 재시도화
+- 작업명: 홈페이지/마이페이지 로그아웃 진입점 추가
 - 상태: 검증 완료
-- 범위: 선생님 빠른 업로드, 관리자 갤러리 초안, SocialPostDraft 큐, Vercel cron
+- 범위: 공개 홈페이지 헤더, 마이페이지 헤더, 기존 `logout()` 서버 액션 연결
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -25,9 +25,11 @@
 | 인스타 게시 상태 분리 | 완료 | 홈페이지 갤러리 성공을 먼저 표시하고 인스타 게시를 후속 진행 |
 | 홈 공지/인스타 갤러리 보강 | 완료 | 히어로 공지 목록 추가, Instagram CDN 이미지 허용, 기존 인스타 URL 갱신 |
 | 인스타 서버 큐/재시도 | 완료 | 브라우저가 닫혀도 Vercel cron이 `PUBLISHING` 초안을 처리 |
+| 로그아웃 진입점 | 완료 | 공개 헤더와 마이페이지 헤더에서 기존 `logout()` 액션 노출 |
 | 타입 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 버튼을 추가.
 - 2026-07-09: 인스타 게시를 브라우저 후속 호출에서 서버 큐/cron 방식으로 옮기고, 실패 시 최대 3회까지 예약 재시도하도록 변경.
 - 2026-07-08: 홈 히어로 좌측 농구공 영역에 공개 공지 목록을 배치하고, 홈 갤러리의 인스타 CDN 이미지를 Next Image가 최적화해 표시하도록 보강.
 - 2026-07-08: 홈페이지 갤러리 게시와 인스타그램 게시를 분리하고 `PUBLISHING` 상태/재시도 UI를 추가해 외부 게시 지연이 화면 성공 메시지를 막지 않게 개선.
@@ -37,18 +39,15 @@
 - 2026-07-08: `/admin` 서버 권한 체크, `/api/upload` 스태프 권한 체크, PC 로그인/역할별 진입점, 갤러리 저장 오류 메시지 처리 보강.
 - 2026-07-08: 인스타 `media_publish` 단계의 `Media ID is not available` 일시 오류를 짧게 재시도하도록 보강.
 - 2026-07-08: 인스타 자동 게시 전 미디어 컨테이너 처리 완료 상태를 기다리도록 수정해 `Media ID is not available` 실패 가능성을 낮춤.
-- 2026-07-08: 모든 주요 이미지 업로드 흐름에 공통 브라우저 압축을 적용해 저장 전 JPG 리사이즈/품질 압축을 수행.
-- 2026-07-08: 공지사항에서 갤러리 추가 없이 인스타 피드/스토리 발행과 페이스북 광고 소재 준비를 할 수 있는 소셜 발행 흐름 추가.
 
 ## 구현 기록
-- 변경 파일: `src/lib/socialDrafts.ts`, `src/lib/socialPostPublishing.ts`, `src/app/api/cron/social-posts/route.ts`, `src/app/actions/social-posts.ts`, `src/app/staff/quick-post/QuickPostClient.tsx`, `src/app/admin/gallery/GalleryAdminClient.tsx`, `vercel.json`
-- 주요 변경: `SocialPostDraft`에 시도 횟수/마지막 시도/다음 재시도 시간을 추가하고, `/api/cron/social-posts`가 5분마다 1건씩 인스타 게시를 처리.
-- 적용 범위: 선생님 바로 게시, 관리자 초안 게시, 서버 자동 재시도.
+- 변경 파일: `src/components/PublicHeader.tsx`, `src/app/mypage/layout.tsx`
+- 주요 변경: 로그인 상태의 공개 홈페이지 헤더와 마이페이지 상단에 로그아웃 버튼을 추가하고 기존 `logout()` 서버 액션을 재사용.
+- 적용 범위: PC 공개 헤더, 모바일 공개 메뉴, PC/모바일 마이페이지 헤더.
 
 ## 테스트 결과
-- `git diff --check` 통과
 - `npx.cmd tsc --noEmit` 통과
-- `npm.cmd run build` 예정
+- `npm.cmd run build` 통과
 
 ## 다음에 할 것
-- 인스타에서 가져온 외부 이미지를 Supabase Storage로 캐싱해 홈/갤러리 이미지 안정성을 더 높인다.
+- 로그아웃 후 사용자 안내 토스트나 로그인 화면 메시지가 필요한지 실제 사용 흐름에서 확인한다.

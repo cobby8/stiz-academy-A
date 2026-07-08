@@ -1,6 +1,7 @@
 import { Home, Calendar, CreditCard, User } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { logout } from "@/app/actions/auth";
 
 export default function MyPageLayout({
     children,
@@ -11,11 +12,19 @@ export default function MyPageLayout({
         // surface-warm 배경 적용 — 공개 페이지와 동일한 따뜻한 톤
         <div className="min-h-screen bg-surface-warm flex flex-col pb-20 md:pb-0">
             {/* 모바일 상단 헤더 — 기존 구조 유지, 그림자/보더 디자인 토큰 통일 */}
-            <header className="bg-white dark:bg-gray-800 sticky top-0 z-50 shadow-sm border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-4 py-3 md:hidden">
+            <header className="bg-white dark:bg-gray-800 sticky top-0 z-50 shadow-sm border-b border-gray-100 dark:border-gray-800 grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-3 md:hidden">
                 <Link href="/" className="flex items-center gap-2">
                     <Image src="/stiz-logo.png" alt="STIZ" width={100} height={25} className="h-7 w-auto object-contain" />
                 </Link>
-                <span className="font-bold text-brand-navy-900 text-sm">마이페이지</span>
+                <span className="text-center font-bold text-brand-navy-900 text-sm">마이페이지</span>
+                <form action={logout}>
+                    <button
+                        type="submit"
+                        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                        로그아웃
+                    </button>
+                </form>
             </header>
 
             {/* 데스크탑 헤더 — 기존 구조 유지, 호버 트랜지션 통일 */}
@@ -29,6 +38,14 @@ export default function MyPageLayout({
                 <nav className="flex items-center gap-8 font-bold text-gray-600 dark:text-gray-300">
                     <Link href="/mypage" className="text-brand-orange-500 dark:text-brand-neon-lime transition-colors">마이페이지</Link>
                     <Link href="/" className="hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors">홈으로</Link>
+                    <form action={logout}>
+                        <button
+                            type="submit"
+                            className="font-bold text-gray-600 transition-colors hover:text-brand-orange-500 dark:text-gray-300 dark:hover:text-brand-neon-lime"
+                        >
+                            로그아웃
+                        </button>
+                    </form>
                 </nav>
             </header>
 

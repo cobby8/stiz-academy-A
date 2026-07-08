@@ -76,6 +76,10 @@
 - 결정: `/admin/notices`는 `RichTextEditor`를 정적 import하지 않고, 새 공지/수정 모달이 렌더될 때 `next/dynamic`으로 로드한다.
 - 이유: 선생님/관리자가 공지 목록을 확인하거나 소셜 발행을 누를 때는 리치 에디터가 필요 없다. 큰 편집기 번들을 작성/수정 순간으로 미루면 관리자 목록 초기 진입이 가벼워진다. 빌드 산출물 기준 `/admin/notices` entry JS는 5개 합계 약 0.27MB이며 `RichTextEditor`는 초기 manifest에서 빠진 것을 확인했다.
 
+## 2026-07-09: 공개 헤더 인증 확인은 동적 컴포넌트로 분리한다
+- 결정: `PublicHeader`는 Supabase 브라우저 클라이언트를 직접 import하지 않고, 계정 버튼과 로그아웃 UI를 `PublicAccountControls`로 분리해 동적 로드한다.
+- 이유: 공개 헤더는 모든 공개 페이지의 첫 화면에 붙지만, 로그인 상태 확인은 본문 렌더링보다 덜 급하다. 인증 SDK를 초기 entry JS에서 빼면 첫 화면 다운로드 부담이 크게 줄어든다. 빌드 산출물 기준 홈 entry JS는 4개 265,411 bytes에서 3개 58,339 bytes로 줄었고, entry 파일에 Supabase 문자열이 없는 것을 확인했다.
+
 ## 2026-07-07: `SocialPostDraft`는 raw SQL 보강 테이블로 둔다
 - 결정: Prisma schema 마이그레이션 대신 `CREATE TABLE IF NOT EXISTS "SocialPostDraft"` 패턴을 사용한다.
 - 이유: 기존 프로젝트가 Supabase PgBouncer 호환을 위해 raw SQL 보강 패턴을 많이 쓰고 있으며, 이번 기능은 독립 초안 테이블이라 점진 도입이 안전하다.

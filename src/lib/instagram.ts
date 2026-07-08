@@ -72,6 +72,102 @@ function apiErrorMessage(body: InstagramApiError, fallback: string) {
   return body.error?.message || fallback;
 }
 
+const MEDIA_CONTAINER_STATUS_ATTEMPTS = 8;
+const MEDIA_CONTAINER_STATUS_DELAY_MS = 1500;
+
+type InstagramContainerStatus = InstagramApiError & {
+  status_code?: string;
+};
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function isContainerReady(statusCode?: string) {
+  return statusCode === "FINISHED" || statusCode === "PUBLISHED";
+}
+
+function isContainerFailed(statusCode?: string) {
+  return statusCode === "ERROR" || statusCode === "EXPIRED";
+}
+
+async function fetchMediaContainerStatus({
+  accessToken,
+  containerId,
+}: {
+  accessToken: string;
+  containerId: string;
+}) {
+  const params = new URLSearchParams({
+    fields: "status_code",
+    access_token: accessToken,
+  });
+
+  const res = await fetch(`${graphBaseUrl(accessToken)}/${containerId}?${params.toString()}`, {
+    cache: "no-store",
+  });
+  const body = (await res.json()) as InstagramContainerStatus;
+
+  if (!res.ok) {
+    return {
+      ok: false as const,
+      error: apiErrorMessage(body, "인스타그램 미디어 처리 상태를 확인하지 못했습니다."),
+    };
+  }
+
+  return {
+    ok: true as const,
+    statusCode: body.status_code,
+  };
+}
+
+async function waitForMediaContainersReady({
+  accessToken,
+  containerIds,
+  label,
+}: {
+  accessToken: string;
+  containerIds: string[];
+  label: string;
+}) {
+  const pendingIds = new Set(containerIds);
+
+  for (let attempt = 1; attempt <= MEDIA_CONTAINER_STATUS_ATTEMPTS; attempt++) {
+    for (const containerId of Array.from(pendingIds)) {
+      const status = await fetchMediaContainerStatus({ accessToken, containerId });
+
+      if (!status.ok) {
+        return status;
+      }
+
+      if (isContainerReady(status.statusCode)) {
+        pendingIds.delete(containerId);
+        continue;
+      }
+
+      if (isContainerFailed(status.statusCode)) {
+        return {
+          ok: false as const,
+          error: `인스타그램 ${label} 처리에 실패했습니다. 사진 URL 또는 계정 권한을 확인해주세요.`,
+        };
+      }
+    }
+
+    if (pendingIds.size === 0) {
+      return { ok: true as const };
+    }
+
+    if (attempt < MEDIA_CONTAINER_STATUS_ATTEMPTS) {
+      await wait(MEDIA_CONTAINER_STATUS_DELAY_MS);
+    }
+  }
+
+  return {
+    ok: false as const,
+    error: `인스타그램에서 ${label} 처리가 아직 끝나지 않았습니다. 잠시 후 다시 게시해주세요.`,
+  };
+}
+
 function mediaTypeForInstagram(mediaType?: string): "image" | "video" {
   const normalized = mediaType?.toUpperCase() || "";
   return normalized.includes("VIDEO") || normalized.includes("REEL") ? "video" : "image";
@@ -292,6 +388,16 @@ export async function publishMediaItemsToInstagram({
       return { attempted: true, ok: false, error: createResult.error };
     }
     creationId = createResult.id;
+
+    const readyResult = await waitForMediaContainersReady({
+      accessToken,
+      containerIds: [creationId],
+      label: "스토리 미디어",
+    });
+
+    if (!readyResult.ok) {
+      return { attempted: true, ok: false, error: readyResult.error };
+    }
   } else if (imageUrls.length === 1) {
     const createResult = await createMediaContainer({
       accessToken,
@@ -308,6 +414,16 @@ export async function publishMediaItemsToInstagram({
       return { attempted: true, ok: false, error: createResult.error };
     }
     creationId = createResult.id;
+
+    const readyResult = await waitForMediaContainersReady({
+      accessToken,
+      containerIds: [creationId],
+      label: "피드 이미지",
+    });
+
+    if (!readyResult.ok) {
+      return { attempted: true, ok: false, error: readyResult.error };
+    }
   } else {
     const childIds: string[] = [];
 
@@ -330,6 +446,16 @@ export async function publishMediaItemsToInstagram({
       childIds.push(childResult.id);
     }
 
+    const childReadyResult = await waitForMediaContainersReady({
+      accessToken,
+      containerIds: childIds,
+      label: "캐러셀 이미지",
+    });
+
+    if (!childReadyResult.ok) {
+      return { attempted: true, ok: false, error: childReadyResult.error };
+    }
+
     const carouselResult = await createMediaContainer({
       accessToken,
       businessAccountId: resolvedBusinessAccountId,
@@ -346,6 +472,16 @@ export async function publishMediaItemsToInstagram({
       return { attempted: true, ok: false, error: carouselResult.error };
     }
     creationId = carouselResult.id;
+
+    const carouselReadyResult = await waitForMediaContainersReady({
+      accessToken,
+      containerIds: [creationId],
+      label: "캐러셀 게시물",
+    });
+
+    if (!carouselReadyResult.ok) {
+      return { attempted: true, ok: false, error: carouselReadyResult.error };
+    }
   }
 
   const publishParams = new URLSearchParams({

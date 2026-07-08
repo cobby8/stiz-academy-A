@@ -31,3 +31,9 @@
 - 원인: 런타임에서는 null이 제거되지만 TypeScript 타입 추론은 Boolean 필터를 타입 가드로 보지 않는다.
 - 해결: `(part): part is NonNullable<...> => part !== null`처럼 명시적 타입 가드를 사용한다.
 - 예방: 외부 API/이미지 파트처럼 `null` 가능성이 있는 배열을 SDK에 넘길 때는 타입 가드를 명시한다.
+
+## Instagram `Media ID is not available`
+- 현상: 미디어 컨테이너 생성 직후 `media_publish`를 호출하면 `Media ID is not available` 오류가 날 수 있다.
+- 원인: Meta가 이미지 URL을 가져와 처리하는 시간이 필요하지만 기존 코드는 생성 직후 바로 게시했다.
+- 해결: `src/lib/instagram.ts`에서 컨테이너 `status_code`가 `FINISHED` 또는 `PUBLISHED`가 될 때까지 대기한 뒤 게시한다.
+- 예방: 단일 이미지뿐 아니라 스토리, 캐러셀 자식 이미지, 캐러셀 컨테이너 모두 게시 전 상태 확인을 거친다.

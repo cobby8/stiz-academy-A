@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 공개 헤더, 테마 토글, 챗봇 버튼의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: 공개 헤더의 Supabase 계정 상태 확인을 `PublicAccountControls` 동적 컴포넌트로 분리했다.
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달이 열릴 때만 동적 로드하도록 변경했다.
 - 2026-07-09: 공개 갤러리 목록은 서버 렌더링으로 유지하고 전체화면 라이트박스 본체는 클릭 후 동적 로드하도록 분리했다.
@@ -6,14 +7,13 @@
 - 2026-07-09: 공개 페이지의 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리했다.
 - 2026-07-09: 전역 폰트 preload 폭증과 미설정 Meta Pixel 강제 로드를 제거하고, `AcademySettings` 서버 캐시를 추가했다.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 진입점을 추가했다.
-- 2026-07-09: 선생님/관리자 초안의 인스타 게시를 브라우저 후속 호출에서 서버 큐와 Vercel cron 재시도로 옮겼다.
 - 2026-07-08: 홈 히어로에 공개 공지 목록을 가볍게 표시하고, 인스타 CDN 이미지를 Next Image 최적화 허용 목록에 추가했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 공개 헤더처럼 모든 공개 페이지에 붙는 컴포넌트는 인증 확인 같은 부가 기능을 동적 컴포넌트로 분리해 초기 JS를 작게 유지한다.
+- 최근 지식: 공개 첫 화면 공통 컴포넌트의 단순 아이콘은 Material Symbols를 우선 사용해 별도 아이콘 JS import를 줄인다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -50,3 +50,4 @@
 - 공개 갤러리는 `GalleryPublicClient`를 서버 렌더링으로 두고, `GalleryLightboxController`가 클릭만 감지하며 `GalleryLightboxOverlay`는 클릭 후 동적 로드한다.
 - `/admin/notices`는 목록 초기 진입에서 `RichTextEditor`를 싣지 않고, 새 공지/수정 모달 렌더 시 `next/dynamic`으로 로드한다.
 - 공개 헤더는 메뉴/테마/큰글씨 상태만 직접 관리하고, Supabase 계정 확인과 로그아웃 UI는 `PublicAccountControls`를 동적 로드한다.
+- 공개 헤더, 테마 토글, 챗봇 버튼처럼 모든 공개 페이지에 붙는 단순 아이콘은 `lucide-react` 대신 Material Symbols 텍스트 아이콘을 사용한다.

@@ -9,7 +9,6 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { MessageCircle } from "lucide-react";
 
 const ChatPanel = dynamic(() => import("./ChatPanel"), {
   ssr: false,
@@ -39,7 +38,7 @@ export default function ChatBotButton() {
           "
           aria-label="상담 챗봇 열기"
         >
-          <MessageCircle size={26} />
+          <span className="material-symbols-outlined text-[28px] leading-none">chat_bubble</span>
         </button>
       )}
     </>

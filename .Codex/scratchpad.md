@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 공개 헤더 계정 확인 지연 로딩
+- 작업명: 공개 공통 아이콘 JS 제거
 - 상태: 검증 완료
-- 범위: 공개 페이지 공통 헤더
+- 범위: 공개 헤더, 테마 토글, 챗봇 버튼
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -32,9 +32,11 @@
 | 갤러리 라이트박스 지연 로딩 | 완료 | 갤러리 목록은 서버 렌더링, 전체화면 라이트박스는 클릭 후 로드 |
 | 관리자 공지 에디터 지연 로딩 | 완료 | 공지 목록 초기 진입에서 리치 에디터 번들을 제외 |
 | 공개 헤더 계정 확인 지연 로딩 | 완료 | Supabase 브라우저 인증 확인을 초기 헤더 JS에서 분리 |
+| 공개 공통 아이콘 JS 제거 | 완료 | 공개 첫 화면 공통 아이콘을 Material Symbols로 전환 |
 | 타입 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 공개 헤더/테마 토글/챗봇 버튼의 lucide 아이콘을 Material Symbols로 바꿔 홈 entry JS를 약 0.05MB로 줄임.
 - 2026-07-09: 공개 헤더의 Supabase 계정 상태 확인을 동적 컴포넌트로 분리해 홈 entry JS를 약 0.06MB로 줄임.
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달에서만 동적 로드하도록 변경함.
 - 2026-07-09: 공개 갤러리 목록을 서버 렌더링으로 돌리고 라이트박스 본체를 클릭 후 동적 로드하도록 분리함.
@@ -44,17 +46,16 @@
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 버튼을 추가.
 - 2026-07-09: 인스타 게시를 브라우저 후속 호출에서 서버 큐/cron 방식으로 옮기고, 실패 시 최대 3회까지 예약 재시도하도록 변경.
 - 2026-07-08: 홈 히어로 좌측 농구공 영역에 공개 공지 목록을 배치하고, 홈 갤러리의 인스타 CDN 이미지를 Next Image가 최적화해 표시하도록 보강.
-- 2026-07-08: 홈페이지 갤러리 게시와 인스타그램 게시를 분리하고 `PUBLISHING` 상태/재시도 UI를 추가해 외부 게시 지연이 화면 성공 메시지를 막지 않게 개선.
 
 ## 구현 기록
-- 변경 파일: `src/components/PublicHeader.tsx`, `src/components/PublicAccountControls.tsx`
-- 주요 변경: 공개 헤더에서 Supabase 브라우저 클라이언트 import와 역할 확인 `useEffect`를 제거하고, 데스크탑/모바일 계정 버튼을 `next/dynamic`으로 분리.
-- 적용 범위: 홈 및 공개 서브페이지 공통 헤더 초기 JS.
+- 변경 파일: `src/components/PublicHeader.tsx`, `src/components/ThemeToggle.tsx`, `src/components/chat/ChatBotButton.tsx`
+- 주요 변경: 공개 첫 화면에 바로 붙는 공통 컴포넌트의 `lucide-react` 아이콘 import를 제거하고 Material Symbols 아이콘으로 전환.
+- 적용 범위: 홈 및 공개 서브페이지 공통 클라이언트 JS.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과
-- 산출물 확인: 홈 entry JS 4개 265,411 bytes(약 0.25MB) → 3개 58,339 bytes(약 0.06MB), entry 파일에서 Supabase 문자열 미포함
+- 산출물 확인: 홈 entry JS 3개 58,339 bytes(약 0.06MB) → 56,093 bytes(약 0.05MB), entry 파일에서 lucide 문자열 미포함
 
 ## 다음에 할 것
 - 다음 속도 개선 후보: 관리자 공통 shell polling/API 호출 정리, 공개 페이지 CSS/JS chunk 추가 분석.

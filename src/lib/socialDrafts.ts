@@ -21,6 +21,9 @@ export type SocialPostDraft = {
   instagramMediaId: string | null;
   instagramPermalink: string | null;
   instagramPublishError: string | null;
+  instagramPublishAttempts: number;
+  instagramLastAttemptAt: string | null;
+  instagramNextRetryAt: string | null;
   submittedAt: string | null;
   publishedAt: string | null;
   rejectedAt: string | null;
@@ -54,6 +57,9 @@ function mapDraft(row: any): SocialPostDraft {
     instagramMediaId: row.instagramMediaId ?? null,
     instagramPermalink: row.instagramPermalink ?? null,
     instagramPublishError: row.instagramPublishError ?? null,
+    instagramPublishAttempts: Number(row.instagramPublishAttempts ?? 0),
+    instagramLastAttemptAt: toIso(row.instagramLastAttemptAt),
+    instagramNextRetryAt: toIso(row.instagramNextRetryAt),
     submittedAt: toIso(row.submittedAt),
     publishedAt: toIso(row.publishedAt),
     rejectedAt: toIso(row.rejectedAt),
@@ -99,6 +105,9 @@ export async function ensureSocialPostDraftTable() {
       "instagramMediaId" TEXT,
       "instagramPermalink" TEXT,
       "instagramPublishError" TEXT,
+      "instagramPublishAttempts" INTEGER NOT NULL DEFAULT 0,
+      "instagramLastAttemptAt" TIMESTAMPTZ,
+      "instagramNextRetryAt" TIMESTAMPTZ,
       "submittedAt" TIMESTAMPTZ,
       "publishedAt" TIMESTAMPTZ,
       "rejectedAt" TIMESTAMPTZ,
@@ -106,6 +115,18 @@ export async function ensureSocialPostDraftTable() {
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  const columns: [string, string][] = [
+    ["instagramPublishAttempts", "INTEGER NOT NULL DEFAULT 0"],
+    ["instagramLastAttemptAt", "TIMESTAMPTZ"],
+    ["instagramNextRetryAt", "TIMESTAMPTZ"],
+  ];
+
+  for (const [col, type] of columns) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "SocialPostDraft" ADD COLUMN IF NOT EXISTS "${col}" ${type}`,
+    );
+  }
 
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS "SocialPostDraft_status_idx" ON "SocialPostDraft" (status)`
@@ -115,6 +136,9 @@ export async function ensureSocialPostDraftTable() {
   );
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS "SocialPostDraft_createdAt_idx" ON "SocialPostDraft" ("createdAt" DESC)`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "SocialPostDraft_queue_idx" ON "SocialPostDraft" (status, "instagramNextRetryAt", "updatedAt")`
   );
 
   tableEnsured = true;
@@ -185,6 +209,21 @@ export async function getSocialPostDraftById(id: string) {
   );
 
   return rows[0] ? mapDraft(rows[0]) : null;
+}
+
+export async function getQueuedSocialPostDrafts(limit = 1) {
+  await ensureSocialPostDraftTable();
+
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT * FROM "SocialPostDraft"
+     WHERE status = 'PUBLISHING'
+       AND COALESCE("instagramNextRetryAt", "updatedAt") <= NOW()
+     ORDER BY COALESCE("instagramNextRetryAt", "updatedAt") ASC, "createdAt" ASC
+     LIMIT $1`,
+    limit,
+  );
+
+  return rows.map(mapDraft);
 }
 
 export async function updateSocialPostDraftRecord(
@@ -292,10 +331,59 @@ export async function markSocialPostDraftPublishing(
      SET status = 'PUBLISHING',
          "galleryPostId" = $1,
          "instagramPublishError" = NULL,
+         "instagramPublishAttempts" = 0,
+         "instagramLastAttemptAt" = NULL,
+         "instagramNextRetryAt" = NOW(),
          "updatedAt" = NOW()
      WHERE id = $2
      RETURNING *`,
     data.galleryPostId,
+    id,
+  );
+
+  return mapDraft(rows[0]);
+}
+
+export async function markSocialPostDraftPublishAttempt(id: string) {
+  await ensureSocialPostDraftTable();
+
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `UPDATE "SocialPostDraft"
+     SET "instagramPublishAttempts" = COALESCE("instagramPublishAttempts", 0) + 1,
+         "instagramLastAttemptAt" = NOW(),
+         "instagramNextRetryAt" = NULL,
+         "updatedAt" = NOW()
+     WHERE id = $1
+       AND status = 'PUBLISHING'
+     RETURNING *`,
+    id,
+  );
+
+  return rows[0] ? mapDraft(rows[0]) : null;
+}
+
+export async function markSocialPostDraftRetryScheduled(
+  id: string,
+  data: {
+    galleryPostId: string;
+    error: string;
+    nextRetryAt: Date;
+  },
+) {
+  await ensureSocialPostDraftTable();
+
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `UPDATE "SocialPostDraft"
+     SET status = 'PUBLISHING',
+         "galleryPostId" = $1,
+         "instagramPublishError" = $2,
+         "instagramNextRetryAt" = $3,
+         "updatedAt" = NOW()
+     WHERE id = $4
+     RETURNING *`,
+    data.galleryPostId,
+    data.error,
+    data.nextRetryAt,
     id,
   );
 
@@ -316,6 +404,7 @@ export async function markSocialPostDraftFailed(
      SET status = 'FAILED',
          "galleryPostId" = $1,
          "instagramPublishError" = $2,
+         "instagramNextRetryAt" = NULL,
          "updatedAt" = NOW()
      WHERE id = $3
      RETURNING *`,

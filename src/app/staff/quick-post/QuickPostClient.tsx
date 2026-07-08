@@ -6,7 +6,6 @@ import { ArrowRight, Camera, CheckCircle2, Loader2, RefreshCcw, Save, Send, Spar
 import {
   createSocialPostDraft,
   publishSocialPostDraftToGallery,
-  publishSocialPostDraftToInstagram,
   saveSocialPostDraft,
 } from "@/app/actions/social-posts";
 import InstagramFeedPreview, {
@@ -36,14 +35,12 @@ export default function QuickPostClient({
   const [progressText, setProgressText] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [isWorking, setIsWorking] = useState(false);
-  const [instagramPosting, setInstagramPosting] = useState(false);
   const [isPending, startTransition] = useTransition();
   const busy = isPending || isWorking;
   const canApprove = currentUser.role === "ADMIN" || currentUser.role === "VICE_ADMIN";
   const isPublished = draft?.status === "PUBLISHED";
   const hasInstagramIssue = draft?.status === "FAILED";
   const hasPublishingStatus = draft?.status === "PUBLISHING";
-  const isPublishingInstagram = instagramPosting;
   const needsInstagramRetry = hasInstagramIssue || hasPublishingStatus;
 
   async function handleFiles(files: FileList | null) {
@@ -132,28 +129,6 @@ export default function QuickPostClient({
     });
   }
 
-  async function publishInstagramInBackground(draftId: string) {
-    setInstagramPosting(true);
-    try {
-      const result = await publishSocialPostDraftToInstagram(draftId);
-      setDraft(result.draft);
-
-      if (result.ok) {
-        setMessage("인스타그램 게시까지 완료됐습니다.");
-        setError(null);
-        return;
-      }
-
-      setMessage("홈페이지 갤러리에는 게시됐습니다. 인스타그램 게시만 확인이 필요합니다.");
-      setError(result.error || "인스타그램 게시 설정을 확인해주세요.");
-    } catch (caught) {
-      setMessage("홈페이지 갤러리에는 게시됐습니다. 인스타그램 게시만 다시 시도해주세요.");
-      setError(caught instanceof Error ? caught.message : "인스타그램 게시 중 오류가 발생했습니다.");
-    } finally {
-      setInstagramPosting(false);
-    }
-  }
-
   function handlePublish() {
     if (!draft) return;
 
@@ -174,10 +149,9 @@ export default function QuickPostClient({
         setProgressText("홈페이지 갤러리에 게시하는 중입니다.");
         const result = await publishSocialPostDraftToGallery(saved.draft.id);
         setDraft(result.draft);
-        setMessage("홈페이지 갤러리에 게시됐습니다. 인스타그램은 이어서 게시 중입니다.");
+        setMessage("홈페이지 갤러리에 게시됐습니다. 인스타그램은 서버에서 자동 게시됩니다.");
         setProgressText(null);
         setIsWorking(false);
-        void publishInstagramInBackground(result.draft.id);
       } catch (caught) {
         setMessage(null);
         setError(caught instanceof Error ? caught.message : "게시하지 못했습니다.");
@@ -196,7 +170,6 @@ export default function QuickPostClient({
     setError(null);
     setProgressText(null);
     setUploadProgress(null);
-    setInstagramPosting(false);
   }
 
   return (
@@ -279,8 +252,6 @@ export default function QuickPostClient({
                 <CheckCircle2 size={18} />
                 {isPublished
                   ? "게시 완료"
-                  : isPublishingInstagram
-                    ? "홈페이지 게시 완료"
                   : needsInstagramRetry
                     ? "홈페이지 게시 완료"
                     : "AI 초안 준비 완료"}
@@ -288,10 +259,8 @@ export default function QuickPostClient({
               <p className="mt-2 text-xs leading-5 text-green-700">
                 {isPublished
                   ? "홈페이지 갤러리와 인스타그램 게시가 완료됐습니다."
-                  : isPublishingInstagram
-                    ? "홈페이지 갤러리는 완료됐고, 인스타그램 게시를 진행 중입니다."
                   : hasPublishingStatus
-                    ? "홈페이지 갤러리는 완료됐습니다. 인스타그램 게시 상태가 멈춘 경우 다시 게시를 눌러 이어갈 수 있습니다."
+                    ? "홈페이지 갤러리는 완료됐습니다. 인스타그램 게시는 서버가 자동으로 처리 중입니다."
                   : hasInstagramIssue
                     ? "사진은 홈페이지 갤러리에 올라갔고, 인스타그램 게시만 다시 시도하거나 관리자 설정을 확인하면 됩니다."
                     : "문구를 확인하고 필요한 부분을 수정한 뒤 바로 게시할 수 있습니다."}
@@ -352,11 +321,11 @@ export default function QuickPostClient({
                 <button
                   type="button"
                   onClick={handlePublish}
-                  disabled={busy || isPublishingInstagram}
+                  disabled={busy || hasPublishingStatus}
                   className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-3 text-sm font-black text-white disabled:opacity-60"
                 >
-                  {isPublishingInstagram ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                  {isPublishingInstagram ? "인스타그램 게시 중" : needsInstagramRetry ? "인스타그램 다시 게시" : "바로 게시"}
+                  {hasPublishingStatus ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                  {hasPublishingStatus ? "인스타그램 자동 게시 중" : needsInstagramRetry ? "인스타그램 다시 게시" : "바로 게시"}
                 </button>
               )}
               <button
@@ -380,13 +349,13 @@ export default function QuickPostClient({
           </div>
         )}
 
-        {isPublishingInstagram && !busy && (
+        {hasPublishingStatus && !busy && (
           <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-700">
             <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin" />
             <div>
-              <p>인스타그램 게시 중입니다.</p>
+              <p>인스타그램 자동 게시 중입니다.</p>
               <p className="mt-1 text-xs font-medium text-blue-600">
-                홈페이지 갤러리는 이미 반영됐습니다. 잠시 뒤 결과가 표시됩니다.
+                홈페이지 갤러리는 이미 반영됐습니다. 창을 닫아도 서버가 이어서 처리합니다.
               </p>
             </div>
           </div>

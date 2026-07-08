@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 선생님/관리자 초안의 인스타 게시를 브라우저 후속 호출에서 서버 큐와 Vercel cron 재시도로 옮겼다.
 - 2026-07-08: 홈 히어로에 공개 공지 목록을 가볍게 표시하고, 인스타 CDN 이미지를 Next Image 최적화 허용 목록에 추가했다.
 - 2026-07-08: 선생님/관리자 초안 게시에서 홈페이지 갤러리 반영과 인스타그램 게시를 분리하고 `PUBLISHING` 재시도 UI를 둔다.
 - 2026-07-08: 선생님/관리자 갤러리 업로드는 공통 `uploadImagesWithProgress` 도우미로 압축 후 3장씩 병렬 업로드하고 진행률을 표시한다.
@@ -7,9 +8,9 @@
 
 # STIZ Knowledge Index
 
-- 기준일: 2026-07-08
+- 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 홈 화면에 새 데이터를 추가할 때는 서버에서 작은 limit로 병렬 조회하고, 클라이언트에는 필요한 목록 필드만 넘겨 첫 화면 반응 속도를 유지한다.
+- 최근 지식: 선생님/관리자 인스타 게시처럼 오래 걸리는 외부 API 작업은 화면에서 기다리지 않고 `PUBLISHING` 큐와 cron 재시도로 처리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -35,3 +36,4 @@
 - 선생님/관리자 갤러리 업로드는 `src/lib/clientImageUpload.ts`의 `uploadImagesWithProgress`를 사용해 같은 압축/업로드/진행률 패턴을 공유한다.
 - 선생님/관리자 초안 게시는 홈페이지 갤러리 반영을 먼저 완료 처리하고, 인스타그램 게시 결과는 `PUBLISHING`/`PUBLISHED`/`FAILED` 상태로 별도 표시한다.
 - 홈 히어로 공지는 `getNotices({ limit, publicOnly: true })`로 공개 공지만 작게 가져오고, 본문 HTML은 홈에 렌더하지 않는다.
+- `/api/cron/social-posts`는 `PUBLISHING` 초안을 5분마다 1건씩 처리하고, 일시 실패는 `instagramNextRetryAt` 기준으로 최대 3회까지 예약 재시도한다.

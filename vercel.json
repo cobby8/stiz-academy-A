@@ -18,6 +18,10 @@
     {
       "path": "/api/cron/instagram-gallery",
       "schedule": "10 18 * * *"
+    },
+    {
+      "path": "/api/cron/social-posts",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

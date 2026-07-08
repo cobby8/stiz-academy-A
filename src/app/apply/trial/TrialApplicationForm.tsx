@@ -11,6 +11,7 @@
 import { useState, useTransition } from "react";
 import { submitTrialApplication, type AvailableSlot } from "@/app/actions/public";
 import Link from "next/link";
+import { trackMetaEvent } from "@/components/MetaPixel";
 
 // ── Props 타입 ───────────────────────────────────────────────────────────────
 interface Props {
@@ -145,6 +146,10 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
         startTransition(async () => {
             try {
                 await submitTrialApplication(form);
+                trackMetaEvent("Lead", {
+                    content_name: "Trial application",
+                    content_category: "Application",
+                });
                 setCompleted(true);
                 window.scrollTo({ top: 0, behavior: "smooth" });
             } catch (e: any) {

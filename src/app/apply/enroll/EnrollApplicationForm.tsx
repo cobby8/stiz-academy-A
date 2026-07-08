@@ -18,6 +18,7 @@ import {
     type TrialLeadForEnroll,
 } from "@/app/actions/public";
 import Link from "next/link";
+import { trackMetaEvent } from "@/components/MetaPixel";
 
 // ── Props 타입 ───────────────────────────────────────────────────────────────
 interface Props {
@@ -214,6 +215,10 @@ export default function EnrollApplicationForm({
                     agreedTerms: form.agreedTerms,
                     agreedPrivacy: form.agreedPrivacy,
                     honeypot: form.honeypot,
+                });
+                trackMetaEvent("CompleteRegistration", {
+                    content_name: "Enrollment application",
+                    content_category: "Application",
                 });
                 setCompleted(true);
                 window.scrollTo({ top: 0, behavior: "smooth" });

@@ -3,6 +3,7 @@ import "./globals.css";
 import { getAcademySettings } from "@/lib/queries";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, getFontCss } from "@/lib/fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import MetaPixel from "@/components/MetaPixel";
 
 // --- next/font/google: 빌드 시 폰트 파일을 자체 호스팅하여 외부 DNS 조회 제거, CLS 방지 ---
 import { Noto_Sans_KR, Nanum_Gothic, IBM_Plex_Sans_KR, Black_Han_Sans, Jua } from "next/font/google";
@@ -127,6 +128,7 @@ export default async function RootLayout({
                     enableSystem
                     disableTransitionOnChange
                 >
+                    <MetaPixel />
                     {children}
                 </ThemeProvider>
             </body>

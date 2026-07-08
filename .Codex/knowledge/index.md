@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 공개 페이지의 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리했다.
 - 2026-07-09: 전역 폰트 preload 폭증과 미설정 Meta Pixel 강제 로드를 제거하고, `AcademySettings` 서버 캐시를 추가했다.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 진입점을 추가했다.
 - 2026-07-09: 선생님/관리자 초안의 인스타 게시를 브라우저 후속 호출에서 서버 큐와 Vercel cron 재시도로 옮겼다.
@@ -12,7 +13,7 @@
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 전역 `next/font`는 선택 가능한 모든 폰트를 preload하면 첫 화면 리소스가 폭증하므로 `preload: false`로 두고, 설정성 데이터는 `unstable_cache`와 태그 무효화로 반복 DB 조회를 줄인다.
+- 최근 지식: 공개 페이지 플로팅 도구는 버튼만 가볍게 먼저 렌더하고, 챗봇 패널/가이드 투어 본체처럼 큰 상호작용 코드는 클릭 또는 지연 시점에 동적 로드한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -43,3 +44,5 @@
 - 전역 레이아웃의 Google 폰트는 `preload: false`로 두어 첫 화면에서 선택 후보 폰트 수백 개를 선로딩하지 않는다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.
 - `getAcademySettings()`는 5분 서버 캐시와 `academy-settings` 태그를 사용하며, 관리자 설정 저장 시 `revalidateTag(..., { expire: 0 })`로 즉시 무효화한다.
+- 공개 페이지의 챗봇은 `ChatBotButton`만 초기 로드하고, `ChatPanel`은 버튼 클릭 후 `next/dynamic`으로 로드한다.
+- 입학 가이드 투어는 `GuideTourLazyTrigger`를 공개 페이지에 붙이고, 기존 `GuideTourTrigger` 본체는 클릭, `?tour=` URL, 첫 방문 예열 시점에 로드한다.

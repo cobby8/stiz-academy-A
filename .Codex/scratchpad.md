@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 사이트 전역 속도 병목 1차 개선
+- 작업명: 가이드 투어/챗봇 지연 로딩
 - 상태: 검증 완료
-- 범위: 전역 폰트 preload, Meta Pixel 조건부 로드, 학원 설정 서버 캐시
+- 범위: 공개 페이지 플로팅 챗봇, 입학 가이드 투어
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -27,9 +27,11 @@
 | 인스타 서버 큐/재시도 | 완료 | 브라우저가 닫혀도 Vercel cron이 `PUBLISHING` 초안을 처리 |
 | 로그아웃 진입점 | 완료 | 공개 헤더와 마이페이지 헤더에서 기존 `logout()` 액션 노출 |
 | 전역 속도 병목 개선 | 완료 | 홈 폰트 preload 561개→0개, 리소스 참조 630개→90개 |
+| 플로팅 도구 지연 로딩 | 완료 | 챗봇 패널/가이드 투어 본체를 첫 렌더에서 분리 |
 | 타입 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 공개 페이지 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리해 첫 렌더 부담을 줄임.
 - 2026-07-09: 전역 `next/font` preload를 끄고, Meta Pixel을 환경변수 있을 때만 로드하며, `AcademySettings` 서버 캐시/무효화를 추가.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 버튼을 추가.
 - 2026-07-09: 인스타 게시를 브라우저 후속 호출에서 서버 큐/cron 방식으로 옮기고, 실패 시 최대 3회까지 예약 재시도하도록 변경.
@@ -39,17 +41,16 @@
 - 2026-07-08: 관리자 사이드바 탭/메뉴 hover, 갤러리 라이트박스 버튼, 마이페이지 학생 선택의 흰 배경/흰 글씨 대비 충돌을 보강.
 - 2026-07-08: 공지 상세 리치 HTML 본문에서 신청 URL이 자동 링크되도록 `sanitizeHtml` 옵션을 추가하고 `npx.cmd tsc --noEmit` 통과.
 - 2026-07-08: `/admin` 서버 권한 체크, `/api/upload` 스태프 권한 체크, PC 로그인/역할별 진입점, 갤러리 저장 오류 메시지 처리 보강.
-- 2026-07-08: 인스타 `media_publish` 단계의 `Media ID is not available` 일시 오류를 짧게 재시도하도록 보강.
 
 ## 구현 기록
-- 변경 파일: `src/app/layout.tsx`, `src/components/MetaPixel.tsx`, `src/lib/queries.ts`, `src/app/actions/admin.ts`
-- 주요 변경: Google 폰트 전역 preload 제거, Meta Pixel 기본 강제 로드 제거, `getAcademySettings()`를 `unstable_cache`로 5분 캐시하고 설정 저장 시 `revalidateTag`로 즉시 무효화.
-- 적용 범위: 공개 홈페이지, 관리자/마이페이지 포함 전체 앱 레이아웃.
+- 변경 파일: `src/components/chat/ChatBotButton.tsx`, `src/components/guide-tour/GuideTourLazyTrigger.tsx`, `src/components/guide-tour/GuideTourTrigger.tsx`, `src/components/PublicPageLayout.tsx`, `src/app/page.tsx`
+- 주요 변경: 챗봇 버튼은 유지하되 `ChatPanel`을 클릭 후 로드하고, 가이드 투어는 가벼운 런처를 먼저 렌더한 뒤 클릭/투어 URL/첫 방문 예열 시 본체를 로드.
+- 적용 범위: 홈 및 공개 서브페이지 플로팅 도구.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과
-- 산출물 확인: 홈 폰트 preload 561개/약 5MB → 0개/0MB, 홈 리소스 참조 630개 → 90개, Meta Pixel 미설정 시 Facebook 스크립트 없음
+- 산출물 확인: 홈 초기 HTML에 `GuideTourTrigger`/`ChatPanel` 코드 미포함, 홈 초기 chunk 참조 21개→20개, 약 1.96MB→1.94MB
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 공개 페이지 클라이언트 JS 1.96MB 축소, 가이드 투어/챗봇 지연 로딩, 갤러리 이미지 추가 경량화.
+- 다음 속도 개선 후보: 홈 `LandingPageClient` 서버 컴포넌트 분리, 갤러리 라이트박스 지연 로딩, 공개 페이지 CSS/JS chunk 추가 분석.

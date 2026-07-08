@@ -8,8 +8,13 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { MessageCircle } from "lucide-react";
-import ChatPanel from "./ChatPanel";
+
+const ChatPanel = dynamic(() => import("./ChatPanel"), {
+  ssr: false,
+  loading: () => null,
+});
 
 export default function ChatBotButton() {
   // 채팅 패널의 열림/닫힘 상태

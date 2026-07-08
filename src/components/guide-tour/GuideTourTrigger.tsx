@@ -990,7 +990,7 @@ async function runPhase5() {
 // 메인 컴포넌트
 // ========================================
 
-function TourTriggerInner() {
+function TourTriggerInner({ autoStart = false }: { autoStart?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -1075,6 +1075,13 @@ function TourTriggerInner() {
     // Phase 1부터 시작
     runPhase1(routerPush);
   }, [routerPush]);
+
+  const hasAutoStarted = useRef(false);
+  useEffect(() => {
+    if (!mounted || !autoStart || hasAutoStarted.current) return;
+    hasAutoStarted.current = true;
+    startTour();
+  }, [autoStart, mounted, startTour]);
 
   // 토스트 닫기 (투어 완료로 처리하여 다시 안 뜨게)
   const dismissPrompt = useCallback(() => {
@@ -1165,10 +1172,10 @@ function TourTriggerInner() {
 }
 
 // useSearchParams()는 반드시 Suspense 안에서 사용해야 함
-export default function GuideTourTrigger() {
+export default function GuideTourTrigger({ autoStart = false }: { autoStart?: boolean }) {
   return (
     <Suspense fallback={null}>
-      <TourTriggerInner />
+      <TourTriggerInner autoStart={autoStart} />
     </Suspense>
   );
 }

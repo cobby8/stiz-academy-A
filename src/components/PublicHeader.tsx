@@ -17,6 +17,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
+import { createClient } from "@/lib/supabase/client";
+import { defaultPathForRole, normalizeAppRole, type AppRole } from "@/lib/auth-routes";
 
 // 부모(Server Component)에서 전달받을 props 타입
 interface PublicHeaderProps {
@@ -65,7 +67,17 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
 
   // 큰글씨 모드 상태 — localStorage에 저장하여 새로고침 후에도 유지
   const [isLargeFont, setIsLargeFont] = useState(false);
+  const [appRole, setAppRole] = useState<AppRole | null>(null);
   const displayOperatingHours = operatingHours?.trim() || DEFAULT_OPERATING_HOURS;
+  const accountHref = appRole ? defaultPathForRole(appRole) : "/login";
+  const accountLabel =
+    appRole === "ADMIN" || appRole === "VICE_ADMIN"
+      ? "관리자"
+      : appRole === "INSTRUCTOR"
+        ? "사진 올리기"
+        : appRole === "PARENT"
+          ? "마이페이지"
+          : "로그인";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -85,6 +97,22 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
       setIsLargeFont(true);
       document.documentElement.classList.add("text-large");
     }
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setAppRole(user ? normalizeAppRole(user.user_metadata?.role) : null);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAppRole(session?.user ? normalizeAppRole(session.user.user_metadata?.role) : null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // 큰글씨 모드 토글 핸들러
@@ -233,6 +261,17 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
               <span className="text-sm font-black leading-none">가</span>
             </button>
 
+            <Link
+              href={accountHref}
+              className={[
+                "hidden md:inline-flex items-center rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold",
+                "text-gray-700 transition-colors hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-600",
+                "dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime/40 dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime",
+              ].join(" ")}
+            >
+              {accountLabel}
+            </Link>
+
             {/* CTA 버튼 — "신청하기"로 변경 */}
             <Link
               href="/apply"
@@ -346,18 +385,18 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
           <div className="grid grid-cols-2 gap-2 mb-3">
             <Link
-              href="/staff/quick-post"
+              href={accountHref}
               onClick={() => setIsMobileMenuOpen(false)}
               className="flex min-h-11 items-center justify-center rounded-xl border border-brand-orange-200 bg-white text-sm font-bold text-brand-orange-600 transition-colors hover:bg-brand-orange-50 dark:border-brand-neon-lime/30 dark:bg-gray-900 dark:text-brand-neon-lime"
             >
-              사진 올리기
+              {accountLabel}
             </Link>
             <Link
-              href="/admin"
+              href="/staff/quick-post"
               onClick={() => setIsMobileMenuOpen(false)}
               className="flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
             >
-              관리자
+              사진 올리기
             </Link>
           </div>
           <Link

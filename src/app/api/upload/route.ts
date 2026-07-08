@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth-guard";
 
 // 허용 파일 타입 화이트리스트 — 이미지만 허용
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -28,18 +28,20 @@ async function trySupabaseUpload(buffer: Buffer, folder: string, filename: strin
         }
         const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
         return urlData.publicUrl;
-    } catch (e: any) {
-        console.warn("[upload] Supabase unavailable:", e.message);
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.warn("[upload] Supabase unavailable:", message);
         return null;
     }
 }
 
 export async function POST(req: Request) {
-    // 인증 체크: 로그인한 관리자만 파일 업로드 가능
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    try {
+        await requireStaff();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "업로드 권한이 필요합니다.";
+        const status = message.includes("인증") ? 401 : 403;
+        return NextResponse.json({ error: message }, { status });
     }
 
     try {
@@ -81,7 +83,7 @@ export async function POST(req: Request) {
         await mkdir(uploadDir, { recursive: true });
         await writeFile(join(uploadDir, filename), buffer);
         return NextResponse.json({ url: `/uploads/${folder}/${filename}` });
-    } catch (e: any) {
+    } catch (e: unknown) {
         console.error("[upload] Fatal error:", e);
         return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }

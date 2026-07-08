@@ -84,6 +84,7 @@ export default function GalleryAdminClient({
   const [uploading, setUploading] = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
+  const [formMessage, setFormMessage] = useState<{ ok: boolean; message: string } | null>(null);
 
   const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
   const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");
@@ -95,6 +96,7 @@ export default function GalleryAdminClient({
     setCaption("");
     setIsPublic(true);
     setMediaItems([]);
+    setFormMessage(null);
     setShowForm(false);
   }
 
@@ -111,6 +113,7 @@ export default function GalleryAdminClient({
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploading(true);
+    setFormMessage(null);
     const newItems: MediaItem[] = [];
     const failedNames: string[] = [];
 
@@ -149,6 +152,7 @@ export default function GalleryAdminClient({
       alert("사진을 최소 1장 업로드해주세요.");
       return;
     }
+    setFormMessage(null);
 
     const payload = {
       classId: classId || null,
@@ -159,16 +163,27 @@ export default function GalleryAdminClient({
     };
 
     startTransition(async () => {
-      if (editId) await updateGalleryPost(editId, payload);
-      else await createGalleryPost(payload);
-      resetForm();
+      try {
+        if (editId) await updateGalleryPost(editId, payload);
+        else await createGalleryPost(payload);
+        resetForm();
+      } catch (error) {
+        setFormMessage({
+          ok: false,
+          message: error instanceof Error ? error.message : "갤러리 게시물 저장 중 오류가 발생했습니다.",
+        });
+      }
     });
   }
 
   function handleDelete(id: string) {
     if (!confirm("이 갤러리 게시물을 삭제할까요?")) return;
     startTransition(async () => {
-      await deleteGalleryPost(id);
+      try {
+        await deleteGalleryPost(id);
+      } catch (error) {
+        alert(error instanceof Error ? error.message : "갤러리 게시물 삭제 중 오류가 발생했습니다.");
+      }
     });
   }
 
@@ -439,6 +454,17 @@ export default function GalleryAdminClient({
               </button>
             </div>
             <div className="space-y-4 p-6">
+              {formMessage && (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-sm font-bold ${
+                    formMessage.ok
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : "border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  {formMessage.message}
+                </div>
+              )}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">반 선택</label>
                 <select

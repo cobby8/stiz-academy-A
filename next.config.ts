@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/uploads/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
         source: "/(.*)", // 모든 경로에 적용
         headers: [
           { key: "X-Frame-Options", value: "DENY" }, // 클릭재킹 방지: iframe 삽입 차단

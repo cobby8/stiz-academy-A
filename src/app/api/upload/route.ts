@@ -20,7 +20,7 @@ async function trySupabaseUpload(buffer: Buffer, folder: string, filename: strin
         const path = `${folder}/${filename}`;
         const { data, error } = await supabase.storage
             .from(BUCKET)
-            .upload(path, buffer, { contentType, upsert: false });
+            .upload(path, buffer, { contentType, upsert: false, cacheControl: "31536000" });
 
         if (error) {
             console.warn("[upload] Supabase error:", error.message);

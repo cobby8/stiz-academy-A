@@ -88,6 +88,10 @@
 - 결정: `/admin` 레이아웃의 `requireAdmin()` 결과에서 사용자 이름/이메일을 shell에 전달하고, `AdminShellClient`는 Supabase 브라우저 클라이언트로 사용자 정보를 다시 조회하지 않는다. 로그아웃은 서버 액션으로 처리하고, 알림/체험 카운트 API 호출은 첫 렌더 뒤로 지연한다.
 - 이유: 관리자 레이아웃은 렌더링 전에 이미 인증을 통과한다. 같은 정보를 브라우저에서 다시 조회하면 공통 shell JS와 초기 네트워크 부담이 늘어난다. 빌드 산출물 기준 `/admin` entry JS는 2개 합계 약 0.05MB이며 Supabase 문자열이 없는 것을 확인했다.
 
+## 2026-07-09: 업로드 이미지는 고유 URL 전제로 장기 캐시한다
+- 결정: 로컬 fallback 업로드 `/uploads/:path*`에는 `Cache-Control: public, max-age=31536000, immutable`을 적용하고, Supabase Storage 업로드에는 `cacheControl: "31536000"`을 지정한다.
+- 이유: 현재 업로드 경로는 타임스탬프와 랜덤값을 포함한 파일명으로 저장되어 같은 URL의 이미지 내용이 바뀌지 않는다. 한 번 받은 이미지를 브라우저와 CDN이 오래 재사용하면 홈페이지와 관리자 페이지의 재방문 이미지 로딩이 빨라진다.
+
 ## 2026-07-07: `SocialPostDraft`는 raw SQL 보강 테이블로 둔다
 - 결정: Prisma schema 마이그레이션 대신 `CREATE TABLE IF NOT EXISTS "SocialPostDraft"` 패턴을 사용한다.
 - 이유: 기존 프로젝트가 Supabase PgBouncer 호환을 위해 raw SQL 보강 패턴을 많이 쓰고 있으며, 이번 기능은 독립 초안 테이블이라 점진 도입이 안전하다.

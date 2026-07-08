@@ -243,7 +243,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             <select
                                 value={selectedIdx}
                                 onChange={(e) => setSelectedIdx(Number(e.target.value))}
-                                className="bg-white dark:bg-gray-800/20 hover:bg-white dark:hover:bg-gray-800/30 px-3 py-1.5 rounded-full text-xs font-bold transition text-white border-none"
+                                className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full text-xs font-bold text-white transition border border-white/20"
                             >
                                 {data.children.map((c, i) => (
                                     <option key={c.id} value={i} className="text-gray-900 dark:text-white">{c.name}</option>

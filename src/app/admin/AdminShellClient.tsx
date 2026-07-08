@@ -115,8 +115,8 @@ export default function AdminShellClient({
                         onClick={() => setActiveTab("site")}
                         className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
                             activeTab === "site"
-                                ? "bg-white dark:bg-gray-800/15 text-white"
-                                : "text-white/50 hover:text-white/80 hover:bg-white dark:hover:bg-gray-800/5"
+                                ? "bg-white text-brand-navy-900 dark:bg-white/10 dark:text-white"
+                                : "text-white/60 hover:bg-white/10 hover:text-white"
                         }`}
                     >
                         사이트
@@ -125,8 +125,8 @@ export default function AdminShellClient({
                         onClick={() => setActiveTab("ops")}
                         className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
                             activeTab === "ops"
-                                ? "bg-white dark:bg-gray-800/15 text-white"
-                                : "text-white/50 hover:text-white/80 hover:bg-white dark:hover:bg-gray-800/5"
+                                ? "bg-white text-brand-navy-900 dark:bg-white/10 dark:text-white"
+                                : "text-white/60 hover:bg-white/10 hover:text-white"
                         }`}
                     >
                         학원운영
@@ -208,7 +208,7 @@ export default function AdminShellClient({
                         <button
                             onClick={handleLogout}
                             title="로그아웃"
-                            className="p-1.5 text-gray-400 hover:text-white hover:bg-white dark:hover:bg-gray-800/10 rounded-lg transition-colors flex-shrink-0"
+                            className="p-1.5 text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors flex-shrink-0"
                         >
                             <LogOut size={18} />
                         </button>
@@ -315,19 +315,19 @@ function BackupButtons() {
             <button
                 onClick={handleSyncSchedule}
                 disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
             >
                 <span className="text-xl">🔄</span>
                 <span>시트 동기화</span>
             </button>
             <a
                 href="/api/admin/backup"
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
             >
                 <span className="text-xl">💾</span>
                 <span>백업 다운로드</span>
             </a>
-            <label className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}>
+            <label className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
                 <span className="text-xl">📂</span>
                 <span>{busy ? "처리 중..." : "파일로 복원"}</span>
                 <input type="file" accept=".json" className="hidden" onChange={handleRestore} disabled={busy} />
@@ -335,7 +335,7 @@ function BackupButtons() {
             <button
                 onClick={handleCloudRestore}
                 disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
             >
                 <span className="text-xl">☁️</span>
                 <span>최신 자동백업 복원</span>
@@ -343,7 +343,7 @@ function BackupButtons() {
             <button
                 onClick={handleBackupNow}
                 disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
             >
                 <span className="text-xl">☁️</span>
                 <span>지금 클라우드에 저장</span>
@@ -351,7 +351,7 @@ function BackupButtons() {
             <a
                 href="/api/admin/export-seed"
                 download="seed-data.ts"
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
             >
                 <span className="text-xl">🌱</span>
                 <span>seed 내보내기</span>
@@ -367,7 +367,7 @@ function NavItem({ href, active, icon, label, badge }: { href: string; active?: 
             href={href}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active
                 ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold"
-                : "text-gray-300 hover:bg-white dark:hover:bg-gray-800/10 hover:text-white"
+                : "text-gray-300 hover:bg-white/10 hover:text-white"
                 }`}
         >
             <span className="text-xl">{icon}</span>

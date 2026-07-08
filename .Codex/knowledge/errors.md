@@ -49,3 +49,9 @@
 - 원인: `/api/upload`는 로그인만 확인하고, `createGalleryPost`는 관리자 권한을 확인하므로 권한 없는 사용자는 두 번째 단계에서 Server Action 예외가 난다.
 - 해결: `/api/upload`를 `requireStaff()`로 보호하고, 갤러리 저장 예외는 `GalleryAdminClient` 폼 내부 메시지로 표시한다.
 - 예방: 파일 업로드 API와 최종 저장 액션의 권한 수준을 맞추고, 예상 가능한 권한/저장 오류는 화면 안에서 처리한다.
+
+## 흰 배경 위 흰 글씨 대비 충돌
+- 현상: 관리자 사이드바 탭처럼 활성/hover 상태에서 메뉴 글씨가 보이지 않는다.
+- 원인: 어두운 배경 기준으로 `text-white`를 유지한 채 활성 또는 hover 배경만 `bg-white`로 바뀌면 흰 종이에 흰 글씨가 된다.
+- 해결: 실제 흰 배경을 쓰는 활성 탭은 `text-brand-navy-900`처럼 진한 글씨를 사용하고, 어두운 오버레이/사이드바 hover는 `bg-white/10`처럼 반투명 배경을 사용한다.
+- 예방: `bg-white text-white`, `hover:bg-white hover:text-white` 조합을 전역 검색해 실제 충돌인지 확인한다.

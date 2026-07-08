@@ -93,7 +93,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                                 // .notice-content 는 line-height/font-size를 자체 지정하므로 글자색만 컨테이너에서 상속시킨다(라이트/다크 대응).
                                 <div
                                     className="notice-content max-w-none text-gray-700 dark:text-gray-200 [overflow-wrap:anywhere]"
-                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(notice.content) }}
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(notice.content, { linkifyTextUrls: true }) }}
                                 />
                             ) : (
                                 // 옛 순수 텍스트 공지(하위호환): 줄바꿈 유지 + URL 자동 링크(toNoticeHtml이 이미 이스케이프해 안전, sanitize 미경유 → 500 위험 없음)

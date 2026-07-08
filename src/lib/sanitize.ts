@@ -56,8 +56,47 @@ const ALLOWED_TAGS = [
 // 표/열 style 속성에서 허용할 폭 값 형식 — 정수/소수 px만 (예: "75px", "120.5px")
 // position/expression/url() 등 위험 값은 이 형식에 걸리지 않아 자동 제거된다.
 const PX_VALUE = /^\d+(?:\.\d+)?px$/;
+const TEXT_URL_RE = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+type SanitizeHtmlOptions = { linkifyTextUrls?: boolean };
 
-export function sanitizeHtml(dirty: string): string {
+// sanitize-html의 textFilter는 이미 안전하게 이스케이프된 텍스트를 받는다.
+// 그래서 여기서는 a/code/pre 바깥의 URL 모양 텍스트만 링크로 감싼다.
+function linkifySanitizedTextUrls(text: string, tagName: string): string {
+    if (tagName === "a" || tagName === "code" || tagName === "pre") return text;
+
+    let out = "";
+    let last = 0;
+    let match: RegExpExecArray | null;
+    TEXT_URL_RE.lastIndex = 0;
+
+    while ((match = TEXT_URL_RE.exec(text)) !== null) {
+        out += text.slice(last, match.index);
+
+        let url = match[0];
+        let trail = "";
+        const trailingPunctuation = url.match(/[),.!?;:]+$/);
+
+        if (trailingPunctuation) {
+            trail = trailingPunctuation[0];
+            url = url.slice(0, -trail.length);
+        }
+
+        const href = (url.startsWith("www.") ? `https://${url}` : url)
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        out +=
+            `<a href="${href}" target="_blank" rel="noopener noreferrer" ` +
+            `class="text-brand-orange-600 dark:text-brand-neon-lime underline underline-offset-2 break-all hover:opacity-80">` +
+            `${url}</a>${trail}`;
+
+        last = match.index + match[0].length;
+    }
+
+    return out + text.slice(last);
+}
+
+export function sanitizeHtml(dirty: string, options: SanitizeHtmlOptions = {}): string {
     return sanitizeHtmlLib(dirty, {
         allowedTags: ALLOWED_TAGS,
         allowedAttributes: {
@@ -125,6 +164,7 @@ export function sanitizeHtml(dirty: string): string {
         transformTags: {
             a: sanitizeHtmlLib.simpleTransform("a", { rel: "noopener noreferrer" }),
         },
+        textFilter: options.linkifyTextUrls ? linkifySanitizedTextUrls : undefined,
         // 🔒 iframe 이중 방어 — allowedIframeHostnames는 비유튜브 iframe의 src만 제거하고
         //    빈 <iframe></iframe> 껍데기를 남긴다(harmless지만 지저분). 여기서 src가 사라진
         //    iframe을 통째로 삭제해 비유튜브/data:/http 등 무효 iframe이 남지 않게 한다.

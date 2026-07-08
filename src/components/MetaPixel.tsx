@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Script from "next/script";
 
-const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || "537084849778028";
+const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
 type MetaEventParams = Record<string, string | number | boolean | undefined>;
 

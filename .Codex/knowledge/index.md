@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 전역 폰트 preload 폭증과 미설정 Meta Pixel 강제 로드를 제거하고, `AcademySettings` 서버 캐시를 추가했다.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 진입점을 추가했다.
 - 2026-07-09: 선생님/관리자 초안의 인스타 게시를 브라우저 후속 호출에서 서버 큐와 Vercel cron 재시도로 옮겼다.
 - 2026-07-08: 홈 히어로에 공개 공지 목록을 가볍게 표시하고, 인스타 CDN 이미지를 Next Image 최적화 허용 목록에 추가했다.
@@ -11,7 +12,7 @@
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 로그인/로그아웃은 기존 `src/app/actions/auth.ts`의 서버 액션을 재사용하고, 공개 헤더와 마이페이지 헤더에서 진입점을 노출한다.
+- 최근 지식: 전역 `next/font`는 선택 가능한 모든 폰트를 preload하면 첫 화면 리소스가 폭증하므로 `preload: false`로 두고, 설정성 데이터는 `unstable_cache`와 태그 무효화로 반복 DB 조회를 줄인다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -39,3 +40,6 @@
 - 홈 히어로 공지는 `getNotices({ limit, publicOnly: true })`로 공개 공지만 작게 가져오고, 본문 HTML은 홈에 렌더하지 않는다.
 - `/api/cron/social-posts`는 `PUBLISHING` 초안을 5분마다 1건씩 처리하고, 일시 실패는 `instagramNextRetryAt` 기준으로 최대 3회까지 예약 재시도한다.
 - 공개 홈페이지와 마이페이지의 로그아웃 UI는 새 로그아웃 로직을 만들지 않고 `logout()` 서버 액션을 `form action`으로 연결한다.
+- 전역 레이아웃의 Google 폰트는 `preload: false`로 두어 첫 화면에서 선택 후보 폰트 수백 개를 선로딩하지 않는다.
+- `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.
+- `getAcademySettings()`는 5분 서버 캐시와 `academy-settings` 태그를 사용하며, 관리자 설정 저장 시 `revalidateTag(..., { expire: 0 })`로 즉시 무효화한다.

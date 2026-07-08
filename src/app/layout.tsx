@@ -14,6 +14,7 @@ const notoSansKr = Noto_Sans_KR({
     weight: ["300", "400", "500", "700", "900"],
     display: "swap", // FOUT 방식: 폰트 로드 전 시스템 폰트 표시 → CLS 방지
     variable: "--font-noto-sans-kr",
+    preload: false,
 });
 
 const nanumGothic = Nanum_Gothic({
@@ -21,6 +22,7 @@ const nanumGothic = Nanum_Gothic({
     weight: ["400", "700", "800"],
     display: "swap",
     variable: "--font-nanum-gothic",
+    preload: false,
 });
 
 const ibmPlexSansKr = IBM_Plex_Sans_KR({
@@ -28,6 +30,7 @@ const ibmPlexSansKr = IBM_Plex_Sans_KR({
     weight: ["300", "400", "500", "600", "700"],
     display: "swap",
     variable: "--font-ibm-plex-sans-kr",
+    preload: false,
 });
 
 // 제목용 폰트 (단일 weight)
@@ -36,6 +39,7 @@ const blackHanSans = Black_Han_Sans({
     weight: "400",
     display: "swap",
     variable: "--font-black-han-sans",
+    preload: false,
 });
 
 const jua = Jua({
@@ -43,6 +47,7 @@ const jua = Jua({
     weight: "400",
     display: "swap",
     variable: "--font-jua",
+    preload: false,
 });
 
 export const metadata: Metadata = {

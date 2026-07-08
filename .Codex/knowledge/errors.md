@@ -10,6 +10,18 @@
 - 원인: Next `next/font/google`이 빌드 중 Google Fonts CSS를 받아오는데, 현재 작업 환경의 네트워크 샌드박스가 외부 요청을 막는다.
 - 해결: 코드 문제가 아니므로 같은 빌드를 네트워크 허용으로 재실행해 확인한다.
 
+## Windows Prisma generate DLL rename EPERM
+- 현상: `npm.cmd run build`의 `prisma generate` 단계에서 `EPERM: operation not permitted, rename ... query_engine-windows.dll.node.tmp...` 오류가 날 수 있다.
+- 원인: Windows에서 Prisma query engine DLL 파일이 기존 Node/빌드 프로세스 또는 보안 소프트웨어에 잠깐 잡혀 있으면 rename이 실패한다.
+- 해결: 코드 검증이 목적이면 이미 생성된 Prisma Client를 사용해 `npx.cmd next build`로 Next 빌드를 먼저 확인한다. 프로세스 종료가 필요하면 전체 `node.exe` 종료가 아니라 포트/PID 기준으로 해당 프로세스만 종료한다.
+- 예방: 빌드/개발 서버를 동시에 여러 개 띄운 상태에서 `prisma generate`를 반복 실행하지 않는다.
+
+## 전역 next/font preload 폭증
+- 현상: 홈 HTML에 `/_next/static/media/*.woff2` preload가 수백 개 붙어 첫 화면 로드가 심각하게 느려질 수 있다.
+- 원인: 관리자에서 선택 가능한 한국어 Google 폰트 여러 종을 전역 `next/font`로 등록하면서 기본 preload가 켜져 있으면, 실제 선택 여부와 관계없이 모든 후보 폰트 조각을 선로딩한다.
+- 해결: 전역 후보 폰트에는 `preload: false`를 지정한다.
+- 예방: 빌드 산출물에서 `FontPreloadCount`와 HTML 리소스 참조 수를 확인한다.
+
 ## 홈 인스타 갤러리 이미지 회색 박스
 - 현상: 홈 갤러리에서 인스타그램에서 가져온 사진이 회색 박스와 alt 텍스트처럼 보일 수 있다.
 - 원인: 홈은 `next/image`를 사용하므로 Instagram/Facebook CDN 호스트가 `next.config.ts`의 `images.remotePatterns`에 없으면 최적화 이미지 요청이 막힌다. 또한 Instagram CDN URL은 시간이 지나 바뀔 수 있다.

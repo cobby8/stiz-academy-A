@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 홈페이지/마이페이지 로그아웃 진입점 추가
+- 작업명: 사이트 전역 속도 병목 1차 개선
 - 상태: 검증 완료
-- 범위: 공개 홈페이지 헤더, 마이페이지 헤더, 기존 `logout()` 서버 액션 연결
+- 범위: 전역 폰트 preload, Meta Pixel 조건부 로드, 학원 설정 서버 캐시
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -26,9 +26,11 @@
 | 홈 공지/인스타 갤러리 보강 | 완료 | 히어로 공지 목록 추가, Instagram CDN 이미지 허용, 기존 인스타 URL 갱신 |
 | 인스타 서버 큐/재시도 | 완료 | 브라우저가 닫혀도 Vercel cron이 `PUBLISHING` 초안을 처리 |
 | 로그아웃 진입점 | 완료 | 공개 헤더와 마이페이지 헤더에서 기존 `logout()` 액션 노출 |
+| 전역 속도 병목 개선 | 완료 | 홈 폰트 preload 561개→0개, 리소스 참조 630개→90개 |
 | 타입 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 전역 `next/font` preload를 끄고, Meta Pixel을 환경변수 있을 때만 로드하며, `AcademySettings` 서버 캐시/무효화를 추가.
 - 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 버튼을 추가.
 - 2026-07-09: 인스타 게시를 브라우저 후속 호출에서 서버 큐/cron 방식으로 옮기고, 실패 시 최대 3회까지 예약 재시도하도록 변경.
 - 2026-07-08: 홈 히어로 좌측 농구공 영역에 공개 공지 목록을 배치하고, 홈 갤러리의 인스타 CDN 이미지를 Next Image가 최적화해 표시하도록 보강.
@@ -38,16 +40,16 @@
 - 2026-07-08: 공지 상세 리치 HTML 본문에서 신청 URL이 자동 링크되도록 `sanitizeHtml` 옵션을 추가하고 `npx.cmd tsc --noEmit` 통과.
 - 2026-07-08: `/admin` 서버 권한 체크, `/api/upload` 스태프 권한 체크, PC 로그인/역할별 진입점, 갤러리 저장 오류 메시지 처리 보강.
 - 2026-07-08: 인스타 `media_publish` 단계의 `Media ID is not available` 일시 오류를 짧게 재시도하도록 보강.
-- 2026-07-08: 인스타 자동 게시 전 미디어 컨테이너 처리 완료 상태를 기다리도록 수정해 `Media ID is not available` 실패 가능성을 낮춤.
 
 ## 구현 기록
-- 변경 파일: `src/components/PublicHeader.tsx`, `src/app/mypage/layout.tsx`
-- 주요 변경: 로그인 상태의 공개 홈페이지 헤더와 마이페이지 상단에 로그아웃 버튼을 추가하고 기존 `logout()` 서버 액션을 재사용.
-- 적용 범위: PC 공개 헤더, 모바일 공개 메뉴, PC/모바일 마이페이지 헤더.
+- 변경 파일: `src/app/layout.tsx`, `src/components/MetaPixel.tsx`, `src/lib/queries.ts`, `src/app/actions/admin.ts`
+- 주요 변경: Google 폰트 전역 preload 제거, Meta Pixel 기본 강제 로드 제거, `getAcademySettings()`를 `unstable_cache`로 5분 캐시하고 설정 저장 시 `revalidateTag`로 즉시 무효화.
+- 적용 범위: 공개 홈페이지, 관리자/마이페이지 포함 전체 앱 레이아웃.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- `npm.cmd run build` 통과
+- `npx.cmd next build` 통과
+- 산출물 확인: 홈 폰트 preload 561개/약 5MB → 0개/0MB, 홈 리소스 참조 630개 → 90개, Meta Pixel 미설정 시 Facebook 스크립트 없음
 
 ## 다음에 할 것
-- 로그아웃 후 사용자 안내 토스트나 로그인 화면 메시지가 필요한지 실제 사용 흐름에서 확인한다.
+- 다음 속도 개선 후보: 공개 페이지 클라이언트 JS 1.96MB 축소, 가이드 투어/챗봇 지연 로딩, 갤러리 이미지 추가 경량화.

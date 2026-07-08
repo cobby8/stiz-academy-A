@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireOwner } from "@/lib/auth-guard";
 import {
@@ -18,7 +18,7 @@ import {
 } from "@/lib/googleCalendarWrite";
 import { publishGalleryPostToInstagram } from "@/lib/instagram";
 import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
-import { getAcademySettings } from "@/lib/queries";
+import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings } from "@/lib/queries";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
@@ -373,6 +373,7 @@ export async function updateAcademySettings(data: {
         console.error("Failed to update academy settings:", e);
         throw new Error("설정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
+    revalidateTag(ACADEMY_SETTINGS_CACHE_TAG, { expire: 0 });
     revalidatePath("/");
     revalidatePath("/about");
     revalidatePath("/programs");
@@ -401,6 +402,7 @@ export async function updateNaverPlaceUrl(url: string) {
         console.error("Failed to update naver place URL:", e);
         throw new Error("네이버 플레이스 URL 저장에 실패했습니다.");
     }
+    revalidateTag(ACADEMY_SETTINGS_CACHE_TAG, { expire: 0 });
     revalidatePath("/admin/testimonials");
     revalidatePath("/");
 }

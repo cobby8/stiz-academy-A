@@ -4,6 +4,7 @@
  * "use server" 없음 — 일반 서버 모듈로 import 가능
  */
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
@@ -14,7 +15,9 @@ const toBool = (v: any, fallback: boolean): boolean => {
     return fallback;
 };
 
-export const getAcademySettings = cache(async () => {
+export const ACADEMY_SETTINGS_CACHE_TAG = "academy-settings";
+
+async function fetchAcademySettings() {
     // PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe 사용 (prepared statement 우회)
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
@@ -80,7 +83,15 @@ export const getAcademySettings = cache(async () => {
         kakaoChannelUrl: null,
         address: "다산신도시 체육관",
     } as any;
-});
+}
+
+const getCachedAcademySettings = unstable_cache(
+    fetchAcademySettings,
+    ["academy-settings"],
+    { revalidate: 300, tags: [ACADEMY_SETTINGS_CACHE_TAG] },
+);
+
+export const getAcademySettings = cache(getCachedAcademySettings);
 
 export const getPrograms = cache(async () => {
     // Use $queryRawUnsafe (simple query protocol) for PgBouncer transaction mode compatibility

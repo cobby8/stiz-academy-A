@@ -43,6 +43,13 @@ type GalleryMediaItem = {
   alt: string;
 };
 
+type HomeNotice = {
+  id: string;
+  title: string;
+  isPinned: boolean;
+  createdAt: Date | string;
+};
+
 function getGalleryMediaItems(posts: GalleryPost[]): GalleryMediaItem[] {
   return posts.flatMap((post) => {
     try {
@@ -64,15 +71,70 @@ function getGalleryMediaItems(posts: GalleryPost[]): GalleryMediaItem[] {
   });
 }
 
+function formatNoticeDate(date: Date | string) {
+  return new Date(date).toLocaleDateString("ko-KR", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function HeroNoticePanel({ notices, compact = false }: { notices: HomeNotice[]; compact?: boolean }) {
+  if (notices.length === 0) return null;
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-white/15 bg-white/10 text-left shadow-xl shadow-black/10 backdrop-blur-sm ${
+        compact ? "p-3" : "p-4"
+      }`}
+    >
+      <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full border-[18px] border-white/10" />
+      <div className="relative flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase text-brand-orange-300">NOTICE</p>
+          <h2 className="mt-1 text-lg font-black text-white">새 소식</h2>
+        </div>
+        <Link
+          href="/notices"
+          className="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-xs font-bold text-blue-50 transition hover:bg-white/10"
+        >
+          전체보기
+        </Link>
+      </div>
+
+      <div className="relative mt-3 space-y-2">
+        {notices.slice(0, compact ? 2 : 4).map((notice) => (
+          <Link
+            key={notice.id}
+            href={`/notices/${notice.id}`}
+            className="group flex min-h-12 items-center gap-2 rounded-xl border border-white/10 bg-brand-navy-900/20 px-3 py-2 transition hover:bg-white/10"
+          >
+            <span
+              className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-black ${
+                notice.isPinned ? "bg-brand-orange-500 text-white" : "bg-white/15 text-blue-50"
+              }`}
+            >
+              {notice.isPinned ? "중요" : "안내"}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-bold text-white">{notice.title}</span>
+            <span className="shrink-0 text-[11px] font-semibold text-blue-100/70">{formatNoticeDate(notice.createdAt)}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPageClient({
   initialSettings,
   testimonials,
   galleryPosts = [],
+  notices = [],
   naverPlaceUrl,
 }: {
   initialSettings: any;
   testimonials?: { name: string; info: string; text: string; rating: number }[];
   galleryPosts?: GalleryPost[];
+  notices?: HomeNotice[];
   naverPlaceUrl?: string;
 }) {
   const settings = initialSettings || {};
@@ -102,16 +164,15 @@ export default function LandingPageClient({
         <div className="max-w-6xl mx-auto px-4 relative">
           {/* 좌(비주얼) + 우(텍스트) 분할 레이아웃 */}
           <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
-            {/* 좌측: 비주얼 영역 — 농구 그래픽 장식 */}
-            <div className="flex-1 hidden lg:flex items-center justify-center">
-              <div className="relative w-64 h-64">
-                <div className="absolute inset-0 bg-brand-orange-500/20 dark:bg-brand-neon-lime/20 rounded-full animate-pulse" />
-                <div className="absolute inset-4 bg-brand-orange-500/30 dark:bg-brand-neon-lime/30 rounded-full" />
-                <div className="absolute inset-8 bg-brand-orange-500/20 dark:bg-brand-neon-lime/20 rounded-full flex items-center justify-center">
-                  <span className="text-7xl">🏀</span>
+            {/* 좌측: 공지 영역 — 데스크탑에서는 농구공 빈 공간에 최신 공지 표시 */}
+            <div className="hidden flex-1 items-center justify-center lg:flex">
+              <div className="relative w-full max-w-md">
+                <div className="absolute -left-7 top-8 h-52 w-52 rounded-full bg-brand-orange-500/20 dark:bg-brand-neon-lime/20" />
+                <div className="absolute left-5 top-20 h-28 w-28 rounded-full bg-brand-orange-500/25 dark:bg-brand-neon-lime/20" />
+                <div className="absolute left-16 top-28 flex h-14 w-14 items-center justify-center rounded-full bg-brand-orange-500 text-white shadow-lg">
+                  <span className="text-3xl leading-none" aria-hidden="true">🏀</span>
                 </div>
-                <div className="absolute -top-4 -right-4 w-16 h-16 border-4 border-white/20 dark:border-brand-neon-cobalt/30 rounded-full" />
-                <div className="absolute -bottom-2 -left-2 w-12 h-12 border-4 border-brand-orange-500/30 dark:border-brand-neon-lime/40 rounded-full" />
+                <HeroNoticePanel notices={notices} />
               </div>
             </div>
 
@@ -140,6 +201,12 @@ export default function LandingPageClient({
                   })()),
                 }}
               />
+
+              {notices.length > 0 && (
+                <div className="mt-5 lg:hidden">
+                  <HeroNoticePanel notices={notices} compact />
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
       // Supabase Storage (코치 이미지 등 사용자 업로드 파일)
       { protocol: "https", hostname: "*.supabase.co" },
       { protocol: "https", hostname: "*.supabase.in" },
+      // Instagram/Facebook CDN (인스타그램에서 가져온 갤러리 이미지)
+      { protocol: "https", hostname: "**.cdninstagram.com" },
+      { protocol: "https", hostname: "**.fbcdn.net" },
     ],
   },
 

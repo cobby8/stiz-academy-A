@@ -10,6 +10,11 @@
 - 원인: Next `next/font/google`이 빌드 중 Google Fonts CSS를 받아오는데, 현재 작업 환경의 네트워크 샌드박스가 외부 요청을 막는다.
 - 해결: 코드 문제가 아니므로 같은 빌드를 네트워크 허용으로 재실행해 확인한다.
 
+## 홈 인스타 갤러리 이미지 회색 박스
+- 현상: 홈 갤러리에서 인스타그램에서 가져온 사진이 회색 박스와 alt 텍스트처럼 보일 수 있다.
+- 원인: 홈은 `next/image`를 사용하므로 Instagram/Facebook CDN 호스트가 `next.config.ts`의 `images.remotePatterns`에 없으면 최적화 이미지 요청이 막힌다. 또한 Instagram CDN URL은 시간이 지나 바뀔 수 있다.
+- 해결: `**.cdninstagram.com`, `**.fbcdn.net`을 허용하고, 인스타 동기화 시 기존 `GalleryPost`의 `mediaJSON` URL도 새로 갱신한다.
+
 ## ESLint 전체 실패
 - 현상: 현재 전체 lint는 많은 기존 오류를 낸다.
 - 주요 원인: 기존 `any`, 루트 임시 JS 스크립트의 `require()`, React 19 lint 규칙 위반.

@@ -8,6 +8,7 @@ import {
 export type InstagramGallerySyncResult = {
   ok: boolean;
   imported: number;
+  refreshed: number;
   skipped: number;
   fetched: number;
   message: string;
@@ -82,6 +83,7 @@ export async function syncInstagramGalleryPostsToDb({
       return {
         ok: false,
         imported: 0,
+        refreshed: 0,
         skipped: 0,
         fetched: 0,
         message: result.reason,
@@ -96,6 +98,7 @@ export async function syncInstagramGalleryPostsToDb({
       return {
         ok: true,
         imported: 0,
+        refreshed: 0,
         skipped: result.media.length,
         fetched: result.media.length,
         message: `인스타그램 게시물 0개를 가져왔고 ${result.media.length}개는 건너뛰었습니다.`,
@@ -111,15 +114,42 @@ export async function syncInstagramGalleryPostsToDb({
       ...candidates.map((row) => row.externalId),
     );
     const existingIds = new Set(existingRows.map((row) => row.externalId).filter(Boolean));
+    const rowsToRefresh = candidates.filter((row) => existingIds.has(row.externalId));
     const rowsToInsert = candidates.filter((row) => !existingIds.has(row.externalId));
+
+    if (rowsToRefresh.length > 0) {
+      const refreshValuesSql = rowsToRefresh
+        .map((_, rowIndex) => {
+          const base = rowIndex * 3;
+          return `($${base + 1}::text, $${base + 2}::text, $${base + 3}::text)`;
+        })
+        .join(", ");
+      const refreshValues = rowsToRefresh.flatMap((row) => [
+        row.mediaJSON,
+        row.externalId,
+        row.externalUrl,
+      ]);
+
+      await prisma.$executeRawUnsafe(
+        `UPDATE "GalleryPost" AS g
+         SET "mediaJSON" = incoming.media_json,
+             "externalUrl" = incoming.external_url,
+             "updatedAt" = NOW()
+         FROM (VALUES ${refreshValuesSql}) AS incoming(media_json, external_id, external_url)
+         WHERE g.source = 'INSTAGRAM'
+           AND g."externalId" = incoming.external_id`,
+        ...refreshValues,
+      );
+    }
 
     if (rowsToInsert.length === 0) {
       return {
         ok: true,
         imported: 0,
+        refreshed: rowsToRefresh.length,
         skipped: result.media.length,
         fetched: result.media.length,
-        message: `인스타그램 게시물 0개를 가져왔고 ${result.media.length}개는 건너뛰었습니다.`,
+        message: `인스타그램 새 게시물 0개를 가져왔고 기존 ${rowsToRefresh.length}개의 이미지 주소를 갱신했습니다.`,
       };
     }
 
@@ -168,15 +198,17 @@ export async function syncInstagramGalleryPostsToDb({
     return {
       ok: true,
       imported,
+      refreshed: rowsToRefresh.length,
       skipped,
       fetched: result.media.length,
-      message: `인스타그램 게시물 ${imported}개를 가져왔고 ${skipped}개는 건너뛰었습니다.`,
+      message: `인스타그램 새 게시물 ${imported}개를 가져왔고 기존 ${rowsToRefresh.length}개의 이미지 주소를 갱신했습니다.`,
     };
   } catch (error) {
     console.error("[instagram/gallery-sync] failed:", error);
     return {
       ok: false,
       imported: 0,
+      refreshed: 0,
       skipped: 0,
       fetched: 0,
       message: "인스타그램 동기화 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",

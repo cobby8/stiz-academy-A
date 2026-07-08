@@ -769,13 +769,15 @@ export async function getGalleryByClassIds(classIds: string[], limit = 20) {
 }
 
 // ── 공지사항 조회 ────────────────────────────────────────────────────────────
-export const getNotices = cache(async (options?: { limit?: number }) => {
+export const getNotices = cache(async (options?: { limit?: number; publicOnly?: boolean }) => {
     const limit = options?.limit ?? 50;
+    const publicFilter = options?.publicOnly ? `WHERE "targetType" = 'ALL'` : "";
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT id, title, content, "targetType", "targetClassIds",
                     "attachmentsJSON", "isPinned", "createdAt", "updatedAt"
              FROM "Notice"
+             ${publicFilter}
              ORDER BY "isPinned" DESC, "createdAt" DESC
              LIMIT $1`,
             limit

@@ -72,6 +72,10 @@
 - 결정: 갤러리 그리드는 서버 렌더링으로 만들고, 클릭 감지용 `GalleryLightboxController`만 초기 로드하며, 전체화면 `GalleryLightboxOverlay`는 동적 로드한다.
 - 이유: 방문자는 갤러리 목록을 먼저 훑고 일부만 사진을 크게 본다. 라이트박스 키보드 이벤트, 스크롤 잠금, 큰 미디어 뷰어 코드를 첫 화면에 싣지 않아도 기본 탐색은 가능하다. 빌드 산출물 기준 `/gallery` entry JS는 4개 합계 약 0.25MB이며 라이트박스 본체는 초기 manifest에서 빠진 것을 확인했다.
 
+## 2026-07-09: 관리자 공지 리치 에디터는 모달에서 로드한다
+- 결정: `/admin/notices`는 `RichTextEditor`를 정적 import하지 않고, 새 공지/수정 모달이 렌더될 때 `next/dynamic`으로 로드한다.
+- 이유: 선생님/관리자가 공지 목록을 확인하거나 소셜 발행을 누를 때는 리치 에디터가 필요 없다. 큰 편집기 번들을 작성/수정 순간으로 미루면 관리자 목록 초기 진입이 가벼워진다. 빌드 산출물 기준 `/admin/notices` entry JS는 5개 합계 약 0.27MB이며 `RichTextEditor`는 초기 manifest에서 빠진 것을 확인했다.
+
 ## 2026-07-07: `SocialPostDraft`는 raw SQL 보강 테이블로 둔다
 - 결정: Prisma schema 마이그레이션 대신 `CREATE TABLE IF NOT EXISTS "SocialPostDraft"` 패턴을 사용한다.
 - 이유: 기존 프로젝트가 Supabase PgBouncer 호환을 위해 raw SQL 보강 패턴을 많이 쓰고 있으며, 이번 기능은 독립 초안 테이블이라 점진 도입이 안전하다.

@@ -1,12 +1,21 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { createNotice, updateNotice, deleteNotice } from "@/app/actions/admin";
 import { prepareNoticeSocialCampaign, publishNoticeSocialCampaign } from "@/app/actions/social-campaigns";
 import { Plus, Trash2, Edit2, Pin, X, Paperclip, Bell, Megaphone, Copy, ExternalLink } from "lucide-react";
 import { isImageAttachment, isHtmlContent, plainToEditorHtml, stripHtmlForPreview } from "@/lib/noticeContent";
-import RichTextEditor from "@/components/RichTextEditor";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
+
+const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
+    ssr: false,
+    loading: () => (
+        <div className="border border-gray-300 dark:border-gray-700 rounded-xl p-4 min-h-[180px] bg-gray-50 dark:bg-gray-900 flex items-center justify-center text-sm text-gray-400">
+            에디터 로딩중...
+        </div>
+    ),
+});
 
 // 리치 에디터가 비어있으면 getHTML()이 "<p></p>"를 반환하므로, 태그를 걷어내 실제 내용 유무를 판단한다.
 // 이미지/표/영상만 있는 공지(텍스트 0)도 유효하므로, 그런 미디어 태그가 있으면 "내용 있음"으로 본다.

@@ -10,6 +10,7 @@ import { getAcademySettings } from "@/lib/queries";
 import {
   createSocialPostDraftRecord,
   getSocialPostDraftById,
+  markSocialPostDraftPublishing,
   markSocialPostDraftFailed,
   markSocialPostDraftPublished,
   parseSocialDraftMedia,
@@ -134,30 +135,64 @@ export async function rejectSocialPostDraft(id: string) {
   return { ok: true, draft };
 }
 
-export async function publishSocialPostDraft(id: string) {
-  const staff = await requireStaff();
+function canPublishDraftStatus(status: SocialPostDraft["status"]) {
+  return status === "READY" || status === "FAILED" || status === "PUBLISHING";
+}
 
-  const currentDraft = await getSocialPostDraftById(id);
-  if (!currentDraft || (currentDraft.status !== "READY" && currentDraft.status !== "FAILED")) {
+function assertCanPublishDraft(draft: SocialPostDraft | null, staff: Awaited<ReturnType<typeof requireStaff>>) {
+  if (!draft || !canPublishDraftStatus(draft.status)) {
     throw new Error("게시할 수 있는 초안을 찾지 못했습니다.");
   }
 
-  if (staff.appUserRole === "INSTRUCTOR" && currentDraft.authorUserId !== staff.appUserId) {
+  if (staff.appUserRole === "INSTRUCTOR" && draft.authorUserId !== staff.appUserId) {
     throw new Error("본인이 작성한 초안만 바로 게시할 수 있습니다.");
   }
+}
 
-  const mediaItems = parseSocialDraftMedia(currentDraft.mediaJSON).filter((item) => item.type === "image");
+export async function publishSocialPostDraftToGallery(id: string) {
+  const staff = await requireStaff();
+
+  const currentDraft = await getSocialPostDraftById(id);
+  assertCanPublishDraft(currentDraft, staff);
+
+  const mediaItems = parseSocialDraftMedia(currentDraft!.mediaJSON).filter((item) => item.type === "image");
   if (mediaItems.length === 0) {
     throw new Error("인스타그램 자동 게시에는 사진이 최소 1장 필요합니다.");
   }
 
-  const galleryPostId = await upsertGalleryPostFromDraft(currentDraft);
+  const galleryPostId = await upsertGalleryPostFromDraft(currentDraft!);
+  const draft = await markSocialPostDraftPublishing(id, { galleryPostId });
+
+  revalidateSocialPostPaths();
+  return { ok: true, draft, galleryPostId };
+}
+
+export async function publishSocialPostDraftToInstagram(id: string) {
+  const staff = await requireStaff();
+
+  const currentDraft = await getSocialPostDraftById(id);
+  if (currentDraft?.status === "PUBLISHED") {
+    return { ok: true, draft: currentDraft };
+  }
+
+  assertCanPublishDraft(currentDraft, staff);
+
+  const mediaItems = parseSocialDraftMedia(currentDraft!.mediaJSON).filter((item) => item.type === "image");
+  if (mediaItems.length === 0) {
+    throw new Error("인스타그램 자동 게시에는 사진이 최소 1장 필요합니다.");
+  }
+
+  const galleryPostId = currentDraft!.galleryPostId || await upsertGalleryPostFromDraft(currentDraft!);
+  if (!currentDraft!.galleryPostId) {
+    await markSocialPostDraftPublishing(id, { galleryPostId });
+  }
+
   const settings = (await getAcademySettings()) as any;
-  const caption = fullCaption(currentDraft.caption, currentDraft.hashtags);
+  const caption = fullCaption(currentDraft!.caption, currentDraft!.hashtags);
   const result = await publishGalleryPostToInstagram({
     businessAccountId: settings.instagramBusinessAccountId,
     caption,
-    mediaJSON: currentDraft.mediaJSON,
+    mediaJSON: currentDraft!.mediaJSON,
   });
 
   if (result.attempted && result.ok) {
@@ -198,4 +233,9 @@ export async function publishSocialPostDraft(id: string) {
   const draft = await markSocialPostDraftFailed(id, { galleryPostId, error });
   revalidateSocialPostPaths();
   return { ok: false, draft, error };
+}
+
+export async function publishSocialPostDraft(id: string) {
+  await publishSocialPostDraftToGallery(id);
+  return publishSocialPostDraftToInstagram(id);
 }

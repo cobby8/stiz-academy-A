@@ -5,6 +5,11 @@
 - 원인: 코드 문제가 아니라 PowerShell 스크립트 실행 제한이다.
 - 해결: Windows에서는 `npm.cmd run lint`, `npx.cmd tsc --noEmit`처럼 `.cmd` 실행 파일을 사용한다.
 
+## Next build Google Fonts 네트워크 제한
+- 현상: `npm.cmd run build`가 `Failed to fetch ... from Google Fonts`로 실패할 수 있다.
+- 원인: Next `next/font/google`이 빌드 중 Google Fonts CSS를 받아오는데, 현재 작업 환경의 네트워크 샌드박스가 외부 요청을 막는다.
+- 해결: 코드 문제가 아니므로 같은 빌드를 네트워크 허용으로 재실행해 확인한다.
+
 ## ESLint 전체 실패
 - 현상: 현재 전체 lint는 많은 기존 오류를 낸다.
 - 주요 원인: 기존 `any`, 루트 임시 JS 스크립트의 `require()`, React 19 lint 규칙 위반.

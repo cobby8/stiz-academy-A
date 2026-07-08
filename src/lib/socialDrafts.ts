@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import type { SocialMediaItem } from "@/lib/socialCaptionAI";
 
-export type SocialPostDraftStatus = "DRAFT" | "READY" | "PUBLISHED" | "REJECTED" | "FAILED";
+export type SocialPostDraftStatus = "DRAFT" | "READY" | "PUBLISHING" | "PUBLISHED" | "REJECTED" | "FAILED";
 
 export type SocialPostDraft = {
   id: string;
@@ -167,7 +167,7 @@ export async function getPendingSocialPostDrafts(limit = 30) {
 
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT * FROM "SocialPostDraft"
-     WHERE status IN ('READY', 'FAILED')
+     WHERE status IN ('READY', 'PUBLISHING', 'FAILED')
      ORDER BY "createdAt" DESC
      LIMIT $1`,
     limit,
@@ -273,6 +273,29 @@ export async function markSocialPostDraftPublished(
     data.galleryPostId,
     data.instagramMediaId || null,
     data.instagramPermalink || null,
+    id,
+  );
+
+  return mapDraft(rows[0]);
+}
+
+export async function markSocialPostDraftPublishing(
+  id: string,
+  data: {
+    galleryPostId: string;
+  },
+) {
+  await ensureSocialPostDraftTable();
+
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `UPDATE "SocialPostDraft"
+     SET status = 'PUBLISHING',
+         "galleryPostId" = $1,
+         "instagramPublishError" = NULL,
+         "updatedAt" = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    data.galleryPostId,
     id,
   );
 

@@ -19,7 +19,12 @@ import {
   X,
 } from "lucide-react";
 import { createGalleryPost, deleteGalleryPost, syncInstagramGalleryPosts, updateGalleryPost } from "@/app/actions/admin";
-import { publishSocialPostDraft, rejectSocialPostDraft, saveSocialPostDraft } from "@/app/actions/social-posts";
+import {
+  publishSocialPostDraftToGallery,
+  publishSocialPostDraftToInstagram,
+  rejectSocialPostDraft,
+  saveSocialPostDraft,
+} from "@/app/actions/social-posts";
 import InstagramFeedPreview from "@/components/instagram/InstagramFeedPreview";
 import { uploadImagesWithProgress } from "@/lib/clientImageUpload";
 import type { SocialPostDraft } from "@/lib/socialDrafts";
@@ -86,6 +91,7 @@ export default function GalleryAdminClient({
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
+  const [publishingDraftIds, setPublishingDraftIds] = useState<Set<string>>(new Set());
   const [formMessage, setFormMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [pageMessage, setPageMessage] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -213,6 +219,15 @@ export default function GalleryAdminClient({
     setDrafts((prev) => prev.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)));
   }
 
+  function setDraftPublishing(id: string, publishing: boolean) {
+    setPublishingDraftIds((prev) => {
+      const next = new Set(prev);
+      if (publishing) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
   function handleDraftSave(draft: SocialPostDraft) {
     setDraftMessage(null);
     startTransition(async () => {
@@ -233,19 +248,34 @@ export default function GalleryAdminClient({
     });
   }
 
+  async function publishDraftInstagramInBackground(draftId: string) {
+    setDraftPublishing(draftId, true);
+    try {
+      const result = await publishSocialPostDraftToInstagram(draftId);
+      if (result.ok) {
+        setDrafts((prev) => prev.filter((item) => item.id !== draftId));
+        setDraftMessage("인스타그램 게시까지 완료되었습니다.");
+        return;
+      }
+
+      patchDraft(draftId, result.draft);
+      setDraftMessage(result.error || "홈페이지 갤러리는 저장됐지만 인스타그램 게시에 실패했습니다.");
+    } catch (error) {
+      setDraftMessage(error instanceof Error ? error.message : "인스타그램 게시 중 오류가 발생했습니다.");
+    } finally {
+      setDraftPublishing(draftId, false);
+    }
+  }
+
   function handleDraftPublish(draft: SocialPostDraft) {
-    if (!confirm("이 초안을 홈페이지 갤러리와 인스타그램에 게시할까요?")) return;
+    if (!confirm("이 초안을 홈페이지 갤러리에 게시하고 인스타그램 게시를 이어서 진행할까요?")) return;
     setDraftMessage(null);
     startTransition(async () => {
       try {
-        const result = await publishSocialPostDraft(draft.id);
-        if (result.ok) {
-          setDrafts((prev) => prev.filter((item) => item.id !== draft.id));
-          setDraftMessage("홈페이지 갤러리와 인스타그램 게시가 완료되었습니다.");
-        } else {
-          patchDraft(draft.id, result.draft);
-          setDraftMessage(result.error || "홈페이지 갤러리는 저장됐지만 인스타그램 게시에 실패했습니다.");
-        }
+        const result = await publishSocialPostDraftToGallery(draft.id);
+        patchDraft(draft.id, result.draft);
+        setDraftMessage("홈페이지 갤러리에 게시됐습니다. 인스타그램은 이어서 게시 중입니다.");
+        void publishDraftInstagramInBackground(result.draft.id);
       } catch (error) {
         setDraftMessage(error instanceof Error ? error.message : "게시 중 오류가 발생했습니다.");
       }
@@ -397,6 +427,8 @@ export default function GalleryAdminClient({
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {drafts.map((draft) => {
               const media = parseMedia(draft.mediaJSON).filter((item) => item.type === "image");
+              const isDraftPublishingNow = publishingDraftIds.has(draft.id);
+              const hasPublishingStatus = draft.status === "PUBLISHING";
               return (
                 <div key={draft.id} className="grid gap-4 rounded-lg border border-gray-200 p-3 md:grid-cols-[minmax(220px,320px)_1fr]">
                   <InstagramFeedPreview
@@ -422,6 +454,16 @@ export default function GalleryAdminClient({
                             재시도 필요
                           </span>
                         )}
+                        {isDraftPublishingNow && (
+                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">
+                            인스타 게시 중
+                          </span>
+                        )}
+                        {!isDraftPublishingNow && hasPublishingStatus && (
+                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">
+                            재시도 가능
+                          </span>
+                        )}
                       </div>
                       <input
                         value={draft.title || ""}
@@ -440,7 +482,7 @@ export default function GalleryAdminClient({
                       <button
                         type="button"
                         onClick={() => handleDraftSave(draft)}
-                        disabled={isPending}
+                        disabled={isPending || isDraftPublishingNow}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 text-xs font-black text-gray-700 disabled:opacity-50"
                       >
                         <Save size={15} />
@@ -449,16 +491,16 @@ export default function GalleryAdminClient({
                       <button
                         type="button"
                         onClick={() => handleDraftPublish(draft)}
-                        disabled={isPending}
+                        disabled={isPending || isDraftPublishingNow}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-brand-orange-500 px-2 text-xs font-black text-white disabled:opacity-50"
                       >
-                        <Send size={15} />
-                        게시
+                        {isDraftPublishingNow ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                        {isDraftPublishingNow ? "게시 중" : hasPublishingStatus || draft.status === "FAILED" ? "다시 게시" : "게시"}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDraftReject(draft)}
-                        disabled={isPending}
+                        disabled={isPending || isDraftPublishingNow}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-gray-100 px-2 text-xs font-black text-gray-600 disabled:opacity-50"
                       >
                         <Ban size={15} />

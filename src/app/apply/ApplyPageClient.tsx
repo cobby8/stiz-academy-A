@@ -7,17 +7,16 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SectionLayout from "@/components/ui/SectionLayout";
-import { sanitizeHtml } from "@/lib/sanitize";
 
 // FAQ 데이터 타입 (DB에서 가져온 FAQ 항목)
 type FaqItem = { id: string; question: string; answer: string };
 
 interface ApplyPageClientProps {
     trialTitle: string;
-    trialContent: string | null;
+    trialContentHtml: string | null;
     trialFormUrl: string | null;
     enrollTitle: string;
-    enrollContent: string | null;
+    enrollContentHtml: string | null;
     enrollFormUrl: string | null;
     uniformFormUrl: string | null;
     // 자체 폼 ON/OFF 플래그 (false=구글폼 외부 링크, true=자체 폼 페이지)
@@ -80,19 +79,13 @@ function FormModal({
     );
 }
 
-// --- ContentBlock: 기존 코드 그대로 유지 (절대 변경 금지) ---
-function ContentBlock({ content }: { content: string }) {
-    const isHtml = /<[a-z][\s\S]*>/i.test(content);
-    if (isHtml) {
-        return (
-            <div
-                className="prose prose-gray max-w-none text-gray-700 dark:text-gray-200 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
-            />
-        );
-    }
+// 안내 HTML은 서버 컴포넌트(page.tsx)에서 미리 sanitize한 뒤 전달한다.
+function ContentBlock({ html }: { html: string }) {
     return (
-        <p className="text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-line">{content}</p>
+        <div
+            className="prose prose-gray max-w-none text-gray-700 dark:text-gray-200 leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
     );
 }
 
@@ -174,10 +167,10 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 export default function ApplyPageClient({
     trialTitle,
-    trialContent,
+    trialContentHtml,
     trialFormUrl,
     enrollTitle,
-    enrollContent,
+    enrollContentHtml,
     enrollFormUrl,
     uniformFormUrl,
     useBuiltInTrialForm,
@@ -213,8 +206,8 @@ export default function ApplyPageClient({
                                     <Badge variant="info" size="sm">준비물: 운동복, 실내화</Badge>
                                 </div>
 
-                                {trialContent ? (
-                                    <ContentBlock content={trialContent} />
+                                {trialContentHtml ? (
+                                    <ContentBlock html={trialContentHtml} />
                                 ) : (
                                     <p className="text-gray-400 text-base italic">체험수업 안내 내용이 아직 등록되지 않았습니다.</p>
                                 )}
@@ -272,8 +265,8 @@ export default function ApplyPageClient({
                             </div>
                             {/* 카드 본문 */}
                             <div className="px-6 py-6">
-                                {enrollContent ? (
-                                    <ContentBlock content={enrollContent} />
+                                {enrollContentHtml ? (
+                                    <ContentBlock html={enrollContentHtml} />
                                 ) : (
                                     <p className="text-gray-400 text-base italic">수강신청 안내 내용이 아직 등록되지 않았습니다.</p>
                                 )}

@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮겨 `sanitize-html` client chunk를 제거했다.
 - 2026-07-09: 관리자 shell 로그아웃 아이콘의 `lucide-react` import를 제거하고 Material Symbols 아이콘으로 바꿨다.
 - 2026-07-09: 업로드 이미지 URL이 고유 파일명인 점을 활용해 `/uploads`와 Supabase Storage 업로드에 장기 캐시를 적용했다.
 - 2026-07-09: 관리자 shell이 서버 인증 정보를 재사용하고 알림/체험 카운트 API 호출을 첫 렌더 뒤로 지연하도록 바꿨다.
@@ -7,13 +8,12 @@
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달이 열릴 때만 동적 로드하도록 변경했다.
 - 2026-07-09: 공개 갤러리 목록은 서버 렌더링으로 유지하고 전체화면 라이트박스 본체는 클릭 후 동적 로드하도록 분리했다.
 - 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 전환해 정적 홈 섹션의 초기 JS 부담을 줄였다.
-- 2026-07-09: 공개 페이지의 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 관리자 shell처럼 모든 관리자 화면에 붙는 공통 UI의 단순 아이콘도 Material Symbols를 우선 사용해 공통 JS chunk를 작게 유지한다.
+- 최근 지식: `sanitize-html` 같은 큰 HTML 정리 라이브러리는 가능한 서버 컴포넌트에서 실행하고, client 컴포넌트에는 이미 안전해진 HTML만 넘긴다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -54,3 +54,4 @@
 - 관리자 shell은 `requireAdmin()`에서 받은 사용자 이름/이메일을 사용하고, 로그아웃은 서버 액션으로 처리하며, 알림/체험 카운트 조회는 첫 렌더 후 지연 실행한다.
 - 로컬 fallback 업로드 `/uploads/:path*`와 Supabase Storage 업로드 파일은 1년 immutable 캐시를 사용해 재방문 이미지 다운로드 비용을 줄인다.
 - 관리자 shell의 로그아웃처럼 모든 관리자 화면에 포함되는 단순 아이콘은 별도 아이콘 라이브러리 import 대신 Material Symbols를 사용한다.
+- `/apply` 안내 HTML은 서버에서 sanitize한 뒤 `ApplyPageClient`에 넘겨 `sanitize-html/htmlparser2`가 client bundle에 들어가지 않게 한다.

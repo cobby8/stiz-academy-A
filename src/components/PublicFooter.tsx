@@ -9,7 +9,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Phone } from "lucide-react";
 
 // 부모에서 전달받을 props 타입
 interface PublicFooterProps {
@@ -112,12 +111,12 @@ export default function PublicFooter({
             <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
               {address && (
                 <li className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 mt-0.5 text-gray-500 dark:text-gray-400 shrink-0" />
+                  <span className="material-symbols-outlined mt-0.5 text-[16px] leading-none text-gray-500 dark:text-gray-400 shrink-0" aria-hidden="true">location_on</span>
                   <span>{address}</span>
                 </li>
               )}
               <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400 shrink-0" />
+                <span className="material-symbols-outlined text-[16px] leading-none text-gray-500 dark:text-gray-400 shrink-0" aria-hidden="true">call</span>
                 <span>{phone}</span>
               </li>
               <li className="text-xs text-gray-500 dark:text-gray-400 mt-1">

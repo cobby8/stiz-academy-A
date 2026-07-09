@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 관리자 공통 아이콘 JS 제거
+- 작업명: 신청 페이지 client bundle 축소
 - 상태: 검증 완료
-- 범위: 관리자 공통 shell
+- 범위: 공개 신청 페이지와 공개 푸터
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -36,9 +36,11 @@
 | 관리자 shell 초기 요청 지연 | 완료 | 서버 인증 정보를 재사용하고 알림/체험 카운트 호출을 첫 렌더 뒤로 이동 |
 | 업로드 이미지 캐시 강화 | 완료 | `/uploads`와 Supabase Storage 업로드 파일에 1년 immutable 캐시 적용 |
 | 관리자 공통 아이콘 JS 제거 | 완료 | shell 로그아웃 아이콘을 Material Symbols로 전환해 공통 chunk 축소 |
+| 신청 페이지 client bundle 축소 | 완료 | `sanitize-html`을 client bundle에서 제거해 `/apply` 첫 JS 대폭 축소 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮기고 공개 푸터 lucide import를 제거해 첫 JS를 372.4KB에서 116.3KB로 줄임.
 - 2026-07-09: 관리자 shell 로그아웃 아이콘의 lucide import를 제거해 관리자 공통 chunk를 약 42.7KB에서 41.4KB로 줄임.
 - 2026-07-09: 업로드 이미지 URL이 고유 파일명인 점을 활용해 `/uploads`와 Supabase Storage 업로드에 1년 immutable 캐시를 적용함.
 - 2026-07-09: 관리자 shell에서 Supabase 브라우저 재조회/클라이언트 로그아웃을 제거하고 알림·체험 카운트 조회를 지연함.
@@ -47,18 +49,16 @@
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달에서만 동적 로드하도록 변경함.
 - 2026-07-09: 공개 갤러리 목록을 서버 렌더링으로 돌리고 라이트박스 본체를 클릭 후 동적 로드하도록 분리함.
 - 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 돌려 첫 화면 전용 entry JS를 약 0.25MB 수준으로 줄임.
-- 2026-07-09: 공개 페이지 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리해 첫 렌더 부담을 줄임.
-- 2026-07-09: 전역 `next/font` preload를 끄고, Meta Pixel을 환경변수 있을 때만 로드하며, `AcademySettings` 서버 캐시/무효화를 추가.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/AdminShellClient.tsx`
-- 주요 변경: 관리자 sidebar 하단 로그아웃 아이콘의 `lucide-react` import를 제거하고, 전역 Material Symbols의 `logout` 아이콘으로 대체.
-- 적용 범위: 모든 관리자 화면에 공통으로 포함되는 shell 초기 JS.
+- 변경 파일: `src/app/apply/page.tsx`, `src/app/apply/ApplyPageClient.tsx`, `src/components/PublicFooter.tsx`
+- 주요 변경: 신청 안내 HTML sanitize를 서버 컴포넌트에서 미리 수행하고, client 컴포넌트는 안전한 HTML만 렌더. 공개 푸터 주소/전화 아이콘은 Material Symbols로 전환.
+- 적용 범위: `/apply` 공개 신청 페이지 초기 client JS와 공개 공통 푸터 의존성.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- `npx.cmd next build` 통과. 첫 시도는 Google Fonts 네트워크 차단으로 실패했고, 네트워크 허용 후 통과.
-- 산출물 확인: `/admin/schedule` 첫 JS 138.4KB → 137.2KB, 관리자 공통 chunk 42.7KB → 41.4KB.
+- `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
+- 산출물 확인: `/apply/page` 첫 JS 372.4KB → 116.3KB, `sanitize-html/htmlparser2` client chunk 제거.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/apply` 공개 신청 페이지와 관리자 개별 화면의 남은 큰 client chunk 분석.
+- 다음 속도 개선 후보: `/setup` 공개 설정 화면과 관리자 개별 대형 화면의 남은 큰 client chunk 분석.

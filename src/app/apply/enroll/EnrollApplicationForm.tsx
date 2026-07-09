@@ -12,6 +12,7 @@
  */
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import {
     submitEnrollApplication,
     type AvailableSlot,
@@ -19,6 +20,14 @@ import {
 } from "@/app/actions/public";
 import Link from "next/link";
 import { trackMetaEvent } from "@/components/MetaPixel";
+
+const EnrollApplicationLaterSteps = dynamic(() => import("./EnrollApplicationLaterSteps"), {
+    loading: () => (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+            다음 단계를 불러오는 중...
+        </div>
+    ),
+});
 
 // ── Props 타입 ───────────────────────────────────────────────────────────────
 interface Props {
@@ -34,37 +43,7 @@ const GRADE_OPTIONS = [
     "중1", "중2", "중3", "성인",
 ];
 
-// ── 가입 경로 옵션 (9개) ────────────────────────────────────────────────────
-const SOURCE_OPTIONS = [
-    { value: "REFERRAL", label: "지인소개" },
-    { value: "PASSBY", label: "지나가다 발견" },
-    { value: "NAVER_SEARCH", label: "네이버 키워드 검색" },
-    { value: "NAVER_BLOG", label: "네이버 블로그" },
-    { value: "PORTAL_OTHER", label: "기타 포털검색(다음/구글)" },
-    { value: "INSTAGRAM", label: "인스타그램" },
-    { value: "SOOMGO", label: "숨고" },
-    { value: "EXISTING_STUDENT", label: "기존 수강생" },
-    { value: "OTHER", label: "기타" },
-];
-
-// ── 보호자 관계 옵션 ────────────────────────────────────────────────────────
-const RELATION_OPTIONS = ["부", "모", "기타"];
-
-// ── 요일 정렬 순서 + 한글 라벨 ──────────────────────────────────────────────
-const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DAY_LABELS: Record<string, string> = {
-    Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
-};
-
 // ── 폼 데이터 타입 ──────────────────────────────────────────────────────────
-// 농구 경험 선택지
-const BASKETBALL_EXP_OPTIONS = [
-    { value: "없음", label: "없음" },
-    { value: "1년 미만", label: "1년 미만" },
-    { value: "1~3년", label: "1~3년" },
-    { value: "3년 이상", label: "3년 이상" },
-];
-
 interface FormData {
     childName: string;
     childBirthDate: string;
@@ -255,22 +234,6 @@ export default function EnrollApplicationForm({
         );
     }
 
-    // ── 슬롯을 요일별로 그룹핑 (시간표 그리드용) ─────────────────────────────
-    const slotsByDay = DAY_ORDER.reduce<Record<string, AvailableSlot[]>>((acc, day) => {
-        const daySlots = availableSlots.filter((s) => s.dayOfWeek === day);
-        if (daySlots.length > 0) acc[day] = daySlots;
-        return acc;
-    }, {});
-
-    // ── 선택한 슬롯을 읽기 좋은 문자열로 변환 (요약 표시용) ─────────────────
-    const selectedSlotsLabel = form.preferredSlotKeys
-        .map((key) => {
-            const slot = availableSlots.find((s) => s.slotKey === key);
-            if (!slot) return key;
-            return `${slot.dayLabel} ${slot.startTime}~${slot.endTime} (${slot.className})`;
-        })
-        .join(", ");
-
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             {/* 진행 표시줄 — 4단계 */}
@@ -443,405 +406,15 @@ export default function EnrollApplicationForm({
                     </div>
                 )}
 
-                {/* ──────────── Step 2: 보호자 정보 ──────────── */}
-                {step === 2 && (
-                    <div className="space-y-5">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person</span>
-                            보호자 정보
-                        </h2>
-
-                        {/* 보호자 이름 (필수) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                보호자 이름 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                value={form.parentName}
-                                onChange={(e) => update("parentName", e.target.value)}
-                                placeholder="홍부모"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
-                        </div>
-
-                        {/* 보호자 연락처 (필수) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                보호자 연락처 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="tel"
-                                value={form.parentPhone}
-                                onChange={(e) => {
-                                    // 숫자만 추출 후 000-0000-0000 자동 포맷팅
-                                    const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
-                                    let formatted = nums;
-                                    if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
-                                    else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
-                                    update("parentPhone", formatted);
-                                }}
-                                placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
-                        </div>
-
-                        {/* 관계 (드롭다운) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">관계</label>
-                            <div className="flex gap-3">
-                                {RELATION_OPTIONS.map((r) => (
-                                    <button
-                                        key={r}
-                                        type="button"
-                                        onClick={() => update("parentRelation", r)}
-                                        className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                            form.parentRelation === r
-                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime"
-                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {r}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 주소 (선택) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                주소 <span className="text-gray-400 text-xs font-normal">(선택)</span>
-                            </label>
-                            <input
-                                type="text"
-                                value={form.address}
-                                onChange={(e) => update("address", e.target.value)}
-                                placeholder="다산동 000아파트 000호"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
-                        </div>
-                    </div>
+                {step > 1 && (
+                    <EnrollApplicationLaterSteps
+                        step={step}
+                        form={form}
+                        availableSlots={availableSlots}
+                        update={update}
+                        toggleSlot={toggleSlot}
+                    />
                 )}
-
-                {/* ──────────── Step 3: 수강 정보 ──────────── */}
-                {step === 3 && (
-                    <div className="space-y-5">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">sports_basketball</span>
-                            수강 정보
-                        </h2>
-
-                        {/* 희망 수업 선택 — 시간표 그리드 (복수 선택 가능) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                                희망 수업 <span className="text-gray-400 text-xs font-normal">(복수 선택 가능)</span>
-                            </label>
-                            {Object.keys(slotsByDay).length > 0 ? (
-                                <div className="space-y-3">
-                                    {DAY_ORDER.filter((d) => slotsByDay[d]).map((day) => (
-                                        <div key={day}>
-                                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase">
-                                                {DAY_LABELS[day]}요일
-                                            </p>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                {slotsByDay[day]!.map((slot) => {
-                                                    const isFull = slot.available <= 0;
-                                                    const isSelected = form.preferredSlotKeys.includes(slot.slotKey);
-                                                    return (
-                                                        <button
-                                                            key={slot.slotKey}
-                                                            type="button"
-                                                            disabled={isFull}
-                                                            onClick={() => toggleSlot(slot.slotKey)}
-                                                            className={`py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
-                                                                isFull
-                                                                    ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-300 cursor-not-allowed"
-                                                                    : isSelected
-                                                                    ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime ring-2 ring-brand-orange-500 dark:focus:ring-brand-neon-lime/30"
-                                                                    : "border-gray-300 text-gray-700 dark:text-gray-200 hover:border-brand-navy-400 cursor-pointer"
-                                                            }`}
-                                                        >
-                                                            <span className="block font-semibold text-sm">
-                                                                {slot.startTime}~{slot.endTime}
-                                                            </span>
-                                                            <span className="block mt-0.5 truncate">{slot.className}</span>
-                                                            <span className={`block mt-1 ${
-                                                                isFull ? "text-gray-300" : slot.available <= 3 ? "text-red-500" : "text-green-600"
-                                                            }`}>
-                                                                {isFull ? "마감" : `잔여 ${slot.available}석`}
-                                                            </span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-gray-400 text-sm py-4 text-center">
-                                    현재 조회 가능한 시간표가 없습니다. 신청 후 담당자가 안내해드립니다.
-                                </p>
-                            )}
-                        </div>
-
-                        {/* 농구 경험 — 코치가 레벨 파악에 참고 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                                농구 경험 <span className="text-gray-400 text-xs font-normal">(선택)</span>
-                            </label>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                {BASKETBALL_EXP_OPTIONS.map((opt) => (
-                                    <button
-                                        key={opt.value}
-                                        type="button"
-                                        onClick={() => update("basketballExp", form.basketballExp === opt.value ? "" : opt.value)}
-                                        className={`py-2.5 px-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                            form.basketballExp === opt.value
-                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime"
-                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 셔틀 이용 여부 */}
-                        <div>
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={form.shuttleNeeded}
-                                    onChange={(e) => update("shuttleNeeded", e.target.checked)}
-                                    className="w-5 h-5 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50"
-                                />
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">셔틀 이용을 희망합니다</span>
-                            </label>
-                        </div>
-
-                        {/* 셔틀 상세 — 셔틀 체크 시에만 표시 */}
-                        {form.shuttleNeeded && (
-                            <div className="space-y-4 pl-2 border-l-2 border-brand-orange-200 ml-2">
-                                {/* 셔틀 탑승 장소 */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                        셔틀 탑승 장소
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={form.shuttlePickup}
-                                        onChange={(e) => update("shuttlePickup", e.target.value)}
-                                        placeholder="예: 다산 자이 아파트 정문 앞"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                                    />
-                                </div>
-                                {/* 셔틀 하차 장소 */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                        셔틀 하차 장소 <span className="text-gray-400 text-xs font-normal">(탑승지와 다른 경우)</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={form.shuttleDropoff}
-                                        onChange={(e) => update("shuttleDropoff", e.target.value)}
-                                        placeholder="예: 한강 자이 아파트 후문"
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                                    />
-                                </div>
-                                {/* 셔틀 희망 시간 */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                        셔틀 희망 시간 <span className="text-gray-400 text-xs font-normal">(선택)</span>
-                                    </label>
-                                    <input
-                                        type="time"
-                                        value={form.shuttleTime}
-                                        onChange={(e) => update("shuttleTime", e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 가입 경로 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">어떻게 알게 되셨나요?</label>
-                            <select
-                                value={form.referralSource}
-                                onChange={(e) => update("referralSource", e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-                            >
-                                <option value="">선택해주세요</option>
-                                {SOURCE_OPTIONS.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* 기타 요청사항 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                기타 요청사항 <span className="text-gray-400 text-xs font-normal">(선택)</span>
-                            </label>
-                            <textarea
-                                value={form.memo}
-                                onChange={(e) => update("memo", e.target.value)}
-                                placeholder="궁금하신 점이나 요청사항을 자유롭게 적어주세요"
-                                rows={3}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white resize-none"
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* ──────────── Step 4: 확인 + 동의 ──────────── */}
-                {step === 4 && (
-                    <div className="space-y-5">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">verified</span>
-                            입력 정보 확인 및 동의
-                        </h2>
-
-                        {/* 입력 정보 요약 — 제출 전 최종 확인용 */}
-                        <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-3 text-sm">
-                            {/* 아이 정보 요약 */}
-                            <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white mb-1.5 flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-sm text-gray-500 dark:text-gray-400">child_care</span>
-                                    아이 정보
-                                </h3>
-                                <div className="grid grid-cols-2 gap-y-1 gap-x-4 pl-5">
-                                    <span className="text-gray-500 dark:text-gray-400">이름</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">{form.childName}</span>
-                                    <span className="text-gray-500 dark:text-gray-400">생년월일</span>
-                                    <span className="text-gray-900 dark:text-white">{form.childBirthDate}</span>
-                                    <span className="text-gray-500 dark:text-gray-400">성별</span>
-                                    <span className="text-gray-900 dark:text-white">{form.childGender}</span>
-                                    <span className="text-gray-500 dark:text-gray-400">학년</span>
-                                    <span className="text-gray-900 dark:text-white">{form.childGrade}</span>
-                                    <span className="text-gray-500 dark:text-gray-400">학교</span>
-                                    <span className="text-gray-900 dark:text-white">{form.childSchool}</span>
-                                    {form.childPhone && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">학생 연락처</span>
-                                            <span className="text-gray-900 dark:text-white">{form.childPhone}</span>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <hr className="border-gray-200 dark:border-gray-700" />
-
-                            {/* 보호자 정보 요약 */}
-                            <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white mb-1.5 flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-sm text-gray-500 dark:text-gray-400">person</span>
-                                    보호자 정보
-                                </h3>
-                                <div className="grid grid-cols-2 gap-y-1 gap-x-4 pl-5">
-                                    <span className="text-gray-500 dark:text-gray-400">이름</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">{form.parentName}</span>
-                                    <span className="text-gray-500 dark:text-gray-400">연락처</span>
-                                    <span className="text-gray-900 dark:text-white">{form.parentPhone}</span>
-                                    {form.parentRelation && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">관계</span>
-                                            <span className="text-gray-900 dark:text-white">{form.parentRelation}</span>
-                                        </>
-                                    )}
-                                    {form.address && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">주소</span>
-                                            <span className="text-gray-900 dark:text-white">{form.address}</span>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <hr className="border-gray-200 dark:border-gray-700" />
-
-                            {/* 수강 정보 요약 */}
-                            <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white mb-1.5 flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-sm text-gray-500 dark:text-gray-400">sports_basketball</span>
-                                    수강 정보
-                                </h3>
-                                <div className="grid grid-cols-2 gap-y-1 gap-x-4 pl-5">
-                                    {selectedSlotsLabel && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">희망 수업</span>
-                                            <span className="text-gray-900 dark:text-white">{selectedSlotsLabel}</span>
-                                        </>
-                                    )}
-                                    {form.basketballExp && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">농구 경험</span>
-                                            <span className="text-gray-900 dark:text-white">{form.basketballExp}</span>
-                                        </>
-                                    )}
-                                    {form.shuttleNeeded && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">셔틀 탑승</span>
-                                            <span className="text-gray-900 dark:text-white">{form.shuttlePickup || "이용 희망"}</span>
-                                        </>
-                                    )}
-                                    {form.shuttleDropoff && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">셔틀 하차</span>
-                                            <span className="text-gray-900 dark:text-white">{form.shuttleDropoff}</span>
-                                        </>
-                                    )}
-                                    {form.shuttleTime && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">셔틀 시간</span>
-                                            <span className="text-gray-900 dark:text-white">{form.shuttleTime}</span>
-                                        </>
-                                    )}
-                                    {form.memo && (
-                                        <>
-                                            <span className="text-gray-500 dark:text-gray-400">요청사항</span>
-                                            <span className="text-gray-900 dark:text-white">{form.memo}</span>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 이용약관 동의 */}
-                        <TermsAccordion
-                            title="이용약관 동의"
-                            required
-                            checked={form.agreedTerms}
-                            onCheck={(v) => update("agreedTerms", v)}
-                        >
-                            <EnrollTermsContent />
-                        </TermsAccordion>
-
-                        {/* 개인정보 수집/이용 동의 */}
-                        <TermsAccordion
-                            title="개인정보 수집/이용 동의"
-                            required
-                            checked={form.agreedPrivacy}
-                            onCheck={(v) => update("agreedPrivacy", v)}
-                        >
-                            <EnrollPrivacyContent />
-                        </TermsAccordion>
-
-                        {/* honeypot 필드 — 스팸봇 차단용, 사용자에게 보이지 않음 */}
-                        <div className="absolute left-[-9999px]" aria-hidden="true">
-                            <input
-                                type="text"
-                                tabIndex={-1}
-                                value={form.honeypot}
-                                onChange={(e) => update("honeypot", e.target.value)}
-                                autoComplete="off"
-                            />
-                        </div>
-                    </div>
-                )}
-
                 {/* ── 네비게이션 버튼 ─────────────────────────────────────────── */}
                 <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100 dark:border-gray-800">
                     {step > 1 ? (
@@ -888,85 +461,6 @@ export default function EnrollApplicationForm({
                     )}
                 </div>
             </div>
-        </div>
-    );
-}
-
-// ── 약관 아코디언 컴포넌트 (체험 폼과 동일 패턴 재사용) ─────────────────────
-function TermsAccordion({
-    title,
-    required,
-    checked,
-    onCheck,
-    children,
-}: {
-    title: string;
-    required?: boolean;
-    checked: boolean;
-    onCheck: (v: boolean) => void;
-    children: React.ReactNode;
-}) {
-    const [isOpen, setIsOpen] = useState(false);
-
-    return (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-            <div className="flex items-center px-4 py-3 bg-gray-50 dark:bg-gray-900">
-                <label className="flex items-center gap-2 flex-1 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => onCheck(e.target.checked)}
-                        className="w-5 h-5 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50"
-                    />
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {title} {required && <span className="text-red-500">*</span>}
-                    </span>
-                </label>
-                <button
-                    type="button"
-                    onClick={() => setIsOpen(!isOpen)}
-                    className="text-gray-400 hover:text-gray-600 dark:text-gray-300 p-1 cursor-pointer"
-                >
-                    <span className={`material-symbols-outlined text-lg transition-transform ${isOpen ? "rotate-180" : ""}`}>
-                        expand_more
-                    </span>
-                </button>
-            </div>
-            {isOpen && (
-                <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 max-h-48 overflow-y-auto text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-                    {children}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ── 수강 신청 이용약관 내용 ──────────────────────────────────────────────────
-function EnrollTermsContent() {
-    return (
-        <div className="space-y-2">
-            <p className="font-semibold text-gray-800 dark:text-gray-100">STIZ 농구교실 수강 이용약관</p>
-            <p>1. 수강료는 수강 시작 2주 전부터 수강일 전까지 납부합니다.</p>
-            <p>2. 개인 사정(여행, 행사, 늦잠 등)에 의한 결석은 이월/환불 대상이 아닙니다.</p>
-            <p>3. 본인의 질병/부상(진단서 제출 가능한 경우)이나 직계존비속 경조사는 확인 후 이월 또는 환불이 가능합니다.</p>
-            <p>4. 보강 수업은 결석일로부터 2개월 이내에 참여해야 하며, 2개월이 지나면 자동 소멸됩니다.</p>
-            <p>5. 모든 수강생은 입단과 동시에 유니폼을 구매해야 합니다.</p>
-            <p>6. 수업 중 운동복과 실내운동화를 반드시 착용해야 하며, 미착용 시 수업 참여가 제한될 수 있습니다.</p>
-            <p>7. 수업 중 코치의 안전 지시를 따라주세요. 안전교육 미준수로 인한 부상은 보상이 어려울 수 있습니다.</p>
-        </div>
-    );
-}
-
-// ── 수강 신청 개인정보 수집/이용 동의 내용 ───────────────────────────────────
-function EnrollPrivacyContent() {
-    return (
-        <div className="space-y-2">
-            <p className="font-semibold text-gray-800 dark:text-gray-100">개인정보 수집/이용 동의</p>
-            <p><strong>수집 항목:</strong> 아이 이름, 생년월일, 성별, 학년, 학교명, 학생 연락처, 보호자 이름, 보호자 연락처, 관계, 주소</p>
-            <p><strong>수집 목적:</strong> 수강 신청 접수, 반 배정, 수강료 안내, 셔틀 운행, 수업 운영</p>
-            <p><strong>보유 기간:</strong> 수강 종료 후 1년 (미등록 시 6개월)</p>
-            <p><strong>동의 거부 권리:</strong> 동의를 거부할 수 있으나, 동의하지 않을 경우 수강 신청이 불가합니다.</p>
-            <p>수집된 개인정보는 목적 외 용도로 사용되지 않으며, 제3자에게 제공되지 않습니다.</p>
         </div>
     );
 }

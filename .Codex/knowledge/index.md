@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄였다.
 - 2026-07-09: `/admin/apply`의 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄였다.
 - 2026-07-09: `/admin/schedule`의 편집/추가/구글시트 모달과 표 미리보기를 동적 로드로 분리해 첫 JS를 137.1KB에서 118.6KB로 줄였다.
 - 2026-07-09: 페이지 빌더의 남은 `lucide-react` 아이콘 import를 Material Symbols로 전환해 `src/app`, `src/components` 실제 import를 0건으로 만들었다.
@@ -8,7 +9,6 @@
 - 2026-07-09: `/mypage` 마이페이지 레이아웃/본문의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/staff/quick-post` 선생님 빠른 업로드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/faq` FAQ 관리의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
-- 2026-07-09: `/admin/requests` 요청 관리의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 
 # STIZ Knowledge Index
 
@@ -72,3 +72,4 @@
 - 페이지 빌더의 툴박스/상단바/설정 패널/노드 아이콘도 Material Symbols로 유지하며, `src/app`, `src/components` 안의 실제 `lucide-react` import는 0건을 목표로 관리한다.
 - `/admin/schedule`처럼 목록은 바로 봐야 하지만 편집/추가/설정 모달은 클릭 후 쓰는 화면은 모달 묶음과 미리보기를 동적 로드해 초기 route chunk를 줄인다.
 - `/admin/apply`처럼 목록 탭과 설정 탭이 함께 있는 화면은 기본 탭에 필요 없는 설정 저장 UI와 처리 모달을 동적 로드해 초기 route chunk를 줄인다.
+- `/apply/enroll`처럼 단계형 공개 폼은 첫 화면 단계는 즉시 렌더하고, 뒤 단계 입력/약관 UI는 `next/dynamic`으로 분리해 초기 route chunk를 줄인다.

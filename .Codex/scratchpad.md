@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: next/font/google 빌드 의존 제거
+- 작업명: 런타임 폰트 CSS 지연 로딩
 - 상태: 빌드 검증 완료
-- 범위: 전역 레이아웃/폰트 설정
+- 범위: 전역 레이아웃/폰트 런타임 로딩
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -64,9 +64,11 @@
 | 프로그램 작성/수정 폼 지연 로딩 | 완료 | `/admin/programs` 등록/수정 폼과 create/update 액션 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 설정 리치 에디터 가시 영역 지연 로딩 | 완료 | `/admin/settings` 리치 에디터를 스크롤/호버/클릭 시 로드하도록 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | Google Fonts 빌드 의존 제거 | 완료 | `next/font/google` 제거 후 `npx.cmd next build`, `npx.cmd next build --webpack` 모두 통과 |
+| 런타임 폰트 CSS 지연 로딩 | 완료 | Pretendard/Material Symbols stylesheet를 head에서 제거하고 첫 paint/idle 후 로드 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build`, `npx.cmd next build --webpack` 통과 |
 
 ## 작업 로그
+- 2026-07-09: Pretendard/Material Symbols 외부 stylesheet를 전역 head에서 제거하고 `DeferredFontStyles`로 첫 paint 이후 지연 로드해 렌더 차단 가능성을 낮춤.
 - 2026-07-09: 전역 `next/font/google` 의존을 제거하고 폰트 옵션을 CSS fallback 스택으로 바꿔 Google Fonts 네트워크 실패 없이 `next build`가 통과하도록 함.
 - 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 화면 근처에 올 때만 실제 편집기 chunk를 로드하도록 변경함.
 - 2026-07-09: `/admin/programs`의 등록/수정 폼을 `ProgramFormPanel`로 분리해 프로그램 목록 초기 렌더에서 create/update 폼 코드를 제외함.
@@ -76,18 +78,16 @@
 - 2026-07-09: `/admin/classes/[id]`의 수업 기록/사진 업로드 모달을 클릭 후 동적 로드로 바꿔 수업 상세 초기 렌더에서 사진 압축 코드를 제외함.
 - 2026-07-09: `/admin/notices`의 소셜 발행 준비/게시 모달을 `NoticeSocialModal`로 분리해 공지 목록 초기 렌더에서 소셜 캠페인 UI 코드를 제외함.
 - 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals`로 분리해 목록 초기 렌더에서 보조 UI 코드를 제외함.
-- 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/layout.tsx`, `src/lib/fonts.ts`
-- 주요 변경: `next/font/google` 전역 import와 html font variable 클래스를 제거하고, 관리자 폰트 옵션을 빌드 생성 CSS 변수 대신 안전한 CSS font-family fallback으로 전환.
-- 적용 범위: 전역 레이아웃, 관리자 폰트 선택 미리보기/적용값.
+- 변경 파일: `src/app/layout.tsx`, `src/app/globals.css`, `src/components/DeferredFontStyles.tsx`
+- 주요 변경: Pretendard/Material Symbols stylesheet를 head에서 제거하고, 아이콘 자리 유지 CSS와 클라이언트 지연 로드 컴포넌트로 전환.
+- 적용 범위: 전역 레이아웃, Material Symbols 아이콘, Pretendard 런타임 로딩.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과
-- `npx.cmd next build --webpack` 통과
-- 빌드 중 Supabase DB 접속 실패 로그는 fallback 처리되어 빌드 종료 코드는 0. Next 16 출력에서 예전 First Load JS 표는 표시되지 않음.
+- 빌드 중 Supabase DB 접속 실패 로그는 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 런타임 외부 CSS인 Pretendard/Material Symbols를 로컬 자산 또는 더 작은 아이콘 전략으로 대체할지 검토.
+- 다음 속도 개선 후보: Material Symbols 277곳을 우선순위별 SVG/텍스트 아이콘 컴포넌트로 점진 전환할지 검토.

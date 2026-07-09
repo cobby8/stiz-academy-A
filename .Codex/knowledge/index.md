@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: Pretendard/Material Symbols 외부 stylesheet를 전역 head에서 제거하고 `DeferredFontStyles`로 첫 paint 이후 지연 로드하도록 바꿨다.
 - 2026-07-09: 전역 `next/font/google` 빌드 의존을 제거하고 폰트 옵션을 CSS fallback 스택으로 전환해 `next build`/`next build --webpack`을 통과시켰다.
 - 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 가시 영역 진입 후 로드하도록 바꿨다.
 - 2026-07-09: `/admin/programs`의 등록/수정 폼을 `ProgramFormPanel` 동적 로드로 분리했다.
@@ -8,13 +9,12 @@
 - 2026-07-09: `/admin/classes/[id]`의 수업 기록/사진 업로드 모달을 클릭 후 동적 로드로 전환했다.
 - 2026-07-09: `/admin/notices`의 소셜 발행 준비/게시 모달을 `NoticeSocialModal` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals` 동적 로드로 분리했다.
-- 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄였다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 전역 후보 폰트는 `next/font/google`로 등록하지 않는다. 빌드가 Google Fonts 네트워크에 묶이고, 실제 선택 여부와 무관하게 앱 전체 안정성을 떨어뜨릴 수 있다.
+- 최근 지식: 전역 외부 stylesheet는 head에 직접 두지 않는다. 초기 HTML에서는 앱 CSS만 로드하고, 폰트/아이콘 CSS는 첫 paint 이후 지연 로드한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -43,6 +43,7 @@
 - `/api/cron/social-posts`는 `PUBLISHING` 초안을 5분마다 1건씩 처리하고, 일시 실패는 `instagramNextRetryAt` 기준으로 최대 3회까지 예약 재시도한다.
 - 공개 홈페이지와 마이페이지의 로그아웃 UI는 새 로그아웃 로직을 만들지 않고 `logout()` 서버 액션을 `form action`으로 연결한다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
+- Pretendard/Material Symbols 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 첫 paint/idle 시점에 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.
 - `getAcademySettings()`는 5분 서버 캐시와 `academy-settings` 태그를 사용하며, 관리자 설정 저장 시 `revalidateTag(..., { expire: 0 })`로 즉시 무효화한다.
 - 공개 페이지의 챗봇은 `ChatBotButton`만 초기 로드하고, `ChatPanel`은 버튼 클릭 후 `next/dynamic`으로 로드한다.
@@ -83,3 +84,4 @@
 - `/admin/programs`처럼 목록/정렬/삭제와 작성/수정 폼이 함께 있는 화면은 목록 업무만 초기 렌더에 남기고 저장 폼을 동적 패널로 분리한다.
 - `/admin/settings`처럼 여러 리치 텍스트 에디터가 한 화면에 있는 경우, 에디터 본체는 스크롤 근처 진입/호버/클릭 후 로드한다.
 - 빌드 안정성을 위해 Google Fonts 파일 다운로드가 필요한 `next/font/google`은 전역 후보 폰트 용도로 쓰지 않는다. 폰트를 꼭 보장해야 하면 로컬 self-host 파일을 별도 자산으로 둔다.
+- Material Symbols를 완전히 제거하기 전까지는 `.material-symbols-outlined` 자리 크기를 CSS로 유지하고, 실제 아이콘 폰트는 `material-symbols-ready` 클래스가 붙은 뒤 표시한다.

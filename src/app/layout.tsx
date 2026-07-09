@@ -4,6 +4,7 @@ import { getAcademySettings } from "@/lib/queries";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, getFontCss } from "@/lib/fonts";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import MetaPixel from "@/components/MetaPixel";
+import DeferredFontStyles from "@/components/DeferredFontStyles";
 
 export const metadata: Metadata = {
     title: "스티즈농구교실 다산점 | 스마트 학원 관리",
@@ -60,16 +61,6 @@ export default async function RootLayout({
                 <meta name="theme-color" content="#f97316" />
                 {/* iOS에서 홈 화면 아이콘으로 쓸 이미지 */}
                 <link rel="apple-touch-icon" href="/icon-192.png" />
-                {/* Pretendard는 Google Fonts에 없으므로 CDN 유지 */}
-                <link
-                    rel="stylesheet"
-                    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-                />
-                {/* Material Symbols Outlined: 가이드 투어 등에서 사용하는 아이콘 폰트 */}
-                <link
-                    rel="stylesheet"
-                    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0"
-                />
             </head>
             <body
                 className="antialiased selection:bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 selection:text-white"
@@ -86,6 +77,7 @@ export default async function RootLayout({
                     enableSystem
                     disableTransitionOnChange
                 >
+                    <DeferredFontStyles />
                     <MetaPixel />
                     {children}
                 </ThemeProvider>

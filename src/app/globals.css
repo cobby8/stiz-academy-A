@@ -88,6 +88,34 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading, var(--font-body, -apple-system, sans-serif));
 }
 
+/* Material Symbols is loaded after first paint so the stylesheet never blocks LCP. */
+.material-symbols-outlined {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  min-width: 1em;
+  overflow: hidden;
+  color: transparent;
+  user-select: none;
+}
+
+.material-symbols-ready .material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  color: currentColor;
+  -webkit-font-feature-settings: "liga";
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
 /* Event detail panel animations */
 @keyframes slide-up {
   from { transform: translateY(100%); opacity: 0; }

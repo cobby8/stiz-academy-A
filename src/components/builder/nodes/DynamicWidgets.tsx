@@ -1,8 +1,27 @@
 "use client";
 import React from "react";
 import { useNode } from "@craftjs/core";
-import { Trophy, Calendar as CalendarIcon, Users } from "lucide-react";
 import { useLandingData } from "../LandingPageDataContext";
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 // Placeholder component for purely admin view when no data is provided or explicitly requested
 const PlaceholderBox = ({ icon, title, desc, connect, drag, selected }: any) => (
@@ -29,7 +48,7 @@ export const ProgramsWidget = () => {
     if (isEditor) {
         return <PlaceholderBox
             connect={connect} drag={drag} selected={selected}
-            icon={<Trophy className="w-12 h-12 mb-3 text-brand-orange-500 dark:text-brand-neon-lime" />}
+            icon={<SymbolIcon name="emoji_events" size={48} className="mb-3 text-brand-orange-500 dark:text-brand-neon-lime" />}
             title="프로그램 목록 (자동 연동 위젯)"
             desc="저장 후 실제 홈페이지에서 학원 프로그램 목록으로 자동 변환됩니다."
         />
@@ -52,7 +71,7 @@ export const ProgramsWidget = () => {
                                         {program.targetAge}
                                     </div>
                                 )}
-                                <Trophy className={`w-8 h-8 md:w-12 md:h-12 opacity-20 ${idx % 2 === 0 ? 'text-brand-navy-900' : 'text-brand-orange-500 dark:text-brand-neon-lime'}`} />
+                                <SymbolIcon name="emoji_events" size={48} className={`opacity-20 ${idx % 2 === 0 ? 'text-brand-navy-900' : 'text-brand-orange-500 dark:text-brand-neon-lime'}`} />
                             </div>
                             <div className="p-4 md:p-6 sm:w-2/3 flex flex-col justify-center">
                                 <h3 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white mb-1 md:mb-2">{program.name}</h3>
@@ -87,7 +106,7 @@ export const ScheduleWidget = () => {
     if (isEditor) {
         return <PlaceholderBox
             connect={connect} drag={drag} selected={selected}
-            icon={<CalendarIcon className="w-12 h-12 mb-3 text-brand-navy-900" />}
+            icon={<SymbolIcon name="calendar_month" size={48} className="mb-3 text-brand-navy-900" />}
             title="시간표 테이블 (자동 연동 위젯)"
             desc="저장 후 실제 홈페이지에서 시간표 테이블로 자동 변환됩니다."
         />
@@ -153,7 +172,7 @@ export const CoachesWidget = () => {
     if (isEditor) {
         return <PlaceholderBox
             connect={connect} drag={drag} selected={selected}
-            icon={<Users className="w-12 h-12 mb-3 text-emerald-600" />}
+            icon={<SymbolIcon name="groups" size={48} className="mb-3 text-emerald-600" />}
             title="코치진 명단 (자동 연동 위젯)"
             desc="저장 후 실제 홈페이지에서 강사 프로필 카드로 자동 변환됩니다."
         />
@@ -170,7 +189,7 @@ export const CoachesWidget = () => {
                                 <img src={coach.imageUrl} alt={coach.name} className="w-full h-full object-cover" />
                             ) : (
                                 <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                                    <Users className="w-8 h-8" />
+                                    <SymbolIcon name="groups" size={32} />
                                 </div>
                             )}
                         </div>

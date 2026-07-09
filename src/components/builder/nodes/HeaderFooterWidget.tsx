@@ -4,7 +4,6 @@ import { useNode } from "@craftjs/core";
 import { useLandingData } from "../LandingPageDataContext";
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin } from "lucide-react";
 
 export const HeaderFooterWidget = () => {
     const { connectors: { connect, drag }, selected } = useNode((node) => ({

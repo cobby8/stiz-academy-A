@@ -1,7 +1,24 @@
 "use client";
 import React from "react";
 import { useEditor } from "@craftjs/core";
-import { Trash2, ArrowUpCircle } from "lucide-react";
+
+function SymbolIcon({
+    name,
+    size = 18,
+}: {
+    name: string;
+    size?: number;
+}) {
+    return (
+        <span
+            className="material-symbols-outlined leading-none"
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 export const SettingsPanel = () => {
     const { actions, selected, isEnabled } = useEditor((state, query) => {
@@ -42,7 +59,7 @@ export const SettingsPanel = () => {
                                 }}
                                 title="요소 재선택"
                             >
-                                <ArrowUpCircle className="w-4 h-4" />
+                                <SymbolIcon name="arrow_circle_up" size={16} />
                             </button>
                             {selected.isDeletable && (
                                 <button
@@ -52,7 +69,7 @@ export const SettingsPanel = () => {
                                     }}
                                     title="블록 삭제"
                                 >
-                                    <Trash2 className="w-4 h-4" />
+                                    <SymbolIcon name="delete" size={16} />
                                 </button>
                             )}
                         </div>

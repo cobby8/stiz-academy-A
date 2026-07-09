@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 챗봇 패널 아이콘 JS 제거
+- 작업명: 페이지 빌더 아이콘 JS 제거
 - 상태: 검증 완료
-- 범위: 공개 챗봇 패널
+- 범위: 페이지 빌더 컴포넌트
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -50,9 +50,11 @@
 | 공지 상세 서버 아이콘 의존 제거 | 완료 | 공지 상세 lucide 아이콘을 Material Symbols로 전환 |
 | 관리자 대시보드 서버 아이콘 의존 제거 | 완료 | 관리자 대시보드 lucide 아이콘을 Material Symbols로 전환 |
 | 챗봇 패널 아이콘 JS 제거 | 완료 | 클릭 후 로드되는 챗봇 패널 lucide 아이콘을 Material Symbols로 전환 |
+| 페이지 빌더 아이콘 JS 제거 | 완료 | 빌더 툴박스/상단바/노드 lucide 아이콘을 Material Symbols로 전환 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 페이지 빌더의 남은 lucide 아이콘 import를 Material Symbols로 바꿔 `src/app`, `src/components`의 실제 `lucide-react` import를 모두 제거함.
 - 2026-07-09: `ChatPanel`의 lucide 닫기/전송 아이콘을 Material Symbols로 바꿔 챗봇 동적 패널의 아이콘 라이브러리 의존을 제거함.
 - 2026-07-09: `/admin` 대시보드의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 100.2KB 유지.
 - 2026-07-09: `/notices/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 99.9KB 유지.
@@ -62,17 +64,16 @@
 - 2026-07-09: `/admin/requests`의 lucide 아이콘을 Material Symbols로 바꿔 요청 관리 첫 JS를 108.2KB에서 106.3KB로 줄임.
 - 2026-07-09: `/admin/students/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 학생 상세 첫 JS를 116.1KB에서 113.6KB로 줄임.
 - 2026-07-09: `/admin/classes/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 수업 상세 첫 JS를 126.8KB에서 124.5KB로 줄임.
-- 2026-07-09: `/admin/notices`의 lucide 아이콘을 Material Symbols로 바꿔 공지 관리 첫 JS를 127.6KB에서 124.4KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/components/chat/ChatPanel.tsx`
-- 주요 변경: 챗봇 닫기/전송 아이콘의 `lucide-react` import를 Material Symbols 기반 `SymbolIcon`으로 대체.
-- 적용 범위: 공개 페이지 챗봇 클릭 후 로드되는 동적 패널.
+- 변경 파일: `src/components/builder/*`, `src/components/builder/nodes/*`
+- 주요 변경: 빌더 툴박스, 상단바, 설정 패널, 동적 위젯, 이미지 노드의 `lucide-react` import를 Material Symbols 기반 `SymbolIcon`으로 대체하고 미사용 import를 제거.
+- 적용 범위: 관리자 페이지 빌더 UI.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: 챗봇 패널 관련 정적 chunk 후보 4.3KB~9.6KB. 패널의 아이콘 라이브러리 의존 제거.
+- 산출물 확인: `src/app`, `src/components`의 실제 `lucide-react` import 0건.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 페이지 빌더에 남은 아이콘 JS와 보조 패널 지연 로딩 여부 추가 검토.
+- 다음 속도 개선 후보: 반복 정의된 `SymbolIcon`을 필요 시 공통 컴포넌트로 정리하되, 당장은 번들 분리 상태를 유지.

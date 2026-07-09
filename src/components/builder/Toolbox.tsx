@@ -2,7 +2,26 @@
 import React from "react";
 import { useEditor } from "@craftjs/core";
 import { ContainerNode, TextNode, ImageNode, ProgramsWidget, ScheduleWidget, CoachesWidget, HeaderFooterWidget } from "./nodes";
-import { Type, Square, Image as ImageIcon, LayoutGrid, Calendar, Users, LayoutTemplate } from "lucide-react";
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 export const Toolbox = () => {
     const { connectors, query } = useEditor();
@@ -16,7 +35,7 @@ export const Toolbox = () => {
                     className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-gray-50 dark:bg-gray-900"
                     title="기본 박스"
                 >
-                    <Square className="w-6 h-6 mb-1 text-gray-500 dark:text-gray-400" />
+                    <SymbolIcon name="crop_square" size={24} className="mb-1 text-gray-500 dark:text-gray-400" />
                     <span className="text-xs font-semibold">컨테이너</span>
                 </button>
 
@@ -25,7 +44,7 @@ export const Toolbox = () => {
                     className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-gray-50 dark:bg-gray-900"
                     title="글자 입력"
                 >
-                    <Type className="w-6 h-6 mb-1 text-gray-500 dark:text-gray-400" />
+                    <SymbolIcon name="title" size={24} className="mb-1 text-gray-500 dark:text-gray-400" />
                     <span className="text-xs font-semibold">텍스트</span>
                 </button>
 
@@ -34,7 +53,7 @@ export const Toolbox = () => {
                     className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded hover:bg-gray-100 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-gray-50 dark:bg-gray-900"
                     title="사진 업로드"
                 >
-                    <ImageIcon className="w-6 h-6 mb-1 text-gray-500 dark:text-gray-400" />
+                    <SymbolIcon name="image" size={24} className="mb-1 text-gray-500 dark:text-gray-400" />
                     <span className="text-xs font-semibold">이미지</span>
                 </button>
             </div>
@@ -45,7 +64,7 @@ export const Toolbox = () => {
                     ref={(ref) => { if (ref) connectors.create(ref, <ProgramsWidget />); }}
                     className="flex flex-col items-center justify-center p-3 border border-orange-200 rounded hover:bg-orange-50 hover:border-brand-orange-500 dark:border-brand-neon-lime cursor-move transition bg-orange-50/50"
                 >
-                    <LayoutGrid className="w-6 h-6 mb-1 text-brand-orange-500 dark:text-brand-neon-lime" />
+                    <SymbolIcon name="dashboard" size={24} className="mb-1 text-brand-orange-500 dark:text-brand-neon-lime" />
                     <span className="text-[10px] font-bold text-brand-orange-700 dark:text-brand-neon-lime">프로그램 목록</span>
                 </button>
 
@@ -53,7 +72,7 @@ export const Toolbox = () => {
                     ref={(ref) => { if (ref) connectors.create(ref, <ScheduleWidget />); }}
                     className="flex flex-col items-center justify-center p-3 border border-blue-200 rounded hover:bg-blue-50 hover:border-brand-navy-900 cursor-move transition bg-blue-50/50"
                 >
-                    <Calendar className="w-6 h-6 mb-1 text-brand-navy-900" />
+                    <SymbolIcon name="calendar_month" size={24} className="mb-1 text-brand-navy-900" />
                     <span className="text-[10px] font-bold text-brand-navy-900">클래스 시간표</span>
                 </button>
 
@@ -61,7 +80,7 @@ export const Toolbox = () => {
                     ref={(ref) => { if (ref) connectors.create(ref, <CoachesWidget />); }}
                     className="flex flex-col items-center justify-center p-3 border border-emerald-200 rounded hover:bg-emerald-50 hover:border-emerald-600 cursor-move transition bg-emerald-50/50"
                 >
-                    <Users className="w-6 h-6 mb-1 text-emerald-600" />
+                    <SymbolIcon name="groups" size={24} className="mb-1 text-emerald-600" />
                     <span className="text-[10px] font-bold text-emerald-700">강사진 목록</span>
                 </button>
 
@@ -69,7 +88,7 @@ export const Toolbox = () => {
                     ref={(ref) => { if (ref) connectors.create(ref, <HeaderFooterWidget />); }}
                     className="flex flex-col items-center justify-center p-3 border border-purple-200 rounded hover:bg-purple-50 hover:border-purple-600 cursor-move transition bg-purple-50/50"
                 >
-                    <LayoutTemplate className="w-6 h-6 mb-1 text-purple-600" />
+                    <SymbolIcon name="view_quilt" size={24} className="mb-1 text-purple-600" />
                     <span className="text-[10px] font-bold text-purple-700">헤더/푸터</span>
                 </button>
             </div>

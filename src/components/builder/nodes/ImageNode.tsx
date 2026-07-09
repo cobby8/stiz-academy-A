@@ -5,8 +5,27 @@ import { useNode } from "@craftjs/core";
 import { Resizable } from "re-resizable";
 import ReactCrop, { Crop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
-import { ImageIcon, Crop as CropIcon, Check, X } from "lucide-react";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 export const ImageSettings = () => {
     const { actions: { setProp, setCustom }, borderRadius, objectFit, isCropModalOpen, hasImage } = useNode((node) => ({
@@ -25,7 +44,7 @@ export const ImageSettings = () => {
                         onClick={() => setCustom((custom: any) => custom.isCropModalOpen = true)}
                         className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded flex items-center justify-center gap-2 text-sm transition"
                     >
-                        <CropIcon className="w-4 h-4" /> 이미지 자르기 모드 시작
+                        <SymbolIcon name="crop" size={16} /> 이미지 자르기 모드 시작
                     </button>
                     {isCropModalOpen && (
                         <p className="text-xs text-orange-600 mt-2 text-center animate-pulse">중앙 화면에서 자르기 영역을 설정하세요</p>
@@ -202,13 +221,13 @@ export const ImageNode = ({
                             onClick={getCroppedImg}
                             className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-orange-600 hover:scale-105 transition shadow-lg"
                         >
-                            <Check className="w-5 h-5" /> 이대로 자르기 적용
+                            <SymbolIcon name="check" size={20} /> 이대로 자르기 적용
                         </button>
                         <button
                             onClick={() => setCustom((custom: any) => custom.isCropModalOpen = false)}
                             className="bg-gray-700 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-600 transition shadow-lg"
                         >
-                            <X className="w-5 h-5" /> 취소
+                            <SymbolIcon name="close" size={20} /> 취소
                         </button>
                     </div>
                 </div>,
@@ -280,7 +299,7 @@ export const ImageNode = ({
                                 style={{ borderRadius: `${borderRadius}px` }}
                                 onClick={() => fileInputRef.current?.click()}
                             >
-                                <ImageIcon className="w-8 h-8 mb-2" />
+                                <SymbolIcon name="image" size={32} className="mb-2" />
                                 <span className="text-sm font-medium">클릭하여 이미지 업로드</span>
                             </div>
                         )}

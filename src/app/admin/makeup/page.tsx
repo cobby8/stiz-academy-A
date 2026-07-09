@@ -1,4 +1,4 @@
-import { getMakeupSessions, getStudents, getClasses } from "@/lib/queries";
+import { getMakeupSessions, getClasses } from "@/lib/queries";
 import { ensureMakeupSessionTable } from "@/app/actions/admin";
 import MakeupClient from "./MakeupClient";
 
@@ -9,17 +9,15 @@ export default async function AdminMakeupPage() {
     // DDL ensure: MakeupSession 테이블이 없으면 자동 생성
     await ensureMakeupSessionTable();
 
-    // 병렬 조회: 보강 목록 + 학생 목록 + 반 목록
-    const [sessions, students, classes] = await Promise.all([
+    // Makeup list data is enough for the first paint; student options load on demand.
+    const [sessions, classes] = await Promise.all([
         getMakeupSessions(),
-        getStudents(),
         getClasses(),
     ]);
 
     return (
         <MakeupClient
             sessions={sessions}
-            students={students}
             classes={classes}
         />
     );

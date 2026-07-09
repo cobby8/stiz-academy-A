@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
     bookMakeupSession,
@@ -84,17 +84,45 @@ const STATUS_TABS = [
 
 export default function MakeupClient({
     sessions,
-    students,
     classes,
 }: {
     sessions: MakeupItem[];
-    students: Student[];
     classes: ClassItem[];
 }) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [showBookModal, setShowBookModal] = useState(false);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [studentsLoaded, setStudentsLoaded] = useState(false);
+    const [studentsLoading, setStudentsLoading] = useState(false);
+    const [studentsError, setStudentsError] = useState<string | null>(null);
+
+    const loadStudents = useCallback(async () => {
+        if (studentsLoaded || studentsLoading) return;
+
+        setStudentsLoading(true);
+        setStudentsError(null);
+
+        try {
+            const response = await fetch("/api/admin/student-options", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load student options.");
+            }
+
+            const data = (await response.json()) as { students?: Student[] };
+            setStudents(data.students ?? []);
+            setStudentsLoaded(true);
+        } catch (error) {
+            console.error("Failed to load student options:", error);
+            setStudentsError("원생 목록을 불러오지 못했습니다.");
+        } finally {
+            setStudentsLoading(false);
+        }
+    }, [studentsLoaded, studentsLoading]);
 
     // 상태별 필터링
     const filteredSessions = useMemo(() => {
@@ -159,7 +187,10 @@ export default function MakeupClient({
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">결석 학생의 보강 수업을 예약하고 관리합니다</p>
                 </div>
                 <button
-                    onClick={() => setShowBookModal(true)}
+                    onClick={() => {
+                        setShowBookModal(true);
+                        void loadStudents();
+                    }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                 >
                     <span className="material-symbols-outlined text-[20px]">event_repeat</span>
@@ -290,6 +321,9 @@ export default function MakeupClient({
             {showBookModal && (
                 <BookMakeupModal
                     students={students}
+                    studentsLoading={studentsLoading}
+                    studentsError={studentsError}
+                    onRetryLoadStudents={loadStudents}
                     classes={classes}
                     onClose={() => setShowBookModal(false)}
                     onSuccess={() => {
@@ -306,11 +340,17 @@ export default function MakeupClient({
 
 function BookMakeupModal({
     students,
+    studentsLoading,
+    studentsError,
+    onRetryLoadStudents,
     classes,
     onClose,
     onSuccess,
 }: {
     students: Student[];
+    studentsLoading: boolean;
+    studentsError: string | null;
+    onRetryLoadStudents: () => Promise<void>;
     classes: ClassItem[];
     onClose: () => void;
     onSuccess: () => void;
@@ -423,21 +463,42 @@ function BookMakeupModal({
                                     placeholder="이름 검색..."
                                     value={studentSearch}
                                     onChange={(e) => setStudentSearch(e.target.value)}
+                                    disabled={studentsLoading || Boolean(studentsError)}
                                     className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm mb-2"
                                 />
                                 <select
                                     value={studentId}
                                     onChange={(e) => setStudentId(e.target.value)}
+                                    disabled={studentsLoading || Boolean(studentsError)}
                                     className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
                                     size={5}
                                 >
-                                    <option value="">-- 원생 선택 --</option>
+                                    <option value="">
+                                        {studentsLoading ? "원생 목록 로딩 중..." : "-- 원생 선택 --"}
+                                    </option>
                                     {filteredStudents.map((s) => (
                                         <option key={s.id} value={s.id}>
                                             {s.name}
                                         </option>
                                     ))}
                                 </select>
+                                {studentsError && (
+                                    <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                        <span>{studentsError}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => void onRetryLoadStudents()}
+                                            className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                        >
+                                            다시 시도
+                                        </button>
+                                    </div>
+                                )}
+                                {!studentsLoading && !studentsError && students.length === 0 && (
+                                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                        등록된 원생이 없습니다.
+                                    </p>
+                                )}
                             </div>
 
                             {/* 원래 반 선택 */}

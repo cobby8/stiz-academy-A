@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/classes/[id]` 수업 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/notices`의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/gallery`와 `InstagramFeedPreview`의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/students` 엑셀 업로드 모달을 클릭 후 동적 로드하도록 분리했다.
@@ -7,13 +8,12 @@
 - 2026-07-09: 관리자 shell 로그아웃 아이콘의 `lucide-react` import를 제거하고 Material Symbols 아이콘으로 바꿨다.
 - 2026-07-09: 업로드 이미지 URL이 고유 파일명인 점을 활용해 `/uploads`와 Supabase Storage 업로드에 장기 캐시를 적용했다.
 - 2026-07-09: 관리자 shell이 서버 인증 정보를 재사용하고 알림/체험 카운트 API 호출을 첫 렌더 뒤로 지연하도록 바꿨다.
-- 2026-07-09: 공개 헤더, 테마 토글, 챗봇 버튼의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 관리자 공지/갤러리처럼 자주 쓰는 관리 화면의 단순 아이콘도 Material Symbols를 우선 사용해 별도 아이콘 JS를 줄인다.
+- 최근 지식: 관리자 수업 상세처럼 깊은 하위 화면도 단순 아이콘은 Material Symbols를 우선 사용해 route chunk에 아이콘 라이브러리가 붙지 않게 한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -59,3 +59,4 @@
 - `/admin/students`의 엑셀 업로드 모달처럼 목록에서 가끔 쓰는 대형 보조 UI는 `next/dynamic`과 조건부 렌더로 클릭 후 로드한다.
 - `InstagramFeedPreview`처럼 관리자와 선생님 화면이 공유하는 미리보기 컴포넌트는 단순 아이콘을 Material Symbols로 유지한다.
 - `/admin/notices` 같은 관리 화면 액션 아이콘도 Material Symbols로 유지해 `lucide-react`가 route chunk에 붙지 않게 한다.
+- `/admin/classes/[id]` 같은 하위 관리자 화면의 탭/빈 상태/버튼 아이콘도 Material Symbols로 유지해 수업 상세 route chunk를 줄인다.

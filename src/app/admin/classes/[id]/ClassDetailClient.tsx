@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, BookOpen, CalendarCheck, Plus, Camera } from "lucide-react";
 import SessionLogModal, { type SessionInitialData } from "./SessionLogModal";
 
 // 요일 한글 변환 맵
@@ -83,6 +82,26 @@ type Props = {
     coaches: Coach[];
 };
 
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
+
 export default function ClassDetailClient({ classData, sessions, coaches }: Props) {
     const router = useRouter();
     // 현재 활성 탭 상태 관리
@@ -122,10 +141,10 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
     }, [router]);
 
     // 탭 정의 — 아이콘 + 라벨 + 카운트
-    const tabs: { key: TabKey; label: string; icon: typeof Users; count?: number }[] = [
-        { key: "students", label: "학생 명단", icon: Users, count: classData.students.length },
-        { key: "sessions", label: "수업 기록", icon: BookOpen, count: sessions.length },
-        { key: "attendance", label: "출석 현황", icon: CalendarCheck },
+    const tabs: { key: TabKey; label: string; iconName: string; count?: number }[] = [
+        { key: "students", label: "학생 명단", iconName: "groups", count: classData.students.length },
+        { key: "sessions", label: "수업 기록", iconName: "menu_book", count: sessions.length },
+        { key: "attendance", label: "출석 현황", iconName: "event_available" },
     ];
 
     return (
@@ -133,7 +152,7 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
             {/* ── 상단 헤더: 뒤로가기 + 반 정보 ── */}
             <div className="flex items-center gap-4">
                 <Link href="/admin/classes" className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
-                    <ArrowLeft size={20} className="text-gray-500 dark:text-gray-400" />
+                    <SymbolIcon name="arrow_back" size={20} className="text-gray-500 dark:text-gray-400" />
                 </Link>
                 <div className="flex-1">
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">
@@ -187,7 +206,6 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
             <div className="border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex gap-6">
                     {tabs.map((tab) => {
-                        const Icon = tab.icon;
                         const isActive = activeTab === tab.key;
                         return (
                             <button
@@ -199,7 +217,7 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
                                         : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-200"
                                 }`}
                             >
-                                <Icon size={16} />
+                                <SymbolIcon name={tab.iconName} size={16} />
                                 {tab.label}
                                 {/* 카운트 뱃지 */}
                                 {tab.count !== undefined && (
@@ -257,7 +275,7 @@ function StudentsTab({ students }: { students: ClassData["students"] }) {
     if (students.length === 0) {
         return (
             <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
-                <Users size={40} className="mx-auto text-gray-300 mb-3" />
+                <SymbolIcon name="groups" size={40} className="mx-auto mb-3 text-gray-300" />
                 <p className="text-gray-500 dark:text-gray-400">등록된 수강생이 없습니다</p>
             </div>
         );
@@ -320,14 +338,14 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                     onClick={onAddSession}
                     className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-orange-600 transition"
                 >
-                    <Plus size={16} />
+                    <SymbolIcon name="add" size={16} />
                     수업 기록 추가
                 </button>
             </div>
 
             {sessions.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
-                    <BookOpen size={40} className="mx-auto text-gray-300 mb-3" />
+                    <SymbolIcon name="menu_book" size={40} className="mx-auto mb-3 text-gray-300" />
                     <p className="text-gray-500 dark:text-gray-400">수업 기록이 없습니다</p>
                     <p className="text-xs text-gray-400 mt-1">위 버튼으로 첫 수업을 기록해보세요</p>
                 </div>
@@ -374,7 +392,7 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                                 {/* 사진 없을 때 아이콘 placeholder */}
                                 {!firstPhotoUrl && (
                                     <div className="w-20 h-20 rounded-xl bg-gray-50 dark:bg-gray-900 flex-shrink-0 flex items-center justify-center">
-                                        <Camera size={24} className="text-gray-300" />
+                                        <SymbolIcon name="photo_camera" size={24} className="text-gray-300" />
                                     </div>
                                 )}
 
@@ -421,7 +439,7 @@ function AttendanceTab({ sessions }: { sessions: SessionRow[] }) {
     if (sessions.length === 0) {
         return (
             <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
-                <CalendarCheck size={40} className="mx-auto text-gray-300 mb-3" />
+                <SymbolIcon name="event_available" size={40} className="mx-auto mb-3 text-gray-300" />
                 <p className="text-gray-500 dark:text-gray-400">출석 기록이 없습니다</p>
             </div>
         );

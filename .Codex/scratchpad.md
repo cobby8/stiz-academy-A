@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 공지 관리 아이콘 JS 제거
+- 작업명: 수업 상세 아이콘 JS 제거
 - 상태: 검증 완료
-- 범위: 관리자 공지 관리 화면
+- 범위: 관리자 수업 상세 화면
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -41,9 +41,11 @@
 | 학생 관리 엑셀 모달 지연 로딩 | 완료 | 엑셀 업로드 모달을 클릭 후 별도 chunk로 로드 |
 | 갤러리/인스타 미리보기 아이콘 JS 제거 | 완료 | lucide 아이콘을 Material Symbols로 전환 |
 | 공지 관리 아이콘 JS 제거 | 완료 | 공지 관리 lucide 아이콘을 Material Symbols로 전환 |
+| 수업 상세 아이콘 JS 제거 | 완료 | 수업 상세 lucide 아이콘을 Material Symbols로 전환 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/classes/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 수업 상세 첫 JS를 126.8KB에서 124.5KB로 줄임.
 - 2026-07-09: `/admin/notices`의 lucide 아이콘을 Material Symbols로 바꿔 공지 관리 첫 JS를 127.6KB에서 124.4KB로 줄임.
 - 2026-07-09: `/admin/gallery`와 `InstagramFeedPreview`의 lucide 아이콘을 Material Symbols로 바꿔 갤러리 첫 JS를 131.5KB에서 126.2KB로 줄임.
 - 2026-07-09: `/admin/students` 엑셀 업로드 모달을 동적 로드로 분리해 학생 관리 첫 JS를 134.6KB에서 123.0KB로 줄임.
@@ -51,17 +53,16 @@
 - 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮기고 공개 푸터 lucide import를 제거해 첫 JS를 372.4KB에서 116.3KB로 줄임.
 - 2026-07-09: 관리자 shell 로그아웃 아이콘의 lucide import를 제거해 관리자 공통 chunk를 약 42.7KB에서 41.4KB로 줄임.
 - 2026-07-09: 업로드 이미지 URL이 고유 파일명인 점을 활용해 `/uploads`와 Supabase Storage 업로드에 1년 immutable 캐시를 적용함.
-- 2026-07-09: 관리자 shell에서 Supabase 브라우저 재조회/클라이언트 로그아웃을 제거하고 알림·체험 카운트 조회를 지연함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/notices/NoticesAdminClient.tsx`
-- 주요 변경: 공지 작성/첨부/소셜 발행/목록 액션의 `lucide-react` 아이콘을 Material Symbols 기반 `SymbolIcon`으로 대체.
-- 적용 범위: `/admin/notices` 공지 관리 초기 client JS.
+- 변경 파일: `src/app/admin/classes/[id]/ClassDetailClient.tsx`
+- 주요 변경: 수업 상세 탭/빈 상태/버튼/썸네일 자리 표시 아이콘의 `lucide-react` import를 Material Symbols 기반 `SymbolIcon`으로 대체.
+- 적용 범위: `/admin/classes/[id]` 수업 상세 초기 client JS.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/admin/notices/page` 첫 JS 127.6KB → 124.4KB.
+- 산출물 확인: `/admin/classes/[id]/page` 첫 JS 126.8KB → 124.5KB.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 관리자 schedule/apply/notices 등 남은 120KB대 화면은 모달/편집 폼 단위 분리 여부 추가 검토.
+- 다음 속도 개선 후보: `/staff/quick-post`, `/admin/requests`, `/mypage`에 남은 아이콘 JS와 보조 패널 지연 로딩 여부 추가 검토.

@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactElement } from "react";
 
 type FontFreeIconName =
+  | "arrow_back"
+  | "attach_file"
   | "bookmark"
   | "calendar_today"
   | "call"
@@ -11,6 +13,7 @@ type FontFreeIconName =
   | "chevron_right"
   | "close"
   | "dark_mode"
+  | "download"
   | "expand_more"
   | "how_to_reg"
   | "image"
@@ -26,6 +29,7 @@ type FontFreeIconName =
   | "payments"
   | "person_add"
   | "play_arrow"
+  | "push_pin"
   | "rate_review"
   | "school"
   | "send"
@@ -40,6 +44,8 @@ type FontFreeIconProps = {
 };
 
 const PATHS: Record<FontFreeIconName, ReactElement> = {
+  arrow_back: <path d="M19 12H5m6-6-6 6 6 6" />,
+  attach_file: <path d="m21 8.5-9.5 9.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 1 1-2.8-2.8l8.5-8.5" />,
   bookmark: <path d="M7 4.5h10v15l-5-3-5 3z" />,
   calendar_today: <path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z" />,
   call: <path d="M7.5 4.5 10 9l-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2 4.5 2.5-1.5 3c-.4.8-1.3 1.2-2.2 1A17 17 0 0 1 3.5 8.7c-.2-.9.2-1.8 1-2.2z" />,
@@ -50,6 +56,7 @@ const PATHS: Record<FontFreeIconName, ReactElement> = {
   chevron_right: <path d="m9.5 6 6 6-6 6" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
   dark_mode: <path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z" />,
+  download: <path d="M12 4v10m-4-4 4 4 4-4M5 20h14" />,
   expand_more: <path d="m7 9.5 5 5 5-5" />,
   favorite: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />,
   how_to_reg: <path d="M8 12h6m-6 4h4m-5-8h7m3 8 2 2 4-5M5 4.5h12v6.5M5 4.5v15h9" />,
@@ -66,6 +73,7 @@ const PATHS: Record<FontFreeIconName, ReactElement> = {
   payments: <path d="M4 7h16v10H4zm0 3h16m-5 4h2" />,
   person_add: <path d="M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-6 8a6 6 0 0 1 12 0m4-9v6m-3-3h6" />,
   play_arrow: <path d="M8 5v14l11-7z" />,
+  push_pin: <path d="m14 4 6 6-3 1-4 4v5l-2 2-3-6-6-3 2-2h5l4-4z" />,
   rate_review: <path d="M5 5h14v10H9l-4 4zm4 4h6m-6 3h4" />,
   school: <path d="m3 9 9-5 9 5-9 5zm4 3.5V17c2.8 2 7.2 2 10 0v-4.5" />,
   send: <path d="m3.5 20 17-8-17-8 3 8zM6.5 12h14" />,

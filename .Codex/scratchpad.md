@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 공개 갤러리 아이콘 폰트 요청 제거
+- 작업명: 공개 공지 아이콘 폰트 요청 제거
 - 상태: 빌드 검증 완료
-- 범위: `/gallery` 공개 그리드/라이트박스 단순 아이콘
+- 범위: `/notices` 공개 목록/상세 단순 아이콘
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -67,9 +67,11 @@
 | 런타임 폰트 CSS 지연 로딩 | 완료 | Pretendard/Material Symbols stylesheet를 head에서 제거하고 첫 paint/idle 후 로드 |
 | 홈/공통 아이콘 폰트 요청 제거 | 완료 | 홈 HTML의 `material-symbols-outlined`/Material Symbols URL 0건 확인 |
 | 공개 갤러리 아이콘 폰트 요청 제거 | 완료 | `/gallery` HTML의 `material-symbols-outlined`/Material Symbols URL 0건 확인 |
+| 공개 공지 아이콘 폰트 요청 제거 | 완료 | `/notices` 소스/HTML의 Material Symbols 사용 흔적 0건 확인 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build`, `npx.cmd next build --webpack` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/notices` 목록/상세의 고정글, 첨부파일, 뒤로가기, 다운로드 아이콘을 `FontFreeIcon`으로 바꿔 공개 공지 HTML에서 Material Symbols 요청 흔적을 제거함.
 - 2026-07-09: `/gallery` 공개 그리드와 라이트박스의 이미지/재생/날짜/닫기/이전/다음 아이콘을 `FontFreeIcon`으로 바꿔 공개 갤러리 HTML에서 Material Symbols 요청 흔적을 제거함.
 - 2026-07-09: 공개 헤더/푸터/테마/챗봇/가이드/후기/인스타 미리보기와 관리자 shell 단순 아이콘을 `FontFreeIcon`으로 바꾸고, Material Symbols stylesheet는 실제 사용처가 있는 페이지에서만 로드되도록 조정함.
 - 2026-07-09: Pretendard/Material Symbols 외부 stylesheet를 전역 head에서 제거하고 `DeferredFontStyles`로 첫 paint 이후 지연 로드해 렌더 차단 가능성을 낮춤.
@@ -79,18 +81,17 @@
 - 2026-07-09: `/admin/staff`의 SMS 초대 링크 발송 모달을 `InviteStaffModal`로 분리해 스태프 목록 초기 렌더에서 초대 폼/액션 코드를 제외함.
 - 2026-07-09: `/admin/staff`의 직접 스태프 추가 모달을 `AddStaffModal`로 분리해 스태프 목록 초기 렌더에서 전화번호 인증/계정 생성 UI 코드를 제외함.
 - 2026-07-09: `/admin/classes`의 반 작성/수정 폼을 `ClassFormPanel`로 분리해 반 목록 초기 렌더에서 create/update 폼 코드를 제외함.
-- 2026-07-09: `/admin/classes/[id]`의 수업 기록/사진 업로드 모달을 클릭 후 동적 로드로 바꿔 수업 상세 초기 렌더에서 사진 압축 코드를 제외함.
 
 ## 구현 기록
-- 변경 파일: `src/app/gallery/GalleryPublicClient.tsx`, `src/app/gallery/GalleryLightboxOverlay.tsx`, `src/components/ui/FontFreeIcon.tsx`
-- 주요 변경: 공개 갤러리의 이미지 없음/영상 재생/날짜/라이트박스 조작 아이콘을 `FontFreeIcon`으로 전환.
-- 적용 범위: `/gallery` 공개 그리드와 클릭 후 로드되는 라이트박스.
+- 변경 파일: `src/app/notices/page.tsx`, `src/app/notices/[id]/page.tsx`, `src/components/ui/FontFreeIcon.tsx`
+- 주요 변경: 공개 공지 목록/상세의 단순 아이콘을 `FontFreeIcon`으로 전환.
+- 적용 범위: `/notices` 공개 목록과 `/notices/[id]` 상세.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과
-- `.next/server/app/gallery.html`에서 `material-symbols-outlined`, `fonts.googleapis`, `material-symbols-css` 0건 확인
+- `src/app/notices`와 `.next/server/app/notices.html`에서 `material-symbols-outlined`, `fonts.googleapis`, `material-symbols-css` 0건 확인
 - 빌드 중 Supabase DB 접속 실패 로그는 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/notices`, `/apply`, `/admin/gallery`, `/admin/apply`의 남은 Material Symbols 사용처를 우선순위별로 `FontFreeIcon` 또는 로컬 아이콘으로 전환.
+- 다음 속도 개선 후보: `/apply`, `/admin/gallery`, `/admin/apply`의 남은 Material Symbols 사용처를 우선순위별로 `FontFreeIcon` 또는 로컬 아이콘으로 전환.

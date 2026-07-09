@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 반 관리 작성 폼 지연 로딩
+- 작업명: 스태프 직접 추가 모달 지연 로딩
 - 상태: 타입 검증 완료
-- 범위: `/admin/classes`
+- 범위: `/admin/staff`
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -59,9 +59,11 @@
 | 공지 소셜 발행 모달 지연 로딩 | 완료 | `/admin/notices` 소셜 발행 준비/게시 UI 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 수업 상세 기록 모달 지연 로딩 | 완료 | `/admin/classes/[id]` 수업 기록/사진 업로드 모달 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 반 관리 작성 폼 지연 로딩 | 완료 | `/admin/classes` 반 작성/수정 폼과 저장 액션 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
+| 스태프 직접 추가 모달 지연 로딩 | 완료 | `/admin/staff` 전화번호 인증/직접 추가 모달 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 타입/빌드 검증 | 진행 | `npx.cmd tsc --noEmit` 통과, `next build`는 Google Fonts 외부 다운로드 실패 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/staff`의 직접 스태프 추가 모달을 `AddStaffModal`로 분리해 스태프 목록 초기 렌더에서 전화번호 인증/계정 생성 UI 코드를 제외함.
 - 2026-07-09: `/admin/classes`의 반 작성/수정 폼을 `ClassFormPanel`로 분리해 반 목록 초기 렌더에서 create/update 폼 코드를 제외함.
 - 2026-07-09: `/admin/classes/[id]`의 수업 기록/사진 업로드 모달을 클릭 후 동적 로드로 바꿔 수업 상세 초기 렌더에서 사진 압축 코드를 제외함.
 - 2026-07-09: `/admin/notices`의 소셜 발행 준비/게시 모달을 `NoticeSocialModal`로 분리해 공지 목록 초기 렌더에서 소셜 캠페인 UI 코드를 제외함.
@@ -71,12 +73,11 @@
 - 2026-07-09: `/admin/apply` 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄임.
 - 2026-07-09: `/admin/schedule` 편집/추가/구글시트 모달과 표 미리보기를 동적 로드로 분리해 첫 JS를 137.1KB에서 118.6KB로 줄임.
 - 2026-07-09: 페이지 빌더의 남은 lucide 아이콘 import를 Material Symbols로 바꿔 `src/app`, `src/components`의 실제 `lucide-react` import를 모두 제거함.
-- 2026-07-09: `ChatPanel`의 lucide 닫기/전송 아이콘을 Material Symbols로 바꿔 챗봇 동적 패널의 아이콘 라이브러리 의존을 제거함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/classes/ClassManagementClient.tsx`, `src/app/admin/classes/ClassFormPanel.tsx`
-- 주요 변경: 반 목록/삭제는 유지하고 반 작성/수정 폼과 `createClass`/`updateClass` 액션 호출을 `next/dynamic` 폼 패널로 분리.
-- 적용 범위: 관리자 반 관리 목록.
+- 변경 파일: `src/app/admin/staff/StaffClient.tsx`, `src/app/admin/staff/AddStaffModal.tsx`
+- 주요 변경: 스태프 목록/역할 변경/초대 관리는 유지하고 전화번호 인증이 포함된 직접 추가 모달과 `createStaffUser` 액션 호출을 `next/dynamic`으로 분리.
+- 적용 범위: 관리자 스태프 관리.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -84,4 +85,4 @@
 - 산출물 확인: 빌드 완료 실패로 route JS 수치 측정 보류.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/programs`, `/admin/staff`, `/admin/settings`의 기본 닫힘 폼/보조 UI 분리와 빌드 산출물 재측정.
+- 다음 속도 개선 후보: `/admin/staff` 초대 모달 분리, `/admin/programs`, `/admin/settings`의 기본 닫힘 폼/보조 UI 분리와 빌드 산출물 재측정.

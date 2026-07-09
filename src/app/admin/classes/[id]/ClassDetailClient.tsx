@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import SessionLogModal, { type SessionInitialData } from "./SessionLogModal";
+import type { SessionInitialData } from "./SessionLogModal";
+
+const SessionLogModal = dynamic(() => import("./SessionLogModal"), {
+    loading: () => null,
+});
 
 // 요일 한글 변환 맵
 const DAY_LABELS: Record<string, string> = {
@@ -248,22 +253,24 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
             </div>
 
             {/* 수업 기록 모달 (신규/수정 모드) */}
-            <SessionLogModal
-                isOpen={showSessionLog}
-                onClose={() => {
-                    setShowSessionLog(false);
-                    setEditingSession(null);
-                }}
-                classId={classData.id}
-                initialData={editingSession ?? undefined}
-                coaches={coaches.map((c) => ({ id: c.id, name: c.name }))}
-                students={classData.students.map((s) => ({
-                    id: s.studentId,
-                    name: s.studentName,
-                    gender: s.gender,
-                }))}
-                onSaved={handleSaved}
-            />
+            {showSessionLog && (
+                <SessionLogModal
+                    isOpen={showSessionLog}
+                    onClose={() => {
+                        setShowSessionLog(false);
+                        setEditingSession(null);
+                    }}
+                    classId={classData.id}
+                    initialData={editingSession ?? undefined}
+                    coaches={coaches.map((c) => ({ id: c.id, name: c.name }))}
+                    students={classData.students.map((s) => ({
+                        id: s.studentId,
+                        name: s.studentName,
+                        gender: s.gender,
+                    }))}
+                    onSaved={handleSaved}
+                />
+            )}
         </div>
     );
 }

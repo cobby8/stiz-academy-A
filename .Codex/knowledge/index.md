@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/classes/[id]`의 수업 기록/사진 업로드 모달을 클릭 후 동적 로드로 전환했다.
 - 2026-07-09: `/admin/notices`의 소셜 발행 준비/게시 모달을 `NoticeSocialModal` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄였다.
@@ -8,7 +9,6 @@
 - 2026-07-09: 페이지 빌더의 남은 `lucide-react` 아이콘 import를 Material Symbols로 전환해 `src/app`, `src/components` 실제 import를 0건으로 만들었다.
 - 2026-07-09: `ChatPanel`의 `lucide-react` 닫기/전송 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin` 관리자 대시보드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
-- 2026-07-09: `/notices/[id]` 공지 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 
 # STIZ Knowledge Index
 
@@ -76,3 +76,4 @@
 - `/admin/gallery`처럼 업로드 폼이 닫힌 상태로 시작하는 관리 화면은 이미지 압축/업로드 코드가 포함된 폼을 동적 로드해 목록 초기 route chunk를 줄인다.
 - `/admin/trial`처럼 목록을 먼저 보는 CRM 화면은 신규 등록/전환/이탈/메모 모달을 별도 파일로 분리해 클릭 후 로드한다.
 - `/admin/notices`처럼 목록과 소셜 홍보 도구가 함께 있는 화면은 소셜 미리보기/발행 UI를 별도 동적 모달로 분리한다.
+- `/admin/classes/[id]`처럼 상세 화면에 사진 업로드 모달이 붙은 경우, 압축/업로드 코드는 모달을 열 때만 로드한다.

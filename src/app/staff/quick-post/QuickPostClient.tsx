@@ -2,7 +2,6 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowRight, Camera, CheckCircle2, Loader2, RefreshCcw, Save, Send, Sparkles, UploadCloud } from "lucide-react";
 import {
   createSocialPostDraft,
   publishSocialPostDraftToGallery,
@@ -17,6 +16,26 @@ import type { SocialPostDraft } from "@/lib/socialDrafts";
 const LESSON_TYPES = ["정규 수업", "기초반", "심화반", "게임 수업", "특강", "대회 준비"];
 const MAX_UPLOAD_COUNT = 10;
 type UploadProgress = { done: number; total: number };
+
+function SymbolIcon({
+  name,
+  size = 18,
+  className = "",
+}: {
+  name: string;
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`material-symbols-outlined leading-none ${className}`}
+      style={{ fontSize: `${size}px` }}
+      aria-hidden="true"
+    >
+      {name}
+    </span>
+  );
+}
 
 export default function QuickPostClient({
   currentUser,
@@ -227,14 +246,14 @@ export default function QuickPostClient({
             disabled={busy}
             className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-4 py-3 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-60"
           >
-            {busy ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
+            <SymbolIcon name={busy ? "progress_activity" : "photo_camera"} size={20} className={busy ? "animate-spin" : ""} />
             사진 선택하고 AI 초안 만들기
           </button>
         </section>
 
         {message && (
           <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-bold text-green-700">
-            <CheckCircle2 size={17} />
+            <SymbolIcon name="check_circle" size={17} />
             {message}
           </div>
         )}
@@ -249,7 +268,7 @@ export default function QuickPostClient({
           <section className="space-y-3">
             <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
               <div className="flex items-center gap-2 text-sm font-black">
-                <CheckCircle2 size={18} />
+                <SymbolIcon name="check_circle" size={18} />
                 {isPublished
                   ? "게시 완료"
                   : needsInstagramRetry
@@ -271,7 +290,7 @@ export default function QuickPostClient({
                   className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-lg bg-green-700 px-3 text-sm font-black text-white"
                 >
                   관리자 갤러리 보기
-                  <ArrowRight size={17} />
+                  <SymbolIcon name="arrow_forward" size={17} />
                 </Link>
               )}
               {isPublished && (
@@ -281,7 +300,7 @@ export default function QuickPostClient({
                     className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-green-200 bg-white px-3 text-sm font-black text-green-700"
                   >
                     홈페이지 갤러리 보기
-                    <ArrowRight size={17} />
+                    <SymbolIcon name="arrow_forward" size={17} />
                   </Link>
                   {draft?.instagramPermalink && (
                     <a
@@ -291,7 +310,7 @@ export default function QuickPostClient({
                       className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-green-700 px-3 text-sm font-black text-white"
                     >
                       인스타그램 게시물 보기
-                      <ArrowRight size={17} />
+                      <SymbolIcon name="arrow_forward" size={17} />
                     </a>
                   )}
                 </div>
@@ -314,7 +333,7 @@ export default function QuickPostClient({
                 disabled={busy || isPublished}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-navy-900 px-3 text-sm font-black text-white disabled:opacity-60"
               >
-                <Save size={18} />
+                <SymbolIcon name="save" size={18} />
                 수정 저장
               </button>
               {!isPublished && (
@@ -324,7 +343,11 @@ export default function QuickPostClient({
                   disabled={busy || hasPublishingStatus}
                   className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-3 text-sm font-black text-white disabled:opacity-60"
                 >
-                  {hasPublishingStatus ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                  <SymbolIcon
+                    name={hasPublishingStatus ? "progress_activity" : "send"}
+                    size={18}
+                    className={hasPublishingStatus ? "animate-spin" : ""}
+                  />
                   {hasPublishingStatus ? "인스타그램 자동 게시 중" : needsInstagramRetry ? "인스타그램 다시 게시" : "바로 게시"}
                 </button>
               )}
@@ -334,7 +357,7 @@ export default function QuickPostClient({
                 disabled={busy}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-black text-gray-700 disabled:opacity-60"
               >
-                <RefreshCcw size={18} />
+                <SymbolIcon name="refresh" size={18} />
                 새로 작성
               </button>
             </div>
@@ -343,7 +366,7 @@ export default function QuickPostClient({
 
         {!draft && !busy && (
           <div className="rounded-lg border border-dashed border-gray-300 bg-white/70 p-6 text-center text-gray-500">
-            <UploadCloud className="mx-auto mb-2 h-9 w-9 text-gray-400" />
+            <SymbolIcon name="cloud_upload" size={36} className="mx-auto mb-2 text-gray-400" />
             <p className="text-sm font-bold">사진을 고르면 인스타 피드 형태로 미리보기가 만들어집니다.</p>
             <p className="mt-1 text-xs">문구를 확인한 뒤 승인 과정 없이 바로 게시할 수 있습니다.</p>
           </div>
@@ -351,7 +374,7 @@ export default function QuickPostClient({
 
         {hasPublishingStatus && !busy && (
           <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-700">
-            <Loader2 size={18} className="mt-0.5 shrink-0 animate-spin" />
+            <SymbolIcon name="progress_activity" size={18} className="mt-0.5 shrink-0 animate-spin" />
             <div>
               <p>인스타그램 자동 게시 중입니다.</p>
               <p className="mt-1 text-xs font-medium text-blue-600">
@@ -363,7 +386,7 @@ export default function QuickPostClient({
 
         {busy && (
           <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm font-bold text-gray-600">
-            <Sparkles size={18} className="mt-0.5 shrink-0 text-brand-orange-500" />
+            <SymbolIcon name="auto_awesome" size={18} className="mt-0.5 shrink-0 text-brand-orange-500" />
             <div className="min-w-0 flex-1">
               <p>{progressText || "처리 중입니다."}</p>
               {uploadProgress && uploadProgress.total > 0 && (

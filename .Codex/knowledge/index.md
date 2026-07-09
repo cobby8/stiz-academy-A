@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/staff/quick-post` 선생님 빠른 업로드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/faq` FAQ 관리의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/requests` 요청 관리의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/students/[id]` 학생 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
@@ -8,13 +9,12 @@
 - 2026-07-09: `/admin/students` 엑셀 업로드 모달을 클릭 후 동적 로드하도록 분리했다.
 - 2026-07-09: `/setup` 최초 관리자 생성 흐름을 서버 API로 옮겨 Supabase 브라우저 SDK를 제거했다.
 - 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮겨 `sanitize-html` client chunk를 제거했다.
-- 2026-07-09: 관리자 shell 로그아웃 아이콘의 `lucide-react` import를 제거하고 Material Symbols 아이콘으로 바꿨다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 관리자 FAQ/요청/학생/수업 상세처럼 업무 화면의 단순 아이콘은 Material Symbols를 우선 사용해 route chunk에 아이콘 라이브러리가 붙지 않게 한다.
+- 최근 지식: 선생님 빠른 업로드와 관리자 CRUD 화면의 단순 아이콘은 Material Symbols를 우선 사용해 route chunk에 아이콘 라이브러리가 붙지 않게 한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -64,3 +64,4 @@
 - `/admin/students/[id]` 같은 학생 상세 업무 화면의 섹션/저장 아이콘도 Material Symbols로 유지해 학생 상세 route chunk를 줄인다.
 - `/admin/requests` 같은 요청 처리 화면의 상태/펼침/빈 상태 아이콘도 Material Symbols로 유지해 요청 관리 route chunk를 줄인다.
 - `/admin/faq` 같은 단순 CRUD 관리 화면의 생성/닫기/상태/수정/삭제 아이콘도 Material Symbols로 유지해 FAQ 관리 route chunk를 줄인다.
+- `/staff/quick-post`처럼 모바일에서 바로 쓰는 업로드 화면의 로딩/저장/게시/상태 아이콘도 Material Symbols로 유지해 선생님 화면 route chunk를 줄인다.

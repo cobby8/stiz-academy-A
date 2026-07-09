@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 학부모 수강신청 후속 단계 지연 로딩
+- 작업명: 관리자 갤러리 업로드 폼 지연 로딩
 - 상태: 검증 완료
-- 범위: `/apply/enroll`
+- 범위: `/admin/gallery`
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -54,9 +54,11 @@
 | 시간표 관리 모달 지연 로딩 | 완료 | `/admin/schedule` 첫 JS 137.1KB → 118.6KB |
 | 신청 관리 보조 UI 지연 로딩 | 완료 | `/admin/apply` 첫 JS 131.0KB → 115.5KB |
 | 수강신청 후속 단계 지연 로딩 | 완료 | `/apply/enroll` 첫 JS 131.2KB → 112.4KB |
+| 갤러리 업로드 폼 지연 로딩 | 완료 | `/admin/gallery` 첫 JS 126.4KB → 120.3KB |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄임.
 - 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄임.
 - 2026-07-09: `/admin/apply` 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄임.
 - 2026-07-09: `/admin/schedule` 편집/추가/구글시트 모달과 표 미리보기를 동적 로드로 분리해 첫 JS를 137.1KB에서 118.6KB로 줄임.
@@ -66,17 +68,16 @@
 - 2026-07-09: `/notices/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 99.9KB 유지.
 - 2026-07-09: `/mypage` 레이아웃/본문의 lucide 아이콘을 Material Symbols로 바꿔 마이페이지 첫 JS를 109.2KB에서 105.4KB로 줄임.
 - 2026-07-09: `/staff/quick-post`의 lucide 아이콘을 Material Symbols로 바꿔 선생님 빠른 업로드 첫 JS를 88.2KB에서 85.3KB로 줄임.
-- 2026-07-09: `/admin/faq`의 lucide 아이콘을 Material Symbols로 바꿔 FAQ 관리 첫 JS를 109.7KB에서 107.2KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/apply/enroll/EnrollApplicationForm.tsx`, `src/app/apply/enroll/EnrollApplicationLaterSteps.tsx`
-- 주요 변경: 첫 화면에 보이는 1단계 아이 정보는 유지하고, 2~4단계 보호자/수강정보/약관 UI를 `next/dynamic`으로 분리.
-- 적용 범위: 학부모 수강신청 자체 폼.
+- 변경 파일: `src/app/admin/gallery/GalleryAdminClient.tsx`, `src/app/admin/gallery/GalleryPostFormModal.tsx`
+- 주요 변경: 갤러리 목록/초안 관리는 유지하고 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 `next/dynamic`으로 분리.
+- 적용 범위: 관리자 사진/영상 갤러리 관리.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/apply/enroll` 첫 JS 131.2KB → 112.4KB.
+- 산출물 확인: `/admin/gallery` 첫 JS 126.4KB → 120.3KB.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/gallery`, `/admin/trial`, `/admin/notices`의 초기 업로드/처리 모달 분리.
+- 다음 속도 개선 후보: `/admin/trial`, `/admin/notices`, `/admin/classes/[id]`의 초기 보조 UI 분리.

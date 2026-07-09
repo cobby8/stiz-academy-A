@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Script from "next/script";
 
-const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || "537084849778028";
+const TRACK_RETRY_LIMIT = 3;
+const TRACK_RETRY_DELAY_MS = 600;
 
 type MetaEventParams = Record<string, string | number | boolean | undefined>;
 
@@ -14,9 +16,30 @@ declare global {
     }
 }
 
-export function trackMetaEvent(eventName: string, params?: MetaEventParams) {
-    if (typeof window === "undefined" || !window.fbq || !META_PIXEL_ID) return;
-    window.fbq("track", eventName, params ?? {});
+function getTestEventCode() {
+    if (typeof window === "undefined") return undefined;
+    return new URLSearchParams(window.location.search).get("test_event_code")?.trim() || undefined;
+}
+
+function withTestEventCode(params?: MetaEventParams) {
+    const testEventCode = getTestEventCode();
+    return testEventCode ? { ...(params ?? {}), test_event_code: testEventCode } : params ?? {};
+}
+
+export function trackMetaEvent(eventName: string, params?: MetaEventParams, retryCount = 0) {
+    if (typeof window === "undefined" || !META_PIXEL_ID) return;
+
+    if (!window.fbq) {
+        if (retryCount < TRACK_RETRY_LIMIT) {
+            window.setTimeout(
+                () => trackMetaEvent(eventName, params, retryCount + 1),
+                TRACK_RETRY_DELAY_MS * (retryCount + 1),
+            );
+        }
+        return;
+    }
+
+    window.fbq("track", eventName, withTestEventCode(params));
 }
 
 export default function MetaPixel() {

@@ -9,7 +9,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Send } from "lucide-react";
 import ChatMessage from "./ChatMessage";
 
 interface ChatPanelProps {
@@ -22,6 +21,24 @@ const WELCOME_MESSAGE = {
   content:
     "안녕하세요! STIZ 농구교실입니다.\n수업에 대해 궁금한 점을 편하게 물어보세요.",
 };
+
+function SymbolIcon({
+  name,
+  size = 18,
+}: {
+  name: string;
+  size?: number;
+}) {
+  return (
+    <span
+      className="material-symbols-outlined leading-none"
+      style={{ fontSize: `${size}px` }}
+      aria-hidden="true"
+    >
+      {name}
+    </span>
+  );
+}
 
 export default function ChatPanel({ onClose }: ChatPanelProps) {
   // 대화 히스토리 (인사 메시지로 시작)
@@ -153,7 +170,7 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
             className="p-1 hover:bg-orange-600 rounded-full transition-colors"
             aria-label="채팅 닫기"
           >
-            <X size={20} />
+            <SymbolIcon name="close" size={20} />
           </button>
         </div>
 
@@ -206,7 +223,7 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
               "
               aria-label="메시지 전송"
             >
-              <Send size={18} />
+              <SymbolIcon name="send" size={18} />
             </button>
           </div>
         </div>

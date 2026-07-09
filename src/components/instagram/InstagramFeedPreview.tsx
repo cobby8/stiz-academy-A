@@ -1,12 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Heart, MessageCircle, MoreHorizontal, Send } from "lucide-react";
 
 export type InstagramPreviewMediaItem = {
   url: string;
   type: "image" | "video";
 };
+
+function SymbolIcon({ name, size, className = "" }: { name: string; size: number; className?: string }) {
+  return (
+    <span
+      className={`material-symbols-outlined leading-none ${className}`}
+      style={{ fontSize: `${size}px` }}
+      aria-hidden="true"
+    >
+      {name}
+    </span>
+  );
+}
 
 export default function InstagramFeedPreview({
   mediaItems,
@@ -48,7 +59,7 @@ export default function InstagramFeedPreview({
             <p className="truncate text-[11px] text-gray-500 dark:text-gray-400">STIZ Basketball Dasan</p>
           </div>
         </div>
-        <MoreHorizontal size={18} className="shrink-0 text-gray-500" />
+        <SymbolIcon name="more_horiz" size={18} className="shrink-0 text-gray-500" />
       </div>
 
       <div className={`relative bg-gray-100 dark:bg-gray-800 ${compact ? "aspect-square" : "aspect-[4/5]"}`}>
@@ -66,7 +77,7 @@ export default function InstagramFeedPreview({
               className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-black/60"
               aria-label="이전 사진"
             >
-              <ChevronLeft size={18} />
+              <SymbolIcon name="chevron_left" size={18} />
             </button>
             <button
               type="button"
@@ -74,7 +85,7 @@ export default function InstagramFeedPreview({
               className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-black/60"
               aria-label="다음 사진"
             >
-              <ChevronRight size={18} />
+              <SymbolIcon name="chevron_right" size={18} />
             </button>
             <div className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold text-white">
               {Math.min(activeIndex + 1, images.length)} / {images.length}
@@ -86,11 +97,11 @@ export default function InstagramFeedPreview({
       <div className="space-y-3 p-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Heart size={21} />
-            <MessageCircle size={21} />
-            <Send size={21} />
+            <SymbolIcon name="favorite" size={21} />
+            <SymbolIcon name="chat_bubble" size={21} />
+            <SymbolIcon name="send" size={21} />
           </div>
-          <Bookmark size={21} />
+          <SymbolIcon name="bookmark" size={21} />
         </div>
 
         {images.length > 1 && (

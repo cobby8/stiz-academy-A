@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 학생 관리 엑셀 모달 지연 로딩
+- 작업명: 갤러리/인스타 미리보기 아이콘 JS 제거
 - 상태: 검증 완료
-- 범위: 관리자 학생 관리 화면
+- 범위: 관리자 갤러리와 인스타 미리보기
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -39,9 +39,11 @@
 | 신청 페이지 client bundle 축소 | 완료 | `sanitize-html`을 client bundle에서 제거해 `/apply` 첫 JS 대폭 축소 |
 | setup 페이지 Supabase SDK 제거 | 완료 | 최초 관리자 생성 API를 서버 처리로 옮겨 `/setup` 첫 JS 대폭 축소 |
 | 학생 관리 엑셀 모달 지연 로딩 | 완료 | 엑셀 업로드 모달을 클릭 후 별도 chunk로 로드 |
+| 갤러리/인스타 미리보기 아이콘 JS 제거 | 완료 | lucide 아이콘을 Material Symbols로 전환 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/gallery`와 `InstagramFeedPreview`의 lucide 아이콘을 Material Symbols로 바꿔 갤러리 첫 JS를 131.5KB에서 126.2KB로 줄임.
 - 2026-07-09: `/admin/students` 엑셀 업로드 모달을 동적 로드로 분리해 학생 관리 첫 JS를 134.6KB에서 123.0KB로 줄임.
 - 2026-07-09: `/setup` 관리자 생성 처리를 서버 API로 옮겨 Supabase 브라우저 SDK를 제거하고 첫 JS를 265.5KB에서 64.8KB로 줄임.
 - 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮기고 공개 푸터 lucide import를 제거해 첫 JS를 372.4KB에서 116.3KB로 줄임.
@@ -50,17 +52,16 @@
 - 2026-07-09: 관리자 shell에서 Supabase 브라우저 재조회/클라이언트 로그아웃을 제거하고 알림·체험 카운트 조회를 지연함.
 - 2026-07-09: 공개 헤더/테마 토글/챗봇 버튼의 lucide 아이콘을 Material Symbols로 바꿔 홈 entry JS를 약 0.05MB로 줄임.
 - 2026-07-09: 공개 헤더의 Supabase 계정 상태 확인을 동적 컴포넌트로 분리해 홈 entry JS를 약 0.06MB로 줄임.
-- 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달에서만 동적 로드하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/students/StudentManagementClient.tsx`
-- 주요 변경: `ExcelUploadModal`을 정적 import에서 `next/dynamic`으로 변경하고, 업로드 버튼 클릭 후에만 렌더하도록 조건부 로딩.
-- 적용 범위: `/admin/students` 학생 목록 초기 client JS.
+- 변경 파일: `src/app/admin/gallery/GalleryAdminClient.tsx`, `src/components/instagram/InstagramFeedPreview.tsx`
+- 주요 변경: 갤러리 액션 버튼, 상태 배지, 인스타 미리보기 UI의 `lucide-react` 아이콘을 Material Symbols 기반 `SymbolIcon`으로 대체.
+- 적용 범위: `/admin/gallery`와 인스타 미리보기를 공유하는 선생님 빠른 업로드 화면.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/admin/students/page` 첫 JS 134.6KB → 123.0KB, 엑셀 모달은 별도 chunk로 분리.
+- 산출물 확인: `/admin/gallery/page` 첫 JS 131.5KB → 126.2KB, `/staff/quick-post/page` 88.2KB.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/gallery` 업로드/인스타 미리보기 보조 UI chunk 추가 분리.
+- 다음 속도 개선 후보: 관리자 schedule/apply/notices 등 남은 120KB대 화면은 모달/편집 폼 단위 분리 여부 추가 검토.

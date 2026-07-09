@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin` 관리자 대시보드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/notices/[id]` 공지 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/mypage` 마이페이지 레이아웃/본문의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/staff/quick-post` 선생님 빠른 업로드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
@@ -8,13 +9,12 @@
 - 2026-07-09: `/admin/classes/[id]` 수업 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/notices`의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/gallery`와 `InstagramFeedPreview`의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
-- 2026-07-09: `/admin/students` 엑셀 업로드 모달을 클릭 후 동적 로드하도록 분리했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 공지 상세/마이페이지/선생님 빠른 업로드/관리자 CRUD 화면의 단순 아이콘은 Material Symbols를 우선 사용해 route chunk와 서버 렌더 의존을 줄인다.
+- 최근 지식: 관리자 대시보드/공지 상세/마이페이지/선생님 빠른 업로드 화면의 단순 아이콘은 Material Symbols를 우선 사용해 route chunk와 서버 렌더 의존을 줄인다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -67,3 +67,4 @@
 - `/staff/quick-post`처럼 모바일에서 바로 쓰는 업로드 화면의 로딩/저장/게시/상태 아이콘도 Material Symbols로 유지해 선생님 화면 route chunk를 줄인다.
 - `/mypage`처럼 부모님이 로그인 후 쓰는 화면의 하단탭/알림/요청/수납/사진 아이콘도 Material Symbols로 유지해 마이페이지 route chunk를 줄인다.
 - `/notices/[id]`처럼 서버 렌더 중심인 공개 상세 화면도 단순 아이콘은 Material Symbols로 유지해 서버 렌더 아이콘 라이브러리 의존을 줄인다.
+- `/admin`처럼 서버 렌더 중심인 관리자 대시보드도 단순 아이콘은 Material Symbols로 유지해 서버 렌더 아이콘 라이브러리 의존을 줄인다.

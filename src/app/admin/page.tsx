@@ -1,4 +1,3 @@
-import { Users, BookOpen, UserCheck, Layers, Database, CloudOff, TrendingUp, TrendingDown, Minus, AlertTriangle, MessageSquare, Clock, CalendarCheck, UserPlus } from "lucide-react";
 import { Suspense } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +6,26 @@ import Link from "next/link";
 
 // 30초 캐시: 아무도 수정 안 할 때 캐시 유지, Server Action 호출 시 즉시 무효화
 export const revalidate = 30;
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 // DB 연결 상태만 확인 (빠름, 보통 수십ms)
 async function getDbStatus() {
@@ -61,7 +80,7 @@ async function BackupStatusSection() {
         <>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                    {backupWarn ? <CloudOff size={14} className={backupDanger ? "text-red-500" : "text-yellow-500"} /> : <span className="text-sm">☁️</span>}
+                    {backupWarn ? <SymbolIcon name="cloud_off" size={14} className={backupDanger ? "text-red-500" : "text-yellow-500"} /> : <span className="text-sm">☁️</span>}
                     <span>마지막 백업</span>
                 </div>
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${backupDanger ? "bg-red-100 text-red-700" : backupWarn ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
@@ -94,7 +113,7 @@ async function SystemStatusCard() {
                 {/* DB 상태: 빠르게 표시 */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                        <Database size={14} className="text-gray-400" />
+                        <SymbolIcon name="database" size={14} className="text-gray-400" />
                         <span>데이터베이스</span>
                     </div>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${dbOk ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
@@ -242,7 +261,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                     <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{formatKRW(ext.thisMonthRevenue)}</h3>
                     {ext.lastMonthRevenue > 0 && (
                         <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${revDiff >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            {revDiff > 0 ? <TrendingUp size={14} /> : revDiff < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                            <SymbolIcon name={revDiff > 0 ? "trending_up" : revDiff < 0 ? "trending_down" : "remove"} size={14} />
                             전월 대비 {revDiff > 0 ? "+" : ""}{revDiff}%
                         </div>
                     )}
@@ -259,7 +278,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                     </h3>
                     {ext.unpaidAmount > 0 && (
                         <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                            <AlertTriangle size={12} /> {formatKRW(ext.unpaidAmount)}
+                            <SymbolIcon name="warning" size={12} /> {formatKRW(ext.unpaidAmount)}
                         </p>
                     )}
                 </Link>
@@ -331,7 +350,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                 {/* 오늘의 수업 */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <CalendarCheck size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" />
+                        <SymbolIcon name="event_available" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                         오늘의 수업 ({todayLabel})
                     </h3>
                     {todayClasses.length === 0 ? (
@@ -362,7 +381,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                     {/* 신규 원생 */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                            <UserPlus size={18} className="text-emerald-500" />
+                            <SymbolIcon name="person_add" size={18} className="text-emerald-500" />
                             신규 원생 (최근 7일)
                         </h3>
                         {recentStudents.length === 0 ? (
@@ -390,7 +409,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-yellow-200">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <Clock size={18} className="text-yellow-500" />
+                                    <SymbolIcon name="schedule" size={18} className="text-yellow-500" />
                                     대기중 요청
                                 </h3>
                                 <Link href="/admin/requests" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
@@ -470,7 +489,7 @@ export default async function AdminDashboard() {
                 <Link href="/admin/requests"
                     className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 hover:bg-yellow-100 transition shadow-sm">
                     <div className="bg-yellow-400 text-white p-2 rounded-full">
-                        <MessageSquare size={20} />
+                        <SymbolIcon name="forum" size={20} />
                     </div>
                     <div className="flex-1">
                         <p className="font-bold text-yellow-800">
@@ -490,7 +509,7 @@ export default async function AdminDashboard() {
                 <Link href="/admin/apply"
                     className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl p-4 hover:bg-blue-100 transition shadow-sm">
                     <div className="bg-blue-500 text-white p-2 rounded-full">
-                        <UserPlus size={20} />
+                        <SymbolIcon name="person_add" size={20} />
                     </div>
                     <div className="flex-1">
                         <p className="font-bold text-blue-800">
@@ -507,13 +526,13 @@ export default async function AdminDashboard() {
             {/* KPI Cards - Row 1: 기본 통계 (빠른 쿼리로 즉시 표시) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="등록 원생" value={`${stats.studentCount}명`}
-                    icon={<Users className="w-5 h-5 text-blue-500" />} href="/admin/students" />
+                    icon={<SymbolIcon name="groups" size={20} className="text-blue-500" />} href="/admin/students" />
                 <StatCard title="운영 프로그램" value={`${stats.programCount}개`}
-                    icon={<BookOpen className="w-5 h-5 text-brand-orange-500 dark:text-brand-neon-lime" />} href="/admin/programs" />
+                    icon={<SymbolIcon name="menu_book" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />} href="/admin/programs" />
                 <StatCard title="코치/강사진" value={`${stats.coachCount}명`}
-                    icon={<UserCheck className="w-5 h-5 text-emerald-500" />} href="/admin/coaches" />
+                    icon={<SymbolIcon name="person_check" size={20} className="text-emerald-500" />} href="/admin/coaches" />
                 <StatCard title="개설 반" value={`${stats.classCount}개`}
-                    icon={<Layers className="w-5 h-5 text-purple-500" />} href="/admin/classes" />
+                    icon={<SymbolIcon name="layers" size={20} className="text-purple-500" />} href="/admin/classes" />
             </div>
 
             {/* 느린 쿼리 섹션: 경영 통계 + 차트 + 오늘 수업 + 신규 원생 + Bottom Row */}

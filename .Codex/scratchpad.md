@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 마이페이지 아이콘 JS 제거
+- 작업명: 공지 상세 서버 아이콘 의존 제거
 - 상태: 검증 완료
-- 범위: 마이페이지 레이아웃/본문
+- 범위: 공개 공지 상세 화면
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -47,9 +47,11 @@
 | FAQ 관리 아이콘 JS 제거 | 완료 | FAQ 관리 lucide 아이콘을 Material Symbols로 전환 |
 | 선생님 빠른 업로드 아이콘 JS 제거 | 완료 | 빠른 업로드 lucide 아이콘을 Material Symbols로 전환 |
 | 마이페이지 아이콘 JS 제거 | 완료 | 마이페이지 lucide 아이콘을 Material Symbols로 전환 |
+| 공지 상세 서버 아이콘 의존 제거 | 완료 | 공지 상세 lucide 아이콘을 Material Symbols로 전환 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/notices/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 99.9KB 유지.
 - 2026-07-09: `/mypage` 레이아웃/본문의 lucide 아이콘을 Material Symbols로 바꿔 마이페이지 첫 JS를 109.2KB에서 105.4KB로 줄임.
 - 2026-07-09: `/staff/quick-post`의 lucide 아이콘을 Material Symbols로 바꿔 선생님 빠른 업로드 첫 JS를 88.2KB에서 85.3KB로 줄임.
 - 2026-07-09: `/admin/faq`의 lucide 아이콘을 Material Symbols로 바꿔 FAQ 관리 첫 JS를 109.7KB에서 107.2KB로 줄임.
@@ -59,17 +61,16 @@
 - 2026-07-09: `/admin/notices`의 lucide 아이콘을 Material Symbols로 바꿔 공지 관리 첫 JS를 127.6KB에서 124.4KB로 줄임.
 - 2026-07-09: `/admin/gallery`와 `InstagramFeedPreview`의 lucide 아이콘을 Material Symbols로 바꿔 갤러리 첫 JS를 131.5KB에서 126.2KB로 줄임.
 - 2026-07-09: `/admin/students` 엑셀 업로드 모달을 동적 로드로 분리해 학생 관리 첫 JS를 134.6KB에서 123.0KB로 줄임.
-- 2026-07-09: `/setup` 관리자 생성 처리를 서버 API로 옮겨 Supabase 브라우저 SDK를 제거하고 첫 JS를 265.5KB에서 64.8KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/mypage/layout.tsx`, `src/app/mypage/MyPageClient.tsx`
-- 주요 변경: 모바일 하단탭, 알림, 요청, 수납, 공지, 피드백, 사진 섹션 아이콘의 `lucide-react` import를 Material Symbols 기반 `SymbolIcon`으로 대체.
-- 적용 범위: `/mypage` 마이페이지 초기 client JS.
+- 변경 파일: `src/app/notices/[id]/page.tsx`
+- 주요 변경: 목록 이동, 중요 공지, 첨부파일, 다운로드 아이콘의 `lucide-react` import를 Material Symbols 기반 `SymbolIcon`으로 대체.
+- 적용 범위: `/notices/[id]` 공지 상세 서버 렌더.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/mypage/page` 첫 JS 109.2KB → 105.4KB.
+- 산출물 확인: `/notices/[id]/page` 첫 JS 99.9KB 유지. 서버 렌더 아이콘 라이브러리 의존 제거.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/notices/[id]`, `/admin` 대시보드, 페이지 빌더에 남은 아이콘 JS와 보조 패널 지연 로딩 여부 추가 검토.
+- 다음 속도 개선 후보: `/admin` 대시보드, 페이지 빌더, 챗봇 패널에 남은 아이콘 JS와 보조 패널 지연 로딩 여부 추가 검토.

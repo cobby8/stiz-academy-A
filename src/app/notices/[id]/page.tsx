@@ -4,12 +4,31 @@ import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import Badge from "@/components/ui/Badge";
 import CTABanner from "@/components/landing/CTABanner";
 import Link from "next/link";
-import { ArrowLeft, Paperclip, Download, Pin } from "lucide-react";
 import { notFound } from "next/navigation";
 import { toNoticeHtml, isImageAttachment, isHtmlContent } from "@/lib/noticeContent";
 import { sanitizeHtml } from "@/lib/sanitize";
 
 export const revalidate = 60;
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 export default async function NoticeDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -53,14 +72,14 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                             href="/notices"
                             className="inline-flex items-center gap-1.5 text-blue-200/70 hover:text-white text-sm mb-6 transition-colors"
                         >
-                            <ArrowLeft size={16} /> 목록으로 돌아가기
+                            <SymbolIcon name="arrow_back" size={16} /> 목록으로 돌아가기
                         </Link>
 
                         {/* 고정 공지 뱃지 */}
                         {notice.isPinned && (
                             <div className="mb-3">
                                 <Badge variant="error" size="md">
-                                    <Pin size={12} className="mr-1" />
+                                    <SymbolIcon name="push_pin" size={12} className="mr-1" />
                                     중요 공지
                                 </Badge>
                             </div>
@@ -124,7 +143,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                             {fileAtts.length > 0 && (
                                 <div className="mt-10 pt-6 border-t border-gray-100 dark:border-gray-800">
                                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
-                                        <Paperclip size={16} className="text-gray-400" />
+                                        <SymbolIcon name="attach_file" size={16} className="text-gray-400" />
                                         첨부파일 ({fileAtts.length}개)
                                     </h3>
                                     <div className="space-y-2">
@@ -141,7 +160,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                                                 </span>
                                                 <div className="flex items-center gap-3 flex-shrink-0 ml-4">
                                                     <span className="text-xs text-gray-400">{formatSize(a.size)}</span>
-                                                    <Download size={16} className="text-gray-400 group-hover:text-brand-orange-500 dark:group-hover:text-brand-neon-lime transition-colors" />
+                                                    <SymbolIcon name="download" size={16} className="text-gray-400 group-hover:text-brand-orange-500 dark:group-hover:text-brand-neon-lime transition-colors" />
                                                 </div>
                                             </a>
                                         ))}
@@ -157,7 +176,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
                             href="/notices"
                             className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-brand-navy-900 text-sm font-medium transition-colors"
                         >
-                            <ArrowLeft size={16} /> 목록으로 돌아가기
+                            <SymbolIcon name="arrow_back" size={16} /> 목록으로 돌아가기
                         </Link>
                     </div>
                 </div>

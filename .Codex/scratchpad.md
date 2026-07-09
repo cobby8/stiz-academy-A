@@ -1,7 +1,7 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 프로그램 작성/수정 폼 지연 로딩
+- 작업명: 설정 리치 에디터 가시 영역 지연 로딩
 - 상태: 타입 검증 완료
 - 범위: `/admin/staff`
 - 기준일: 2026-07-09
@@ -62,9 +62,11 @@
 | 스태프 직접 추가 모달 지연 로딩 | 완료 | `/admin/staff` 전화번호 인증/직접 추가 모달 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 스태프 초대 모달 지연 로딩 | 완료 | `/admin/staff` SMS 초대 링크 발송 모달 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 프로그램 작성/수정 폼 지연 로딩 | 완료 | `/admin/programs` 등록/수정 폼과 create/update 액션 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
+| 설정 리치 에디터 가시 영역 지연 로딩 | 완료 | `/admin/settings` 리치 에디터를 스크롤/호버/클릭 시 로드하도록 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 타입/빌드 검증 | 진행 | `npx.cmd tsc --noEmit` 통과, `next build`는 Google Fonts 외부 다운로드 실패 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 화면 근처에 올 때만 실제 편집기 chunk를 로드하도록 변경함.
 - 2026-07-09: `/admin/programs`의 등록/수정 폼을 `ProgramFormPanel`로 분리해 프로그램 목록 초기 렌더에서 create/update 폼 코드를 제외함.
 - 2026-07-09: `/admin/staff`의 SMS 초대 링크 발송 모달을 `InviteStaffModal`로 분리해 스태프 목록 초기 렌더에서 초대 폼/액션 코드를 제외함.
 - 2026-07-09: `/admin/staff`의 직접 스태프 추가 모달을 `AddStaffModal`로 분리해 스태프 목록 초기 렌더에서 전화번호 인증/계정 생성 UI 코드를 제외함.
@@ -74,12 +76,11 @@
 - 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals`로 분리해 목록 초기 렌더에서 보조 UI 코드를 제외함.
 - 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄임.
 - 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄임.
-- 2026-07-09: `/admin/apply` 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/programs/ProgramsAdminClient.tsx`, `src/app/admin/programs/ProgramFormPanel.tsx`
-- 주요 변경: 프로그램 목록/정렬/삭제는 유지하고 등록/수정 폼과 `createProgram`/`updateProgram` 액션 호출을 `next/dynamic` 패널로 분리.
-- 적용 범위: 관리자 프로그램 관리.
+- 변경 파일: `src/app/admin/settings/AdminSettingsClient.tsx`, `src/app/admin/settings/LazyRichTextEditor.tsx`
+- 주요 변경: 설정 저장 폼과 상태는 유지하고 `RichTextEditor` 본체를 IntersectionObserver 기반 지연 로딩 래퍼로 감싸 초기 렌더 부담을 줄임.
+- 적용 범위: 관리자 설정 페이지.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -87,4 +88,4 @@
 - 산출물 확인: 빌드 완료 실패로 route JS 수치 측정 보류.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/settings`의 기본 닫힘 폼/보조 UI 분리와 빌드 산출물 재측정.
+- 다음 속도 개선 후보: 빌드 네트워크 문제가 풀리면 `/admin/programs`, `/admin/settings` route JS 수치 재측정.

@@ -3,19 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
+import LazyRichTextEditor from "./LazyRichTextEditor";
 import { updateAcademySettings } from "@/app/actions/admin";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, type FontOption } from "@/lib/fonts";
-import dynamic from "next/dynamic";
-
-// RichTextEditor는 SSR 불가 → dynamic import
-const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
-    ssr: false,
-    loading: () => (
-        <div className="border border-gray-300 rounded-md p-4 min-h-[150px] bg-gray-50 dark:bg-gray-900 flex items-center justify-center text-sm text-gray-400">
-            에디터 로딩중...
-        </div>
-    ),
-});
 
 // ─── 적용 범위 뱃지 ────────────────────────────────────────────────────────────
 function AppliesTo({ pages }: { pages: string[] }) {
@@ -213,7 +203,7 @@ export default function AdminSettingsClient({
                                 <p className="text-xs text-gray-400 mb-2">
                                     굵게·기울임·색상·정렬 적용 가능. 줄바꿈은 Enter 키로 문단 구분, Shift+Enter로 줄바꿈.
                                 </p>
-                                <RichTextEditor
+                                <LazyRichTextEditor
                                     value={introText}
                                     onChange={setIntroText}
                                     placeholder={"안녕하세요, 스티즈 농구교실 다산점입니다.\n\n아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다."}
@@ -229,7 +219,7 @@ export default function AdminSettingsClient({
                         <p className="text-xs text-gray-400 mb-2">
                             학원의 교육 철학, 비전, 지도 방침 등을 작성합니다. 비워두면 섹션이 숨겨집니다.
                         </p>
-                        <RichTextEditor
+                        <LazyRichTextEditor
                             value={philosophyText}
                             onChange={setPhilosophyText}
                             placeholder={"우리 학원은 농구를 통해 아이들의 체력, 협동심, 리더십을 길러줍니다.\n\n모든 수업은 연령과 실력에 맞춘 단계별 커리큘럼으로 진행됩니다."}
@@ -245,7 +235,7 @@ export default function AdminSettingsClient({
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">시설 설명</label>
                                 <p className="text-xs text-gray-400 mb-2">비워두면 섹션이 숨겨집니다.</p>
-                                <RichTextEditor
+                                <LazyRichTextEditor
                                     value={facilitiesText}
                                     onChange={setFacilitiesText}
                                     placeholder="최신 시설과 안전한 환경에서 수업이 진행됩니다."

@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { createFaq, updateFaq, deleteFaq } from "@/app/actions/admin";
-import { Plus, Trash2, Edit2, X, HelpCircle, Eye, EyeOff } from "lucide-react";
 
 // FAQ 데이터 타입
 type FaqData = {
@@ -13,6 +12,26 @@ type FaqData = {
     isPublic: boolean;
     createdAt: Date | string;
 };
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
     const [isPending, startTransition] = useTransition();
@@ -77,7 +96,7 @@ export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
                 </div>
                 <button onClick={() => { resetForm(); setShowForm(true); }}
                     className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition">
-                    <Plus size={18} /> 새 FAQ
+                    <SymbolIcon name="add" size={18} /> 새 FAQ
                 </button>
             </div>
 
@@ -87,7 +106,9 @@ export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
                     <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                             <h2 className="text-lg font-bold">{editId ? "FAQ 수정" : "새 FAQ"}</h2>
-                            <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg"><X size={20} /></button>
+                            <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg">
+                                <SymbolIcon name="close" size={20} />
+                            </button>
                         </div>
                         <div className="p-6 space-y-4">
                             {/* 질문 입력 */}
@@ -133,7 +154,7 @@ export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
             {/* FAQ 목록 */}
             {faqs.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400">
-                    <HelpCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <SymbolIcon name="help" size={48} className="mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">아직 FAQ가 없습니다</p>
                     <p className="text-sm mt-1">&quot;새 FAQ&quot; 버튼으로 질문을 추가하세요</p>
                 </div>
@@ -156,7 +177,8 @@ export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
                                         <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${
                                             faq.isPublic ? "bg-green-50 text-green-600" : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
                                         }`}>
-                                            {faq.isPublic ? <><Eye size={10} /> 공개</> : <><EyeOff size={10} /> 비공개</>}
+                                            <SymbolIcon name={faq.isPublic ? "visibility" : "visibility_off"} size={10} />
+                                            {faq.isPublic ? "공개" : "비공개"}
                                         </span>
                                         <span className="text-xs text-gray-400">
                                             {new Date(faq.createdAt).toLocaleDateString("ko-KR")}
@@ -167,11 +189,11 @@ export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
                                 <div className="flex gap-1 flex-shrink-0">
                                     <button onClick={() => startEdit(faq)}
                                         className="p-2 text-gray-400 hover:text-brand-orange-500 dark:text-brand-neon-lime hover:bg-orange-50 rounded-lg transition">
-                                        <Edit2 size={16} />
+                                        <SymbolIcon name="edit" size={16} />
                                     </button>
                                     <button onClick={() => handleDelete(faq.id)}
                                         className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
-                                        <Trash2 size={16} />
+                                        <SymbolIcon name="delete" size={16} />
                                     </button>
                                 </div>
                             </div>

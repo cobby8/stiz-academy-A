@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 시간표 관리 모달 지연 로딩
+- 작업명: 수강 신청 관리 보조 UI 지연 로딩
 - 상태: 검증 완료
-- 범위: `/admin/schedule`
+- 범위: `/admin/apply`
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -52,9 +52,11 @@
 | 챗봇 패널 아이콘 JS 제거 | 완료 | 클릭 후 로드되는 챗봇 패널 lucide 아이콘을 Material Symbols로 전환 |
 | 페이지 빌더 아이콘 JS 제거 | 완료 | 빌더 툴박스/상단바/노드 lucide 아이콘을 Material Symbols로 전환 |
 | 시간표 관리 모달 지연 로딩 | 완료 | `/admin/schedule` 첫 JS 137.1KB → 118.6KB |
+| 신청 관리 보조 UI 지연 로딩 | 완료 | `/admin/apply` 첫 JS 131.0KB → 115.5KB |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/apply` 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄임.
 - 2026-07-09: `/admin/schedule` 편집/추가/구글시트 모달과 표 미리보기를 동적 로드로 분리해 첫 JS를 137.1KB에서 118.6KB로 줄임.
 - 2026-07-09: 페이지 빌더의 남은 lucide 아이콘 import를 Material Symbols로 바꿔 `src/app`, `src/components`의 실제 `lucide-react` import를 모두 제거함.
 - 2026-07-09: `ChatPanel`의 lucide 닫기/전송 아이콘을 Material Symbols로 바꿔 챗봇 동적 패널의 아이콘 라이브러리 의존을 제거함.
@@ -64,17 +66,16 @@
 - 2026-07-09: `/staff/quick-post`의 lucide 아이콘을 Material Symbols로 바꿔 선생님 빠른 업로드 첫 JS를 88.2KB에서 85.3KB로 줄임.
 - 2026-07-09: `/admin/faq`의 lucide 아이콘을 Material Symbols로 바꿔 FAQ 관리 첫 JS를 109.7KB에서 107.2KB로 줄임.
 - 2026-07-09: `/admin/requests`의 lucide 아이콘을 Material Symbols로 바꿔 요청 관리 첫 JS를 108.2KB에서 106.3KB로 줄임.
-- 2026-07-09: `/admin/students/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 학생 상세 첫 JS를 116.1KB에서 113.6KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/schedule/ScheduleAdminClient.tsx`, `src/app/admin/schedule/ScheduleAdminModals.tsx`
-- 주요 변경: 시간표 초기 목록은 그대로 두고, 시트 슬롯 편집/커스텀 수업 추가·수정/구글시트 설정 모달과 표 미리보기를 `next/dynamic`으로 클릭 후 로드.
-- 적용 범위: 관리자 수업시간표 관리 UI.
+- 변경 파일: `src/app/admin/apply/ApplyAdminClient.tsx`, `src/app/admin/apply/ApplyAdminModals.tsx`, `src/app/admin/apply/ApplySettingsTab.tsx`
+- 주요 변경: 신청서 목록은 그대로 유지하고 승인/반려/상세 모달과 안내 설정 저장 UI를 `next/dynamic`으로 분리.
+- 적용 범위: 관리자 수강 신청 관리 UI.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/admin/schedule` 첫 JS 137.1KB → 118.6KB.
+- 산출물 확인: `/admin/apply` 첫 JS 131.0KB → 115.5KB.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/apply/enroll`, `/admin/apply`, `/admin/gallery`의 모달/미리보기/업로드 보조 UI를 같은 방식으로 분리.
+- 다음 속도 개선 후보: `/apply/enroll`, `/admin/gallery`, `/admin/trial`의 초기 폼/업로드 보조 UI 분리.

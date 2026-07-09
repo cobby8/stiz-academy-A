@@ -10,6 +10,12 @@
 - 원인: Next `next/font/google`이 빌드 중 Google Fonts CSS를 받아오는데, 현재 작업 환경의 네트워크 샌드박스가 외부 요청을 막는다.
 - 해결: 코드 문제가 아니므로 같은 빌드를 네트워크 허용으로 재실행해 확인한다.
 
+## Next build Turbopack 출력 지연
+- 현상: `npx.cmd next build`가 `Creating an optimized production build ...` 이후 수십 초 이상 출력 없이 멈춘 것처럼 보일 수 있다.
+- 원인: Turbopack 컴파일 워커가 오래 걸리면 중간 로그가 거의 나오지 않는다.
+- 해결: 먼저 충분히 기다린다. 실제로 멈춘 빌드를 정리해야 하면 전체 `node.exe` 종료가 아니라 `next build` 명령줄을 가진 PID만 찾아 종료한다.
+- 예방: 다른 프로젝트 개발 서버가 함께 떠 있는 Windows 환경에서는 `taskkill //f //im node.exe`를 사용하지 않는다.
+
 ## Windows Prisma generate DLL rename EPERM
 - 현상: `npm.cmd run build`의 `prisma generate` 단계에서 `EPERM: operation not permitted, rename ... query_engine-windows.dll.node.tmp...` 오류가 날 수 있다.
 - 원인: Windows에서 Prisma query engine DLL 파일이 기존 Node/빌드 프로세스 또는 보안 소프트웨어에 잠깐 잡혀 있으면 rename이 실패한다.

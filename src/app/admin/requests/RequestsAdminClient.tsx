@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Clock, CheckCircle2, XCircle, MessageSquare, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { updateRequestStatus, deleteParentRequest } from "@/app/actions/admin";
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -12,11 +11,31 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 const STATUS_OPTIONS = [
-    { value: "PENDING", label: "대기중", color: "bg-yellow-100 text-yellow-700", icon: Clock },
-    { value: "CONFIRMED", label: "확인됨", color: "bg-blue-100 text-blue-700", icon: CheckCircle2 },
-    { value: "COMPLETED", label: "처리완료", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-    { value: "REJECTED", label: "반려", color: "bg-red-100 text-red-700", icon: XCircle },
+    { value: "PENDING", label: "대기중", color: "bg-yellow-100 text-yellow-700", iconName: "schedule" },
+    { value: "CONFIRMED", label: "확인됨", color: "bg-blue-100 text-blue-700", iconName: "check_circle" },
+    { value: "COMPLETED", label: "처리완료", color: "bg-green-100 text-green-700", iconName: "check_circle" },
+    { value: "REJECTED", label: "반려", color: "bg-red-100 text-red-700", iconName: "cancel" },
 ];
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 type RequestData = {
     id: string;
@@ -84,7 +103,7 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
             {/* 요청 목록 */}
             {filtered.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400 shadow-sm">
-                    <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <SymbolIcon name="forum" size={48} className="mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">요청이 없습니다</p>
                 </div>
             ) : (
@@ -92,7 +111,6 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                     {filtered.map(req => {
                         const typeInfo = TYPE_LABELS[req.type] || TYPE_LABELS.OTHER;
                         const statusInfo = STATUS_OPTIONS.find(s => s.value === req.status) || STATUS_OPTIONS[0];
-                        const StatusIcon = statusInfo.icon;
                         const isExpanded = expandedId === req.id;
 
                         return (
@@ -106,7 +124,7 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                 >
                                     {/* 상태 아이콘 */}
                                     <div className={`p-2 rounded-full flex-shrink-0 ${statusInfo.color}`}>
-                                        <StatusIcon size={16} />
+                                        <SymbolIcon name={statusInfo.iconName} size={16} />
                                     </div>
 
                                     <div className="flex-1 min-w-0">
@@ -121,7 +139,11 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                         </p>
                                     </div>
 
-                                    {isExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                                    <SymbolIcon
+                                        name={isExpanded ? "expand_less" : "expand_more"}
+                                        size={18}
+                                        className="text-gray-400"
+                                    />
                                 </button>
 
                                 {/* 상세 (펼침) */}
@@ -157,7 +179,6 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                         {/* 상태 변경 버튼 */}
                                         <div className="flex gap-2 flex-wrap">
                                             {STATUS_OPTIONS.filter(s => s.value !== req.status).map(s => {
-                                                const Icon = s.icon;
                                                 return (
                                                     <button key={s.value}
                                                         disabled={isPending}
@@ -166,7 +187,7 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                                         )}
                                                         className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition hover:shadow-sm ${s.color}`}
                                                     >
-                                                        <Icon size={14} /> {s.label}
+                                                        <SymbolIcon name={s.iconName} size={14} /> {s.label}
                                                     </button>
                                                 );
                                             })}

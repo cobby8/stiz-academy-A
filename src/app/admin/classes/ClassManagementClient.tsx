@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link"; // 클래스 상세 페이지 링크용
-import { createClass, updateClass, deleteClass } from "@/app/actions/admin";
+import { deleteClass } from "@/app/actions/admin";
 
-type Program = { id: string; name: string };
-type ClassItem = {
+const ClassFormPanel = dynamic(() => import("./ClassFormPanel"), {
+    loading: () => null,
+});
+
+export type Program = { id: string; name: string };
+export type ClassItem = {
     id: string;
     programId: string;
     name: string;
@@ -37,69 +42,18 @@ export default function ClassManagementClient({
 }) {
     const router = useRouter();
     const [showForm, setShowForm] = useState(false);
-    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
     const [busy, setBusy] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-    // Form state
-    const [programId, setProgramId] = useState("");
-    const [name, setName] = useState("");
-    const [dayOfWeek, setDayOfWeek] = useState("");
-    const [startTime, setStartTime] = useState("");
-    const [endTime, setEndTime] = useState("");
-    const [location, setLocation] = useState("");
-    const [capacity, setCapacity] = useState(10);
-
     function resetForm() {
-        setProgramId("");
-        setName("");
-        setDayOfWeek("");
-        setStartTime("");
-        setEndTime("");
-        setLocation("");
-        setCapacity(10);
         setShowForm(false);
-        setEditingId(null);
+        setEditingClass(null);
     }
 
     function startEdit(c: ClassItem) {
-        setProgramId(c.programId);
-        setName(c.name);
-        setDayOfWeek(c.dayOfWeek);
-        setStartTime(c.startTime || "");
-        setEndTime(c.endTime || "");
-        setLocation(c.location || "");
-        setCapacity(c.capacity);
-        setEditingId(c.id);
+        setEditingClass(c);
         setShowForm(true);
-    }
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        if (!programId || !name.trim() || !dayOfWeek) return;
-        setBusy(true);
-        try {
-            const payload = {
-                programId,
-                name: name.trim(),
-                dayOfWeek,
-                startTime,
-                endTime,
-                location: location.trim() || undefined,
-                capacity,
-            };
-            if (editingId) {
-                await updateClass(editingId, payload);
-            } else {
-                await createClass(payload);
-            }
-            resetForm();
-            router.refresh();
-        } catch (err: any) {
-            alert(err.message || "저장 실패");
-        } finally {
-            setBusy(false);
-        }
     }
 
     async function handleDelete(id: string) {
@@ -123,7 +77,7 @@ export default function ClassManagementClient({
                     <p className="text-gray-500 dark:text-gray-400">각 프로그램별 요일과 시간에 맞는 실제 반을 개설합니다.</p>
                 </div>
                 <button
-                    onClick={() => { resetForm(); setShowForm(true); }}
+                    onClick={() => { setEditingClass(null); setShowForm(true); }}
                     className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
                 >
                     + 반 개설
@@ -138,85 +92,15 @@ export default function ClassManagementClient({
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-sm space-y-4">
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{editingId ? "반 수정" : "새 반 개설"}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">소속 프로그램 *</label>
-                            <select
-                                value={programId}
-                                onChange={(e) => setProgramId(e.target.value)}
-                                required
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-white dark:bg-gray-800"
-                            >
-                                <option value="">선택하세요</option>
-                                {programs.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">반 이름 *</label>
-                            <input
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                required
-                                placeholder="예: 초등 저학년 A반"
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">요일 *</label>
-                            <select
-                                value={dayOfWeek}
-                                onChange={(e) => setDayOfWeek(e.target.value)}
-                                required
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-white dark:bg-gray-800"
-                            >
-                                <option value="">선택하세요</option>
-                                {DAYS.map((d) => (
-                                    <option key={d.value} value={d.value}>{d.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">시작 시간</label>
-                            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">종료 시간</label>
-                            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">정원 (명) *</label>
-                            <input type="number" value={capacity} onChange={(e) => setCapacity(parseInt(e.target.value) || 0)}
-                                required
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">장소(코트)</label>
-                            <input value={location} onChange={(e) => setLocation(e.target.value)}
-                                placeholder="예: A코트, 메인구장"
-                                className="w-full border border-gray-300 rounded-md p-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime" />
-                        </div>
-                        <div className="flex items-end justify-end">
-                            <div className="flex gap-2">
-                                <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={busy}
-                                    className="bg-brand-navy-900 text-white px-4 py-2 rounded-md font-bold hover:bg-gray-800 transition shadow-sm disabled:opacity-50"
-                                >
-                                    {busy ? "저장 중..." : editingId ? "수정" : "개설하기"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </form>
+                <ClassFormPanel
+                    programs={programs}
+                    classItem={editingClass}
+                    onClose={resetForm}
+                    onSaved={() => {
+                        resetForm();
+                        router.refresh();
+                    }}
+                />
             )}
 
             {/* Class List */}

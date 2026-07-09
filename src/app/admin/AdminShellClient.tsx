@@ -360,6 +360,7 @@ function NavItem({ href, active, icon, label, badge }: { href: string; active?: 
     return (
         <Link
             href={href}
+            prefetch={false}
             className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active
                 ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold"
                 : "text-gray-300 hover:bg-white/10 hover:text-white"

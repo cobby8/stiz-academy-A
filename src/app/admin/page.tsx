@@ -234,6 +234,27 @@ function SlowSectionSkeleton() {
     );
 }
 
+function DashboardPrimarySkeleton() {
+    return (
+        <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 animate-pulse">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <div className="h-3 bg-gray-200 rounded w-16 mb-2" />
+                                <div className="h-7 bg-gray-200 rounded w-20" />
+                            </div>
+                            <div className="h-10 w-10 bg-gray-100 dark:bg-gray-900 rounded-xl" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <SlowSectionSkeleton />
+        </>
+    );
+}
+
 // 느린 쿼리(경영 통계, 오늘 수업, 신규 원생)를 별도 async 서버 컴포넌트로 분리
 // Suspense 경계 안에서 로딩되므로 빠른 쿼리 결과가 먼저 화면에 표시됨
 async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[] }) {
@@ -467,9 +488,9 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
     );
 }
 
-export default async function AdminDashboard() {
-    // 빠른 쿼리만 먼저 실행 (stats, pendingRequests, pendingCount)
-    // 느린 쿼리(ext, todayClasses, recentStudents)는 Suspense 안에서 별도 로딩
+async function DashboardPrimarySection() {
+    // 핵심 통계도 Suspense 안에서 불러와 제목/스켈레톤이 먼저 표시되게 한다.
+    // 더 무거운 확장 통계(ext, todayClasses, recentStudents)는 아래에서 한 번 더 분리한다.
     const [stats, pendingRequests, pendingCount, enrollStats] = await Promise.all([
         getDashboardStats(),
         getRecentPendingRequests(),
@@ -478,12 +499,7 @@ export default async function AdminDashboard() {
     ]);
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1">경영 대시보드</h1>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">스티즈농구교실 다산점의 운영 현황입니다.</p>
-            </div>
-
+        <>
             {/* 학부모 요청 알림 배너 - 빠른 쿼리로 즉시 표시 */}
             {pendingCount > 0 && (
                 <Link href="/admin/requests"
@@ -540,6 +556,21 @@ export default async function AdminDashboard() {
             {/* ProgramStudentsCard도 ext 데이터가 필요하므로 같은 Suspense 안에서 렌더 (이중 호출 방지) */}
             <Suspense fallback={<SlowSectionSkeleton />}>
                 <SlowDashboardSection pendingRequests={pendingRequests} />
+            </Suspense>
+        </>
+    );
+}
+
+export default function AdminDashboard() {
+    return (
+        <div className="max-w-7xl mx-auto space-y-6">
+            <div>
+                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1">경영 대시보드</h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">스티즈농구교실 다산점의 운영 현황입니다.</p>
+            </div>
+
+            <Suspense fallback={<DashboardPrimarySkeleton />}>
+                <DashboardPrimarySection />
             </Suspense>
         </div>
     );

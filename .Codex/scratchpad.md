@@ -1,7 +1,7 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 스태프 초대 모달 지연 로딩
+- 작업명: 프로그램 작성/수정 폼 지연 로딩
 - 상태: 타입 검증 완료
 - 범위: `/admin/staff`
 - 기준일: 2026-07-09
@@ -61,9 +61,11 @@
 | 반 관리 작성 폼 지연 로딩 | 완료 | `/admin/classes` 반 작성/수정 폼과 저장 액션 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 스태프 직접 추가 모달 지연 로딩 | 완료 | `/admin/staff` 전화번호 인증/직접 추가 모달 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 스태프 초대 모달 지연 로딩 | 완료 | `/admin/staff` SMS 초대 링크 발송 모달 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
+| 프로그램 작성/수정 폼 지연 로딩 | 완료 | `/admin/programs` 등록/수정 폼과 create/update 액션 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 타입/빌드 검증 | 진행 | `npx.cmd tsc --noEmit` 통과, `next build`는 Google Fonts 외부 다운로드 실패 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/programs`의 등록/수정 폼을 `ProgramFormPanel`로 분리해 프로그램 목록 초기 렌더에서 create/update 폼 코드를 제외함.
 - 2026-07-09: `/admin/staff`의 SMS 초대 링크 발송 모달을 `InviteStaffModal`로 분리해 스태프 목록 초기 렌더에서 초대 폼/액션 코드를 제외함.
 - 2026-07-09: `/admin/staff`의 직접 스태프 추가 모달을 `AddStaffModal`로 분리해 스태프 목록 초기 렌더에서 전화번호 인증/계정 생성 UI 코드를 제외함.
 - 2026-07-09: `/admin/classes`의 반 작성/수정 폼을 `ClassFormPanel`로 분리해 반 목록 초기 렌더에서 create/update 폼 코드를 제외함.
@@ -73,12 +75,11 @@
 - 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄임.
 - 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄임.
 - 2026-07-09: `/admin/apply` 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄임.
-- 2026-07-09: `/admin/schedule` 편집/추가/구글시트 모달과 표 미리보기를 동적 로드로 분리해 첫 JS를 137.1KB에서 118.6KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/staff/StaffClient.tsx`, `src/app/admin/staff/InviteStaffModal.tsx`
-- 주요 변경: 스태프 목록/역할 변경/초대 목록은 유지하고 SMS 초대 링크 발송 폼과 `inviteStaff` 액션 호출을 `next/dynamic` 모달로 분리.
-- 적용 범위: 관리자 스태프 관리.
+- 변경 파일: `src/app/admin/programs/ProgramsAdminClient.tsx`, `src/app/admin/programs/ProgramFormPanel.tsx`
+- 주요 변경: 프로그램 목록/정렬/삭제는 유지하고 등록/수정 폼과 `createProgram`/`updateProgram` 액션 호출을 `next/dynamic` 패널로 분리.
+- 적용 범위: 관리자 프로그램 관리.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -86,4 +87,4 @@
 - 산출물 확인: 빌드 완료 실패로 route JS 수치 측정 보류.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/programs`, `/admin/settings`의 기본 닫힘 폼/보조 UI 분리와 빌드 산출물 재측정.
+- 다음 속도 개선 후보: `/admin/settings`의 기본 닫힘 폼/보조 UI 분리와 빌드 산출물 재측정.

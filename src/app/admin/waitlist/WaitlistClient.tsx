@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
     addToWaitlist,
@@ -59,21 +59,49 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 export default function WaitlistClient({
     waitlist,
     capacityInfo,
-    students,
     classes,
 }: {
     waitlist: WaitlistItem[];
     capacityInfo: CapacityInfo[];
-    students: Student[];
     classes: ClassItem[];
 }) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [studentsLoaded, setStudentsLoaded] = useState(false);
+    const [studentsLoading, setStudentsLoading] = useState(false);
+    const [studentsError, setStudentsError] = useState<string | null>(null);
     // 필터: 특정 반만 보기
     const [filterClassId, setFilterClassId] = useState<string>("ALL");
     // 상태 필터: 활성(WAITING+OFFERED) or 전체
     const [showAll, setShowAll] = useState(false);
+
+    const loadStudents = useCallback(async () => {
+        if (studentsLoaded || studentsLoading) return;
+
+        setStudentsLoading(true);
+        setStudentsError(null);
+
+        try {
+            const response = await fetch("/api/admin/student-options", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load student options.");
+            }
+
+            const data = (await response.json()) as { students?: Student[] };
+            setStudents(data.students ?? []);
+            setStudentsLoaded(true);
+        } catch (error) {
+            console.error("Failed to load student options:", error);
+            setStudentsError("원생 목록을 불러오지 못했습니다.");
+        } finally {
+            setStudentsLoading(false);
+        }
+    }, [studentsLoaded, studentsLoading]);
 
     // 활성 대기자만 필터링 (WAITING + OFFERED), showAll이면 전체
     const filteredList = useMemo(() => {
@@ -170,7 +198,10 @@ export default function WaitlistClient({
                     </p>
                 </div>
                 <button
-                    onClick={() => setShowAddModal(true)}
+                    onClick={() => {
+                        setShowAddModal(true);
+                        void loadStudents();
+                    }}
                     className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors"
                 >
                     <span className="material-symbols-outlined text-xl">person_add</span>
@@ -352,6 +383,9 @@ export default function WaitlistClient({
             {showAddModal && (
                 <AddWaitlistModal
                     students={students}
+                    studentsLoading={studentsLoading}
+                    studentsError={studentsError}
+                    onRetryLoadStudents={loadStudents}
                     classes={classes}
                     onClose={() => setShowAddModal(false)}
                     onDone={() => { setShowAddModal(false); router.refresh(); }}
@@ -364,11 +398,17 @@ export default function WaitlistClient({
 // ── 대기 등록 모달 ──────────────────────────────────────────────────────────
 function AddWaitlistModal({
     students,
+    studentsLoading,
+    studentsError,
+    onRetryLoadStudents,
     classes,
     onClose,
     onDone,
 }: {
     students: Student[];
+    studentsLoading: boolean;
+    studentsError: string | null;
+    onRetryLoadStudents: () => Promise<void>;
     classes: ClassItem[];
     onClose: () => void;
     onDone: () => void;
@@ -426,19 +466,40 @@ function AddWaitlistModal({
                             placeholder="이름 검색..."
                             value={studentSearch}
                             onChange={(e) => setStudentSearch(e.target.value)}
+                            disabled={studentsLoading || Boolean(studentsError)}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-1"
                         />
                         <select
                             value={studentId}
                             onChange={(e) => setStudentId(e.target.value)}
+                            disabled={studentsLoading || Boolean(studentsError)}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                             size={5}
                         >
-                            <option value="">-- 학생 선택 --</option>
+                            <option value="">
+                                {studentsLoading ? "학생 목록 로딩 중..." : "-- 학생 선택 --"}
+                            </option>
                             {filteredStudents.map((s) => (
                                 <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
                         </select>
+                        {studentsError && (
+                            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                <span>{studentsError}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => void onRetryLoadStudents()}
+                                    className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                >
+                                    다시 시도
+                                </button>
+                            </div>
+                        )}
+                        {!studentsLoading && !studentsError && students.length === 0 && (
+                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                등록된 학생이 없습니다.
+                            </p>
+                        )}
                     </div>
 
                     {/* 반 선택 */}

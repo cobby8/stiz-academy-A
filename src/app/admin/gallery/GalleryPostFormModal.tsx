@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { createGalleryPost, updateGalleryPost } from "@/app/actions/admin";
 import { uploadImagesWithProgress } from "@/lib/clientImageUpload";
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 type MediaItem = { url: string; type: "image" | "video" };
 type UploadProgress = { done: number; total: number };
@@ -15,26 +16,6 @@ type GalleryPost = {
   isPublic: boolean;
 };
 type ClassInfo = { id: string; name: string; program?: { name: string } | null };
-
-function SymbolIcon({
-  name,
-  size = 18,
-  className = "",
-}: {
-  name: string;
-  size?: number;
-  className?: string;
-}) {
-  return (
-    <span
-      className={`material-symbols-outlined leading-none ${className}`}
-      style={{ fontSize: `${size}px` }}
-      aria-hidden="true"
-    >
-      {name}
-    </span>
-  );
-}
 
 function parseMedia(mediaJSON: string): MediaItem[] {
   try {
@@ -144,7 +125,7 @@ export default function GalleryPostFormModal({
         <div className="flex items-center justify-between border-b border-gray-100 p-6 dark:border-gray-800">
           <h2 className="text-lg font-bold">{post ? "게시물 수정" : "새 게시물"}</h2>
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <SymbolIcon name="close" size={20} />
+            <FontFreeIcon name="close" size={20} />
           </button>
         </div>
         <div className="space-y-4 p-6">
@@ -200,7 +181,7 @@ export default function GalleryPostFormModal({
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">사진 업로드</label>
             <label className="flex h-32 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 transition hover:bg-gray-50 dark:bg-gray-900">
-              <SymbolIcon name="upload" className="mb-2 text-gray-400" size={24} />
+              <FontFreeIcon name="upload" className="mb-2 text-gray-400" size={24} />
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 {uploading && uploadProgress
                   ? `${uploadProgress.done}/${uploadProgress.total}장 업로드 중...`
@@ -241,7 +222,7 @@ export default function GalleryPostFormModal({
                       onClick={() => removeMedia(index)}
                       className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white opacity-0 transition group-hover:opacity-100"
                     >
-                      <SymbolIcon name="close" size={12} />
+                      <FontFreeIcon name="close" size={12} />
                     </button>
                   </div>
                 ))}

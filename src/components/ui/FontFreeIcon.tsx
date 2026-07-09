@@ -3,8 +3,10 @@ import type { CSSProperties, ReactElement } from "react";
 export type FontFreeIconName =
   | "arrow_back"
   | "arrow_forward"
+  | "add"
   | "attach_file"
   | "auto_fix_high"
+  | "block"
   | "bookmark"
   | "calendar_today"
   | "call"
@@ -18,7 +20,9 @@ export type FontFreeIconName =
   | "chevron_right"
   | "close"
   | "dark_mode"
+  | "delete"
   | "download"
+  | "edit"
   | "error"
   | "expand_more"
   | "how_to_reg"
@@ -43,7 +47,12 @@ export type FontFreeIconName =
   | "school"
   | "send"
   | "sports_basketball"
+  | "save"
+  | "sync"
+  | "upload"
   | "verified"
+  | "visibility"
+  | "visibility_off"
   | "favorite";
 
 type FontFreeIconProps = {
@@ -57,8 +66,10 @@ type FontFreeIconProps = {
 const PATHS: Record<FontFreeIconName, ReactElement> = {
   arrow_back: <path d="M19 12H5m6-6-6 6 6 6" />,
   arrow_forward: <path d="M5 12h14m-6-6 6 6-6 6" />,
+  add: <path d="M12 5v14M5 12h14" />,
   attach_file: <path d="m21 8.5-9.5 9.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 1 1-2.8-2.8l8.5-8.5" />,
   auto_fix_high: <path d="m4 20 10-10m-1-5 1 2 2 1-2 1-1 2-1-2-2-1 2-1zm6 5 .8 1.6 1.7.8-1.7.8L18 15l-.8-1.6-1.7-.8 1.7-.8zM5 5l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" />,
+  block: <path d="M18.4 5.6 5.6 18.4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />,
   bookmark: <path d="M7 4.5h10v15l-5-3-5 3z" />,
   calendar_today: <path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z" />,
   call: <path d="M7.5 4.5 10 9l-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2 4.5 2.5-1.5 3c-.4.8-1.3 1.2-2.2 1A17 17 0 0 1 3.5 8.7c-.2-.9.2-1.8 1-2.2z" />,
@@ -72,7 +83,9 @@ const PATHS: Record<FontFreeIconName, ReactElement> = {
   chevron_right: <path d="m9.5 6 6 6-6 6" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
   dark_mode: <path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z" />,
+  delete: <path d="M6 7h12m-9 0V5h6v2m-8 0 1 13h8l1-13M10 11v5m4-5v5" />,
   download: <path d="M12 4v10m-4-4 4 4 4-4M5 20h14" />,
+  edit: <path d="M4 20h4L19 9l-4-4L4 16zm11-15 4 4" />,
   error: <path d="M12 8v5m0 4h.1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />,
   expand_more: <path d="m7 9.5 5 5 5-5" />,
   favorite: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />,
@@ -95,10 +108,15 @@ const PATHS: Record<FontFreeIconName, ReactElement> = {
   progress_activity: <path d="M12 3a9 9 0 1 0 9 9M12 3v4m0-4a9 9 0 0 1 8.5 6" />,
   push_pin: <path d="m14 4 6 6-3 1-4 4v5l-2 2-3-6-6-3 2-2h5l4-4z" />,
   rate_review: <path d="M5 5h14v10H9l-4 4zm4 4h6m-6 3h4" />,
+  save: <path d="M5 5h11l3 3v11H5zm3 0v5h7V5m-7 14v-6h8v6" />,
   school: <path d="m3 9 9-5 9 5-9 5zm4 3.5V17c2.8 2 7.2 2 10 0v-4.5" />,
   send: <path d="m3.5 20 17-8-17-8 3 8zM6.5 12h14" />,
   sports_basketball: <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM4.5 8h15M4.5 16h15M12 3c2.5 2.4 3.5 5.4 3.5 9s-1 6.6-3.5 9M12 3C9.5 5.4 8.5 8.4 8.5 12s1 6.6 3.5 9" />,
+  sync: <path d="M20 7v5h-5M4 17v-5h5M19 12a7 7 0 0 0-12-5M5 12a7 7 0 0 0 12 5" />,
+  upload: <path d="M12 16V4m-4 4 4-4 4 4M5 20h14" />,
   verified: <path d="m12 3 2 2.5 3.2-.2.8 3.1 2.7 1.6-1.5 2.8.8 3.1-3.1.9-1.7 2.7-3.2-1.4-3.2 1.4-1.7-2.7-3.1-.9.8-3.1L3.3 10l2.7-1.6.8-3.1 3.2.2zm-3 9 2 2 4-5" />,
+  visibility: <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />,
+  visibility_off: <path d="m4 4 16 16M9.5 5.5A10.5 10.5 0 0 1 12 5c6 0 9.5 7 9.5 7a16.2 16.2 0 0 1-3.1 3.8M6.5 7.4A16 16 0 0 0 2.5 12s3.5 7 9.5 7c1.2 0 2.3-.3 3.3-.7M9.5 9.7a3 3 0 0 0 4 4" />,
 };
 
 export default function FontFreeIcon({

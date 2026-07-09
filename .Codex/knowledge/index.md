@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/gallery` 목록과 업로드/수정 모달 아이콘을 `FontFreeIcon`으로 바꿔 관리자 갤러리 route의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: `/apply`, `/apply/enroll`, `/apply/trial` 신청 화면 아이콘을 `FontFreeIcon`으로 바꿔 신청 페이지 HTML의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: `/notices` 공개 목록/상세 아이콘을 `FontFreeIcon`으로 바꿔 공개 공지 HTML의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: `/gallery` 공개 그리드와 라이트박스 아이콘을 `FontFreeIcon`으로 바꿔 공개 갤러리 HTML의 Material Symbols 사용 흔적을 제거했다.
@@ -8,13 +9,12 @@
 - 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 가시 영역 진입 후 로드하도록 바꿨다.
 - 2026-07-09: `/admin/programs`의 등록/수정 폼을 `ProgramFormPanel` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/staff`의 SMS 초대 링크 발송 모달을 `InviteStaffModal` 동적 로드로 분리했다.
-- 2026-07-09: `/admin/staff`의 전화번호 인증/직접 추가 모달을 `AddStaffModal` 동적 로드로 분리했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 신청 페이지처럼 전환율에 직접 닿는 공개 화면의 단순 아이콘은 `FontFreeIcon`으로 전환해 Material Symbols 폰트 요청을 줄인다.
+- 최근 지식: 관리자 갤러리처럼 업로드 업무가 많은 화면의 단순 아이콘은 `FontFreeIcon`으로 전환해 아이콘 폰트 요청을 줄인다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -77,7 +77,7 @@
 - `/admin/schedule`처럼 목록은 바로 봐야 하지만 편집/추가/설정 모달은 클릭 후 쓰는 화면은 모달 묶음과 미리보기를 동적 로드해 초기 route chunk를 줄인다.
 - `/admin/apply`처럼 목록 탭과 설정 탭이 함께 있는 화면은 기본 탭에 필요 없는 설정 저장 UI와 처리 모달을 동적 로드해 초기 route chunk를 줄인다.
 - `/apply/enroll`처럼 단계형 공개 폼은 첫 화면 단계는 즉시 렌더하고, 뒤 단계 입력/약관 UI는 `next/dynamic`으로 분리해 초기 route chunk를 줄인다.
-- `/admin/gallery`처럼 업로드 폼이 닫힌 상태로 시작하는 관리 화면은 이미지 압축/업로드 코드가 포함된 폼을 동적 로드해 목록 초기 route chunk를 줄인다.
+- `/admin/gallery`처럼 업로드 폼이 닫힌 상태로 시작하는 관리 화면은 이미지 압축/업로드 코드가 포함된 폼을 동적 로드하고, 목록/업로드 모달의 단순 아이콘은 `FontFreeIcon`으로 유지한다.
 - `/admin/trial`처럼 목록을 먼저 보는 CRM 화면은 신규 등록/전환/이탈/메모 모달을 별도 파일로 분리해 클릭 후 로드한다.
 - `/admin/notices`처럼 목록과 소셜 홍보 도구가 함께 있는 화면은 소셜 미리보기/발행 UI를 별도 동적 모달로 분리한다.
 - `/admin/classes/[id]`처럼 상세 화면에 사진 업로드 모달이 붙은 경우, 압축/업로드 코드는 모달을 열 때만 로드한다.

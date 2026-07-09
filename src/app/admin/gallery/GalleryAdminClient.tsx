@@ -10,6 +10,7 @@ import {
   saveSocialPostDraft,
 } from "@/app/actions/social-posts";
 import InstagramFeedPreview from "@/components/instagram/InstagramFeedPreview";
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 import type { SocialPostDraft } from "@/lib/socialDrafts";
 
 const GalleryPostFormModal = dynamic(() => import("./GalleryPostFormModal"), {
@@ -35,26 +36,6 @@ type InstagramStatus = {
   hasAccessToken: boolean;
   hasBusinessAccountId: boolean;
 };
-
-function SymbolIcon({
-  name,
-  size = 18,
-  className = "",
-}: {
-  name: string;
-  size?: number;
-  className?: string;
-}) {
-  return (
-    <span
-      className={`material-symbols-outlined leading-none ${className}`}
-      style={{ fontSize: `${size}px` }}
-      aria-hidden="true"
-    >
-      {name}
-    </span>
-  );
-}
 
 function normalizeInstagramProfileUrl(url: string) {
   const trimmed = url.trim();
@@ -195,7 +176,7 @@ export default function GalleryAdminClient({
             href="/staff/quick-post"
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
           >
-            <SymbolIcon name="upload" size={18} />
+            <FontFreeIcon name="upload" size={18} />
             선생님 업로드
           </Link>
           <button
@@ -205,7 +186,7 @@ export default function GalleryAdminClient({
             }}
             className="flex items-center gap-2 rounded-lg bg-brand-orange-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
           >
-            <SymbolIcon name="add" size={18} /> 새 게시물
+            <FontFreeIcon name="add" size={18} /> 새 게시물
           </button>
         </div>
       </div>
@@ -219,7 +200,7 @@ export default function GalleryAdminClient({
           }`}
         >
           <div className="flex items-center gap-2">
-            <SymbolIcon name="check_circle" size={18} />
+            <FontFreeIcon name="check_circle" size={18} />
             <span>{pageMessage.message}</span>
           </div>
           <button
@@ -228,7 +209,7 @@ export default function GalleryAdminClient({
             className="rounded p-0.5 opacity-70 transition hover:opacity-100"
             aria-label="메시지 닫기"
           >
-            <SymbolIcon name="close" size={16} />
+            <FontFreeIcon name="close" size={16} />
           </button>
         </div>
       )}
@@ -278,9 +259,9 @@ export default function GalleryAdminClient({
                 className="flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-gray-700 disabled:opacity-40"
               >
                 {isPending ? (
-                  <SymbolIcon name="sync" size={14} className="animate-spin" />
+                  <FontFreeIcon name="sync" size={14} className="animate-spin" />
                 ) : (
-                  <SymbolIcon name="sync" size={14} />
+                  <FontFreeIcon name="sync" size={14} />
                 )}
                 인스타 가져오기
               </button>
@@ -369,7 +350,7 @@ export default function GalleryAdminClient({
                         disabled={isDraftLocked}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 text-xs font-black text-gray-700 disabled:opacity-50"
                       >
-                        <SymbolIcon name="save" size={15} />
+                        <FontFreeIcon name="save" size={15} />
                         저장
                       </button>
                       <button
@@ -379,9 +360,9 @@ export default function GalleryAdminClient({
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-brand-orange-500 px-2 text-xs font-black text-white disabled:opacity-50"
                       >
                         {hasPublishingStatus ? (
-                          <SymbolIcon name="sync" size={15} className="animate-spin" />
+                          <FontFreeIcon name="sync" size={15} className="animate-spin" />
                         ) : (
-                          <SymbolIcon name="send" size={15} />
+                          <FontFreeIcon name="send" size={15} />
                         )}
                         {hasPublishingStatus ? "처리 중" : draft.status === "FAILED" ? "다시 게시" : "게시"}
                       </button>
@@ -391,7 +372,7 @@ export default function GalleryAdminClient({
                         disabled={isDraftLocked}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-gray-100 px-2 text-xs font-black text-gray-600 disabled:opacity-50"
                       >
-                        <SymbolIcon name="block" size={15} />
+                        <FontFreeIcon name="block" size={15} />
                         반려
                       </button>
                     </div>
@@ -417,7 +398,7 @@ export default function GalleryAdminClient({
 
       {posts.length === 0 ? (
         <div className="rounded-lg border border-gray-100 bg-white p-12 text-center text-gray-400 dark:border-gray-700 dark:bg-gray-800">
-          <SymbolIcon name="image" className="mx-auto mb-3 text-gray-300" size={48} />
+          <FontFreeIcon name="image" className="mx-auto mb-3 text-gray-300" size={48} />
           <p className="font-medium">아직 갤러리 게시물이 없습니다.</p>
         </div>
       ) : (
@@ -435,17 +416,17 @@ export default function GalleryAdminClient({
                     <img src={firstImage.url} alt={post.title || ""} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full items-center justify-center text-gray-300">
-                      <SymbolIcon name="image" size={48} />
+                      <FontFreeIcon name="image" size={48} />
                     </div>
                   )}
                   <div className="absolute right-2 top-2 flex gap-1">
                     {post.isPublic ? (
                       <span className="flex items-center gap-1 rounded-full bg-green-500 px-2 py-0.5 text-xs text-white">
-                        <SymbolIcon name="visibility" size={10} /> 공개
+                        <FontFreeIcon name="visibility" size={10} /> 공개
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 rounded-full bg-gray-500 px-2 py-0.5 text-xs text-white">
-                        <SymbolIcon name="visibility_off" size={10} /> 비공개
+                        <FontFreeIcon name="visibility_off" size={10} /> 비공개
                       </span>
                     )}
                     {media.length > 1 && (
@@ -473,13 +454,13 @@ export default function GalleryAdminClient({
                       onClick={() => startEdit(post)}
                       className="flex items-center gap-1 text-xs text-gray-500 transition hover:text-brand-orange-500"
                     >
-                      <SymbolIcon name="edit" size={14} /> 수정
+                      <FontFreeIcon name="edit" size={14} /> 수정
                     </button>
                     <button
                       onClick={() => handleDelete(post.id)}
                       className="flex items-center gap-1 text-xs text-gray-500 transition hover:text-red-500"
                     >
-                      <SymbolIcon name="delete" size={14} /> 삭제
+                      <FontFreeIcon name="delete" size={14} /> 삭제
                     </button>
                   </div>
                 </div>

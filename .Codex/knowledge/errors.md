@@ -7,8 +7,8 @@
 
 ## Next build Google Fonts 네트워크 제한
 - 현상: `npm.cmd run build`가 `Failed to fetch ... from Google Fonts`로 실패할 수 있다.
-- 원인: Next `next/font/google`이 빌드 중 Google Fonts CSS를 받아오는데, 현재 작업 환경의 네트워크 샌드박스가 외부 요청을 막는다.
-- 해결: 코드 문제가 아니므로 같은 빌드를 네트워크 허용으로 재실행해 확인한다.
+- 원인: Next `next/font/google`이 빌드 중 Google Fonts CSS와 `fonts.gstatic.com` woff2 파일을 받아오는데, 현재 작업 환경의 네트워크 샌드박스 또는 외부 연결 불안정이 요청을 끊는다.
+- 해결: 코드 문제가 아니므로 같은 빌드를 네트워크 허용으로 재실행해 확인한다. 네트워크 허용 후에도 `socket hang up`, `ECONNRESET`이 반복되면 작은 코드 분리는 `npx.cmd tsc --noEmit` 통과 기준으로 커밋하고, 빌드 수치 측정은 네트워크가 안정된 환경에서 재확인한다.
 
 ## Next build Turbopack 출력 지연
 - 현상: `npx.cmd next build`가 `Creating an optimized production build ...` 이후 수십 초 이상 출력 없이 멈춘 것처럼 보일 수 있다.

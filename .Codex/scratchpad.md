@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 관리자 갤러리 업로드 폼 지연 로딩
-- 상태: 검증 완료
-- 범위: `/admin/gallery`
+- 작업명: 체험수업 CRM 모달 지연 로딩
+- 상태: 타입 검증 완료
+- 범위: `/admin/trial`
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -55,9 +55,11 @@
 | 신청 관리 보조 UI 지연 로딩 | 완료 | `/admin/apply` 첫 JS 131.0KB → 115.5KB |
 | 수강신청 후속 단계 지연 로딩 | 완료 | `/apply/enroll` 첫 JS 131.2KB → 112.4KB |
 | 갤러리 업로드 폼 지연 로딩 | 완료 | `/admin/gallery` 첫 JS 126.4KB → 120.3KB |
-| 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
+| 체험 CRM 모달 지연 로딩 | 완료 | `/admin/trial` 모달 묶음 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
+| 타입/빌드 검증 | 진행 | `npx.cmd tsc --noEmit` 통과, `next build`는 Google Fonts 외부 다운로드 실패 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals`로 분리해 목록 초기 렌더에서 보조 UI 코드를 제외함.
 - 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄임.
 - 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄임.
 - 2026-07-09: `/admin/apply` 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄임.
@@ -67,17 +69,16 @@
 - 2026-07-09: `/admin` 대시보드의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 100.2KB 유지.
 - 2026-07-09: `/notices/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 99.9KB 유지.
 - 2026-07-09: `/mypage` 레이아웃/본문의 lucide 아이콘을 Material Symbols로 바꿔 마이페이지 첫 JS를 109.2KB에서 105.4KB로 줄임.
-- 2026-07-09: `/staff/quick-post`의 lucide 아이콘을 Material Symbols로 바꿔 선생님 빠른 업로드 첫 JS를 88.2KB에서 85.3KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/gallery/GalleryAdminClient.tsx`, `src/app/admin/gallery/GalleryPostFormModal.tsx`
-- 주요 변경: 갤러리 목록/초안 관리는 유지하고 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 `next/dynamic`으로 분리.
-- 적용 범위: 관리자 사진/영상 갤러리 관리.
+- 변경 파일: `src/app/admin/trial/TrialCrmClient.tsx`, `src/app/admin/trial/TrialCrmModals.tsx`
+- 주요 변경: 체험수업 CRM 목록/상태 변경/삭제는 유지하고 신규 등록, 정규 전환, 이탈, 메모 모달을 `next/dynamic`으로 분리.
+- 적용 범위: 관리자 체험수업 CRM.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/admin/gallery` 첫 JS 126.4KB → 120.3KB.
+- `npx.cmd next build`, `npx.cmd next build --webpack`은 Google Fonts/Fonts static 파일 다운로드 중 `socket hang up`, `ECONNRESET`이 반복되어 완료하지 못함.
+- 산출물 확인: 빌드 완료 실패로 route JS 수치 측정 보류.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/trial`, `/admin/notices`, `/admin/classes/[id]`의 초기 보조 UI 분리.
+- 다음 속도 개선 후보: `/admin/notices`, `/admin/classes/[id]`의 초기 보조 UI 분리.

@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄였다.
 - 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄였다.
 - 2026-07-09: `/admin/apply`의 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄였다.
@@ -8,7 +9,6 @@
 - 2026-07-09: `/admin` 관리자 대시보드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/notices/[id]` 공지 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/mypage` 마이페이지 레이아웃/본문의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
-- 2026-07-09: `/staff/quick-post` 선생님 빠른 업로드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 
 # STIZ Knowledge Index
 
@@ -74,3 +74,4 @@
 - `/admin/apply`처럼 목록 탭과 설정 탭이 함께 있는 화면은 기본 탭에 필요 없는 설정 저장 UI와 처리 모달을 동적 로드해 초기 route chunk를 줄인다.
 - `/apply/enroll`처럼 단계형 공개 폼은 첫 화면 단계는 즉시 렌더하고, 뒤 단계 입력/약관 UI는 `next/dynamic`으로 분리해 초기 route chunk를 줄인다.
 - `/admin/gallery`처럼 업로드 폼이 닫힌 상태로 시작하는 관리 화면은 이미지 압축/업로드 코드가 포함된 폼을 동적 로드해 목록 초기 route chunk를 줄인다.
+- `/admin/trial`처럼 목록을 먼저 보는 CRM 화면은 신규 등록/전환/이탈/메모 모달을 별도 파일로 분리해 클릭 후 로드한다.

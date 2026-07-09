@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, Save, CalendarCheck, CreditCard, Image as ImageIcon, User, BookOpen } from "lucide-react";
 import { updateStudentMemo } from "@/app/actions/admin";
 
 type MediaItem = { url: string; type: "image" | "video" };
@@ -37,6 +36,26 @@ function calcAge(birthDate: Date | string): number {
 }
 function formatKRW(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
+}
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
 }
 
 type StudentActivityData = {
@@ -81,7 +100,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
             {/* Header */}
             <div className="flex items-center gap-4">
                 <Link href="/admin/students" className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
-                    <ArrowLeft size={20} className="text-gray-500 dark:text-gray-400" />
+                    <SymbolIcon name="arrow_back" size={20} className="text-gray-500 dark:text-gray-400" />
                 </Link>
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">{student.name} <span className="text-gray-400 font-normal text-lg">학생</span></h1>
@@ -130,7 +149,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                     {/* 학부모 정보 */}
                     <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                            <User size={16} className="text-gray-400" /> 학부모 정보
+                            <SymbolIcon name="person" size={16} className="text-gray-400" /> 학부모 정보
                         </h3>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
@@ -152,7 +171,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                     {(student.phone || student.school || student.grade || student.address || student.enrollDate) && (
                         <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                             <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                <BookOpen size={16} className="text-gray-400" /> 학생 추가 정보
+                                <SymbolIcon name="menu_book" size={16} className="text-gray-400" /> 학생 추가 정보
                             </h3>
                             <div className="space-y-2 text-sm">
                                 {student.phone && (
@@ -204,7 +223,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                             {!memoSaved && <span />}
                             <button onClick={saveMemo} disabled={isPending}
                                 className="flex items-center gap-1 text-sm bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50">
-                                <Save size={14} /> {isPending ? "저장 중..." : "저장"}
+                                <SymbolIcon name="save" size={14} /> {isPending ? "저장 중..." : "저장"}
                             </button>
                         </div>
                     </div>
@@ -212,7 +231,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                     {/* 수강 반 */}
                     <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                            <BookOpen size={16} className="text-gray-400" /> 수강 중인 반
+                            <SymbolIcon name="menu_book" size={16} className="text-gray-400" /> 수강 중인 반
                         </h3>
                         {activeEnrollments.length === 0 ? (
                             <p className="text-sm text-gray-400">수강 중인 반이 없습니다</p>
@@ -236,7 +255,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                     {/* 출결 기록 */}
                     <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                            <CalendarCheck size={16} className="text-gray-400" /> 출결 기록
+                            <SymbolIcon name="event_available" size={16} className="text-gray-400" /> 출결 기록
                             <span className="text-xs text-gray-400 font-normal ml-1">최근 50건</span>
                         </h3>
                         {attendances.length === 0 ? (
@@ -273,7 +292,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                     {/* 수납 내역 */}
                     <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                            <CreditCard size={16} className="text-gray-400" /> 수납 내역
+                            <SymbolIcon name="credit_card" size={16} className="text-gray-400" /> 수납 내역
                         </h3>
                         {payments.length === 0 ? (
                             <p className="text-sm text-gray-400">수납 내역이 없습니다</p>
@@ -312,7 +331,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
                     {galleryPosts.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                             <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                <ImageIcon size={16} className="text-gray-400" /> 수업 사진
+                                <SymbolIcon name="image" size={16} className="text-gray-400" /> 수업 사진
                             </h3>
                             <div className="grid grid-cols-3 gap-2">
                                 {galleryPosts.map(g => {

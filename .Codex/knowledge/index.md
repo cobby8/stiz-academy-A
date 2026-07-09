@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/students/[id]` 학생 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/classes/[id]` 수업 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/notices`의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/gallery`와 `InstagramFeedPreview`의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
@@ -13,7 +14,7 @@
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 관리자 수업 상세처럼 깊은 하위 화면도 단순 아이콘은 Material Symbols를 우선 사용해 route chunk에 아이콘 라이브러리가 붙지 않게 한다.
+- 최근 지식: 관리자 학생/수업 상세처럼 깊은 하위 화면도 단순 아이콘은 Material Symbols를 우선 사용해 route chunk에 아이콘 라이브러리가 붙지 않게 한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -60,3 +61,4 @@
 - `InstagramFeedPreview`처럼 관리자와 선생님 화면이 공유하는 미리보기 컴포넌트는 단순 아이콘을 Material Symbols로 유지한다.
 - `/admin/notices` 같은 관리 화면 액션 아이콘도 Material Symbols로 유지해 `lucide-react`가 route chunk에 붙지 않게 한다.
 - `/admin/classes/[id]` 같은 하위 관리자 화면의 탭/빈 상태/버튼 아이콘도 Material Symbols로 유지해 수업 상세 route chunk를 줄인다.
+- `/admin/students/[id]` 같은 학생 상세 업무 화면의 섹션/저장 아이콘도 Material Symbols로 유지해 학생 상세 route chunk를 줄인다.

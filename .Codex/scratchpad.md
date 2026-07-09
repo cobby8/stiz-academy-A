@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 수업 상세 아이콘 JS 제거
+- 작업명: 학생 상세 아이콘 JS 제거
 - 상태: 검증 완료
-- 범위: 관리자 수업 상세 화면
+- 범위: 관리자 학생 상세 화면
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -42,9 +42,11 @@
 | 갤러리/인스타 미리보기 아이콘 JS 제거 | 완료 | lucide 아이콘을 Material Symbols로 전환 |
 | 공지 관리 아이콘 JS 제거 | 완료 | 공지 관리 lucide 아이콘을 Material Symbols로 전환 |
 | 수업 상세 아이콘 JS 제거 | 완료 | 수업 상세 lucide 아이콘을 Material Symbols로 전환 |
+| 학생 상세 아이콘 JS 제거 | 완료 | 학생 상세 lucide 아이콘을 Material Symbols로 전환 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/students/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 학생 상세 첫 JS를 116.1KB에서 113.6KB로 줄임.
 - 2026-07-09: `/admin/classes/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 수업 상세 첫 JS를 126.8KB에서 124.5KB로 줄임.
 - 2026-07-09: `/admin/notices`의 lucide 아이콘을 Material Symbols로 바꿔 공지 관리 첫 JS를 127.6KB에서 124.4KB로 줄임.
 - 2026-07-09: `/admin/gallery`와 `InstagramFeedPreview`의 lucide 아이콘을 Material Symbols로 바꿔 갤러리 첫 JS를 131.5KB에서 126.2KB로 줄임.
@@ -55,14 +57,14 @@
 - 2026-07-09: 업로드 이미지 URL이 고유 파일명인 점을 활용해 `/uploads`와 Supabase Storage 업로드에 1년 immutable 캐시를 적용함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/classes/[id]/ClassDetailClient.tsx`
-- 주요 변경: 수업 상세 탭/빈 상태/버튼/썸네일 자리 표시 아이콘의 `lucide-react` import를 Material Symbols 기반 `SymbolIcon`으로 대체.
-- 적용 범위: `/admin/classes/[id]` 수업 상세 초기 client JS.
+- 변경 파일: `src/app/admin/students/[id]/StudentDetailClient.tsx`
+- 주요 변경: 학생 상세 헤더/학부모/수강/출결/수납/사진/저장 버튼 아이콘의 `lucide-react` import를 Material Symbols 기반 `SymbolIcon`으로 대체.
+- 적용 범위: `/admin/students/[id]` 학생 상세 초기 client JS.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/admin/classes/[id]/page` 첫 JS 126.8KB → 124.5KB.
+- 산출물 확인: `/admin/students/[id]/page` 첫 JS 116.1KB → 113.6KB.
 
 ## 다음에 할 것
 - 다음 속도 개선 후보: `/staff/quick-post`, `/admin/requests`, `/mypage`에 남은 아이콘 JS와 보조 패널 지연 로딩 여부 추가 검토.

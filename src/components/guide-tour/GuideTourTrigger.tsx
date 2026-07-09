@@ -20,6 +20,7 @@
 
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import FontFreeIcon from "../ui/FontFreeIcon";
 
 // 투어 완료 여부를 localStorage에 저장하는 키
 const STORAGE_KEY = "stiz_tour_completed";
@@ -1105,12 +1106,7 @@ function TourTriggerInner({ autoStart = false }: { autoStart?: boolean }) {
         aria-label="입학 가이드 시작"
         title="입학 가이드"
       >
-        <span
-          className="material-symbols-outlined"
-          style={{ fontSize: 26 }}
-        >
-          school
-        </span>
+        <FontFreeIcon name="school" size={26} />
       </button>
 
       {/* 첫 방문 자동 제안 토스트 -- 메인 페이지에서만, 3초 후 표시 */}

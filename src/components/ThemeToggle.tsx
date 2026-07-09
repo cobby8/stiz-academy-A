@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
+import FontFreeIcon from "./ui/FontFreeIcon";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -21,9 +22,7 @@ export function ThemeToggle() {
       className="p-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-800 transition-colors flex items-center justify-center text-gray-700 dark:text-gray-300"
       aria-label="Toggle theme"
     >
-      <span className="material-symbols-outlined text-[22px] leading-none">
-        {theme === "dark" ? "light_mode" : "dark_mode"}
-      </span>
+      <FontFreeIcon name={theme === "dark" ? "light_mode" : "dark_mode"} size={22} />
     </button>
   );
 }

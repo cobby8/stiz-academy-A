@@ -10,6 +10,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import ChatMessage from "./ChatMessage";
+import FontFreeIcon from "../ui/FontFreeIcon";
 
 interface ChatPanelProps {
   onClose: () => void; // 닫기 버튼 클릭 시 부모(ChatBotButton)에 알림
@@ -26,18 +27,10 @@ function SymbolIcon({
   name,
   size = 18,
 }: {
-  name: string;
+  name: "close" | "send";
   size?: number;
 }) {
-  return (
-    <span
-      className="material-symbols-outlined leading-none"
-      style={{ fontSize: `${size}px` }}
-      aria-hidden="true"
-    >
-      {name}
-    </span>
-  );
+  return <FontFreeIcon name={name} size={size} />;
 }
 
 export default function ChatPanel({ onClose }: ChatPanelProps) {

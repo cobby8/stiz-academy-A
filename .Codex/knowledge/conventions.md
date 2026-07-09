@@ -17,7 +17,7 @@
 - 인스타 자동 게시처럼 30초 제한에 걸릴 수 있는 외부 작업은 화면 Server Action에서 직접 기다리지 않고, 큐 상태와 cron 처리로 넘긴다.
 - 홈 화면에 공지/갤러리 같은 보조 데이터를 추가할 때는 작은 limit와 공개 필터를 SQL에 넣고, 본문 전체 대신 목록에 필요한 필드만 UI에서 사용한다.
 - 전역 레이아웃에서 여러 한국어 후보 폰트를 `next/font/google`로 등록하지 않는다. 빌드가 Google Fonts 네트워크에 의존하게 되므로, 후보 폰트는 CSS fallback 스택으로 두고 꼭 필요한 폰트만 로컬 self-host 자산으로 추가한다.
-- Pretendard/Material Symbols처럼 외부 stylesheet가 필요한 경우 전역 head에 직접 넣지 않는다. 첫 paint 이후 클라이언트에서 삽입하거나, 장기적으로 로컬 self-host 또는 SVG/텍스트 아이콘 컴포넌트로 대체한다.
+- Pretendard/Material Symbols처럼 외부 stylesheet가 필요한 경우 전역 head에 직접 넣지 않는다. Pretendard는 idle 시점에 삽입하고, Material Symbols는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - 설정처럼 여러 페이지가 반복해서 읽는 저변경 데이터는 요청 단위 `react.cache()`만 믿지 말고 `unstable_cache`와 태그 무효화를 함께 검토한다.
 - 외부 추적 스크립트는 환경변수가 있을 때만 로드한다. 기본 ID fallback으로 모든 방문자에게 외부 스크립트를 강제하지 않는다.
 - 모든 공개 페이지에 붙는 플로팅 도구는 버튼/런처만 초기 렌더에 남기고, 패널/투어/라이브러리 본체는 사용자 클릭 또는 지연 시점에 동적 로드한다.
@@ -26,16 +26,16 @@
 - `sanitize-html`처럼 HTML 정리용 큰 라이브러리는 client component에서 import하지 않는다. 서버 컴포넌트에서 미리 정리한 HTML을 내려보내고, client component는 렌더링만 맡긴다.
 - 관리자 목록 화면에서 리치 에디터, 업로드 파서, 큰 미리보기처럼 무거운 도구가 모달에서만 필요하면 정적 import 대신 `next/dynamic`으로 모달 렌더 시점에 로드한다.
 - 공개 헤더/푸터처럼 모든 페이지에 붙는 공통 컴포넌트는 인증 확인, 외부 SDK, 큰 패널 같은 부가 기능을 직접 import하지 말고 작은 동적 컴포넌트로 분리한다.
-- 공개 첫 화면 공통 컴포넌트의 단순 아이콘은 이미 전역 로드된 Material Symbols를 우선 사용하고, 별도 아이콘 라이브러리 import는 피한다.
-- 관리자 shell처럼 모든 관리자 페이지에 붙는 공통 컴포넌트의 단순 아이콘도 Material Symbols를 우선 사용한다.
-- 관리자와 선생님 화면이 공유하는 미리보기 컴포넌트의 단순 아이콘도 Material Symbols를 우선 사용한다.
+- 공개 첫 화면 공통 컴포넌트의 단순 아이콘은 아이콘 폰트 요청을 만들지 않는 `FontFreeIcon`을 우선 사용하고, 별도 아이콘 라이브러리 import는 피한다.
+- 관리자 shell처럼 모든 관리자 페이지에 붙는 공통 컴포넌트의 단순 아이콘도 `FontFreeIcon`을 우선 사용한다.
+- 관리자와 선생님 화면이 공유하는 미리보기 컴포넌트의 단순 아이콘도 `FontFreeIcon`을 우선 사용한다.
 - 최초 setup처럼 서버에서 계정 생성/인증 처리가 가능한 화면은 client component에 Supabase 브라우저 SDK를 직접 import하지 않는다.
 - 서버 레이아웃에서 이미 인증/사용자 정보를 확인한 관리자 화면은 같은 정보를 클라이언트에서 Supabase로 다시 조회하지 않는다. 배지/알림 같은 보조 API는 첫 렌더 직후 동시 실행을 피하고 지연 시작한다.
 
 ## 디자인 원칙
 - API와 데이터 패칭은 유지하고 UI 렌더링만 바꾸는 방식을 우선한다.
 - 하드코딩 색상보다 기존 디자인 토큰과 CSS 변수 사용을 우선한다.
-- 현재 프로젝트는 Material Symbols Outlined 아이콘 사용 규칙이 있다.
+- 현재 프로젝트는 Material Symbols Outlined 아이콘 사용 규칙이 있으나, 첫 화면 공통 shell 아이콘은 속도상 `FontFreeIcon` 예외를 우선한다.
 - 어두운 배경 위 메뉴/아이콘 hover는 순백 `bg-white` 대신 `bg-white/10` 같은 반투명 배경을 사용한다.
 
 ## 검증 원칙

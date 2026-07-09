@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: 홈/공개 공통 UI/관리자 shell의 단순 아이콘을 `FontFreeIcon`으로 바꾸고, Material Symbols stylesheet는 실제 사용처가 있는 페이지에서만 로드하도록 조정했다.
 - 2026-07-09: Pretendard/Material Symbols 외부 stylesheet를 전역 head에서 제거하고 `DeferredFontStyles`로 첫 paint 이후 지연 로드하도록 바꿨다.
 - 2026-07-09: 전역 `next/font/google` 빌드 의존을 제거하고 폰트 옵션을 CSS fallback 스택으로 전환해 `next build`/`next build --webpack`을 통과시켰다.
 - 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 가시 영역 진입 후 로드하도록 바꿨다.
@@ -8,13 +9,12 @@
 - 2026-07-09: `/admin/classes`의 반 작성/수정 폼을 `ClassFormPanel` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/classes/[id]`의 수업 기록/사진 업로드 모달을 클릭 후 동적 로드로 전환했다.
 - 2026-07-09: `/admin/notices`의 소셜 발행 준비/게시 모달을 `NoticeSocialModal` 동적 로드로 분리했다.
-- 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals` 동적 로드로 분리했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 전역 외부 stylesheet는 head에 직접 두지 않는다. 초기 HTML에서는 앱 CSS만 로드하고, 폰트/아이콘 CSS는 첫 paint 이후 지연 로드한다.
+- 최근 지식: 첫 화면 공통 아이콘은 폰트 요청을 만들지 않는 `FontFreeIcon`을 우선하고, Material Symbols stylesheet는 실제 사용처가 있는 페이지에서만 지연 로드한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -43,7 +43,7 @@
 - `/api/cron/social-posts`는 `PUBLISHING` 초안을 5분마다 1건씩 처리하고, 일시 실패는 `instagramNextRetryAt` 기준으로 최대 3회까지 예약 재시도한다.
 - 공개 홈페이지와 마이페이지의 로그아웃 UI는 새 로그아웃 로직을 만들지 않고 `logout()` 서버 액션을 `form action`으로 연결한다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
-- Pretendard/Material Symbols 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 첫 paint/idle 시점에 삽입한다.
+- Pretendard 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 idle 시점에 삽입한다. Material Symbols stylesheet는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.
 - `getAcademySettings()`는 5분 서버 캐시와 `academy-settings` 태그를 사용하며, 관리자 설정 저장 시 `revalidateTag(..., { expire: 0 })`로 즉시 무효화한다.
 - 공개 페이지의 챗봇은 `ChatBotButton`만 초기 로드하고, `ChatPanel`은 버튼 클릭 후 `next/dynamic`으로 로드한다.
@@ -52,14 +52,14 @@
 - 공개 갤러리는 `GalleryPublicClient`를 서버 렌더링으로 두고, `GalleryLightboxController`가 클릭만 감지하며 `GalleryLightboxOverlay`는 클릭 후 동적 로드한다.
 - `/admin/notices`는 목록 초기 진입에서 `RichTextEditor`를 싣지 않고, 새 공지/수정 모달 렌더 시 `next/dynamic`으로 로드한다.
 - 공개 헤더는 메뉴/테마/큰글씨 상태만 직접 관리하고, Supabase 계정 확인과 로그아웃 UI는 `PublicAccountControls`를 동적 로드한다.
-- 공개 헤더, 테마 토글, 챗봇 버튼처럼 모든 공개 페이지에 붙는 단순 아이콘은 `lucide-react` 대신 Material Symbols 텍스트 아이콘을 사용한다.
+- 공개 헤더, 테마 토글, 챗봇/가이드 버튼처럼 모든 공개 페이지에 붙는 단순 아이콘은 Material Symbols 폰트 대신 `FontFreeIcon`을 사용한다.
 - 관리자 shell은 `requireAdmin()`에서 받은 사용자 이름/이메일을 사용하고, 로그아웃은 서버 액션으로 처리하며, 알림/체험 카운트 조회는 첫 렌더 후 지연 실행한다.
 - 로컬 fallback 업로드 `/uploads/:path*`와 Supabase Storage 업로드 파일은 1년 immutable 캐시를 사용해 재방문 이미지 다운로드 비용을 줄인다.
-- 관리자 shell의 로그아웃처럼 모든 관리자 화면에 포함되는 단순 아이콘은 별도 아이콘 라이브러리 import 대신 Material Symbols를 사용한다.
+- 관리자 shell의 로그아웃/메뉴/알림처럼 모든 관리자 화면에 포함되는 단순 아이콘은 별도 아이콘 라이브러리나 아이콘 폰트 대신 `FontFreeIcon`을 사용한다.
 - `/apply` 안내 HTML은 서버에서 sanitize한 뒤 `ApplyPageClient`에 넘겨 `sanitize-html/htmlparser2`가 client bundle에 들어가지 않게 한다.
 - `/setup` 최초 관리자 생성은 서버 API에서 Auth 사용자 생성, `User` row upsert, 로그인 쿠키 설정까지 처리해 client bundle에 Supabase 브라우저 SDK가 들어가지 않게 한다.
 - `/admin/students`의 엑셀 업로드 모달처럼 목록에서 가끔 쓰는 대형 보조 UI는 `next/dynamic`과 조건부 렌더로 클릭 후 로드한다.
-- `InstagramFeedPreview`처럼 관리자와 선생님 화면이 공유하는 미리보기 컴포넌트는 단순 아이콘을 Material Symbols로 유지한다.
+- `InstagramFeedPreview`처럼 관리자와 선생님 화면이 공유하는 미리보기 컴포넌트의 단순 아이콘은 `FontFreeIcon`으로 유지한다.
 - `/admin/notices` 같은 관리 화면 액션 아이콘도 Material Symbols로 유지해 `lucide-react`가 route chunk에 붙지 않게 한다.
 - `/admin/classes/[id]` 같은 하위 관리자 화면의 탭/빈 상태/버튼 아이콘도 Material Symbols로 유지해 수업 상세 route chunk를 줄인다.
 - `/admin/students/[id]` 같은 학생 상세 업무 화면의 섹션/저장 아이콘도 Material Symbols로 유지해 학생 상세 route chunk를 줄인다.
@@ -69,7 +69,7 @@
 - `/mypage`처럼 부모님이 로그인 후 쓰는 화면의 하단탭/알림/요청/수납/사진 아이콘도 Material Symbols로 유지해 마이페이지 route chunk를 줄인다.
 - `/notices/[id]`처럼 서버 렌더 중심인 공개 상세 화면도 단순 아이콘은 Material Symbols로 유지해 서버 렌더 아이콘 라이브러리 의존을 줄인다.
 - `/admin`처럼 서버 렌더 중심인 관리자 대시보드도 단순 아이콘은 Material Symbols로 유지해 서버 렌더 아이콘 라이브러리 의존을 줄인다.
-- `ChatPanel`처럼 클릭 후 동적 로드되는 보조 UI도 단순 닫기/전송 아이콘은 Material Symbols로 유지해 동적 패널의 아이콘 라이브러리 의존을 줄인다.
+- `ChatPanel`처럼 클릭 후 동적 로드되는 보조 UI도 단순 닫기/전송 아이콘은 `FontFreeIcon`으로 유지해 아이콘 폰트/라이브러리 의존을 줄인다.
 - 페이지 빌더의 툴박스/상단바/설정 패널/노드 아이콘도 Material Symbols로 유지하며, `src/app`, `src/components` 안의 실제 `lucide-react` import는 0건을 목표로 관리한다.
 - `/admin/schedule`처럼 목록은 바로 봐야 하지만 편집/추가/설정 모달은 클릭 후 쓰는 화면은 모달 묶음과 미리보기를 동적 로드해 초기 route chunk를 줄인다.
 - `/admin/apply`처럼 목록 탭과 설정 탭이 함께 있는 화면은 기본 탭에 필요 없는 설정 저장 UI와 처리 모달을 동적 로드해 초기 route chunk를 줄인다.

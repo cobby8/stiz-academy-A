@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import FontFreeIcon from "../ui/FontFreeIcon";
 
 const ChatPanel = dynamic(() => import("./ChatPanel"), {
   ssr: false,
@@ -38,7 +39,7 @@ export default function ChatBotButton() {
           "
           aria-label="상담 챗봇 열기"
         >
-          <span className="material-symbols-outlined text-[28px] leading-none">chat_bubble</span>
+          <FontFreeIcon name="chat_bubble" size={28} />
         </button>
       )}
     </>

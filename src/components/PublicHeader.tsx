@@ -17,6 +17,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "./ThemeToggle";
+import FontFreeIcon from "./ui/FontFreeIcon";
 
 const DesktopAccountControls = dynamic(
   () => import("./PublicAccountControls").then((mod) => mod.DesktopAccountControls),
@@ -235,9 +236,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
                 >
                   {group.label}
                   {/* 화살표 — hover 시 회전 */}
-                  <span className="material-symbols-outlined text-[18px] leading-none transition-transform duration-200 group-hover:rotate-180">
-                    expand_more
-                  </span>
+                  <FontFreeIcon name="expand_more" size={18} className="transition-transform duration-200 group-hover:rotate-180" />
                 </button>
 
                 {/* 드롭다운 패널 — group-hover로 보이기/숨기기 */}
@@ -307,7 +306,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
               className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
               aria-label="메뉴 열기"
             >
-              <span className="material-symbols-outlined text-[24px] leading-none">menu</span>
+              <FontFreeIcon name="menu" size={24} />
             </button>
           </div>
         </div>
@@ -338,7 +337,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
             className="p-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
             aria-label="메뉴 닫기"
           >
-            <span className="material-symbols-outlined text-[22px] leading-none">close</span>
+            <FontFreeIcon name="close" size={22} />
           </button>
         </div>
 

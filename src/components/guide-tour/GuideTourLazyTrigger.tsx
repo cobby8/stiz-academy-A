@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import FontFreeIcon from "../ui/FontFreeIcon";
 
 const LazyGuideTourTrigger = dynamic(() => import("./GuideTourTrigger"), {
   ssr: false,
@@ -50,9 +51,7 @@ export default function GuideTourLazyTrigger() {
       aria-label="입학 가이드 시작"
       title="입학 가이드"
     >
-      <span className="material-symbols-outlined" style={{ fontSize: 26 }}>
-        school
-      </span>
+      <FontFreeIcon name="school" size={26} />
     </button>
   );
 }

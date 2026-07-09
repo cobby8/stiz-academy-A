@@ -1,22 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import FontFreeIcon from "../ui/FontFreeIcon";
 
 export type InstagramPreviewMediaItem = {
   url: string;
   type: "image" | "video";
 };
 
-function SymbolIcon({ name, size, className = "" }: { name: string; size: number; className?: string }) {
-  return (
-    <span
-      className={`material-symbols-outlined leading-none ${className}`}
-      style={{ fontSize: `${size}px` }}
-      aria-hidden="true"
-    >
-      {name}
-    </span>
-  );
+type InstagramIconName =
+  | "bookmark"
+  | "chat_bubble"
+  | "chevron_left"
+  | "chevron_right"
+  | "favorite"
+  | "more_horiz"
+  | "send";
+
+function SymbolIcon({ name, size, className = "" }: { name: InstagramIconName; size: number; className?: string }) {
+  return <FontFreeIcon name={name} size={size} className={className} />;
 }
 
 export default function InstagramFeedPreview({

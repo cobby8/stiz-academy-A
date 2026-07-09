@@ -12,6 +12,7 @@
 import { useRef } from 'react';
 import SectionLayout from '@/components/ui/SectionLayout';
 import AnimateOnScroll from '@/components/ui/AnimateOnScroll';
+import FontFreeIcon from '@/components/ui/FontFreeIcon';
 
 // 후기 데이터 타입
 interface Testimonial {
@@ -65,7 +66,7 @@ export default function TestimonialCarousel({
       {/* 후기가 없으면 안내 메시지 */}
       {testimonials.length === 0 ? (
         <div className="text-center py-12 text-gray-400 dark:text-gray-400">
-          <span className="material-symbols-outlined text-5xl mb-3 block">rate_review</span>
+          <FontFreeIcon name="rate_review" size={48} className="mx-auto mb-3" />
           <p className="font-medium">아직 등록된 후기가 없습니다</p>
         </div>
       ) : (
@@ -144,7 +145,7 @@ export default function TestimonialCarousel({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-600 transition text-sm"
           >
-            <span className="material-symbols-outlined text-lg">open_in_new</span>
+            <FontFreeIcon name="open_in_new" size={18} />
             네이버 플레이스에서 더 많은 후기 보기
           </a>
         </div>

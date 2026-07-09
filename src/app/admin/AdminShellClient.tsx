@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { logout } from "@/app/actions/auth";
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 // "학원운영" 탭에 속하는 경로 목록 — 이 경로로 시작하면 학원운영 탭 활성화
 const OPS_PATHS = [
@@ -203,7 +204,7 @@ export default function AdminShellClient({
                                 title="로그아웃"
                                 className="p-1.5 text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
                             >
-                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
+                                <FontFreeIcon name="logout" size={18} />
                             </button>
                         </form>
                     </div>
@@ -220,7 +221,7 @@ export default function AdminShellClient({
                             className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700 md:hidden"
                             onClick={() => setMobileMenuOpen(true)}
                         >
-                            <span className="material-symbols-outlined text-[22px]">menu</span>
+                            <FontFreeIcon name="menu" size={22} />
                         </button>
                         <h2 className="truncate font-bold text-gray-700 dark:text-gray-200">관리자 시스템</h2>
                     </div>
@@ -486,12 +487,12 @@ function NotificationBell() {
     // 알림 타입별 아이콘 매핑
     function typeIcon(type: string) {
         switch (type) {
-            case "TRIAL_APPLICATION": return "person_add";
-            case "ENROLL_APPLICATION": return "how_to_reg";
-            case "REQUEST": return "mail";
-            case "ATTENDANCE": return "check_circle";
-            case "PAYMENT": return "payments";
-            case "NOTICE": return "campaign";
+            case "TRIAL_APPLICATION": return "person_add" as const;
+            case "ENROLL_APPLICATION": return "how_to_reg" as const;
+            case "REQUEST": return "mail" as const;
+            case "ATTENDANCE": return "check_circle" as const;
+            case "PAYMENT": return "payments" as const;
+            case "NOTICE": return "campaign" as const;
             default: return "notifications";
         }
     }
@@ -504,7 +505,7 @@ function NotificationBell() {
                 className="relative p-2 text-gray-500 hover:text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition-colors"
                 title="알림"
             >
-                <span className="material-symbols-outlined text-[22px]">notifications</span>
+                <FontFreeIcon name="notifications" size={22} />
                 {/* 읽지 않은 알림 수 배지 */}
                 {unreadCount > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-red-500 text-white">
@@ -534,7 +535,7 @@ function NotificationBell() {
                     <div className="max-h-[400px] overflow-y-auto">
                         {items.length === 0 ? (
                             <div className="py-12 text-center text-gray-400 text-sm">
-                                <span className="material-symbols-outlined text-4xl block mb-2">notifications_off</span>
+                                <FontFreeIcon name="notifications_off" size={40} className="mx-auto mb-2" />
                                 알림이 없습니다
                             </div>
                         ) : (
@@ -550,7 +551,7 @@ function NotificationBell() {
                                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                                         !item.isRead ? "bg-blue-100 text-blue-600" : "bg-gray-100 dark:bg-gray-800 text-gray-400"
                                     }`}>
-                                        <span className="material-symbols-outlined text-[18px]">{typeIcon(item.type)}</span>
+                                        <FontFreeIcon name={typeIcon(item.type)} size={18} />
                                     </div>
                                     {/* 내용 */}
                                     <div className="flex-1 min-w-0">

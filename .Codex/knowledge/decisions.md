@@ -64,6 +64,10 @@
 - 결정: Pretendard와 Material Symbols stylesheet를 전역 `<head>`에서 제거하고 `DeferredFontStyles` 클라이언트 컴포넌트가 첫 paint/idle 이후 삽입한다.
 - 이유: 전역 stylesheet는 첫 화면 렌더를 막는 리소스가 될 수 있다. 앱의 기본 CSS와 레이아웃을 먼저 보여주고, 선택 폰트와 아이콘 폰트는 화면이 그려진 뒤 붙이면 홈페이지와 관리자 페이지 첫 반응이 가벼워진다.
 
+## 2026-07-09: 첫 화면 공통 아이콘은 폰트 없는 SVG 컴포넌트를 사용
+- 결정: 공개 헤더/푸터/테마/챗봇/가이드/후기/인스타 미리보기와 관리자 shell의 단순 아이콘은 `FontFreeIcon`으로 렌더링하고, `DeferredFontStyles`는 실제 `.material-symbols-outlined`가 있는 페이지에서만 Material Symbols stylesheet를 삽입한다.
+- 이유: Material Symbols는 라이브러리 JS보다 가볍지만, 첫 화면에서 아이콘 몇 개 때문에 외부 아이콘 폰트 CSS/폰트 요청이 생길 수 있다. 공통 shell 아이콘을 작은 inline SVG로 바꾸면 홈 첫 HTML에서 Material Symbols 흔적이 사라지고, 아이콘 폰트는 필요한 업무 화면에서만 요청된다.
+
 ## 2026-07-09: 학원 기본 설정은 서버 캐시와 태그 무효화를 사용한다
 - 결정: `getAcademySettings()`는 `unstable_cache`로 5분 캐시하고, 관리자 설정 저장 시 `academy-settings` 태그를 즉시 무효화한다.
 - 이유: 학원 설정은 거의 모든 공개 페이지와 일부 서버 작업에서 반복 사용되지만 자주 바뀌지 않는다. 요청마다 DB를 확인하는 대신 캐시를 두면 전체 페이지의 서버 부담이 줄고, 저장 시 태그 무효화로 최신성도 유지할 수 있다.

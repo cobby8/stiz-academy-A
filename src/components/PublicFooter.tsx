@@ -9,6 +9,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import FontFreeIcon from "./ui/FontFreeIcon";
 
 // 부모에서 전달받을 props 타입
 interface PublicFooterProps {
@@ -111,12 +112,12 @@ export default function PublicFooter({
             <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
               {address && (
                 <li className="flex items-start gap-2">
-                  <span className="material-symbols-outlined mt-0.5 text-[16px] leading-none text-gray-500 dark:text-gray-400 shrink-0" aria-hidden="true">location_on</span>
+                  <FontFreeIcon name="location_on" size={16} className="mt-0.5 shrink-0 text-gray-500 dark:text-gray-400" />
                   <span>{address}</span>
                 </li>
               )}
               <li className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[16px] leading-none text-gray-500 dark:text-gray-400 shrink-0" aria-hidden="true">call</span>
+                <FontFreeIcon name="call" size={16} className="shrink-0 text-gray-500 dark:text-gray-400" />
                 <span>{phone}</span>
               </li>
               <li className="text-xs text-gray-500 dark:text-gray-400 mt-1">

@@ -29,10 +29,28 @@ function appendStylesheet(id: string, href: string, onLoad?: () => void) {
 
 export default function DeferredFontStyles() {
     useEffect(() => {
+        let iconObserver: MutationObserver | null = null;
+
         const loadIcons = () => {
             appendStylesheet("material-symbols-css", MATERIAL_SYMBOLS_URL, () => {
                 document.documentElement.classList.add("material-symbols-ready");
             });
+        };
+
+        const loadIconsIfPresent = () => {
+            if (!document.querySelector(".material-symbols-outlined")) return false;
+            loadIcons();
+            return true;
+        };
+
+        const watchForIconUse = () => {
+            if (loadIconsIfPresent()) return;
+            iconObserver = new MutationObserver(() => {
+                if (!loadIconsIfPresent()) return;
+                iconObserver?.disconnect();
+                iconObserver = null;
+            });
+            iconObserver.observe(document.body, { childList: true, subtree: true });
         };
 
         const loadPretendard = () => {
@@ -40,13 +58,14 @@ export default function DeferredFontStyles() {
         };
 
         const idleWindow = window as IdleWindow;
-        const iconFrame = window.requestAnimationFrame(loadIcons);
+        const iconFrame = window.requestAnimationFrame(watchForIconUse);
         const idleId = idleWindow.requestIdleCallback
             ? idleWindow.requestIdleCallback(loadPretendard, { timeout: 2500 })
             : window.setTimeout(loadPretendard, 1500);
 
         return () => {
             window.cancelAnimationFrame(iconFrame);
+            iconObserver?.disconnect();
             if (idleWindow.cancelIdleCallback) {
                 idleWindow.cancelIdleCallback(idleId);
             } else {

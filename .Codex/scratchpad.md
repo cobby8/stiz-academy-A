@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: setup 페이지 Supabase SDK 제거
+- 작업명: 학생 관리 엑셀 모달 지연 로딩
 - 상태: 검증 완료
-- 범위: 초기 관리자 설정 페이지
+- 범위: 관리자 학생 관리 화면
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -38,9 +38,11 @@
 | 관리자 공통 아이콘 JS 제거 | 완료 | shell 로그아웃 아이콘을 Material Symbols로 전환해 공통 chunk 축소 |
 | 신청 페이지 client bundle 축소 | 완료 | `sanitize-html`을 client bundle에서 제거해 `/apply` 첫 JS 대폭 축소 |
 | setup 페이지 Supabase SDK 제거 | 완료 | 최초 관리자 생성 API를 서버 처리로 옮겨 `/setup` 첫 JS 대폭 축소 |
+| 학생 관리 엑셀 모달 지연 로딩 | 완료 | 엑셀 업로드 모달을 클릭 후 별도 chunk로 로드 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/students` 엑셀 업로드 모달을 동적 로드로 분리해 학생 관리 첫 JS를 134.6KB에서 123.0KB로 줄임.
 - 2026-07-09: `/setup` 관리자 생성 처리를 서버 API로 옮겨 Supabase 브라우저 SDK를 제거하고 첫 JS를 265.5KB에서 64.8KB로 줄임.
 - 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮기고 공개 푸터 lucide import를 제거해 첫 JS를 372.4KB에서 116.3KB로 줄임.
 - 2026-07-09: 관리자 shell 로그아웃 아이콘의 lucide import를 제거해 관리자 공통 chunk를 약 42.7KB에서 41.4KB로 줄임.
@@ -49,17 +51,16 @@
 - 2026-07-09: 공개 헤더/테마 토글/챗봇 버튼의 lucide 아이콘을 Material Symbols로 바꿔 홈 entry JS를 약 0.05MB로 줄임.
 - 2026-07-09: 공개 헤더의 Supabase 계정 상태 확인을 동적 컴포넌트로 분리해 홈 entry JS를 약 0.06MB로 줄임.
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달에서만 동적 로드하도록 변경함.
-- 2026-07-09: 공개 갤러리 목록을 서버 렌더링으로 돌리고 라이트박스 본체를 클릭 후 동적 로드하도록 분리함.
 
 ## 구현 기록
-- 변경 파일: `src/app/setup/page.tsx`, `src/app/api/auth/check-setup/route.ts`
-- 주요 변경: 최초 관리자 생성 POST API를 추가해 서버에서 Auth 사용자 생성, `User` row upsert, 로그인 쿠키 설정을 처리. setup client는 Supabase 브라우저 SDK 대신 fetch만 사용.
-- 적용 범위: `/setup` 초기 설정 페이지 client JS와 최초 관리자 생성 흐름.
+- 변경 파일: `src/app/admin/students/StudentManagementClient.tsx`
+- 주요 변경: `ExcelUploadModal`을 정적 import에서 `next/dynamic`으로 변경하고, 업로드 버튼 클릭 후에만 렌더하도록 조건부 로딩.
+- 적용 범위: `/admin/students` 학생 목록 초기 client JS.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/setup/page` 첫 JS 265.5KB → 64.8KB, setup client manifest에서 Supabase 브라우저 SDK 제거.
+- 산출물 확인: `/admin/students/page` 첫 JS 134.6KB → 123.0KB, 엑셀 모달은 별도 chunk로 분리.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 관리자 개별 대형 화면(`/admin/schedule`, `/admin/students`, `/admin/gallery`)의 남은 큰 client chunk 분석.
+- 다음 속도 개선 후보: `/admin/gallery` 업로드/인스타 미리보기 보조 UI chunk 추가 분리.

@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/students` 엑셀 업로드 모달을 클릭 후 동적 로드하도록 분리했다.
 - 2026-07-09: `/setup` 최초 관리자 생성 흐름을 서버 API로 옮겨 Supabase 브라우저 SDK를 제거했다.
 - 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮겨 `sanitize-html` client chunk를 제거했다.
 - 2026-07-09: 관리자 shell 로그아웃 아이콘의 `lucide-react` import를 제거하고 Material Symbols 아이콘으로 바꿨다.
@@ -7,13 +8,12 @@
 - 2026-07-09: 공개 헤더, 테마 토글, 챗봇 버튼의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: 공개 헤더의 Supabase 계정 상태 확인을 `PublicAccountControls` 동적 컴포넌트로 분리했다.
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달이 열릴 때만 동적 로드하도록 변경했다.
-- 2026-07-09: 공개 갤러리 목록은 서버 렌더링으로 유지하고 전체화면 라이트박스 본체는 클릭 후 동적 로드하도록 분리했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 최초 setup처럼 서버에서 처리 가능한 인증성 작업은 브라우저 Supabase SDK를 싣지 말고 API route/server client로 처리한다.
+- 최근 지식: 관리자 목록 화면의 업로드/파서/대형 미리보기 모달은 목록 첫 진입에 싣지 말고 클릭 후 동적 로드한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -56,3 +56,4 @@
 - 관리자 shell의 로그아웃처럼 모든 관리자 화면에 포함되는 단순 아이콘은 별도 아이콘 라이브러리 import 대신 Material Symbols를 사용한다.
 - `/apply` 안내 HTML은 서버에서 sanitize한 뒤 `ApplyPageClient`에 넘겨 `sanitize-html/htmlparser2`가 client bundle에 들어가지 않게 한다.
 - `/setup` 최초 관리자 생성은 서버 API에서 Auth 사용자 생성, `User` row upsert, 로그인 쿠키 설정까지 처리해 client bundle에 Supabase 브라우저 SDK가 들어가지 않게 한다.
+- `/admin/students`의 엑셀 업로드 모달처럼 목록에서 가끔 쓰는 대형 보조 UI는 `next/dynamic`과 조건부 렌더로 클릭 후 로드한다.

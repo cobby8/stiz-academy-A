@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import ExcelUploadModal from "./ExcelUploadModal";
 import {
     createStudent,
     updateStudent,
@@ -11,6 +11,11 @@ import {
     enrollStudent,
     deleteEnrollment,
 } from "@/app/actions/admin";
+
+const ExcelUploadModal = dynamic(() => import("./ExcelUploadModal"), {
+    ssr: false,
+    loading: () => null,
+});
 
 type Student = {
     id: string;
@@ -750,14 +755,16 @@ export default function StudentManagementClient({
             )}
 
             {/* 엑셀 업로드 모달 — 파일 선택 -> 미리보기 -> 일괄 등록 */}
-            <ExcelUploadModal
-                isOpen={showExcelUpload}
-                onClose={() => setShowExcelUpload(false)}
-                onComplete={() => {
-                    setShowExcelUpload(false);
-                    router.refresh(); // 목록 새로고침
-                }}
-            />
+            {showExcelUpload && (
+                <ExcelUploadModal
+                    isOpen={showExcelUpload}
+                    onClose={() => setShowExcelUpload(false)}
+                    onComplete={() => {
+                        setShowExcelUpload(false);
+                        router.refresh(); // 목록 새로고침
+                    }}
+                />
+            )}
 
             {/* 수강 등록 모달 — 프로그램별 그룹화 + 요일/시간 표시 */}
             {enrollModal && (

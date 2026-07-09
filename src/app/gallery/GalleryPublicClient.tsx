@@ -1,5 +1,5 @@
 import GalleryLightboxController, { type GalleryLightboxItem } from "./GalleryLightboxController";
-// Material Symbols Outlined 아이콘 사용 (프로젝트 conventions: lucide-react 금지)
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 type MediaItem = { url: string; type: "image" | "video" };
 type GalleryPost = {
@@ -18,7 +18,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
     if (items.length === 0) {
         return (
             <div className="text-center py-20 text-gray-400">
-                <span className="material-symbols-outlined mx-auto mb-4 text-gray-300" style={{ fontSize: 64 }}>image</span>
+                <FontFreeIcon name="image" size={64} className="mx-auto mb-4 text-gray-300" />
                 <p className="text-lg font-medium">아직 갤러리가 비어있습니다</p>
                 <p className="text-sm mt-1">곧 수업 사진이 업로드됩니다.</p>
             </div>
@@ -52,7 +52,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
                                 {/* 동영상 재생 아이콘 표시 */}
                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
-                                        <span className="material-symbols-outlined text-white ml-1" style={{ fontSize: 20 }}>play_arrow</span>
+                                        <FontFreeIcon name="play_arrow" size={20} className="ml-1 text-white" />
                                     </div>
                                 </div>
                             </>
@@ -67,7 +67,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
                                 )}
                                 {/* 날짜 표시 */}
                                 <p className="text-white/70 text-xs flex items-center gap-1">
-                                    <span className="material-symbols-outlined" style={{ fontSize: 10 }}>calendar_today</span>
+                                    <FontFreeIcon name="calendar_today" size={10} />
                                     {item.displayDate}
                                 </p>
                             </div>

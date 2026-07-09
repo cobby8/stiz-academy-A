@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 import { type GalleryLightboxItem } from "./GalleryLightboxController";
 
 export default function GalleryLightboxOverlay({
@@ -58,7 +59,7 @@ export default function GalleryLightboxOverlay({
                 className="absolute top-4 right-4 text-white/60 hover:bg-white/10 hover:text-white z-10 p-2 rounded-full transition-colors"
                 aria-label="닫기"
             >
-                <span className="material-symbols-outlined" style={{ fontSize: 28 }}>close</span>
+                <FontFreeIcon name="close" size={28} />
             </button>
 
             {/* 카운터 — 현재 위치 / 전체 개수 */}
@@ -77,7 +78,7 @@ export default function GalleryLightboxOverlay({
                     className="absolute left-2 md:left-6 text-white/40 hover:bg-white/10 hover:text-white z-10 p-2 rounded-full transition-colors"
                     aria-label="이전 사진"
                 >
-                    <span className="material-symbols-outlined" style={{ fontSize: 36 }}>chevron_left</span>
+                    <FontFreeIcon name="chevron_left" size={36} />
                 </button>
             )}
 
@@ -92,7 +93,7 @@ export default function GalleryLightboxOverlay({
                     className="absolute right-2 md:right-6 text-white/40 hover:bg-white/10 hover:text-white z-10 p-2 rounded-full transition-colors"
                     aria-label="다음 사진"
                 >
-                    <span className="material-symbols-outlined" style={{ fontSize: 36 }}>chevron_right</span>
+                    <FontFreeIcon name="chevron_right" size={36} />
                 </button>
             )}
 

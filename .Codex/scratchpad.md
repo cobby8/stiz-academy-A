@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 체험수업 CRM 모달 지연 로딩
+- 작업명: 공지 소셜 발행 모달 지연 로딩
 - 상태: 타입 검증 완료
-- 범위: `/admin/trial`
+- 범위: `/admin/notices`
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -56,9 +56,11 @@
 | 수강신청 후속 단계 지연 로딩 | 완료 | `/apply/enroll` 첫 JS 131.2KB → 112.4KB |
 | 갤러리 업로드 폼 지연 로딩 | 완료 | `/admin/gallery` 첫 JS 126.4KB → 120.3KB |
 | 체험 CRM 모달 지연 로딩 | 완료 | `/admin/trial` 모달 묶음 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
+| 공지 소셜 발행 모달 지연 로딩 | 완료 | `/admin/notices` 소셜 발행 준비/게시 UI 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 타입/빌드 검증 | 진행 | `npx.cmd tsc --noEmit` 통과, `next build`는 Google Fonts 외부 다운로드 실패 |
 
 ## 작업 로그
+- 2026-07-09: `/admin/notices`의 소셜 발행 준비/게시 모달을 `NoticeSocialModal`로 분리해 공지 목록 초기 렌더에서 소셜 캠페인 UI 코드를 제외함.
 - 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals`로 분리해 목록 초기 렌더에서 보조 UI 코드를 제외함.
 - 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄임.
 - 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄임.
@@ -68,17 +70,16 @@
 - 2026-07-09: `ChatPanel`의 lucide 닫기/전송 아이콘을 Material Symbols로 바꿔 챗봇 동적 패널의 아이콘 라이브러리 의존을 제거함.
 - 2026-07-09: `/admin` 대시보드의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 100.2KB 유지.
 - 2026-07-09: `/notices/[id]`의 lucide 아이콘을 Material Symbols로 바꿔 서버 렌더 아이콘 의존을 제거함. client JS는 99.9KB 유지.
-- 2026-07-09: `/mypage` 레이아웃/본문의 lucide 아이콘을 Material Symbols로 바꿔 마이페이지 첫 JS를 109.2KB에서 105.4KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/trial/TrialCrmClient.tsx`, `src/app/admin/trial/TrialCrmModals.tsx`
-- 주요 변경: 체험수업 CRM 목록/상태 변경/삭제는 유지하고 신규 등록, 정규 전환, 이탈, 메모 모달을 `next/dynamic`으로 분리.
-- 적용 범위: 관리자 체험수업 CRM.
+- 변경 파일: `src/app/admin/notices/NoticesAdminClient.tsx`, `src/app/admin/notices/NoticeSocialModal.tsx`
+- 주요 변경: 공지 목록/작성 관리는 유지하고 소셜 발행 미리보기, 광고 문구 복사, 인스타 발행 UI와 액션을 `next/dynamic`으로 분리.
+- 적용 범위: 관리자 공지사항 관리.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- `npx.cmd next build`, `npx.cmd next build --webpack`은 Google Fonts/Fonts static 파일 다운로드 중 `socket hang up`, `ECONNRESET`이 반복되어 완료하지 못함.
+- `npx.cmd next build`, `npx.cmd next build --webpack`은 이전 단계에서 Google Fonts/Fonts static 파일 다운로드 중 `socket hang up`, `ECONNRESET`이 반복되어 완료하지 못함.
 - 산출물 확인: 빌드 완료 실패로 route JS 수치 측정 보류.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/notices`, `/admin/classes/[id]`의 초기 보조 UI 분리.
+- 다음 속도 개선 후보: `/admin/classes/[id]`, `/admin/trial` 빌드 산출물 재측정, `/admin/notices` 빌드 산출물 재측정.

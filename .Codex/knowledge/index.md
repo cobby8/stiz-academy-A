@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/staff`의 SMS 초대 링크 발송 모달을 `InviteStaffModal` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/staff`의 전화번호 인증/직접 추가 모달을 `AddStaffModal` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/classes`의 반 작성/수정 폼을 `ClassFormPanel` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/classes/[id]`의 수업 기록/사진 업로드 모달을 클릭 후 동적 로드로 전환했다.
@@ -8,7 +9,6 @@
 - 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄였다.
 - 2026-07-09: `/admin/apply`의 승인/반려/상세 모달과 안내 설정 탭을 동적 로드로 분리해 첫 JS를 131.0KB에서 115.5KB로 줄였다.
 - 2026-07-09: `/admin/schedule`의 편집/추가/구글시트 모달과 표 미리보기를 동적 로드로 분리해 첫 JS를 137.1KB에서 118.6KB로 줄였다.
-- 2026-07-09: 페이지 빌더의 남은 `lucide-react` 아이콘 import를 Material Symbols로 전환해 `src/app`, `src/components` 실제 import를 0건으로 만들었다.
 
 # STIZ Knowledge Index
 
@@ -79,3 +79,4 @@
 - `/admin/classes/[id]`처럼 상세 화면에 사진 업로드 모달이 붙은 경우, 압축/업로드 코드는 모달을 열 때만 로드한다.
 - `/admin/classes`처럼 목록과 작성/수정 폼이 함께 있는 화면은 저장 폼과 create/update 액션을 별도 동적 패널로 분리한다.
 - `/admin/staff`처럼 인증 절차가 들어간 직접 추가 모달은 목록 초기 렌더에서 분리해 클릭 후 로드한다.
+- `/admin/staff`처럼 SMS 초대 발송 폼이 닫힌 상태로 시작하는 화면은 초대 액션과 폼을 별도 동적 모달로 분리한다.

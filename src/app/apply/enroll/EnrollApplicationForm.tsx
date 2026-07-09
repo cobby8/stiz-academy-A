@@ -20,6 +20,7 @@ import {
 } from "@/app/actions/public";
 import Link from "next/link";
 import { trackMetaEvent } from "@/components/MetaPixel";
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 const EnrollApplicationLaterSteps = dynamic(() => import("./EnrollApplicationLaterSteps"), {
     loading: () => (
@@ -212,7 +213,7 @@ export default function EnrollApplicationForm({
         return (
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 text-center">
                 <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-green-600 text-4xl">check_circle</span>
+                    <FontFreeIcon name="check_circle" size={40} className="text-green-600" />
                 </div>
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3">수강 신청이 완료되었습니다!</h2>
                 <p className="text-gray-600 dark:text-gray-300 mb-2">담당자가 빠른 시간 내에 연락드리겠습니다.</p>
@@ -227,7 +228,7 @@ export default function EnrollApplicationForm({
                     href="/"
                     className="inline-flex items-center gap-2 px-6 py-3 bg-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-navy-800 transition-colors"
                 >
-                    <span className="material-symbols-outlined text-lg">home</span>
+                    <FontFreeIcon name="home" size={18} />
                     홈으로 돌아가기
                 </Link>
             </div>
@@ -252,7 +253,7 @@ export default function EnrollApplicationForm({
                                 }`}
                             >
                                 {n < step ? (
-                                    <span className="material-symbols-outlined text-lg">check</span>
+                                    <FontFreeIcon name="check" size={18} />
                                 ) : (
                                     n
                                 )}
@@ -277,7 +278,7 @@ export default function EnrollApplicationForm({
             {/* 체험 데이터 자동 채움 알림 배너 */}
             {trialData && step === 1 && (
                 <div className="mx-6 mt-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm flex items-center gap-2">
-                    <span className="material-symbols-outlined text-lg">auto_fix_high</span>
+                    <FontFreeIcon name="auto_fix_high" size={18} />
                     체험수업 정보가 자동으로 입력되었습니다. 필요하면 수정할 수 있습니다.
                 </div>
             )}
@@ -287,7 +288,7 @@ export default function EnrollApplicationForm({
                 {/* 에러 메시지 */}
                 {error && (
                     <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
-                        <span className="material-symbols-outlined text-lg">error</span>
+                        <FontFreeIcon name="error" size={18} />
                         {error}
                     </div>
                 )}
@@ -296,7 +297,7 @@ export default function EnrollApplicationForm({
                 {step === 1 && (
                     <div className="space-y-5">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">child_care</span>
+                            <FontFreeIcon name="child_care" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                             아이 정보
                         </h2>
 
@@ -423,7 +424,7 @@ export default function EnrollApplicationForm({
                             onClick={goBack}
                             className="flex items-center gap-1 px-5 py-3 text-gray-600 hover:text-gray-900 dark:text-white font-medium transition-colors cursor-pointer"
                         >
-                            <span className="material-symbols-outlined text-lg">arrow_back</span>
+                            <FontFreeIcon name="arrow_back" size={18} />
                             이전
                         </button>
                     ) : (
@@ -437,7 +438,7 @@ export default function EnrollApplicationForm({
                             className="flex items-center gap-1 px-6 py-3 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors cursor-pointer"
                         >
                             다음
-                            <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                            <FontFreeIcon name="arrow_forward" size={18} />
                         </button>
                     ) : (
                         <button
@@ -448,12 +449,12 @@ export default function EnrollApplicationForm({
                         >
                             {isPending ? (
                                 <>
-                                    <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                                    <FontFreeIcon name="progress_activity" size={18} className="animate-spin" />
                                     처리 중...
                                 </>
                             ) : (
                                 <>
-                                    <span className="material-symbols-outlined text-lg">how_to_reg</span>
+                                    <FontFreeIcon name="how_to_reg" size={18} />
                                     수강 신청하기
                                 </>
                             )}

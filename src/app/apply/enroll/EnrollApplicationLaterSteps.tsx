@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import FontFreeIcon, { type FontFreeIconName } from "@/components/ui/FontFreeIcon";
 
 interface AvailableSlot {
     slotKey: string;
@@ -104,7 +105,7 @@ export default function EnrollApplicationLaterSteps({
             {step === 2 && (
                 <div className="space-y-5">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person</span>
+                        <FontFreeIcon name="person" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                         보호자 정보
                     </h2>
 
@@ -173,7 +174,7 @@ export default function EnrollApplicationLaterSteps({
             {step === 3 && (
                 <div className="space-y-5">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">sports_basketball</span>
+                        <FontFreeIcon name="sports_basketball" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                         수강 정보
                     </h2>
 
@@ -324,7 +325,7 @@ export default function EnrollApplicationLaterSteps({
             {step === 4 && (
                 <div className="space-y-5">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">verified</span>
+                        <FontFreeIcon name="verified" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                         입력 정보 확인 및 동의
                     </h2>
 
@@ -428,11 +429,11 @@ function TextInput({
     );
 }
 
-function SummarySection({ title, icon, children }: { title: string; icon: string; children: ReactNode }) {
+function SummarySection({ title, icon, children }: { title: string; icon: FontFreeIconName; children: ReactNode }) {
     return (
         <div>
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm text-gray-500 dark:text-gray-400">{icon}</span>
+                <FontFreeIcon name={icon} size={14} className="text-gray-500 dark:text-gray-400" />
                 {title}
             </h3>
             <div className="grid grid-cols-2 gap-y-1 gap-x-4 pl-5">{children}</div>
@@ -483,9 +484,7 @@ function TermsAccordion({
                     onClick={() => setIsOpen(!isOpen)}
                     className="text-gray-400 hover:text-gray-600 dark:text-gray-300 p-1 cursor-pointer"
                 >
-                    <span className={`material-symbols-outlined text-lg transition-transform ${isOpen ? "rotate-180" : ""}`}>
-                        expand_more
-                    </span>
+                    <FontFreeIcon name="expand_more" size={18} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
                 </button>
             </div>
             {isOpen && (

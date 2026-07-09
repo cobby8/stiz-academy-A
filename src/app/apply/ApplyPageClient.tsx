@@ -7,6 +7,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SectionLayout from "@/components/ui/SectionLayout";
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 // FAQ 데이터 타입 (DB에서 가져온 FAQ 항목)
 type FaqItem = { id: string; question: string; answer: string };
@@ -313,8 +314,7 @@ export default function ApplyPageClient({
                                         <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white/20 text-white">Uniform</span>
                                     </div>
                                     <h3 className="text-xl font-black text-white flex items-center gap-2">
-                                        {/* Material Symbols Outlined 아이콘 — checkroom(옷걸이) */}
-                                        <span className="material-symbols-outlined text-2xl">checkroom</span>
+                                        <FontFreeIcon name="checkroom" size={24} />
                                         유니폼 신청
                                     </h3>
                                 </div>

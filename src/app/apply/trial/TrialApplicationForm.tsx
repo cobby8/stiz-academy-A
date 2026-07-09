@@ -12,6 +12,7 @@ import { useState, useTransition } from "react";
 import { submitTrialApplication, type AvailableSlot } from "@/app/actions/public";
 import Link from "next/link";
 import { trackMetaEvent } from "@/components/MetaPixel";
+import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 // ── Props 타입 ───────────────────────────────────────────────────────────────
 interface Props {
@@ -164,7 +165,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 text-center">
                 {/* 성공 아이콘 */}
                 <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-green-600 text-4xl">check_circle</span>
+                    <FontFreeIcon name="check_circle" size={40} className="text-green-600" />
                 </div>
                 <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3">체험수업 신청 완료!</h2>
                 <p className="text-gray-600 dark:text-gray-300 mb-2">담당자가 빠른 시간 내에 연락드리겠습니다.</p>
@@ -179,7 +180,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                     href="/"
                     className="inline-flex items-center gap-2 px-6 py-3 bg-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-navy-800 transition-colors"
                 >
-                    <span className="material-symbols-outlined text-lg">home</span>
+                    <FontFreeIcon name="home" size={18} />
                     홈으로 돌아가기
                 </Link>
             </div>
@@ -211,7 +212,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                                 }`}
                             >
                                 {n < step ? (
-                                    <span className="material-symbols-outlined text-lg">check</span>
+                                    <FontFreeIcon name="check" size={18} />
                                 ) : (
                                     n
                                 )}
@@ -238,7 +239,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                 {/* 에러 메시지 */}
                 {error && (
                     <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
-                        <span className="material-symbols-outlined text-lg">error</span>
+                        <FontFreeIcon name="error" size={18} />
                         {error}
                     </div>
                 )}
@@ -247,7 +248,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                 {step === 1 && (
                     <div className="space-y-5">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">child_care</span>
+                            <FontFreeIcon name="child_care" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                             아이 정보
                         </h2>
 
@@ -346,7 +347,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                 {step === 2 && (
                     <div className="space-y-5">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person</span>
+                            <FontFreeIcon name="person" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                             보호자 정보 / 희망 수업
                         </h2>
 
@@ -483,7 +484,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                 {step === 3 && (
                     <div className="space-y-5">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">verified</span>
+                            <FontFreeIcon name="verified" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                             약관 동의 및 제출
                         </h2>
 
@@ -554,7 +555,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                             onClick={goBack}
                             className="flex items-center gap-1 px-5 py-3 text-gray-600 hover:text-gray-900 dark:text-white font-medium transition-colors cursor-pointer"
                         >
-                            <span className="material-symbols-outlined text-lg">arrow_back</span>
+                            <FontFreeIcon name="arrow_back" size={18} />
                             이전
                         </button>
                     ) : (
@@ -569,7 +570,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                             className="flex items-center gap-1 px-6 py-3 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors cursor-pointer"
                         >
                             다음
-                            <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                            <FontFreeIcon name="arrow_forward" size={18} />
                         </button>
                     ) : (
                         <button
@@ -580,12 +581,12 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                         >
                             {isPending ? (
                                 <>
-                                    <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                                    <FontFreeIcon name="progress_activity" size={18} className="animate-spin" />
                                     처리 중...
                                 </>
                             ) : (
                                 <>
-                                    <span className="material-symbols-outlined text-lg">sports_basketball</span>
+                                    <FontFreeIcon name="sports_basketball" size={18} />
                                     체험수업 신청하기
                                 </>
                             )}
@@ -635,9 +636,7 @@ function TermsAccordion({
                     onClick={() => setIsOpen(!isOpen)}
                     className="text-gray-400 hover:text-gray-600 dark:text-gray-300 p-1 cursor-pointer"
                 >
-                    <span className={`material-symbols-outlined text-lg transition-transform ${isOpen ? "rotate-180" : ""}`}>
-                        expand_more
-                    </span>
+                    <FontFreeIcon name="expand_more" size={18} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
                 </button>
             </div>
             {/* 약관 본문 — 펼쳐져 있을 때만 표시 */}

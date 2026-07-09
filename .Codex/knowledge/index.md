@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/apply`, `/apply/enroll`, `/apply/trial` 신청 화면 아이콘을 `FontFreeIcon`으로 바꿔 신청 페이지 HTML의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: `/notices` 공개 목록/상세 아이콘을 `FontFreeIcon`으로 바꿔 공개 공지 HTML의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: `/gallery` 공개 그리드와 라이트박스 아이콘을 `FontFreeIcon`으로 바꿔 공개 갤러리 HTML의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: 홈/공개 공통 UI/관리자 shell의 단순 아이콘을 `FontFreeIcon`으로 바꾸고, Material Symbols stylesheet는 실제 사용처가 있는 페이지에서만 로드하도록 조정했다.
@@ -8,13 +9,12 @@
 - 2026-07-09: `/admin/programs`의 등록/수정 폼을 `ProgramFormPanel` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/staff`의 SMS 초대 링크 발송 모달을 `InviteStaffModal` 동적 로드로 분리했다.
 - 2026-07-09: `/admin/staff`의 전화번호 인증/직접 추가 모달을 `AddStaffModal` 동적 로드로 분리했다.
-- 2026-07-09: `/admin/classes`의 반 작성/수정 폼을 `ClassFormPanel` 동적 로드로 분리했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 공개 공지처럼 자주 보는 공개 서브페이지의 단순 아이콘도 `FontFreeIcon`으로 전환해 Material Symbols 폰트 요청을 줄인다.
+- 최근 지식: 신청 페이지처럼 전환율에 직접 닿는 공개 화면의 단순 아이콘은 `FontFreeIcon`으로 전환해 Material Symbols 폰트 요청을 줄인다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -52,6 +52,7 @@
 - 공개 갤러리는 `GalleryPublicClient`를 서버 렌더링으로 두고, `GalleryLightboxController`가 클릭만 감지하며 `GalleryLightboxOverlay`는 클릭 후 동적 로드한다.
 - 공개 갤러리의 빈 상태/영상 재생/날짜/라이트박스 조작 아이콘은 `FontFreeIcon`을 사용해 `/gallery` HTML에서 Material Symbols 폰트 요청을 만들지 않는다.
 - 공개 공지 목록/상세의 고정글/첨부파일/뒤로가기/다운로드 아이콘은 `FontFreeIcon`을 사용해 `/notices` HTML에서 Material Symbols 폰트 요청을 만들지 않는다.
+- 신청 안내/정규 신청/체험 신청의 단계/오류/버튼/약관 아이콘은 `FontFreeIcon`을 사용해 `/apply` HTML에서 Material Symbols 폰트 요청을 만들지 않는다.
 - `/admin/notices`는 목록 초기 진입에서 `RichTextEditor`를 싣지 않고, 새 공지/수정 모달 렌더 시 `next/dynamic`으로 로드한다.
 - 공개 헤더는 메뉴/테마/큰글씨 상태만 직접 관리하고, Supabase 계정 확인과 로그아웃 UI는 `PublicAccountControls`를 동적 로드한다.
 - 공개 헤더, 테마 토글, 챗봇/가이드 버튼처럼 모든 공개 페이지에 붙는 단순 아이콘은 Material Symbols 폰트 대신 `FontFreeIcon`을 사용한다.

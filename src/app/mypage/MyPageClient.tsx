@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { CalendarCheck, CreditCard, Image as ImageIcon, Bell, Paperclip, Check, CheckCheck, BellRing, BellOff, Send, MessageSquare, Clock, CheckCircle2, XCircle, Star } from "lucide-react";
 import Link from "next/link";
 import { markNotificationRead, markAllNotificationsRead, createParentRequest } from "@/app/actions/admin";
 
@@ -24,6 +23,26 @@ function toDateStr(d: Date | string | null): string {
 
 function formatAmount(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
+}
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
 }
 
 type ChildData = {
@@ -135,11 +154,11 @@ const REQUEST_TYPES = [
     { value: "OTHER", label: "기타 요청" },
 ];
 
-const REQUEST_STATUS: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-700", icon: Clock },
-    CONFIRMED: { label: "확인됨", color: "bg-blue-100 text-blue-700", icon: CheckCircle2 },
-    COMPLETED: { label: "처리완료", color: "bg-green-100 text-green-700", icon: CheckCircle2 },
-    REJECTED: { label: "반려", color: "bg-red-100 text-red-700", icon: XCircle },
+const REQUEST_STATUS: Record<string, { label: string; color: string; iconName: string }> = {
+    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-700", iconName: "schedule" },
+    CONFIRMED: { label: "확인됨", color: "bg-blue-100 text-blue-700", iconName: "check_circle" },
+    COMPLETED: { label: "처리완료", color: "bg-green-100 text-green-700", iconName: "check_circle" },
+    REJECTED: { label: "반려", color: "bg-red-100 text-red-700", iconName: "cancel" },
 };
 
 export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [] }: {
@@ -291,7 +310,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 >
                     <div className="flex items-center gap-3">
                         <div className="bg-brand-orange-50 dark:bg-brand-neon-lime/10  p-2 rounded-full">
-                            <Bell className="w-5 h-5 text-brand-orange-500 dark:text-brand-neon-lime" />
+                            <SymbolIcon name="notifications" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                         </div>
                         <span className="font-bold text-gray-900 dark:text-white">알림</span>
                         {unreadCount > 0 && (
@@ -319,9 +338,9 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     }`}
                                 >
                                     {pushLoading ? "..." : pushEnabled ? (
-                                        <><BellRing size={13} /> 푸시 ON</>
+                                        <><SymbolIcon name="notifications_active" size={13} /> 푸시 ON</>
                                     ) : (
-                                        <><BellOff size={13} /> 푸시 OFF</>
+                                        <><SymbolIcon name="notifications_off" size={13} /> 푸시 OFF</>
                                     )}
                                 </button>
                             )}
@@ -332,7 +351,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                     disabled={isPending}
                                     className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline flex items-center gap-1"
                                 >
-                                    <CheckCheck size={14} /> 모두 읽음
+                                    <SymbolIcon name="done_all" size={14} /> 모두 읽음
                                 </button>
                             )}
                         </div>
@@ -354,9 +373,10 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                             n.type === "PAYMENT" ? "bg-red-100 text-red-600" :
                                             "bg-blue-100 text-blue-600"
                                         }`}>
-                                            {n.type === "ATTENDANCE" ? <CalendarCheck size={14} /> :
-                                             n.type === "PAYMENT" ? <CreditCard size={14} /> :
-                                             <Bell size={14} />}
+                                            <SymbolIcon
+                                                name={n.type === "ATTENDANCE" ? "event_available" : n.type === "PAYMENT" ? "credit_card" : "notifications"}
+                                                size={14}
+                                            />
                                         </div>
 
                                         <div className="flex-1 min-w-0">
@@ -379,7 +399,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                                 className="text-gray-400 hover:text-brand-orange-500 dark:text-brand-neon-lime p-1 flex-shrink-0"
                                                 title="읽음 처리"
                                             >
-                                                <Check size={14} />
+                                                <SymbolIcon name="check" size={14} />
                                             </button>
                                         )}
                                     </div>
@@ -397,13 +417,13 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         onClick={() => { setShowRequestForm(!showRequestForm); setShowRequests(false); }}
                         className="flex-1 flex items-center justify-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold py-3 rounded-2xl hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition shadow-sm"
                     >
-                        <Send size={16} /> 학원에 요청하기
+                        <SymbolIcon name="send" size={16} /> 학원에 요청하기
                     </button>
                     <button
                         onClick={() => { setShowRequests(!showRequests); setShowRequestForm(false); }}
                         className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-bold px-4 py-3 rounded-2xl hover:bg-gray-50 dark:bg-gray-900 transition shadow-sm"
                     >
-                        <MessageSquare size={16} />
+                        <SymbolIcon name="forum" size={16} />
                         내 요청
                         {myRequests.filter(r => r.status === "PENDING").length > 0 && (
                             <span className="bg-yellow-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
@@ -512,13 +532,12 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
                                 {myRequests.map(r => {
                                     const st = REQUEST_STATUS[r.status] || REQUEST_STATUS.PENDING;
-                                    const StatusIcon = st.icon;
                                     return (
                                         <div key={r.id} className="px-4 py-3">
                                             <div className="flex items-center justify-between mb-1">
                                                 <span className="text-sm font-bold text-gray-900 dark:text-white">{r.title}</span>
                                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${st.color}`}>
-                                                    <StatusIcon size={12} /> {st.label}
+                                                    <SymbolIcon name={st.iconName} size={12} /> {st.label}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{r.content}</p>
@@ -548,7 +567,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         <div key={p.id} className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                             <div className="flex items-center gap-3 text-red-700">
                                 <div className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm text-red-500">
-                                    <CreditCard className="w-5 h-5" />
+                                    <SymbolIcon name="credit_card" size={20} />
                                 </div>
                                 <div>
                                     <p className="font-bold text-sm">{formatAmount(p.amount)} {p.status === "OVERDUE" ? "연체" : "미납"}</p>
@@ -646,7 +665,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {/* No data state */}
             {child.enrollments.length === 0 && child.payments.length === 0 && child.attendance.total === 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400 shadow-sm">
-                    <CalendarCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <SymbolIcon name="event_available" size={48} className="mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">아직 수강/출결/수납 데이터가 없습니다.</p>
                     <p className="text-sm mt-1">학원에서 반 배정 후 데이터가 표시됩니다.</p>
                 </div>
@@ -657,7 +676,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 <div>
                     <div className="flex items-center justify-between mb-3 px-1">
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
-                            <Bell size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 공지사항
+                            <SymbolIcon name="notifications" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 공지사항
                         </h2>
                         <Link href="/notices" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
                     </div>
@@ -702,7 +721,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 <div>
                     <div className="flex items-center justify-between mb-3 px-1">
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
-                            <Star size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 학습 피드백
+                            <SymbolIcon name="star" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 학습 피드백
                         </h2>
                     </div>
                     <div className="space-y-2">
@@ -762,7 +781,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 <div>
                     <div className="flex items-center justify-between mb-3 px-1">
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
-                            <ImageIcon size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 수업 사진
+                            <SymbolIcon name="image" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 수업 사진
                         </h2>
                         <Link href="/gallery" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
                     </div>

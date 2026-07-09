@@ -1,7 +1,14 @@
-import { Home, Calendar, CreditCard, User } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { logout } from "@/app/actions/auth";
+
+function SymbolIcon({ name }: { name: string }) {
+    return (
+        <span className="material-symbols-outlined leading-none" style={{ fontSize: "24px" }} aria-hidden="true">
+            {name}
+        </span>
+    );
+}
 
 export default function MyPageLayout({
     children,
@@ -56,19 +63,19 @@ export default function MyPageLayout({
 
             {/* 모바일 하단 네비게이션 — 기존 동작 100% 유지, 배경만 통일 */}
             <nav className="md:hidden fixed bottom-0 w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-around items-center h-16 pb-safe z-50">
-                <NavItem href="/mypage" icon={<Home className="w-6 h-6" />} label="홈" />
-                <NavItem href="/schedule" icon={<Calendar className="w-6 h-6" />} label="시간표" />
-                <NavItem href="/programs" icon={<CreditCard className="w-6 h-6" />} label="프로그램" />
-                <NavItem href="/" icon={<User className="w-6 h-6" />} label="홈페이지" />
+                <NavItem href="/mypage" iconName="home" label="홈" />
+                <NavItem href="/schedule" iconName="calendar_month" label="시간표" />
+                <NavItem href="/programs" iconName="credit_card" label="프로그램" />
+                <NavItem href="/" iconName="person" label="홈페이지" />
             </nav>
         </div>
     );
 }
 
-function NavItem({ href, icon, label, active }: any) {
+function NavItem({ href, iconName, label, active }: { href: string; iconName: string; label: string; active?: boolean }) {
     return (
         <Link href={href} className={`flex flex-col items-center justify-center w-full h-full gap-1 ${active ? 'text-brand-orange-500 dark:text-brand-neon-lime' : 'text-gray-400'}`}>
-            {icon}
+            <SymbolIcon name={iconName} />
             <span className="text-[10px] font-bold">{label}</span>
         </Link>
     );

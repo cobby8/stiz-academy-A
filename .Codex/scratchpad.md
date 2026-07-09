@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 업로드 이미지 캐시 강화
+- 작업명: 관리자 공통 아이콘 JS 제거
 - 상태: 검증 완료
-- 범위: 업로드 이미지 응답 캐시
+- 범위: 관리자 공통 shell
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -35,9 +35,11 @@
 | 공개 공통 아이콘 JS 제거 | 완료 | 공개 첫 화면 공통 아이콘을 Material Symbols로 전환 |
 | 관리자 shell 초기 요청 지연 | 완료 | 서버 인증 정보를 재사용하고 알림/체험 카운트 호출을 첫 렌더 뒤로 이동 |
 | 업로드 이미지 캐시 강화 | 완료 | `/uploads`와 Supabase Storage 업로드 파일에 1년 immutable 캐시 적용 |
+| 관리자 공통 아이콘 JS 제거 | 완료 | shell 로그아웃 아이콘을 Material Symbols로 전환해 공통 chunk 축소 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 관리자 shell 로그아웃 아이콘의 lucide import를 제거해 관리자 공통 chunk를 약 42.7KB에서 41.4KB로 줄임.
 - 2026-07-09: 업로드 이미지 URL이 고유 파일명인 점을 활용해 `/uploads`와 Supabase Storage 업로드에 1년 immutable 캐시를 적용함.
 - 2026-07-09: 관리자 shell에서 Supabase 브라우저 재조회/클라이언트 로그아웃을 제거하고 알림·체험 카운트 조회를 지연함.
 - 2026-07-09: 공개 헤더/테마 토글/챗봇 버튼의 lucide 아이콘을 Material Symbols로 바꿔 홈 entry JS를 약 0.05MB로 줄임.
@@ -47,17 +49,16 @@
 - 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 돌려 첫 화면 전용 entry JS를 약 0.25MB 수준으로 줄임.
 - 2026-07-09: 공개 페이지 챗봇 패널과 입학 가이드 투어 본체를 동적 로딩으로 분리해 첫 렌더 부담을 줄임.
 - 2026-07-09: 전역 `next/font` preload를 끄고, Meta Pixel을 환경변수 있을 때만 로드하며, `AcademySettings` 서버 캐시/무효화를 추가.
-- 2026-07-09: 공개 홈페이지 헤더와 마이페이지 헤더에 기존 `logout()` 서버 액션을 연결한 로그아웃 버튼을 추가.
 
 ## 구현 기록
-- 변경 파일: `next.config.ts`, `src/app/api/upload/route.ts`
-- 주요 변경: 로컬 fallback 업로드 경로 `/uploads/:path*`에 `Cache-Control: public, max-age=31536000, immutable`을 추가하고, Supabase Storage 업로드 옵션에 `cacheControl: "31536000"`을 지정.
-- 적용 범위: 홈페이지/관리자에서 공통으로 표시되는 업로드 이미지 재방문 다운로드 비용.
+- 변경 파일: `src/app/admin/AdminShellClient.tsx`
+- 주요 변경: 관리자 sidebar 하단 로그아웃 아이콘의 `lucide-react` import를 제거하고, 전역 Material Symbols의 `logout` 아이콘으로 대체.
+- 적용 범위: 모든 관리자 화면에 공통으로 포함되는 shell 초기 JS.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. 첫 시도는 Google Fonts 네트워크 차단으로 실패했고, 네트워크 허용 후 통과.
-- 소스 확인: `/uploads/:path*` 캐시 헤더와 Supabase Storage `cacheControl: "31536000"` 적용 확인.
+- 산출물 확인: `/admin/schedule` 첫 JS 138.4KB → 137.2KB, 관리자 공통 chunk 42.7KB → 41.4KB.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 실서버 Lighthouse/TTFB 측정, 관리자 개별 대형 화면(갤러리/학생/수업 상세) 요청 수 추가 측정.
+- 다음 속도 개선 후보: `/apply` 공개 신청 페이지와 관리자 개별 화면의 남은 큰 client chunk 분석.

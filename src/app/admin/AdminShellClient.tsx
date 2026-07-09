@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { LogOut } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
 // "학원운영" 탭에 속하는 경로 목록 — 이 경로로 시작하면 학원운영 탭 활성화
@@ -204,7 +203,7 @@ export default function AdminShellClient({
                                 title="로그아웃"
                                 className="p-1.5 text-gray-400 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
                             >
-                                <LogOut size={18} />
+                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
                             </button>
                         </form>
                     </div>

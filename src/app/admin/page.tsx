@@ -292,7 +292,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                     <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{ext.attendanceRate}%</h3>
                     <p className="text-xs text-gray-400 mt-1">전체 수업 기준</p>
                 </div>
-                <Link href="/admin/finance" className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:border-red-200 transition">
+                <Link href="/admin/finance" prefetch={false} className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:border-red-200 transition">
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">미납 현황</p>
                     <h3 className={`text-2xl font-extrabold ${ext.unpaidCount > 0 ? "text-red-600" : "text-gray-900 dark:text-white"}`}>
                         {ext.unpaidCount}건
@@ -310,7 +310,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
             </div>
 
             {/* 상세 통계 링크 */}
-            <Link href="/admin/stats" className="flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 hover:from-indigo-100 hover:to-purple-100 transition shadow-sm">
+            <Link href="/admin/stats" prefetch={false} className="flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-4 hover:from-indigo-100 hover:to-purple-100 transition shadow-sm">
                 <div className="flex items-center gap-3">
                     <span className="text-2xl">📊</span>
                     <div>
@@ -410,7 +410,7 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                         ) : (
                             <div className="space-y-2">
                                 {recentStudents.map(s => (
-                                    <Link key={s.id} href={`/admin/students/${s.id}`}
+                                    <Link key={s.id} href={`/admin/students/${s.id}`} prefetch={false}
                                         className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:bg-gray-900 rounded-lg px-2 transition">
                                         <div>
                                             <p className="text-sm font-bold text-gray-900 dark:text-white">{s.name}</p>
@@ -433,11 +433,11 @@ async function SlowDashboardSection({ pendingRequests }: { pendingRequests: any[
                                     <SymbolIcon name="schedule" size={18} className="text-yellow-500" />
                                     대기중 요청
                                 </h3>
-                                <Link href="/admin/requests" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
+                                <Link href="/admin/requests" prefetch={false} className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
                             </div>
                             <div className="space-y-2">
                                 {pendingRequests.map(r => (
-                                    <Link key={r.id} href="/admin/requests"
+                                    <Link key={r.id} href="/admin/requests" prefetch={false}
                                         className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 hover:bg-yellow-50 rounded-lg px-2 transition">
                                         <div>
                                             <p className="text-sm font-bold text-gray-900 dark:text-white">{r.title}</p>
@@ -502,7 +502,7 @@ async function DashboardPrimarySection() {
         <>
             {/* 학부모 요청 알림 배너 - 빠른 쿼리로 즉시 표시 */}
             {pendingCount > 0 && (
-                <Link href="/admin/requests"
+                <Link href="/admin/requests" prefetch={false}
                     className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 hover:bg-yellow-100 transition shadow-sm">
                     <div className="bg-yellow-400 text-white p-2 rounded-full">
                         <SymbolIcon name="forum" size={20} />
@@ -522,7 +522,7 @@ async function DashboardPrimarySection() {
 
             {/* 수강 신청 대기 배너 — PENDING 건수가 있을 때만 표시 */}
             {enrollStats.PENDING > 0 && (
-                <Link href="/admin/apply"
+                <Link href="/admin/apply" prefetch={false}
                     className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl p-4 hover:bg-blue-100 transition shadow-sm">
                     <div className="bg-blue-500 text-white p-2 rounded-full">
                         <SymbolIcon name="person_add" size={20} />
@@ -623,7 +623,7 @@ function StatCard({ title, value, icon, href }: {
             </div>
         </div>
     );
-    if (href) return <Link href={href}>{content}</Link>;
+    if (href) return <Link href={href} prefetch={false}>{content}</Link>;
     return content;
 }
 
@@ -635,7 +635,7 @@ function QuickLink({ title, href, color }: { title: string; href: string; color:
         purple: "bg-purple-50 border-purple-200 hover:border-purple-400",
     };
     return (
-        <Link href={href} className={`p-3 rounded-xl border transition-colors text-center ${colorMap[color] || colorMap.orange}`}>
+        <Link href={href} prefetch={false} className={`p-3 rounded-xl border transition-colors text-center ${colorMap[color] || colorMap.orange}`}>
             <span className="font-bold text-sm text-gray-900 dark:text-white">{title}</span>
         </Link>
     );

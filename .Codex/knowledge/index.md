@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin` 대시보드 카드/배너/목록/빠른관리 링크에 `prefetch={false}`를 적용해 첫 화면에서 다른 관리자 route를 자동 조회하지 않게 했다.
 - 2026-07-09: `/admin` 대시보드의 핵심 통계를 Suspense 경계 뒤로 옮겨 제목과 스켈레톤이 DB 응답 전에 먼저 표시되도록 했다.
 - 2026-07-09: 관리자 사이드바 메뉴 링크에 `prefetch={false}`를 적용해 관리자 진입 직후 다수 route 서버 조회가 자동으로 몰리는 상황을 줄였다.
 - 2026-07-09: `/admin/gallery` 목록과 업로드/수정 모달 아이콘을 `FontFreeIcon`으로 바꿔 관리자 갤러리 route의 Material Symbols 사용 흔적을 제거했다.
@@ -8,13 +9,12 @@
 - 2026-07-09: 홈/공개 공통 UI/관리자 shell의 단순 아이콘을 `FontFreeIcon`으로 바꾸고, Material Symbols stylesheet는 실제 사용처가 있는 페이지에서만 로드하도록 조정했다.
 - 2026-07-09: Pretendard/Material Symbols 외부 stylesheet를 전역 head에서 제거하고 `DeferredFontStyles`로 첫 paint 이후 지연 로드하도록 바꿨다.
 - 2026-07-09: 전역 `next/font/google` 빌드 의존을 제거하고 폰트 옵션을 CSS fallback 스택으로 전환해 `next build`/`next build --webpack`을 통과시켰다.
-- 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 가시 영역 진입 후 로드하도록 바꿨다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 관리자 공통 사이드바 메뉴는 자동 prefetch를 끄고, 대시보드 통계 조회는 Suspense 경계 뒤로 보내 첫 화면 체감 대기를 줄인다.
+- 최근 지식: 관리자 대시보드와 공통 사이드바의 내부 링크는 자동 prefetch를 끄고, 필요한 페이지는 클릭 시 로드한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -44,6 +44,7 @@
 - 공개 홈페이지와 마이페이지의 로그아웃 UI는 새 로그아웃 로직을 만들지 않고 `logout()` 서버 액션을 `form action`으로 연결한다.
 - `/admin` 대시보드는 제목과 skeleton을 먼저 렌더하고 기본 통계/요청/신청 통계는 `DashboardPrimarySection` 안에서 Suspense로 스트리밍한다.
 - 관리자 공통 사이드바의 `NavItem` 링크는 `prefetch={false}`를 사용해 화면에 보이는 많은 관리자 메뉴가 동시에 서버 렌더/DB 조회를 유발하지 않게 한다.
+- `/admin` 대시보드 안의 카드/배너/목록/빠른관리 링크도 `prefetch={false}`를 사용해 대시보드 첫 진입이 다른 관리자 route 요청으로 붐비지 않게 한다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
 - Pretendard 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 idle 시점에 삽입한다. Material Symbols stylesheet는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.

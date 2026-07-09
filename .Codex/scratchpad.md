@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 관리자 대시보드/전역 메뉴 속도 개선
+- 작업명: 관리자 대시보드 내부 링크 prefetch 차단
 - 상태: 빌드 검증 완료
-- 범위: `/admin`, 관리자 shell 사이드바
+- 범위: `/admin` 대시보드 내부 링크
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -20,9 +20,11 @@
 | 관리자 갤러리 아이콘 폰트 요청 제거 | 완료 | `/admin/gallery` 소스/빌드 산출물의 Material Symbols 사용 흔적 0건 확인 |
 | 관리자 대시보드 첫 렌더 대기 완화 | 완료 | 제목/스켈레톤을 먼저 렌더하고 DB 통계는 Suspense 경계 안에서 스트리밍 |
 | 관리자 사이드바 prefetch 차단 | 완료 | 다수 관리자 링크가 자동으로 서버 조회를 몰아치지 않도록 `prefetch={false}` 적용 |
+| 관리자 대시보드 내부 prefetch 차단 | 완료 | 대시보드 카드/목록/빠른관리 링크가 다른 관리자 route를 자동 조회하지 않도록 조정 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/admin` 대시보드의 카드, 배너, 신규 원생, 요청 목록, 빠른 관리 링크에 `prefetch={false}`를 적용해 첫 화면에서 다른 관리자 route가 자동 조회되는 일을 줄임.
 - 2026-07-09: `/admin` 대시보드의 기본 통계/요청/신청 통계 조회를 `DashboardPrimarySection` Suspense 경계 뒤로 옮겨 헤더와 스켈레톤이 DB 응답 전에 먼저 표시되도록 변경함.
 - 2026-07-09: 관리자 사이드바 `NavItem`의 자동 prefetch를 꺼서 진입 직후 여러 관리자 route 서버 조회가 동시에 몰리는 상황을 줄임.
 - 2026-07-09: `/admin/gallery` 목록과 업로드/수정 모달의 업로드/동기화/저장/공개상태/수정/삭제 아이콘을 `FontFreeIcon`으로 바꿔 Material Symbols 요청 흔적을 제거함.
@@ -32,12 +34,11 @@
 - 2026-07-09: 공개 헤더/푸터/테마/챗봇/가이드/후기/인스타 미리보기와 관리자 shell 단순 아이콘을 `FontFreeIcon`으로 전환함.
 - 2026-07-09: Pretendard/Material Symbols 외부 stylesheet를 전역 head에서 제거하고 `DeferredFontStyles`로 첫 paint 이후 지연 로드함.
 - 2026-07-09: 전역 `next/font/google` 의존을 제거하고 폰트 옵션을 CSS fallback 스택으로 바꿔 Google Fonts 네트워크 실패 없이 빌드가 통과하도록 함.
-- 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 화면 근처에 올 때만 실제 편집기 chunk를 로드하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/page.tsx`, `src/app/admin/AdminShellClient.tsx`
-- 주요 변경: 관리자 대시보드 첫 화면을 DB 응답과 분리하고, 관리자 사이드바 링크 자동 prefetch를 비활성화.
-- 적용 범위: `/admin` 대시보드와 모든 관리자 페이지 공통 사이드바.
+- 변경 파일: `src/app/admin/page.tsx`
+- 주요 변경: 관리자 대시보드 내부 `Link`와 `StatCard`/`QuickLink` 링크의 자동 prefetch 비활성화.
+- 적용 범위: `/admin` 대시보드.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

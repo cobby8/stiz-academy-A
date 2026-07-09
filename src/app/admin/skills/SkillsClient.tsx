@@ -38,15 +38,45 @@ interface SkillRecord {
 
 interface Props {
     categories: Category[];
-    students: Student[];
+    students?: Student[];
 }
 
-export default function SkillsClient({ categories, students }: Props) {
+export default function SkillsClient({ categories, students: initialStudents = [] }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const [students, setStudents] = useState<Student[]>(initialStudents);
+    const [studentsLoaded, setStudentsLoaded] = useState(initialStudents.length > 0);
+    const [studentsLoading, setStudentsLoading] = useState(false);
+    const [studentsError, setStudentsError] = useState<string | null>(null);
 
     // 탭 전환: "categories" (카테고리 관리) / "assessment" (스킬 평가)
     const [tab, setTab] = useState<"categories" | "assessment">("categories");
+
+    const loadStudents = useCallback(async () => {
+        if (studentsLoaded || studentsLoading) return;
+
+        setStudentsLoading(true);
+        setStudentsError(null);
+
+        try {
+            const response = await fetch("/api/admin/student-options", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load student options.");
+            }
+
+            const data = (await response.json()) as { students?: Student[] };
+            setStudents(data.students ?? []);
+            setStudentsLoaded(true);
+        } catch (error) {
+            console.error("Failed to load student options:", error);
+            setStudentsError("원생 목록을 불러오지 못했습니다.");
+        } finally {
+            setStudentsLoading(false);
+        }
+    }, [studentsLoaded, studentsLoading]);
 
     return (
         <div>
@@ -76,7 +106,10 @@ export default function SkillsClient({ categories, students }: Props) {
                     카테고리 관리
                 </button>
                 <button
-                    onClick={() => setTab("assessment")}
+                    onClick={() => {
+                        setTab("assessment");
+                        void loadStudents();
+                    }}
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                         tab === "assessment"
                             ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
@@ -102,6 +135,9 @@ export default function SkillsClient({ categories, students }: Props) {
                 <AssessmentTab
                     categories={categories}
                     students={students}
+                    studentsLoading={studentsLoading}
+                    studentsError={studentsError}
+                    onRetryLoadStudents={loadStudents}
                     isPending={isPending}
                     startTransition={startTransition}
                     router={router}
@@ -397,12 +433,18 @@ function CategoryTab({
 function AssessmentTab({
     categories,
     students,
+    studentsLoading,
+    studentsError,
+    onRetryLoadStudents,
     isPending,
     startTransition,
     router,
 }: {
     categories: Category[];
     students: Student[];
+    studentsLoading: boolean;
+    studentsError: string | null;
+    onRetryLoadStudents: () => Promise<void>;
     isPending: boolean;
     startTransition: (fn: () => void) => void;
     router: ReturnType<typeof useRouter>;
@@ -543,20 +585,24 @@ function AssessmentTab({
                 {/* 원생 선택 */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
                     <h3 className="font-semibold text-gray-900 dark:text-white mb-4">원생 선택</h3>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row">
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
+                            disabled={studentsLoading || Boolean(studentsError)}
                             placeholder="원생 이름으로 검색..."
                             className="flex-1 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                         />
                         <select
                             value={selectedStudentId}
                             onChange={(e) => handleSelectStudent(e.target.value)}
-                            className="border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 min-w-[200px]"
+                            disabled={studentsLoading || Boolean(studentsError)}
+                            className="border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 sm:min-w-[200px]"
                         >
-                            <option value="">-- 원생 선택 --</option>
+                            <option value="">
+                                {studentsLoading ? "원생 목록 로딩 중..." : "-- 원생 선택 --"}
+                            </option>
                             {filteredStudents.map((s) => (
                                 <option key={s.id} value={s.id}>
                                     {s.name}
@@ -565,6 +611,23 @@ function AssessmentTab({
                             ))}
                         </select>
                     </div>
+                    {studentsError && (
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                            <span>{studentsError}</span>
+                            <button
+                                type="button"
+                                onClick={() => void onRetryLoadStudents()}
+                                className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                            >
+                                다시 시도
+                            </button>
+                        </div>
+                    )}
+                    {!studentsLoading && !studentsError && students.length === 0 && (
+                        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                            등록된 원생이 없습니다.
+                        </p>
+                    )}
                 </div>
 
                 {/* 평가 입력 */}

@@ -1,4 +1,4 @@
-import { getSkillCategories, getStudents } from "@/lib/queries";
+import { getSkillCategories } from "@/lib/queries";
 import { ensureSkillTables } from "@/app/actions/admin";
 import SkillsClient from "./SkillsClient";
 
@@ -9,11 +9,8 @@ export default async function AdminSkillsPage() {
     // DDL ensure — 테이블이 없으면 자동 생성
     await ensureSkillTables();
 
-    // 카테고리 목록과 원생 목록을 병렬 조회
-    const [categories, students] = await Promise.all([
-        getSkillCategories(),
-        getStudents(),
-    ]);
+    // Category data is enough for the first paint; student options load on demand.
+    const categories = await getSkillCategories();
 
-    return <SkillsClient categories={categories} students={students} />;
+    return <SkillsClient categories={categories} />;
 }

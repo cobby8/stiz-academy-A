@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { createNotice, updateNotice, deleteNotice } from "@/app/actions/admin";
 import { prepareNoticeSocialCampaign, publishNoticeSocialCampaign } from "@/app/actions/social-campaigns";
-import { Plus, Trash2, Edit2, Pin, X, Paperclip, Bell, Megaphone, Copy, ExternalLink } from "lucide-react";
 import { isImageAttachment, isHtmlContent, plainToEditorHtml, stripHtmlForPreview } from "@/lib/noticeContent";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
 
@@ -42,6 +41,26 @@ type NoticeData = {
 type ClassInfo = { id: string; name: string; program?: { name: string } | null };
 type SocialPreview = Awaited<ReturnType<typeof prepareNoticeSocialCampaign>>;
 type SocialPublishResult = Awaited<ReturnType<typeof publishNoticeSocialCampaign>>;
+
+function SymbolIcon({
+    name,
+    size = 18,
+    className = "",
+}: {
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <span
+            className={`material-symbols-outlined leading-none ${className}`}
+            style={{ fontSize: `${size}px` }}
+            aria-hidden="true"
+        >
+            {name}
+        </span>
+    );
+}
 
 export default function NoticesAdminClient({ notices, classes }: { notices: NoticeData[]; classes: ClassInfo[] }) {
     const [isPending, startTransition] = useTransition();
@@ -225,7 +244,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                 </div>
                 <button onClick={() => { resetForm(); setShowForm(true); }}
                     className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition">
-                    <Plus size={18} /> 새 공지
+                    <SymbolIcon name="add" size={18} /> 새 공지
                 </button>
             </div>
 
@@ -235,7 +254,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                     <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                             <h2 className="text-lg font-bold">{editId ? "공지 수정" : "새 공지"}</h2>
-                            <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg"><X size={20} /></button>
+                            <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg"><SymbolIcon name="close" size={20} /></button>
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
@@ -288,7 +307,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">첨부파일</label>
                                 <label className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-brand-orange-500 dark:text-brand-neon-lime cursor-pointer transition">
-                                    <Paperclip size={16} /> {uploading ? "업로드 중..." : "이미지 첨부"}
+                                    <SymbolIcon name="attach_file" size={16} /> {uploading ? "업로드 중..." : "이미지 첨부"}
                                     <input type="file" accept="image/*" className="hidden" multiple onChange={e => handleFileUpload(e.target.files)} disabled={uploading} />
                                 </label>
                                 <p className="text-xs text-gray-400 mt-1">첨부한 이미지는 공지 본문 아래에 크게 표시됩니다. (JPG·PNG·WebP·GIF, 최대 5MB)</p>
@@ -305,7 +324,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                                 </div>
                                                 <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
                                                     className="text-gray-400 hover:text-red-500 shrink-0">
-                                                    <X size={14} />
+                                                    <SymbolIcon name="close" size={14} />
                                                 </button>
                                             </div>
                                         ))}
@@ -336,7 +355,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">소셜 발행</h2>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{socialNotice.title}</p>
                             </div>
-                            <button onClick={() => setSocialNotice(null)} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg"><X size={20} /></button>
+                            <button onClick={() => setSocialNotice(null)} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg"><SymbolIcon name="close" size={20} /></button>
                         </div>
 
                         {socialLoading && !socialPreview ? (
@@ -419,7 +438,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                             onClick={copyAdDraft}
                                             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 px-4 text-sm font-bold text-gray-700 dark:text-gray-200"
                                         >
-                                            <Copy size={16} />
+                                            <SymbolIcon name="content_copy" size={16} />
                                             광고 문구 복사
                                         </button>
                                         <a
@@ -428,7 +447,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                             rel="noopener noreferrer"
                                             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white"
                                         >
-                                            <ExternalLink size={16} />
+                                            <SymbolIcon name="open_in_new" size={16} />
                                             광고관리자 열기
                                         </a>
                                     </div>
@@ -456,7 +475,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                         disabled={socialLoading}
                                         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 px-5 text-sm font-bold text-white disabled:opacity-50"
                                     >
-                                        <Megaphone size={16} />
+                                        <SymbolIcon name="campaign" size={16} />
                                         {socialLoading ? "발행 중..." : "선택 항목 발행"}
                                     </button>
                                 </div>
@@ -469,7 +488,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
             {/* Notices List */}
             {notices.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400">
-                    <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <SymbolIcon name="notifications" className="mx-auto mb-3 text-gray-300" size={48} />
                     <p className="font-medium">아직 공지사항이 없습니다</p>
                     <p className="text-sm mt-1">&quot;새 공지&quot; 버튼으로 공지를 작성하세요</p>
                 </div>
@@ -483,7 +502,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
-                                            {n.isPinned && <Pin size={14} className="text-brand-orange-500 dark:text-brand-neon-lime flex-shrink-0" />}
+                                            {n.isPinned && <SymbolIcon name="push_pin" size={14} className="text-brand-orange-500 dark:text-brand-neon-lime flex-shrink-0" />}
                                             <h3 className="font-bold text-gray-900 dark:text-white truncate">{n.title}</h3>
                                         </div>
                                         {/* 목록 미리보기 — HTML 공지는 태그 제거 후 순수 텍스트만 노출(raw 태그 노출 방지) */}
@@ -496,7 +515,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                             </span>
                                             {atts.length > 0 && (
                                                 <span className="text-xs text-gray-400 flex items-center gap-1">
-                                                    <Paperclip size={12} /> {atts.length}개 파일
+                                                    <SymbolIcon name="attach_file" size={12} /> {atts.length}개 파일
                                                 </span>
                                             )}
                                             <span className="text-xs text-gray-400">
@@ -508,15 +527,15 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                                         <button onClick={() => openSocialModal(n)}
                                             className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                             title="소셜 발행">
-                                            <Megaphone size={16} />
+                                            <SymbolIcon name="campaign" size={16} />
                                         </button>
                                         <button onClick={() => startEdit(n)}
                                             className="p-2 text-gray-400 hover:text-brand-orange-500 dark:text-brand-neon-lime hover:bg-orange-50 rounded-lg transition">
-                                            <Edit2 size={16} />
+                                            <SymbolIcon name="edit" size={16} />
                                         </button>
                                         <button onClick={() => handleDelete(n.id)}
                                             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
-                                            <Trash2 size={16} />
+                                            <SymbolIcon name="delete" size={16} />
                                         </button>
                                     </div>
                                 </div>

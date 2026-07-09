@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-09: `/admin/schedule`의 편집/추가/구글시트 모달과 표 미리보기를 동적 로드로 분리해 첫 JS를 137.1KB에서 118.6KB로 줄였다.
 - 2026-07-09: 페이지 빌더의 남은 `lucide-react` 아이콘 import를 Material Symbols로 전환해 `src/app`, `src/components` 실제 import를 0건으로 만들었다.
 - 2026-07-09: `ChatPanel`의 `lucide-react` 닫기/전송 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin` 관리자 대시보드의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
@@ -8,13 +9,12 @@
 - 2026-07-09: `/admin/faq` FAQ 관리의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/requests` 요청 관리의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 - 2026-07-09: `/admin/students/[id]` 학생 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
-- 2026-07-09: `/admin/classes/[id]` 수업 상세의 `lucide-react` 아이콘을 Material Symbols로 전환했다.
 
 # STIZ Knowledge Index
 
 - 기준일: 2026-07-09
 - 문서 수: 5
-- 최근 지식: 앱/컴포넌트의 단순 아이콘은 Material Symbols를 우선 사용하고, 실제 `lucide-react` import는 유지하지 않는다.
+- 최근 지식: 관리자에서 가끔 누르는 편집/추가 모달과 미리보기 UI는 첫 화면에 정적 import하지 말고 `next/dynamic`으로 클릭 후 로드한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -70,3 +70,4 @@
 - `/admin`처럼 서버 렌더 중심인 관리자 대시보드도 단순 아이콘은 Material Symbols로 유지해 서버 렌더 아이콘 라이브러리 의존을 줄인다.
 - `ChatPanel`처럼 클릭 후 동적 로드되는 보조 UI도 단순 닫기/전송 아이콘은 Material Symbols로 유지해 동적 패널의 아이콘 라이브러리 의존을 줄인다.
 - 페이지 빌더의 툴박스/상단바/설정 패널/노드 아이콘도 Material Symbols로 유지하며, `src/app`, `src/components` 안의 실제 `lucide-react` import는 0건을 목표로 관리한다.
+- `/admin/schedule`처럼 목록은 바로 봐야 하지만 편집/추가/설정 모달은 클릭 후 쓰는 화면은 모달 묶음과 미리보기를 동적 로드해 초기 route chunk를 줄인다.

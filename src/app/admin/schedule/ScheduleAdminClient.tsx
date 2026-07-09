@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
     upsertClassSlotOverride,
     createCustomSlot,
@@ -10,8 +11,19 @@ import {
 } from "@/app/actions/schedule";
 import { updateAcademySettings } from "@/app/actions/admin";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
-import ScheduleTableView from "@/components/ScheduleTableView";
 import type { MergedSlot } from "@/app/schedule/ScheduleClient";
+
+const ScheduleTableView = dynamic(() => import("@/components/ScheduleTableView"), {
+    loading: () => (
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            시간표 미리보기를 불러오는 중...
+        </div>
+    ),
+});
+
+const ScheduleAdminModals = dynamic(() => import("./ScheduleAdminModals"), {
+    loading: () => null,
+});
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_LABEL: Record<string, string> = {
@@ -118,9 +130,6 @@ function buildInitialState(overrides: Override[]): Record<string, SlotState> {
 function defaultSlotState(): SlotState {
     return { label: "", note: "", isHidden: false, capacity: 12, coachId: "", startTimeOverride: "", endTimeOverride: "", programId: "", dirty: false, saved: false, error: null };
 }
-
-const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800";
-const TIME_INPUT = "border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800";
 
 export default function ScheduleAdminClient({
     slots,
@@ -353,6 +362,8 @@ export default function ScheduleAdminClient({
 
     // 현재 편집 모달이 열린 시트 슬롯 객체 찾기
     const editingSheetSlot = editingSlotKey ? slots.find((s) => s.slotKey === editingSlotKey) : null;
+    const editingCustomSlot = editingCustomId ? initialCustomSlots.find((c) => c.id === editingCustomId) ?? null : null;
+    const hasOpenModal = Boolean(editingSheetSlot || editingCustomSlot || showSheetModal || isAddingCustom);
 
     return (
         <div className="space-y-8">
@@ -610,408 +621,42 @@ export default function ScheduleAdminClient({
                 </div>
             ))}
 
-            {/* ── 시트 슬롯 편집 모달 ── */}
-            {editingSheetSlot && (() => {
-                const slot = editingSheetSlot;
-                const s = getState(slot.slotKey);
-                return (
-                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setEditingSlotKey(null)}>
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                            {/* 모달 헤더 */}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                                <div className="flex items-center gap-3">
-                                    <span className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs font-bold px-2.5 py-1 rounded-full">
-                                        {slot.period}교시
-                                    </span>
-                                    <span className="font-bold text-gray-800 dark:text-gray-100">
-                                        {DAY_LABEL[slot.dayKey]} {slot.startTime} ~ {slot.endTime}
-                                    </span>
-                                    {slot.gradeRange && (
-                                        <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200">
-                                            {slot.gradeRange}
-                                        </span>
-                                    )}
-                                </div>
-                                <button onClick={() => setEditingSlotKey(null)} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
-                                    <span className="material-symbols-outlined" style={{ fontSize: "22px" }}>close</span>
-                                </button>
-                            </div>
-
-                            {/* 모달 본문 — 편집 필드 */}
-                            <div className="p-6 space-y-4">
-                                {/* 슬롯 키 (읽기 전용 참조) */}
-                                <p className="text-xs text-gray-400 font-mono">{slot.slotKey}</p>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {/* 표시 레이블 */}
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
-                                            표시 레이블<span className="font-normal text-gray-400 ml-1">(비워두면 "n교시" 자동)</span>
-                                        </label>
-                                        <input type="text" value={s.label} onChange={(e) => update(slot.slotKey, { label: e.target.value })} placeholder={`${slot.dayLabel} ${slot.period}교시`} className={INPUT} />
-                                    </div>
-
-                                    {/* 정원 */}
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">정원<span className="font-normal text-gray-400 ml-1">(기본 12명)</span></label>
-                                        <input type="number" min={1} max={50} value={s.capacity} onChange={(e) => update(slot.slotKey, { capacity: parseInt(e.target.value) || 12 })} className={INPUT} />
-                                    </div>
-
-                                    {/* 시작 시간 조정 */}
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
-                                            시작 시간 조정<span className="font-normal text-gray-400 ml-1">(기본: {slot.startTime})</span>
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <input type="time" value={s.startTimeOverride} onChange={(e) => update(slot.slotKey, { startTimeOverride: e.target.value })} className={TIME_INPUT + " flex-1"} />
-                                            {s.startTimeOverride && (
-                                                <button type="button" onClick={() => update(slot.slotKey, { startTimeOverride: "" })} className="text-gray-400 hover:text-gray-600 dark:text-gray-300 shrink-0">
-                                                    <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>close</span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* 종료 시간 조정 */}
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
-                                            종료 시간 조정<span className="font-normal text-gray-400 ml-1">(기본: {slot.endTime})</span>
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <input type="time" value={s.endTimeOverride} onChange={(e) => update(slot.slotKey, { endTimeOverride: e.target.value })} className={TIME_INPUT + " flex-1"} />
-                                            {s.endTimeOverride && (
-                                                <button type="button" onClick={() => update(slot.slotKey, { endTimeOverride: "" })} className="text-gray-400 hover:text-gray-600 dark:text-gray-300 shrink-0">
-                                                    <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>close</span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* 메모 */}
-                                    <div className="md:col-span-2">
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
-                                            메모 / 특이사항<span className="font-normal text-gray-400 ml-1">(공개 시간표에 표시)</span>
-                                        </label>
-                                        <input type="text" value={s.note} onChange={(e) => update(slot.slotKey, { note: e.target.value })} placeholder="예: 이번 주 보강 있음, 코치 변경 예정" className={INPUT} />
-                                    </div>
-
-                                    {/* 담당 코치 */}
-                                    <div className="md:col-span-2">
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
-                                            담당 코치<span className="font-normal text-gray-400 ml-1">(공개 시간표 카드에 표시)</span>
-                                        </label>
-                                        <div className="flex items-center gap-3">
-                                            <select value={s.coachId} onChange={(e) => update(slot.slotKey, { coachId: e.target.value })} className={INPUT + " flex-1"}>
-                                                <option value="">-- 코치 미배정 --</option>
-                                                {coaches.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.role})</option>)}
-                                            </select>
-                                            {s.coachId && coachMap[s.coachId]?.imageUrl && (
-                                                <img src={coachMap[s.coachId].imageUrl!} alt="" className="w-9 h-9 rounded-full object-cover border border-gray-200 dark:border-gray-700 shrink-0" />
-                                            )}
-                                        </div>
-                                        {coaches.length === 0 && (
-                                            <p className="text-xs text-amber-600 mt-1">등록된 코치가 없습니다. <a href="/admin/coaches" className="underline">코치 추가</a></p>
-                                        )}
-                                    </div>
-
-                                    {/* 프로그램 분류 */}
-                                    {programs.length > 0 && (
-                                        <div className="md:col-span-2">
-                                            <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
-                                                프로그램 분류<span className="font-normal text-gray-400 ml-1">(공개 시간표 필터에 사용)</span>
-                                            </label>
-                                            <select value={s.programId} onChange={(e) => update(slot.slotKey, { programId: e.target.value })} className={INPUT}>
-                                                <option value="">-- 프로그램 미설정 --</option>
-                                                {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* 숨기기 체크박스 */}
-                                <label className="flex items-center gap-2 cursor-pointer select-none">
-                                    <input type="checkbox" checked={s.isHidden} onChange={(e) => update(slot.slotKey, { isHidden: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime" />
-                                    <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">공개 시간표에서 숨기기</span>
-                                </label>
-                            </div>
-
-                            {/* 모달 푸터 — 저장/닫기 버튼 (우측 하단) */}
-                            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-b-2xl">
-                                <div className="flex items-center gap-2">
-                                    {s.error && <span className="text-xs text-red-500 flex items-center gap-1"><span className="material-symbols-outlined" style={{ fontSize: "14px" }}>error</span>{s.error}</span>}
-                                    {s.saved && !s.dirty && <span className="text-xs text-green-600 font-medium flex items-center gap-1"><span className="material-symbols-outlined" style={{ fontSize: "14px" }}>check_circle</span>저장됨</span>}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setEditingSlotKey(null)}
-                                        className="bg-white dark:bg-gray-800 border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 transition"
-                                    >
-                                        닫기
-                                    </button>
-                                    <button
-                                        onClick={() => save(slot)}
-                                        disabled={pending || !s.dirty}
-                                        className="bg-brand-navy-900 text-white text-sm font-bold px-5 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-                                    >
-                                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>save</span>
-                                        {pending ? "저장 중..." : "저장"}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
-
-            {/* ── 커스텀 슬롯 편집 모달 ── */}
-            {editingCustomId && (() => {
-                const cs = initialCustomSlots.find((c) => c.id === editingCustomId);
-                if (!cs) return null;
-                return (
-                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setEditingCustomId(null)}>
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                            {/* 모달 헤더 */}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                                <div className="flex items-center gap-3">
-                                    <span className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-xs font-bold px-2.5 py-1 rounded-full">커스텀</span>
-                                    <span className="font-bold text-gray-800 dark:text-gray-100">수업 수정</span>
-                                </div>
-                                <button onClick={() => setEditingCustomId(null)} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
-                                    <span className="material-symbols-outlined" style={{ fontSize: "22px" }}>close</span>
-                                </button>
-                            </div>
-
-                            {/* 모달 본문 */}
-                            <div className="p-6">
-                                <CustomSlotFormFields form={editCustomForm} onChange={setEditCustomForm} coaches={coaches} programs={programs} />
-                            </div>
-
-                            {/* 모달 푸터 — 삭제/저장 버튼 */}
-                            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-b-2xl">
-                                {/* 좌측: 삭제 버튼 */}
-                                <div>
-                                    {deletingCustomId === cs.id ? (
-                                        <span className="flex items-center gap-2">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400">정말 삭제할까요?</span>
-                                            <button onClick={() => handleDeleteCustom(cs.id)} disabled={customPending} className="text-xs text-red-600 hover:text-red-800 font-bold">삭제 확인</button>
-                                            <button onClick={() => setDeletingCustomId(null)} className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-200">취소</button>
-                                        </span>
-                                    ) : (
-                                        <button
-                                            onClick={() => setDeletingCustomId(cs.id)}
-                                            className="flex items-center gap-1 text-sm text-red-400 hover:text-red-600 font-medium transition-colors"
-                                        >
-                                            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>delete</span>
-                                            삭제
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* 우측: 취소/저장 버튼 */}
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setEditingCustomId(null)}
-                                        className="bg-white dark:bg-gray-800 border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 transition"
-                                    >
-                                        닫기
-                                    </button>
-                                    <button
-                                        onClick={() => handleUpdateCustom(cs.id)}
-                                        disabled={customPending || !editCustomForm.label.trim()}
-                                        className="bg-brand-navy-900 text-white text-sm font-bold px-5 py-2 rounded-lg hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-                                    >
-                                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>save</span>
-                                        {customPending ? "저장 중..." : "저장"}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
-
-            {/* Google Sheets URL modal */}
-            {showSheetModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowSheetModal(false)}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                            <span className="font-bold text-gray-800 dark:text-gray-100 text-base flex items-center gap-2">
-                                <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>link</span>
-                                구글시트 연동관리
-                            </span>
-                            <button onClick={() => setShowSheetModal(false)} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
-                                <span className="material-symbols-outlined" style={{ fontSize: "22px" }}>close</span>
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
-                                <p className="font-bold mb-1">URL 확인 방법</p>
-                                <p>구글시트 열기 → 주소창 URL 복사</p>
-                                <p className="mt-1 font-mono bg-green-100 px-2 py-1 rounded">spreadsheets/d/.../edit?gid=... 형태 그대로</p>
-                                <p className="mt-1 font-bold">시트가 "링크가 있는 모든 사용자 - 뷰어" 공개 설정이어야 합니다.</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1.5">구글시트 URL</label>
-                                <input
-                                    type="url"
-                                    value={sheetUrlInput}
-                                    onChange={(e) => setSheetUrlInput(e.target.value)}
-                                    placeholder="https://docs.google.com/spreadsheets/d/.../edit?gid=..."
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime"
-                                />
-                            </div>
-                            {sheetError && (
-                                <p className="text-sm text-red-600 font-medium flex items-center gap-1">
-                                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>warning</span>
-                                    {sheetError}
-                                </p>
-                            )}
-                            <div className="flex gap-2 pt-1">
-                                <button
-                                    onClick={handleSaveSheetUrl}
-                                    disabled={sheetSaving}
-                                    className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-orange-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition disabled:opacity-40 flex items-center gap-2"
-                                >
-                                    {sheetSaving ? "저장 중..." : sheetSaved ? "저장됨" : "저장"}
-                                </button>
-                                <button
-                                    onClick={() => setShowSheetModal(false)}
-                                    className="bg-white dark:bg-gray-800 border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition"
-                                >
-                                    취소
-                                </button>
-                                {sheetUrlInput && (
-                                    <button
-                                        onClick={() => setSheetUrlInput("")}
-                                        className="ml-auto text-xs text-red-400 hover:text-red-600 font-medium"
-                                    >
-                                        URL 초기화
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {hasOpenModal && (
+                <ScheduleAdminModals
+                    editingSheetSlot={editingSheetSlot ?? null}
+                    editingSheetState={editingSheetSlot ? getState(editingSheetSlot.slotKey) : null}
+                    editingCustomSlot={editingCustomSlot}
+                    editCustomForm={editCustomForm}
+                    newCustomForm={newCustomForm}
+                    coaches={coaches}
+                    programs={programs}
+                    pending={pending}
+                    customPending={customPending}
+                    deletingCustomId={deletingCustomId}
+                    showSheetModal={showSheetModal}
+                    sheetUrlInput={sheetUrlInput}
+                    sheetSaving={sheetSaving}
+                    sheetSaved={sheetSaved}
+                    sheetError={sheetError}
+                    isAddingCustom={isAddingCustom}
+                    onCloseSheetSlot={() => setEditingSlotKey(null)}
+                    onUpdateSlot={update}
+                    onSaveSheetSlot={save}
+                    onCloseCustomEdit={() => setEditingCustomId(null)}
+                    onEditCustomFormChange={setEditCustomForm}
+                    onStartDeleteCustom={setDeletingCustomId}
+                    onCancelDeleteCustom={() => setDeletingCustomId(null)}
+                    onConfirmDeleteCustom={handleDeleteCustom}
+                    onSaveCustomEdit={handleUpdateCustom}
+                    onCloseSheetUrl={() => setShowSheetModal(false)}
+                    onSheetUrlChange={setSheetUrlInput}
+                    onSaveSheetUrl={handleSaveSheetUrl}
+                    onClearSheetUrl={() => setSheetUrlInput("")}
+                    onCloseAddCustom={() => setIsAddingCustom(false)}
+                    onNewCustomFormChange={setNewCustomForm}
+                    onSaveNewCustom={handleAddCustom}
+                />
             )}
-
-            {/* 커스텀 수업 추가 모달 */}
-            {isAddingCustom && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsAddingCustom(false)}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                            <span className="font-bold text-gray-800 dark:text-gray-100 text-base flex items-center gap-2">
-                                <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime" style={{ fontSize: "20px" }}>add_circle</span>
-                                새 수업 추가
-                            </span>
-                            <button onClick={() => setIsAddingCustom(false)} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
-                                <span className="material-symbols-outlined" style={{ fontSize: "22px" }}>close</span>
-                            </button>
-                        </div>
-                        <div className="p-6">
-                            <CustomSlotFormFields form={newCustomForm} onChange={setNewCustomForm} coaches={coaches} programs={programs} />
-                        </div>
-                        {/* 모달 푸터 */}
-                        <div className="flex items-center justify-end px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-b-2xl gap-2">
-                            <button
-                                onClick={() => setIsAddingCustom(false)}
-                                className="bg-white dark:bg-gray-800 border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 transition"
-                            >
-                                취소
-                            </button>
-                            <button
-                                onClick={handleAddCustom}
-                                disabled={customPending || !newCustomForm.label.trim()}
-                                className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-orange-600 text-white text-sm font-bold px-5 py-2 rounded-lg transition disabled:opacity-40 flex items-center gap-1.5"
-                            >
-                                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>add</span>
-                                {customPending ? "저장 중..." : "저장"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-/* ── 커스텀 슬롯 폼 필드 (추가/수정 모달 공용) ── */
-function CustomSlotFormFields({
-    form,
-    onChange,
-    coaches,
-    programs,
-}: {
-    form: CustomSlotForm;
-    onChange: (f: CustomSlotForm) => void;
-    coaches: Coach[];
-    programs: Program[];
-}) {
-    const DAY_OPTIONS = [
-        { key: "Mon", label: "월요일" }, { key: "Tue", label: "화요일" },
-        { key: "Wed", label: "수요일" }, { key: "Thu", label: "목요일" },
-        { key: "Fri", label: "금요일" }, { key: "Sat", label: "토요일" },
-        { key: "Sun", label: "일요일" },
-    ];
-    const p = (patch: Partial<CustomSlotForm>) => onChange({ ...form, ...patch });
-
-    return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">요일 *</label>
-                <select value={form.dayKey} onChange={(e) => p({ dayKey: e.target.value })} className={INPUT}>
-                    {DAY_OPTIONS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-                </select>
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">표시 레이블 *</label>
-                <input type="text" value={form.label} onChange={(e) => p({ label: e.target.value })} placeholder="예: 성인반 A" className={INPUT} />
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">시작 시간 *</label>
-                <input type="time" value={form.startTime} onChange={(e) => p({ startTime: e.target.value })} className={TIME_INPUT + " w-full"} />
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">종료 시간 *</label>
-                <input type="time" value={form.endTime} onChange={(e) => p({ endTime: e.target.value })} className={TIME_INPUT + " w-full"} />
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">학년 범위</label>
-                <input type="text" value={form.gradeRange} onChange={(e) => p({ gradeRange: e.target.value })} placeholder="예: 초4~중1" className={INPUT} />
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">정원</label>
-                <input type="number" min={1} max={50} value={form.capacity} onChange={(e) => p({ capacity: parseInt(e.target.value) || 12 })} className={INPUT} />
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">현재 수강 인원</label>
-                <input type="number" min={0} value={form.enrolled} onChange={(e) => p({ enrolled: parseInt(e.target.value) || 0 })} className={INPUT} />
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">담당 코치</label>
-                <select value={form.coachId} onChange={(e) => p({ coachId: e.target.value })} className={INPUT}>
-                    <option value="">-- 코치 미배정 --</option>
-                    {coaches.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.role})</option>)}
-                </select>
-            </div>
-            {programs.length > 0 && (
-                <div>
-                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">프로그램 분류</label>
-                    <select value={form.programId} onChange={(e) => p({ programId: e.target.value })} className={INPUT}>
-                        <option value="">-- 프로그램 미설정 --</option>
-                        {programs.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
-                    </select>
-                </div>
-            )}
-            <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">메모 / 특이사항</label>
-                <input type="text" value={form.note} onChange={(e) => p({ note: e.target.value })} placeholder="예: 이번 주 보강 있음" className={INPUT} />
-            </div>
-            <div className="md:col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input type="checkbox" checked={form.isHidden} onChange={(e) => p({ isHidden: e.target.checked })} className="w-4 h-4 rounded border-gray-300" />
-                    <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">공개 시간표에서 숨기기</span>
-                </label>
-            </div>
         </div>
     );
 }

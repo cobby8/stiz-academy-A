@@ -96,6 +96,10 @@
 - 결정: `/apply`의 체험/수강신청 안내 HTML은 `page.tsx` 서버 컴포넌트에서 `sanitizeHtml()`로 정리한 뒤 `ApplyPageClient`에 전달한다.
 - 이유: `sanitize-html`과 그 하위 파서들은 브라우저에서 실행하기엔 큰 도구다. 서버에서 한 번 정리해 안전한 HTML만 내려보내면 보안은 유지하면서 `/apply` client bundle에서 약 248KB짜리 HTML 파서 chunk를 제거할 수 있다.
 
+## 2026-07-09: 최초 관리자 setup은 서버 API에서 처리한다
+- 결정: `/setup` client는 Supabase 브라우저 SDK를 직접 import하지 않고, `/api/auth/check-setup` POST가 Auth 사용자 생성, `User` row upsert, 로그인 쿠키 설정을 처리한다.
+- 이유: setup은 최초 1회 사용하는 화면이지만 기존 구조는 Supabase 브라우저 SDK 약 200KB를 첫 JS에 포함했다. 서버 API로 옮기면 같은 UX를 유지하면서 `/setup` client bundle을 크게 줄일 수 있다.
+
 ## 2026-07-07: `SocialPostDraft`는 raw SQL 보강 테이블로 둔다
 - 결정: Prisma schema 마이그레이션 대신 `CREATE TABLE IF NOT EXISTS "SocialPostDraft"` 패턴을 사용한다.
 - 이유: 기존 프로젝트가 Supabase PgBouncer 호환을 위해 raw SQL 보강 패턴을 많이 쓰고 있으며, 이번 기능은 독립 초안 테이블이라 점진 도입이 안전하다.

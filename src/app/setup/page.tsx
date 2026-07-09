@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function SetupPage() {
   const router = useRouter();
@@ -54,27 +53,21 @@ export default function SetupPage() {
     }
 
     try {
-      const supabase = createClient();
-
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-            role: "ADMIN",
-          },
-        },
+      const res = await fetch("/api/auth/check-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name }),
       });
+      const data = await res.json();
 
-      if (signUpError) {
-        setError(signUpError.message);
+      if (!res.ok) {
+        setError(data.error || "관리자 생성 중 오류가 발생했습니다.");
         setLoading(false);
         return;
       }
 
       setSuccess(true);
-      setTimeout(() => router.push("/admin"), 2000);
+      setTimeout(() => router.push(data.redirectTo || "/admin"), 1200);
     } catch {
       setError("관리자 생성 중 오류가 발생했습니다.");
     } finally {
@@ -125,7 +118,7 @@ export default function SetupPage() {
             관리자 계정 생성 완료!
           </h1>
           <p className="text-gray-500 dark:text-gray-400">
-            잠시 후 관리자 페이지로 이동합니다...
+            잠시 후 다음 화면으로 이동합니다...
           </p>
         </div>
       </div>

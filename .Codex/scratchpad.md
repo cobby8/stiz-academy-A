@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 신청 페이지 client bundle 축소
+- 작업명: setup 페이지 Supabase SDK 제거
 - 상태: 검증 완료
-- 범위: 공개 신청 페이지와 공개 푸터
+- 범위: 초기 관리자 설정 페이지
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -37,9 +37,11 @@
 | 업로드 이미지 캐시 강화 | 완료 | `/uploads`와 Supabase Storage 업로드 파일에 1년 immutable 캐시 적용 |
 | 관리자 공통 아이콘 JS 제거 | 완료 | shell 로그아웃 아이콘을 Material Symbols로 전환해 공통 chunk 축소 |
 | 신청 페이지 client bundle 축소 | 완료 | `sanitize-html`을 client bundle에서 제거해 `/apply` 첫 JS 대폭 축소 |
+| setup 페이지 Supabase SDK 제거 | 완료 | 최초 관리자 생성 API를 서버 처리로 옮겨 `/setup` 첫 JS 대폭 축소 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-09: `/setup` 관리자 생성 처리를 서버 API로 옮겨 Supabase 브라우저 SDK를 제거하고 첫 JS를 265.5KB에서 64.8KB로 줄임.
 - 2026-07-09: `/apply` 안내 HTML sanitize를 서버로 옮기고 공개 푸터 lucide import를 제거해 첫 JS를 372.4KB에서 116.3KB로 줄임.
 - 2026-07-09: 관리자 shell 로그아웃 아이콘의 lucide import를 제거해 관리자 공통 chunk를 약 42.7KB에서 41.4KB로 줄임.
 - 2026-07-09: 업로드 이미지 URL이 고유 파일명인 점을 활용해 `/uploads`와 Supabase Storage 업로드에 1년 immutable 캐시를 적용함.
@@ -48,17 +50,16 @@
 - 2026-07-09: 공개 헤더의 Supabase 계정 상태 확인을 동적 컴포넌트로 분리해 홈 entry JS를 약 0.06MB로 줄임.
 - 2026-07-09: `/admin/notices`의 `RichTextEditor`를 새 공지/수정 모달에서만 동적 로드하도록 변경함.
 - 2026-07-09: 공개 갤러리 목록을 서버 렌더링으로 돌리고 라이트박스 본체를 클릭 후 동적 로드하도록 분리함.
-- 2026-07-09: 홈 `LandingPageClient`를 서버 컴포넌트로 돌려 첫 화면 전용 entry JS를 약 0.25MB 수준으로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/apply/page.tsx`, `src/app/apply/ApplyPageClient.tsx`, `src/components/PublicFooter.tsx`
-- 주요 변경: 신청 안내 HTML sanitize를 서버 컴포넌트에서 미리 수행하고, client 컴포넌트는 안전한 HTML만 렌더. 공개 푸터 주소/전화 아이콘은 Material Symbols로 전환.
-- 적용 범위: `/apply` 공개 신청 페이지 초기 client JS와 공개 공통 푸터 의존성.
+- 변경 파일: `src/app/setup/page.tsx`, `src/app/api/auth/check-setup/route.ts`
+- 주요 변경: 최초 관리자 생성 POST API를 추가해 서버에서 Auth 사용자 생성, `User` row upsert, 로그인 쿠키 설정을 처리. setup client는 Supabase 브라우저 SDK 대신 fetch만 사용.
+- 적용 범위: `/setup` 초기 설정 페이지 client JS와 최초 관리자 생성 흐름.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
 - `npx.cmd next build` 통과. Google Fonts 네트워크가 필요해 네트워크 허용으로 검증.
-- 산출물 확인: `/apply/page` 첫 JS 372.4KB → 116.3KB, `sanitize-html/htmlparser2` client chunk 제거.
+- 산출물 확인: `/setup/page` 첫 JS 265.5KB → 64.8KB, setup client manifest에서 Supabase 브라우저 SDK 제거.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/setup` 공개 설정 화면과 관리자 개별 대형 화면의 남은 큰 client chunk 분석.
+- 다음 속도 개선 후보: 관리자 개별 대형 화면(`/admin/schedule`, `/admin/students`, `/admin/gallery`)의 남은 큰 client chunk 분석.

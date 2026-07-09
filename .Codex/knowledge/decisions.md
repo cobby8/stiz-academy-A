@@ -56,6 +56,10 @@
 - 결정: 관리자에서 선택 가능한 Google 폰트들은 전역 등록을 유지하되 `preload: false`로 두고, Meta Pixel은 `NEXT_PUBLIC_META_PIXEL_ID`가 있을 때만 로드한다.
 - 이유: 기존 빌드 산출물에서 홈 첫 화면에 폰트 preload 561개, 약 5MB가 잡혔다. 선택 후보 폰트를 모두 미리 받는 것은 체감 속도를 크게 해치므로, 실제 사용 시 필요한 폰트만 브라우저가 요청하게 한다.
 
+## 2026-07-09: 전역 후보 폰트는 next/font/google에서 제거
+- 결정: `src/app/layout.tsx`의 전역 `next/font/google` 등록을 제거하고, 관리자 폰트 선택값은 `src/lib/fonts.ts`의 CSS fallback 스택으로 처리한다.
+- 이유: `preload: false`는 브라우저 선로딩만 막고, `next/font/google`은 여전히 빌드 시 Google Fonts와 `fonts.gstatic.com` 파일을 다운로드한다. 외부 네트워크 불안정이 빌드 전체를 막지 않게 하려면 후보 폰트를 빌드 단계에서 가져오지 않아야 한다.
+
 ## 2026-07-09: 학원 기본 설정은 서버 캐시와 태그 무효화를 사용한다
 - 결정: `getAcademySettings()`는 `unstable_cache`로 5분 캐시하고, 관리자 설정 저장 시 `academy-settings` 태그를 즉시 무효화한다.
 - 이유: 학원 설정은 거의 모든 공개 페이지와 일부 서버 작업에서 반복 사용되지만 자주 바뀌지 않는다. 요청마다 DB를 확인하는 대신 캐시를 두면 전체 페이지의 서버 부담이 줄고, 저장 시 태그 무효화로 최신성도 유지할 수 있다.

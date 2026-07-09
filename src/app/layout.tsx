@@ -5,51 +5,6 @@ import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, getFontCss } from "@/lib/fonts
 import { ThemeProvider } from "@/components/ThemeProvider";
 import MetaPixel from "@/components/MetaPixel";
 
-// --- next/font/google: 빌드 시 폰트 파일을 자체 호스팅하여 외부 DNS 조회 제거, CLS 방지 ---
-import { Noto_Sans_KR, Nanum_Gothic, IBM_Plex_Sans_KR, Black_Han_Sans, Jua } from "next/font/google";
-
-// 본문용 폰트 (weight 옵션으로 필요한 굵기만 로드)
-const notoSansKr = Noto_Sans_KR({
-    subsets: ["latin"],
-    weight: ["300", "400", "500", "700", "900"],
-    display: "swap", // FOUT 방식: 폰트 로드 전 시스템 폰트 표시 → CLS 방지
-    variable: "--font-noto-sans-kr",
-    preload: false,
-});
-
-const nanumGothic = Nanum_Gothic({
-    subsets: ["latin"],
-    weight: ["400", "700", "800"],
-    display: "swap",
-    variable: "--font-nanum-gothic",
-    preload: false,
-});
-
-const ibmPlexSansKr = IBM_Plex_Sans_KR({
-    subsets: ["latin"],
-    weight: ["300", "400", "500", "600", "700"],
-    display: "swap",
-    variable: "--font-ibm-plex-sans-kr",
-    preload: false,
-});
-
-// 제목용 폰트 (단일 weight)
-const blackHanSans = Black_Han_Sans({
-    subsets: ["latin"],
-    weight: "400",
-    display: "swap",
-    variable: "--font-black-han-sans",
-    preload: false,
-});
-
-const jua = Jua({
-    subsets: ["latin"],
-    weight: "400",
-    display: "swap",
-    variable: "--font-jua",
-    preload: false,
-});
-
 export const metadata: Metadata = {
     title: "스티즈농구교실 다산점 | 스마트 학원 관리",
     description: "우리아이 농구교실 스티즈농구교실 다산점의 스마트 출결/결제 관리 시스템입니다.",
@@ -96,10 +51,8 @@ export default async function RootLayout({
     }
 
     return (
-        // next/font CSS variable 클래스를 html에 적용 → 폰트가 self-hosted로 로드됨
         <html
             lang="ko"
-            className={`${notoSansKr.variable} ${nanumGothic.variable} ${ibmPlexSansKr.variable} ${blackHanSans.variable} ${jua.variable}`}
             suppressHydrationWarning
         >
             <head>

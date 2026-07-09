@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 설정 리치 에디터 가시 영역 지연 로딩
-- 상태: 타입 검증 완료
-- 범위: `/admin/staff`
+- 작업명: next/font/google 빌드 의존 제거
+- 상태: 빌드 검증 완료
+- 범위: 전역 레이아웃/폰트 설정
 - 기준일: 2026-07-09
 
 ## 진행 현황표
@@ -63,9 +63,11 @@
 | 스태프 초대 모달 지연 로딩 | 완료 | `/admin/staff` SMS 초대 링크 발송 모달 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 프로그램 작성/수정 폼 지연 로딩 | 완료 | `/admin/programs` 등록/수정 폼과 create/update 액션 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
 | 설정 리치 에디터 가시 영역 지연 로딩 | 완료 | `/admin/settings` 리치 에디터를 스크롤/호버/클릭 시 로드하도록 분리, 빌드 수치 측정은 Google Fonts 네트워크 실패로 보류 |
-| 타입/빌드 검증 | 진행 | `npx.cmd tsc --noEmit` 통과, `next build`는 Google Fonts 외부 다운로드 실패 |
+| Google Fonts 빌드 의존 제거 | 완료 | `next/font/google` 제거 후 `npx.cmd next build`, `npx.cmd next build --webpack` 모두 통과 |
+| 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build`, `npx.cmd next build --webpack` 통과 |
 
 ## 작업 로그
+- 2026-07-09: 전역 `next/font/google` 의존을 제거하고 폰트 옵션을 CSS fallback 스택으로 바꿔 Google Fonts 네트워크 실패 없이 `next build`가 통과하도록 함.
 - 2026-07-09: `/admin/settings`의 리치 텍스트 편집기를 `LazyRichTextEditor`로 감싸 화면 근처에 올 때만 실제 편집기 chunk를 로드하도록 변경함.
 - 2026-07-09: `/admin/programs`의 등록/수정 폼을 `ProgramFormPanel`로 분리해 프로그램 목록 초기 렌더에서 create/update 폼 코드를 제외함.
 - 2026-07-09: `/admin/staff`의 SMS 초대 링크 발송 모달을 `InviteStaffModal`로 분리해 스태프 목록 초기 렌더에서 초대 폼/액션 코드를 제외함.
@@ -75,17 +77,17 @@
 - 2026-07-09: `/admin/notices`의 소셜 발행 준비/게시 모달을 `NoticeSocialModal`로 분리해 공지 목록 초기 렌더에서 소셜 캠페인 UI 코드를 제외함.
 - 2026-07-09: `/admin/trial`의 신규 등록/정규 전환/이탈/메모 모달을 `TrialCrmModals`로 분리해 목록 초기 렌더에서 보조 UI 코드를 제외함.
 - 2026-07-09: `/admin/gallery`의 새 게시물/수정 업로드 폼과 이미지 압축 업로드 코드를 동적 로드로 분리해 첫 JS를 126.4KB에서 120.3KB로 줄임.
-- 2026-07-09: `/apply/enroll`의 2~4단계 입력/약관 UI를 동적 로드로 분리해 첫 JS를 131.2KB에서 112.4KB로 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/settings/AdminSettingsClient.tsx`, `src/app/admin/settings/LazyRichTextEditor.tsx`
-- 주요 변경: 설정 저장 폼과 상태는 유지하고 `RichTextEditor` 본체를 IntersectionObserver 기반 지연 로딩 래퍼로 감싸 초기 렌더 부담을 줄임.
-- 적용 범위: 관리자 설정 페이지.
+- 변경 파일: `src/app/layout.tsx`, `src/lib/fonts.ts`
+- 주요 변경: `next/font/google` 전역 import와 html font variable 클래스를 제거하고, 관리자 폰트 옵션을 빌드 생성 CSS 변수 대신 안전한 CSS font-family fallback으로 전환.
+- 적용 범위: 전역 레이아웃, 관리자 폰트 선택 미리보기/적용값.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- `npx.cmd next build`, `npx.cmd next build --webpack`은 이전 단계에서 Google Fonts/Fonts static 파일 다운로드 중 `socket hang up`, `ECONNRESET`이 반복되어 완료하지 못함.
-- 산출물 확인: 빌드 완료 실패로 route JS 수치 측정 보류.
+- `npx.cmd next build` 통과
+- `npx.cmd next build --webpack` 통과
+- 빌드 중 Supabase DB 접속 실패 로그는 fallback 처리되어 빌드 종료 코드는 0. Next 16 출력에서 예전 First Load JS 표는 표시되지 않음.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 네트워크 문제가 풀리면 `/admin/programs`, `/admin/settings` route JS 수치 재측정.
+- 다음 속도 개선 후보: 런타임 외부 CSS인 Pretendard/Material Symbols를 로컬 자산 또는 더 작은 아이콘 전략으로 대체할지 검토.

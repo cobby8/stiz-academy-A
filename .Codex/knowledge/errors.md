@@ -8,7 +8,8 @@
 ## Next build Google Fonts 네트워크 제한
 - 현상: `npm.cmd run build`가 `Failed to fetch ... from Google Fonts`로 실패할 수 있다.
 - 원인: Next `next/font/google`이 빌드 중 Google Fonts CSS와 `fonts.gstatic.com` woff2 파일을 받아오는데, 현재 작업 환경의 네트워크 샌드박스 또는 외부 연결 불안정이 요청을 끊는다.
-- 해결: 코드 문제가 아니므로 같은 빌드를 네트워크 허용으로 재실행해 확인한다. 네트워크 허용 후에도 `socket hang up`, `ECONNRESET`이 반복되면 작은 코드 분리는 `npx.cmd tsc --noEmit` 통과 기준으로 커밋하고, 빌드 수치 측정은 네트워크가 안정된 환경에서 재확인한다.
+- 해결: 전역 `next/font/google` 후보 폰트를 제거하고 `src/lib/fonts.ts`의 폰트 선택값을 CSS fallback 스택으로 바꾼다. 이후 `npx.cmd next build`, `npx.cmd next build --webpack` 모두 Google Fonts 다운로드 없이 통과한다.
+- 예방: 관리자에서 선택 가능한 후보 폰트를 전역 `next/font/google`로 등록하지 않는다. 특정 폰트를 반드시 보장해야 하면 Google 런타임/빌드 다운로드가 아니라 로컬 self-host 파일을 프로젝트 자산으로 둔다.
 
 ## Next build Turbopack 출력 지연
 - 현상: `npx.cmd next build`가 `Creating an optimized production build ...` 이후 수십 초 이상 출력 없이 멈춘 것처럼 보일 수 있다.
@@ -25,8 +26,14 @@
 ## 전역 next/font preload 폭증
 - 현상: 홈 HTML에 `/_next/static/media/*.woff2` preload가 수백 개 붙어 첫 화면 로드가 심각하게 느려질 수 있다.
 - 원인: 관리자에서 선택 가능한 한국어 Google 폰트 여러 종을 전역 `next/font`로 등록하면서 기본 preload가 켜져 있으면, 실제 선택 여부와 관계없이 모든 후보 폰트 조각을 선로딩한다.
-- 해결: 전역 후보 폰트에는 `preload: false`를 지정한다.
-- 예방: 빌드 산출물에서 `FontPreloadCount`와 HTML 리소스 참조 수를 확인한다.
+- 해결: 최종적으로 전역 `next/font/google` 후보 폰트를 제거하고 CSS fallback 스택으로 전환한다.
+- 예방: 빌드 산출물에서 `FontPreloadCount`와 HTML 리소스 참조 수를 확인하고, 전역 후보 폰트는 빌드/런타임 모두에 부담이 되는지 먼저 계산한다.
+
+## Next build 정적 생성 중 Supabase 접속 실패 로그
+- 현상: `npx.cmd next build`가 `Can't reach database server at aws-1-ap-northeast-2.pooler.supabase.com:6543` 로그를 많이 출력할 수 있다.
+- 원인: 정적 페이지 생성 단계에서 공개/관리 페이지 데이터 조회 함수가 Supabase에 접근하지만, 현재 로컬/샌드박스 환경에서 DB 연결이 막혀 있다.
+- 해석: 현재 쿼리 함수들이 fallback을 반환해 빌드 종료 코드는 0으로 끝난다. 배포 빌드 실패와는 다르게, 로컬 검증에서는 경고성 로그로 본다.
+- 예방: 빌드 로그를 볼 때 Google Fonts 실패처럼 종료 코드를 막는 오류와, fallback으로 흡수되는 DB 연결 로그를 구분한다.
 
 ## 홈 인스타 갤러리 이미지 회색 박스
 - 현상: 홈 갤러리에서 인스타그램에서 가져온 사진이 회색 박스와 alt 텍스트처럼 보일 수 있다.

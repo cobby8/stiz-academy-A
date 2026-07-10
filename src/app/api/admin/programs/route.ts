@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getPrograms } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+const getCachedPrograms = unstable_cache(
+    () => getPrograms(),
+    ["admin-programs-v1"],
+    { revalidate: 60, tags: ["admin-programs"] },
+);
 
 export async function GET() {
     try {
@@ -12,7 +19,7 @@ export async function GET() {
     }
 
     try {
-        const programs = await getPrograms();
+        const programs = await getCachedPrograms();
 
         return NextResponse.json(
             { programs },

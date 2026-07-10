@@ -30,6 +30,16 @@ const BOOLEAN_SETTINGS_COLUMNS = new Set([
     "useBuiltInEnrollForm",
 ]);
 
+function revalidateProgramAdminCaches() {
+    revalidateTag("admin-programs", { expire: 0 });
+    revalidateTag("admin-finance-billing", { expire: 0 });
+}
+
+function revalidateCoachAdminCaches() {
+    revalidateTag("admin-coaches", { expire: 0 });
+    revalidateTag("admin-coach-options", { expire: 0 });
+}
+
 export async function ensureAcademySettingsColumns() {
     if (_columnsEnsured) return;
     const columns: [string, string][] = [
@@ -178,6 +188,7 @@ export async function createProgram(data: ProgramData) {
     revalidatePath("/admin/programs");
     revalidatePath("/programs");
     revalidatePath("/schedule");
+    revalidateProgramAdminCaches();
 }
 
 export async function updateProgram(id: string, data: ProgramData) {
@@ -222,6 +233,7 @@ export async function updateProgram(id: string, data: ProgramData) {
     revalidatePath("/admin/programs");
     revalidatePath("/programs");
     revalidatePath("/schedule");
+    revalidateProgramAdminCaches();
 }
 
 export async function reorderPrograms(orderedIds: string[]) {
@@ -238,6 +250,7 @@ export async function reorderPrograms(orderedIds: string[]) {
     }
     revalidatePath("/admin/programs");
     revalidatePath("/programs");
+    revalidateProgramAdminCaches();
 }
 
 export async function deleteProgram(id: string) {
@@ -249,6 +262,7 @@ export async function deleteProgram(id: string) {
         revalidatePath("/admin/programs");
         revalidatePath("/programs");
         revalidatePath("/schedule");
+        revalidateProgramAdminCaches();
     } catch (e) {
         console.error("Failed to delete program:", e);
         throw new Error("Failed to delete program");
@@ -434,6 +448,7 @@ export async function createCoach(data: {
         revalidatePath("/admin/schedule");
         revalidatePath("/about");
         revalidatePath("/schedule");
+        revalidateCoachAdminCaches();
     } catch (e) {
         console.error("Failed to create coach:", e);
         throw new Error("데이터베이스에 연결할 수 없습니다. Supabase 연결 설정을 확인해주세요.");
@@ -464,6 +479,7 @@ export async function updateCoach(id: string, data: {
         revalidatePath("/admin/schedule");
         revalidatePath("/about");
         revalidatePath("/schedule");
+        revalidateCoachAdminCaches();
     } catch (e) {
         console.error("Failed to update coach:", e);
         throw new Error("코치 정보 수정 실패");
@@ -479,6 +495,7 @@ export async function deleteCoach(id: string) {
         revalidatePath("/admin/schedule");
         revalidatePath("/about");
         revalidatePath("/schedule");
+        revalidateCoachAdminCaches();
     } catch (e) {
         console.error("Failed to delete coach:", e);
         throw new Error("Failed to delete coach");
@@ -508,6 +525,7 @@ export async function moveCoach(id: string, direction: "up" | "down") {
         revalidatePath("/admin/coaches");
         revalidatePath("/about");
         revalidatePath("/schedule");
+        revalidateCoachAdminCaches();
     } catch (e) {
         console.error("Failed to move coach:", e);
         throw new Error("순서 변경 실패");
@@ -527,6 +545,7 @@ export async function reorderCoaches(ids: string[]) {
         revalidatePath("/admin/coaches");
         revalidatePath("/about");
         revalidatePath("/schedule");
+        revalidateCoachAdminCaches();
     } catch (e) {
         console.error("Failed to reorder coaches:", e);
         throw new Error("순서 변경 실패");
@@ -586,6 +605,7 @@ export async function createAnnualEvent(data: {
 
     revalidatePath("/admin/annual");
     revalidatePath("/annual");
+    revalidateTag("admin-annual", { expire: 0 });
 }
 
 export async function updateAnnualEvent(id: string, data: {
@@ -636,6 +656,7 @@ export async function updateAnnualEvent(id: string, data: {
 
     revalidatePath("/admin/annual");
     revalidatePath("/annual");
+    revalidateTag("admin-annual", { expire: 0 });
 }
 
 export async function deleteAnnualEvent(id: string) {
@@ -670,6 +691,7 @@ export async function deleteAnnualEvent(id: string) {
 
     revalidatePath("/admin/annual");
     revalidatePath("/annual");
+    revalidateTag("admin-annual", { expire: 0 });
 }
 
 // ── 원생 관리 CRUD ────────────────────────────────────────────────────────────
@@ -1454,6 +1476,7 @@ export async function createFaq(data: {
     }
     revalidatePath("/admin/faq");
     revalidatePath("/apply");
+    revalidateTag("admin-faq", { expire: 0 });
 }
 
 // FAQ 수정
@@ -1480,6 +1503,7 @@ export async function updateFaq(id: string, data: {
     }
     revalidatePath("/admin/faq");
     revalidatePath("/apply");
+    revalidateTag("admin-faq", { expire: 0 });
 }
 
 // FAQ 삭제
@@ -1493,6 +1517,7 @@ export async function deleteFaq(id: string) {
     }
     revalidatePath("/admin/faq");
     revalidatePath("/apply");
+    revalidateTag("admin-faq", { expire: 0 });
 }
 
 // ── 학부모 후기 관리 ─────────────────────────────────────────────────────────
@@ -2451,6 +2476,7 @@ export async function createBillingTemplate(data: {
         throw new Error("청구 템플릿 생성 실패");
     }
     revalidatePath("/admin/finance/billing");
+    revalidateTag("admin-finance-billing", { expire: 0 });
 }
 
 // 청구 템플릿 수정
@@ -2489,6 +2515,7 @@ export async function updateBillingTemplate(id: string, data: {
         throw new Error("청구 템플릿 수정 실패");
     }
     revalidatePath("/admin/finance/billing");
+    revalidateTag("admin-finance-billing", { expire: 0 });
 }
 
 // 청구 템플릿 삭제
@@ -2502,6 +2529,7 @@ export async function deleteBillingTemplate(id: string) {
         throw new Error("청구 템플릿 삭제 실패");
     }
     revalidatePath("/admin/finance/billing");
+    revalidateTag("admin-finance-billing", { expire: 0 });
 }
 
 // ── 월별 청구서 자동 생성 ────────────────────────────────────────────────────────
@@ -4049,6 +4077,7 @@ export async function updateSmsTemplate(
     }
 
     revalidatePath("/admin/sms/templates");
+    revalidateTag("admin-sms-templates", { expire: 0 });
 }
 
 /**
@@ -4114,6 +4143,7 @@ export async function resetSmsTemplate(id: string) {
     }
 
     revalidatePath("/admin/sms/templates");
+    revalidateTag("admin-sms-templates", { expire: 0 });
 }
 
 // ══════════════════════════════════════════════════════════════════════

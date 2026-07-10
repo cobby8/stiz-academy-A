@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getSmsTemplates } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+const getCachedSmsTemplates = unstable_cache(
+    () => getSmsTemplates(),
+    ["admin-sms-templates-v1"],
+    { revalidate: 60, tags: ["admin-sms-templates"] },
+);
 
 export async function GET() {
     try {
@@ -12,7 +19,7 @@ export async function GET() {
     }
 
     try {
-        const templates = await getSmsTemplates();
+        const templates = await getCachedSmsTemplates();
 
         return NextResponse.json(
             { templates },

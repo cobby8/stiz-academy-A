@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 수동 시간표 동기화 전환 및 수납/통계 캐시
-- 상태: 타입/빌드 검증 완료
-- 범위: Google Sheets 시간표 동기화, 공개 시간표/시뮬레이터, 수납/통계 API
+- 작업명: 관리자 콘텐츠성 읽기 API 캐시 확대
+- 상태: 타입/빌드 검증 완료, 커밋 준비 중
+- 범위: 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 관리자 API
 - 기준일: 2026-07-11
 
 ## 진행 현황표
@@ -22,9 +22,11 @@
 | 공통 선택 목록 캐시 | 완료 | 학생/코치 옵션, 설정, 체험 카운트 API에 짧은 private/server cache 적용 |
 | 수동 시간표 동기화 | 완료 | 공개/관리 화면은 DB 캐시만 읽고 관리자 버튼으로 Google Sheets를 수동 동기화 |
 | 수납/통계 캐시 | 완료 | `/api/admin/finance`, `/api/admin/stats`에 짧은 캐시와 저장 후 무효화 적용 |
+| 콘텐츠성 관리자 API 캐시 | 완료 | 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 조회에 60초 서버 캐시 적용 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-11: 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 관리자 API에 60초 서버 캐시를 적용하고, 관련 저장 액션에서 태그 캐시를 즉시 무효화.
 - 2026-07-11: Google Sheets 시간표 자동 cron을 제거하고, 관리자 시간표 모달의 “지금 동기화” 버튼으로만 시트를 읽어 `SheetSlotCache`에 저장하도록 전환.
 - 2026-07-11: 공개 `/schedule`과 `/simulator`의 Google Sheets 직접 fetch 폴백을 제거해 화면 렌더가 외부 네트워크를 기다리지 않도록 변경.
 - 2026-07-11: `/api/admin/finance`와 `/api/admin/stats`에 짧은 private/server cache를 적용하고, 수납 쓰기 작업 후 관련 캐시를 즉시 무효화.
@@ -35,13 +37,11 @@
 - 2026-07-11: 관리자 공통 헤더의 알림 자동 idle 조회와 120초 폴링을 제거해 모든 관리자 페이지 진입 시 배경 API 경합을 줄임.
 - 2026-07-11: 관리자 셸의 `/api/admin/performance-indexes` 자동 호출 제거, Supabase 인증 `getClaims()` 우선 사용, DB role 조회 30초 캐시 적용.
 - 2026-07-10: `/api/admin/students`의 학생별 Enrollment 반복 조회를 CTE 집계로 변경해 학생 목록 응답 부담을 줄임.
-- 2026-07-10: 주요 관리자 화면의 서버 직접 조회를 skeleton/API 기반 로딩으로 분리하고 내부 링크 prefetch를 꺼서 배경 DB 조회를 줄임.
-- 2026-07-10: 공개 홈페이지의 폰트 preload, 인라인 스크립트, 클릭 후 열리는 UI 초기 JS 부담을 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/schedule/*`, `src/app/api/admin/sync-schedule/route.ts`, `src/app/schedule/page.tsx`, `src/app/simulator/page.tsx`, `src/app/api/admin/finance/route.ts`, `src/app/api/admin/stats/route.ts`, `src/lib/queries.ts`
-- 주요 변경: Google Sheets는 수동 동기화로 DB에 저장하고, 화면은 DB 캐시만 읽는다. 수납/통계 API는 짧은 캐시와 월 범위 날짜 조건을 사용한다.
-- 의도: 외부 네트워크와 반복 집계가 관리자 화면 진입 속도를 묶지 않도록 한다.
+- 변경 파일: `src/app/api/admin/programs/route.ts`, `src/app/api/admin/coaches/route.ts`, `src/app/api/admin/faq/route.ts`, `src/app/api/admin/annual/route.ts`, `src/app/api/admin/sms/templates/route.ts`, `src/app/api/admin/finance/billing/route.ts`, `src/app/actions/admin.ts`
+- 주요 변경: 콘텐츠/설정성 관리자 읽기 API는 권한 확인 후 60초 `unstable_cache`를 사용하고, 저장/삭제/순서변경 action에서 관련 태그를 즉시 무효화한다.
+- 의도: 브라우저에는 관리자 데이터를 저장하지 않으면서, 서버 안쪽의 반복 DB 조회만 줄여 체감 대기시간을 낮춘다.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -49,4 +49,4 @@
 - 빌드 중 Supabase pooler 접속 경고가 출력됐지만 기존 공개 페이지 프리렌더 fallback 경고이며 종료 코드는 0
 
 ## 다음에 할 것
-- 실제 배포 환경에서 `/admin` 첫 진입 Network waterfall을 확인하고, 아직 느린 API가 남으면 수납/통계처럼 날짜 집계가 많은 route의 DB 인덱스와 쿼리 조건을 별도로 최적화한다.
+- 실제 배포 환경에서 `/admin` 첫 진입 Network waterfall을 확인하고, 여전히 느린 API가 남으면 해당 route의 DB 쿼리 수와 응답 시간을 API별로 측정한다.

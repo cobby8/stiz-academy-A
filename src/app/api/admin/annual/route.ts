@@ -1,8 +1,25 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getAcademySettings, getAnnualEvents } from "@/lib/queries";
+import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings, getAnnualEvents } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+const getCachedAnnualPayload = unstable_cache(
+    async () => {
+        const [events, settings] = await Promise.all([
+            getAnnualEvents(),
+            getAcademySettings(),
+        ]);
+
+        return {
+            events,
+            initialIcsUrl: settings?.googleCalendarIcsUrl || "",
+        };
+    },
+    ["admin-annual-v1"],
+    { revalidate: 60, tags: ["admin-annual", ACADEMY_SETTINGS_CACHE_TAG] },
+);
 
 export async function GET() {
     try {
@@ -12,16 +29,10 @@ export async function GET() {
     }
 
     try {
-        const [events, settings] = await Promise.all([
-            getAnnualEvents(),
-            getAcademySettings(),
-        ]);
+        const payload = await getCachedAnnualPayload();
 
         return NextResponse.json(
-            {
-                events,
-                initialIcsUrl: settings?.googleCalendarIcsUrl || "",
-            },
+            payload,
             { headers: { "Cache-Control": "no-store" } },
         );
     } catch (error) {

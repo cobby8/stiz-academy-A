@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 관리자 내부 링크 prefetch 정리
+- 작업명: 시간표 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: 관리자 내부 이동 링크
+- 범위: `/admin/schedule`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -59,9 +59,11 @@
 | 수업 리포트 상세 화면 지연 렌더링 | 완료 | 리포트/코치 조회를 Suspense 안쪽으로 분리하고 목록 링크 prefetch 차단 |
 | 원생 상세 화면 지연 렌더링 | 완료 | 원생 활동 조회를 Suspense 안쪽으로 분리하고 상세 링크 prefetch 차단 |
 | 관리자 내부 링크 prefetch 정리 | 완료 | 반/출석/리포트/갤러리/설정 링크의 자동 배경 조회 차단 |
+| 시간표 관리 화면 지연 렌더링 | 완료 | 설정/DB/Google Sheets 조회를 Suspense 안쪽으로 분리해 skeleton 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/schedule` 진입 시 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 Suspense 안쪽으로 옮기고, skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: 관리자 내부 반/출석/리포트/갤러리/설정 이동 링크에 `prefetch={false}`를 추가해 불필요한 배경 route 조회를 차단함.
 - 2026-07-10: `/admin/students/[id]` 원생 활동 조회를 Suspense 경계 안쪽으로 옮기고, 원생 상세로 가는 목록/반 상세 링크 prefetch를 차단함.
 - 2026-07-10: `/admin/attendance/report/[sessionId]` 진입 시 리포트/코치 조회를 Suspense 경계 안쪽으로 옮기고, 목록 링크 prefetch를 차단함.
@@ -70,12 +72,11 @@
 - 2026-07-10: `/admin/stats` 진입 시 7개 운영 집계 조회를 Suspense 경계 안쪽으로 옮기고, KPI/chart skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/testimonials` 진입 시 후기/학원 설정 조회를 Suspense 경계 안쪽으로 옮기고, 설정 카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/attendance/report` 진입 시 최근 수업 리포트 목록 조회를 Suspense 경계 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/finance/billing` 진입 시 청구 템플릿/프로그램 목록 조회를 Suspense 경계 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/classes/ClassManagementClient.tsx`, `src/app/admin/classes/[id]/ClassDetailClient.tsx`, `src/app/admin/attendance/AttendanceClient.tsx`, `src/app/admin/attendance/report/page.tsx`, `src/app/admin/gallery/GalleryAdminClient.tsx`, `src/app/admin/settings/AdminSettingsClient.tsx`
-- 주요 변경: 관리자 내부 이동 링크에 `prefetch={false}`를 추가해 사용자가 누르기 전 무거운 route/data 조회가 배경에서 발생하지 않도록 차단.
-- 적용 범위: 반 관리, 출석 관리, 리포트 목록, 갤러리 관리, 설정 관리
+- 변경 파일: `src/app/admin/schedule/page.tsx`
+- 주요 변경: 시간표 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/schedule`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -83,4 +84,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/settings`, `/admin/schedule`처럼 설정/시간표 데이터를 첫 진입에 함께 가져오는 화면을 추가 점검.
+- 다음 속도 개선 후보: `/admin/settings`, `/admin/privacy`, `/admin/terms`처럼 설정 데이터를 첫 진입에 가져오는 화면을 추가 점검.

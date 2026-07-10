@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 학원 소개 설정 화면 지연 렌더링
+- 작업명: 약관/개인정보 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/settings`
+- 범위: `/admin/privacy`, `/admin/terms`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -61,9 +61,11 @@
 | 관리자 내부 링크 prefetch 정리 | 완료 | 반/출석/리포트/갤러리/설정 링크의 자동 배경 조회 차단 |
 | 시간표 관리 화면 지연 렌더링 | 완료 | 설정/DB/Google Sheets 조회를 Suspense 안쪽으로 분리해 skeleton 먼저 표시 |
 | 학원 소개 설정 화면 지연 렌더링 | 완료 | 학원 설정 조회를 Suspense 안쪽으로 분리해 설정 skeleton 먼저 표시 |
+| 약관/개인정보 관리 화면 지연 렌더링 | 완료 | 약관/개인정보 설정 조회를 Suspense 안쪽으로 분리해 editor skeleton 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/privacy`, `/admin/terms` 진입 시 약관/개인정보 설정 조회를 Suspense 안쪽으로 옮기고, editor skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/settings` 진입 시 학원 설정 조회를 Suspense 안쪽으로 옮기고, 설정 폼 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/schedule` 진입 시 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 Suspense 안쪽으로 옮기고, skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: 관리자 내부 반/출석/리포트/갤러리/설정 이동 링크에 `prefetch={false}`를 추가해 불필요한 배경 route 조회를 차단함.
@@ -72,12 +74,11 @@
 - 2026-07-10: `/admin/classes/[id]` 진입 시 반/수강생/수업기록/코치 조회를 Suspense 경계 안쪽으로 옮기고, 상세 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/sms/templates` 진입 시 SMS 템플릿 조회를 Suspense 경계 안쪽으로 옮기고, card skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/stats` 진입 시 7개 운영 집계 조회를 Suspense 경계 안쪽으로 옮기고, KPI/chart skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/testimonials` 진입 시 후기/학원 설정 조회를 Suspense 경계 안쪽으로 옮기고, 설정 카드/list skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/settings/page.tsx`
-- 주요 변경: 학원 소개 설정 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getAcademySettings()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/settings`
+- 변경 파일: `src/app/admin/privacy/page.tsx`, `src/app/admin/terms/page.tsx`
+- 주요 변경: 약관/개인정보 관리 페이지를 Suspense로 감싸 editor skeleton을 먼저 보여주고, 설정 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/privacy`, `/admin/terms`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -85,4 +86,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/settings`, `/admin/privacy`, `/admin/terms`처럼 설정 데이터를 첫 진입에 가져오는 화면을 추가 점검.
+- 다음 속도 개선 후보: 관리자 route 중 아직 Suspense 분리되지 않은 단순 설정/도구 화면을 추가 검색.

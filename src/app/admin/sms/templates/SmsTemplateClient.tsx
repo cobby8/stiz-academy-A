@@ -12,7 +12,7 @@
  * 6. 저장 / 초기화 버튼
  */
 
-import { useState, useRef, useCallback, useTransition } from "react";
+import { useState, useRef, useCallback, useEffect, useTransition } from "react";
 import {
     updateSmsTemplate,
     previewSmsTemplate,
@@ -63,13 +63,111 @@ const TARGET_LABELS: Record<string, string> = {
     PARENT: "학부모",
 };
 
-export default function SmsTemplateClient({ templates }: { templates: SmsTemplate[] }) {
+function SmsTemplatesLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-10 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+                <div className="h-9 w-36 animate-pulse rounded-md bg-white dark:bg-gray-700" />
+                <div className="h-9 w-28 animate-pulse rounded-md bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    >
+                        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                                <div className="h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                <div className="h-5 w-14 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                            </div>
+                            <div className="h-6 w-11 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                        </div>
+                        <div className="px-5 pt-3">
+                            <div className="h-4 w-64 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                        </div>
+                        <div className="px-5 py-3">
+                            <div className="h-28 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {Array.from({ length: 5 }).map((_, chipIndex) => (
+                                    <div key={chipIndex} className="h-7 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                ))}
+                            </div>
+                            <div className="mt-4 flex justify-end gap-2">
+                                <div className="h-9 w-20 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-9 w-20 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function SmsTemplatesErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">SMS 템플릿을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
+export default function SmsTemplateClient({ templates }: { templates?: SmsTemplate[] }) {
+    // 탭 목록은 페이지 진입 후 API로 채운다. 저장/초기화 후에도 같은 API만 다시 호출한다.
+    const hasInitialData = templates !== undefined;
+    const [items, setItems] = useState<SmsTemplate[]>(templates ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     // 탭: "staff" = 관리자/코치, "parent" = 학부모
     const [activeTab, setActiveTab] = useState<"staff" | "parent">("staff");
 
+    const loadTemplates = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/sms/templates", { cache: "no-store" });
+            if (!response.ok) throw new Error("Failed to load SMS templates.");
+            const data = (await response.json()) as { templates: SmsTemplate[] };
+            setItems(data.templates);
+        } catch (error) {
+            console.error("Failed to load SMS templates:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadTemplates();
+    }, [hasInitialData, loadTemplates]);
+
+    if (loading && items.length === 0) {
+        return <SmsTemplatesLoadingFallback />;
+    }
+
+    if (loadError && items.length === 0) {
+        return <SmsTemplatesErrorState onRetry={loadTemplates} />;
+    }
+
     // 탭별 필터링
-    const staffTemplates = templates.filter(t => t.target === "ADMIN" || t.target === "COACH");
-    const parentTemplates = templates.filter(t => t.target === "PARENT");
+    const staffTemplates = items.filter(t => t.target === "ADMIN" || t.target === "COACH");
+    const parentTemplates = items.filter(t => t.target === "PARENT");
     const filtered = activeTab === "staff" ? staffTemplates : parentTemplates;
 
     return (
@@ -120,7 +218,7 @@ export default function SmsTemplateClient({ templates }: { templates: SmsTemplat
             {/* 카드 그리드 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filtered.map(tpl => (
-                    <TemplateCard key={tpl.id} template={tpl} />
+                    <TemplateCard key={tpl.id} template={tpl} onReload={loadTemplates} />
                 ))}
             </div>
 
@@ -135,7 +233,7 @@ export default function SmsTemplateClient({ templates }: { templates: SmsTemplat
 }
 
 // ── 개별 템플릿 카드 컴포넌트 ──────────────────────────────────────────────────
-function TemplateCard({ template }: { template: SmsTemplate }) {
+function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload: () => Promise<void> | void }) {
     const [body, setBody] = useState(template.body);
     const [isActive, setIsActive] = useState(template.isActive);
     const [preview, setPreview] = useState<string | null>(null);
@@ -144,6 +242,12 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
     const [saved, setSaved] = useState(false);
     const [isPending, startTransition] = useTransition();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        setBody(template.body);
+        setIsActive(template.isActive);
+        setPreview(null);
+    }, [template.id, template.body, template.isActive]);
 
     // 이 템플릿에서 사용 가능한 변수 목록 파싱
     const availableVars = (() => {
@@ -234,7 +338,7 @@ function TemplateCard({ template }: { template: SmsTemplate }) {
         if (!confirm("기본 템플릿으로 초기화하시겠습니까?\n현재 수정한 내용이 사라집니다.")) return;
         try {
             await resetSmsTemplate(template.id);
-            window.location.reload();
+            await onReload();
         } catch (e) {
             alert("초기화 실패: " + (e as Error).message);
         }

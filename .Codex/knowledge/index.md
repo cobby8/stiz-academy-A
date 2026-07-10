@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/sms/templates` SMS 템플릿 관리는 템플릿 조회/보장 작업을 서버 렌더에서 제거하고, `/api/admin/sms/templates` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/feedback` 피드백 관리는 피드백 목록 조회를 서버 렌더에서 제거하고, `/api/admin/feedback` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/gallery` 갤러리 관리는 갤러리/반/인스타 설정/소셜 초안 조회를 서버 렌더에서 제거하고, `/api/admin/gallery` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/requests` 요청 관리는 학부모 요청 목록 조회를 서버 렌더에서 제거하고, `/api/admin/requests` 클라이언트 로딩으로 뒤로 미뤘다.
@@ -71,7 +72,7 @@
 
 - 기준일: 2026-07-10
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/SMS 템플릿/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -134,7 +135,7 @@
 - `/admin/attendance/report`는 최근 수업 리포트 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/attendance/report`에서 클라이언트가 불러온다.
 - `/admin/testimonials`는 후기/네이버 플레이스 링크를 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/testimonials`에서 클라이언트가 불러온다.
 - `/admin/stats`는 7개 운영 집계 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, KPI/chart skeleton을 먼저 렌더한다.
-- `/admin/sms/templates`는 SMS 템플릿 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, card skeleton을 먼저 렌더한다.
+- `/admin/sms/templates`는 SMS 템플릿 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/sms/templates`에서 클라이언트가 불러온다.
 - `/admin/classes/[id]`는 반/수강생/수업기록/코치 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 상세 skeleton을 먼저 렌더한다.
 - `/admin/attendance/report/[sessionId]`는 리포트/코치 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 목록 링크에는 `prefetch={false}`를 둔다.
 - `/admin/students/[id]`는 원생 활동 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 원생 상세 링크에는 `prefetch={false}`를 둔다.

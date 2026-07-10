@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 피드백 관리 학생 목록 지연 로딩
+- 작업명: 피드백 관리 학생/코치 목록 지연 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/feedback`, `/api/admin/student-options`
+- 범위: `/admin/feedback`, `/api/admin/student-options`, `/api/admin/coach-options`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -26,9 +26,11 @@
 | 보강 관리 원생 목록 지연 로딩 | 완료 | 보강 예약 모달을 열 때만 원생 선택용 최소 데이터 호출 |
 | 수납 관리 학생 목록 지연 로딩 | 완료 | 수납 기록 추가 폼을 열 때만 학생 선택용 최소 데이터 호출 |
 | 피드백 관리 학생 목록 지연 로딩 | 완료 | 피드백 작성/수정 폼을 열 때만 학생 선택용 최소 데이터 호출 |
+| 피드백 관리 코치 목록 지연 로딩 | 완료 | 피드백 작성/수정 폼을 열 때만 코치 선택용 최소 데이터 호출 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/feedback` 초기 렌더에서 `getCoaches()` 호출도 제거하고, 피드백 작성/수정 폼을 열 때 `/api/admin/coach-options`로 코치 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/feedback` 초기 렌더에서 `getStudents()` 호출을 제거하고, 피드백 작성/수정 폼을 열 때 `/api/admin/student-options`로 학생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/finance` 초기 렌더에서 `getStudents()` 호출을 제거하고, 수납 기록 추가 폼을 열 때 `/api/admin/student-options`로 학생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/makeup` 초기 렌더에서 `getStudents()` 호출을 제거하고, 보강 예약 모달을 열 때 `/api/admin/student-options`로 원생 선택 목록을 불러오도록 변경함.
@@ -38,11 +40,10 @@
 - 2026-07-09: `/admin` 대시보드의 기본 통계/요청/신청 통계 조회를 `DashboardPrimarySection` Suspense 경계 뒤로 옮겨 헤더와 스켈레톤이 DB 응답 전에 먼저 표시되도록 변경함.
 - 2026-07-09: 관리자 사이드바 `NavItem`의 자동 prefetch를 꺼서 진입 직후 여러 관리자 route 서버 조회가 동시에 몰리는 상황을 줄임.
 - 2026-07-09: `/admin/gallery` 목록과 업로드/수정 모달의 업로드/동기화/저장/공개상태/수정/삭제 아이콘을 `FontFreeIcon`으로 바꿔 Material Symbols 요청 흔적을 제거함.
-- 2026-07-09: `/apply`, `/apply/enroll`, `/apply/trial` 신청 화면 아이콘을 `FontFreeIcon`으로 바꿔 신청 페이지 HTML에서 Material Symbols 요청 흔적을 제거함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/feedback/page.tsx`, `src/app/admin/feedback/FeedbackManagementClient.tsx`
-- 주요 변경: 피드백 관리 첫 렌더에서 학생 전체 조회를 제거하고, 피드백 작성/수정 폼을 열 때 학생 선택용 최소 데이터만 불러오도록 분리.
+- 변경 파일: `src/app/admin/feedback/page.tsx`, `src/app/admin/feedback/FeedbackManagementClient.tsx`, `src/app/api/admin/coach-options/route.ts`
+- 주요 변경: 피드백 관리 첫 렌더에서 학생/코치 전체 조회를 제거하고, 피드백 작성/수정 폼을 열 때 선택용 최소 데이터만 불러오도록 분리.
 - 적용 범위: `/admin/feedback`
 
 ## 테스트 결과

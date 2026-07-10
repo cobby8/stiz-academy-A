@@ -40,16 +40,19 @@ type Coach = {
 
 type Props = {
     feedbacks: Feedback[];
-    coaches: Coach[];
 };
 
-export default function FeedbackManagementClient({ feedbacks, coaches }: Props) {
+export default function FeedbackManagementClient({ feedbacks }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [students, setStudents] = useState<Student[]>([]);
     const [studentsLoaded, setStudentsLoaded] = useState(false);
     const [studentsLoading, setStudentsLoading] = useState(false);
     const [studentsError, setStudentsError] = useState<string | null>(null);
+    const [coaches, setCoaches] = useState<Coach[]>([]);
+    const [coachesLoaded, setCoachesLoaded] = useState(false);
+    const [coachesLoading, setCoachesLoading] = useState(false);
+    const [coachesError, setCoachesError] = useState<string | null>(null);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -76,6 +79,32 @@ export default function FeedbackManagementClient({ feedbacks, coaches }: Props) 
             setStudentsLoading(false);
         }
     }, [studentsLoaded, studentsLoading]);
+
+    const loadCoaches = useCallback(async () => {
+        if (coachesLoaded || coachesLoading) return;
+
+        setCoachesLoading(true);
+        setCoachesError(null);
+
+        try {
+            const response = await fetch("/api/admin/coach-options", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load coach options.");
+            }
+
+            const data = (await response.json()) as { coaches?: Coach[] };
+            setCoaches(data.coaches ?? []);
+            setCoachesLoaded(true);
+        } catch (error) {
+            console.error("Failed to load coach options:", error);
+            setCoachesError("코치 목록을 불러오지 못했습니다.");
+        } finally {
+            setCoachesLoading(false);
+        }
+    }, [coachesLoaded, coachesLoading]);
 
     // 작성 폼 표시 여부
     const [showForm, setShowForm] = useState(false);
@@ -167,6 +196,7 @@ export default function FeedbackManagementClient({ feedbacks, coaches }: Props) 
         setEditingId(fb.id);
         setShowForm(true);
         void loadStudents();
+        void loadCoaches();
         // 페이지 상단으로 스크롤
         window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -240,6 +270,7 @@ export default function FeedbackManagementClient({ feedbacks, coaches }: Props) 
                             resetForm();
                             setShowForm(true);
                             void loadStudents();
+                            void loadCoaches();
                         }
                     }}
                     className="px-5 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors"
@@ -305,14 +336,33 @@ export default function FeedbackManagementClient({ feedbacks, coaches }: Props) 
                             <select
                                 value={form.coachId}
                                 onChange={(e) => setForm({ ...form, coachId: e.target.value })}
-                                disabled={!!editingId}
+                                disabled={!!editingId || coachesLoading || Boolean(coachesError)}
                                 className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-gray-100 dark:bg-gray-800"
                             >
-                                <option value="">코치를 선택하세요</option>
+                                <option value="">
+                                    {coachesLoading ? "코치 목록 로딩 중..." : "코치를 선택하세요"}
+                                </option>
                                 {coaches.map((c) => (
                                     <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
                             </select>
+                            {coachesError && (
+                                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                    <span>{coachesError}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => void loadCoaches()}
+                                        className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                    >
+                                        다시 시도
+                                    </button>
+                                </div>
+                            )}
+                            {!coachesLoading && !coachesError && coaches.length === 0 && (
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    등록된 코치가 없습니다.
+                                </p>
+                            )}
                         </div>
                     </div>
 

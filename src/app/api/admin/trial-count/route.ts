@@ -4,23 +4,16 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
     try {
-        // 관리자 인증 확인
-        const supabase = await createClient();
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) {
+        try {
+            await requireAdmin();
+        } catch {
             return NextResponse.json({ count: 0 }, { status: 401 });
-        }
-        const userRows = await prisma.$queryRawUnsafe<{ role: string }[]>(
-            `SELECT role FROM "User" WHERE email = $1 LIMIT 1`, user.email
-        );
-        if (userRows.length === 0 || userRows[0].role !== "ADMIN") {
-            return NextResponse.json({ count: 0 }, { status: 403 });
         }
 
         const rows = await prisma.$queryRawUnsafe<{ count: number }[]>(

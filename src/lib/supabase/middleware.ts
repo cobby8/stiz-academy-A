@@ -24,9 +24,20 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claimsResult = await supabase.auth.getClaims();
+  let isAuthenticated = false;
+  let userMetadata: Record<string, any> | null = null;
+
+  if (!claimsResult.error && claimsResult.data?.claims?.sub) {
+    isAuthenticated = true;
+    userMetadata = claimsResult.data.claims.user_metadata ?? null;
+  } else {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    isAuthenticated = Boolean(user);
+    userMetadata = user?.user_metadata ?? null;
+  }
 
   const pathname = request.nextUrl.pathname;
   const protectedPath =
@@ -34,15 +45,15 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/staff") ||
     pathname.startsWith("/mypage");
 
-  if (protectedPath && !user) {
+  if (protectedPath && !isAuthenticated) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/login" && user) {
-    const role = normalizeAppRole(user.user_metadata?.role);
+  if (pathname === "/login" && isAuthenticated) {
+    const role = normalizeAppRole(userMetadata?.role);
     const url = request.nextUrl.clone();
     url.pathname = defaultPathForRole(role);
     url.search = "";

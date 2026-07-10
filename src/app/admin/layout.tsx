@@ -17,7 +17,7 @@ export default async function AdminLayout({
 
     return (
         <AdminShellClient
-            initialUserName={adminUser.user_metadata?.name || "관리자"}
+            initialUserName={adminUser.appUserName || adminUser.user_metadata?.name || "관리자"}
             initialUserEmail={adminUser.email || ""}
         >
             {children}

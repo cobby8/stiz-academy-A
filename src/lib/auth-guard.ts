@@ -1,6 +1,90 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
+type AuthUser = {
+  id: string;
+  email?: string;
+  phone?: string;
+  aud?: string | string[];
+  role?: string;
+  app_metadata?: Record<string, any>;
+  user_metadata?: Record<string, any>;
+};
+
+type AppUserRoleRow = {
+  id: string;
+  name: string | null;
+  role: string;
+};
+
+type AdminRole = "ADMIN" | "VICE_ADMIN";
+
+export type AdminAuthUser = AuthUser & {
+  appUserId: string;
+  appUserName: string;
+  appUserRole: AdminRole;
+};
+
+const ROLE_CACHE_TTL_MS = 30_000;
+const roleCache = new Map<string, AppUserRoleRow & { expiresAt: number }>();
+
+function normalizeEmail(email: string | null | undefined) {
+  return (email || "").trim().toLowerCase();
+}
+
+function userFromClaims(claims: any): AuthUser | null {
+  if (!claims?.sub) return null;
+
+  return {
+    id: claims.sub,
+    email: claims.email,
+    phone: claims.phone,
+    aud: claims.aud,
+    role: claims.role,
+    app_metadata: claims.app_metadata ?? {},
+    user_metadata: claims.user_metadata ?? {},
+  };
+}
+
+function userFromSupabaseUser(user: any): AuthUser {
+  return {
+    id: user.id,
+    email: user.email ?? undefined,
+    phone: user.phone ?? undefined,
+    aud: user.aud,
+    role: user.role,
+    app_metadata: user.app_metadata ?? {},
+    user_metadata: user.user_metadata ?? {},
+  };
+}
+
+async function getAppUserRole(email: string): Promise<AppUserRoleRow | null> {
+  const cacheKey = normalizeEmail(email);
+  if (!cacheKey) return null;
+
+  const cached = roleCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached;
+  }
+
+  const rows = await prisma.$queryRawUnsafe<AppUserRoleRow[]>(
+    `SELECT id, name, role FROM "User" WHERE email = $1 LIMIT 1`,
+    email,
+  );
+
+  const row = rows[0] ?? null;
+  if (row) {
+    roleCache.set(cacheKey, {
+      ...row,
+      expiresAt: Date.now() + ROLE_CACHE_TTL_MS,
+    });
+  } else {
+    roleCache.delete(cacheKey);
+  }
+
+  return row;
+}
+
 // ── Server Action 인증 가드 ──────────────────────────────────────
 // 미들웨어는 "페이지 접근"만 보호한다.
 // Server Action은 직접 POST 요청으로 호출 가능하므로,
@@ -13,6 +97,16 @@ import { prisma } from "@/lib/prisma";
  */
 export async function requireAuth() {
   const supabase = await createClient();
+
+  const claimsResult = await supabase.auth.getClaims();
+  const claimsUser = claimsResult.data?.claims
+    ? userFromClaims(claimsResult.data.claims)
+    : null;
+
+  if (!claimsResult.error && claimsUser) {
+    return claimsUser;
+  }
+
   const {
     data: { user },
     error,
@@ -22,7 +116,7 @@ export async function requireAuth() {
     throw new Error("인증이 필요합니다. 로그인해주세요.");
   }
 
-  return user;
+  return userFromSupabaseUser(user);
 }
 
 /**
@@ -32,21 +126,27 @@ export async function requireAuth() {
  * - DB에서 role을 조회하여 ADMIN/VICE_ADMIN이 아니면 에러
  * - $queryRawUnsafe 사용: PgBouncer 트랜잭션 모드 호환
  */
-export async function requireAdmin() {
+export async function requireAdmin(): Promise<AdminAuthUser> {
   const user = await requireAuth();
+  const email = normalizeEmail(user.email);
 
-  // DB에서 실제 role을 조회한다 (토큰의 metadata는 조작 가능하므로 신뢰하지 않음)
-  const rows = await prisma.$queryRawUnsafe<{ role: string }[]>(
-    `SELECT role FROM "User" WHERE email = $1 LIMIT 1`,
-    user.email
-  );
-
-  // ADMIN 또는 VICE_ADMIN만 통과
-  if (rows.length === 0 || (rows[0].role !== "ADMIN" && rows[0].role !== "VICE_ADMIN")) {
+  if (!email) {
     throw new Error("관리자 권한이 필요합니다.");
   }
 
-  return user;
+  // DB에서 실제 role을 조회한다 (토큰의 metadata는 조작 가능하므로 신뢰하지 않음)
+  const appUser = await getAppUserRole(email);
+
+  // ADMIN 또는 VICE_ADMIN만 통과
+  if (!appUser || (appUser.role !== "ADMIN" && appUser.role !== "VICE_ADMIN")) {
+    throw new Error("관리자 권한이 필요합니다.");
+  }
+
+  return Object.assign(user, {
+    appUserId: appUser.id,
+    appUserName: appUser.name || user.email || "STIZ Admin",
+    appUserRole: appUser.role as AdminRole,
+  });
 }
 
 export type StaffRole = "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
@@ -63,13 +163,13 @@ export type StaffAuthUser = Awaited<ReturnType<typeof requireAuth>> & {
  */
 export async function requireStaff(): Promise<StaffAuthUser> {
   const user = await requireAuth();
+  const email = normalizeEmail(user.email);
 
-  const rows = await prisma.$queryRawUnsafe<{ id: string; name: string | null; role: string }[]>(
-    `SELECT id, name, role FROM "User" WHERE email = $1 LIMIT 1`,
-    user.email
-  );
+  if (!email) {
+    throw new Error("Staff permission is required.");
+  }
 
-  const appUser = rows[0];
+  const appUser = await getAppUserRole(email);
   if (
     !appUser ||
     (appUser.role !== "ADMIN" && appUser.role !== "VICE_ADMIN" && appUser.role !== "INSTRUCTOR")
@@ -91,13 +191,15 @@ export async function requireStaff(): Promise<StaffAuthUser> {
  */
 export async function requireOwner() {
   const user = await requireAuth();
+  const email = normalizeEmail(user.email);
 
-  const rows = await prisma.$queryRawUnsafe<{ role: string }[]>(
-    `SELECT role FROM "User" WHERE email = $1 LIMIT 1`,
-    user.email
-  );
+  if (!email) {
+    throw new Error("원장 권한이 필요합니다. (ADMIN만 가능)");
+  }
 
-  if (rows.length === 0 || rows[0].role !== "ADMIN") {
+  const appUser = await getAppUserRole(email);
+
+  if (!appUser || appUser.role !== "ADMIN") {
     throw new Error("원장 권한이 필요합니다. (ADMIN만 가능)");
   }
 

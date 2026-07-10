@@ -22,7 +22,9 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 관리자 공통 레이아웃은 `/admin/layout.tsx`에서 제어한다.
 - 데스크톱은 왼쪽 고정 사이드바와 `md:ml-64` 본문 구조를 사용한다.
 - 모바일은 상단 헤더의 메뉴 버튼으로 슬라이드 사이드바를 열고, 본문은 전체 화면 폭을 사용한다.
-- 관리자 공통 셸은 첫 렌더를 막지 않도록 idle 시간에 `/api/admin/performance-indexes`를 한 번 호출해 핵심 조회 인덱스를 보강한다.
+- 관리자 공통 셸은 운영 화면에서 DB 구조 변경이나 인덱스 생성 작업을 자동 실행하지 않는다. 인덱스/DDL은 배포 전 마이그레이션이나 별도 관리 작업으로 처리한다.
+- 관리자 인증 확인은 Supabase `getClaims()`를 먼저 사용하고, 관리자/스태프 role 조회는 짧은 서버 메모리 캐시로 반복 DB 조회를 줄인다.
+- 관리자 공통 셸의 알림/체험 신청 배지 API도 같은 `requireAdmin()` 흐름을 공유해 Auth 확인과 role 조회가 중복되지 않게 한다.
 - 관리자 대시보드 `/admin`은 서버 렌더에서 통계 DB 조회를 직접 기다리지 않고 `/api/admin/dashboard`와 `/api/admin/dashboard/system`을 클라이언트에서 호출해 채운다.
 - 학생 관리 `/admin/students`는 서버 렌더에서 학생/반 목록을 기다리지 않고 `/api/admin/students`를 클라이언트에서 호출해 채우며, 학생 목록 API는 Enrollment를 CTE로 한 번에 집계해 학생별 반복 subquery를 피한다.
 - 운영 통계 `/admin/stats`도 서버 렌더에서 7개 집계를 기다리지 않고 `/api/admin/stats`를 클라이언트에서 호출해 채운다.

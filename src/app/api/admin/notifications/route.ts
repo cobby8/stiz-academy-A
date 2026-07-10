@@ -9,20 +9,19 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth-guard";
 
 // 관리자 인증 확인 헬퍼
 async function getAdminUser() {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const rows = await prisma.$queryRawUnsafe<{ id: string; role: string }[]>(
-        `SELECT id, role FROM "User" WHERE email = $1 LIMIT 1`,
-        user.email,
-    );
-    if (!rows[0] || rows[0].role !== "ADMIN") return null;
-    return rows[0];
+    try {
+        const user = await requireAdmin();
+        return {
+            id: user.appUserId,
+            role: user.appUserRole,
+        };
+    } catch {
+        return null;
+    }
 }
 
 // GET — 알림 목록 조회

@@ -1,5 +1,7 @@
 # 최근 변경 추가
-- 2026-07-10: 관리자 공통 셸은 idle 시간에 `/api/admin/performance-indexes`를 한 번 호출해 Student/Enrollment/Session/Attendance/Payment/Class 핵심 조회 인덱스를 보강한다.
+- 2026-07-11: 관리자 공통 셸에서 idle 시간에 자동 실행되던 `/api/admin/performance-indexes` 호출을 제거했다. 인덱스/DDL은 사용자 화면이 아니라 배포 전 마이그레이션이나 별도 관리 작업으로 처리한다.
+- 2026-07-11: 관리자 인증 확인은 Supabase `getClaims()`를 먼저 사용하고, 관리자/스태프 role 조회는 30초 서버 메모리 캐시로 반복 DB 조회를 줄인다.
+- 2026-07-11: 관리자 공통 셸의 알림/체험 신청 배지 API는 `requireAdmin()`을 공유해 직접 `getUser()` 호출과 role 중복 조회를 줄인다.
 - 2026-07-10: `/api/admin/students` 수강생 목록 API는 `getStudents()`의 학생별 수강정보 반복 subquery를 Enrollment CTE 전체 집계로 바꿔 DB 응답 부담을 줄였다.
 - 2026-07-10: `/admin/attendance/report/[sessionId]` 리포트 상세 편집은 리포트/코치 조회를 서버 렌더에서 제거하고, `/api/admin/attendance/report/[sessionId]` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/terms` 이용약관은 설정 조회를 서버 렌더에서 제거하고, `/api/admin/settings` 클라이언트 로딩으로 뒤로 미뤘다.
@@ -76,9 +78,9 @@
 
 # STIZ Knowledge Index
 
-- 기준일: 2026-07-10
+- 기준일: 2026-07-11
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/SMS 템플릿/학원 설정/개인정보/이용약관/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/리포트 상세/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다. 학생 목록 API는 Enrollment를 학생별로 반복 조회하지 않고 CTE로 한 번에 집계하며, 관리자 idle 시간에 핵심 DB 인덱스를 보강한다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/SMS 템플릿/학원 설정/개인정보/이용약관/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/리포트 상세/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다. 학생 목록 API는 Enrollment를 학생별로 반복 조회하지 않고 CTE로 한 번에 집계한다. 사용자 화면에서는 DB 인덱스/DDL 자동 실행을 하지 않고, 관리자 인증은 `getClaims()` 우선과 짧은 role 캐시로 반복 비용을 줄인다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -170,6 +172,9 @@
 - 공개 헤더는 메뉴/테마/큰글씨 상태만 직접 관리하고, Supabase 계정 확인과 로그아웃 UI는 `PublicAccountControls`를 동적 로드한다.
 - 공개 헤더, 테마 토글, 챗봇/가이드 버튼처럼 모든 공개 페이지에 붙는 단순 아이콘은 Material Symbols 폰트 대신 `FontFreeIcon`을 사용한다.
 - 관리자 shell은 `requireAdmin()`에서 받은 사용자 이름/이메일을 사용하고, 로그아웃은 서버 액션으로 처리하며, 알림/체험 카운트 조회는 첫 렌더 후 지연 실행한다.
+- 관리자 shell에서는 `/api/admin/performance-indexes` 같은 DB 인덱스/DDL 보강 API를 자동 호출하지 않는다. 운영 화면은 읽기와 조작에 집중하고, 구조 보강은 마이그레이션/관리 작업으로 분리한다.
+- Supabase 인증 확인은 가능하면 `getClaims()`를 먼저 사용한다. `getUser()`는 Auth 서버 왕복이 필요하므로 fallback으로 두고, 실제 권한은 DB `User.role`을 짧게 캐시해 확인한다.
+- 관리자 shell의 알림/체험 신청 배지처럼 모든 관리자 화면에 붙는 API는 직접 `getUser()`를 반복하지 말고 공통 관리자 가드를 사용한다.
 - 로컬 fallback 업로드 `/uploads/:path*`와 Supabase Storage 업로드 파일은 1년 immutable 캐시를 사용해 재방문 이미지 다운로드 비용을 줄인다.
 - 관리자 shell의 로그아웃/메뉴/알림처럼 모든 관리자 화면에 포함되는 단순 아이콘은 별도 아이콘 라이브러리나 아이콘 폰트 대신 `FontFreeIcon`을 사용한다.
 - `/apply` 안내 HTML은 서버에서 sanitize한 뒤 `ApplyPageClient`에 넘겨 `sanitize-html/htmlparser2`가 client bundle에 들어가지 않게 한다.

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from "react";
+import { useCallback, useState, useTransition, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { deleteProgram, reorderPrograms } from "@/app/actions/admin";
 
 const ProgramFormPanel = dynamic(() => import("./ProgramFormPanel"), {
@@ -54,6 +53,10 @@ interface Program {
     imageUrl: string | null;
 }
 
+type ProgramsPayload = {
+    programs: Program[];
+};
+
 // ── Helper to display shuttle fee for a given frequency + override ─────────────
 
 function displayShuttleFee(
@@ -70,17 +73,94 @@ function displayShuttleFee(
     return tier ? tier.autoShuttle.toLocaleString() + "원" : null;
 }
 
+function ProgramsLoadingFallback() {
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-44 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="h-10 w-28 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-700" />
+                    <div className="h-10 w-32 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+                </div>
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <div className="h-5 w-64 animate-pulse rounded bg-blue-100" />
+                <div className="mt-3 flex flex-wrap gap-3">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <div key={index} className="h-8 w-36 animate-pulse rounded-lg bg-white" />
+                    ))}
+                </div>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900/50">
+                    <div className="h-6 w-44 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="h-4 w-44 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                        <div key={index} className="flex">
+                            <div className="w-10 border-r border-gray-100 dark:border-gray-800">
+                                <div className="mx-auto mt-6 h-5 w-5 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                            </div>
+                            <div className="flex-1 p-5">
+                                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                                    <div className="min-w-0 flex-1 space-y-3">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <div className="h-6 w-6 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
+                                            <div className="h-6 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                            <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                            <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                        </div>
+                                        <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="h-8 w-14 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-8 w-14 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ProgramsErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">프로그램 목록을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function ProgramsAdminClient({
     programs: initialPrograms,
 }: {
-    programs: Program[];
+    programs?: Program[];
 }) {
-    const router = useRouter();
     // Programs list with local state for optimistic drag-and-drop reorder
-    const [programs, setPrograms] = useState(initialPrograms);
-    useEffect(() => { setPrograms(initialPrograms); }, [initialPrograms]);
+    const hasInitialData = initialPrograms !== undefined;
+    const [programs, setPrograms] = useState<Program[]>(initialPrograms ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
+    useEffect(() => {
+        if (initialPrograms) setPrograms(initialPrograms);
+    }, [initialPrograms]);
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
@@ -92,6 +172,29 @@ export default function ProgramsAdminClient({
     const dragIdRef = useRef<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
     const [reorderPending, startReorderTransition] = useTransition();
+
+    const loadPrograms = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/programs", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load programs.");
+            }
+            const data = (await response.json()) as ProgramsPayload;
+            setPrograms(data.programs);
+        } catch (error) {
+            console.error("Failed to load programs:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadPrograms();
+    }, [hasInitialData, loadPrograms]);
 
     function handleDragStart(e: React.DragEvent, id: string) {
         dragIdRef.current = id;
@@ -116,7 +219,11 @@ export default function ProgramsAdminClient({
         next.splice(toIdx, 0, moved);
         setPrograms(next); // optimistic
         startReorderTransition(async () => {
-            try { await reorderPrograms(next.map((p) => p.id)); } catch {}
+            try {
+                await reorderPrograms(next.map((p) => p.id));
+            } finally {
+                await loadPrograms();
+            }
         });
     }
     function handleDragEnd() {
@@ -129,11 +236,19 @@ export default function ProgramsAdminClient({
             try {
                 await deleteProgram(id);
                 setDeletingId(null);
-                router.refresh();
+                await loadPrograms();
             } catch (e: any) {
                 alert(e.message || "삭제 실패");
             }
         });
+    }
+
+    if (loading && programs.length === 0) {
+        return <ProgramsLoadingFallback />;
+    }
+
+    if (loadError && programs.length === 0) {
+        return <ProgramsErrorState onRetry={loadPrograms} />;
     }
 
     return (
@@ -189,7 +304,7 @@ export default function ProgramsAdminClient({
                                 onCancel={() => setShowAddModal(false)}
                                 onSaved={() => {
                                     setShowAddModal(false);
-                                    router.refresh();
+                                    void loadPrograms();
                                 }}
                                 onPendingChange={setFormPending}
                             />
@@ -246,7 +361,7 @@ export default function ProgramsAdminClient({
                                         onCancel={() => setEditId(null)}
                                         onSaved={() => {
                                             setEditId(null);
-                                            router.refresh();
+                                            void loadPrograms();
                                         }}
                                         onPendingChange={setFormPending}
                                     />

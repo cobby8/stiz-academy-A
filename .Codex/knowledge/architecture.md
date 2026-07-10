@@ -41,6 +41,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - FAQ 관리 `/admin/faq`는 서버 렌더에서 FAQ 목록을 기다리지 않고 `/api/admin/faq`를 클라이언트에서 호출해 채운다.
 - 출석 관리 `/admin/attendance`는 서버 렌더에서 반 목록을 기다리지 않고 `/api/admin/attendance`를 클라이언트에서 호출해 채우며, 같은 API가 선택 반/날짜 출석 조회도 처리한다.
 - 공지 관리 `/admin/notices`는 서버 렌더에서 공지/반 목록을 기다리지 않고 `/api/admin/notices`를 클라이언트에서 호출해 채운다.
+- 프로그램 관리 `/admin/programs`는 서버 렌더에서 프로그램 목록을 기다리지 않고 `/api/admin/programs`를 클라이언트에서 호출해 채운다.
 
 ## 주요 데이터 모델
 - 사용자/권한: `User`, `StaffInvitation`, `Role`

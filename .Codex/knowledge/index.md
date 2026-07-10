@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/finance/billing` 청구 템플릿 관리는 청구 템플릿/프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/finance/billing` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/schedule` 시간표 관리는 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 서버 렌더에서 제거하고, `/api/admin/schedule` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/attendance/report` 수업 리포트 목록은 최근 수업 리포트 조회를 서버 렌더에서 제거하고, `/api/admin/attendance/report` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/makeup` 보강 관리는 보강 예약/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/makeup` 클라이언트 로딩으로 뒤로 미뤘다.
@@ -58,7 +59,7 @@
 
 - 기준일: 2026-07-10
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/시간표/수납/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/시간표/수납/청구 템플릿/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -117,7 +118,7 @@
 - `/admin/faq`는 FAQ 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, FAQ card skeleton을 먼저 렌더한다.
 - `/admin/requests`는 학부모 요청 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 필터/list skeleton을 먼저 렌더한다.
 - `/admin/programs`는 프로그램 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 요금 안내/list skeleton을 먼저 렌더한다.
-- `/admin/finance/billing`은 청구 템플릿/프로그램 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, table skeleton을 먼저 렌더한다.
+- `/admin/finance/billing`은 청구 템플릿/프로그램 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/finance/billing`에서 클라이언트가 불러온다.
 - `/admin/attendance/report`는 최근 수업 리포트 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/attendance/report`에서 클라이언트가 불러온다.
 - `/admin/testimonials`는 후기/학원 설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 설정 카드/list skeleton을 먼저 렌더한다.
 - `/admin/stats`는 7개 운영 집계 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, KPI/chart skeleton을 먼저 렌더한다.

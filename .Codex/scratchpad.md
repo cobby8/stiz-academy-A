@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 시간표 관리 백그라운드 로딩
+- 작업명: 청구 템플릿 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/schedule`, `/api/admin/schedule`
+- 범위: `/admin/finance/billing`, `/api/admin/finance/billing`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -31,9 +31,11 @@
 | 보강 관리 백그라운드 로딩 | 완료 | `/admin/makeup` 서버 렌더에서 보강 예약/반 조회 제거 |
 | 수업 리포트 목록 백그라운드 로딩 | 완료 | `/admin/attendance/report` 서버 렌더에서 최근 수업 리포트 조회 제거 |
 | 시간표 관리 백그라운드 로딩 | 완료 | `/admin/schedule` 서버 렌더에서 설정/시간표/코치/프로그램/시트 조회 제거 |
+| 청구 템플릿 백그라운드 로딩 | 완료 | `/admin/finance/billing` 서버 렌더에서 템플릿/프로그램 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/finance/billing` 청구 템플릿/프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/finance/billing`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/schedule` 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 서버 렌더에서 제거하고, `/api/admin/schedule`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/attendance/report` 최근 수업 리포트 목록 조회를 서버 렌더에서 제거하고, `/api/admin/attendance/report`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/makeup` 보강 예약/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/makeup`로 클라이언트에서 불러오도록 변경함.
@@ -43,12 +45,11 @@
 - 2026-07-10: `/admin/staff` 스태프/코치/초대 목록 조회를 서버 렌더에서 제거하고, `/api/admin/staff`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/trial` 체험수업 CRM의 리드/통계 조회를 서버 렌더에서 제거하고, `/api/admin/trial`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/stats` 운영 통계의 7개 집계 조회를 서버 렌더에서 제거하고, `/api/admin/stats`로 클라이언트에서 불러오도록 변경함.
-- 2026-07-10: `/admin` 대시보드의 통계/최근 요청/오늘 수업 조회를 서버 렌더에서 제거하고, `/api/admin/dashboard`와 `/api/admin/dashboard/system`으로 클라이언트에서 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/schedule/page.tsx`, `src/app/admin/schedule/ScheduleAdminClient.tsx`, `src/app/api/admin/schedule/route.ts`
-- 주요 변경: 시간표 화면 진입 시 설정/시간표/코치/프로그램/Google Sheets 조회를 클라이언트 API로 분리하고, 저장/추가/수정/삭제 후 전체 새로고침 대신 API 재조회로 갱신.
-- 적용 범위: `/admin/schedule`
+- 변경 파일: `src/app/admin/finance/billing/page.tsx`, `src/app/admin/finance/billing/BillingTemplateClient.tsx`, `src/app/api/admin/finance/billing/route.ts`
+- 주요 변경: 청구 템플릿/프로그램 조회를 클라이언트 API로 분리하고, 저장/활성 토글/삭제 후 전체 새로고침 대신 API 재조회로 갱신.
+- 적용 범위: `/admin/finance/billing`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -56,4 +57,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 `/admin/finance/billing`, `/admin/skills`, 공개 페이지 DB 호출 계열을 추가 점검.
+- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 `/admin/skills`, 공개 페이지 DB 호출 계열, `/admin/classes` 계열을 추가 점검.

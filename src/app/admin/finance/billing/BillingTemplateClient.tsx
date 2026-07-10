@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import {
     createBillingTemplate,
     updateBillingTemplate,
@@ -34,19 +33,86 @@ type Program = {
     name: string;
 };
 
+type BillingTemplatePayload = {
+    templates: Template[];
+    programs: Program[];
+};
+
 function formatAmount(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
 }
 
+function BillingTemplateLoadingFallback() {
+    return (
+        <div className="mx-auto max-w-4xl">
+            <div className="mb-6 flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-52 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="mt-2 h-4 w-96 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="h-10 w-32 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="overflow-x-auto">
+                    <div className="min-w-[760px]">
+                        <div className="grid grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_0.7fr_0.8fr] gap-4 bg-gray-50 px-5 py-3 dark:bg-gray-900">
+                            {Array.from({ length: 6 }).map((_, index) => (
+                                <div key={index} className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            ))}
+                        </div>
+                        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {Array.from({ length: 6 }).map((_, rowIndex) => (
+                                <div
+                                    key={rowIndex}
+                                    className="grid grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_0.7fr_0.8fr] gap-4 px-5 py-4"
+                                >
+                                    <div className="space-y-2">
+                                        <div className="h-5 w-36 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                                        <div className="h-3 w-48 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    </div>
+                                    <div className="h-5 w-20 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    <div className="h-5 w-24 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    <div className="h-5 w-20 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    <div className="h-6 w-12 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    <div className="ml-auto h-5 w-20 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function BillingTemplateErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="mx-auto max-w-4xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">청구 템플릿을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 export default function BillingTemplateClient({
     initialTemplates,
-    programs,
+    programs: initialPrograms,
 }: {
-    initialTemplates: Template[];
-    programs: Program[];
+    initialTemplates?: Template[];
+    programs?: Program[];
 }) {
-    const router = useRouter();
-    const [templates, setTemplates] = useState(initialTemplates);
+    const hasInitialData = Boolean(initialTemplates || initialPrograms);
+    const [templates, setTemplates] = useState(initialTemplates ?? []);
+    const [programs, setPrograms] = useState(initialPrograms ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -59,6 +125,32 @@ export default function BillingTemplateClient({
     const [description, setDescription] = useState("");
     const [dueDay, setDueDay] = useState(10);
     const [programId, setProgramId] = useState<string>("");
+
+    const loadBillingTemplates = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+
+        try {
+            const response = await fetch("/api/admin/finance/billing", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load billing templates.");
+            }
+
+            const data = (await response.json()) as BillingTemplatePayload;
+            setTemplates(data.templates);
+            setPrograms(data.programs);
+        } catch (error) {
+            console.error("Failed to load billing templates:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadBillingTemplates();
+    }, [hasInitialData, loadBillingTemplates]);
 
     // 폼 초기화
     function resetForm() {
@@ -104,7 +196,7 @@ export default function BillingTemplateClient({
                 await createBillingTemplate(payload);
             }
             resetForm();
-            router.refresh();
+            await loadBillingTemplates();
         } catch (err: any) {
             alert(err.message || "저장 실패");
         } finally {
@@ -117,7 +209,7 @@ export default function BillingTemplateClient({
         setBusy(true);
         try {
             await updateBillingTemplate(tpl.id, { isActive: !tpl.isActive });
-            router.refresh();
+            await loadBillingTemplates();
         } catch (err: any) {
             alert(err.message || "상태 변경 실패");
         } finally {
@@ -131,12 +223,20 @@ export default function BillingTemplateClient({
         try {
             await deleteBillingTemplate(id);
             setDeleteConfirm(null);
-            router.refresh();
+            await loadBillingTemplates();
         } catch (err: any) {
             alert(err.message || "삭제 실패");
         } finally {
             setBusy(false);
         }
+    }
+
+    if (loading && templates.length === 0 && programs.length === 0) {
+        return <BillingTemplateLoadingFallback />;
+    }
+
+    if (loadError && templates.length === 0 && programs.length === 0) {
+        return <BillingTemplateErrorState onRetry={loadBillingTemplates} />;
     }
 
     return (

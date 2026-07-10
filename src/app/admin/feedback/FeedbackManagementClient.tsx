@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createFeedback, updateFeedback, deleteFeedback } from "@/app/actions/admin";
 
@@ -40,13 +40,42 @@ type Coach = {
 
 type Props = {
     feedbacks: Feedback[];
-    students: Student[];
     coaches: Coach[];
 };
 
-export default function FeedbackManagementClient({ feedbacks, students, coaches }: Props) {
+export default function FeedbackManagementClient({ feedbacks, coaches }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const [students, setStudents] = useState<Student[]>([]);
+    const [studentsLoaded, setStudentsLoaded] = useState(false);
+    const [studentsLoading, setStudentsLoading] = useState(false);
+    const [studentsError, setStudentsError] = useState<string | null>(null);
+
+    const loadStudents = useCallback(async () => {
+        if (studentsLoaded || studentsLoading) return;
+
+        setStudentsLoading(true);
+        setStudentsError(null);
+
+        try {
+            const response = await fetch("/api/admin/student-options", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load student options.");
+            }
+
+            const data = (await response.json()) as { students?: Student[] };
+            setStudents(data.students ?? []);
+            setStudentsLoaded(true);
+        } catch (error) {
+            console.error("Failed to load student options:", error);
+            setStudentsError("원생 목록을 불러오지 못했습니다.");
+        } finally {
+            setStudentsLoading(false);
+        }
+    }, [studentsLoaded, studentsLoading]);
 
     // 작성 폼 표시 여부
     const [showForm, setShowForm] = useState(false);
@@ -137,6 +166,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
         });
         setEditingId(fb.id);
         setShowForm(true);
+        void loadStudents();
         // 페이지 상단으로 스크롤
         window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -209,6 +239,7 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                             // 폼 열기 (수정 중이었으면 초기화)
                             resetForm();
                             setShowForm(true);
+                            void loadStudents();
                         }
                     }}
                     className="px-5 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors"
@@ -237,14 +268,33 @@ export default function FeedbackManagementClient({ feedbacks, students, coaches 
                             <select
                                 value={form.studentId}
                                 onChange={(e) => setForm({ ...form, studentId: e.target.value })}
-                                disabled={!!editingId}
+                                disabled={!!editingId || studentsLoading || Boolean(studentsError)}
                                 className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-gray-100 dark:bg-gray-800"
                             >
-                                <option value="">학생을 선택하세요</option>
+                                <option value="">
+                                    {studentsLoading ? "학생 목록 로딩 중..." : "학생을 선택하세요"}
+                                </option>
                                 {students.map((s) => (
                                     <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
                             </select>
+                            {studentsError && (
+                                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                    <span>{studentsError}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => void loadStudents()}
+                                        className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                    >
+                                        다시 시도
+                                    </button>
+                                </div>
+                            )}
+                            {!studentsLoading && !studentsError && students.length === 0 && (
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    등록된 학생이 없습니다.
+                                </p>
+                            )}
                         </div>
 
                         {/* 코치 드롭다운 - 수정 시에는 변경 불가 */}

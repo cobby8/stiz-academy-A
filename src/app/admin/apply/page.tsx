@@ -4,17 +4,13 @@
  * - 신청서 목록 + 통계 + 반 목록 + 설정을 병렬 조회 후 클라이언트에 전달
  */
 import { getEnrollApplications, getEnrollApplicationStats, getClasses, getAcademySettings } from "@/lib/queries";
-import { ensureEnrollmentApplicationTable } from "@/app/actions/public";
 import ApplyAdminClient from "./ApplyAdminClient";
 
 // 30초 캐시: Server Action 호출 시 즉시 무효화
 export const revalidate = 30;
 
 export default async function AdminApplyPage() {
-    // DDL ensure — 테이블이 없으면 자동 생성
-    await ensureEnrollmentApplicationTable();
-
-    // 초기 데이터 병렬 조회
+    // 신청서 생성 단계에서 테이블을 보장하므로, 목록 화면은 읽기 데이터만 빠르게 조회한다.
     const [applications, stats, classes, settings] = await Promise.all([
         getEnrollApplications(),
         getEnrollApplicationStats(),

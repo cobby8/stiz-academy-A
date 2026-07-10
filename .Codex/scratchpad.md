@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 요청 관리 화면 지연 렌더링
+- 작업명: 프로그램 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/requests`
+- 범위: `/admin/programs`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -49,9 +49,11 @@
 | 피드백 관리 화면 지연 렌더링 | 완료 | 피드백 목록 조회를 Suspense 안쪽으로 분리해 피드백 card skeleton을 먼저 표시 |
 | FAQ 관리 화면 지연 렌더링 | 완료 | FAQ 목록 조회를 Suspense 안쪽으로 분리해 FAQ card skeleton을 먼저 표시 |
 | 요청 관리 화면 지연 렌더링 | 완료 | 요청 목록 조회를 Suspense 안쪽으로 분리해 필터/list skeleton을 먼저 표시 |
+| 프로그램 관리 화면 지연 렌더링 | 완료 | 프로그램 목록 조회를 Suspense 안쪽으로 분리해 요금 안내/list skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/programs` 진입 시 프로그램 목록 조회를 Suspense 경계 안쪽으로 옮기고, 요금 안내/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/requests` 진입 시 학부모 요청 목록 조회를 Suspense 경계 안쪽으로 옮기고, 필터/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/faq` 진입 시 FAQ 목록 조회를 Suspense 경계 안쪽으로 옮기고, FAQ card skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/feedback` 진입 시 피드백 목록 조회를 Suspense 경계 안쪽으로 옮기고, 피드백 card skeleton을 먼저 렌더하도록 변경함.
@@ -61,12 +63,11 @@
 - 2026-07-10: `/admin/gallery` 진입 시 갤러리/반/설정/소셜 초안 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 업로드/연동/카드 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/finance` 진입 시 수납 목록/요약 통계 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 월 선택/카드/table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/trial` 진입 시 체험 리드/통계 병렬 조회를 Suspense 경계 안쪽으로 옮기고, CRM 카드/list skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/attendance` 진입 시 반 목록 조회를 Suspense 경계 안쪽으로 옮기고, 날짜/반 선택 skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/requests/page.tsx`
-- 주요 변경: 학부모 요청 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getAllRequests()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/requests`
+- 변경 파일: `src/app/admin/programs/page.tsx`
+- 주요 변경: 프로그램 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getPrograms()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/programs`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -74,4 +75,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/programs`, `/admin/finance/billing`, `/admin/attendance/report`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.
+- 다음 속도 개선 후보: `/admin/finance/billing`, `/admin/attendance/report`, `/admin/testimonials`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.

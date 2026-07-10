@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     addToWaitlist,
     removeFromWaitlist,
@@ -43,6 +42,12 @@ type CapacityInfo = {
 type Student = { id: string; name: string };
 type ClassItem = { id: string; name: string; dayOfWeek: string; startTime: string; endTime: string; capacity: number };
 
+type WaitlistPayload = {
+    waitlist: WaitlistItem[];
+    capacityInfo: CapacityInfo[];
+    classes: ClassItem[];
+};
+
 // 요일 한글 변환
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -56,16 +61,71 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
     CANCELLED: { label: "취소", color: "text-gray-500 dark:text-gray-400", bg: "bg-gray-100 dark:bg-gray-800" },
 };
 
+function WaitlistLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                    <div className="h-8 w-44 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-80 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="h-11 w-28 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-32 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+            <div className="flex items-center gap-3">
+                <div className="h-10 w-44 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                <div className="h-5 w-32 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            </div>
+            <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-40 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function WaitlistErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">대기자 정보를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 export default function WaitlistClient({
-    waitlist,
-    capacityInfo,
-    classes,
+    waitlist: initialWaitlist,
+    capacityInfo: initialCapacityInfo,
+    classes: initialClasses,
 }: {
-    waitlist: WaitlistItem[];
-    capacityInfo: CapacityInfo[];
-    classes: ClassItem[];
+    waitlist?: WaitlistItem[];
+    capacityInfo?: CapacityInfo[];
+    classes?: ClassItem[];
 }) {
-    const router = useRouter();
+    const hasInitialData = Boolean(initialWaitlist && initialCapacityInfo && initialClasses);
+    const [waitlist, setWaitlist] = useState<WaitlistItem[]>(initialWaitlist ?? []);
+    const [capacityInfo, setCapacityInfo] = useState<CapacityInfo[]>(initialCapacityInfo ?? []);
+    const [classes, setClasses] = useState<ClassItem[]>(initialClasses ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
     const [students, setStudents] = useState<Student[]>([]);
@@ -76,6 +136,34 @@ export default function WaitlistClient({
     const [filterClassId, setFilterClassId] = useState<string>("ALL");
     // 상태 필터: 활성(WAITING+OFFERED) or 전체
     const [showAll, setShowAll] = useState(false);
+
+    const hasAnyData = waitlist.length > 0 || capacityInfo.length > 0 || classes.length > 0;
+
+    const loadWaitlistData = useCallback(async () => {
+        setLoading(true);
+        setLoadError(null);
+
+        try {
+            const response = await fetch("/api/admin/waitlist", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load waitlist.");
+            }
+            const data = (await response.json()) as WaitlistPayload;
+            setWaitlist(data.waitlist);
+            setCapacityInfo(data.capacityInfo);
+            setClasses(data.classes);
+        } catch (error) {
+            console.error("Failed to load waitlist:", error);
+            setLoadError("failed");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadWaitlistData();
+    }, [hasInitialData, loadWaitlistData]);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -137,7 +225,7 @@ export default function WaitlistClient({
         setBusy(true);
         try {
             await offerWaitlistSpot(id);
-            router.refresh();
+            await loadWaitlistData();
         } catch (e: any) {
             alert(e.message || "자리 제안 실패");
         } finally {
@@ -150,7 +238,7 @@ export default function WaitlistClient({
         setBusy(true);
         try {
             await processWaitlistResponse(id, true);
-            router.refresh();
+            await loadWaitlistData();
         } catch (e: any) {
             alert(e.message || "수락 처리 실패");
         } finally {
@@ -163,7 +251,7 @@ export default function WaitlistClient({
         setBusy(true);
         try {
             await processWaitlistResponse(id, false);
-            router.refresh();
+            await loadWaitlistData();
         } catch (e: any) {
             alert(e.message || "거절 처리 실패");
         } finally {
@@ -176,12 +264,20 @@ export default function WaitlistClient({
         setBusy(true);
         try {
             await removeFromWaitlist(id);
-            router.refresh();
+            await loadWaitlistData();
         } catch (e: any) {
             alert(e.message || "대기 취소 실패");
         } finally {
             setBusy(false);
         }
+    }
+
+    if (loading && !hasAnyData) {
+        return <WaitlistLoadingFallback />;
+    }
+
+    if (loadError && !hasAnyData) {
+        return <WaitlistErrorState onRetry={loadWaitlistData} />;
     }
 
     return (
@@ -388,7 +484,10 @@ export default function WaitlistClient({
                     onRetryLoadStudents={loadStudents}
                     classes={classes}
                     onClose={() => setShowAddModal(false)}
-                    onDone={() => { setShowAddModal(false); router.refresh(); }}
+                    onDone={async () => {
+                        setShowAddModal(false);
+                        await loadWaitlistData();
+                    }}
                 />
             )}
         </div>
@@ -411,7 +510,7 @@ function AddWaitlistModal({
     onRetryLoadStudents: () => Promise<void>;
     classes: ClassItem[];
     onClose: () => void;
-    onDone: () => void;
+    onDone: () => Promise<void> | void;
 }) {
     const [studentId, setStudentId] = useState("");
     const [classId, setClassId] = useState("");
@@ -436,7 +535,7 @@ function AddWaitlistModal({
         setBusy(true);
         try {
             await addToWaitlist(studentId, classId, memo || undefined);
-            onDone();
+            await onDone();
         } catch (err: any) {
             alert(err.message || "대기 등록 실패");
         } finally {

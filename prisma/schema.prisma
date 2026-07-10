@@ -423,6 +423,7 @@ model ParentRequest {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model Faq {
@@ -600,6 +601,7 @@ model EnrollmentApplication {
   @@index([status])
   @@index([trialLeadId])
   @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 // SMS 템플릿 — 상황별 자동 발송 메시지를 관리자가 편집/ON-OFF할 수 있는 시스템

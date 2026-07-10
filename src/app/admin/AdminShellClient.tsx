@@ -26,7 +26,7 @@ const OPS_PATHS = [
     "/admin/apply",
 ];
 
-const PERFORMANCE_INDEX_STORAGE_KEY = "stiz-admin-performance-indexes-v1";
+const PERFORMANCE_INDEX_STORAGE_KEY = "stiz-admin-performance-indexes-v2";
 
 type AdminIdleWindow = Window & {
     requestIdleCallback?: (

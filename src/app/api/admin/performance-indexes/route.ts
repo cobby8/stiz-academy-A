@@ -15,6 +15,8 @@ const INDEX_STATEMENTS = [
     `CREATE INDEX IF NOT EXISTS "Attendance_studentId_idx" ON "Attendance" ("studentId")`,
     `CREATE INDEX IF NOT EXISTS "Payment_studentId_year_month_idx" ON "Payment" ("studentId", year, month)`,
     `CREATE INDEX IF NOT EXISTS "Payment_studentId_dueDate_idx" ON "Payment" ("studentId", "dueDate")`,
+    `CREATE INDEX IF NOT EXISTS "TrialLead_status_createdAt_idx" ON "TrialLead" (status, "createdAt")`,
+    `CREATE INDEX IF NOT EXISTS "EnrollmentApplication_status_createdAt_idx" ON "EnrollmentApplication" (status, "createdAt")`,
 ] as const;
 
 export async function POST() {

@@ -1,5 +1,5 @@
 import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms, getSheetSlotCache } from "@/lib/queries";
-import { fetchSheetSchedule, type SheetClassSlot } from "@/lib/googleSheetsSchedule";
+import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import { buildMergedSlots } from "@/lib/mergeSlots";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
@@ -23,20 +23,11 @@ export default async function SimulatorPage() {
     ]);
 
     const phone = (settings as any).contactPhone || "010-0000-0000";
-    const sheetUrl = (settings as any).googleSheetsScheduleUrl as string | null | undefined;
     // CTA 버튼용 구글폼 URL (DB에 저장된 값)
     const trialFormUrl = (settings as any).trialFormUrl as string | null | undefined;
     const enrollFormUrl = (settings as any).enrollFormUrl as string | null | undefined;
 
-    // DB 캐시가 비어있으면 Google Sheets에서 직접 읽기 (폴백)
-    let rawSlots: SheetClassSlot[] = cachedSlots ?? [];
-    if (rawSlots.length === 0 && sheetUrl) {
-        try {
-            rawSlots = await fetchSheetSchedule(sheetUrl);
-        } catch {
-            rawSlots = [];
-        }
-    }
+    const rawSlots: SheetClassSlot[] = cachedSlots ?? [];
 
     // 공통 함수로 시트 슬롯 + 오버라이드 + 커스텀 슬롯 병합
     const allSlots = buildMergedSlots(rawSlots, overridesList, customSlotsList);

@@ -1,11 +1,9 @@
 /**
  * GET /api/cron/sync-schedule
  *
- * Vercel Cron이 주기적으로 호출 — 구글 시트 → DB 동기화.
- * vercel.json schedule: "* /30 * * * *"  (30분마다, Pro 플랜 필요)
- *
- * Pro 플랜: 30분마다 자동 동기화
- * Hobby 플랜: 1일 1회 (수동 동기화 버튼으로 보완)
+ * 구글 시트 → DB 동기화 예비 엔드포인트.
+ * 기본 운영은 /api/admin/sync-schedule 수동 동기화를 사용한다.
+ * 자동 동기화가 필요해지면 vercel.json crons에 다시 등록한다.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -31,6 +29,7 @@ export async function GET(req: NextRequest) {
     }
 
     revalidatePath("/schedule");
+    revalidatePath("/simulator");
 
     console.log(`[cron/sync-schedule] 완료: ${result.synced}개 슬롯, ${result.syncedAt}`);
     return NextResponse.json({ success: true, ...result });

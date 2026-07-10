@@ -253,12 +253,17 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
     const [sheetSaving, setSheetSaving] = useState(false);
     const [sheetSaved, setSheetSaved] = useState(false);
     const [sheetError, setSheetError] = useState<string | null>(null);
+    const [sheetSyncing, setSheetSyncing] = useState(false);
+    const [sheetSyncMessage, setSheetSyncMessage] = useState<string | null>(null);
 
     async function handleSaveSheetUrl() {
         setSheetSaving(true);
         setSheetError(null);
+        setSheetSyncMessage(null);
         try {
             await updateAcademySettings({ googleSheetsScheduleUrl: sheetUrlInput });
+            setSheetUrl(sheetUrlInput || null);
+            setHasSheetUrl(Boolean(sheetUrlInput));
             setSheetSaved(true);
             setTimeout(() => {
                 setShowSheetModal(false);
@@ -270,6 +275,39 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
         } finally {
             setSheetSaving(false);
         }
+    }
+
+    async function handleSyncSheet() {
+        setSheetSyncing(true);
+        setSheetError(null);
+        setSheetSyncMessage(null);
+
+        try {
+            if (sheetUrlInput !== (sheetUrl || "")) {
+                await updateAcademySettings({ googleSheetsScheduleUrl: sheetUrlInput });
+                setSheetUrl(sheetUrlInput || null);
+                setHasSheetUrl(Boolean(sheetUrlInput));
+            }
+
+            const response = await fetch("/api/admin/sync-schedule", { method: "POST" });
+            const result = (await response.json()) as { synced?: number; error?: string };
+            if (!response.ok) {
+                throw new Error(result.error || "동기화 실패");
+            }
+
+            setSheetSyncMessage(`${result.synced ?? 0}개 수업을 DB에 동기화했습니다.`);
+            await loadScheduleData();
+        } catch (error: any) {
+            setSheetError(error.message || "동기화 실패");
+        } finally {
+            setSheetSyncing(false);
+        }
+    }
+
+    function handleSheetUrlChange(value: string) {
+        setSheetUrlInput(value);
+        setSheetError(null);
+        setSheetSyncMessage(null);
     }
 
     // Custom slot state
@@ -774,6 +812,8 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                     sheetSaving={sheetSaving}
                     sheetSaved={sheetSaved}
                     sheetError={sheetError}
+                    sheetSyncing={sheetSyncing}
+                    sheetSyncMessage={sheetSyncMessage}
                     isAddingCustom={isAddingCustom}
                     onCloseSheetSlot={() => setEditingSlotKey(null)}
                     onUpdateSlot={update}
@@ -785,8 +825,9 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                     onConfirmDeleteCustom={handleDeleteCustom}
                     onSaveCustomEdit={handleUpdateCustom}
                     onCloseSheetUrl={() => setShowSheetModal(false)}
-                    onSheetUrlChange={setSheetUrlInput}
+                    onSheetUrlChange={handleSheetUrlChange}
                     onSaveSheetUrl={handleSaveSheetUrl}
+                    onSyncSheet={handleSyncSheet}
                     onClearSheetUrl={() => setSheetUrlInput("")}
                     onCloseAddCustom={() => setIsAddingCustom(false)}
                     onNewCustomFormChange={setNewCustomForm}

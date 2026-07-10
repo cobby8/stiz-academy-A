@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 관리자 공통 읽기 API 캐시 및 시간표 외부 조회 제거
+- 작업명: 수동 시간표 동기화 전환 및 수납/통계 캐시
 - 상태: 타입/빌드 검증 완료
-- 범위: `/api/admin/schedule`, 선택 목록 API, 학원 설정 API, 체험 카운트 API
+- 범위: Google Sheets 시간표 동기화, 공개 시간표/시뮬레이터, 수납/통계 API
 - 기준일: 2026-07-11
 
 ## 진행 현황표
@@ -20,9 +20,14 @@
 | 알림 자동 폴링 제거 | 완료 | 알림 버튼 클릭 시에만 `/api/admin/notifications` 조회 |
 | 시간표 외부 조회 제거 | 완료 | `/api/admin/schedule`이 Google Sheets 직접 fetch 대신 `SheetSlotCache`를 읽음 |
 | 공통 선택 목록 캐시 | 완료 | 학생/코치 옵션, 설정, 체험 카운트 API에 짧은 private/server cache 적용 |
+| 수동 시간표 동기화 | 완료 | 공개/관리 화면은 DB 캐시만 읽고 관리자 버튼으로 Google Sheets를 수동 동기화 |
+| 수납/통계 캐시 | 완료 | `/api/admin/finance`, `/api/admin/stats`에 짧은 캐시와 저장 후 무효화 적용 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-11: Google Sheets 시간표 자동 cron을 제거하고, 관리자 시간표 모달의 “지금 동기화” 버튼으로만 시트를 읽어 `SheetSlotCache`에 저장하도록 전환.
+- 2026-07-11: 공개 `/schedule`과 `/simulator`의 Google Sheets 직접 fetch 폴백을 제거해 화면 렌더가 외부 네트워크를 기다리지 않도록 변경.
+- 2026-07-11: `/api/admin/finance`와 `/api/admin/stats`에 짧은 private/server cache를 적용하고, 수납 쓰기 작업 후 관련 캐시를 즉시 무효화.
 - 2026-07-11: `/api/admin/schedule`이 Google Sheets를 직접 기다리지 않고 `SheetSlotCache`의 동기화된 슬롯을 읽도록 바꿔 시간표 화면 진입의 외부 네트워크 대기를 제거.
 - 2026-07-11: `student-options`, `coach-options`, `settings`, `trial-count`에 짧은 private/server cache를 적용하고 관련 클라이언트 `cache: "no-store"`를 제거.
 - 2026-07-11: `/api/admin/dashboard`의 `force-dynamic`/`no-store`를 제거하고 15초 `unstable_cache`를 적용해 동일한 관리자 읽기 조회를 짧게 재사용하도록 변경.
@@ -34,9 +39,9 @@
 - 2026-07-10: 공개 홈페이지의 폰트 preload, 인라인 스크립트, 클릭 후 열리는 UI 초기 JS 부담을 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/api/admin/schedule/route.ts`, `src/app/api/admin/student-options/route.ts`, `src/app/api/admin/coach-options/route.ts`, `src/app/api/admin/settings/route.ts`, `src/app/api/admin/trial-count/route.ts`, 관련 관리자 클라이언트 fetch 호출부
-- 주요 변경: 시간표는 Google Sheets 직접 fetch 대신 DB에 저장된 `SheetSlotCache`를 읽고, 반복 호출되는 선택 목록/설정/카운트 API는 짧은 캐시를 사용한다.
-- 의도: 선생님이 메뉴를 오갈 때 매번 외부 네트워크와 같은 DB 조회를 다시 기다리지 않게 해 관리자 체감 속도를 높인다.
+- 변경 파일: `src/app/admin/schedule/*`, `src/app/api/admin/sync-schedule/route.ts`, `src/app/schedule/page.tsx`, `src/app/simulator/page.tsx`, `src/app/api/admin/finance/route.ts`, `src/app/api/admin/stats/route.ts`, `src/lib/queries.ts`
+- 주요 변경: Google Sheets는 수동 동기화로 DB에 저장하고, 화면은 DB 캐시만 읽는다. 수납/통계 API는 짧은 캐시와 월 범위 날짜 조건을 사용한다.
+- 의도: 외부 네트워크와 반복 집계가 관리자 화면 진입 속도를 묶지 않도록 한다.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

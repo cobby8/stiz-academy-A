@@ -1,8 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getPayments, getPaymentSummary } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+const FINANCE_CACHE_HEADERS = {
+    "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+};
+
+function getCachedFinanceData(year: number, month: number) {
+    return unstable_cache(
+        async () => {
+            const [payments, summary] = await Promise.all([
+                getPayments(year, month),
+                getPaymentSummary(year, month),
+            ]);
+
+            return { payments, summary };
+        },
+        ["admin-finance", String(year), String(month)],
+        { revalidate: 30, tags: ["admin-finance", "admin-stats"] },
+    )();
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -20,18 +38,11 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const [payments, summary] = await Promise.all([
-            getPayments(year, month),
-            getPaymentSummary(year, month),
-        ]);
+        const data = await getCachedFinanceData(year, month);
 
         return NextResponse.json(
-            { payments, summary },
-            {
-                headers: {
-                    "Cache-Control": "no-store",
-                },
-            },
+            data,
+            { headers: FINANCE_CACHE_HEADERS },
         );
     } catch (error) {
         console.error("[api/admin/finance] failed:", error);

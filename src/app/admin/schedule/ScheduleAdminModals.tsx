@@ -74,6 +74,8 @@ interface ScheduleAdminModalsProps {
     sheetSaving: boolean;
     sheetSaved: boolean;
     sheetError: string | null;
+    sheetSyncing: boolean;
+    sheetSyncMessage: string | null;
     isAddingCustom: boolean;
     onCloseSheetSlot: () => void;
     onUpdateSlot: (slotKey: string, patch: Partial<SlotState>) => void;
@@ -87,6 +89,7 @@ interface ScheduleAdminModalsProps {
     onCloseSheetUrl: () => void;
     onSheetUrlChange: (value: string) => void;
     onSaveSheetUrl: () => void;
+    onSyncSheet: () => void;
     onClearSheetUrl: () => void;
     onCloseAddCustom: () => void;
     onNewCustomFormChange: (form: CustomSlotForm) => void;
@@ -132,6 +135,8 @@ export default function ScheduleAdminModals({
     sheetSaving,
     sheetSaved,
     sheetError,
+    sheetSyncing,
+    sheetSyncMessage,
     isAddingCustom,
     onCloseSheetSlot,
     onUpdateSlot,
@@ -145,6 +150,7 @@ export default function ScheduleAdminModals({
     onCloseSheetUrl,
     onSheetUrlChange,
     onSaveSheetUrl,
+    onSyncSheet,
     onClearSheetUrl,
     onCloseAddCustom,
     onNewCustomFormChange,
@@ -401,6 +407,10 @@ export default function ScheduleAdminModals({
                                 <p className="mt-1 font-mono bg-green-100 px-2 py-1 rounded">spreadsheets/d/.../edit?gid=... 형태 그대로</p>
                                 <p className="mt-1 font-bold">시트가 "링크가 있는 모든 사용자 - 뷰어" 공개 설정이어야 합니다.</p>
                             </div>
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                                <p className="font-bold mb-1">운영 방식</p>
+                                <p>화면은 저장된 DB 시간표를 읽고, 구글시트는 아래 “지금 동기화”를 눌렀을 때만 가져옵니다.</p>
+                            </div>
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1.5">구글시트 URL</label>
                                 <input
@@ -417,13 +427,27 @@ export default function ScheduleAdminModals({
                                     {sheetError}
                                 </p>
                             )}
-                            <div className="flex gap-2 pt-1">
+                            {sheetSyncMessage && (
+                                <p className="text-sm text-green-700 font-medium flex items-center gap-1">
+                                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>check_circle</span>
+                                    {sheetSyncMessage}
+                                </p>
+                            )}
+                            <div className="flex flex-wrap gap-2 pt-1">
                                 <button
                                     onClick={onSaveSheetUrl}
-                                    disabled={sheetSaving}
+                                    disabled={sheetSaving || sheetSyncing}
                                     className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-orange-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition disabled:opacity-40 flex items-center gap-2"
                                 >
                                     {sheetSaving ? "저장 중..." : sheetSaved ? "저장됨" : "저장"}
+                                </button>
+                                <button
+                                    onClick={onSyncSheet}
+                                    disabled={sheetSaving || sheetSyncing || !sheetUrlInput.trim()}
+                                    className="bg-brand-navy-900 hover:bg-brand-navy-800 text-white text-sm font-bold px-5 py-2.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>sync</span>
+                                    {sheetSyncing ? "동기화 중..." : "지금 동기화"}
                                 </button>
                                 <button onClick={onCloseSheetUrl} className="bg-white dark:bg-gray-800 border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition">
                                     취소

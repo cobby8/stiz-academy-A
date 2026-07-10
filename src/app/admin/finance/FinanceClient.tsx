@@ -216,7 +216,7 @@ export default function FinanceClient({
         setLoadError(null);
         setSelectedIds(new Set()); // 선택 초기화
         try {
-            const res = await fetch(`/api/admin/finance?year=${y}&month=${m}`, { cache: "no-store" });
+            const res = await fetch(`/api/admin/finance?year=${y}&month=${m}`);
             if (!res.ok) {
                 throw new Error("Failed to load finance data.");
             }

@@ -8,15 +8,14 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { syncSheetSlots } from "@/lib/syncSheetSlots";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-    // 인증 체크: 로그인한 관리자만 시간표 동기화 가능
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    try {
+        await requireAdmin();
+    } catch {
         return NextResponse.json({ error: "인증 필요" }, { status: 401 });
     }
 
@@ -28,6 +27,7 @@ export async function POST() {
 
     // 동기화 완료 후 /schedule 캐시 즉시 무효화
     revalidatePath("/schedule");
+    revalidatePath("/simulator");
 
     return NextResponse.json({ success: true, ...result });
 }

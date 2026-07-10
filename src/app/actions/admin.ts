@@ -912,6 +912,13 @@ export async function saveAttendance(classId: string, date: string, records: { s
 }
 
 // ── 수납 관리 ──────────────────────────────────────────────────────────────────
+function revalidateFinanceCaches() {
+    revalidatePath("/admin/finance");
+    revalidatePath("/admin/stats");
+    revalidateTag("admin-finance", { expire: 0 });
+    revalidateTag("admin-stats", { expire: 0 });
+}
+
 export async function createPayment(data: {
     studentId: string;
     amount: number;
@@ -922,11 +929,15 @@ export async function createPayment(data: {
 }) {
     await requireAdmin();
     try {
+        const dueDate = new Date(data.dueDate);
+        const year = dueDate.getFullYear();
+        const month = dueDate.getMonth() + 1;
         // type과 description을 포함하여 INSERT (수동 생성 시 유형/설명 저장)
         await prisma.$executeRawUnsafe(
-            `INSERT INTO "Payment" (id, "studentId", amount, status, "dueDate", type, description, "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4::timestamp, $5, $6, NOW(), NOW())`,
+            `INSERT INTO "Payment" (id, "studentId", amount, status, "dueDate", year, month, type, description, "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4::timestamp, $5, $6, $7, $8, NOW(), NOW())`,
             data.studentId, data.amount, data.status || "PENDING", data.dueDate,
+            year, month,
             data.type || "MONTHLY", data.description || null,
         );
 
@@ -943,7 +954,7 @@ export async function createPayment(data: {
         console.error("Failed to create payment:", e);
         throw new Error("수납 기록 생성 실패");
     }
-    revalidatePath("/admin/finance");
+    revalidateFinanceCaches();
     revalidatePath("/mypage");
 }
 
@@ -959,7 +970,7 @@ export async function updatePaymentStatus(id: string, status: string) {
         console.error("Failed to update payment:", e);
         throw new Error("수납 상태 변경 실패");
     }
-    revalidatePath("/admin/finance");
+    revalidateFinanceCaches();
 }
 
 export async function deletePayment(id: string) {
@@ -970,7 +981,7 @@ export async function deletePayment(id: string) {
         console.error("Failed to delete payment:", e);
         throw new Error("수납 기록 삭제 실패");
     }
-    revalidatePath("/admin/finance");
+    revalidateFinanceCaches();
 }
 
 let _galleryInstagramColumnsEnsured = false;
@@ -2559,7 +2570,7 @@ export async function generateMonthlyInvoices(year: number, month: number) {
             }
         }
 
-        revalidatePath("/admin/finance");
+        revalidateFinanceCaches();
 
         // 학부모에게 수납 안내 SMS 발송 (fire-and-forget)
         // 학생별 보호자 전화번호를 조회하여 INVOICE_PARENT 템플릿 발송
@@ -2676,7 +2687,7 @@ export async function sendUnpaidReminders(forceResend?: boolean) {
             ...ids,
         );
 
-        revalidatePath("/admin/finance");
+        revalidateFinanceCaches();
         return { sent: unpaid.length, message: `${unpaid.length}건 알림 발송 완료` };
     } catch (e) {
         console.error("Failed to send unpaid reminders:", e);
@@ -2702,7 +2713,7 @@ export async function bulkUpdatePaymentStatus(ids: string[], newStatus: string) 
         console.error("Failed to bulk update payment status:", e);
         throw new Error("일괄 상태 변경 실패");
     }
-    revalidatePath("/admin/finance");
+    revalidateFinanceCaches();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -8,6 +8,17 @@
 - 학생 선택 목록, 코치 선택 목록, 학원 설정, 신규 체험 카운트처럼 여러 관리자 화면에서 반복 호출되는 API는 권한 확인 후 짧은 private/server cache를 사용한다.
 - 관리자 클라이언트에서 같은 API를 부를 때 `cache: "no-store"`를 남발하지 않는다. 문 앞에서 신분 확인은 매번 하되, 안쪽 서류 묶음은 몇 초 재사용하는 구조다.
 
+## 2026-07-11 시간표 동기화 메모
+- Google Sheets 시간표는 자동 cron으로 매번 맞추지 않고, 관리자 시간표의 “지금 동기화” 버튼을 눌렀을 때만 외부 시트를 읽어 `SheetSlotCache`에 저장한다.
+- 공개 `/schedule`, `/simulator`, 관리자 `/admin/schedule`은 모두 Google Sheets를 직접 기다리지 않고 DB에 저장된 캐시만 읽는다.
+- `/api/cron/sync-schedule`은 예비 엔드포인트로 남겨 두되, `vercel.json` cron 등록은 제거해 기본 운영을 수동 동기화로 둔다.
+
+## 2026-07-11 수납/통계 속도 메모
+- `/api/admin/finance`는 관리자 권한 확인 후 월별 수납 목록/요약을 30초 캐시한다.
+- `/api/admin/stats`는 운영 통계 묶음을 60초 캐시한다.
+- 수납 생성/상태 변경/삭제/월별 청구서 생성/미납 알림 후에는 `admin-finance`, `admin-stats` 태그를 즉시 무효화한다.
+- 월별 수납 조건은 `EXTRACT(YEAR/MONTH FROM dueDate)` 대신 `dueDate >= 월 시작 AND dueDate < 다음 달 시작` 범위 조건을 쓴다.
+
 # Architecture
 
 ## 프로젝트 성격

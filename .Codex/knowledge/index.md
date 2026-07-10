@@ -1,4 +1,7 @@
 # 최근 변경 추가
+- 2026-07-11: Google Sheets 시간표는 수동 동기화 버튼으로만 외부 시트를 읽어 `SheetSlotCache`에 저장하고, 공개 시간표/시뮬레이터/관리자 시간표는 DB 캐시만 읽도록 정리했다.
+- 2026-07-11: `vercel.json`의 시간표 자동 cron 등록을 제거해 기본 운영을 수동 동기화로 전환했다. 필요하면 `/api/cron/sync-schedule` 예비 엔드포인트를 다시 cron에 등록할 수 있다.
+- 2026-07-11: `/api/admin/finance`와 `/api/admin/stats`에 짧은 private/server cache를 적용하고, 수납 쓰기 작업 후 `admin-finance`, `admin-stats` 캐시를 즉시 무효화한다.
 - 2026-07-11: `/api/admin/schedule`이 Google Sheets를 직접 기다리지 않고 `SheetSlotCache`의 동기화된 슬롯을 읽도록 바꿔 관리자 시간표 진입의 외부 네트워크 대기를 제거했다.
 - 2026-07-11: 관리자 공통 `student-options`, `coach-options`, `settings`, `trial-count` API에 짧은 private/server cache를 적용하고 관련 클라이언트 `cache: "no-store"`를 제거했다.
 - 2026-07-11: 관리자 공통 셸에서 idle 시간에 자동 실행되던 `/api/admin/performance-indexes` 호출을 제거했다. 인덱스/DDL은 사용자 화면이 아니라 배포 전 마이그레이션이나 별도 관리 작업으로 처리한다.
@@ -82,7 +85,7 @@
 
 - 기준일: 2026-07-11
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/SMS 템플릿/학원 설정/개인정보/이용약관/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/리포트 상세/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다. 시간표는 외부 Google Sheets를 직접 기다리지 않고 `SheetSlotCache`를 읽으며, 반복 선택 목록/설정/카운트 API는 짧게 캐시한다. 학생 목록 API는 Enrollment를 학생별로 반복 조회하지 않고 CTE로 한 번에 집계한다. 사용자 화면에서는 DB 인덱스/DDL 자동 실행을 하지 않고, 관리자 인증은 `getClaims()` 우선과 짧은 role 캐시로 반복 비용을 줄인다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/SMS 템플릿/학원 설정/개인정보/이용약관/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/리포트 상세/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다. 시간표는 수동 동기화로 Google Sheets를 `SheetSlotCache`에 저장하고 화면은 DB 캐시만 읽는다. 반복 선택 목록/설정/카운트/수납/통계 API는 짧게 캐시한다. 학생 목록 API는 Enrollment를 학생별로 반복 조회하지 않고 CTE로 한 번에 집계한다. 사용자 화면에서는 DB 인덱스/DDL 자동 실행을 하지 않고, 관리자 인증은 `getClaims()` 우선과 짧은 role 캐시로 반복 비용을 줄인다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능

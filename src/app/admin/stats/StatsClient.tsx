@@ -188,7 +188,7 @@ export default function StatsClient({
         setLoading(true);
 
         try {
-            const res = await fetch("/api/admin/stats", { cache: "no-store" });
+            const res = await fetch("/api/admin/stats");
             if (!res.ok) throw new Error("Stats request failed");
             setStatsData((await res.json()) as StatsPayload);
         } catch {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import {
     getClassCapacityInfo,
@@ -10,16 +11,12 @@ import {
     getTrialStats,
 } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+const STATS_CACHE_HEADERS = {
+    "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+};
 
-export async function GET() {
-    try {
-        await requireAdmin();
-    } catch {
-        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
-
-    try {
+const getCachedStats = unstable_cache(
+    async () => {
         const [
             monthlyRevenue,
             monthlyAttendance,
@@ -38,22 +35,29 @@ export async function GET() {
             getPaymentCollectionRate(),
         ]);
 
-        return NextResponse.json(
-            {
-                monthlyRevenue,
-                monthlyAttendance,
-                enrollmentTrend,
-                classCapacity,
-                trialStats,
-                coachWorkload,
-                collectionRate,
-            },
-            {
-                headers: {
-                    "Cache-Control": "no-store",
-                },
-            },
-        );
+        return {
+            monthlyRevenue,
+            monthlyAttendance,
+            enrollmentTrend,
+            classCapacity,
+            trialStats,
+            coachWorkload,
+            collectionRate,
+        };
+    },
+    ["admin-stats-v1"],
+    { revalidate: 60, tags: ["admin-stats"] },
+);
+
+export async function GET() {
+    try {
+        await requireAdmin();
+    } catch {
+        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
+    try {
+        return NextResponse.json(await getCachedStats(), { headers: STATS_CACHE_HEADERS });
     } catch (error) {
         console.error("[api/admin/stats] failed:", error);
         return NextResponse.json({ error: "Failed to load stats" }, { status: 500 });

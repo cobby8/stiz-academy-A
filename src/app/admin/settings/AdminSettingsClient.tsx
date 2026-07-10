@@ -143,7 +143,7 @@ export default function AdminSettingsClient({
         setLoading(true);
         setFetchErrorState(false);
         try {
-            const response = await fetch("/api/admin/settings", { cache: "no-store" });
+            const response = await fetch("/api/admin/settings");
             if (!response.ok) throw new Error("Failed to load settings.");
             const data = (await response.json()) as { settings: any; fetchError?: boolean };
             setSettings(data.settings ?? null);

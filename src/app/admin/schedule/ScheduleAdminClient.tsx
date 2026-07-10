@@ -292,7 +292,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
         setLoadError(false);
 
         try {
-            const response = await fetch("/api/admin/schedule", { cache: "no-store" });
+            const response = await fetch("/api/admin/schedule");
             if (!response.ok) {
                 throw new Error("Failed to load schedule data.");
             }

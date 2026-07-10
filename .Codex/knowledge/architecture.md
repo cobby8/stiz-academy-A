@@ -3,6 +3,11 @@
 - `/api/admin/dashboard/system`은 5분 서버 캐시를 쓰며, `/admin` 첫 진입에서는 자동 호출하지 않고 시스템 상태 카드의 확인 버튼으로만 조회한다.
 - 관리자 공통 알림은 첫 렌더/idle 자동 조회와 120초 폴링을 하지 않고, 알림 버튼을 열 때만 `/api/admin/notifications`를 호출한다.
 
+## 2026-07-11 관리자 공통 읽기 캐시 메모
+- `/api/admin/schedule`은 외부 Google Sheets를 직접 fetch하지 않고, 동기화 작업이 저장해 둔 `SheetSlotCache` 슬롯을 읽는다.
+- 학생 선택 목록, 코치 선택 목록, 학원 설정, 신규 체험 카운트처럼 여러 관리자 화면에서 반복 호출되는 API는 권한 확인 후 짧은 private/server cache를 사용한다.
+- 관리자 클라이언트에서 같은 API를 부를 때 `cache: "no-store"`를 남발하지 않는다. 문 앞에서 신분 확인은 매번 하되, 안쪽 서류 묶음은 몇 초 재사용하는 구조다.
+
 # Architecture
 
 ## 프로젝트 성격
@@ -40,7 +45,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 수납 관리 `/admin/finance`는 서버 렌더에서 결제 목록/요약을 기다리지 않고 `/api/admin/finance`를 클라이언트에서 호출해 채운다.
 - 보강 관리 `/admin/makeup`은 서버 렌더에서 보강 예약/반 목록을 기다리지 않고 `/api/admin/makeup`을 클라이언트에서 호출해 채운다.
 - 수업 리포트 목록 `/admin/attendance/report`는 서버 렌더에서 최근 수업 리포트 목록을 기다리지 않고 `/api/admin/attendance/report`를 클라이언트에서 호출해 채운다.
-- 시간표 관리 `/admin/schedule`은 서버 렌더에서 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets를 기다리지 않고 `/api/admin/schedule`을 클라이언트에서 호출해 채운다.
+- 시간표 관리 `/admin/schedule`은 서버 렌더에서 설정/시간표 override/코치/직접 슬롯/프로그램/외부 Google Sheets를 기다리지 않고, `/api/admin/schedule`이 `SheetSlotCache`에 동기화된 슬롯을 읽어 클라이언트에서 채운다.
 - 청구 템플릿 `/admin/finance/billing`은 서버 렌더에서 청구 템플릿/프로그램 목록을 기다리지 않고 `/api/admin/finance/billing`을 클라이언트에서 호출해 채운다.
 - 스킬 트래킹 `/admin/skills`는 서버 렌더에서 스킬 카테고리 목록을 기다리지 않고 `/api/admin/skills`를 클라이언트에서 호출해 채운다.
 - 반 관리 `/admin/classes`는 서버 렌더에서 프로그램/반 목록을 기다리지 않고 `/api/admin/classes`를 클라이언트에서 호출해 채운다.

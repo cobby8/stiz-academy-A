@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { fetchSheetScheduleAdmin } from "@/lib/googleSheetsSchedule";
 import {
     getAcademySettings,
     getClassSlotOverrides,
     getCoaches,
     getCustomClassSlots,
     getPrograms,
+    getSheetSlotCache,
 } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+const SCHEDULE_CACHE_HEADERS = {
+    "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+};
 
 export async function GET() {
     try {
@@ -27,7 +29,7 @@ export async function GET() {
             getCoaches(),
             getCustomClassSlots(),
             getPrograms(),
-            sheetUrl ? fetchSheetScheduleAdmin(sheetUrl).catch(() => []) : Promise.resolve([]),
+            sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
         ]);
 
         return NextResponse.json(
@@ -40,7 +42,7 @@ export async function GET() {
                 sheetUrl: sheetUrl ?? null,
                 programs,
             },
-            { headers: { "Cache-Control": "no-store" } },
+            { headers: SCHEDULE_CACHE_HEADERS },
         );
     } catch (error) {
         console.error("[api/admin/schedule] failed:", error);

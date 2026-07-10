@@ -143,9 +143,7 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
         setStudentsError(null);
 
         try {
-            const response = await fetch("/api/admin/student-options", {
-                cache: "no-store",
-            });
+            const response = await fetch("/api/admin/student-options");
 
             if (!response.ok) {
                 throw new Error("Failed to load student options.");
@@ -169,9 +167,7 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
         setCoachesError(null);
 
         try {
-            const response = await fetch("/api/admin/coach-options", {
-                cache: "no-store",
-            });
+            const response = await fetch("/api/admin/coach-options");
 
             if (!response.ok) {
                 throw new Error("Failed to load coach options.");

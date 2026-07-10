@@ -186,9 +186,7 @@ export default function MakeupClient({
         setStudentsError(null);
 
         try {
-            const response = await fetch("/api/admin/student-options", {
-                cache: "no-store",
-            });
+            const response = await fetch("/api/admin/student-options");
 
             if (!response.ok) {
                 throw new Error("Failed to load student options.");

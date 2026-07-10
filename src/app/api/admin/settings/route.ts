@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getAcademySettings } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+const SETTINGS_CACHE_HEADERS = {
+    "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+};
 
 export async function GET() {
     try {
@@ -16,13 +18,13 @@ export async function GET() {
 
         return NextResponse.json(
             { settings, fetchError: false },
-            { headers: { "Cache-Control": "no-store" } },
+            { headers: SETTINGS_CACHE_HEADERS },
         );
     } catch (error) {
         console.error("[api/admin/settings] failed:", error);
         return NextResponse.json(
             { settings: null, fetchError: true },
-            { headers: { "Cache-Control": "no-store" } },
+            { headers: SETTINGS_CACHE_HEADERS },
         );
     }
 }

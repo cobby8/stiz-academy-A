@@ -38,7 +38,7 @@ export default function TermsAdminClient({
     const loadTerms = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await fetch("/api/admin/settings", { cache: "no-store" });
+            const response = await fetch("/api/admin/settings");
             if (!response.ok) throw new Error("Failed to load academy settings.");
             const data = (await response.json()) as { settings?: { termsOfService?: string | null } | null };
             setTerms(data.settings?.termsOfService ?? "");

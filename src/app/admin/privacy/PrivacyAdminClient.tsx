@@ -37,7 +37,7 @@ export default function PrivacyAdminClient({
   const loadPrivacyPolicy = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/settings", { cache: "no-store" });
+      const response = await fetch("/api/admin/settings");
       if (!response.ok) throw new Error("Failed to load academy settings.");
       const data = (await response.json()) as { settings?: { privacyPolicy?: string | null } | null };
       setPrivacyPolicy(data.settings?.privacyPolicy?.trim() || DEFAULT_PRIVACY_POLICY);

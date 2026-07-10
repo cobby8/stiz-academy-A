@@ -205,6 +205,7 @@ export default function ReportEditClient({
                 <div>
                     <Link
                         href="/admin/attendance/report"
+                        prefetch={false}
                         className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-200 flex items-center gap-1 mb-2"
                     >
                         <span className="material-symbols-outlined text-sm">arrow_back</span>

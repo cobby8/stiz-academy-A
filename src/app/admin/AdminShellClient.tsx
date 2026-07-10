@@ -26,26 +26,6 @@ const OPS_PATHS = [
     "/admin/apply",
 ];
 
-type AdminIdleWindow = Window & {
-    requestIdleCallback?: (
-        callback: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void,
-        options?: { timeout?: number },
-    ) => number;
-    cancelIdleCallback?: (handle: number) => void;
-};
-
-function scheduleAdminIdleTask(callback: () => void, timeout = 6000) {
-    const idleWindow = window as AdminIdleWindow;
-
-    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
-        const handle = idleWindow.requestIdleCallback(() => callback(), { timeout });
-        return () => idleWindow.cancelIdleCallback?.(handle);
-    }
-
-    const timer = window.setTimeout(callback, timeout);
-    return () => window.clearTimeout(timer);
-}
-
 export default function AdminShellClient({
     children,
     initialUserName,
@@ -59,9 +39,6 @@ export default function AdminShellClient({
     const userName = initialUserName;
     const userEmail = initialUserEmail;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    // 새 체험 신청 건수 — 사이드바 배지 표시용
-    const [newTrialCount, setNewTrialCount] = useState(0);
-
     // 현재 URL 경로를 기반으로 활성 탭을 자동 결정
     // "/admin" 정확 일치(대시보드) 또는 OPS_PATHS로 시작하면 "학원운영"
     const autoTab = useMemo(() => {
@@ -78,17 +55,6 @@ export default function AdminShellClient({
         setActiveTab(autoTab);
         setMobileMenuOpen(false);
     }, [autoTab, pathname]);
-
-    useEffect(() => {
-        return scheduleAdminIdleTask(() => {
-            // 새 체험 신청 건수 조회 (사이드바 배지 표시용)
-            fetch("/api/admin/trial-count")
-                .then((r) => r.json())
-                .then((d) => setNewTrialCount(d.count ?? 0))
-                .catch(() => {});
-        }, 7000);
-
-    }, []);
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
@@ -187,7 +153,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
                             <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
                             <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
-                            <NavItem href="/admin/trial" active={pathname.startsWith("/admin/trial")} icon="🤝" label="체험 CRM" badge={newTrialCount} />
+                            <NavItem href="/admin/trial" active={pathname.startsWith("/admin/trial")} icon="🤝" label="체험 CRM" />
                             <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />
                             <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강 관리" />
                             <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬 트래킹" />

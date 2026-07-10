@@ -1,8 +1,22 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getClasses, getMakeupSessions } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+const getCachedMakeupPayload = unstable_cache(
+    async () => {
+        const [sessions, classes] = await Promise.all([
+            getMakeupSessions(),
+            getClasses(),
+        ]);
+
+        return { sessions, classes };
+    },
+    ["admin-makeup-v1"],
+    { revalidate: 30, tags: ["admin-makeup", "admin-classes"] },
+);
 
 export async function GET() {
     try {
@@ -12,13 +26,10 @@ export async function GET() {
     }
 
     try {
-        const [sessions, classes] = await Promise.all([
-            getMakeupSessions(),
-            getClasses(),
-        ]);
+        const payload = await getCachedMakeupPayload();
 
         return NextResponse.json(
-            { sessions, classes },
+            payload,
             {
                 headers: {
                     "Cache-Control": "no-store",

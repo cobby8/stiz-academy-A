@@ -32,12 +32,54 @@ const BOOLEAN_SETTINGS_COLUMNS = new Set([
 
 function revalidateProgramAdminCaches() {
     revalidateTag("admin-programs", { expire: 0 });
+    revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-finance-billing", { expire: 0 });
 }
 
 function revalidateCoachAdminCaches() {
     revalidateTag("admin-coaches", { expire: 0 });
     revalidateTag("admin-coach-options", { expire: 0 });
+}
+
+function revalidateClassAdminCaches() {
+    revalidateTag("admin-classes", { expire: 0 });
+    revalidateTag("admin-students", { expire: 0 });
+    revalidateTag("admin-apply", { expire: 0 });
+    revalidateTag("admin-waitlist", { expire: 0 });
+    revalidateTag("admin-makeup", { expire: 0 });
+    revalidateTag("admin-dashboard", { expire: 0 });
+}
+
+function revalidateStudentAdminCaches() {
+    revalidateTag("admin-students", { expire: 0 });
+    revalidateTag("admin-waitlist", { expire: 0 });
+    revalidateTag("admin-makeup", { expire: 0 });
+    revalidateTag("admin-dashboard", { expire: 0 });
+    revalidateTag("admin-finance", { expire: 0 });
+    revalidateTag("admin-stats", { expire: 0 });
+}
+
+function revalidateTrialAdminCaches() {
+    revalidateTag("admin-trial", { expire: 0 });
+    revalidateTag("admin-dashboard", { expire: 0 });
+}
+
+function revalidateApplyAdminCaches() {
+    revalidateTag("admin-apply", { expire: 0 });
+    revalidateTag("admin-trial", { expire: 0 });
+    revalidateTag("admin-students", { expire: 0 });
+    revalidateTag("admin-dashboard", { expire: 0 });
+}
+
+function revalidateWaitlistAdminCaches() {
+    revalidateTag("admin-waitlist", { expire: 0 });
+    revalidateTag("admin-classes", { expire: 0 });
+    revalidateTag("admin-students", { expire: 0 });
+}
+
+function revalidateMakeupAdminCaches() {
+    revalidateTag("admin-makeup", { expire: 0 });
+    revalidateTag("admin-classes", { expire: 0 });
 }
 
 export async function ensureAcademySettingsColumns() {
@@ -294,6 +336,7 @@ export async function createClass(data: {
     revalidatePath("/admin/classes");
     revalidatePath("/schedule");
     revalidatePath("/");
+    revalidateClassAdminCaches();
 }
 
 export async function updateClass(id: string, data: {
@@ -322,6 +365,7 @@ export async function updateClass(id: string, data: {
     revalidatePath("/admin/classes");
     revalidatePath("/schedule");
     revalidatePath("/");
+    revalidateClassAdminCaches();
 }
 
 export async function deleteClass(id: string) {
@@ -336,6 +380,7 @@ export async function deleteClass(id: string) {
     revalidatePath("/admin/classes");
     revalidatePath("/schedule");
     revalidatePath("/");
+    revalidateClassAdminCaches();
 }
 
 export async function updateAcademySettings(data: {
@@ -758,6 +803,7 @@ export async function createStudent(data: {
     }
     revalidatePath("/admin/students");
     revalidatePath("/admin");
+    revalidateStudentAdminCaches();
 }
 
 export async function updateStudentMemo(id: string, memo: string) {
@@ -772,6 +818,7 @@ export async function updateStudentMemo(id: string, memo: string) {
         throw new Error("메모 저장 실패");
     }
     revalidatePath("/admin/students");
+    revalidateStudentAdminCaches();
 }
 
 export async function updateStudent(id: string, data: {
@@ -815,6 +862,7 @@ export async function updateStudent(id: string, data: {
     }
     revalidatePath("/admin/students");
     revalidatePath("/admin");
+    revalidateStudentAdminCaches();
 }
 
 export async function deleteStudent(id: string) {
@@ -837,6 +885,7 @@ export async function deleteStudent(id: string) {
     }
     revalidatePath("/admin/students");
     revalidatePath("/admin");
+    revalidateStudentAdminCaches();
 }
 
 // ── 수강 등록 관리 ────────────────────────────────────────────────────────────
@@ -855,6 +904,8 @@ export async function enrollStudent(studentId: string, classId: string) {
     }
     revalidatePath("/admin/students");
     revalidatePath("/admin/classes");
+    revalidateStudentAdminCaches();
+    revalidateClassAdminCaches();
 }
 
 export async function updateEnrollmentStatus(enrollmentId: string, status: string) {
@@ -870,6 +921,8 @@ export async function updateEnrollmentStatus(enrollmentId: string, status: strin
     }
     revalidatePath("/admin/students");
     revalidatePath("/admin/classes");
+    revalidateStudentAdminCaches();
+    revalidateClassAdminCaches();
 }
 
 export async function deleteEnrollment(enrollmentId: string) {
@@ -882,6 +935,8 @@ export async function deleteEnrollment(enrollmentId: string) {
     }
     revalidatePath("/admin/students");
     revalidatePath("/admin/classes");
+    revalidateStudentAdminCaches();
+    revalidateClassAdminCaches();
 }
 
 // ── 출결 관리 ──────────────────────────────────────────────────────────────────
@@ -3018,6 +3073,7 @@ export async function createTrialLead(data: {
         throw new Error("체험 신청 등록 실패");
     }
     revalidatePath("/admin/trial");
+    revalidateTrialAdminCaches();
 }
 
 /**
@@ -3128,6 +3184,7 @@ export async function updateTrialLead(
         throw new Error("체험 리드 수정 실패");
     }
     revalidatePath("/admin/trial");
+    revalidateTrialAdminCaches();
 }
 
 /**
@@ -3146,6 +3203,7 @@ export async function deleteTrialLead(id: string) {
         throw new Error("체험 리드 삭제 실패");
     }
     revalidatePath("/admin/trial");
+    revalidateTrialAdminCaches();
 }
 
 /**
@@ -3220,6 +3278,8 @@ export async function convertTrialToStudent(
     revalidatePath("/admin/trial");
     revalidatePath("/admin/students");
     revalidatePath("/admin");
+    revalidateTrialAdminCaches();
+    revalidateStudentAdminCaches();
 }
 
 // ── 대기자(Waitlist) 관리 ─────────────────────────────────────────────────────
@@ -3282,6 +3342,7 @@ export async function addToWaitlist(studentId: string, classId: string, memo?: s
     }
     revalidatePath("/admin/waitlist");
     revalidatePath("/admin/classes");
+    revalidateWaitlistAdminCaches();
 }
 
 /**
@@ -3300,6 +3361,7 @@ export async function removeFromWaitlist(id: string) {
     }
     revalidatePath("/admin/waitlist");
     revalidatePath("/admin/classes");
+    revalidateWaitlistAdminCaches();
 }
 
 /**
@@ -3344,6 +3406,7 @@ export async function offerWaitlistSpot(id: string) {
         throw new Error("자리 제안 실패");
     }
     revalidatePath("/admin/waitlist");
+    revalidateWaitlistAdminCaches();
 }
 
 /**
@@ -3392,6 +3455,8 @@ export async function processWaitlistResponse(id: string, accepted: boolean) {
     revalidatePath("/admin/waitlist");
     revalidatePath("/admin/classes");
     revalidatePath("/admin/students");
+    revalidateWaitlistAdminCaches();
+    revalidateStudentAdminCaches();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3465,6 +3530,7 @@ export async function bookMakeupSession(data: {
         throw new Error("보강 예약 실패");
     }
     revalidatePath("/admin/makeup");
+    revalidateMakeupAdminCaches();
 }
 
 /**
@@ -3482,6 +3548,7 @@ export async function cancelMakeupSession(id: string) {
         throw new Error("보강 취소 실패");
     }
     revalidatePath("/admin/makeup");
+    revalidateMakeupAdminCaches();
 }
 
 /**
@@ -3505,6 +3572,7 @@ export async function updateMakeupStatus(id: string, status: string) {
         throw new Error("보강 상태 변경 실패");
     }
     revalidatePath("/admin/makeup");
+    revalidateMakeupAdminCaches();
 }
 
 // ── 스킬 트래킹 — DDL + CRUD ──────────────────────────────────────
@@ -3862,6 +3930,8 @@ export async function approveEnrollApplication(
     revalidatePath("/admin/trial");
     revalidatePath("/admin/students");
     revalidatePath("/admin");
+    revalidateApplyAdminCaches();
+    revalidateStudentAdminCaches();
 
     // 학부모에게 수강 확정 SMS 발송 (fire-and-forget, 승인 처리와 분리)
     try {
@@ -3964,6 +4034,7 @@ export async function rejectEnrollApplication(
 
     revalidatePath("/admin/apply");
     revalidatePath("/admin");
+    revalidateApplyAdminCaches();
 }
 
 /**

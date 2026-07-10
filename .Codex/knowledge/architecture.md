@@ -45,9 +45,9 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 모바일은 상단 헤더의 메뉴 버튼으로 슬라이드 사이드바를 열고, 본문은 전체 화면 폭을 사용한다.
 - 관리자 공통 셸은 운영 화면에서 DB 구조 변경이나 인덱스 생성 작업을 자동 실행하지 않는다. 인덱스/DDL은 배포 전 마이그레이션이나 별도 관리 작업으로 처리한다.
 - 관리자 인증 확인은 Supabase `getClaims()`를 먼저 사용하고, 관리자/스태프 role 조회는 짧은 서버 메모리 캐시로 반복 DB 조회를 줄인다.
-- 관리자 공통 셸의 알림/체험 신청 배지 API도 같은 `requireAdmin()` 흐름을 공유해 Auth 확인과 role 조회가 중복되지 않게 한다.
+- 관리자 공통 셸은 알림을 클릭할 때만 조회하고, 체험 신청 배지를 위한 `trial-count` 자동 조회는 하지 않는다.
 - 관리자 대시보드 `/admin`은 서버 렌더에서 통계 DB 조회를 직접 기다리지 않고 `/api/admin/dashboard`와 `/api/admin/dashboard/system`을 클라이언트에서 호출해 채운다.
-- 학생 관리 `/admin/students`는 서버 렌더에서 학생/반 목록을 기다리지 않고 `/api/admin/students`를 클라이언트에서 호출해 채우며, 학생 목록 API는 Enrollment를 CTE로 한 번에 집계해 학생별 반복 subquery를 피한다.
+- 학생 관리 `/admin/students`는 서버 렌더에서 학생/반 목록을 기다리지 않고 `/api/admin/students`를 클라이언트에서 호출해 채우며, 학생 목록 API는 Enrollment를 CTE로 한 번에 집계해 학생별 반복 subquery를 피한다. API 응답은 60초 서버 캐시를 쓰고 학생/수강 변경 시 태그를 무효화한다.
 - 운영 통계 `/admin/stats`도 서버 렌더에서 7개 집계를 기다리지 않고 `/api/admin/stats`를 클라이언트에서 호출해 채운다.
 - 체험수업 CRM `/admin/trial`은 서버 렌더에서 리드/통계를 기다리지 않고 `/api/admin/trial`을 클라이언트에서 호출해 채운다.
 - 스태프 관리 `/admin/staff`는 서버 렌더에서 스태프/코치/초대 목록을 기다리지 않고 `/api/admin/staff`를 클라이언트에서 호출해 채운다.
@@ -59,6 +59,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 시간표 관리 `/admin/schedule`은 서버 렌더에서 설정/시간표 override/코치/직접 슬롯/프로그램/외부 Google Sheets를 기다리지 않고, `/api/admin/schedule`이 `SheetSlotCache`에 동기화된 슬롯을 읽어 클라이언트에서 채운다.
 - 청구 템플릿 `/admin/finance/billing`은 서버 렌더에서 청구 템플릿/프로그램 목록을 기다리지 않고 `/api/admin/finance/billing`을 클라이언트에서 호출해 채운다.
 - 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 관리자 읽기 API는 권한 확인 후 60초 서버 캐시를 사용하고, 관련 저장/삭제/순서변경 액션에서 태그 캐시를 즉시 무효화한다.
+- 반/체험/수강신청/대기자/보강 관리자 읽기 API도 권한 확인 후 30~60초 서버 캐시를 사용하고, 관련 저장 액션에서 태그 캐시를 즉시 무효화한다.
 - 스킬 트래킹 `/admin/skills`는 서버 렌더에서 스킬 카테고리 목록을 기다리지 않고 `/api/admin/skills`를 클라이언트에서 호출해 채운다.
 - 반 관리 `/admin/classes`는 서버 렌더에서 프로그램/반 목록을 기다리지 않고 `/api/admin/classes`를 클라이언트에서 호출해 채운다.
 - 코치 관리 `/admin/coaches`는 서버 렌더에서 코치 목록을 기다리지 않고 `/api/admin/coaches`를 클라이언트에서 호출해 채운다.

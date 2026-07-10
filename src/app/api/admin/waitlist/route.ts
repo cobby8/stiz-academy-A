@@ -1,8 +1,23 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getClassCapacityInfo, getClasses, getWaitlistAll } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+const getCachedWaitlistPayload = unstable_cache(
+    async () => {
+        const [waitlist, capacityInfo, classes] = await Promise.all([
+            getWaitlistAll(),
+            getClassCapacityInfo(),
+            getClasses(),
+        ]);
+
+        return { waitlist, capacityInfo, classes };
+    },
+    ["admin-waitlist-v1"],
+    { revalidate: 30, tags: ["admin-waitlist", "admin-classes", "admin-students"] },
+);
 
 export async function GET() {
     try {
@@ -12,14 +27,10 @@ export async function GET() {
     }
 
     try {
-        const [waitlist, capacityInfo, classes] = await Promise.all([
-            getWaitlistAll(),
-            getClassCapacityInfo(),
-            getClasses(),
-        ]);
+        const payload = await getCachedWaitlistPayload();
 
         return NextResponse.json(
-            { waitlist, capacityInfo, classes },
+            payload,
             {
                 headers: {
                     "Cache-Control": "no-store",

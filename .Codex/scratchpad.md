@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 출석 리포트 목록 화면 지연 렌더링
+- 작업명: 후기 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/attendance/report`
+- 범위: `/admin/testimonials`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -52,9 +52,11 @@
 | 프로그램 관리 화면 지연 렌더링 | 완료 | 프로그램 목록 조회를 Suspense 안쪽으로 분리해 요금 안내/list skeleton을 먼저 표시 |
 | 청구 템플릿 화면 지연 렌더링 | 완료 | 청구 템플릿/프로그램 조회를 Suspense 안쪽으로 분리해 table skeleton을 먼저 표시 |
 | 출석 리포트 목록 화면 지연 렌더링 | 완료 | 최근 수업 리포트 목록 조회를 Suspense 안쪽으로 분리해 table skeleton을 먼저 표시 |
+| 후기 관리 화면 지연 렌더링 | 완료 | 후기/학원 설정 조회를 Suspense 안쪽으로 분리해 설정 카드/list skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/testimonials` 진입 시 후기/학원 설정 조회를 Suspense 경계 안쪽으로 옮기고, 설정 카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/attendance/report` 진입 시 최근 수업 리포트 목록 조회를 Suspense 경계 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/finance/billing` 진입 시 청구 템플릿/프로그램 목록 조회를 Suspense 경계 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/programs` 진입 시 프로그램 목록 조회를 Suspense 경계 안쪽으로 옮기고, 요금 안내/list skeleton을 먼저 렌더하도록 변경함.
@@ -64,12 +66,11 @@
 - 2026-07-10: `/admin/coaches` 진입 시 코치 목록 조회를 Suspense 경계 안쪽으로 옮기고, 코치 list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/annual` 진입 시 연간일정/학원 설정 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 연동 설정/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/notices` 진입 시 공지/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 공지 list skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/gallery` 진입 시 갤러리/반/설정/소셜 초안 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 업로드/연동/카드 skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/attendance/report/page.tsx`
-- 주요 변경: 출석 리포트 목록 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getSessionsForReportList(50)` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/attendance/report`
+- 변경 파일: `src/app/admin/testimonials/page.tsx`
+- 주요 변경: 후기 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getAllTestimonials()`/`getAcademySettings()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/testimonials`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -77,4 +78,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/testimonials`, `/admin/stats`, `/admin/sms/templates`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.
+- 다음 속도 개선 후보: `/admin/stats`, `/admin/sms/templates`, `/admin/sms`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.

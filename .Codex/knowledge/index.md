@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/testimonials` 페이지는 후기/학원 설정 조회를 Suspense 안쪽으로 분리하고, 설정 카드/list skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/attendance/report` 페이지는 최근 수업 리포트 목록 조회를 Suspense 안쪽으로 분리하고, table skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/finance/billing` 페이지는 청구 템플릿/프로그램 목록 조회를 Suspense 안쪽으로 분리하고, table skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/programs` 페이지는 프로그램 목록 조회를 Suspense 안쪽으로 분리하고, 요금 안내/list skeleton을 먼저 렌더하도록 바꿨다.
@@ -93,6 +94,7 @@
 - `/admin/programs`는 프로그램 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 요금 안내/list skeleton을 먼저 렌더한다.
 - `/admin/finance/billing`은 청구 템플릿/프로그램 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, table skeleton을 먼저 렌더한다.
 - `/admin/attendance/report`는 최근 수업 리포트 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, table skeleton을 먼저 렌더한다.
+- `/admin/testimonials`는 후기/학원 설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 설정 카드/list skeleton을 먼저 렌더한다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
 - Pretendard 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 idle 시점에 삽입한다. Material Symbols stylesheet는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.

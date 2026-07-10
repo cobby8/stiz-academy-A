@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { getSessionsForReportList } from "@/lib/queries";
 
 // 관리자 리포트 목록은 30초 캐시 (출결 기록 후 자동 갱신)
@@ -9,7 +10,47 @@ const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
 
-export default async function AdminReportListPage() {
+function ReportListLoadingFallback() {
+    return (
+        <div className="mx-auto max-w-5xl">
+            <div className="mb-6">
+                <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="mt-2 h-4 w-96 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="overflow-x-auto">
+                    <div className="min-w-[780px]">
+                        <div className="grid grid-cols-[0.9fr_1.5fr_1.4fr_0.6fr_0.8fr_0.7fr] gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 dark:border-gray-700 dark:bg-gray-900">
+                            {Array.from({ length: 6 }).map((_, index) => (
+                                <div key={index} className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            ))}
+                        </div>
+                        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {Array.from({ length: 7 }).map((_, index) => (
+                                <div
+                                    key={index}
+                                    className="grid grid-cols-[0.9fr_1.5fr_1.4fr_0.6fr_0.8fr_0.7fr] gap-4 px-5 py-4"
+                                >
+                                    <div className="h-5 w-24 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                                    <div className="space-y-2">
+                                        <div className="h-5 w-36 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                                        <div className="h-3 w-28 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    </div>
+                                    <div className="h-5 w-40 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    <div className="mx-auto h-5 w-10 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    <div className="mx-auto h-6 w-16 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                    <div className="mx-auto h-8 w-16 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+async function ReportListDataSection() {
     const sessions = await getSessionsForReportList(50);
 
     return (
@@ -86,5 +127,13 @@ export default async function AdminReportListPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function AdminReportListPage() {
+    return (
+        <Suspense fallback={<ReportListLoadingFallback />}>
+            <ReportListDataSection />
+        </Suspense>
     );
 }

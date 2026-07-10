@@ -1,22 +1,8 @@
 import { NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getTrialLeads, getTrialStats } from "@/lib/queries";
+import { getCachedAdminTrialPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
-
-const getCachedTrialPayload = unstable_cache(
-    async () => {
-        const [leads, stats] = await Promise.all([
-            getTrialLeads(),
-            getTrialStats(),
-        ]);
-
-        return { leads, stats };
-    },
-    ["admin-trial-v1"],
-    { revalidate: 30, tags: ["admin-trial"] },
-);
 
 export async function GET() {
     try {
@@ -26,7 +12,7 @@ export async function GET() {
     }
 
     try {
-        const payload = await getCachedTrialPayload();
+        const payload = await getCachedAdminTrialPayload();
 
         return NextResponse.json(
             payload,

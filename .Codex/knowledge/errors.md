@@ -130,3 +130,7 @@
 - 원인: 어두운 배경 기준으로 `text-white`를 유지한 채 활성 또는 hover 배경만 `bg-white`로 바뀌면 흰 종이에 흰 글씨가 된다.
 - 해결: 실제 흰 배경을 쓰는 활성 탭은 `text-brand-navy-900`처럼 진한 글씨를 사용하고, 어두운 오버레이/사이드바 hover는 `bg-white/10`처럼 반투명 배경을 사용한다.
 - 예방: `bg-white text-white`, `hover:bg-white hover:text-white` 조합을 전역 검색해 실제 충돌인지 확인한다.
+## 관리자 page 파일의 깨진 주석 주의
+- 증상: `classes/page.tsx`의 깨진 주석 안에 `revalidate` 텍스트가 섞여 TypeScript 중복 선언처럼 보였다.
+- 해결: 짧은 page 파일은 깨진 주석을 유지하지 않고 ASCII 주석/명확한 export로 정리한다.
+- 예방: 인코딩이 깨진 주석 주변에 설정 export를 추가할 때는 `npx.cmd tsc --noEmit`으로 중복 선언 여부를 바로 확인한다.

@@ -1,8 +1,10 @@
 import StudentManagementClient from "./StudentManagementClient";
+import { getCachedAdminStudentsPayload } from "@/lib/adminReadPayloads";
 
-// The full student list is intentionally loaded in the browser after entry.
 export const revalidate = 30;
 
-export default function AdminStudentsPage() {
-    return <StudentManagementClient />;
+export default async function AdminStudentsPage() {
+    const { students, classes } = await getCachedAdminStudentsPayload();
+
+    return <StudentManagementClient students={students} classes={classes} />;
 }

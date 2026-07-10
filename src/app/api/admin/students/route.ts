@@ -1,22 +1,8 @@
 import { NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getClasses, getStudents } from "@/lib/queries";
+import { getCachedAdminStudentsPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
-
-const getCachedStudentsPayload = unstable_cache(
-    async () => {
-        const [students, classes] = await Promise.all([
-            getStudents(),
-            getClasses(),
-        ]);
-
-        return { students, classes };
-    },
-    ["admin-students-v1"],
-    { revalidate: 60, tags: ["admin-students", "admin-classes"] },
-);
 
 export async function GET() {
     try {
@@ -26,7 +12,7 @@ export async function GET() {
     }
 
     try {
-        const payload = await getCachedStudentsPayload();
+        const payload = await getCachedAdminStudentsPayload();
 
         return NextResponse.json(
             payload,

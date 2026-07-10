@@ -214,17 +214,16 @@ function getLatestStatus(enrollments: Student["enrollments"]): string | null {
 }
 
 export default function StudentManagementClient({
-    students: initialStudents = [],
-    classes: initialClasses = [],
+    students: initialStudents,
+    classes: initialClasses,
 }: {
     students?: Student[];
     classes?: ClassItem[];
 }) {
-    const [students, setStudents] = useState<Student[]>(initialStudents);
-    const [classes, setClasses] = useState<ClassItem[]>(initialClasses);
-    const [dataLoading, setDataLoading] = useState(
-        initialStudents.length === 0 && initialClasses.length === 0,
-    );
+    const hasInitialData = Boolean(initialStudents || initialClasses);
+    const [students, setStudents] = useState<Student[]>(initialStudents ?? []);
+    const [classes, setClasses] = useState<ClassItem[]>(initialClasses ?? []);
+    const [dataLoading, setDataLoading] = useState(!hasInitialData);
     const [dataError, setDataError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -269,8 +268,9 @@ export default function StudentManagementClient({
     }, []);
 
     useEffect(() => {
+        if (hasInitialData) return;
         void loadData();
-    }, [loadData]);
+    }, [hasInitialData, loadData]);
     // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
     const [filterStatus, setFilterStatus] = useState("ACTIVE");
 

@@ -1,3 +1,8 @@
+## 2026-07-11 관리자 초기 payload 메모
+- `src/lib/adminReadPayloads.ts`는 수강생/반/체험 CRM의 캐시된 읽기 payload를 제공하며, API route와 서버 페이지가 같은 캐시 키와 태그를 공유한다.
+- `/admin/students`, `/admin/classes`, `/admin/trial`은 페이지 서버 렌더링에서 초기 데이터를 받아 클라이언트 컴포넌트에 넘기고, 초기 데이터가 있을 때 첫 `useEffect` API 재호출을 건너뛴다.
+- 저장/삭제/상태 변경 이후에는 기존 API 재조회와 Server Action의 `revalidateTag`가 함께 동작해 화면 갱신과 캐시 무효화를 유지한다.
+
 ## 2026-07-11 관리자 대시보드 속도 메모
 - `/api/admin/dashboard`는 관리자 권한 확인 후 15초 `unstable_cache`로 동일한 읽기 결과를 짧게 재사용한다.
 - `/api/admin/dashboard/system`은 5분 서버 캐시를 쓰며, `/admin` 첫 진입에서는 자동 호출하지 않고 시스템 상태 카드의 확인 버튼으로만 조회한다.

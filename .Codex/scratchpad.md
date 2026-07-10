@@ -1,9 +1,9 @@
-# STIZ 고도화 스크래치패드
+# STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 관리자 운영 데이터 API 캐시 및 전역 배경 조회 제거
-- 상태: 타입/빌드 검증 완료, 커밋 준비 중
-- 범위: 관리자 공통 셸, 원생/반/체험/수강신청/대기자/보강 API
+- 작업명: 관리자 주요 메뉴 초기 데이터 왕복 제거
+- 상태: 구현 및 검증 완료, 커밋 준비 중
+- 범위: `/admin/students`, `/admin/classes`, `/admin/trial`, 관리자 읽기 payload 공용화
 - 기준일: 2026-07-11
 
 ## 진행 현황표
@@ -11,43 +11,35 @@
 | --- | --- | --- |
 | 프로젝트 현황 파악 | 완료 | Next.js + Supabase + Prisma 기반 학원 홈페이지/관리 플랫폼 |
 | 관리자 권한 보호 | 완료 | `/admin` 서버 레이아웃에서 DB role 기반 권한 확인 |
-| 관리자 링크 prefetch 차단 | 완료 | 보이지 않는 관리자 route의 배경 조회를 줄임 |
-| 관리자 DDL 진입 제거 | 완료 | 읽기 화면에서 테이블/인덱스 보장 작업을 실행하지 않음 |
-| 관리자 데이터 지연 로딩 | 완료 | 무거운 조회는 API 로딩으로 분리 |
-| 관리자 인증 경량화 | 완료 | Supabase `getClaims()` 우선 사용, DB role 조회 30초 캐시 |
-| 대시보드 읽기 캐시 | 완료 | `/api/admin/dashboard` 15초 서버 캐시와 private browser cache 적용 |
-| 시스템 상태 지연 점검 | 완료 | `/api/admin/dashboard/system` 5분 서버 캐시, 첫 화면 자동 호출 제거 |
-| 알림 자동 폴링 제거 | 완료 | 알림 버튼 클릭 시에만 `/api/admin/notifications` 조회 |
-| 시간표 외부 조회 제거 | 완료 | `/api/admin/schedule`이 Google Sheets 직접 fetch 대신 `SheetSlotCache`를 읽음 |
-| 공통 선택 목록 캐시 | 완료 | 학생/코치 옵션, 설정, 체험 카운트 API에 짧은 private/server cache 적용 |
-| 수동 시간표 동기화 | 완료 | 공개/관리 화면은 DB 캐시만 읽고 관리자 버튼으로 Google Sheets를 수동 동기화 |
-| 수납/통계 캐시 | 완료 | `/api/admin/finance`, `/api/admin/stats`에 짧은 캐시와 저장 후 무효화 적용 |
-| 콘텐츠성 관리자 API 캐시 | 완료 | 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 조회에 60초 서버 캐시 적용 |
-| 운영 데이터 API 캐시 | 완료 | 원생/반/체험/수강신청/대기자/보강 조회에 30~60초 서버 캐시 적용 |
-| 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
+| 관리자 링크 prefetch 차단 | 완료 | 보이지 않는 관리자 route 배경 조회 감소 |
+| 관리자 DDL 진입 제거 | 완료 | 읽기 화면에서 테이블/인덱스 보장 작업 제거 |
+| 관리자 인증 경량화 | 완료 | Supabase `getClaims()` 우선 사용, role 조회 단기 캐시 |
+| 관리자 공통 배경 조회 제거 | 완료 | 알림은 클릭 시 조회, trial-count 자동 조회 제거 |
+| Google Sheets 수동 동기화 | 완료 | 화면은 DB 캐시만 읽고 수동 버튼으로 외부 시트 동기화 |
+| 관리자 읽기 API 캐시 | 완료 | dashboard/finance/stats/content/operation API 서버 캐시 적용 |
+| 주요 메뉴 초기 데이터 주입 | 완료 | students/classes/trial 첫 진입 API 재호출 제거 |
+| 검증 | 완료 | `npx.cmd tsc --noEmit`, `npm.cmd run build` 통과 |
 
 ## 작업 로그
-- 2026-07-11: DB 계측 결과 SQL 자체는 빠르고 반복 API/인증/왕복이 병목에 가까워, 전역 `trial-count` 자동 조회를 제거하고 운영 데이터 API 6개에 짧은 서버 캐시를 적용.
-- 2026-07-11: 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 관리자 API에 60초 서버 캐시를 적용하고, 관련 저장 액션에서 태그 캐시를 즉시 무효화.
-- 2026-07-11: Google Sheets 시간표 자동 cron을 제거하고, 관리자 시간표 모달의 “지금 동기화” 버튼으로만 시트를 읽어 `SheetSlotCache`에 저장하도록 전환.
-- 2026-07-11: 공개 `/schedule`과 `/simulator`의 Google Sheets 직접 fetch 폴백을 제거해 화면 렌더가 외부 네트워크를 기다리지 않도록 변경.
-- 2026-07-11: `/api/admin/finance`와 `/api/admin/stats`에 짧은 private/server cache를 적용하고, 수납 쓰기 작업 후 관련 캐시를 즉시 무효화.
-- 2026-07-11: `/api/admin/schedule`이 Google Sheets를 직접 기다리지 않고 `SheetSlotCache`의 동기화된 슬롯을 읽도록 바꿔 시간표 화면 진입의 외부 네트워크 대기를 제거.
-- 2026-07-11: `student-options`, `coach-options`, `settings`, `trial-count`에 짧은 private/server cache를 적용하고 관련 클라이언트 `cache: "no-store"`를 제거.
-- 2026-07-11: `/api/admin/dashboard`의 `force-dynamic`/`no-store`를 제거하고 15초 `unstable_cache`를 적용해 동일한 관리자 읽기 조회를 짧게 재사용하도록 변경.
-- 2026-07-11: `/api/admin/dashboard/system`은 5분 서버 캐시로 바꾸고, 대시보드 첫 진입 자동 호출을 제거해 사용자가 “확인”을 눌렀을 때만 DB/백업 상태를 점검하도록 변경.
-- 2026-07-11: 관리자 공통 헤더의 알림 자동 idle 조회와 120초 폴링을 제거해 모든 관리자 페이지 진입 시 배경 API 경합을 줄임.
-- 2026-07-11: 관리자 셸의 `/api/admin/performance-indexes` 자동 호출 제거, Supabase 인증 `getClaims()` 우선 사용, DB role 조회 30초 캐시 적용.
+- 2026-07-11: `/admin/students`, `/admin/classes`, `/admin/trial` 페이지가 서버에서 캐시된 초기 데이터를 받아 렌더링하도록 바꾸고, 첫 진입 시 같은 API를 클라이언트에서 다시 호출하던 왕복을 제거.
+- 2026-07-11: DB 계측 결과 SQL 자체보다 반복 API/auth/왕복 비용이 병목에 가까워, 전역 `trial-count` 자동 조회 제거 및 운영 데이터 API 6개에 서버 캐시 적용.
+- 2026-07-11: 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 관리자 API에 60초 서버 캐시 적용 및 저장 액션 캐시 무효화.
+- 2026-07-11: Google Sheets 시간표 자동 cron 제거, 관리자 수동 동기화 버튼으로 `SheetSlotCache` 저장 후 화면은 DB 캐시만 읽도록 전환.
+- 2026-07-11: `/api/admin/finance`, `/api/admin/stats`에 단기 private/server cache 적용 및 관련 저장 작업 후 캐시 무효화.
+- 2026-07-11: `/api/admin/dashboard` 15초 cache, `/api/admin/dashboard/system` 수동 확인형으로 변경.
+- 2026-07-11: 관리자 공통 헤더의 알림 자동 조회와 DDL/index 자동 보장 호출 제거.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/AdminShellClient.tsx`, `src/app/api/admin/students/route.ts`, `src/app/api/admin/classes/route.ts`, `src/app/api/admin/trial/route.ts`, `src/app/api/admin/apply/route.ts`, `src/app/api/admin/waitlist/route.ts`, `src/app/api/admin/makeup/route.ts`, `src/app/actions/admin.ts`
-- 주요 변경: 관리자 공통 셸의 `trial-count` idle 자동 호출을 제거하고, 운영 데이터 API는 권한 확인 후 30~60초 `unstable_cache`를 사용한다. 관련 저장 액션은 태그 캐시를 즉시 무효화한다.
-- 의도: SQL보다 왕복/반복 호출 비용이 큰 구조라, 모든 관리자 화면에 붙는 배경 API와 반복 DB 조회를 줄인다.
+- 변경 파일: `src/lib/adminReadPayloads.ts`, `src/app/admin/students/page.tsx`, `src/app/admin/classes/page.tsx`, `src/app/admin/trial/page.tsx`, `src/app/admin/students/StudentManagementClient.tsx`, `src/app/api/admin/students/route.ts`, `src/app/api/admin/classes/route.ts`, `src/app/api/admin/trial/route.ts`
+- 주요 변경: 캐시된 관리자 읽기 payload를 공용 서버 헬퍼로 분리하고, API route와 서버 페이지가 같은 캐시 키/태그를 공유하게 했다.
+- 주요 변경: 수강생 화면은 초기 데이터가 있으면 첫 `useEffect` API 재호출을 건너뛰게 했다.
+- 의도: 이미 빠른 DB 캐시가 있어도 브라우저가 JS 실행 후 같은 API를 한 번 더 호출하던 왕복을 줄여 관리자 메뉴 첫 표시를 빠르게 만든다.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- `npx.cmd next build` 통과
-- 빌드 중 Supabase pooler 접속 경고가 출력됐지만 기존 공개 페이지 프리렌더 fallback 경고이며 종료 코드는 0
+- `npm.cmd run build` 통과
+- 빌드 중 Supabase pooler 접속 경고가 출력됐지만 기존 정적 페이지 fallback 경고이며 종료 코드는 0
 
 ## 다음에 할 것
-- 실제 로그인 세션에서 `/admin` Network waterfall을 확인하고, 아직 느린 화면은 JS 렌더링/테이블 렌더링 비용까지 분리해서 본다.
+- 실제 로그인 세션에서 `/admin/students`, `/admin/classes`, `/admin/trial` Network waterfall을 확인해 초기 API 재호출이 사라졌는지 검증.
+- 남은 느린 화면은 “초기 데이터가 필요한 화면”과 “클릭할 때만 필요한 보조 데이터”로 더 분리.

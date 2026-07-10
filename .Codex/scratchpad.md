@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: SMS 템플릿 화면 지연 렌더링
+- 작업명: 반 상세 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/sms/templates`
+- 범위: `/admin/classes/[id]`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -55,9 +55,11 @@
 | 후기 관리 화면 지연 렌더링 | 완료 | 후기/학원 설정 조회를 Suspense 안쪽으로 분리해 설정 카드/list skeleton을 먼저 표시 |
 | 통계 화면 지연 렌더링 | 완료 | 7개 운영 집계 조회를 Suspense 안쪽으로 분리해 KPI/chart skeleton을 먼저 표시 |
 | SMS 템플릿 화면 지연 렌더링 | 완료 | SMS 템플릿 조회를 Suspense 안쪽으로 분리해 card skeleton을 먼저 표시 |
+| 반 상세 화면 지연 렌더링 | 완료 | 반/수강생/수업기록/코치 조회를 Suspense 안쪽으로 분리해 상세 skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/classes/[id]` 진입 시 반/수강생/수업기록/코치 조회를 Suspense 경계 안쪽으로 옮기고, 상세 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/sms/templates` 진입 시 SMS 템플릿 조회를 Suspense 경계 안쪽으로 옮기고, card skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/stats` 진입 시 7개 운영 집계 조회를 Suspense 경계 안쪽으로 옮기고, KPI/chart skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/testimonials` 진입 시 후기/학원 설정 조회를 Suspense 경계 안쪽으로 옮기고, 설정 카드/list skeleton을 먼저 렌더하도록 변경함.
@@ -67,12 +69,11 @@
 - 2026-07-10: `/admin/requests` 진입 시 학부모 요청 목록 조회를 Suspense 경계 안쪽으로 옮기고, 필터/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/faq` 진입 시 FAQ 목록 조회를 Suspense 경계 안쪽으로 옮기고, FAQ card skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/feedback` 진입 시 피드백 목록 조회를 Suspense 경계 안쪽으로 옮기고, 피드백 card skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/coaches` 진입 시 코치 목록 조회를 Suspense 경계 안쪽으로 옮기고, 코치 list skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/sms/templates/page.tsx`
-- 주요 변경: SMS 템플릿 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getSmsTemplates()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/sms/templates`
+- 변경 파일: `src/app/admin/classes/[id]/page.tsx`
+- 주요 변경: 반 상세 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, 반/수강생/수업기록/코치 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/classes/[id]`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -80,4 +81,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/sms`, `/admin/attendance/report/[sessionId]`, `/admin/classes/[id]`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.
+- 다음 속도 개선 후보: `/admin/attendance/report/[sessionId]`, `/admin/settings`, `/admin/schedule`처럼 상세/설정 데이터를 첫 진입에 함께 가져오는 화면을 추가 점검.

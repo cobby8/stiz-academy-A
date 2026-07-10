@@ -5,19 +5,12 @@
  */
 
 import { getStaffUsers, getAllCoaches, getStaffInvitations } from "@/lib/queries";
-import { ensureStaffColumns, ensureStaffInvitationTable } from "@/app/actions/admin";
 import StaffClient from "./StaffClient";
 
 export const revalidate = 30;
 
 export default async function StaffPage() {
-    // DDL ensure: VICE_ADMIN enum + Coach.userId + StaffInvitation 테이블 자동 생성
-    await Promise.all([
-        ensureStaffColumns(),
-        ensureStaffInvitationTable(),
-    ]);
-
-    // 스태프 목록 + 코치 목록 + 초대 목록 병렬 조회
+    // 구조 보강은 스태프 생성/역할 변경/초대 액션에서 수행하고, 목록 화면은 읽기만 빠르게 처리한다.
     const [staffUsers, coaches, invitations] = await Promise.all([
         getStaffUsers(),
         getAllCoaches(),

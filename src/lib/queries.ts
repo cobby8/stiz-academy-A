@@ -2604,13 +2604,13 @@ export const getStaffUsers = cache(async () => {
     try {
         // User 테이블에서 ADMIN/VICE_ADMIN/INSTRUCTOR 조회 + Coach 연결 (LEFT JOIN)
         const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT u.id, u.email, u.name, u.phone, u.role, u."createdAt",
+            `SELECT u.id, u.email, u.name, u.phone, u.role::text AS role, u."createdAt",
                     c.id AS "coachId", c.name AS "coachName"
              FROM "User" u
              LEFT JOIN "Coach" c ON c."userId" = u.id
-             WHERE u.role IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR')
+             WHERE u.role::text IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR')
              ORDER BY
-               CASE u.role
+               CASE u.role::text
                  WHEN 'ADMIN' THEN 1
                  WHEN 'VICE_ADMIN' THEN 2
                  WHEN 'INSTRUCTOR' THEN 3
@@ -2629,6 +2629,35 @@ export const getStaffUsers = cache(async () => {
         }));
     } catch (e) {
         console.error("[getStaffUsers] failed:", e);
+    }
+
+    try {
+        // 오래된 DB에서 Coach.userId 컬럼이 아직 없으면 연결 정보 없이 스태프만 표시한다.
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT u.id, u.email, u.name, u.phone, u.role::text AS role, u."createdAt"
+             FROM "User" u
+             WHERE u.role::text IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR')
+             ORDER BY
+               CASE u.role::text
+                 WHEN 'ADMIN' THEN 1
+                 WHEN 'VICE_ADMIN' THEN 2
+                 WHEN 'INSTRUCTOR' THEN 3
+               END,
+               u."createdAt" ASC`
+        );
+
+        return rows.map((r: any) => ({
+            id: r.id,
+            email: r.email,
+            name: r.name,
+            phone: r.phone,
+            role: r.role,
+            createdAt: r.createdAt ?? r.createdat,
+            coachId: null,
+            coachName: null,
+        }));
+    } catch (fallbackError) {
+        console.error("[getStaffUsers:fallback] failed:", fallbackError);
         return [];
     }
 });
@@ -2649,6 +2678,24 @@ export const getAllCoaches = cache(async () => {
         }));
     } catch (e) {
         console.error("[getAllCoaches] failed:", e);
+    }
+
+    try {
+        // 오래된 DB에서 Coach.userId 컬럼이 아직 없으면 연결 상태 없이 코치 목록만 표시한다.
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, role
+             FROM "Coach"
+             ORDER BY "order" ASC, name ASC`
+        );
+
+        return rows.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            role: r.role,
+            userId: null,
+        }));
+    } catch (fallbackError) {
+        console.error("[getAllCoaches:fallback] failed:", fallbackError);
         return [];
     }
 });

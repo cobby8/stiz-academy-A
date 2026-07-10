@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { createNotice, updateNotice, deleteNotice } from "@/app/actions/admin";
 import { isImageAttachment, isHtmlContent, plainToEditorHtml, stripHtmlForPreview } from "@/lib/noticeContent";
@@ -43,6 +43,11 @@ export type NoticeData = {
 };
 type ClassInfo = { id: string; name: string; program?: { name: string } | null };
 
+type NoticesPayload = {
+    notices: NoticeData[];
+    classes: ClassInfo[];
+};
+
 function SymbolIcon({
     name,
     size = 18,
@@ -63,8 +68,73 @@ function SymbolIcon({
     );
 }
 
-export default function NoticesAdminClient({ notices, classes }: { notices: NoticeData[]; classes: ClassInfo[] }) {
+function NoticesLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-64 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-11 w-28 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="space-y-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 space-y-3">
+                                <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="flex gap-2">
+                                    <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-6 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                </div>
+                            </div>
+                            <div className="hidden gap-2 sm:flex">
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function NoticesErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">공지사항을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
+export default function NoticesAdminClient({
+    notices: initialNotices,
+    classes: initialClasses,
+}: {
+    notices?: NoticeData[];
+    classes?: ClassInfo[];
+}) {
     const [isPending, startTransition] = useTransition();
+    const hasInitialData = initialNotices !== undefined && initialClasses !== undefined;
+    const [notices, setNotices] = useState<NoticeData[]>(initialNotices ?? []);
+    const [classes, setClasses] = useState<ClassInfo[]>(initialClasses ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [formTitle, setFormTitle] = useState("");
@@ -77,6 +147,30 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
     // 본문(리치 에디터) 이미지 업로드 진행 상태 — 하단 첨부용 uploading과 별개로 추적한다.
     const [editorUploading, setEditorUploading] = useState(false);
     const [socialNotice, setSocialNotice] = useState<NoticeData | null>(null);
+
+    const loadNotices = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/notices", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load notices.");
+            }
+            const data = (await response.json()) as NoticesPayload;
+            setNotices(data.notices);
+            setClasses(data.classes);
+        } catch (error) {
+            console.error("Failed to load notices:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadNotices();
+    }, [hasInitialData, loadNotices]);
 
     function resetForm() {
         setEditId(null);
@@ -157,6 +251,7 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
                     await createNotice(payload);
                 }
                 resetForm();
+                await loadNotices();
             } catch (e) {
                 console.error("공지 저장 실패:", e);
                 alert("공지 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.\n(문제가 계속되면 관리자에게 문의하세요.)");
@@ -166,7 +261,18 @@ export default function NoticesAdminClient({ notices, classes }: { notices: Noti
 
     function handleDelete(id: string) {
         if (!confirm("이 공지사항을 삭제하시겠습니까?")) return;
-        startTransition(async () => { await deleteNotice(id); });
+        startTransition(async () => {
+            await deleteNotice(id);
+            await loadNotices();
+        });
+    }
+
+    if (loading && notices.length === 0) {
+        return <NoticesLoadingFallback />;
+    }
+
+    if (loadError && notices.length === 0) {
+        return <NoticesErrorState onRetry={loadNotices} />;
     }
 
     return (

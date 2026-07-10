@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/notices` 공지 관리는 공지/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/notices` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/attendance` 출석 관리는 반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/attendance` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/faq` FAQ 관리는 FAQ 목록 조회를 서버 렌더에서 제거하고, `/api/admin/faq` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/testimonials` 후기 관리는 후기/네이버 플레이스 링크 조회를 서버 렌더에서 제거하고, `/api/admin/testimonials` 클라이언트 로딩으로 뒤로 미뤘다.
@@ -66,7 +67,7 @@
 
 - 기준일: 2026-07-10
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -118,7 +119,7 @@
 - `/admin/trial`은 체험 리드/통계 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, CRM 카드/list skeleton을 먼저 렌더한다.
 - `/admin/finance`는 수납 목록/요약 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 월 선택/카드/table skeleton을 먼저 렌더한다.
 - `/admin/gallery`는 갤러리/반/설정/소셜 초안 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 업로드/연동/카드 skeleton을 먼저 렌더한다.
-- `/admin/notices`는 공지/반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 공지 list skeleton을 먼저 렌더한다.
+- `/admin/notices`는 공지/반 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/notices`에서 클라이언트가 불러온다.
 - `/admin/annual`은 연간일정/ICS 설정을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/annual`에서 클라이언트가 불러온다.
 - `/admin/coaches`는 코치 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/coaches`에서 클라이언트가 불러온다.
 - `/admin/feedback`은 피드백 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 피드백 card skeleton을 먼저 렌더한다.

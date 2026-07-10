@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { SessionInitialData } from "./SessionLogModal";
 
@@ -81,10 +80,17 @@ type Coach = {
 type TabKey = "students" | "sessions" | "attendance";
 
 // === Props ===
-type Props = {
+type ClassDetailPayload = {
     classData: ClassData;
     sessions: SessionRow[];
     coaches: Coach[];
+};
+
+type Props = {
+    classData?: ClassData;
+    sessions?: SessionRow[];
+    coaches?: Coach[];
+    classId?: string;
 };
 
 function SymbolIcon({
@@ -107,8 +113,74 @@ function SymbolIcon({
     );
 }
 
-export default function ClassDetailClient({ classData, sessions, coaches }: Props) {
-    const router = useRouter();
+function ClassDetailLoadingSkeleton() {
+    return (
+        <div className="max-w-5xl mx-auto space-y-6">
+            <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="flex-1">
+                    <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="mt-2 h-4 w-72 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                    >
+                        <div className="h-4 w-16 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        <div className="mt-3 h-8 w-12 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    </div>
+                ))}
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
+                {Array.from({ length: 5 }).map((_, index) => (
+                    <div key={index} className="flex items-center gap-4 border-b border-gray-50 p-4 last:border-b-0 dark:border-gray-800">
+                        <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        <div className="min-w-0 flex-1">
+                            <div className="h-4 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                            <div className="mt-2 h-3 w-48 max-w-full rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function ClassDetailErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+    return (
+        <div className="max-w-5xl mx-auto rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <SymbolIcon name="error" size={36} className="mx-auto mb-3 text-red-500" />
+            <p className="font-bold text-gray-900 dark:text-white">{message}</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
+export default function ClassDetailClient({
+    classData: initialClassData,
+    sessions: initialSessions = [],
+    coaches: initialCoaches = [],
+    classId,
+}: Props) {
+    const initialDetail = initialClassData
+        ? { classData: initialClassData, sessions: initialSessions, coaches: initialCoaches }
+        : null;
+    const [detail, setDetail] = useState<ClassDetailPayload | null>(initialDetail);
+    const [detailLoading, setDetailLoading] = useState(!initialDetail && Boolean(classId));
+    const [detailError, setDetailError] = useState<string | null>(
+        initialDetail || classId ? null : "반 정보를 불러올 수 없습니다.",
+    );
     // 현재 활성 탭 상태 관리
     const [activeTab, setActiveTab] = useState<TabKey>("students");
     // SessionLogModal 표시 여부
@@ -117,6 +189,33 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
     const [editingSession, setEditingSession] = useState<SessionInitialData | null>(null);
     // 세션 상세 로딩 상태
     const [loadingSession, setLoadingSession] = useState(false);
+
+    const loadDetail = useCallback(async () => {
+        if (!classId) {
+            setDetailLoading(false);
+            setDetailError("반 정보를 불러올 수 없습니다.");
+            return;
+        }
+
+        setDetailLoading(true);
+        setDetailError(null);
+
+        try {
+            const res = await fetch(`/api/admin/classes/${classId}/detail`, { cache: "no-store" });
+            if (!res.ok) throw new Error("반 상세 정보를 불러올 수 없습니다");
+            const data = (await res.json()) as ClassDetailPayload;
+            setDetail(data);
+        } catch {
+            setDetailError("반 상세 정보를 불러오지 못했습니다.");
+        } finally {
+            setDetailLoading(false);
+        }
+    }, [classId]);
+
+    useEffect(() => {
+        if (detail || !classId) return;
+        void loadDetail();
+    }, [classId, detail, loadDetail]);
 
     // 수업 기록 추가 (신규 모드)
     const handleAddSession = useCallback(() => {
@@ -140,10 +239,25 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
         }
     }, []);
 
-    // 저장 후 콜백 — 페이지 데이터 새로고침
+    // 저장 후 콜백 — 전체 페이지 대신 상세 데이터만 새로고침
     const handleSaved = useCallback(() => {
-        router.refresh();
-    }, [router]);
+        void loadDetail();
+    }, [loadDetail]);
+
+    if (!detail && detailLoading) {
+        return <ClassDetailLoadingSkeleton />;
+    }
+
+    if (!detail) {
+        return (
+            <ClassDetailErrorState
+                message={detailError ?? "반 상세 정보를 불러오지 못했습니다."}
+                onRetry={loadDetail}
+            />
+        );
+    }
+
+    const { classData, sessions, coaches } = detail;
 
     // 탭 정의 — 아이콘 + 라벨 + 카운트
     const tabs: { key: TabKey; label: string; iconName: string; count?: number }[] = [

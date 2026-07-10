@@ -49,6 +49,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 학원 설정 `/admin/settings`는 서버 렌더에서 학원 설정 조회를 기다리지 않고 `/api/admin/settings`를 클라이언트에서 호출해 채운다.
 - 개인정보처리방침 `/admin/privacy`는 서버 렌더에서 개인정보 설정 조회를 기다리지 않고 `/api/admin/settings`를 클라이언트에서 호출해 채운다.
 - 이용약관 `/admin/terms`는 서버 렌더에서 이용약관 설정 조회를 기다리지 않고 `/api/admin/settings`를 클라이언트에서 호출해 채운다.
+- 리포트 상세 편집 `/admin/attendance/report/[sessionId]`는 서버 렌더에서 리포트/코치 조회를 기다리지 않고 `/api/admin/attendance/report/[sessionId]`를 클라이언트에서 호출해 채운다.
 
 ## 주요 데이터 모델
 - 사용자/권한: `User`, `StaffInvitation`, `Role`

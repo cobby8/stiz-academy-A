@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
     saveSessionReport,
@@ -64,14 +63,137 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
     LATE: { label: "지각", color: "bg-yellow-100 text-yellow-700" },
 };
 
+type ReportPayload = {
+    report: ReportData | null;
+    coaches: Coach[];
+};
+
+function ReportEditLoadingFallback() {
+    return (
+        <div className="mx-auto max-w-4xl">
+            <div className="mb-6 flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-5 w-28 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                    <div className="mt-3 h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-8 w-24 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" />
+            </div>
+
+            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="h-7 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="mt-5 space-y-4">
+                    <div className="h-11 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                    <div className="h-11 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                    <div className="h-28 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                    <div className="h-10 w-32 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                </div>
+            </div>
+
+            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="border-b border-gray-100 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900/50">
+                    <div className="h-7 w-56 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-3 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                        <div key={index} className="px-5 py-4">
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                                <div className="h-5 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                <div className="h-6 w-14 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                            </div>
+                            <div className="mb-3 h-5 w-32 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                            <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="h-10 w-32 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+                <div className="h-10 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+            </div>
+        </div>
+    );
+}
+
+function ReportEditErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="mx-auto max-w-4xl rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">수업 리포트 정보를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
 export default function ReportEditClient({
+    report: initialReport,
+    coaches: initialCoaches,
+    sessionId,
+}: {
+    report?: ReportData | null;
+    coaches?: Coach[];
+    sessionId?: string;
+}) {
+    const hasInitialData = initialReport !== undefined && initialCoaches !== undefined;
+    const [report, setReport] = useState<ReportData | null>(initialReport ?? null);
+    const [coaches, setCoaches] = useState<Coach[]>(initialCoaches ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
+
+    const loadReport = useCallback(async () => {
+        if (!sessionId) {
+            setLoadError(true);
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch(`/api/admin/attendance/report/${sessionId}`, { cache: "no-store" });
+            if (!response.ok) throw new Error("Failed to load report.");
+            const data = (await response.json()) as ReportPayload;
+            setReport(data.report);
+            setCoaches(data.coaches);
+            setLoadError(!data.report);
+        } catch (error) {
+            console.error("Failed to load report:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, [sessionId]);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadReport();
+    }, [hasInitialData, loadReport]);
+
+    if (loading && !report) {
+        return <ReportEditLoadingFallback />;
+    }
+
+    if (loadError || !report) {
+        return <ReportEditErrorState onRetry={loadReport} />;
+    }
+
+    return <ReportEditForm report={report} coaches={coaches} />;
+}
+
+function ReportEditForm({
     report,
     coaches,
 }: {
     report: ReportData;
     coaches: Coach[];
 }) {
-    const router = useRouter();
 
     // ── 리포트 기본 정보 상태 ──
     const [topic, setTopic] = useState(report.topic || "");
@@ -165,7 +287,6 @@ export default function ReportEditClient({
             }
 
             setSaved(true);
-            router.refresh();
         } catch (err: any) {
             alert(err.message || "저장 실패");
         } finally {
@@ -185,7 +306,6 @@ export default function ReportEditClient({
         try {
             await publishSessionReport(report.id, newState);
             setPublished(newState);
-            router.refresh();
         } catch (err: any) {
             alert(err.message || "발행 상태 변경 실패");
         } finally {

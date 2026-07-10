@@ -58,3 +58,15 @@ ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramMediaId" TEXT;
 ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramPermalink" TEXT;
 ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramPublishedAt" TIMESTAMPTZ;
 ALTER TABLE "GalleryPost" ADD COLUMN IF NOT EXISTS "instagramPublishError" TEXT;
+
+-- [Performance indexes] 관리자 목록/상세 조회 가속
+CREATE INDEX IF NOT EXISTS "Student_parentId_idx" ON "Student" ("parentId");
+CREATE INDEX IF NOT EXISTS "Student_name_parentId_idx" ON "Student" (name, "parentId");
+CREATE INDEX IF NOT EXISTS "Class_programId_idx" ON "Class" ("programId");
+CREATE INDEX IF NOT EXISTS "Class_instructorId_idx" ON "Class" ("instructorId");
+CREATE INDEX IF NOT EXISTS "Enrollment_classId_status_idx" ON "Enrollment" ("classId", status);
+CREATE INDEX IF NOT EXISTS "Session_classId_date_idx" ON "Session" ("classId", date);
+CREATE INDEX IF NOT EXISTS "Session_published_date_idx" ON "Session" (published, date);
+CREATE INDEX IF NOT EXISTS "Attendance_studentId_idx" ON "Attendance" ("studentId");
+CREATE INDEX IF NOT EXISTS "Payment_studentId_year_month_idx" ON "Payment" ("studentId", year, month);
+CREATE INDEX IF NOT EXISTS "Payment_studentId_dueDate_idx" ON "Payment" ("studentId", "dueDate");

@@ -43,6 +43,9 @@ model Student {
   payments     Payment[]
   sessionNotes StudentSessionNote[]
   parent       User         @relation(fields: [parentId], references: [id])
+
+  @@index([parentId])
+  @@index([name, parentId])
 }
 
 model Program {
@@ -85,6 +88,9 @@ model Class {
   program      Program      @relation(fields: [programId], references: [id])
   enrollments  Enrollment[]
   sessions     Session[]
+
+  @@index([programId])
+  @@index([instructorId])
 }
 
 model Enrollment {
@@ -98,6 +104,7 @@ model Enrollment {
   student   Student  @relation(fields: [studentId], references: [id])
 
   @@unique([studentId, classId])
+  @@index([classId, status])
 }
 
 model Session {
@@ -116,6 +123,9 @@ model Session {
   attendances Attendance[]
   studentNotes StudentSessionNote[]
   class       Class        @relation(fields: [classId], references: [id])
+
+  @@index([classId, date])
+  @@index([published, date])
 }
 
 model Attendance {
@@ -129,6 +139,7 @@ model Attendance {
   student   Student  @relation(fields: [studentId], references: [id])
 
   @@unique([sessionId, studentId])
+  @@index([studentId])
 }
 
 // 학생별 수업 개별 코멘트 — 세션 리포트에서 학생마다 작성하는 메모
@@ -167,6 +178,8 @@ model Payment {
 
   @@index([year, month])
   @@index([status])
+  @@index([studentId, year, month])
+  @@index([studentId, dueDate])
 }
 
 // 청구 템플릿 — 매월 자동 청구서 생성의 기준 데이터

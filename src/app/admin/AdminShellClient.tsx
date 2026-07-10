@@ -26,6 +26,8 @@ const OPS_PATHS = [
     "/admin/apply",
 ];
 
+const PERFORMANCE_INDEX_STORAGE_KEY = "stiz-admin-performance-indexes-v1";
+
 type AdminIdleWindow = Window & {
     requestIdleCallback?: (
         callback: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void,
@@ -88,6 +90,27 @@ export default function AdminShellClient({
                 .catch(() => {});
         }, 7000);
 
+    }, []);
+
+    useEffect(() => {
+        return scheduleAdminIdleTask(() => {
+            try {
+                if (window.localStorage.getItem(PERFORMANCE_INDEX_STORAGE_KEY) === "done") {
+                    return;
+                }
+            } catch {
+                // Storage can fail in restricted browser modes; the API is idempotent.
+            }
+
+            fetch("/api/admin/performance-indexes", { method: "POST" })
+                .then((response) => {
+                    if (!response.ok) return;
+                    try {
+                        window.localStorage.setItem(PERFORMANCE_INDEX_STORAGE_KEY, "done");
+                    } catch {}
+                })
+                .catch(() => {});
+        }, 12000);
     }, []);
 
     return (

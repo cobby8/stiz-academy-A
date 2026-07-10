@@ -4,16 +4,12 @@
  * - getTrialLeads()와 getTrialStats()로 초기 데이터 조회 후 클라이언트에 전달
  */
 import { getTrialLeads, getTrialStats } from "@/lib/queries";
-import { ensureTrialLeadTable } from "@/app/actions/admin";
 import TrialCrmClient from "./TrialCrmClient";
 
 export const revalidate = 30;
 
 export default async function TrialCrmPage() {
-    // DDL ensure — 테이블이 없으면 자동 생성
-    await ensureTrialLeadTable();
-
-    // 초기 데이터 조회 (전체 리드 + 통계)
+    // 화면 읽기 단계에서는 DB 구조 확인을 생략하고, 등록/수정 같은 쓰기 작업에서만 보장한다.
     const [leads, stats] = await Promise.all([
         getTrialLeads(),
         getTrialStats(),

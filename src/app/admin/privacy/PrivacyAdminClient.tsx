@@ -1,16 +1,62 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { updateAcademySettings } from "@/app/actions/admin";
+import { DEFAULT_PRIVACY_POLICY } from "@/lib/defaultPolicies";
+
+function PolicyEditorLoadingFallback() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="h-8 w-56 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+      </div>
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="h-5 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="mt-4 h-[520px] animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+        <div className="mt-4 flex justify-end gap-2">
+          <div className="h-10 w-24 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+          <div className="h-10 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PrivacyAdminClient({
   privacyPolicy: initialPrivacyPolicy,
 }: {
-  privacyPolicy: string;
+  privacyPolicy?: string;
 }) {
-  const [privacyPolicy, setPrivacyPolicy] = useState(initialPrivacyPolicy);
+  const hasInitialData = initialPrivacyPolicy !== undefined;
+  const [privacyPolicy, setPrivacyPolicy] = useState(initialPrivacyPolicy ?? DEFAULT_PRIVACY_POLICY);
+  const [loading, setLoading] = useState(!hasInitialData);
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  const loadPrivacyPolicy = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/settings", { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to load academy settings.");
+      const data = (await response.json()) as { settings?: { privacyPolicy?: string | null } | null };
+      setPrivacyPolicy(data.settings?.privacyPolicy?.trim() || DEFAULT_PRIVACY_POLICY);
+    } catch (error) {
+      console.error("Failed to load privacy policy:", error);
+      setPrivacyPolicy(DEFAULT_PRIVACY_POLICY);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasInitialData) return;
+    void loadPrivacyPolicy();
+  }, [hasInitialData, loadPrivacyPolicy]);
+
+  if (loading) {
+    return <PolicyEditorLoadingFallback />;
+  }
 
   function savePrivacyPolicy() {
     startTransition(async () => {

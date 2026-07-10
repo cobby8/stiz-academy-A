@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/privacy` 개인정보처리방침은 설정 조회를 서버 렌더에서 제거하고, `/api/admin/settings` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/settings` 학원 설정은 설정 조회를 서버 렌더에서 제거하고, `/api/admin/settings` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/sms/templates` SMS 템플릿 관리는 템플릿 조회/보장 작업을 서버 렌더에서 제거하고, `/api/admin/sms/templates` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/feedback` 피드백 관리는 피드백 목록 조회를 서버 렌더에서 제거하고, `/api/admin/feedback` 클라이언트 로딩으로 뒤로 미뤘다.
@@ -30,7 +31,7 @@
 - 2026-07-10: `/admin/students` 페이지는 원생/반 전체 목록 조회를 서버 렌더에서 제거하고, `/api/admin/students` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/skills` 페이지는 스킬 카테고리 조회를 Suspense 안쪽으로 분리하고, table skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/staff` 페이지는 스태프/코치/초대 목록 조회를 Suspense 안쪽으로 분리하고, list skeleton을 먼저 렌더하도록 바꿨다.
-- 2026-07-10: `/admin/privacy`, `/admin/terms` 페이지는 약관/개인정보 설정 조회를 Suspense 안쪽으로 분리하고, editor skeleton을 먼저 렌더하도록 바꿨다.
+- 2026-07-10: `/admin/terms` 페이지는 약관 설정 조회를 Suspense 안쪽으로 분리하고, editor skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/settings` 학원 설정은 설정 조회를 서버 렌더에서 제거하고, `/api/admin/settings` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/schedule` 페이지는 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 Suspense 안쪽으로 분리하고, 시간표 skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: 관리자 내부 반/출석/리포트/갤러리/설정 이동 링크에 `prefetch={false}`를 추가해 누르기 전 배경 route/data 조회를 줄였다.
@@ -73,7 +74,7 @@
 
 - 기준일: 2026-07-10
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/SMS 템플릿/학원 설정/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/프로그램/요청/갤러리/피드백/SMS 템플릿/학원 설정/개인정보/공지/출석/FAQ/후기/연간일정/코치/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -143,7 +144,8 @@
 - 관리자 내부 이동 링크는 무거운 route/data 조회가 많은 편이므로, 업무상 즉시 예열이 꼭 필요한 경우가 아니면 `prefetch={false}`를 기본으로 둔다.
 - `/admin/schedule`은 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/schedule`에서 클라이언트가 불러온다.
 - `/admin/settings`는 학원 설정을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/settings`에서 클라이언트가 불러온다.
-- `/admin/privacy`, `/admin/terms`는 약관/개인정보 설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, editor skeleton을 먼저 렌더한다.
+- `/admin/privacy`는 개인정보처리방침을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/settings`에서 클라이언트가 불러온다.
+- `/admin/terms`는 이용약관 설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, editor skeleton을 먼저 렌더한다.
 - `/admin/staff`는 스태프/코치/초대 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, list skeleton을 먼저 렌더한다.
 - `/admin/skills`는 스킬 카테고리 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/skills`에서 클라이언트가 불러온다.
 - `/admin/students`는 원생/반 전체 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/students`에서 클라이언트가 천천히 불러온다.

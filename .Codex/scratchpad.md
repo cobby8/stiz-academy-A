@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 보강 관리 화면 지연 렌더링
+- 작업명: 수업 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/makeup`
+- 범위: `/admin/classes`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -38,9 +38,11 @@
 | 수강신청 관리 화면 지연 렌더링 | 완료 | 신청/통계/반/설정 조회를 Suspense 안쪽으로 분리해 탭 skeleton을 먼저 표시 |
 | 대기자 관리 화면 지연 렌더링 | 완료 | 대기 목록/정원 집계/반 목록 조회를 Suspense 안쪽으로 분리해 정원 카드 skeleton을 먼저 표시 |
 | 보강 관리 화면 지연 렌더링 | 완료 | 보강 목록/반 목록 조회를 Suspense 안쪽으로 분리해 카드/table skeleton을 먼저 표시 |
+| 수업 관리 화면 지연 렌더링 | 완료 | 프로그램/반 목록 조회를 Suspense 안쪽으로 분리해 수업 표 skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/classes` 진입 시 프로그램/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 수업 표 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/makeup` 진입 시 보강 목록/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 상태 카드/table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/waitlist` 진입 시 대기 목록/정원 집계/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 정원 카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/apply` 진입 시 신청/통계/반/설정 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 탭/카드/list skeleton을 먼저 렌더하도록 변경함.
@@ -50,12 +52,11 @@
 - 2026-07-10: `/admin/skills` 페이지 진입 시 `ensureSkillTables()` 호출을 제거하고, 스킬 생성/수정/평가 저장 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 - 2026-07-10: `/admin/makeup` 페이지 진입 시 `ensureMakeupSessionTable()` 호출을 제거하고, 보강 예약 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 - 2026-07-10: `/admin/waitlist` 페이지 진입 시 `ensureWaitlistTable()` 호출을 제거하고, 대기 등록 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
-- 2026-07-10: `/admin/apply` 페이지 진입 시 `ensureEnrollmentApplicationTable()` 호출을 제거하고, 공개 신청 제출 단계에서 테이블 구조를 보장하도록 읽기/쓰기 책임을 분리함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/makeup/page.tsx`
-- 주요 변경: 보강 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getMakeupSessions()`/`getClasses()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/makeup`
+- 변경 파일: `src/app/admin/classes/page.tsx`
+- 주요 변경: 수업 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getPrograms()`/`getClasses()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/classes`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

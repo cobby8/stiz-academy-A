@@ -7,7 +7,7 @@
  * - 대기 중인 초대 목록 (재발송/취소)
  */
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import {
     updateUserRole,
@@ -57,6 +57,12 @@ interface Invitation {
     createdAt: string;
 }
 
+type StaffPayload = {
+    staffUsers: StaffUser[];
+    coaches: CoachItem[];
+    invitations: Invitation[];
+};
+
 // 역할별 한국어 라벨 + 색상
 const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
     ADMIN: { label: "원장", color: "bg-red-100 text-red-800" },
@@ -85,21 +91,119 @@ function formatPhone(raw: string): string {
     return `${trimmed.slice(0, 3)}-${trimmed.slice(3, 7)}-${trimmed.slice(7)}`;
 }
 
+function StaffLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="mt-2 h-4 w-96 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="flex gap-2">
+                    <div className="h-10 w-32 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-10 w-24 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                </div>
+            </div>
+
+            <div className="rounded-xl border border-yellow-200 bg-white shadow-sm dark:border-yellow-900/50 dark:bg-gray-800">
+                <div className="border-b border-yellow-100 bg-yellow-50 px-6 py-4 dark:border-yellow-900/50 dark:bg-yellow-900/20">
+                    <div className="h-5 w-40 rounded bg-yellow-100 dark:bg-yellow-900/50 animate-pulse" />
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {Array.from({ length: 2 }).map((_, index) => (
+                        <div key={index} className="flex items-center gap-4 px-6 py-4">
+                            <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="min-w-0 flex-1">
+                                <div className="h-4 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                                <div className="mt-2 h-3 w-48 max-w-full rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            </div>
+                            <div className="h-8 w-24 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="border-b border-gray-100 px-6 py-4 dark:border-gray-700">
+                    <div className="h-5 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                </div>
+                <div className="overflow-hidden">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                        <div key={index} className="grid grid-cols-4 gap-4 border-b border-gray-50 px-6 py-4 last:border-0 dark:border-gray-700">
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-8 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function StaffErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">스태프 정보를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 export default function StaffClient({
-    staffUsers,
-    coaches,
-    invitations,
+    staffUsers: initialStaffUsers,
+    coaches: initialCoaches,
+    invitations: initialInvitations,
 }: {
-    staffUsers: StaffUser[];
-    coaches: CoachItem[];
-    invitations: Invitation[];
+    staffUsers?: StaffUser[];
+    coaches?: CoachItem[];
+    invitations?: Invitation[];
 }) {
+    const hasInitialData = Boolean(initialStaffUsers && initialCoaches && initialInvitations);
+    const [staffUsers, setStaffUsers] = useState<StaffUser[]>(initialStaffUsers ?? []);
+    const [coaches, setCoaches] = useState<CoachItem[]>(initialCoaches ?? []);
+    const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState<string | null>(null);
     // 모달 상태: "add" = 직접 추가, "invite" = 초대 링크
     const [showModal, setShowModal] = useState<"add" | "invite" | null>(null);
     // 에러/성공 메시지
     const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
     // 서버 액션 pending 상태
     const [isPending, startTransition] = useTransition();
+
+    const hasAnyData = staffUsers.length > 0 || coaches.length > 0 || invitations.length > 0;
+
+    const loadStaffData = useCallback(async () => {
+        setLoading(true);
+        setLoadError(null);
+
+        try {
+            const res = await fetch("/api/admin/staff", { cache: "no-store" });
+            if (!res.ok) throw new Error("Staff request failed");
+            const data = (await res.json()) as StaffPayload;
+            setStaffUsers(data.staffUsers);
+            setCoaches(data.coaches);
+            setInvitations(data.invitations);
+        } catch {
+            setLoadError("failed");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadStaffData();
+    }, [hasInitialData, loadStaffData]);
 
     // 대기 중인 초대 (PENDING만)
     const pendingInvitations = invitations.filter((inv) => {
@@ -122,6 +226,7 @@ export default function StaffClient({
             try {
                 await updateUserRole(userId, newRole as any);
                 setMessage({ text: "역할이 변경되었습니다.", ok: true });
+                await loadStaffData();
             } catch (e: any) {
                 setMessage({ text: e.message || "역할 변경 실패", ok: false });
             }
@@ -135,6 +240,7 @@ export default function StaffClient({
             try {
                 await linkCoachToUser(userId, value);
                 setMessage({ text: value ? "코치가 연결되었습니다." : "코치 연결이 해제되었습니다.", ok: true });
+                await loadStaffData();
             } catch (e: any) {
                 setMessage({ text: e.message || "코치 연결 실패", ok: false });
             }
@@ -148,6 +254,7 @@ export default function StaffClient({
             try {
                 await cancelInvitation(invId);
                 setMessage({ text: "초대가 취소되었습니다.", ok: true });
+                await loadStaffData();
             } catch (e: any) {
                 setMessage({ text: e.message || "초대 취소 실패", ok: false });
             }
@@ -161,10 +268,19 @@ export default function StaffClient({
             try {
                 await resendInvitation(invId);
                 setMessage({ text: "초대가 재발송되었습니다.", ok: true });
+                await loadStaffData();
             } catch (e: any) {
                 setMessage({ text: e.message || "재발송 실패", ok: false });
             }
         });
+    }
+
+    if (loading && !hasAnyData) {
+        return <StaffLoadingFallback />;
+    }
+
+    if (loadError && !hasAnyData) {
+        return <StaffErrorState onRetry={loadStaffData} />;
     }
 
     return (
@@ -421,6 +537,7 @@ export default function StaffClient({
                     onSuccess={() => {
                         setShowModal(null);
                         setMessage({ text: "초대 링크가 발송되었습니다.", ok: true });
+                        void loadStaffData();
                     }}
                     onError={(msg) => setMessage({ text: msg, ok: false })}
                 />
@@ -433,6 +550,7 @@ export default function StaffClient({
                     onSuccess={() => {
                         setShowModal(null);
                         setMessage({ text: "스태프가 추가되었습니다.", ok: true });
+                        void loadStaffData();
                     }}
                     onError={(msg) => setMessage({ text: msg, ok: false })}
                 />

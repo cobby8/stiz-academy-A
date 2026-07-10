@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 관리자 갤러리 화면 지연 렌더링
+- 작업명: 공지사항 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/gallery`
+- 범위: `/admin/notices`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -43,9 +43,11 @@
 | 체험수업 CRM 화면 지연 렌더링 | 완료 | 체험 리드/통계 조회를 Suspense 안쪽으로 분리해 CRM 카드/list skeleton을 먼저 표시 |
 | 수납 관리 화면 지연 렌더링 | 완료 | 수납 목록/요약 조회를 Suspense 안쪽으로 분리해 월 선택/카드/table skeleton을 먼저 표시 |
 | 관리자 갤러리 화면 지연 렌더링 | 완료 | 갤러리/반/설정/소셜 초안 조회를 Suspense 안쪽으로 분리해 업로드/연동/카드 skeleton을 먼저 표시 |
+| 공지사항 관리 화면 지연 렌더링 | 완료 | 공지/반 목록 조회를 Suspense 안쪽으로 분리해 공지 list skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/notices` 진입 시 공지/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 공지 list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/gallery` 진입 시 갤러리/반/설정/소셜 초안 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 업로드/연동/카드 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/finance` 진입 시 수납 목록/요약 통계 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 월 선택/카드/table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/trial` 진입 시 체험 리드/통계 병렬 조회를 Suspense 경계 안쪽으로 옮기고, CRM 카드/list skeleton을 먼저 렌더하도록 변경함.
@@ -55,12 +57,11 @@
 - 2026-07-10: `/admin/waitlist` 진입 시 대기 목록/정원 집계/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 정원 카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/apply` 진입 시 신청/통계/반/설정 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 탭/카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/students` 진입 시 페이지 shell과 skeleton을 먼저 렌더하고, 학생/반 전체 조회는 Suspense 경계 안에서 천천히 스트리밍하도록 변경함.
-- 2026-07-10: `/admin/settings` 페이지 진입 시 `ensureAcademySettingsColumns()` 병렬 호출을 제거하고, 설정 저장 로직의 lazy 컬럼 보장에 맡겨 화면 조회를 가볍게 함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/gallery/page.tsx`
-- 주요 변경: 관리자 갤러리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getGalleryPosts()`/`getClasses()`/`getAcademySettings()`/`getPendingSocialPostDrafts()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/gallery`
+- 변경 파일: `src/app/admin/notices/page.tsx`
+- 주요 변경: 공지사항 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getNotices()`/`getClasses()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/notices`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -68,4 +69,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/notices`, `/admin/annual`, `/admin/coaches`처럼 목록/설정 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.
+- 다음 속도 개선 후보: `/admin/annual`, `/admin/coaches`, `/admin/feedback`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.

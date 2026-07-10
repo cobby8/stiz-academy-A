@@ -156,7 +156,7 @@ export default function ClassDetailClient({ classData, sessions, coaches }: Prop
         <div className="max-w-5xl mx-auto space-y-6">
             {/* ── 상단 헤더: 뒤로가기 + 반 정보 ── */}
             <div className="flex items-center gap-4">
-                <Link href="/admin/classes" className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
+                <Link href="/admin/classes" prefetch={false} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
                     <SymbolIcon name="arrow_back" size={20} className="text-gray-500 dark:text-gray-400" />
                 </Link>
                 <div className="flex-1">

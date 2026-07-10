@@ -137,6 +137,7 @@ export default function ClassManagementClient({
                                         {/* 반 이름 클릭 시 클래스 상세 페이지로 이동 */}
                                         <Link
                                             href={`/admin/classes/${cls.id}`}
+                                            prefetch={false}
                                             className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                                         >
                                             {cls.name}

@@ -293,6 +293,7 @@ export default function AdminSettingsClient({
                             </p>
                             <Link
                                 href="/admin/gallery"
+                                prefetch={false}
                                 className="inline-flex items-center justify-center mt-3 rounded-lg bg-brand-navy-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 transition"
                             >
                                 사진/영상 갤러리 관리로 이동

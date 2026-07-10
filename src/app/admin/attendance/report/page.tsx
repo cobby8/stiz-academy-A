@@ -113,6 +113,7 @@ async function ReportListDataSection() {
                                         <td className="px-5 py-3 text-center">
                                             <Link
                                                 href={`/admin/attendance/report/${s.id}`}
+                                                prefetch={false}
                                                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-orange-600 transition"
                                             >
                                                 <span className="material-symbols-outlined text-sm">edit</span>

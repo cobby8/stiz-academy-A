@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 원생 상세 화면 지연 렌더링
+- 작업명: 관리자 내부 링크 prefetch 정리
 - 상태: 빌드 검증 완료
-- 범위: `/admin/students/[id]`, 원생 상세 링크
+- 범위: 관리자 내부 이동 링크
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -58,9 +58,11 @@
 | 반 상세 화면 지연 렌더링 | 완료 | 반/수강생/수업기록/코치 조회를 Suspense 안쪽으로 분리해 상세 skeleton을 먼저 표시 |
 | 수업 리포트 상세 화면 지연 렌더링 | 완료 | 리포트/코치 조회를 Suspense 안쪽으로 분리하고 목록 링크 prefetch 차단 |
 | 원생 상세 화면 지연 렌더링 | 완료 | 원생 활동 조회를 Suspense 안쪽으로 분리하고 상세 링크 prefetch 차단 |
+| 관리자 내부 링크 prefetch 정리 | 완료 | 반/출석/리포트/갤러리/설정 링크의 자동 배경 조회 차단 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: 관리자 내부 반/출석/리포트/갤러리/설정 이동 링크에 `prefetch={false}`를 추가해 불필요한 배경 route 조회를 차단함.
 - 2026-07-10: `/admin/students/[id]` 원생 활동 조회를 Suspense 경계 안쪽으로 옮기고, 원생 상세로 가는 목록/반 상세 링크 prefetch를 차단함.
 - 2026-07-10: `/admin/attendance/report/[sessionId]` 진입 시 리포트/코치 조회를 Suspense 경계 안쪽으로 옮기고, 목록 링크 prefetch를 차단함.
 - 2026-07-10: `/admin/classes/[id]` 진입 시 반/수강생/수업기록/코치 조회를 Suspense 경계 안쪽으로 옮기고, 상세 skeleton을 먼저 렌더하도록 변경함.
@@ -69,12 +71,11 @@
 - 2026-07-10: `/admin/testimonials` 진입 시 후기/학원 설정 조회를 Suspense 경계 안쪽으로 옮기고, 설정 카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/attendance/report` 진입 시 최근 수업 리포트 목록 조회를 Suspense 경계 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/finance/billing` 진입 시 청구 템플릿/프로그램 목록 조회를 Suspense 경계 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/programs` 진입 시 프로그램 목록 조회를 Suspense 경계 안쪽으로 옮기고, 요금 안내/list skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/students/[id]/page.tsx`, `src/app/admin/students/[id]/StudentDetailClient.tsx`, `src/app/admin/students/StudentManagementClient.tsx`, `src/app/admin/classes/[id]/ClassDetailClient.tsx`
-- 주요 변경: 원생 상세 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, 원생 활동 조회는 안쪽 서버 컴포넌트에서 스트리밍. 원생 상세 링크 prefetch 차단.
-- 적용 범위: `/admin/students/[id]`, `/admin/students`, `/admin/classes/[id]`
+- 변경 파일: `src/app/admin/classes/ClassManagementClient.tsx`, `src/app/admin/classes/[id]/ClassDetailClient.tsx`, `src/app/admin/attendance/AttendanceClient.tsx`, `src/app/admin/attendance/report/page.tsx`, `src/app/admin/gallery/GalleryAdminClient.tsx`, `src/app/admin/settings/AdminSettingsClient.tsx`
+- 주요 변경: 관리자 내부 이동 링크에 `prefetch={false}`를 추가해 사용자가 누르기 전 무거운 route/data 조회가 배경에서 발생하지 않도록 차단.
+- 적용 범위: 반 관리, 출석 관리, 리포트 목록, 갤러리 관리, 설정 관리
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

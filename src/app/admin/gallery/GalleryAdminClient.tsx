@@ -174,6 +174,7 @@ export default function GalleryAdminClient({
         <div className="flex flex-wrap gap-2">
           <Link
             href="/staff/quick-post"
+            prefetch={false}
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
           >
             <FontFreeIcon name="upload" size={18} />

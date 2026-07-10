@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 반 관리 백그라운드 로딩
+- 작업명: 코치 관리 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/classes`, `/api/admin/classes`
+- 범위: `/admin/coaches`, `/api/admin/coaches`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -34,9 +34,11 @@
 | 청구 템플릿 백그라운드 로딩 | 완료 | `/admin/finance/billing` 서버 렌더에서 템플릿/프로그램 조회 제거 |
 | 스킬 카테고리 백그라운드 로딩 | 완료 | `/admin/skills` 서버 렌더에서 스킬 카테고리 조회 제거 |
 | 반 관리 백그라운드 로딩 | 완료 | `/admin/classes` 서버 렌더에서 프로그램/반 목록 조회 제거 |
+| 코치 관리 백그라운드 로딩 | 완료 | `/admin/coaches` 서버 렌더에서 코치 목록 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/coaches` 코치 목록 조회를 서버 렌더에서 제거하고, `/api/admin/coaches`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/classes` 프로그램/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/classes`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/skills` 스킬 카테고리 조회를 서버 렌더에서 제거하고, `/api/admin/skills`가 카테고리 목록과 학생별 스킬 조회를 함께 담당하도록 확장함.
 - 2026-07-10: `/admin/finance/billing` 청구 템플릿/프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/finance/billing`로 클라이언트에서 불러오도록 변경함.
@@ -46,12 +48,11 @@
 - 2026-07-10: `/admin/finance` 수납 목록/요약 조회를 서버 렌더에서 제거하고, `/api/admin/finance`가 결제 목록과 요약을 함께 반환하도록 변경함.
 - 2026-07-10: `/admin/apply` 신청/통계/반 조회를 서버 렌더에서 제거하고, 안내 설정은 설정 탭 진입 시 `/api/admin/apply/settings`로 불러오도록 분리함.
 - 2026-07-10: `/admin/waitlist` 대기자/정원/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/waitlist`로 클라이언트에서 불러오도록 변경함.
-- 2026-07-10: `/admin/staff` 스태프/코치/초대 목록 조회를 서버 렌더에서 제거하고, `/api/admin/staff`로 클라이언트에서 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/classes/page.tsx`, `src/app/admin/classes/ClassManagementClient.tsx`, `src/app/api/admin/classes/route.ts`
-- 주요 변경: 프로그램/반 목록 조회를 클라이언트 API로 분리하고, 반 저장/삭제 후 전체 새로고침 대신 목록 API 재조회로 갱신.
-- 적용 범위: `/admin/classes`
+- 변경 파일: `src/app/admin/coaches/page.tsx`, `src/app/admin/coaches/CoachesAdminClient.tsx`, `src/app/api/admin/coaches/route.ts`
+- 주요 변경: 코치 목록 조회를 클라이언트 API로 분리하고, 추가/수정/삭제/정렬 후 전체 새로고침 대신 목록 API 재조회로 갱신.
+- 적용 범위: `/admin/coaches`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -59,4 +60,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 공개 페이지 DB 호출 계열, `/admin/coaches`, `/admin/annual` 계열을 추가 점검.
+- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 공개 페이지 DB 호출 계열, `/admin/annual`, `/admin/testimonials` 계열을 추가 점검.

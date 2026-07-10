@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createCoach, updateCoach, deleteCoach, reorderCoaches } from "@/app/actions/admin";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
 
@@ -24,6 +23,10 @@ interface FormState {
     imageFile: File | null;
     previewUrl: string | null;
 }
+
+type CoachesPayload = {
+    coaches: Coach[];
+};
 
 function defaultForm(coach?: Coach): FormState {
     return {
@@ -60,6 +63,59 @@ function CoachPhoto({ url, name }: { url: string | null; name: string }) {
     return (
         <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs font-bold shrink-0">
             없음
+        </div>
+    );
+}
+
+function CoachesLoadingFallback() {
+    return (
+        <div className="space-y-8">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <div className="h-8 w-44 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="mt-2 h-4 w-80 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="h-10 w-28 rounded-xl bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-700">
+                    <div className="h-5 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-36 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                        <div key={index} className="flex items-center justify-between gap-4 px-6 py-4">
+                            <div className="flex min-w-0 flex-1 items-center gap-4">
+                                <div className="h-14 w-14 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                <div className="min-w-0 flex-1 space-y-2">
+                                    <div className="h-5 w-36 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                                    <div className="h-4 w-56 max-w-full rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                </div>
+                            </div>
+                            <div className="hidden gap-2 sm:flex">
+                                <div className="h-8 w-16 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                <div className="h-8 w-16 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CoachesErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">코치 목록을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
         </div>
     );
 }
@@ -124,10 +180,12 @@ function ImageUploadField({
     );
 }
 
-export default function CoachesAdminClient({ initialCoaches }: { initialCoaches: Coach[] }) {
-    const router = useRouter();
+export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?: Coach[] }) {
     const [pending, startTransition] = useTransition();
-    const [coaches, setCoaches] = useState<Coach[]>(initialCoaches);
+    const hasInitialData = Boolean(initialCoaches);
+    const [coaches, setCoaches] = useState<Coach[]>(initialCoaches ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
     const [addForm, setAddForm] = useState<FormState>(defaultForm());
     const [addError, setAddError] = useState<string | null>(null);
@@ -139,6 +197,31 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
     // Drag state
     const dragIndex = useRef<number | null>(null);
     const [dragOver, setDragOver] = useState<number | null>(null);
+
+    const loadCoaches = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+
+        try {
+            const response = await fetch("/api/admin/coaches", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load coaches.");
+            }
+
+            const data = (await response.json()) as CoachesPayload;
+            setCoaches(data.coaches);
+        } catch (error) {
+            console.error("Failed to load coaches:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadCoaches();
+    }, [hasInitialData, loadCoaches]);
 
     function patchAdd(patch: Partial<FormState>) {
         setAddForm((f) => ({ ...f, ...patch }));
@@ -165,7 +248,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                 });
                 setAddForm(defaultForm());
                 setShowAddModal(false);
-                router.refresh();
+                await loadCoaches();
             } catch (e: any) {
                 setAddError(e.message ?? "추가 실패");
             }
@@ -206,7 +289,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                     imageUrl: updatedData.imageUrl || null,
                 } : c));
                 setEditId(null);
-                router.refresh();
+                await loadCoaches();
             } catch (e: any) {
                 setEditError(e.message ?? "수정 실패");
             }
@@ -219,7 +302,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
                 await deleteCoach(id);
                 setDeleteConfirm(null);
                 setCoaches((prev) => prev.filter((c) => c.id !== id));
-                router.refresh();
+                await loadCoaches();
             } catch (e: any) {
                 alert(e.message ?? "삭제 실패");
             }
@@ -246,6 +329,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
             setDragOver(null);
             return;
         }
+        const previous = [...coaches];
         const next = [...coaches];
         const [moved] = next.splice(from, 1);
         next.splice(dropIndex, 0, moved);
@@ -255,10 +339,10 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
         startTransition(async () => {
             try {
                 await reorderCoaches(next.map((c) => c.id));
-                router.refresh();
+                await loadCoaches();
             } catch (e: any) {
                 alert(e.message ?? "순서 변경 실패");
-                setCoaches(initialCoaches);
+                setCoaches(previous);
             }
         });
     }
@@ -270,6 +354,14 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches:
 
     const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm dark:text-white bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime transition";
     const TEXTAREA = INPUT + " resize-none";
+
+    if (loading && coaches.length === 0) {
+        return <CoachesLoadingFallback />;
+    }
+
+    if (loadError && coaches.length === 0) {
+        return <CoachesErrorState onRetry={loadCoaches} />;
+    }
 
     return (
         <div className="space-y-8">

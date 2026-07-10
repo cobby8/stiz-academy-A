@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 요청 관리 백그라운드 로딩
+- 작업명: 갤러리 관리 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/requests`, `/api/admin/requests`
+- 범위: `/admin/gallery`, `/api/admin/gallery`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -42,9 +42,11 @@
 | 공지 관리 백그라운드 로딩 | 완료 | `/admin/notices` 서버 렌더에서 공지/반 목록 조회 제거 |
 | 프로그램 관리 백그라운드 로딩 | 완료 | `/admin/programs` 서버 렌더에서 프로그램 목록 조회 제거 |
 | 요청 관리 백그라운드 로딩 | 완료 | `/admin/requests` 서버 렌더에서 학부모 요청 목록 조회 제거 |
+| 갤러리 관리 백그라운드 로딩 | 완료 | `/admin/gallery` 서버 렌더에서 갤러리/반/설정/초안 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/gallery` 갤러리/반/인스타 설정/소셜 초안 조회를 서버 렌더에서 제거하고, `/api/admin/gallery`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/requests` 학부모 요청 목록 조회를 서버 렌더에서 제거하고, `/api/admin/requests`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/programs` 프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/programs`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/notices` 공지/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/notices`로 클라이언트에서 불러오도록 변경함.
@@ -54,12 +56,11 @@
 - 2026-07-10: `/admin/annual` 연간일정/ICS 설정 조회를 서버 렌더에서 제거하고, `/api/admin/annual`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/coaches` 코치 목록 조회를 서버 렌더에서 제거하고, `/api/admin/coaches`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/classes` 프로그램/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/classes`로 클라이언트에서 불러오도록 변경함.
-- 2026-07-10: `/admin/skills` 스킬 카테고리 조회를 서버 렌더에서 제거하고, `/api/admin/skills`가 카테고리 목록과 학생별 스킬 조회를 함께 담당하도록 확장함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/requests/page.tsx`, `src/app/admin/requests/RequestsAdminClient.tsx`, `src/app/api/admin/requests/route.ts`
-- 주요 변경: 학부모 요청 목록 조회를 클라이언트 API로 분리하고, 상태 변경/삭제 후 페이지 전체 새로고침 대신 요청 API 재조회로 갱신.
-- 적용 범위: `/admin/requests`
+- 변경 파일: `src/app/admin/gallery/page.tsx`, `src/app/admin/gallery/GalleryAdminClient.tsx`, `src/app/api/admin/gallery/route.ts`
+- 주요 변경: 갤러리/반/인스타 설정/소셜 초안 조회를 클라이언트 API로 분리하고, 저장/삭제/게시/가져오기 후 페이지 전체 새로고침 대신 갤러리 API 재조회로 갱신.
+- 적용 범위: `/admin/gallery`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

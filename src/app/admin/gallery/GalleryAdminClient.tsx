@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { deleteGalleryPost, syncInstagramGalleryPosts } from "@/app/actions/admin";
@@ -36,6 +36,12 @@ type InstagramStatus = {
   hasAccessToken: boolean;
   hasBusinessAccountId: boolean;
 };
+type GalleryPayload = {
+  posts: GalleryPost[];
+  classes: ClassInfo[];
+  instagramStatus: InstagramStatus;
+  socialDrafts: SocialPostDraft[];
+};
 
 function normalizeInstagramProfileUrl(url: string) {
   const trimmed = url.trim();
@@ -54,24 +60,119 @@ function parseMedia(mediaJSON: string): MediaItem[] {
   }
 }
 
+function GalleryLoadingFallback() {
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="h-8 w-44 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="mt-2 h-4 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <div className="h-10 w-32 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+          <div className="h-10 w-28 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+        </div>
+      </div>
+      <section className="rounded-lg border border-gray-100 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <div className="h-5 w-36 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+          </div>
+          <div className="h-9 w-32 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+        </div>
+      </section>
+      <section className="rounded-lg border border-orange-100 bg-orange-50/40 p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-2">
+            <div className="h-5 w-32 animate-pulse rounded bg-orange-100 dark:bg-gray-700" />
+            <div className="h-4 w-72 max-w-full animate-pulse rounded bg-orange-100/80 dark:bg-gray-700" />
+          </div>
+          <div className="h-8 w-20 animate-pulse rounded-full bg-orange-100 dark:bg-gray-700" />
+        </div>
+      </section>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={index}
+            className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div className="aspect-video animate-pulse bg-gray-100 dark:bg-gray-700" />
+            <div className="space-y-3 p-4">
+              <div className="h-5 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+              <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+              <div className="h-4 w-2/3 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GalleryErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+      <p className="text-sm font-bold text-red-700 dark:text-red-200">갤러리 데이터를 불러오지 못했습니다.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
+      >
+        다시 불러오기
+      </button>
+    </div>
+  );
+}
+
 export default function GalleryAdminClient({
-  posts,
-  classes,
-  instagramStatus,
-  socialDrafts = [],
+  posts: initialPosts,
+  classes: initialClasses,
+  instagramStatus: initialInstagramStatus,
+  socialDrafts: initialSocialDrafts,
 }: {
-  posts: GalleryPost[];
-  classes: ClassInfo[];
+  posts?: GalleryPost[];
+  classes?: ClassInfo[];
   instagramStatus?: InstagramStatus;
   socialDrafts?: SocialPostDraft[];
 }) {
   const [isPending, startTransition] = useTransition();
-  const [drafts, setDrafts] = useState(socialDrafts);
+  const hasInitialData = initialPosts !== undefined && initialClasses !== undefined;
+  const [posts, setPosts] = useState<GalleryPost[]>(initialPosts ?? []);
+  const [classes, setClasses] = useState<ClassInfo[]>(initialClasses ?? []);
+  const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | undefined>(initialInstagramStatus);
+  const [drafts, setDrafts] = useState<SocialPostDraft[]>(initialSocialDrafts ?? []);
+  const [loading, setLoading] = useState(!hasInitialData);
+  const [loadError, setLoadError] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingPost, setEditingPost] = useState<GalleryPost | null>(null);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
   const [pageMessage, setPageMessage] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const loadGallery = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const response = await fetch("/api/admin/gallery", { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to load gallery data.");
+      const data = (await response.json()) as GalleryPayload;
+      setPosts(data.posts);
+      setClasses(data.classes);
+      setInstagramStatus(data.instagramStatus);
+      setDrafts(data.socialDrafts);
+    } catch (error) {
+      console.error("Failed to load gallery data:", error);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasInitialData) return;
+    void loadGallery();
+  }, [hasInitialData, loadGallery]);
 
   const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
   const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");
@@ -91,6 +192,8 @@ export default function GalleryAdminClient({
     startTransition(async () => {
       try {
         await deleteGalleryPost(id);
+        await loadGallery();
+        setPageMessage({ ok: true, message: "갤러리 게시물이 삭제됐습니다." });
       } catch (error) {
         alert(error instanceof Error ? error.message : "갤러리 게시물 삭제 중 오류가 발생했습니다.");
       }
@@ -103,6 +206,7 @@ export default function GalleryAdminClient({
       try {
         const result = await syncInstagramGalleryPosts();
         setSyncResult({ ok: result.ok, message: result.message });
+        await loadGallery();
       } catch (error) {
         console.error("Instagram sync failed:", error);
         setSyncResult({ ok: false, message: "인스타그램 가져오기 중 오류가 발생했습니다." });
@@ -142,6 +246,7 @@ export default function GalleryAdminClient({
         const result = await publishSocialPostDraftToGallery(draft.id);
         patchDraft(draft.id, result.draft);
         setDraftMessage("홈페이지 갤러리에 게시됐습니다. 인스타그램은 서버에서 자동 게시됩니다.");
+        await loadGallery();
       } catch (error) {
         setDraftMessage(error instanceof Error ? error.message : "게시 중 오류가 발생했습니다.");
       }
@@ -160,6 +265,14 @@ export default function GalleryAdminClient({
         setDraftMessage(error instanceof Error ? error.message : "반려 처리에 실패했습니다.");
       }
     });
+  }
+
+  if (loading && posts.length === 0) {
+    return <GalleryLoadingFallback />;
+  }
+
+  if (loadError && posts.length === 0) {
+    return <GalleryErrorState onRetry={loadGallery} />;
   }
 
   return (
@@ -393,6 +506,7 @@ export default function GalleryAdminClient({
           onSaved={(message) => {
             setPageMessage({ ok: true, message });
             closeForm();
+            void loadGallery();
           }}
         />
       )}

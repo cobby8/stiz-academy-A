@@ -41,6 +41,7 @@ type Student = {
         status: string;
         dayOfWeek: string;
         startTime: string;
+        slotKey: string | null;
         createdAt?: string;
     }[];
 };

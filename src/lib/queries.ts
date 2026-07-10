@@ -160,24 +160,33 @@ export const getStudents = cache(async () => {
     try {
         // 학생 목록 조회: 서브쿼리로 수강(Enrollment+Class) 정보를 JSON 배열로 포함
         const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
+            `WITH enrollment_json AS (
+                SELECT
+                    e."studentId",
+                    json_agg(
+                        json_build_object(
+                            'classId', e."classId",
+                            'className', c.name,
+                            'status', e.status,
+                            'dayOfWeek', c."dayOfWeek",
+                            'startTime', c."startTime",
+                            'slotKey', c."slotKey",
+                            'createdAt', e."createdAt"
+                        )
+                        ORDER BY e."createdAt" DESC
+                    ) AS enrollments
+                FROM "Enrollment" e
+                JOIN "Class" c ON e."classId" = c.id
+                GROUP BY e."studentId"
+             )
+             SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
                     s.phone, s.school, s.grade, s.address, s."enrollDate",
                     s."createdAt", s."updatedAt",
                     u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email,
-                    (SELECT json_agg(json_build_object(
-                        'classId', e."classId",
-                        'className', c.name,
-                        'status', e.status,
-                        'dayOfWeek', c."dayOfWeek",
-                        'startTime', c."startTime",
-                        'createdAt', e."createdAt"
-                    ))
-                    FROM "Enrollment" e
-                    JOIN "Class" c ON e."classId" = c.id
-                    WHERE e."studentId" = s.id
-                    ) AS enrollments
+                    COALESCE(ej.enrollments, '[]'::json) AS enrollments
              FROM "Student" s
              LEFT JOIN "User" u ON s."parentId" = u.id
+             LEFT JOIN enrollment_json ej ON ej."studentId" = s.id
              ORDER BY s.name ASC`
         );
         return rows.map((r: any) => ({

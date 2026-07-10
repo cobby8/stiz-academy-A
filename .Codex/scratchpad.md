@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 리포트 상세 편집 백그라운드 로딩
-- 상태: 빌드 검증 완료
-- 범위: `/admin/attendance/report/[sessionId]`, `/api/admin/attendance/report/[sessionId]`
+- 작업명: 수강생 목록 API 쿼리 최적화
+- 상태: `tsc --noEmit` 검증 완료
+- 범위: `/api/admin/students`, `src/lib/queries.ts`, `/admin/students`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -49,9 +49,11 @@
 | 개인정보처리방침 백그라운드 로딩 | 완료 | `/admin/privacy` 서버 렌더에서 개인정보 설정 조회 제거 |
 | 이용약관 백그라운드 로딩 | 완료 | `/admin/terms` 서버 렌더에서 이용약관 설정 조회 제거 |
 | 리포트 상세 편집 백그라운드 로딩 | 완료 | `/admin/attendance/report/[sessionId]` 서버 렌더에서 리포트/코치 조회 제거 |
+| 수강생 목록 API 쿼리 최적화 | 완료 | `getStudents()`의 학생별 수강정보 반복 조회를 CTE 전체 집계로 변경 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/api/admin/students`가 사용하는 `getStudents()` 쿼리를 학생별 subquery 반복에서 Enrollment CTE 전체 집계로 바꿔 수강생 목록 응답 부담을 줄임.
 - 2026-07-10: `/admin/attendance/report/[sessionId]` 리포트/코치 조회를 서버 렌더에서 제거하고, `/api/admin/attendance/report/[sessionId]`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/terms` 이용약관 조회를 서버 렌더에서 제거하고, 기존 `/api/admin/settings`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/privacy` 개인정보처리방침 조회를 서버 렌더에서 제거하고, 기존 `/api/admin/settings`로 클라이언트에서 불러오도록 변경함.
@@ -61,17 +63,14 @@
 - 2026-07-10: `/admin/gallery` 갤러리/반/인스타 설정/소셜 초안 조회를 서버 렌더에서 제거하고, `/api/admin/gallery`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/requests` 학부모 요청 목록 조회를 서버 렌더에서 제거하고, `/api/admin/requests`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/programs` 프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/programs`로 클라이언트에서 불러오도록 변경함.
-- 2026-07-10: `/admin/notices` 공지/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/notices`로 클라이언트에서 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/attendance/report/[sessionId]/page.tsx`, `src/app/admin/attendance/report/[sessionId]/ReportEditClient.tsx`, `src/app/api/admin/attendance/report/[sessionId]/route.ts`
-- 주요 변경: 리포트 상세/코치 조회를 클라이언트 API로 분리하고, 저장/발행 후 전체 페이지 refresh를 제거.
-- 적용 범위: `/admin/attendance/report/[sessionId]`
+- 변경 파일: `src/lib/queries.ts`, `src/app/admin/students/StudentManagementClient.tsx`
+- 주요 변경: `getStudents()`에서 Enrollment/Class 조회를 학생별 subquery로 반복하던 구조를 CTE 전체 집계 후 조인으로 변경하고, 목록 표시용 `slotKey`를 함께 반환.
+- 적용 범위: `/api/admin/students`, `/admin/students`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- `npx.cmd next build` 통과
-- 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 공개 페이지 DB 호출 계열, `/admin/privacy`, `/admin/terms`, `/admin/settings`, `/admin/sms/templates` 계열을 추가 점검.
+- 다음 속도 개선 후보: 관리자 API 응답 크기, 필요 시 수강생/선택 목록 페이지네이션 또는 검색형 로딩 추가 점검.

@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 수강신청 관리 화면 지연 렌더링
+- 작업명: 대기자 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/apply`
+- 범위: `/admin/waitlist`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -36,9 +36,11 @@
 | 설정 관리 화면 진입 DDL 제거 | 완료 | 설정 저장 로직에서 누락 컬럼을 보장하고, 화면 진입은 설정 조회만 수행 |
 | 수강생 관리 화면 지연 렌더링 | 완료 | 페이지 shell과 skeleton을 먼저 보여주고, 학생/반 전체 조회는 Suspense 안에서 스트리밍 |
 | 수강신청 관리 화면 지연 렌더링 | 완료 | 신청/통계/반/설정 조회를 Suspense 안쪽으로 분리해 탭 skeleton을 먼저 표시 |
+| 대기자 관리 화면 지연 렌더링 | 완료 | 대기 목록/정원 집계/반 목록 조회를 Suspense 안쪽으로 분리해 정원 카드 skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/waitlist` 진입 시 대기 목록/정원 집계/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 정원 카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/apply` 진입 시 신청/통계/반/설정 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 탭/카드/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/students` 진입 시 페이지 shell과 skeleton을 먼저 렌더하고, 학생/반 전체 조회는 Suspense 경계 안에서 천천히 스트리밍하도록 변경함.
 - 2026-07-10: `/admin/settings` 페이지 진입 시 `ensureAcademySettingsColumns()` 병렬 호출을 제거하고, 설정 저장 로직의 lazy 컬럼 보장에 맡겨 화면 조회를 가볍게 함.
@@ -48,12 +50,11 @@
 - 2026-07-10: `/admin/waitlist` 페이지 진입 시 `ensureWaitlistTable()` 호출을 제거하고, 대기 등록 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 - 2026-07-10: `/admin/apply` 페이지 진입 시 `ensureEnrollmentApplicationTable()` 호출을 제거하고, 공개 신청 제출 단계에서 테이블 구조를 보장하도록 읽기/쓰기 책임을 분리함.
 - 2026-07-10: `/admin/trial` 페이지 진입 시 `ensureTrialLeadTable()` 호출을 제거하고, 체험 등록/수정/전환 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
-- 2026-07-10: `/admin/feedback` 초기 렌더에서 `getCoaches()` 호출도 제거하고, 피드백 작성/수정 폼을 열 때 `/api/admin/coach-options`로 코치 선택 목록을 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/apply/page.tsx`
-- 주요 변경: 신청 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getEnrollApplications()`/`getEnrollApplicationStats()`/`getClasses()`/`getAcademySettings()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/apply`
+- 변경 파일: `src/app/admin/waitlist/page.tsx`
+- 주요 변경: 대기자 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getWaitlistAll()`/`getClassCapacityInfo()`/`getClasses()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/waitlist`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -61,4 +62,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/waitlist`, `/admin/makeup`처럼 목록과 보조 통계/반 옵션이 함께 로드되는 화면에서 첫 렌더 필수 데이터만 남길 수 있는지 점검.
+- 다음 속도 개선 후보: `/admin/makeup`처럼 목록과 반 옵션이 함께 로드되는 화면에서 첫 렌더 필수 데이터만 남길 수 있는지 점검.

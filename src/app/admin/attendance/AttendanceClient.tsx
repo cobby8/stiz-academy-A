@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveAttendance } from "@/app/actions/admin";
 
@@ -21,6 +20,10 @@ type StudentRecord = {
     attendanceId: string | null;
 };
 
+type AttendanceClassesPayload = {
+    classes: ClassItem[];
+};
+
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
@@ -35,8 +38,46 @@ function todayStr() {
     return new Date().toISOString().split("T")[0];
 }
 
-export default function AttendanceClient({ classes }: { classes: ClassItem[] }) {
-    const router = useRouter();
+function AttendanceLoadingFallback() {
+    return (
+        <div className="max-w-4xl mx-auto">
+            <div className="mb-6 flex items-center justify-between">
+                <div className="space-y-2">
+                    <div className="h-8 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="h-4 w-72 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-10 w-28 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+                    <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function AttendanceErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="mx-auto max-w-4xl rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">출석 관리 데이터를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
+export default function AttendanceClient({ classes: initialClasses }: { classes?: ClassItem[] }) {
+    const hasInitialClasses = initialClasses !== undefined;
+    const [classes, setClasses] = useState<ClassItem[]>(initialClasses ?? []);
+    const [classesLoading, setClassesLoading] = useState(!hasInitialClasses);
+    const [classesError, setClassesError] = useState(false);
     const [selectedClass, setSelectedClass] = useState("");
     const [date, setDate] = useState(todayStr());
     const [students, setStudents] = useState<StudentRecord[]>([]);
@@ -44,10 +85,35 @@ export default function AttendanceClient({ classes }: { classes: ClassItem[] }) 
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
-    const loadAttendance = useCallback(async () => {
+    const loadClasses = useCallback(async () => {
+        setClassesLoading(true);
+        setClassesError(false);
+        try {
+            const response = await fetch("/api/admin/attendance", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load classes.");
+            }
+            const data = (await response.json()) as AttendanceClassesPayload;
+            setClasses(data.classes);
+        } catch (error) {
+            console.error("Failed to load attendance classes:", error);
+            setClassesError(true);
+        } finally {
+            setClassesLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialClasses) return;
+        void loadClasses();
+    }, [hasInitialClasses, loadClasses]);
+
+    const loadAttendance = useCallback(async (options?: { resetSaved?: boolean }) => {
         if (!selectedClass || !date) return;
         setLoading(true);
-        setSaved(false);
+        if (options?.resetSaved !== false) {
+            setSaved(false);
+        }
         try {
             const res = await fetch(`/api/admin/attendance?classId=${selectedClass}&date=${date}`);
             if (res.ok) {
@@ -91,8 +157,8 @@ export default function AttendanceClient({ classes }: { classes: ClassItem[] }) 
         setSaving(true);
         try {
             await saveAttendance(selectedClass, date, records);
+            await loadAttendance({ resetSaved: false });
             setSaved(true);
-            router.refresh();
         } catch (err: any) {
             alert(err.message || "저장 실패");
         } finally {
@@ -103,6 +169,14 @@ export default function AttendanceClient({ classes }: { classes: ClassItem[] }) 
     const presentCount = students.filter((s) => s.status === "PRESENT").length;
     const absentCount = students.filter((s) => s.status === "ABSENT").length;
     const lateCount = students.filter((s) => s.status === "LATE").length;
+
+    if (classesLoading && classes.length === 0) {
+        return <AttendanceLoadingFallback />;
+    }
+
+    if (classesError && classes.length === 0) {
+        return <AttendanceErrorState onRetry={loadClasses} />;
+    }
 
     return (
         <div className="max-w-4xl mx-auto">

@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: FAQ 관리 백그라운드 로딩
+- 작업명: 출석 관리 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/faq`, `/api/admin/faq`
+- 범위: `/admin/attendance`, `/api/admin/attendance`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -38,9 +38,11 @@
 | 연간일정 관리 백그라운드 로딩 | 완료 | `/admin/annual` 서버 렌더에서 일정/ICS 설정 조회 제거 |
 | 후기 관리 백그라운드 로딩 | 완료 | `/admin/testimonials` 서버 렌더에서 후기/네이버 링크 조회 제거 |
 | FAQ 관리 백그라운드 로딩 | 완료 | `/admin/faq` 서버 렌더에서 FAQ 목록 조회 제거 |
+| 출석 관리 백그라운드 로딩 | 완료 | `/admin/attendance` 서버 렌더에서 반 목록 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/attendance` 반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/attendance`가 반 목록과 날짜별 출석 조회를 함께 담당하도록 변경함.
 - 2026-07-10: `/admin/faq` FAQ 목록 조회를 서버 렌더에서 제거하고, `/api/admin/faq`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/testimonials` 후기/네이버 플레이스 링크 조회를 서버 렌더에서 제거하고, `/api/admin/testimonials`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/annual` 연간일정/ICS 설정 조회를 서버 렌더에서 제거하고, `/api/admin/annual`로 클라이언트에서 불러오도록 변경함.
@@ -50,12 +52,11 @@
 - 2026-07-10: `/admin/finance/billing` 청구 템플릿/프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/finance/billing`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/schedule` 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 서버 렌더에서 제거하고, `/api/admin/schedule`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/attendance/report` 최근 수업 리포트 목록 조회를 서버 렌더에서 제거하고, `/api/admin/attendance/report`로 클라이언트에서 불러오도록 변경함.
-- 2026-07-10: `/admin/makeup` 보강 예약/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/makeup`로 클라이언트에서 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/faq/page.tsx`, `src/app/admin/faq/FaqAdminClient.tsx`, `src/app/api/admin/faq/route.ts`
-- 주요 변경: FAQ 목록 조회를 클라이언트 API로 분리하고, FAQ 저장/삭제 후 전체 새로고침 대신 FAQ API 재조회로 갱신.
-- 적용 범위: `/admin/faq`
+- 변경 파일: `src/app/admin/attendance/page.tsx`, `src/app/admin/attendance/AttendanceClient.tsx`, `src/app/api/admin/attendance/route.ts`
+- 주요 변경: 출석 관리 반 목록 조회를 클라이언트 API로 분리하고, 출석 저장 후 전체 새로고침 대신 현재 출석 API 재조회로 갱신.
+- 적용 범위: `/admin/attendance`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -63,4 +64,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 공개 페이지 DB 호출 계열, `/admin/attendance`, `/admin/notices`, `/admin/programs` 계열을 추가 점검.
+- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 공개 페이지 DB 호출 계열, `/admin/notices`, `/admin/programs`, `/admin/requests` 계열을 추가 점검.

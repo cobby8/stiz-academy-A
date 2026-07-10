@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import {
     upsertClassSlotOverride,
@@ -103,6 +102,26 @@ interface CustomSlotForm {
     programId: string;
 }
 
+interface SchedulePayload {
+    slots: SheetClassSlot[];
+    overrides: Override[];
+    coaches: Coach[];
+    customSlots: CustomSlot[];
+    hasSheetUrl: boolean;
+    sheetUrl: string | null;
+    programs: Program[];
+}
+
+interface ScheduleAdminClientProps {
+    slots?: SheetClassSlot[];
+    overrides?: Override[];
+    coaches?: Coach[];
+    customSlots?: CustomSlot[];
+    hasSheetUrl?: boolean;
+    sheetUrl?: string | null;
+    programs?: Program[];
+}
+
 function defaultCustomSlotForm(): CustomSlotForm {
     return { dayKey: "Mon", startTime: "14:00", endTime: "15:00", label: "", gradeRange: "", enrolled: 0, capacity: 12, note: "", isHidden: false, coachId: "", programId: "" };
 }
@@ -131,25 +150,101 @@ function defaultSlotState(): SlotState {
     return { label: "", note: "", isHidden: false, capacity: 12, coachId: "", startTimeOverride: "", endTimeOverride: "", programId: "", dirty: false, saved: false, error: null };
 }
 
-export default function ScheduleAdminClient({
-    slots,
-    overrides,
-    coaches,
-    customSlots: initialCustomSlots,
-    hasSheetUrl,
-    sheetUrl,
-    programs,
-}: {
-    slots: SheetClassSlot[];
-    overrides: Override[];
-    coaches: Coach[];
-    customSlots: CustomSlot[];
-    hasSheetUrl: boolean;
-    sheetUrl: string | null;
-    programs: Program[];
-}) {
-    const router = useRouter();
-    const [stateMap, setStateMap] = useState<Record<string, SlotState>>(() => buildInitialState(overrides));
+function ScheduleLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="mt-2 h-4 w-96 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <div className="h-10 w-36 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-10 w-28 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    >
+                        <div className="h-4 w-24 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        <div className="mt-3 h-7 w-16 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    </div>
+                ))}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="border-b border-gray-100 p-5 dark:border-gray-700">
+                    <div className="h-6 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="mt-2 h-3 w-72 max-w-full rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                </div>
+                <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
+                    {Array.from({ length: 9 }).map((_, index) => (
+                        <div key={index} className="rounded-xl border border-gray-100 p-4 dark:border-gray-700">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="h-5 w-24 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                                <div className="h-6 w-16 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            </div>
+                            <div className="mt-4 space-y-2">
+                                <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                                <div className="h-4 w-2/3 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            </div>
+                            <div className="mt-4 h-9 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ScheduleErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">시간표 데이터를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
+export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}) {
+    const {
+        slots: initialSlots = [],
+        overrides: initialOverrides = [],
+        coaches: initialCoaches = [],
+        customSlots: initialCustomSlots = [],
+        hasSheetUrl: initialHasSheetUrl = false,
+        sheetUrl: initialSheetUrl = null,
+        programs: initialPrograms = [],
+    } = props;
+    const hasInitialData = Boolean(
+        props.slots ||
+        props.overrides ||
+        props.coaches ||
+        props.customSlots ||
+        props.hasSheetUrl !== undefined ||
+        props.sheetUrl !== undefined ||
+        props.programs,
+    );
+    const [slots, setSlots] = useState<SheetClassSlot[]>(initialSlots);
+    const [stateMap, setStateMap] = useState<Record<string, SlotState>>(() => buildInitialState(initialOverrides));
+    const [coaches, setCoaches] = useState<Coach[]>(initialCoaches);
+    const [customSlots, setCustomSlots] = useState<CustomSlot[]>(initialCustomSlots);
+    const [hasSheetUrl, setHasSheetUrl] = useState(initialHasSheetUrl);
+    const [sheetUrl, setSheetUrl] = useState<string | null>(initialSheetUrl);
+    const [programs, setPrograms] = useState<Program[]>(initialPrograms);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [pending, startTransition] = useTransition();
 
     // Google Sheets modal state
@@ -168,7 +263,7 @@ export default function ScheduleAdminClient({
             setTimeout(() => {
                 setShowSheetModal(false);
                 setSheetSaved(false);
-                router.refresh();
+                void loadScheduleData();
             }, 800);
         } catch (e: any) {
             setSheetError(e.message || "저장 실패");
@@ -190,7 +285,40 @@ export default function ScheduleAdminClient({
     // 시트 슬롯 편집 모달 state — 클릭한 슬롯의 slotKey를 저장
     const [editingSlotKey, setEditingSlotKey] = useState<string | null>(null);
 
-    const coachMap = Object.fromEntries(coaches.map((c) => [c.id, c]));
+    const hasAnyData = slots.length > 0 || customSlots.length > 0 || coaches.length > 0 || programs.length > 0 || hasSheetUrl;
+
+    const loadScheduleData = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+
+        try {
+            const response = await fetch("/api/admin/schedule", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load schedule data.");
+            }
+
+            const data = (await response.json()) as SchedulePayload;
+            setSlots(data.slots);
+            setStateMap(buildInitialState(data.overrides));
+            setCoaches(data.coaches);
+            setCustomSlots(data.customSlots);
+            setHasSheetUrl(data.hasSheetUrl);
+            setSheetUrl(data.sheetUrl);
+            setPrograms(data.programs);
+        } catch (error) {
+            console.error("Failed to load schedule data:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadScheduleData();
+    }, [hasInitialData, loadScheduleData]);
+
+    const coachMap = useMemo(() => Object.fromEntries(coaches.map((c) => [c.id, c])), [coaches]);
 
     function getState(slotKey: string): SlotState {
         return stateMap[slotKey] ?? defaultSlotState();
@@ -249,7 +377,7 @@ export default function ScheduleAdminClient({
                 });
                 setNewCustomForm(defaultCustomSlotForm());
                 setIsAddingCustom(false);
-                router.refresh();
+                await loadScheduleData();
             } catch (e: any) {
                 alert(e.message || "생성 실패");
             }
@@ -279,7 +407,7 @@ export default function ScheduleAdminClient({
                     programId: editCustomForm.programId || null,
                 });
                 setEditingCustomId(null);
-                router.refresh();
+                await loadScheduleData();
             } catch (e: any) {
                 alert(e.message || "수정 실패");
             }
@@ -291,7 +419,7 @@ export default function ScheduleAdminClient({
             try {
                 await deleteCustomSlot(id);
                 setDeletingCustomId(null);
-                router.refresh();
+                await loadScheduleData();
             } catch (e: any) {
                 alert(e.message || "삭제 실패");
             }
@@ -305,7 +433,7 @@ export default function ScheduleAdminClient({
     }, {});
     // 커스텀 슬롯도 요일별로 그룹핑 (startTime 기준 정렬)
     const customByDay = DAY_ORDER.reduce<Record<string, CustomSlot[]>>((acc, d) => {
-        acc[d] = initialCustomSlots.filter((cs) => cs.dayKey === d).sort((a, b) => a.startTime.localeCompare(b.startTime));
+        acc[d] = customSlots.filter((cs) => cs.dayKey === d).sort((a, b) => a.startTime.localeCompare(b.startTime));
         return acc;
     }, {});
     // 시트 슬롯 또는 커스텀 슬롯이 하나라도 있는 요일만 표시
@@ -339,7 +467,7 @@ export default function ScheduleAdminClient({
                 programId: s?.programId || null,
             });
         }
-        for (const cs of initialCustomSlots) {
+        for (const cs of customSlots) {
             if (cs.isHidden) continue;
             result.push({
                 slotKey: `custom-${cs.id}`,
@@ -358,12 +486,20 @@ export default function ScheduleAdminClient({
             });
         }
         return result;
-    }, [slots, stateMap, initialCustomSlots, coachMap]);
+    }, [slots, stateMap, customSlots, coachMap]);
 
     // 현재 편집 모달이 열린 시트 슬롯 객체 찾기
     const editingSheetSlot = editingSlotKey ? slots.find((s) => s.slotKey === editingSlotKey) : null;
-    const editingCustomSlot = editingCustomId ? initialCustomSlots.find((c) => c.id === editingCustomId) ?? null : null;
+    const editingCustomSlot = editingCustomId ? customSlots.find((c) => c.id === editingCustomId) ?? null : null;
     const hasOpenModal = Boolean(editingSheetSlot || editingCustomSlot || showSheetModal || isAddingCustom);
+
+    if (loading && !hasAnyData) {
+        return <ScheduleLoadingFallback />;
+    }
+
+    if (loadError && !hasAnyData) {
+        return <ScheduleErrorState onRetry={loadScheduleData} />;
+    }
 
     return (
         <div className="space-y-8">

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { createTrialLead, convertTrialToStudent, updateTrialLead } from "@/app/actions/admin";
 import type { TrialLead } from "./TrialCrmClient";
 
@@ -14,6 +13,7 @@ interface TrialCrmModalsProps {
     onCloseConvert: () => void;
     onCloseLost: () => void;
     onCloseMemo: () => void;
+    onSaved: () => Promise<void> | void;
 }
 
 export default function TrialCrmModals({
@@ -25,8 +25,8 @@ export default function TrialCrmModals({
     onCloseConvert,
     onCloseLost,
     onCloseMemo,
+    onSaved,
 }: TrialCrmModalsProps) {
-    const router = useRouter();
     const [busy, setBusy] = useState(false);
 
     async function runAction(action: () => Promise<unknown>, onDone: () => void) {
@@ -34,7 +34,7 @@ export default function TrialCrmModals({
         try {
             await action();
             onDone();
-            router.refresh();
+            await onSaved();
         } catch (error) {
             alert((error as Error).message);
         } finally {

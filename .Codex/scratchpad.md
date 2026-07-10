@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 운영 통계 화면 백그라운드 로딩
+- 작업명: 체험수업 CRM 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/stats`, `/api/admin/stats`
+- 범위: `/admin/trial`, `/api/admin/trial`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -23,9 +23,11 @@
 | 반 상세 백그라운드 로딩 | 완료 | 반/수강생/수업기록/코치 조회를 클라이언트 API로 분리 |
 | 관리자 대시보드 백그라운드 로딩 | 완료 | `/admin` 서버 렌더에서 통계/요청/백업 조회 제거 |
 | 운영 통계 화면 백그라운드 로딩 | 완료 | `/admin/stats` 서버 렌더에서 7개 통계 집계 제거 |
+| 체험수업 CRM 백그라운드 로딩 | 완료 | `/admin/trial` 서버 렌더에서 리드/통계 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/trial` 체험수업 CRM의 리드/통계 조회를 서버 렌더에서 제거하고, `/api/admin/trial`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/stats` 운영 통계의 7개 집계 조회를 서버 렌더에서 제거하고, `/api/admin/stats`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin` 대시보드의 통계/최근 요청/오늘 수업 조회를 서버 렌더에서 제거하고, `/api/admin/dashboard`와 `/api/admin/dashboard/system`으로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/classes/[id]` 진입 시 반/수강생/수업기록/코치 조회를 서버 렌더에서 제거하고, `/api/admin/classes/[id]/detail`로 클라이언트에서 불러오도록 변경함.
@@ -35,12 +37,11 @@
 - 2026-07-10: `/admin/skills` 진입 시 스킬 카테고리 조회를 Suspense 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/staff` 진입 시 스태프/코치/초대 목록 조회를 Suspense 안쪽으로 옮기고, list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/privacy`, `/admin/terms` 진입 시 약관/개인정보 설정 조회를 Suspense 안쪽으로 옮기고, editor skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/settings` 진입 시 학원 설정 조회를 Suspense 안쪽으로 옮기고, 설정 폼 skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/stats/page.tsx`, `src/app/admin/stats/StatsClient.tsx`, `src/app/api/admin/stats/route.ts`
-- 주요 변경: 운영 통계의 매출/출석/원생/정원/체험/코치/수납률 집계를 클라이언트 API 로딩으로 분리.
-- 적용 범위: `/admin/stats`
+- 변경 파일: `src/app/admin/trial/page.tsx`, `src/app/admin/trial/TrialCrmClient.tsx`, `src/app/admin/trial/TrialCrmModals.tsx`, `src/app/api/admin/trial/route.ts`
+- 주요 변경: 체험 신청 리드/통계 조회와 저장 후 새로고침을 클라이언트 API 재조회로 분리.
+- 적용 범위: `/admin/trial`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -48,4 +49,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 `/admin/trial`, `/admin/staff`, `/admin/waitlist` 계열을 추가 점검.
+- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 `/admin/staff`, `/admin/waitlist`, `/admin/apply` 계열을 추가 점검.

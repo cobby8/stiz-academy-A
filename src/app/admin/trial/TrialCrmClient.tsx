@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
     updateTrialLead,
     deleteTrialLead,
     generateEnrollLink,
 } from "@/app/actions/admin";
-import { useRouter } from "next/navigation";
 
 const TrialCrmModals = dynamic(() => import("./TrialCrmModals"), {
     loading: () => null,
@@ -54,6 +53,22 @@ interface TrialStats {
     conversionRate: number;
 }
 
+type TrialCrmPayload = {
+    leads: TrialLead[];
+    stats: TrialStats;
+};
+
+const EMPTY_STATS: TrialStats = {
+    NEW: 0,
+    CONTACTED: 0,
+    SCHEDULED: 0,
+    ATTENDED: 0,
+    CONVERTED: 0,
+    LOST: 0,
+    total: 0,
+    conversionRate: 0,
+};
+
 // ── 상태별 라벨/색상/아이콘 매핑 ──────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -78,18 +93,74 @@ const SOURCE_LABELS: Record<string, string> = {
 // 상태 순서 (파이프라인 흐름)
 const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST"] as const;
 
+function TrialCrmLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                    <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-80 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="h-11 w-36 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                {Array.from({ length: 7 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-28 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+                {Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-8 w-20 rounded-full bg-gray-100 dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+            <div className="grid gap-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-40 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function TrialCrmErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">체험수업 CRM 데이터를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
 
 export default function TrialCrmClient({
     initialLeads,
     initialStats,
 }: {
-    initialLeads: TrialLead[];
-    initialStats: TrialStats;
+    initialLeads?: TrialLead[];
+    initialStats?: TrialStats;
 }) {
-    const router = useRouter();
-    const [leads] = useState(initialLeads);
-    const [stats] = useState(initialStats);
+    const hasInitialData = Boolean(initialLeads && initialStats);
+    const [leads, setLeads] = useState<TrialLead[]>(initialLeads ?? []);
+    const [stats, setStats] = useState<TrialStats>(initialStats ?? EMPTY_STATS);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
     const [busy, setBusy] = useState(false);
 
@@ -99,6 +170,28 @@ export default function TrialCrmClient({
     const [showLostModal, setShowLostModal] = useState<TrialLead | null>(null);
     const [showMemoModal, setShowMemoModal] = useState<TrialLead | null>(null);
     const hasOpenModal = Boolean(showAddModal || showConvertModal || showLostModal || showMemoModal);
+
+    const loadTrialData = useCallback(async () => {
+        setLoading(true);
+        setLoadError(null);
+
+        try {
+            const res = await fetch("/api/admin/trial", { cache: "no-store" });
+            if (!res.ok) throw new Error("Trial CRM request failed");
+            const data = (await res.json()) as TrialCrmPayload;
+            setLeads(data.leads);
+            setStats(data.stats);
+        } catch {
+            setLoadError("failed");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadTrialData();
+    }, [hasInitialData, loadTrialData]);
 
     // 필터링된 리드 목록
     const filteredLeads = useMemo(() => {
@@ -117,7 +210,7 @@ export default function TrialCrmClient({
                 updates.attendedDate = new Date().toISOString();
             }
             await updateTrialLead(lead.id, updates);
-            router.refresh();
+            await loadTrialData();
         } catch (e) {
             alert((e as Error).message);
         } finally {
@@ -131,7 +224,7 @@ export default function TrialCrmClient({
         setBusy(true);
         try {
             await deleteTrialLead(lead.id);
-            router.refresh();
+            await loadTrialData();
         } catch (e) {
             alert((e as Error).message);
         } finally {
@@ -144,6 +237,14 @@ export default function TrialCrmClient({
         if (!dateStr) return "-";
         const d = new Date(dateStr);
         return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    if (loading && leads.length === 0) {
+        return <TrialCrmLoadingFallback />;
+    }
+
+    if (loadError && leads.length === 0) {
+        return <TrialCrmErrorState onRetry={loadTrialData} />;
     }
 
     return (
@@ -440,6 +541,7 @@ export default function TrialCrmClient({
                     onCloseConvert={() => setShowConvertModal(null)}
                     onCloseLost={() => setShowLostModal(null)}
                     onCloseMemo={() => setShowMemoModal(null)}
+                    onSaved={loadTrialData}
                 />
             )}
         </div>

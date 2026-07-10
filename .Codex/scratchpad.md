@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 연간일정 관리 화면 지연 렌더링
+- 작업명: 코치/강사진 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/annual`
+- 범위: `/admin/coaches`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -45,9 +45,11 @@
 | 관리자 갤러리 화면 지연 렌더링 | 완료 | 갤러리/반/설정/소셜 초안 조회를 Suspense 안쪽으로 분리해 업로드/연동/카드 skeleton을 먼저 표시 |
 | 공지사항 관리 화면 지연 렌더링 | 완료 | 공지/반 목록 조회를 Suspense 안쪽으로 분리해 공지 list skeleton을 먼저 표시 |
 | 연간일정 관리 화면 지연 렌더링 | 완료 | 연간일정/설정 조회를 Suspense 안쪽으로 분리해 연동 설정/list skeleton을 먼저 표시 |
+| 코치/강사진 관리 화면 지연 렌더링 | 완료 | 코치 목록 조회를 Suspense 안쪽으로 분리해 코치 list skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/coaches` 진입 시 코치 목록 조회를 Suspense 경계 안쪽으로 옮기고, 코치 list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/annual` 진입 시 연간일정/학원 설정 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 연동 설정/list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/notices` 진입 시 공지/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 공지 list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/gallery` 진입 시 갤러리/반/설정/소셜 초안 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 업로드/연동/카드 skeleton을 먼저 렌더하도록 변경함.
@@ -57,12 +59,11 @@
 - 2026-07-10: `/admin/classes` 진입 시 프로그램/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 수업 표 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/makeup` 진입 시 보강 목록/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 상태 카드/table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/waitlist` 진입 시 대기 목록/정원 집계/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 정원 카드/list skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: `/admin/apply` 진입 시 신청/통계/반/설정 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 탭/카드/list skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/annual/page.tsx`
-- 주요 변경: 연간일정 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getAnnualEvents()`/`getAcademySettings()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/annual`
+- 변경 파일: `src/app/admin/coaches/page.tsx`
+- 주요 변경: 코치/강사진 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getCoaches()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/coaches`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -70,4 +71,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/coaches`, `/admin/feedback`, `/admin/faq`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.
+- 다음 속도 개선 후보: `/admin/feedback`, `/admin/faq`, `/admin/requests`처럼 목록 조회를 첫 진입에 함께 가져오는 화면을 추가 점검.

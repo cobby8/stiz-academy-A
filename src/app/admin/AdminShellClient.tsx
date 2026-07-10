@@ -26,6 +26,26 @@ const OPS_PATHS = [
     "/admin/apply",
 ];
 
+type AdminIdleWindow = Window & {
+    requestIdleCallback?: (
+        callback: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void,
+        options?: { timeout?: number },
+    ) => number;
+    cancelIdleCallback?: (handle: number) => void;
+};
+
+function scheduleAdminIdleTask(callback: () => void, timeout = 6000) {
+    const idleWindow = window as AdminIdleWindow;
+
+    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+        const handle = idleWindow.requestIdleCallback(() => callback(), { timeout });
+        return () => idleWindow.cancelIdleCallback?.(handle);
+    }
+
+    const timer = window.setTimeout(callback, timeout);
+    return () => window.clearTimeout(timer);
+}
+
 export default function AdminShellClient({
     children,
     initialUserName,
@@ -60,15 +80,14 @@ export default function AdminShellClient({
     }, [autoTab, pathname]);
 
     useEffect(() => {
-        const timer = window.setTimeout(() => {
+        return scheduleAdminIdleTask(() => {
             // 새 체험 신청 건수 조회 (사이드바 배지 표시용)
             fetch("/api/admin/trial-count")
                 .then((r) => r.json())
                 .then((d) => setNewTrialCount(d.count ?? 0))
                 .catch(() => {});
-        }, 1200);
+        }, 7000);
 
-        return () => window.clearTimeout(timer);
     }, []);
 
     return (
@@ -413,11 +432,14 @@ function NotificationBell() {
 
     // 최초 로드 + 60초마다 폴링 (새 알림 확인)
     useEffect(() => {
-        const timer = window.setTimeout(fetchNotifications, 1500);
-        const interval = setInterval(fetchNotifications, 60_000);
+        let interval: number | null = null;
+        const cancelIdleTask = scheduleAdminIdleTask(() => {
+            void fetchNotifications();
+            interval = window.setInterval(fetchNotifications, 120_000);
+        }, 8000);
         return () => {
-            window.clearTimeout(timer);
-            clearInterval(interval);
+            cancelIdleTask();
+            if (interval) window.clearInterval(interval);
         };
     }, [fetchNotifications]);
 

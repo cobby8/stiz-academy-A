@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { updateStudentMemo } from "@/app/actions/admin";
 
@@ -77,11 +77,142 @@ type StudentActivityData = {
     galleryPosts: { id: string; title: string | null; mediaJSON: string; createdAt: Date | string }[];
 };
 
-export default function StudentDetailClient({ data }: { data: StudentActivityData }) {
-    const { student, enrollments, attendances, payments, attendanceStats, galleryPosts } = data;
-    const [memo, setMemo] = useState(student.memo || "");
+export default function StudentDetailClient({
+    data: initialData,
+    studentId,
+}: {
+    data?: StudentActivityData;
+    studentId?: string;
+}) {
+    const [activityData, setActivityData] = useState<StudentActivityData | null>(initialData ?? null);
+    const [loading, setLoading] = useState(!initialData);
+    const [error, setError] = useState<string | null>(null);
+    const [memo, setMemo] = useState(initialData?.student.memo || "");
     const [isPending, startTransition] = useTransition();
     const [memoSaved, setMemoSaved] = useState(false);
+
+    const loadData = useCallback(async () => {
+        if (!studentId) return;
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`/api/admin/students/${studentId}/activity`, {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load student activity.");
+            }
+
+            const payload = (await response.json()) as { data?: StudentActivityData };
+            if (!payload.data) {
+                throw new Error("Student activity is empty.");
+            }
+
+            setActivityData(payload.data);
+            setMemo(payload.data.student.memo || "");
+        } catch (loadError) {
+            console.error("Failed to load student activity:", loadError);
+            setError("원생 상세 정보를 불러오지 못했습니다.");
+        } finally {
+            setLoading(false);
+        }
+    }, [studentId]);
+
+    useEffect(() => {
+        if (!initialData) void loadData();
+    }, [initialData, loadData]);
+
+    if (loading && !activityData) {
+        return (
+            <div className="mx-auto max-w-5xl space-y-6">
+                <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-lg bg-gray-200 animate-pulse dark:bg-gray-700" />
+                    <div>
+                        <div className="h-8 w-40 rounded bg-gray-200 animate-pulse dark:bg-gray-700" />
+                        <div className="mt-2 h-4 w-80 max-w-full rounded bg-gray-100 animate-pulse dark:bg-gray-800" />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <div
+                            key={index}
+                            className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                        >
+                            <div className="h-4 w-20 rounded bg-gray-100 animate-pulse dark:bg-gray-700" />
+                            <div className="mt-3 h-8 w-24 rounded bg-gray-200 animate-pulse dark:bg-gray-700" />
+                            <div className="mt-2 h-3 w-16 rounded bg-gray-100 animate-pulse dark:bg-gray-700" />
+                        </div>
+                    ))}
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <div className="space-y-4">
+                        {Array.from({ length: 3 }).map((_, index) => (
+                            <div
+                                key={index}
+                                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                            >
+                                <div className="h-5 w-32 rounded bg-gray-200 animate-pulse dark:bg-gray-700" />
+                                <div className="mt-4 space-y-3">
+                                    {Array.from({ length: 3 }).map((__, rowIndex) => (
+                                        <div key={rowIndex} className="h-4 rounded bg-gray-100 animate-pulse dark:bg-gray-700" />
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="space-y-4 lg:col-span-2">
+                        {Array.from({ length: 2 }).map((_, sectionIndex) => (
+                            <div
+                                key={sectionIndex}
+                                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                            >
+                                <div className="h-5 w-32 rounded bg-gray-200 animate-pulse dark:bg-gray-700" />
+                                <div className="mt-4 space-y-3">
+                                    {Array.from({ length: 6 }).map((__, rowIndex) => (
+                                        <div key={rowIndex} className="grid grid-cols-3 gap-3">
+                                            <div className="h-4 rounded bg-gray-100 animate-pulse dark:bg-gray-700" />
+                                            <div className="h-4 rounded bg-gray-100 animate-pulse dark:bg-gray-700" />
+                                            <div className="h-4 rounded bg-gray-100 animate-pulse dark:bg-gray-700" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error && !activityData) {
+        return (
+            <div className="mx-auto max-w-5xl rounded-xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900/50 dark:bg-red-950/20">
+                <p className="font-bold text-red-700 dark:text-red-200">{error}</p>
+                <button
+                    type="button"
+                    onClick={() => void loadData()}
+                    className="mt-4 rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                >
+                    다시 불러오기
+                </button>
+                <div className="mt-4">
+                    <Link href="/admin/students" prefetch={false} className="text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                        원생 목록으로 돌아가기
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    if (!activityData) return null;
+
+    const { student, enrollments, attendances, payments, attendanceStats, galleryPosts } = activityData;
 
     function saveMemo() {
         startTransition(async () => {

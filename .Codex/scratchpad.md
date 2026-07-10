@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 관리자 셸 배경 API 지연 실행
+- 작업명: 원생 상세 활동 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin` 공통 셸
+- 범위: `/admin/students/[id]`, `/api/admin/students/[id]/activity`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -66,9 +66,11 @@
 | 스킬 관리 화면 지연 렌더링 | 완료 | 스킬 카테고리 조회를 Suspense 안쪽으로 분리해 table skeleton 먼저 표시 |
 | 원생 관리 목록 백그라운드 로딩 | 완료 | 원생/반 전체 목록을 페이지 서버 렌더에서 분리해 클라이언트 API로 지연 로딩 |
 | 관리자 셸 배경 API 지연 실행 | 완료 | 체험 신청/알림 배지 조회를 idle 이후로 미뤄 초기 DB 요청 경합 완화 |
+| 원생 상세 활동 백그라운드 로딩 | 완료 | 원생 상세의 활동/출석/결제/갤러리 조회를 클라이언트 API로 지연 로딩 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/students/[id]` 상세 진입 시 활동/출석/결제/갤러리 조회를 서버 렌더에서 제거하고, `/api/admin/students/[id]/activity`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: 관리자 공통 셸의 체험 신청 수/알림 조회를 첫 렌더 직후가 아니라 idle 이후 천천히 실행하고 알림 폴링 간격을 완화함.
 - 2026-07-10: `/admin/students` 진입 시 원생/반 전체 목록 조회를 서버 렌더에서 제거하고, `/api/admin/students`를 통해 클라이언트에서 천천히 불러오도록 변경함.
 - 2026-07-10: `/admin/skills` 진입 시 스킬 카테고리 조회를 Suspense 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
@@ -83,9 +85,9 @@
 - 2026-07-10: `/admin/sms/templates` 진입 시 SMS 템플릿 조회를 Suspense 경계 안쪽으로 옮기고, card skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/AdminShellClient.tsx`
-- 주요 변경: 모든 관리자 페이지에서 자동 실행되던 체험 신청 수/알림 조회를 브라우저 idle 이후로 지연하고, 알림 폴링 간격을 2분으로 완화.
-- 적용 범위: 관리자 공통 레이아웃
+- 변경 파일: `src/app/admin/students/[id]/page.tsx`, `src/app/admin/students/[id]/StudentDetailClient.tsx`, `src/app/api/admin/students/[id]/activity/route.ts`
+- 주요 변경: 원생 상세의 무거운 활동 데이터 조회를 클라이언트 API로 분리하고, 상세 skeleton/재시도 UI를 클라이언트에서 표시.
+- 적용 범위: `/admin/students/[id]`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -93,4 +95,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 반 상세/원생 상세처럼 상세 데이터가 무거운 화면을 추가 점검.
+- 다음 속도 개선 후보: 반 상세처럼 상세 데이터가 무거운 화면을 추가 점검.

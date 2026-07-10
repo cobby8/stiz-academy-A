@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: SMS 템플릿 백그라운드 로딩
+- 작업명: 학원 설정 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/sms/templates`, `/api/admin/sms/templates`
+- 범위: `/admin/settings`, `/api/admin/settings`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -45,9 +45,11 @@
 | 갤러리 관리 백그라운드 로딩 | 완료 | `/admin/gallery` 서버 렌더에서 갤러리/반/설정/초안 조회 제거 |
 | 피드백 관리 백그라운드 로딩 | 완료 | `/admin/feedback` 서버 렌더에서 피드백 목록 조회 제거 |
 | SMS 템플릿 백그라운드 로딩 | 완료 | `/admin/sms/templates` 서버 렌더에서 템플릿 조회/보장 작업 제거 |
+| 학원 설정 백그라운드 로딩 | 완료 | `/admin/settings` 서버 렌더에서 학원 설정 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/settings` 학원 설정 조회를 서버 렌더에서 제거하고, `/api/admin/settings`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/sms/templates` SMS 템플릿 조회를 서버 렌더에서 제거하고, `/api/admin/sms/templates`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/feedback` 피드백 목록 조회를 서버 렌더에서 제거하고, `/api/admin/feedback`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/gallery` 갤러리/반/인스타 설정/소셜 초안 조회를 서버 렌더에서 제거하고, `/api/admin/gallery`로 클라이언트에서 불러오도록 변경함.
@@ -57,12 +59,11 @@
 - 2026-07-10: `/admin/attendance` 반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/attendance`가 반 목록과 날짜별 출석 조회를 함께 담당하도록 변경함.
 - 2026-07-10: `/admin/faq` FAQ 목록 조회를 서버 렌더에서 제거하고, `/api/admin/faq`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/testimonials` 후기/네이버 플레이스 링크 조회를 서버 렌더에서 제거하고, `/api/admin/testimonials`로 클라이언트에서 불러오도록 변경함.
-- 2026-07-10: `/admin/annual` 연간일정/ICS 설정 조회를 서버 렌더에서 제거하고, `/api/admin/annual`로 클라이언트에서 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/sms/templates/page.tsx`, `src/app/admin/sms/templates/SmsTemplateClient.tsx`, `src/app/api/admin/sms/templates/route.ts`
-- 주요 변경: SMS 템플릿 조회와 기본 템플릿 보장 작업을 클라이언트 API로 분리하고, 초기화 후 페이지 전체 새로고침 대신 템플릿 API 재조회로 갱신.
-- 적용 범위: `/admin/sms/templates`
+- 변경 파일: `src/app/admin/settings/page.tsx`, `src/app/admin/settings/AdminSettingsClient.tsx`, `src/app/api/admin/settings/route.ts`
+- 주요 변경: 학원 설정 조회를 클라이언트 API로 분리하고, 로딩 후 폰트/소개/시설 상태를 동기화해 빈 폼 렌더를 방지.
+- 적용 범위: `/admin/settings`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

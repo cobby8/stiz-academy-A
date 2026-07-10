@@ -46,6 +46,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 갤러리 관리 `/admin/gallery`는 서버 렌더에서 갤러리/반/인스타 설정/소셜 초안을 기다리지 않고 `/api/admin/gallery`를 클라이언트에서 호출해 채운다.
 - 피드백 관리 `/admin/feedback`은 서버 렌더에서 피드백 목록을 기다리지 않고 `/api/admin/feedback`을 클라이언트에서 호출해 채운다.
 - SMS 템플릿 `/admin/sms/templates`는 서버 렌더에서 템플릿 조회/보장 작업을 기다리지 않고 `/api/admin/sms/templates`를 클라이언트에서 호출해 채운다.
+- 학원 설정 `/admin/settings`는 서버 렌더에서 학원 설정 조회를 기다리지 않고 `/api/admin/settings`를 클라이언트에서 호출해 채운다.
 
 ## 주요 데이터 모델
 - 사용자/권한: `User`, `StaffInvitation`, `Role`

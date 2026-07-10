@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
 import LazyRichTextEditor from "./LazyRichTextEditor";
@@ -59,28 +59,78 @@ function SectionHeader({ title }: { title: string }) {
     );
 }
 
+function AdminSettingsLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div>
+                <div className="h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <div className="space-y-2">
+                        {Array.from({ length: 7 }).map((_, index) => (
+                            <div
+                                key={index}
+                                className={`h-10 animate-pulse rounded-lg ${
+                                    index === 0 ? "bg-gray-200 dark:bg-gray-700" : "bg-gray-100 dark:bg-gray-700"
+                                }`}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                <div className="space-y-5">
+                    {Array.from({ length: 4 }).map((_, sectionIndex) => (
+                        <div
+                            key={sectionIndex}
+                            className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                        >
+                            <div className="h-6 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                            <div className="mt-5 grid gap-4 md:grid-cols-2">
+                                {Array.from({ length: 4 }).map((__, fieldIndex) => (
+                                    <div key={fieldIndex}>
+                                        <div className="h-4 w-24 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                        <div className="mt-2 h-11 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-5 h-28 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────────────────
 export default function AdminSettingsClient({
     initialSettings,
     fetchError,
 }: {
-    initialSettings: any;
-    fetchError: boolean;
+    initialSettings?: any;
+    fetchError?: boolean;
 }) {
+    const hasInitialData = initialSettings !== undefined || fetchError === true;
+    const [settings, setSettings] = useState<any>(initialSettings ?? null);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [fetchErrorState, setFetchErrorState] = useState(fetchError === true);
     const [actionError, setActionError] = useState<string | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
-    const [bodyFont, setBodyFont] = useState<string>(initialSettings?.siteBodyFont || "system");
+    const [bodyFont, setBodyFont] = useState<string>(settings?.siteBodyFont || "system");
     const [headingFont, setHeadingFont] = useState<string>(
-        HEADING_FONT_OPTIONS.some(f => f.key === initialSettings?.siteHeadingFont)
-            ? initialSettings.siteHeadingFont
+        HEADING_FONT_OPTIONS.some(f => f.key === settings?.siteHeadingFont)
+            ? settings.siteHeadingFont
             : "same-as-body"
     );
-    const [introText, setIntroText] = useState<string>(initialSettings?.introductionText || "");
-    const [philosophyText, setPhilosophyText] = useState<string>(initialSettings?.philosophyText || "");
-    const [facilitiesText, setFacilitiesText] = useState<string>(initialSettings?.facilitiesText || "");
+    const [introText, setIntroText] = useState<string>(settings?.introductionText || "");
+    const [philosophyText, setPhilosophyText] = useState<string>(settings?.philosophyText || "");
+    const [facilitiesText, setFacilitiesText] = useState<string>(settings?.facilitiesText || "");
     const [facilityImages, setFacilityImages] = useState<string[]>(() => {
         try {
-            if (initialSettings?.facilitiesImagesJSON) return JSON.parse(initialSettings.facilitiesImagesJSON);
+            if (settings?.facilitiesImagesJSON) return JSON.parse(settings.facilitiesImagesJSON);
         } catch {}
         return [];
     });
@@ -88,6 +138,50 @@ export default function AdminSettingsClient({
     const headingFontCss = headingFont === "same-as-body"
         ? bodyFontCss
         : (HEADING_FONT_OPTIONS.find(f => f.key === headingFont)?.css ?? bodyFontCss);
+
+    const loadSettings = useCallback(async () => {
+        setLoading(true);
+        setFetchErrorState(false);
+        try {
+            const response = await fetch("/api/admin/settings", { cache: "no-store" });
+            if (!response.ok) throw new Error("Failed to load settings.");
+            const data = (await response.json()) as { settings: any; fetchError?: boolean };
+            setSettings(data.settings ?? null);
+            setFetchErrorState(data.fetchError === true);
+        } catch (error) {
+            console.error("Failed to load academy settings:", error);
+            setSettings(null);
+            setFetchErrorState(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadSettings();
+    }, [hasInitialData, loadSettings]);
+
+    useEffect(() => {
+        setBodyFont(settings?.siteBodyFont || "system");
+        setHeadingFont(
+            HEADING_FONT_OPTIONS.some(f => f.key === settings?.siteHeadingFont)
+                ? settings.siteHeadingFont
+                : "same-as-body"
+        );
+        setIntroText(settings?.introductionText || "");
+        setPhilosophyText(settings?.philosophyText || "");
+        setFacilitiesText(settings?.facilitiesText || "");
+        try {
+            setFacilityImages(settings?.facilitiesImagesJSON ? JSON.parse(settings.facilitiesImagesJSON) : []);
+        } catch {
+            setFacilityImages([]);
+        }
+    }, [settings]);
+
+    if (loading && !settings && !fetchErrorState) {
+        return <AdminSettingsLoadingFallback />;
+    }
 
     async function saveBasicSettings(formData: FormData) {
         setActionError(null);
@@ -114,7 +208,7 @@ export default function AdminSettingsClient({
 
     return (
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-gray-900">
-            {fetchError && (
+            {fetchErrorState && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm">
                     데이터베이스 연결에 문제가 발생했습니다. 새 스키마 동기화(db push)가 필요합니다.
                 </div>
@@ -188,7 +282,7 @@ export default function AdminSettingsClient({
                                 <input
                                     name="introductionTitle"
                                     type="text"
-                                    defaultValue={initialSettings?.introductionTitle || ""}
+                                    defaultValue={settings?.introductionTitle || ""}
                                     placeholder="예: 다산신도시 No.1 스티즈농구교실"
                                     className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
@@ -312,7 +406,7 @@ export default function AdminSettingsClient({
                                 <input
                                     name="contactPhone"
                                     type="text"
-                                    defaultValue={initialSettings?.contactPhone || ""}
+                                    defaultValue={settings?.contactPhone || ""}
                                     placeholder="010-0000-0000"
                                     className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
@@ -322,7 +416,7 @@ export default function AdminSettingsClient({
                                 <input
                                     name="operatingHours"
                                     type="text"
-                                    defaultValue={initialSettings?.operatingHours || ""}
+                                    defaultValue={settings?.operatingHours || ""}
                                     placeholder="평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)"
                                     className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
@@ -333,7 +427,7 @@ export default function AdminSettingsClient({
                                 <input
                                     name="address"
                                     type="text"
-                                    defaultValue={initialSettings?.address || ""}
+                                    defaultValue={settings?.address || ""}
                                     placeholder="경기도 남양주시 다산동 ..."
                                     className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
@@ -348,7 +442,7 @@ export default function AdminSettingsClient({
                         <input
                             name="youtubeUrl"
                             type="text"
-                            defaultValue={initialSettings?.youtubeUrl || ""}
+                            defaultValue={settings?.youtubeUrl || ""}
                             placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX  또는 <iframe ...> 코드"
                             className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                         />
@@ -365,7 +459,7 @@ export default function AdminSettingsClient({
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">푸터 소개 문구</label>
                                 <textarea
                                     name="footerDescription"
-                                    defaultValue={initialSettings?.footerDescription || ""}
+                                    defaultValue={settings?.footerDescription || ""}
                                     rows={3}
                                     placeholder={"아이들이 농구를 통해 협동심과\n건강한 체력을 기를 수 있도록 지도합니다."}
                                     className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition resize-y"
@@ -378,7 +472,7 @@ export default function AdminSettingsClient({
                                 <input
                                     name="footerCopyright"
                                     type="text"
-                                    defaultValue={initialSettings?.footerCopyright || ""}
+                                    defaultValue={settings?.footerCopyright || ""}
                                     placeholder="© 2026 STIZ Basketball Academy. All rights reserved."
                                     className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
@@ -391,7 +485,7 @@ export default function AdminSettingsClient({
                                     <input
                                         name="instagramUrl"
                                         type="text"
-                                        defaultValue={initialSettings?.instagramUrl || ""}
+                                        defaultValue={settings?.instagramUrl || ""}
                                         placeholder="https://www.instagram.com/stiz... 또는 @stiz..."
                                         className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                     />
@@ -401,7 +495,7 @@ export default function AdminSettingsClient({
                                     <input
                                         name="instagramBusinessAccountId"
                                         type="text"
-                                        defaultValue={initialSettings?.instagramBusinessAccountId || ""}
+                                        defaultValue={settings?.instagramBusinessAccountId || ""}
                                         placeholder="예: 1784..."
                                         className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                     />
@@ -412,7 +506,7 @@ export default function AdminSettingsClient({
                                     <input
                                         name="naverPlaceUrl"
                                         type="url"
-                                        defaultValue={initialSettings?.naverPlaceUrl || ""}
+                                        defaultValue={settings?.naverPlaceUrl || ""}
                                         placeholder="https://naver.me/..."
                                         className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                     />
@@ -422,7 +516,7 @@ export default function AdminSettingsClient({
                                     <input
                                         name="kakaoChannelUrl"
                                         type="url"
-                                        defaultValue={initialSettings?.kakaoChannelUrl || ""}
+                                        defaultValue={settings?.kakaoChannelUrl || ""}
                                         placeholder="https://pf.kakao.com/..."
                                         className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                     />
@@ -433,7 +527,7 @@ export default function AdminSettingsClient({
                                     type="checkbox"
                                     name="instagramAutoPublishEnabled"
                                     value="true"
-                                    defaultChecked={initialSettings?.instagramAutoPublishEnabled === true}
+                                    defaultChecked={settings?.instagramAutoPublishEnabled === true}
                                     className="mt-1 rounded border-gray-300"
                                 />
                                 <span>

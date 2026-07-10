@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 스태프 관리 화면 진입 DDL 제거
+- 작업명: 설정 관리 화면 진입 DDL 제거
 - 상태: 빌드 검증 완료
-- 범위: `/admin/staff`, `src/lib/queries.ts`
+- 범위: `/admin/settings`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -33,9 +33,11 @@
 | 보강 관리 화면 진입 DDL 제거 | 완료 | 보강 예약 액션에서 테이블을 보장하고, 목록 화면은 읽기 조회만 수행 |
 | 스킬 관리 화면 진입 DDL 제거 | 완료 | 스킬 생성/수정/평가 저장 액션에서 테이블을 보장하고, 화면은 카테고리만 조회 |
 | 스태프 관리 화면 진입 DDL 제거 | 완료 | 스태프 읽기 fallback을 보강하고, 생성/역할/초대 액션에서 구조 보장 |
+| 설정 관리 화면 진입 DDL 제거 | 완료 | 설정 저장 로직에서 누락 컬럼을 보장하고, 화면 진입은 설정 조회만 수행 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/settings` 페이지 진입 시 `ensureAcademySettingsColumns()` 병렬 호출을 제거하고, 설정 저장 로직의 lazy 컬럼 보장에 맡겨 화면 조회를 가볍게 함.
 - 2026-07-10: `/admin/staff` 페이지 진입 시 스태프 관련 DDL 호출 2개를 제거하고, 오래된 DB에서도 최소 목록을 보여주도록 스태프/코치 읽기 fallback을 보강함.
 - 2026-07-10: `/admin/skills` 페이지 진입 시 `ensureSkillTables()` 호출을 제거하고, 스킬 생성/수정/평가 저장 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 - 2026-07-10: `/admin/makeup` 페이지 진입 시 `ensureMakeupSessionTable()` 호출을 제거하고, 보강 예약 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
@@ -45,12 +47,11 @@
 - 2026-07-10: `/admin/feedback` 초기 렌더에서 `getCoaches()` 호출도 제거하고, 피드백 작성/수정 폼을 열 때 `/api/admin/coach-options`로 코치 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/feedback` 초기 렌더에서 `getStudents()` 호출을 제거하고, 피드백 작성/수정 폼을 열 때 `/api/admin/student-options`로 학생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/finance` 초기 렌더에서 `getStudents()` 호출을 제거하고, 수납 기록 추가 폼을 열 때 `/api/admin/student-options`로 학생 선택 목록을 불러오도록 변경함.
-- 2026-07-10: `/admin/makeup` 초기 렌더에서 `getStudents()` 호출을 제거하고, 보강 예약 모달을 열 때 `/api/admin/student-options`로 원생 선택 목록을 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/staff/page.tsx`, `src/lib/queries.ts`
-- 주요 변경: 스태프 관리 첫 렌더에서 DB 구조 확인용 DDL 호출을 제거하고, `Coach.userId`/`VICE_ADMIN` 구조가 없어도 읽기 목록이 빈 화면으로만 떨어지지 않도록 fallback 보강.
-- 적용 범위: `/admin/staff`
+- 변경 파일: `src/app/admin/settings/page.tsx`
+- 주요 변경: 설정 관리 첫 렌더에서 누락 컬럼 확인 DDL 호출을 제거하고, 설정 저장 시 lazy 보장 로직은 유지.
+- 적용 범위: `/admin/settings`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -58,4 +59,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/settings`의 설정 컬럼 DDL 호출과 공개/관리자 공통 설정 조회 경로 점검.
+- 다음 속도 개선 후보: 남은 관리자 조회 쿼리 중 실제 화면 첫 렌더에 꼭 필요 없는 통계/목록을 추가로 Suspense 또는 지연 API로 분리할 수 있는지 점검.

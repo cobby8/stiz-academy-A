@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/settings` 페이지 진입 시 `ensureAcademySettingsColumns()` 병렬 호출을 제거하고, 설정 저장 로직의 lazy 컬럼 보장에 맡기게 했다.
 - 2026-07-10: `/admin/staff` 페이지 진입 시 스태프 관련 DDL 호출 2개를 제거하고, 오래된 DB에서도 최소 스태프/코치 목록을 보여주도록 읽기 fallback을 보강했다.
 - 2026-07-10: `/admin/skills` 페이지 진입 시 `ensureSkillTables()` 호출을 제거하고, 스킬 생성/수정/평가 저장 작업에서 테이블 구조를 보장하게 했다.
 - 2026-07-10: `/admin/makeup` 페이지 진입 시 `ensureMakeupSessionTable()` 호출을 제거하고, 보강 예약 작업에서 테이블 구조를 보장하게 했다.
@@ -8,7 +9,6 @@
 - 2026-07-10: `/admin/feedback` 초기 렌더에서 코치 전체 조회도 제거하고, 피드백 작성/수정 폼을 열 때 코치 선택 목록만 `/api/admin/coach-options`로 불러오게 했다.
 - 2026-07-10: `/admin/feedback` 초기 렌더에서 학생 전체 조회를 제거하고, 피드백 작성/수정 폼을 열 때 학생 선택 목록만 `/api/admin/student-options`로 불러오게 했다.
 - 2026-07-10: `/admin/finance` 초기 렌더에서 학생 전체 조회를 제거하고, 수납 기록 추가 폼을 열 때 학생 선택 목록만 `/api/admin/student-options`로 불러오게 했다.
-- 2026-07-10: `/admin/makeup` 초기 렌더에서 원생 전체 조회를 제거하고, 보강 예약 모달을 열 때 원생 선택 목록만 `/api/admin/student-options`로 불러오게 했다.
 
 # STIZ Knowledge Index
 
@@ -56,6 +56,7 @@
 - `/admin/makeup`은 보강 목록 읽기 화면에서는 `ensureMakeupSessionTable()`을 실행하지 않고, 보강 예약 작업에서 테이블 구조를 보장한다.
 - `/admin/skills`는 카테고리 읽기 화면에서는 `ensureSkillTables()`를 실행하지 않고, 스킬 생성/수정/평가 저장 작업에서 테이블 구조를 보장한다.
 - `/admin/staff`는 목록 읽기 화면에서는 스태프 DDL을 실행하지 않고, 스태프 생성/역할 변경/초대 작업에서 구조를 보장하며, 오래된 DB에서는 코치 연결 없이 최소 목록을 표시한다.
+- `/admin/settings`는 화면 진입 때 설정 컬럼 DDL을 실행하지 않고, 설정 저장 시 `rawUpsertAcademySettings()`의 lazy 컬럼 보장에 맡긴다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
 - Pretendard 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 idle 시점에 삽입한다. Material Symbols stylesheet는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.

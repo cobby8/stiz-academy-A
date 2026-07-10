@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 개인정보처리방침 백그라운드 로딩
+- 작업명: 이용약관 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/privacy`, `/api/admin/settings`
+- 범위: `/admin/terms`, `/api/admin/settings`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -47,9 +47,11 @@
 | SMS 템플릿 백그라운드 로딩 | 완료 | `/admin/sms/templates` 서버 렌더에서 템플릿 조회/보장 작업 제거 |
 | 학원 설정 백그라운드 로딩 | 완료 | `/admin/settings` 서버 렌더에서 학원 설정 조회 제거 |
 | 개인정보처리방침 백그라운드 로딩 | 완료 | `/admin/privacy` 서버 렌더에서 개인정보 설정 조회 제거 |
+| 이용약관 백그라운드 로딩 | 완료 | `/admin/terms` 서버 렌더에서 이용약관 설정 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/terms` 이용약관 조회를 서버 렌더에서 제거하고, 기존 `/api/admin/settings`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/privacy` 개인정보처리방침 조회를 서버 렌더에서 제거하고, 기존 `/api/admin/settings`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/settings` 학원 설정 조회를 서버 렌더에서 제거하고, `/api/admin/settings`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/sms/templates` SMS 템플릿 조회를 서버 렌더에서 제거하고, `/api/admin/sms/templates`로 클라이언트에서 불러오도록 변경함.
@@ -59,12 +61,11 @@
 - 2026-07-10: `/admin/programs` 프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/programs`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/notices` 공지/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/notices`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/attendance` 반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/attendance`가 반 목록과 날짜별 출석 조회를 함께 담당하도록 변경함.
-- 2026-07-10: `/admin/faq` FAQ 목록 조회를 서버 렌더에서 제거하고, `/api/admin/faq`로 클라이언트에서 불러오도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/privacy/page.tsx`, `src/app/admin/privacy/PrivacyAdminClient.tsx`
-- 주요 변경: 개인정보처리방침 조회를 기존 설정 API로 분리하고, 로딩 중 skeleton을 클라이언트에서 표시.
-- 적용 범위: `/admin/privacy`
+- 변경 파일: `src/app/admin/terms/page.tsx`, `src/app/admin/terms/TermsAdminClient.tsx`
+- 주요 변경: 이용약관 조회를 기존 설정 API로 분리하고, 로딩 중 skeleton을 클라이언트에서 표시.
+- 적용 범위: `/admin/terms`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

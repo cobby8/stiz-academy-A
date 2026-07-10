@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/skills` 스킬 트래킹은 스킬 카테고리 조회를 서버 렌더에서 제거하고, `/api/admin/skills` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/finance/billing` 청구 템플릿 관리는 청구 템플릿/프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/finance/billing` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/schedule` 시간표 관리는 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 서버 렌더에서 제거하고, `/api/admin/schedule` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/attendance/report` 수업 리포트 목록은 최근 수업 리포트 조회를 서버 렌더에서 제거하고, `/api/admin/attendance/report` 클라이언트 로딩으로 뒤로 미뤘다.
@@ -59,7 +60,7 @@
 
 - 기준일: 2026-07-10
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/시간표/수납/청구 템플릿/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -131,7 +132,7 @@
 - `/admin/settings`는 학원 설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 설정 폼 skeleton을 먼저 렌더한다.
 - `/admin/privacy`, `/admin/terms`는 약관/개인정보 설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, editor skeleton을 먼저 렌더한다.
 - `/admin/staff`는 스태프/코치/초대 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, list skeleton을 먼저 렌더한다.
-- `/admin/skills`는 스킬 카테고리 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, table skeleton을 먼저 렌더한다.
+- `/admin/skills`는 스킬 카테고리 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/skills`에서 클라이언트가 불러온다.
 - `/admin/students`는 원생/반 전체 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/students`에서 클라이언트가 천천히 불러온다.
 - 관리자 공통 셸의 체험 신청 수/알림 조회는 첫 렌더 직후 실행하지 않고 `requestIdleCallback` 또는 지연 타이머 이후 실행해 페이지 데이터 조회와 경쟁하지 않게 한다.
 - `/admin/students/[id]`는 원생 활동/출석/결제/갤러리 조회를 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/students/[id]/activity`에서 클라이언트가 불러온다.

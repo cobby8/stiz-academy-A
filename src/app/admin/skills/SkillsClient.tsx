@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import SkillRadarChart from "@/components/SkillRadarChart";
 import {
     createSkillCategory,
@@ -37,13 +36,67 @@ interface SkillRecord {
 }
 
 interface Props {
-    categories: Category[];
+    categories?: Category[];
     students?: Student[];
 }
 
-export default function SkillsClient({ categories, students: initialStudents = [] }: Props) {
-    const router = useRouter();
+function SkillsLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div>
+                <div className="h-8 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="mt-2 h-4 w-96 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            </div>
+
+            <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+                <div className="h-9 w-32 rounded-md bg-white shadow-sm dark:bg-gray-700 animate-pulse" />
+                <div className="h-9 w-28 rounded-md bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+                    <div className="h-5 w-36 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-10 w-32 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                        <div key={index} className="grid grid-cols-6 gap-4 px-6 py-4">
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-8 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SkillsErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">스킬 카테고리를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
+export default function SkillsClient({ categories: initialCategories, students: initialStudents = [] }: Props) {
     const [isPending, startTransition] = useTransition();
+    const hasInitialCategories = Boolean(initialCategories);
+    const [categories, setCategories] = useState<Category[]>(initialCategories ?? []);
+    const [categoriesLoading, setCategoriesLoading] = useState(!hasInitialCategories);
+    const [categoriesError, setCategoriesError] = useState(false);
     const [students, setStudents] = useState<Student[]>(initialStudents);
     const [studentsLoaded, setStudentsLoaded] = useState(initialStudents.length > 0);
     const [studentsLoading, setStudentsLoading] = useState(false);
@@ -51,6 +104,34 @@ export default function SkillsClient({ categories, students: initialStudents = [
 
     // 탭 전환: "categories" (카테고리 관리) / "assessment" (스킬 평가)
     const [tab, setTab] = useState<"categories" | "assessment">("categories");
+
+    const loadCategories = useCallback(async () => {
+        setCategoriesLoading(true);
+        setCategoriesError(false);
+
+        try {
+            const response = await fetch("/api/admin/skills", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load skill categories.");
+            }
+
+            const data = (await response.json()) as { categories?: Category[] };
+            setCategories(data.categories ?? []);
+        } catch (error) {
+            console.error("Failed to load skill categories:", error);
+            setCategoriesError(true);
+        } finally {
+            setCategoriesLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialCategories) return;
+        void loadCategories();
+    }, [hasInitialCategories, loadCategories]);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -77,6 +158,14 @@ export default function SkillsClient({ categories, students: initialStudents = [
             setStudentsLoading(false);
         }
     }, [studentsLoaded, studentsLoading]);
+
+    if (categoriesLoading && categories.length === 0) {
+        return <SkillsLoadingFallback />;
+    }
+
+    if (categoriesError && categories.length === 0) {
+        return <SkillsErrorState onRetry={loadCategories} />;
+    }
 
     return (
         <div>
@@ -129,7 +218,7 @@ export default function SkillsClient({ categories, students: initialStudents = [
                     categories={categories}
                     isPending={isPending}
                     startTransition={startTransition}
-                    router={router}
+                    onReloadCategories={loadCategories}
                 />
             ) : (
                 <AssessmentTab
@@ -140,7 +229,6 @@ export default function SkillsClient({ categories, students: initialStudents = [
                     onRetryLoadStudents={loadStudents}
                     isPending={isPending}
                     startTransition={startTransition}
-                    router={router}
                 />
             )}
         </div>
@@ -154,12 +242,12 @@ function CategoryTab({
     categories,
     isPending,
     startTransition,
-    router,
+    onReloadCategories,
 }: {
     categories: Category[];
     isPending: boolean;
     startTransition: (fn: () => void) => void;
-    router: ReturnType<typeof useRouter>;
+    onReloadCategories: () => Promise<void>;
 }) {
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
@@ -212,7 +300,7 @@ function CategoryTab({
                 });
             }
             setShowForm(false);
-            router.refresh();
+            await onReloadCategories();
         });
     };
 
@@ -221,7 +309,7 @@ function CategoryTab({
         if (!confirm(`"${name}" 카테고리를 삭제하시겠습니까?\n해당 카테고리의 모든 평가 기록도 함께 삭제됩니다.`)) return;
         startTransition(async () => {
             await deleteSkillCategory(id);
-            router.refresh();
+            await onReloadCategories();
         });
     };
 
@@ -438,7 +526,6 @@ function AssessmentTab({
     onRetryLoadStudents,
     isPending,
     startTransition,
-    router,
 }: {
     categories: Category[];
     students: Student[];
@@ -447,7 +534,6 @@ function AssessmentTab({
     onRetryLoadStudents: () => Promise<void>;
     isPending: boolean;
     startTransition: (fn: () => void) => void;
-    router: ReturnType<typeof useRouter>;
 }) {
     const [selectedStudentId, setSelectedStudentId] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
@@ -551,7 +637,6 @@ function AssessmentTab({
             await recordSkillAssessment(selectedStudentId, items, assessedBy);
             // 저장 후 데이터 리로드
             await handleSelectStudent(selectedStudentId);
-            router.refresh();
         });
     };
 

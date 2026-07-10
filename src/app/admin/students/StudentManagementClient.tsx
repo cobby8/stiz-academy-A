@@ -673,7 +673,11 @@ export default function StudentManagementClient({
                                     <tr key={s.id} className="hover:bg-gray-50 dark:bg-gray-900 transition-colors">
                                         {/* 이름: 항상 표시, 클릭하면 상세 페이지로 이동 */}
                                         <td className="px-4 py-2">
-                                            <Link href={`/admin/students/${s.id}`} className="font-bold text-gray-900 hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors text-sm">
+                                            <Link
+                                                href={`/admin/students/${s.id}`}
+                                                prefetch={false}
+                                                className="font-bold text-gray-900 hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors text-sm"
+                                            >
                                                 {s.name}
                                             </Link>
                                         </td>

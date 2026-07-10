@@ -99,7 +99,7 @@ export default function StudentDetailClient({ data }: { data: StudentActivityDat
         <div className="max-w-5xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center gap-4">
-                <Link href="/admin/students" className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
+                <Link href="/admin/students" prefetch={false} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
                     <SymbolIcon name="arrow_back" size={20} className="text-gray-500 dark:text-gray-400" />
                 </Link>
                 <div>

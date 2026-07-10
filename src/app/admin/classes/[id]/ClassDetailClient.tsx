@@ -309,6 +309,7 @@ function StudentsTab({ students }: { students: ClassData["students"] }) {
                                 <td className="py-3 px-4">
                                     <Link
                                         href={`/admin/students/${s.studentId}`}
+                                        prefetch={false}
                                         className="font-medium text-gray-900 hover:text-brand-orange-500 dark:text-brand-neon-lime transition"
                                     >
                                         {s.studentName}

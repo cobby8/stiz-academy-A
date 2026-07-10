@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { updateRequestStatus, deleteParentRequest } from "@/app/actions/admin";
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -54,11 +54,96 @@ type RequestData = {
     parentPhone: string | null;
 };
 
-export default function RequestsAdminClient({ requests }: { requests: RequestData[] }) {
+type RequestsPayload = {
+    requests: RequestData[];
+};
+
+function RequestsLoadingFallback() {
+    return (
+        <div className="mx-auto max-w-4xl space-y-6">
+            <div>
+                <div className="h-8 w-56 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-10 w-24 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700"
+                    />
+                ))}
+            </div>
+            <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                    >
+                        <div className="flex items-center gap-3 px-5 py-4">
+                            <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                            <div className="min-w-0 flex-1 space-y-2">
+                                <div className="flex gap-2">
+                                    <div className="h-5 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-48 max-w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                </div>
+                                <div className="h-4 w-64 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                            </div>
+                            <div className="h-5 w-5 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function RequestsErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="mx-auto max-w-4xl rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">요청 목록을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
+export default function RequestsAdminClient({ requests: initialRequests }: { requests?: RequestData[] }) {
+    const hasInitialData = initialRequests !== undefined;
+    const [requests, setRequests] = useState<RequestData[]>(initialRequests ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [filter, setFilter] = useState<string>("ALL");
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
     const [isPending, startTransition] = useTransition();
+
+    const loadRequests = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/requests", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load requests.");
+            }
+            const data = (await response.json()) as RequestsPayload;
+            setRequests(data.requests);
+        } catch (error) {
+            console.error("Failed to load requests:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadRequests();
+    }, [hasInitialData, loadRequests]);
 
     // 필터 적용
     const filtered = filter === "ALL" ? requests : requests.filter(r => r.status === filter);
@@ -70,6 +155,14 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
         CONFIRMED: requests.filter(r => r.status === "CONFIRMED").length,
         COMPLETED: requests.filter(r => r.status === "COMPLETED").length,
     };
+
+    if (loading && requests.length === 0) {
+        return <RequestsLoadingFallback />;
+    }
+
+    if (loadError && requests.length === 0) {
+        return <RequestsErrorState onRetry={loadRequests} />;
+    }
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
@@ -182,9 +275,10 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                                 return (
                                                     <button key={s.value}
                                                         disabled={isPending}
-                                                        onClick={() => startTransition(() =>
-                                                            updateRequestStatus(req.id, s.value, adminNotes[req.id] ?? req.adminNote ?? undefined)
-                                                        )}
+                                                        onClick={() => startTransition(async () => {
+                                                            await updateRequestStatus(req.id, s.value, adminNotes[req.id] ?? req.adminNote ?? undefined);
+                                                            await loadRequests();
+                                                        })}
                                                         className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition hover:shadow-sm ${s.color}`}
                                                     >
                                                         <SymbolIcon name={s.iconName} size={14} /> {s.label}
@@ -195,7 +289,11 @@ export default function RequestsAdminClient({ requests }: { requests: RequestDat
                                                 disabled={isPending}
                                                 onClick={() => {
                                                     if (confirm("이 요청을 삭제하시겠습니까?")) {
-                                                        startTransition(() => deleteParentRequest(req.id));
+                                                        startTransition(async () => {
+                                                            await deleteParentRequest(req.id);
+                                                            setExpandedId(null);
+                                                            await loadRequests();
+                                                        });
                                                     }
                                                 }}
                                                 className="ml-auto text-xs text-red-400 hover:text-red-600 transition"

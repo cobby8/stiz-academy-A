@@ -1,40 +1,91 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { updateAcademySettings } from "@/app/actions/admin";
 
+type ApplySettings = {
+    trialTitle: string;
+    trialContent: string | null;
+    trialFormUrl: string | null;
+    enrollTitle: string;
+    enrollContent: string | null;
+    enrollFormUrl: string | null;
+    uniformFormUrl: string | null;
+    useBuiltInTrialForm: boolean;
+    useBuiltInEnrollForm: boolean;
+};
+
 interface ApplySettingsTabProps {
-    initialSettings: {
-        trialTitle: string;
-        trialContent: string | null;
-        trialFormUrl: string | null;
-        enrollTitle: string;
-        enrollContent: string | null;
-        enrollFormUrl: string | null;
-        uniformFormUrl: string | null;
-        useBuiltInTrialForm: boolean;
-        useBuiltInEnrollForm: boolean;
-    };
+    initialSettings?: ApplySettings;
 }
+
+const DEFAULT_SETTINGS: ApplySettings = {
+    trialTitle: "체험수업 안내",
+    trialContent: null,
+    trialFormUrl: null,
+    enrollTitle: "수강신청 안내",
+    enrollContent: null,
+    enrollFormUrl: null,
+    uniformFormUrl: null,
+    useBuiltInTrialForm: false,
+    useBuiltInEnrollForm: false,
+};
 
 const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm dark:text-white bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime transition";
 const TEXTAREA = INPUT + " resize-none";
 
 export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabProps) {
-    const router = useRouter();
-    const [trialTitle, setTrialTitle] = useState(initialSettings.trialTitle);
-    const [trialContent, setTrialContent] = useState(initialSettings.trialContent || "");
-    const [trialFormUrl, setTrialFormUrl] = useState(initialSettings.trialFormUrl || "");
-    const [enrollTitle, setEnrollTitle] = useState(initialSettings.enrollTitle);
-    const [enrollContent, setEnrollContent] = useState(initialSettings.enrollContent || "");
-    const [enrollFormUrl, setEnrollFormUrl] = useState(initialSettings.enrollFormUrl || "");
-    const [uniformFormUrl, setUniformFormUrl] = useState(initialSettings.uniformFormUrl || "");
-    const [useBuiltInTrialForm, setUseBuiltInTrialForm] = useState(initialSettings.useBuiltInTrialForm);
-    const [useBuiltInEnrollForm, setUseBuiltInEnrollForm] = useState(initialSettings.useBuiltInEnrollForm);
+    const settings = initialSettings ?? DEFAULT_SETTINGS;
+    const [trialTitle, setTrialTitle] = useState(settings.trialTitle);
+    const [trialContent, setTrialContent] = useState(settings.trialContent || "");
+    const [trialFormUrl, setTrialFormUrl] = useState(settings.trialFormUrl || "");
+    const [enrollTitle, setEnrollTitle] = useState(settings.enrollTitle);
+    const [enrollContent, setEnrollContent] = useState(settings.enrollContent || "");
+    const [enrollFormUrl, setEnrollFormUrl] = useState(settings.enrollFormUrl || "");
+    const [uniformFormUrl, setUniformFormUrl] = useState(settings.uniformFormUrl || "");
+    const [useBuiltInTrialForm, setUseBuiltInTrialForm] = useState(settings.useBuiltInTrialForm);
+    const [useBuiltInEnrollForm, setUseBuiltInEnrollForm] = useState(settings.useBuiltInEnrollForm);
+    const [loading, setLoading] = useState(!initialSettings);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const applySettings = useCallback((nextSettings: ApplySettings) => {
+        setTrialTitle(nextSettings.trialTitle);
+        setTrialContent(nextSettings.trialContent || "");
+        setTrialFormUrl(nextSettings.trialFormUrl || "");
+        setEnrollTitle(nextSettings.enrollTitle);
+        setEnrollContent(nextSettings.enrollContent || "");
+        setEnrollFormUrl(nextSettings.enrollFormUrl || "");
+        setUniformFormUrl(nextSettings.uniformFormUrl || "");
+        setUseBuiltInTrialForm(nextSettings.useBuiltInTrialForm);
+        setUseBuiltInEnrollForm(nextSettings.useBuiltInEnrollForm);
+    }, []);
+
+    const loadSettings = useCallback(async () => {
+        setLoading(true);
+        setLoadError(null);
+
+        try {
+            const response = await fetch("/api/admin/apply/settings", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load apply settings.");
+            }
+            const data = (await response.json()) as { settings: ApplySettings };
+            applySettings(data.settings);
+        } catch (loadSettingsError) {
+            console.error("Failed to load apply settings:", loadSettingsError);
+            setLoadError("신청 안내 설정을 불러오지 못했습니다.");
+        } finally {
+            setLoading(false);
+        }
+    }, [applySettings]);
+
+    useEffect(() => {
+        if (initialSettings) return;
+        void loadSettings();
+    }, [initialSettings, loadSettings]);
 
     async function handleSave() {
         setSaving(true);
@@ -53,13 +104,35 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 useBuiltInEnrollForm,
             });
             setSaved(true);
-            router.refresh();
             setTimeout(() => setSaved(false), 3000);
         } catch (saveError: any) {
             setError(saveError.message ?? "저장 실패");
         } finally {
             setSaving(false);
         }
+    }
+
+    if (loading) {
+        return (
+            <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                신청 안내 설정을 불러오는 중...
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="rounded-xl border border-red-100 bg-white p-6 text-center dark:border-red-900/40 dark:bg-gray-800">
+                <p className="text-sm font-semibold text-red-700 dark:text-red-200">{loadError}</p>
+                <button
+                    type="button"
+                    onClick={loadSettings}
+                    className="mt-3 rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                >
+                    다시 시도
+                </button>
+            </div>
+        );
     }
 
     return (

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { approveEnrollApplication, rejectEnrollApplication } from "@/app/actions/admin";
 
 interface EnrollApplication {
@@ -55,6 +54,7 @@ interface ApplyAdminModalsProps {
     onCloseApprove: () => void;
     onCloseReject: () => void;
     onCloseDetail: () => void;
+    onSaved: () => Promise<void> | void;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -97,8 +97,8 @@ export default function ApplyAdminModals({
     onCloseApprove,
     onCloseReject,
     onCloseDetail,
+    onSaved,
 }: ApplyAdminModalsProps) {
-    const router = useRouter();
     const [busy, setBusy] = useState(false);
 
     async function handleApprove(classIds: string[], note: string) {
@@ -110,7 +110,7 @@ export default function ApplyAdminModals({
                 processedNote: note,
             });
             onCloseApprove();
-            router.refresh();
+            await onSaved();
         } catch (error) {
             alert((error as Error).message);
         } finally {
@@ -124,7 +124,7 @@ export default function ApplyAdminModals({
         try {
             await rejectEnrollApplication(rejectApp.id, reason);
             onCloseReject();
-            router.refresh();
+            await onSaved();
         } catch (error) {
             alert((error as Error).message);
         } finally {

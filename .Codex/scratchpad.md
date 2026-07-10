@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 대기자 관리 백그라운드 로딩
+- 작업명: 수강 신청 관리 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/waitlist`, `/api/admin/waitlist`
+- 범위: `/admin/apply`, `/api/admin/apply`, `/api/admin/apply/settings`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -26,9 +26,11 @@
 | 체험수업 CRM 백그라운드 로딩 | 완료 | `/admin/trial` 서버 렌더에서 리드/통계 조회 제거 |
 | 스태프 관리 백그라운드 로딩 | 완료 | `/admin/staff` 서버 렌더에서 스태프/코치/초대 조회 제거 |
 | 대기자 관리 백그라운드 로딩 | 완료 | `/admin/waitlist` 서버 렌더에서 대기/정원/반 조회 제거 |
+| 수강 신청 관리 백그라운드 로딩 | 완료 | `/admin/apply` 서버 렌더에서 신청/통계/반/설정 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/apply` 신청/통계/반 조회를 서버 렌더에서 제거하고, 안내 설정은 설정 탭 진입 시 `/api/admin/apply/settings`로 불러오도록 분리함.
 - 2026-07-10: `/admin/waitlist` 대기자/정원/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/waitlist`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/staff` 스태프/코치/초대 목록 조회를 서버 렌더에서 제거하고, `/api/admin/staff`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/trial` 체험수업 CRM의 리드/통계 조회를 서버 렌더에서 제거하고, `/api/admin/trial`로 클라이언트에서 불러오도록 변경함.
@@ -38,12 +40,11 @@
 - 2026-07-10: `/admin/students/[id]` 상세 진입 시 활동/출석/결제/갤러리 조회를 서버 렌더에서 제거하고, `/api/admin/students/[id]/activity`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: 관리자 공통 셸의 체험 신청 수/알림 조회를 첫 렌더 직후가 아니라 idle 이후 천천히 실행하고 알림 폴링 간격을 완화함.
 - 2026-07-10: `/admin/students` 진입 시 원생/반 전체 목록 조회를 서버 렌더에서 제거하고, `/api/admin/students`를 통해 클라이언트에서 천천히 불러오도록 변경함.
-- 2026-07-10: `/admin/skills` 진입 시 스킬 카테고리 조회를 Suspense 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/waitlist/page.tsx`, `src/app/admin/waitlist/WaitlistClient.tsx`, `src/app/api/admin/waitlist/route.ts`
-- 주요 변경: 대기자/정원/반 목록 조회와 자리 제안/수락/거절/취소/등록 후 새로고침을 클라이언트 API 재조회로 분리.
-- 적용 범위: `/admin/waitlist`
+- 변경 파일: `src/app/admin/apply/page.tsx`, `src/app/admin/apply/ApplyAdminClient.tsx`, `src/app/admin/apply/ApplyAdminModals.tsx`, `src/app/admin/apply/ApplySettingsTab.tsx`, `src/app/api/admin/apply/route.ts`, `src/app/api/admin/apply/settings/route.ts`
+- 주요 변경: 수강 신청 목록/통계/반 조회를 클라이언트 API로 분리하고, 안내 설정은 설정 탭에서만 지연 조회하도록 분리.
+- 적용 범위: `/admin/apply`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -51,4 +52,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 `/admin/apply`, `/admin/finance`, `/admin/makeup` 계열을 추가 점검.
+- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 `/admin/finance`, `/admin/makeup`, `/admin/attendance/report` 계열을 추가 점검.

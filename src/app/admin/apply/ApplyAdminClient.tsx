@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 
 const ApplyAdminModals = dynamic(() => import("./ApplyAdminModals"), {
@@ -69,21 +69,16 @@ interface ClassInfo {
 }
 
 interface ApplyAdminClientProps {
-    initialApplications: EnrollApplication[];
-    initialStats: EnrollStats;
-    initialClasses: ClassInfo[];
-    initialSettings: {
-        trialTitle: string;
-        trialContent: string | null;
-        trialFormUrl: string | null;
-        enrollTitle: string;
-        enrollContent: string | null;
-        enrollFormUrl: string | null;
-        uniformFormUrl: string | null;
-        useBuiltInTrialForm: boolean;
-        useBuiltInEnrollForm: boolean;
-    };
+    initialApplications?: EnrollApplication[];
+    initialStats?: EnrollStats;
+    initialClasses?: ClassInfo[];
 }
+
+type ApplyPayload = {
+    applications: EnrollApplication[];
+    stats: EnrollStats;
+    classes: ClassInfo[];
+};
 
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
 
@@ -113,6 +108,61 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 
+const EMPTY_STATS: EnrollStats = {
+    PENDING: 0,
+    APPROVED: 0,
+    REJECTED: 0,
+    CANCELLED: 0,
+    total: 0,
+};
+
+function ApplyLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                    <div className="h-8 w-52 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-64 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="h-10 w-36 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            </div>
+            <div className="h-12 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-28 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+            <div className="space-y-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-36 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function ApplyErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">수강 신청 정보를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 // ── 탭 상수 ──────────────────────────────────────────────────────────────────────
 
 type TabType = "applications" | "settings";
@@ -123,10 +173,13 @@ export default function ApplyAdminClient({
     initialApplications,
     initialStats,
     initialClasses,
-    initialSettings,
 }: ApplyAdminClientProps) {
-    const [applications] = useState(initialApplications);
-    const [stats] = useState(initialStats);
+    const hasInitialData = Boolean(initialApplications && initialStats && initialClasses);
+    const [applications, setApplications] = useState<EnrollApplication[]>(initialApplications ?? []);
+    const [stats, setStats] = useState<EnrollStats>(initialStats ?? EMPTY_STATS);
+    const [classes, setClasses] = useState<ClassInfo[]>(initialClasses ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
     const [activeTab, setActiveTab] = useState<TabType>("applications");
 
@@ -134,6 +187,34 @@ export default function ApplyAdminClient({
     const [showApproveModal, setShowApproveModal] = useState<EnrollApplication | null>(null);
     const [showRejectModal, setShowRejectModal] = useState<EnrollApplication | null>(null);
     const [showDetailModal, setShowDetailModal] = useState<EnrollApplication | null>(null);
+
+    const hasAnyData = applications.length > 0 || classes.length > 0 || stats.total > 0;
+
+    const loadApplyData = useCallback(async () => {
+        setLoading(true);
+        setLoadError(null);
+
+        try {
+            const response = await fetch("/api/admin/apply", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load applications.");
+            }
+            const data = (await response.json()) as ApplyPayload;
+            setApplications(data.applications);
+            setStats(data.stats);
+            setClasses(data.classes);
+        } catch (error) {
+            console.error("Failed to load applications:", error);
+            setLoadError("failed");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadApplyData();
+    }, [hasInitialData, loadApplyData]);
 
     // 필터링된 신청서 목록
     const filteredApps = useMemo(() => {
@@ -158,6 +239,14 @@ export default function ApplyAdminClient({
         const m = today.getMonth() - birth.getMonth();
         if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
         return age;
+    }
+
+    if (loading && !hasAnyData) {
+        return <ApplyLoadingFallback />;
+    }
+
+    if (loadError && !hasAnyData) {
+        return <ApplyErrorState onRetry={loadApplyData} />;
     }
 
     return (
@@ -485,7 +574,7 @@ export default function ApplyAdminClient({
                 </>
             ) : (
                 /* 설정 탭 — 기존 안내 설정 UI */
-                <ApplySettingsTab initialSettings={initialSettings} />
+                <ApplySettingsTab />
             )}
 
             {hasOpenModal && (
@@ -493,13 +582,13 @@ export default function ApplyAdminClient({
                     approveApp={showApproveModal}
                     rejectApp={showRejectModal}
                     detailApp={showDetailModal}
-                    classes={initialClasses}
+                    classes={classes}
                     onCloseApprove={() => setShowApproveModal(null)}
                     onCloseReject={() => setShowRejectModal(null)}
                     onCloseDetail={() => setShowDetailModal(null)}
+                    onSaved={loadApplyData}
                 />
             )}
         </div>
     );
 }
-

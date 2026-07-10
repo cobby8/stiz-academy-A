@@ -34,6 +34,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 시간표 관리 `/admin/schedule`은 서버 렌더에서 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets를 기다리지 않고 `/api/admin/schedule`을 클라이언트에서 호출해 채운다.
 - 청구 템플릿 `/admin/finance/billing`은 서버 렌더에서 청구 템플릿/프로그램 목록을 기다리지 않고 `/api/admin/finance/billing`을 클라이언트에서 호출해 채운다.
 - 스킬 트래킹 `/admin/skills`는 서버 렌더에서 스킬 카테고리 목록을 기다리지 않고 `/api/admin/skills`를 클라이언트에서 호출해 채운다.
+- 반 관리 `/admin/classes`는 서버 렌더에서 프로그램/반 목록을 기다리지 않고 `/api/admin/classes`를 클라이언트에서 호출해 채운다.
 
 ## 주요 데이터 모델
 - 사용자/권한: `User`, `StaffInvitation`, `Role`

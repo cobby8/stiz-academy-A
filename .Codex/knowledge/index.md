@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/classes` 반 관리는 프로그램/반 목록 조회를 서버 렌더에서 제거하고, `/api/admin/classes` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/skills` 스킬 트래킹은 스킬 카테고리 조회를 서버 렌더에서 제거하고, `/api/admin/skills` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/finance/billing` 청구 템플릿 관리는 청구 템플릿/프로그램 목록 조회를 서버 렌더에서 제거하고, `/api/admin/finance/billing` 클라이언트 로딩으로 뒤로 미뤘다.
 - 2026-07-10: `/admin/schedule` 시간표 관리는 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 서버 렌더에서 제거하고, `/api/admin/schedule` 클라이언트 로딩으로 뒤로 미뤘다.
@@ -60,7 +61,7 @@
 
 - 기준일: 2026-07-10
 - 문서 수: 5
-- 최근 지식: 관리자 화면에서 대시보드/운영 통계/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
+- 최근 지식: 관리자 화면에서 대시보드/운영 통계/반 관리/시간표/수납/청구 템플릿/스킬/신청 관리/체험 CRM/스태프/대기자/보강/수업 리포트/원생/반 상세처럼 무거운 업무 데이터는 shell/skeleton을 먼저 보여주고, 실제 조회는 지연 API 경계 안으로 분리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능
@@ -107,7 +108,7 @@
 - `/admin/apply`는 신청/통계/반/설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 탭/카드/list skeleton을 먼저 렌더한다.
 - `/admin/waitlist`는 대기 목록/정원 집계/반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 정원 카드/list skeleton을 먼저 렌더한다.
 - `/admin/makeup`은 보강 목록/반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 상태 카드/table skeleton을 먼저 렌더한다.
-- `/admin/classes`는 프로그램/반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 수업 표 skeleton을 먼저 렌더한다.
+- `/admin/classes`는 프로그램/반 목록을 페이지 서버 렌더에서 가져오지 않고, 진입 후 `/api/admin/classes`에서 클라이언트가 불러온다.
 - `/admin/attendance`는 반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 날짜/반 선택 skeleton을 먼저 렌더한다.
 - `/admin/trial`은 체험 리드/통계 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, CRM 카드/list skeleton을 먼저 렌더한다.
 - `/admin/finance`는 수납 목록/요약 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 월 선택/카드/table skeleton을 먼저 렌더한다.

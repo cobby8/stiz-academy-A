@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import Link from "next/link"; // 클래스 상세 페이지 링크용
 import { deleteClass } from "@/app/actions/admin";
 
@@ -23,6 +22,11 @@ export type ClassItem = {
     program: { id: string; name: string } | null;
 };
 
+type ClassesPayload = {
+    programs: Program[];
+    classes: ClassItem[];
+};
+
 const DAYS = [
     { value: "Mon", label: "월요일" },
     { value: "Tue", label: "화요일" },
@@ -33,18 +37,87 @@ const DAYS = [
     { value: "Sun", label: "일요일" },
 ] as const;
 
+function ClassesLoadingFallback() {
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                    <div className="h-8 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-80 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="h-10 w-24 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                <div className="h-16 border-b border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/50 animate-pulse" />
+                {Array.from({ length: 7 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-16 border-b border-gray-100 bg-white last:border-b-0 dark:border-gray-700 dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function ClassesErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">반 목록을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 export default function ClassManagementClient({
-    programs,
-    classes,
+    programs: initialPrograms,
+    classes: initialClasses,
 }: {
-    programs: Program[];
-    classes: ClassItem[];
+    programs?: Program[];
+    classes?: ClassItem[];
 }) {
-    const router = useRouter();
+    const hasInitialData = Boolean(initialPrograms || initialClasses);
+    const [programs, setPrograms] = useState<Program[]>(initialPrograms ?? []);
+    const [classes, setClasses] = useState<ClassItem[]>(initialClasses ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
     const [busy, setBusy] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+    const loadClasses = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+
+        try {
+            const response = await fetch("/api/admin/classes", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load classes.");
+            }
+
+            const data = (await response.json()) as ClassesPayload;
+            setPrograms(data.programs);
+            setClasses(data.classes);
+        } catch (error) {
+            console.error("Failed to load classes:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadClasses();
+    }, [hasInitialData, loadClasses]);
 
     function resetForm() {
         setShowForm(false);
@@ -61,12 +134,20 @@ export default function ClassManagementClient({
         try {
             await deleteClass(id);
             setDeleteConfirm(null);
-            router.refresh();
+            await loadClasses();
         } catch (err: any) {
             alert(err.message || "삭제 실패");
         } finally {
             setBusy(false);
         }
+    }
+
+    if (loading && classes.length === 0 && programs.length === 0) {
+        return <ClassesLoadingFallback />;
+    }
+
+    if (loadError && classes.length === 0 && programs.length === 0) {
+        return <ClassesErrorState onRetry={loadClasses} />;
     }
 
     return (
@@ -96,9 +177,9 @@ export default function ClassManagementClient({
                     programs={programs}
                     classItem={editingClass}
                     onClose={resetForm}
-                    onSaved={() => {
+                    onSaved={async () => {
                         resetForm();
-                        router.refresh();
+                        await loadClasses();
                     }}
                 />
             )}

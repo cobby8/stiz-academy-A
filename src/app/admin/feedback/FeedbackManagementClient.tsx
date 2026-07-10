@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useCallback, useEffect } from "react";
 import { createFeedback, updateFeedback, deleteFeedback } from "@/app/actions/admin";
 
 // 카테고리 정의: 피드백을 4가지 유형으로 분류
@@ -39,12 +38,74 @@ type Coach = {
 };
 
 type Props = {
+    feedbacks?: Feedback[];
+};
+
+type FeedbackPayload = {
     feedbacks: Feedback[];
 };
 
-export default function FeedbackManagementClient({ feedbacks }: Props) {
-    const router = useRouter();
+function FeedbackLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-11 w-28 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                    >
+                        <div className="p-5">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div className="min-w-0 flex-1 space-y-3">
+                                    <div className="flex gap-2">
+                                        <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-6 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                    </div>
+                                    <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                    <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                </div>
+                                <div className="hidden gap-2 sm:flex">
+                                    <div className="h-8 w-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-8 w-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function FeedbackErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">피드백 목록을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
+export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }: Props) {
     const [isPending, startTransition] = useTransition();
+    const hasInitialData = initialFeedbacks !== undefined;
+    const [feedbacks, setFeedbacks] = useState<Feedback[]>(initialFeedbacks ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [students, setStudents] = useState<Student[]>([]);
     const [studentsLoaded, setStudentsLoaded] = useState(false);
     const [studentsLoading, setStudentsLoading] = useState(false);
@@ -53,6 +114,27 @@ export default function FeedbackManagementClient({ feedbacks }: Props) {
     const [coachesLoaded, setCoachesLoaded] = useState(false);
     const [coachesLoading, setCoachesLoading] = useState(false);
     const [coachesError, setCoachesError] = useState<string | null>(null);
+
+    const loadFeedbacks = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/feedback", { cache: "no-store" });
+            if (!response.ok) throw new Error("Failed to load feedbacks.");
+            const data = (await response.json()) as FeedbackPayload;
+            setFeedbacks(data.feedbacks);
+        } catch (error) {
+            console.error("Failed to load feedbacks:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadFeedbacks();
+    }, [hasInitialData, loadFeedbacks]);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -174,7 +256,7 @@ export default function FeedbackManagementClient({ feedbacks }: Props) {
                 }
                 resetForm();
                 setShowForm(false);
-                router.refresh();
+                await loadFeedbacks();
             } catch (err: any) {
                 alert(err.message || "저장 실패");
             }
@@ -207,7 +289,7 @@ export default function FeedbackManagementClient({ feedbacks }: Props) {
         startTransition(async () => {
             try {
                 await deleteFeedback(id);
-                router.refresh();
+                await loadFeedbacks();
             } catch (err: any) {
                 alert(err.message || "삭제 실패");
             }
@@ -247,6 +329,14 @@ export default function FeedbackManagementClient({ feedbacks }: Props) {
                 )}
             </div>
         );
+    }
+
+    if (loading && feedbacks.length === 0) {
+        return <FeedbackLoadingFallback />;
+    }
+
+    if (loadError && feedbacks.length === 0) {
+        return <FeedbackErrorState onRetry={loadFeedbacks} />;
     }
 
     return (

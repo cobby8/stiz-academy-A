@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { createAnnualEvent, updateAnnualEvent, deleteAnnualEvent, updateAcademySettings } from "@/app/actions/admin";
 
 type AnnualEvent = {
@@ -11,6 +10,11 @@ type AnnualEvent = {
     endDate?: Date | string | null;
     description?: string | null;
     category?: string | null;
+};
+
+type AnnualPayload = {
+    events: AnnualEvent[];
+    initialIcsUrl: string;
 };
 
 const CATEGORIES = ["일반", "대회", "방학", "특별행사", "정기행사"] as const;
@@ -23,6 +27,68 @@ const CATEGORY_COLORS: Record<string, string> = {
     "일반": "bg-green-100 text-green-700",
 };
 
+function AnnualLoadingFallback() {
+    return (
+        <div className="max-w-4xl mx-auto">
+            <div className="mb-6 flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-10 w-28 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="mt-3 h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                <div className="mt-2 h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                <div className="mt-4 flex gap-2">
+                    <div className="h-10 flex-1 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                    <div className="h-10 w-20 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+                </div>
+            </div>
+            <div className="space-y-6">
+                {Array.from({ length: 2 }).map((_, yearIndex) => (
+                    <section key={yearIndex}>
+                        <div className="mb-3 h-6 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                            {Array.from({ length: 4 }).map((_, rowIndex) => (
+                                <div key={rowIndex} className="flex items-center justify-between gap-4 border-b border-gray-100 p-4 last:border-b-0 dark:border-gray-700">
+                                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                                        <div className="h-4 w-24 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                        <div className="min-w-0 flex-1 space-y-2">
+                                            <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                            <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                        </div>
+                                    </div>
+                                    <div className="hidden gap-2 sm:flex">
+                                        <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function AnnualErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="mx-auto max-w-4xl rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">연간일정을 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
 function toDateString(d: Date | string | null | undefined): string {
     if (!d) return "";
     const date = typeof d === "string" ? new Date(d) : d;
@@ -30,13 +96,16 @@ function toDateString(d: Date | string | null | undefined): string {
 }
 
 export default function AnnualAdminClient({
-    events,
-    initialIcsUrl,
+    events: initialEvents,
+    initialIcsUrl = "",
 }: {
-    events: AnnualEvent[];
-    initialIcsUrl: string;
+    events?: AnnualEvent[];
+    initialIcsUrl?: string;
 }) {
-    const router = useRouter();
+    const hasInitialData = initialEvents !== undefined;
+    const [events, setEvents] = useState<AnnualEvent[]>(initialEvents ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -46,6 +115,30 @@ export default function AnnualAdminClient({
     const [icsUrl, setIcsUrl] = useState(initialIcsUrl);
     const [icsSaving, setIcsSaving] = useState(false);
     const [icsMsg, setIcsMsg] = useState<string | null>(null);
+
+    const loadAnnual = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/annual", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load annual events.");
+            }
+            const data = (await response.json()) as AnnualPayload;
+            setEvents(data.events);
+            setIcsUrl(data.initialIcsUrl || "");
+        } catch (error) {
+            console.error("Failed to load annual events:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadAnnual();
+    }, [hasInitialData, loadAnnual]);
 
     // Form state
     const [title, setTitle] = useState("");
@@ -92,7 +185,7 @@ export default function AnnualAdminClient({
                 await createAnnualEvent(payload);
             }
             resetForm();
-            router.refresh();
+            await loadAnnual();
         } catch (err: any) {
             alert(err.message || "저장 실패");
         } finally {
@@ -105,7 +198,7 @@ export default function AnnualAdminClient({
         try {
             await deleteAnnualEvent(id);
             setDeleteConfirm(null);
-            router.refresh();
+            await loadAnnual();
         } catch (err: any) {
             alert(err.message || "삭제 실패");
         } finally {
@@ -120,13 +213,21 @@ export default function AnnualAdminClient({
         try {
             await updateAcademySettings({ googleCalendarIcsUrl: icsUrl.trim() });
             setIcsMsg("저장되었습니다.");
-            router.refresh();
+            await loadAnnual();
             setTimeout(() => setIcsMsg(null), 3000);
         } catch (err: any) {
             setIcsMsg("저장 실패: " + (err.message || "알 수 없는 오류"));
         } finally {
             setIcsSaving(false);
         }
+    }
+
+    if (loading && events.length === 0) {
+        return <AnnualLoadingFallback />;
+    }
+
+    if (loadError && events.length === 0) {
+        return <AnnualErrorState onRetry={loadAnnual} />;
     }
 
     // Group events by year

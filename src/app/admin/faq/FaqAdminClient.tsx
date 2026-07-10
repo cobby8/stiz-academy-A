@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { createFaq, updateFaq, deleteFaq } from "@/app/actions/admin";
 
 // FAQ 데이터 타입
@@ -11,6 +11,10 @@ type FaqData = {
     order: number;
     isPublic: boolean;
     createdAt: Date | string;
+};
+
+type FaqPayload = {
+    faqs: FaqData[];
 };
 
 function SymbolIcon({
@@ -33,8 +37,68 @@ function SymbolIcon({
     );
 }
 
-export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
+function FaqLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-11 w-28 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1 space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="h-5 w-5 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                </div>
+                                <div className="ml-7 h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="ml-7 h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="ml-7 flex gap-2">
+                                    <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                </div>
+                            </div>
+                            <div className="hidden gap-1 sm:flex">
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function FaqErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">FAQ를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
+export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[] }) {
     const [isPending, startTransition] = useTransition();
+    const hasInitialData = initialFaqs !== undefined;
+    const [faqs, setFaqs] = useState<FaqData[]>(initialFaqs ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
     // 모달 표시 여부
     const [showForm, setShowForm] = useState(false);
     // 수정 중인 FAQ의 ID (null이면 새 FAQ 생성 모드)
@@ -44,6 +108,29 @@ export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
     const [answer, setAnswer] = useState("");
     const [order, setOrder] = useState(0);
     const [isPublic, setIsPublic] = useState(true);
+
+    const loadFaqs = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/faq", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load FAQs.");
+            }
+            const data = (await response.json()) as FaqPayload;
+            setFaqs(data.faqs);
+        } catch (error) {
+            console.error("Failed to load FAQs:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadFaqs();
+    }, [hasInitialData, loadFaqs]);
 
     // 폼 초기화
     function resetForm() {
@@ -77,13 +164,25 @@ export default function FaqAdminClient({ faqs }: { faqs: FaqData[] }) {
                 await createFaq(payload);
             }
             resetForm();
+            await loadFaqs();
         });
     }
 
     // 삭제 확인 후 실행
     function handleDelete(id: string) {
         if (!confirm("이 FAQ를 삭제하시겠습니까?")) return;
-        startTransition(async () => { await deleteFaq(id); });
+        startTransition(async () => {
+            await deleteFaq(id);
+            await loadFaqs();
+        });
+    }
+
+    if (loading && faqs.length === 0) {
+        return <FaqLoadingFallback />;
+    }
+
+    if (loadError && faqs.length === 0) {
+        return <FaqErrorState onRetry={loadFaqs} />;
     }
 
     return (

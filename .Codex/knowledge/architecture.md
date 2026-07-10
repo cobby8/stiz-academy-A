@@ -28,6 +28,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 스태프 관리 `/admin/staff`는 서버 렌더에서 스태프/코치/초대 목록을 기다리지 않고 `/api/admin/staff`를 클라이언트에서 호출해 채운다.
 - 대기자 관리 `/admin/waitlist`는 서버 렌더에서 대기자/정원/반 목록을 기다리지 않고 `/api/admin/waitlist`를 클라이언트에서 호출해 채운다.
 - 수강 신청 관리 `/admin/apply`는 서버 렌더에서 신청/통계/반 목록을 기다리지 않고 `/api/admin/apply`를 클라이언트에서 호출하며, 안내 설정은 설정 탭 진입 시 `/api/admin/apply/settings`로 별도 조회한다.
+- 수납 관리 `/admin/finance`는 서버 렌더에서 결제 목록/요약을 기다리지 않고 `/api/admin/finance`를 클라이언트에서 호출해 채운다.
 
 ## 주요 데이터 모델
 - 사용자/권한: `User`, `StaffInvitation`, `Role`

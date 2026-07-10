@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import {
     createPayment,
     updatePaymentStatus,
@@ -42,6 +41,20 @@ type Summary = {
     unpaidCount: number;
 };
 
+type FinancePayload = {
+    payments: Payment[];
+    summary: Summary;
+};
+
+const EMPTY_SUMMARY: Summary = {
+    totalCount: 0,
+    totalAmount: 0,
+    paidAmount: 0,
+    unpaidAmount: 0,
+    paidCount: 0,
+    unpaidCount: 0,
+};
+
 // 상태 라벨 + 색상 매핑
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     PENDING: { label: "미납", color: "bg-yellow-100 text-yellow-700" },
@@ -68,25 +81,91 @@ function formatAmount(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
 }
 
+function FinanceLoadingFallback({ year, month }: { year: number; month: number }) {
+    return (
+        <div className="max-w-5xl mx-auto">
+            <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
+                <div>
+                    <div className="h-8 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-64 rounded bg-gray-100 dark:bg-gray-800 animate-pulse mt-2" />
+                </div>
+                <div className="flex gap-2">
+                    <div className="h-10 w-28 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-10 w-28 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-10 w-32 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                </div>
+            </div>
+            <div className="flex items-center justify-center gap-4 mb-6">
+                <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                <div className="h-7 w-28 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" aria-label={`${year}년 ${month}월 수납 로딩 중`} />
+                <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-28 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+            <div className="overflow-hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="h-12 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 animate-pulse" />
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                        <div key={index} className="grid grid-cols-5 gap-4 px-4 py-4">
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function FinanceErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="mx-auto max-w-5xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">수납 데이터를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 export default function FinanceClient({
     initialPayments,
     initialYear,
     initialMonth,
     initialSummary,
 }: {
-    initialPayments: Payment[];
-    initialYear: number;
-    initialMonth: number;
-    initialSummary: Summary;
+    initialPayments?: Payment[];
+    initialYear?: number;
+    initialMonth?: number;
+    initialSummary?: Summary;
 }) {
-    const router = useRouter();
-    const [payments, setPayments] = useState(initialPayments);
-    const [year, setYear] = useState(initialYear);
-    const [month, setMonth] = useState(initialMonth);
+    const now = new Date();
+    const fallbackYear = now.getFullYear();
+    const fallbackMonth = now.getMonth() + 1;
+    const hasInitialData = Boolean(initialPayments && initialSummary);
+    const [payments, setPayments] = useState(initialPayments ?? []);
+    const [year, setYear] = useState(initialYear ?? fallbackYear);
+    const [month, setMonth] = useState(initialMonth ?? fallbackMonth);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [busy, setBusy] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-    const [summary, setSummary] = useState(initialSummary);
+    const [summary, setSummary] = useState(initialSummary ?? EMPTY_SUMMARY);
     const [students, setStudents] = useState<Student[]>([]);
     const [studentsLoaded, setStudentsLoaded] = useState(false);
     const [studentsLoading, setStudentsLoading] = useState(false);
@@ -129,35 +208,36 @@ export default function FinanceClient({
     const [paymentType, setPaymentType] = useState("MONTHLY");
     const [description, setDescription] = useState("");
 
+    const hasAnyData = payments.length > 0 || summary.totalCount > 0;
+
     // 월 이동 시 데이터 재조회
-    async function loadMonth(y: number, m: number) {
+    const loadMonth = useCallback(async (y: number, m: number) => {
         setYear(y);
         setMonth(m);
+        setLoading(true);
+        setLoadError(null);
         setSelectedIds(new Set()); // 선택 초기화
         try {
-            const res = await fetch(`/api/admin/finance?year=${y}&month=${m}`);
-            if (res.ok) {
-                const data = await res.json();
-                setPayments(data);
-                // 요약 재계산 (클라이언트 측)
-                const total = data.reduce((s: number, p: any) => s + p.amount, 0);
-                const paid = data.filter((p: any) => p.status === "PAID").reduce((s: number, p: any) => s + p.amount, 0);
-                const unpaid = data.filter((p: any) => p.status === "PENDING" || p.status === "OVERDUE").reduce((s: number, p: any) => s + p.amount, 0);
-                setSummary({
-                    totalCount: data.length,
-                    totalAmount: total,
-                    paidAmount: paid,
-                    unpaidAmount: unpaid,
-                    paidCount: data.filter((p: any) => p.status === "PAID").length,
-                    unpaidCount: data.filter((p: any) => p.status === "PENDING" || p.status === "OVERDUE").length,
-                });
+            const res = await fetch(`/api/admin/finance?year=${y}&month=${m}`, { cache: "no-store" });
+            if (!res.ok) {
+                throw new Error("Failed to load finance data.");
             }
+            const data = (await res.json()) as FinancePayload;
+            setPayments(data.payments);
+            setSummary(data.summary);
         } catch (err) {
             // 조회 실패 시 사용자에게 피드백 제공
             console.error("수납 데이터 조회 실패:", err);
-            alert("수납 데이터를 불러오지 못했습니다. 다시 시도해 주세요.");
+            setLoadError("failed");
+        } finally {
+            setLoading(false);
         }
-    }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadMonth(initialYear ?? fallbackYear, initialMonth ?? fallbackMonth);
+    }, [fallbackMonth, fallbackYear, hasInitialData, initialMonth, initialYear, loadMonth]);
 
     function prevMonth() {
         const m = month === 1 ? 12 : month - 1;
@@ -186,8 +266,7 @@ export default function FinanceClient({
             setStatus("PENDING");
             setPaymentType("MONTHLY");
             setDescription("");
-            router.refresh();
-            loadMonth(year, month);
+            await loadMonth(year, month);
         } catch (err: any) {
             alert(err.message || "생성 실패");
         } finally {
@@ -200,8 +279,7 @@ export default function FinanceClient({
         setBusy(true);
         try {
             await updatePaymentStatus(id, newStatus);
-            router.refresh();
-            loadMonth(year, month);
+            await loadMonth(year, month);
         } catch (err: any) {
             alert(err.message || "상태 변경 실패");
         } finally {
@@ -215,8 +293,7 @@ export default function FinanceClient({
         try {
             await deletePayment(id);
             setDeleteConfirm(null);
-            router.refresh();
-            loadMonth(year, month);
+            await loadMonth(year, month);
         } catch (err: any) {
             alert(err.message || "삭제 실패");
         } finally {
@@ -231,8 +308,7 @@ export default function FinanceClient({
         try {
             const result = await generateMonthlyInvoices(year, month);
             alert(result.message);
-            router.refresh();
-            loadMonth(year, month);
+            await loadMonth(year, month);
         } catch (err: any) {
             alert(err.message || "청구서 생성 실패");
         } finally {
@@ -247,8 +323,7 @@ export default function FinanceClient({
         try {
             const result = await sendUnpaidReminders();
             alert(result.message);
-            router.refresh();
-            loadMonth(year, month);
+            await loadMonth(year, month);
         } catch (err: any) {
             alert(err.message || "알림 발송 실패");
         } finally {
@@ -264,8 +339,7 @@ export default function FinanceClient({
         try {
             await bulkUpdatePaymentStatus(Array.from(selectedIds), "PAID");
             setSelectedIds(new Set());
-            router.refresh();
-            loadMonth(year, month);
+            await loadMonth(year, month);
         } catch (err: any) {
             alert(err.message || "일괄 처리 실패");
         } finally {
@@ -294,6 +368,14 @@ export default function FinanceClient({
     const payRate = summary.totalAmount > 0
         ? Math.round((summary.paidAmount / summary.totalAmount) * 100)
         : 0;
+
+    if (loading && !hasAnyData) {
+        return <FinanceLoadingFallback year={year} month={month} />;
+    }
+
+    if (loadError && !hasAnyData) {
+        return <FinanceErrorState onRetry={() => void loadMonth(year, month)} />;
+    }
 
     return (
         <div className="max-w-5xl mx-auto">

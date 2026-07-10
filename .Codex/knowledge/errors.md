@@ -1,3 +1,9 @@
+## 관리자 읽기 API no-store 남발
+- 현상: 홈페이지는 빠른데 관리자 페이지 첫 진입과 메뉴 이동이 유독 느리다.
+- 원인: 인증이 필요한 관리자 route에서 `force-dynamic`, `Cache-Control: no-store`, 클라이언트 `fetch(..., { cache: "no-store" })`, 자동 폴링이 겹치면 같은 통계/목록도 매 진입마다 DB를 다시 조회한다.
+- 해결: 권한 확인은 매번 유지하되, 권한 확인 뒤의 공통 읽기 데이터는 `unstable_cache`와 짧은 private cache로 재사용하고, 시스템 점검/알림처럼 당장 필요 없는 API는 사용자 클릭 또는 충분히 늦은 idle 작업으로 내린다.
+- 예방: 관리자 첫 화면에 API를 추가할 때는 “처음 화면에 꼭 필요한가”, “몇 초 캐시해도 괜찮은가”, “버튼을 눌렀을 때만 불러도 되는가”를 먼저 확인한다.
+
 # Errors And Traps
 
 ## PowerShell npm 실행 정책

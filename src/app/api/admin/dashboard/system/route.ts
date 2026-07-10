@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const dynamic = "force-dynamic";
+const SYSTEM_STATUS_CACHE_SECONDS = 300;
+const SYSTEM_STATUS_CACHE_HEADERS = {
+    "Cache-Control": `private, max-age=60, stale-while-revalidate=${SYSTEM_STATUS_CACHE_SECONDS}`,
+};
 
 async function getDbStatus() {
     try {
@@ -32,6 +36,18 @@ async function getBackupStatus() {
     }
 }
 
+const getCachedSystemStatus = unstable_cache(
+    async () => {
+        const [dbOk, backup] = await Promise.all([getDbStatus(), getBackupStatus()]);
+        return { dbOk, backup };
+    },
+    ["admin-dashboard-system-status-v1"],
+    {
+        revalidate: SYSTEM_STATUS_CACHE_SECONDS,
+        tags: ["admin-dashboard-system"],
+    },
+);
+
 export async function GET() {
     try {
         await requireAdmin();
@@ -40,16 +56,9 @@ export async function GET() {
     }
 
     try {
-        const [dbOk, backup] = await Promise.all([getDbStatus(), getBackupStatus()]);
+        const status = await getCachedSystemStatus();
 
-        return NextResponse.json(
-            { dbOk, backup },
-            {
-                headers: {
-                    "Cache-Control": "no-store",
-                },
-            },
-        );
+        return NextResponse.json(status, { headers: SYSTEM_STATUS_CACHE_HEADERS });
     } catch (error) {
         console.error("[api/admin/dashboard/system] failed:", error);
         return NextResponse.json({ error: "Failed to load dashboard system status" }, { status: 500 });

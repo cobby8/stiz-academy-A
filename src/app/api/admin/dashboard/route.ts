@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import {
@@ -9,7 +10,10 @@ import {
     getRecentPendingRequests,
 } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+const ADMIN_DASHBOARD_CACHE_SECONDS = 15;
+const ADMIN_DASHBOARD_CACHE_HEADERS = {
+    "Cache-Control": `private, max-age=${ADMIN_DASHBOARD_CACHE_SECONDS}, stale-while-revalidate=30`,
+};
 
 async function getTodayClasses() {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -63,6 +67,45 @@ async function getRecentStudents() {
     }
 }
 
+async function loadDashboardData() {
+    const [
+        stats,
+        pendingRequests,
+        pendingCount,
+        enrollStats,
+        extendedStats,
+        todayClasses,
+        recentStudents,
+    ] = await Promise.all([
+        getDashboardStats(),
+        getRecentPendingRequests(),
+        getPendingRequestCount(),
+        getEnrollApplicationStats(),
+        getDashboardExtendedStats(),
+        getTodayClasses(),
+        getRecentStudents(),
+    ]);
+
+    return {
+        stats,
+        pendingRequests,
+        pendingCount,
+        enrollStats,
+        extendedStats,
+        todayClasses,
+        recentStudents,
+    };
+}
+
+const getCachedDashboardData = unstable_cache(
+    loadDashboardData,
+    ["admin-dashboard-data-v1"],
+    {
+        revalidate: ADMIN_DASHBOARD_CACHE_SECONDS,
+        tags: ["admin-dashboard"],
+    },
+);
+
 export async function GET() {
     try {
         await requireAdmin();
@@ -71,40 +114,9 @@ export async function GET() {
     }
 
     try {
-        const [
-            stats,
-            pendingRequests,
-            pendingCount,
-            enrollStats,
-            extendedStats,
-            todayClasses,
-            recentStudents,
-        ] = await Promise.all([
-            getDashboardStats(),
-            getRecentPendingRequests(),
-            getPendingRequestCount(),
-            getEnrollApplicationStats(),
-            getDashboardExtendedStats(),
-            getTodayClasses(),
-            getRecentStudents(),
-        ]);
+        const data = await getCachedDashboardData();
 
-        return NextResponse.json(
-            {
-                stats,
-                pendingRequests,
-                pendingCount,
-                enrollStats,
-                extendedStats,
-                todayClasses,
-                recentStudents,
-            },
-            {
-                headers: {
-                    "Cache-Control": "no-store",
-                },
-            },
-        );
+        return NextResponse.json(data, { headers: ADMIN_DASHBOARD_CACHE_HEADERS });
     } catch (error) {
         console.error("[api/admin/dashboard] failed:", error);
         return NextResponse.json({ error: "Failed to load dashboard" }, { status: 500 });

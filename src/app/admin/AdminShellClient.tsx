@@ -430,19 +430,6 @@ function NotificationBell() {
         }
     }, []);
 
-    // 최초 로드 + 60초마다 폴링 (새 알림 확인)
-    useEffect(() => {
-        let interval: number | null = null;
-        const cancelIdleTask = scheduleAdminIdleTask(() => {
-            void fetchNotifications();
-            interval = window.setInterval(fetchNotifications, 120_000);
-        }, 8000);
-        return () => {
-            cancelIdleTask();
-            if (interval) window.clearInterval(interval);
-        };
-    }, [fetchNotifications]);
-
     // 드롭다운 바깥 클릭 시 닫기
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {

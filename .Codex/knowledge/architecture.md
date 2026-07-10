@@ -1,3 +1,8 @@
+## 2026-07-11 관리자 대시보드 속도 메모
+- `/api/admin/dashboard`는 관리자 권한 확인 후 15초 `unstable_cache`로 동일한 읽기 결과를 짧게 재사용한다.
+- `/api/admin/dashboard/system`은 5분 서버 캐시를 쓰며, `/admin` 첫 진입에서는 자동 호출하지 않고 시스템 상태 카드의 확인 버튼으로만 조회한다.
+- 관리자 공통 알림은 첫 렌더/idle 자동 조회와 120초 폴링을 하지 않고, 알림 버튼을 열 때만 `/api/admin/notifications`를 호출한다.
+
 # Architecture
 
 ## 프로젝트 성격

@@ -186,6 +186,7 @@ export default function AdminDashboardClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [systemStatus, setSystemStatus] = useState<SystemStatusData | null>(null);
+    const [systemLoading, setSystemLoading] = useState(false);
     const [systemError, setSystemError] = useState(false);
 
     const loadDashboard = useCallback(async () => {
@@ -193,7 +194,7 @@ export default function AdminDashboardClient() {
         setError(null);
 
         try {
-            const res = await fetch("/api/admin/dashboard", { cache: "no-store" });
+            const res = await fetch("/api/admin/dashboard");
             if (!res.ok) throw new Error("Dashboard request failed");
             setData((await res.json()) as DashboardData);
         } catch {
@@ -205,24 +206,22 @@ export default function AdminDashboardClient() {
 
     const loadSystemStatus = useCallback(async () => {
         setSystemError(false);
+        setSystemLoading(true);
 
         try {
-            const res = await fetch("/api/admin/dashboard/system", { cache: "no-store" });
+            const res = await fetch("/api/admin/dashboard/system");
             if (!res.ok) throw new Error("System status request failed");
             setSystemStatus((await res.json()) as SystemStatusData);
         } catch {
             setSystemError(true);
+        } finally {
+            setSystemLoading(false);
         }
     }, []);
 
     useEffect(() => {
         void loadDashboard();
-        const timer = window.setTimeout(() => {
-            void loadSystemStatus();
-        }, 1200);
-
-        return () => window.clearTimeout(timer);
-    }, [loadDashboard, loadSystemStatus]);
+    }, [loadDashboard]);
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
@@ -237,6 +236,7 @@ export default function AdminDashboardClient() {
                 <DashboardContent
                     data={data}
                     systemStatus={systemStatus}
+                    systemLoading={systemLoading}
                     systemError={systemError}
                     onRetrySystem={loadSystemStatus}
                 />
@@ -248,11 +248,13 @@ export default function AdminDashboardClient() {
 function DashboardContent({
     data,
     systemStatus,
+    systemLoading,
     systemError,
     onRetrySystem,
 }: {
     data: DashboardData;
     systemStatus: SystemStatusData | null;
+    systemLoading: boolean;
     systemError: boolean;
     onRetrySystem: () => void;
 }) {
@@ -365,6 +367,7 @@ function DashboardContent({
                 <QuickManagementCard />
                 <SystemStatusCard
                     systemStatus={systemStatus}
+                    systemLoading={systemLoading}
                     systemError={systemError}
                     onRetry={onRetrySystem}
                 />
@@ -565,10 +568,12 @@ function QuickManagementCard() {
 
 function SystemStatusCard({
     systemStatus,
+    systemLoading,
     systemError,
     onRetry,
 }: {
     systemStatus: SystemStatusData | null;
+    systemLoading: boolean;
     systemError: boolean;
     onRetry: () => void;
 }) {
@@ -578,8 +583,8 @@ function SystemStatusCard({
     const backupAgeMs = lastBackupAt ? now.getTime() - lastBackupAt.getTime() : Infinity;
     const backupAgeDays = Math.floor(backupAgeMs / (1000 * 60 * 60 * 24));
     const backupAgeHours = Math.floor(backupAgeMs / (1000 * 60 * 60));
-    const backupWarn = backupAgeMs > 2 * 24 * 60 * 60 * 1000;
-    const backupDanger = backupAgeMs > 7 * 24 * 60 * 60 * 1000;
+    const backupWarn = Boolean(systemStatus && backupAgeMs > 2 * 24 * 60 * 60 * 1000);
+    const backupDanger = Boolean(systemStatus && backupAgeMs > 7 * 24 * 60 * 60 * 1000);
 
     function backupLabel() {
         if (!lastBackupAt) return "백업 없음";
@@ -592,15 +597,14 @@ function SystemStatusCard({
         <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
             <div className="mb-3 flex items-center justify-between">
                 <h3 className="font-bold text-gray-900 dark:text-white">시스템 상태</h3>
-                {systemError && (
-                    <button
-                        type="button"
-                        onClick={onRetry}
-                        className="text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime"
-                    >
-                        재시도
-                    </button>
-                )}
+                <button
+                    type="button"
+                    onClick={onRetry}
+                    disabled={systemLoading}
+                    className="text-xs font-bold text-brand-orange-500 transition hover:text-orange-600 disabled:cursor-wait disabled:opacity-60 dark:text-brand-neon-lime"
+                >
+                    {systemLoading ? "확인 중" : systemError ? "다시 시도" : systemStatus ? "새로고침" : "확인"}
+                </button>
             </div>
             <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -611,16 +615,16 @@ function SystemStatusCard({
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                         !systemStatus ? "bg-gray-100 text-gray-500" : systemStatus.dbOk ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                     }`}>
-                        {!systemStatus ? "확인 중" : systemStatus.dbOk ? "정상" : "오류"}
+                        {systemLoading ? "확인 중" : !systemStatus ? "미확인" : systemStatus.dbOk ? "정상" : "오류"}
                     </span>
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                        <SymbolIcon name={backupWarn ? "cloud_off" : "cloud_done"} size={14} className={backupDanger ? "text-red-500" : backupWarn ? "text-yellow-500" : "text-blue-500"} />
+                        <SymbolIcon name={backupWarn ? "cloud_off" : "cloud_done"} size={14} className={!systemStatus ? "text-gray-400" : backupDanger ? "text-red-500" : backupWarn ? "text-yellow-500" : "text-blue-500"} />
                         <span>마지막 백업</span>
                     </div>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${backupDanger ? "bg-red-100 text-red-700" : backupWarn ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                        {!systemStatus ? "확인 중" : backupLabel()}
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${!systemStatus ? "bg-gray-100 text-gray-500" : backupDanger ? "bg-red-100 text-red-700" : backupWarn ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                        {systemLoading ? "확인 중" : !systemStatus ? "미확인" : backupLabel()}
                     </span>
                 </div>
                 {backup && backup.backupCount > 0 && (

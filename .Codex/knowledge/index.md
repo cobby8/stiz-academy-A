@@ -206,3 +206,4 @@
 - `/admin/settings`처럼 여러 리치 텍스트 에디터가 한 화면에 있는 경우, 에디터 본체는 스크롤 근처 진입/호버/클릭 후 로드한다.
 - 빌드 안정성을 위해 Google Fonts 파일 다운로드가 필요한 `next/font/google`은 전역 후보 폰트 용도로 쓰지 않는다. 폰트를 꼭 보장해야 하면 로컬 self-host 파일을 별도 자산으로 둔다.
 - Material Symbols를 완전히 제거하기 전까지는 `.material-symbols-outlined` 자리 크기를 CSS로 유지하고, 실제 아이콘 폰트는 `material-symbols-ready` 클래스가 붙은 뒤 표시한다.
+- 2026-07-11: 관리자 대시보드 읽기 API에 15초 `unstable_cache`를 적용하고, 시스템 상태/알림 조회는 첫 진입 자동 호출에서 사용자 클릭 기반 호출로 낮춰 관리자 첫 화면의 동시 API 경합을 줄였다.

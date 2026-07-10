@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import LineChart from "@/components/charts/LineChart";
 import BarChart from "@/components/charts/BarChart";
 import DonutChart from "@/components/charts/DonutChart";
@@ -67,7 +67,7 @@ interface CollectionRate {
     rate: number;
 }
 
-interface StatsClientProps {
+interface StatsPayload {
     monthlyRevenue: MonthlyRevenue[];
     monthlyAttendance: MonthlyAttendance[];
     enrollmentTrend: EnrollmentTrend[];
@@ -77,6 +77,8 @@ interface StatsClientProps {
     collectionRate: CollectionRate;
 }
 
+type StatsClientProps = Partial<StatsPayload>;
+
 // ── 금액 포맷 함수 ──────────────────────────────────────────────────────────
 
 function formatKRW(n: number): string {
@@ -84,19 +86,140 @@ function formatKRW(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
 }
 
+function StatsLoadingFallback() {
+    return (
+        <div className="mx-auto max-w-7xl space-y-8">
+            <div>
+                <div className="h-8 w-44 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="mt-2 h-4 w-80 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                    >
+                        <div className="h-4 w-24 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        <div className="mt-3 h-8 w-28 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                        <div className="mt-2 h-4 w-32 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                    </div>
+                ))}
+            </div>
+            <div className="flex gap-2">
+                <div className="h-8 w-24 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-8 w-24 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                    >
+                        <div className="mb-4 flex items-center gap-2">
+                            <div className="h-6 w-6 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-5 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                        </div>
+                        <div className="flex h-[220px] items-end gap-3">
+                            {Array.from({ length: 8 }).map((_, barIndex) => (
+                                <div
+                                    key={barIndex}
+                                    className="flex-1 rounded-t bg-gray-100 dark:bg-gray-700 animate-pulse"
+                                    style={{ height: `${36 + ((barIndex * 17) % 58)}%` }}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function StatsErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="mx-auto max-w-7xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">운영 통계를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 // ── 메인 컴포넌트 ───────────────────────────────────────────────────────────
 
 export default function StatsClient({
-    monthlyRevenue,
-    monthlyAttendance,
-    enrollmentTrend,
-    classCapacity,
-    trialStats,
-    coachWorkload,
-    collectionRate,
+    monthlyRevenue: initialMonthlyRevenue,
+    monthlyAttendance: initialMonthlyAttendance,
+    enrollmentTrend: initialEnrollmentTrend,
+    classCapacity: initialClassCapacity,
+    trialStats: initialTrialStats,
+    coachWorkload: initialCoachWorkload,
+    collectionRate: initialCollectionRate,
 }: StatsClientProps) {
+    const initialData = initialMonthlyRevenue
+        && initialMonthlyAttendance
+        && initialEnrollmentTrend
+        && initialClassCapacity
+        && initialTrialStats
+        && initialCoachWorkload
+        && initialCollectionRate
+        ? {
+            monthlyRevenue: initialMonthlyRevenue,
+            monthlyAttendance: initialMonthlyAttendance,
+            enrollmentTrend: initialEnrollmentTrend,
+            classCapacity: initialClassCapacity,
+            trialStats: initialTrialStats,
+            coachWorkload: initialCoachWorkload,
+            collectionRate: initialCollectionRate,
+        }
+        : null;
+    const [statsData, setStatsData] = useState<StatsPayload | null>(() => initialData);
+    const [loading, setLoading] = useState(!initialData);
     // 매출 추이 기간 선택 (6개월/12개월)
     const [revenuePeriod, setRevenuePeriod] = useState<6 | 12>(6);
+
+    const loadStats = useCallback(async () => {
+        setLoading(true);
+
+        try {
+            const res = await fetch("/api/admin/stats", { cache: "no-store" });
+            if (!res.ok) throw new Error("Stats request failed");
+            setStatsData((await res.json()) as StatsPayload);
+        } catch {
+            setStatsData(null);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (statsData) return;
+        void loadStats();
+    }, [loadStats, statsData]);
+
+    if (!statsData && loading) {
+        return <StatsLoadingFallback />;
+    }
+
+    if (!statsData) {
+        return <StatsErrorState onRetry={loadStats} />;
+    }
+
+    const {
+        monthlyRevenue,
+        monthlyAttendance,
+        enrollmentTrend,
+        classCapacity,
+        trialStats,
+        coachWorkload,
+        collectionRate,
+    } = statsData;
 
     // 선택 기간에 맞춰 데이터 슬라이싱
     const revenueData = monthlyRevenue.slice(-revenuePeriod);

@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 const TestimonialsAdminClient = dynamic(() => import("./TestimonialsAdminClient"), { ssr: false });
 
 export default function TestimonialsWrapper(props: {
-    testimonials: {
+    testimonials?: {
         id: string;
         name: string;
         info: string;
@@ -17,7 +17,7 @@ export default function TestimonialsWrapper(props: {
         isPublic: boolean;
         createdAt: Date | string;
     }[];
-    naverPlaceUrl: string;
+    naverPlaceUrl?: string;
 }) {
     return <TestimonialsAdminClient {...props} />;
 }

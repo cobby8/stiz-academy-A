@@ -10,7 +10,7 @@
  * - 아이콘: Material Symbols Outlined (lucide-react 사용 안 함)
  */
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
     createTestimonial,
     updateTestimonial,
@@ -30,6 +30,11 @@ type TestimonialData = {
     createdAt: Date | string;
 };
 
+type TestimonialsPayload = {
+    testimonials: TestimonialData[];
+    naverPlaceUrl: string;
+};
+
 // Material Symbols 아이콘 헬퍼 — 클래스명과 텍스트만 전달
 function MIcon({ name, className = "" }: { name: string; className?: string }) {
     return (
@@ -39,23 +44,118 @@ function MIcon({ name, className = "" }: { name: string; className?: string }) {
     );
 }
 
+function TestimonialsLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                </div>
+                <div className="h-11 w-28 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="h-5 w-44 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="mt-3 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                <div className="mt-4 flex gap-2">
+                    <div className="h-10 flex-1 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-700" />
+                    <div className="h-10 w-20 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+                </div>
+            </div>
+            <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1 space-y-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="h-5 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                    <div className="h-5 w-20 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-24 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                </div>
+                                <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="flex gap-2">
+                                    <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                </div>
+                            </div>
+                            <div className="hidden gap-1 sm:flex">
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function TestimonialsErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">후기를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+            >
+                다시 불러오기
+            </button>
+        </div>
+    );
+}
+
 export default function TestimonialsAdminClient({
-    testimonials,
-    naverPlaceUrl: initialNaverUrl,
+    testimonials: initialTestimonials,
+    naverPlaceUrl: initialNaverUrl = "",
 }: {
-    testimonials: TestimonialData[];
-    naverPlaceUrl: string;
+    testimonials?: TestimonialData[];
+    naverPlaceUrl?: string;
 }) {
     const [isPending, startTransition] = useTransition();
+    const hasInitialData = initialTestimonials !== undefined;
+    const [testimonials, setTestimonials] = useState<TestimonialData[]>(initialTestimonials ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState(false);
 
     // ── 네이버 플레이스 URL 설정 ──
     const [naverUrl, setNaverUrl] = useState(initialNaverUrl);
     const [naverSaved, setNaverSaved] = useState(false);
 
+    const loadTestimonials = useCallback(async () => {
+        setLoading(true);
+        setLoadError(false);
+        try {
+            const response = await fetch("/api/admin/testimonials", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load testimonials.");
+            }
+            const data = (await response.json()) as TestimonialsPayload;
+            setTestimonials(data.testimonials);
+            setNaverUrl(data.naverPlaceUrl || "");
+        } catch (error) {
+            console.error("Failed to load testimonials:", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadTestimonials();
+    }, [hasInitialData, loadTestimonials]);
+
     function handleSaveNaverUrl() {
         startTransition(async () => {
             await updateNaverPlaceUrl(naverUrl);
             setNaverSaved(true);
+            await loadTestimonials();
             setTimeout(() => setNaverSaved(false), 2000);
         });
     }
@@ -108,13 +208,17 @@ export default function TestimonialsAdminClient({
                 await createTestimonial(payload);
             }
             resetForm();
+            await loadTestimonials();
         });
     }
 
     // 삭제
     function handleDelete(id: string) {
         if (!confirm("이 후기를 삭제하시겠습니까?")) return;
-        startTransition(async () => { await deleteTestimonial(id); });
+        startTransition(async () => {
+            await deleteTestimonial(id);
+            await loadTestimonials();
+        });
     }
 
     // 순서 변경 — 인접 항목과 order 값 스왑
@@ -135,7 +239,16 @@ export default function TestimonialsAdminClient({
                 name: target.name, info: target.info, text: target.text,
                 rating: target.rating, order: current.order, isPublic: target.isPublic,
             });
+            await loadTestimonials();
         });
+    }
+
+    if (loading && testimonials.length === 0) {
+        return <TestimonialsLoadingFallback />;
+    }
+
+    if (loadError && testimonials.length === 0) {
+        return <TestimonialsErrorState onRetry={loadTestimonials} />;
     }
 
     // 별점 렌더링

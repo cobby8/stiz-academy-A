@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 보강 관리 원생 목록 지연 로딩
+- 작업명: 수납 관리 학생 목록 지연 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/makeup`, `/api/admin/student-options`
+- 범위: `/admin/finance`, `/api/admin/student-options`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -24,9 +24,11 @@
 | 스킬 관리 원생 목록 지연 로딩 | 완료 | 기본 카테고리 탭은 원생 전체 조회 없이 렌더하고, 평가 탭 클릭 시 가벼운 옵션 API 호출 |
 | 대기자 관리 원생 목록 지연 로딩 | 완료 | 대기 등록 모달을 열 때만 학생 선택용 최소 데이터 호출 |
 | 보강 관리 원생 목록 지연 로딩 | 완료 | 보강 예약 모달을 열 때만 원생 선택용 최소 데이터 호출 |
+| 수납 관리 학생 목록 지연 로딩 | 완료 | 수납 기록 추가 폼을 열 때만 학생 선택용 최소 데이터 호출 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/finance` 초기 렌더에서 `getStudents()` 호출을 제거하고, 수납 기록 추가 폼을 열 때 `/api/admin/student-options`로 학생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/makeup` 초기 렌더에서 `getStudents()` 호출을 제거하고, 보강 예약 모달을 열 때 `/api/admin/student-options`로 원생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/waitlist` 초기 렌더에서 `getStudents()` 호출을 제거하고, 대기 등록 모달을 열 때 `/api/admin/student-options`로 학생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/skills` 초기 렌더에서 `getStudents()` 호출을 제거하고, 스킬 평가 탭 클릭 시 `/api/admin/student-options`로 원생 선택용 최소 데이터만 불러오도록 변경함.
@@ -36,12 +38,11 @@
 - 2026-07-09: `/admin/gallery` 목록과 업로드/수정 모달의 업로드/동기화/저장/공개상태/수정/삭제 아이콘을 `FontFreeIcon`으로 바꿔 Material Symbols 요청 흔적을 제거함.
 - 2026-07-09: `/apply`, `/apply/enroll`, `/apply/trial` 신청 화면 아이콘을 `FontFreeIcon`으로 바꿔 신청 페이지 HTML에서 Material Symbols 요청 흔적을 제거함.
 - 2026-07-09: `/notices` 목록/상세의 고정글, 첨부파일, 뒤로가기, 다운로드 아이콘을 `FontFreeIcon`으로 바꿔 공개 공지 HTML에서 Material Symbols 요청 흔적을 제거함.
-- 2026-07-09: `/gallery` 공개 그리드와 라이트박스 아이콘을 `FontFreeIcon`으로 바꿔 공개 갤러리 HTML에서 Material Symbols 요청 흔적을 제거함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/makeup/page.tsx`, `src/app/admin/makeup/MakeupClient.tsx`
-- 주요 변경: 보강 관리 첫 렌더에서 원생 전체 조회를 제거하고, 보강 예약 모달을 열 때 원생 선택용 최소 데이터만 불러오도록 분리.
-- 적용 범위: `/admin/makeup`
+- 변경 파일: `src/app/admin/finance/page.tsx`, `src/app/admin/finance/FinanceClient.tsx`
+- 주요 변경: 수납 관리 첫 렌더에서 학생 전체 조회를 제거하고, 수납 기록 추가 폼을 열 때 학생 선택용 최소 데이터만 불러오도록 분리.
+- 적용 범위: `/admin/finance`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -49,4 +50,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 남은 관리자 `getStudents()` 호출을 재분류하고, 초기 화면에 불필요한 호출을 더 지연 로딩으로 분리하기.
+- 다음 속도 개선 후보: `/admin/feedback`의 피드백 작성 폼 학생 목록을 지연 로딩으로 분리하기.

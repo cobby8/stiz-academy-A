@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/finance` 초기 렌더에서 학생 전체 조회를 제거하고, 수납 기록 추가 폼을 열 때 학생 선택 목록만 `/api/admin/student-options`로 불러오게 했다.
 - 2026-07-10: `/admin/makeup` 초기 렌더에서 원생 전체 조회를 제거하고, 보강 예약 모달을 열 때 원생 선택 목록만 `/api/admin/student-options`로 불러오게 했다.
 - 2026-07-10: `/admin/waitlist` 초기 렌더에서 학생 전체 조회를 제거하고, 대기 등록 모달을 열 때 학생 선택 목록만 `/api/admin/student-options`로 불러오게 했다.
 - 2026-07-10: `/admin/skills` 초기 렌더에서 원생 전체 조회를 제거하고, 스킬 평가 탭 클릭 시 원생 선택용 최소 데이터만 `/api/admin/student-options`로 불러오게 했다.
@@ -8,7 +9,6 @@
 - 2026-07-09: `/admin/gallery` 목록과 업로드/수정 모달 아이콘을 `FontFreeIcon`으로 바꿔 관리자 갤러리 route의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: `/apply`, `/apply/enroll`, `/apply/trial` 신청 화면 아이콘을 `FontFreeIcon`으로 바꿔 신청 페이지 HTML의 Material Symbols 사용 흔적을 제거했다.
 - 2026-07-09: `/notices` 공개 목록/상세 아이콘을 `FontFreeIcon`으로 바꿔 공개 공지 HTML의 Material Symbols 사용 흔적을 제거했다.
-- 2026-07-09: `/gallery` 공개 그리드와 라이트박스 아이콘을 `FontFreeIcon`으로 바꿔 공개 갤러리 HTML의 Material Symbols 사용 흔적을 제거했다.
 
 # STIZ Knowledge Index
 
@@ -48,6 +48,7 @@
 - `/admin/skills`는 기본 카테고리 탭 렌더 시 원생 전체 목록을 가져오지 않고, 스킬 평가 탭을 열 때 `/api/admin/student-options`에서 `id/name/부모 이름`만 불러온다.
 - `/admin/waitlist`는 대기 목록과 반 정원 현황만 먼저 렌더하고, 대기 등록 모달을 열 때 `/api/admin/student-options`에서 학생 선택 목록을 불러온다.
 - `/admin/makeup`은 보강 목록과 반 목록만 먼저 렌더하고, 보강 예약 모달을 열 때 `/api/admin/student-options`에서 원생 선택 목록을 불러온다.
+- `/admin/finance`는 수납 목록과 요약 통계만 먼저 렌더하고, 수납 기록 추가 폼을 열 때 `/api/admin/student-options`에서 학생 선택 목록을 불러온다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
 - Pretendard 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 idle 시점에 삽입한다. Material Symbols stylesheet는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.

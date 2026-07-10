@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
     createPayment,
@@ -70,13 +70,11 @@ function formatAmount(n: number): string {
 
 export default function FinanceClient({
     initialPayments,
-    students,
     initialYear,
     initialMonth,
     initialSummary,
 }: {
     initialPayments: Payment[];
-    students: Student[];
     initialYear: number;
     initialMonth: number;
     initialSummary: Summary;
@@ -89,6 +87,36 @@ export default function FinanceClient({
     const [busy, setBusy] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [summary, setSummary] = useState(initialSummary);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [studentsLoaded, setStudentsLoaded] = useState(false);
+    const [studentsLoading, setStudentsLoading] = useState(false);
+    const [studentsError, setStudentsError] = useState<string | null>(null);
+
+    const loadStudents = useCallback(async () => {
+        if (studentsLoaded || studentsLoading) return;
+
+        setStudentsLoading(true);
+        setStudentsError(null);
+
+        try {
+            const response = await fetch("/api/admin/student-options", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load student options.");
+            }
+
+            const data = (await response.json()) as { students?: Student[] };
+            setStudents(data.students ?? []);
+            setStudentsLoaded(true);
+        } catch (error) {
+            console.error("Failed to load student options:", error);
+            setStudentsError("학생 목록을 불러오지 못했습니다.");
+        } finally {
+            setStudentsLoading(false);
+        }
+    }, [studentsLoaded, studentsLoading]);
 
     // 일괄 체크박스 상태
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -296,7 +324,13 @@ export default function FinanceClient({
                     </button>
                     {/* 수동 추가 버튼 */}
                     <button
-                        onClick={() => setShowForm(!showForm)}
+                        onClick={() => {
+                            const nextShowForm = !showForm;
+                            setShowForm(nextShowForm);
+                            if (nextShowForm) {
+                                void loadStudents();
+                            }
+                        }}
                         className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition text-sm"
                     >
                         + 수납 기록 추가
@@ -363,14 +397,34 @@ export default function FinanceClient({
                             <select
                                 value={studentId}
                                 onChange={(e) => setStudentId(e.target.value)}
+                                disabled={studentsLoading || Boolean(studentsError)}
                                 required
                                 className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
-                                <option value="">선택하세요</option>
+                                <option value="">
+                                    {studentsLoading ? "학생 목록 로딩 중..." : "선택하세요"}
+                                </option>
                                 {students.map((s) => (
                                     <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
                             </select>
+                            {studentsError && (
+                                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                    <span>{studentsError}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => void loadStudents()}
+                                        className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                    >
+                                        다시 시도
+                                    </button>
+                                </div>
+                            )}
+                            {!studentsLoading && !studentsError && students.length === 0 && (
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    등록된 학생이 없습니다.
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">금액 (원) *</label>

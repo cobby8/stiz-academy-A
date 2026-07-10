@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 반 상세 데이터 백그라운드 로딩
+- 작업명: 관리자 대시보드 백그라운드 로딩
 - 상태: 빌드 검증 완료
-- 범위: `/admin/classes/[id]`, `/api/admin/classes/[id]/detail`
+- 범위: `/admin`, `/api/admin/dashboard`, `/api/admin/dashboard/system`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -21,9 +21,11 @@
 | 관리자 셸 배경 API 지연 | 완료 | 체험 신청/알림 조회를 idle 이후로 지연 |
 | 원생 상세 백그라운드 로딩 | 완료 | 원생 활동/출석/결제/갤러리 조회를 클라이언트 API로 분리 |
 | 반 상세 백그라운드 로딩 | 완료 | 반/수강생/수업기록/코치 조회를 클라이언트 API로 분리 |
+| 관리자 대시보드 백그라운드 로딩 | 완료 | `/admin` 서버 렌더에서 통계/요청/백업 조회 제거 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin` 대시보드의 통계/최근 요청/오늘 수업 조회를 서버 렌더에서 제거하고, `/api/admin/dashboard`와 `/api/admin/dashboard/system`으로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/classes/[id]` 진입 시 반/수강생/수업기록/코치 조회를 서버 렌더에서 제거하고, `/api/admin/classes/[id]/detail`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: `/admin/students/[id]` 상세 진입 시 활동/출석/결제/갤러리 조회를 서버 렌더에서 제거하고, `/api/admin/students/[id]/activity`로 클라이언트에서 불러오도록 변경함.
 - 2026-07-10: 관리자 공통 셸의 체험 신청 수/알림 조회를 첫 렌더 직후가 아니라 idle 이후 천천히 실행하고 알림 폴링 간격을 완화함.
@@ -33,12 +35,11 @@
 - 2026-07-10: `/admin/privacy`, `/admin/terms` 진입 시 약관/개인정보 설정 조회를 Suspense 안쪽으로 옮기고, editor skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/settings` 진입 시 학원 설정 조회를 Suspense 안쪽으로 옮기고, 설정 폼 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/schedule` 진입 시 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 Suspense 안쪽으로 옮기고, skeleton을 먼저 렌더하도록 변경함.
-- 2026-07-10: 관리자 내부 반/출석/리포트/갤러리/설정 이동 링크에 `prefetch={false}`를 추가해 불필요한 배경 route 조회를 차단함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/classes/[id]/page.tsx`, `src/app/admin/classes/[id]/ClassDetailClient.tsx`, `src/app/api/admin/classes/[id]/detail/route.ts`
-- 주요 변경: 반 상세의 무거운 조회를 클라이언트 API로 분리하고, 저장 후에는 전체 페이지 새로고침 대신 상세 데이터만 다시 조회.
-- 적용 범위: `/admin/classes/[id]`
+- 변경 파일: `src/app/admin/page.tsx`, `src/app/admin/AdminDashboardClient.tsx`, `src/app/api/admin/dashboard/route.ts`, `src/app/api/admin/dashboard/system/route.ts`
+- 주요 변경: 관리자 첫 화면의 DB/Supabase 조회를 서버 렌더에서 제거하고, 클라이언트 API 로딩과 지연 시스템 상태 조회로 분리.
+- 적용 범위: `/admin`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -46,4 +47,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: 빌드 중 여전히 DB 조회 로그가 많은 관리자 화면을 골라 서버 렌더 의존을 더 줄이기.
+- 다음 속도 개선 후보: 빌드 중 남은 DB 로그가 많은 `/admin/stats`, `/admin/trial`, `/admin/staff` 계열을 추가 점검.

@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 대기자 관리 화면 진입 DDL 제거
+- 작업명: 보강 관리 화면 진입 DDL 제거
 - 상태: 빌드 검증 완료
-- 범위: `/admin/waitlist`
+- 범위: `/admin/makeup`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -30,9 +30,11 @@
 | 체험수업 CRM 화면 진입 DDL 제거 | 완료 | 읽기 화면에서는 구조 확인을 생략하고, 등록/수정/전환 작업에서만 테이블 보장 |
 | 수강신청 관리 화면 진입 DDL 제거 | 완료 | 신청서 생성 단계에서 테이블을 보장하고, 목록 화면은 읽기 조회만 수행 |
 | 대기자 관리 화면 진입 DDL 제거 | 완료 | 대기 등록 액션에서 테이블을 보장하고, 목록 화면은 읽기 조회만 수행 |
+| 보강 관리 화면 진입 DDL 제거 | 완료 | 보강 예약 액션에서 테이블을 보장하고, 목록 화면은 읽기 조회만 수행 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/makeup` 페이지 진입 시 `ensureMakeupSessionTable()` 호출을 제거하고, 보강 예약 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 - 2026-07-10: `/admin/waitlist` 페이지 진입 시 `ensureWaitlistTable()` 호출을 제거하고, 대기 등록 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 - 2026-07-10: `/admin/apply` 페이지 진입 시 `ensureEnrollmentApplicationTable()` 호출을 제거하고, 공개 신청 제출 단계에서 테이블 구조를 보장하도록 읽기/쓰기 책임을 분리함.
 - 2026-07-10: `/admin/trial` 페이지 진입 시 `ensureTrialLeadTable()` 호출을 제거하고, 체험 등록/수정/전환 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
@@ -42,12 +44,11 @@
 - 2026-07-10: `/admin/makeup` 초기 렌더에서 `getStudents()` 호출을 제거하고, 보강 예약 모달을 열 때 `/api/admin/student-options`로 원생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/waitlist` 초기 렌더에서 `getStudents()` 호출을 제거하고, 대기 등록 모달을 열 때 `/api/admin/student-options`로 학생 선택 목록을 불러오도록 변경함.
 - 2026-07-10: `/admin/skills` 초기 렌더에서 `getStudents()` 호출을 제거하고, 스킬 평가 탭 클릭 시 `/api/admin/student-options`로 원생 선택용 최소 데이터만 불러오도록 변경함.
-- 2026-07-09: `/admin` 대시보드의 카드, 배너, 신규 원생, 요청 목록, 빠른 관리 링크에 `prefetch={false}`를 적용해 첫 화면에서 다른 관리자 route가 자동 조회되는 일을 줄임.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/waitlist/page.tsx`
-- 주요 변경: 대기자 관리 첫 렌더에서 DB 구조 확인용 DDL 호출을 제거하고, 대기 등록 액션의 보장 로직은 유지.
-- 적용 범위: `/admin/waitlist`
+- 변경 파일: `src/app/admin/makeup/page.tsx`
+- 주요 변경: 보강 관리 첫 렌더에서 DB 구조 확인용 DDL 호출을 제거하고, 보강 예약 액션의 보장 로직은 유지.
+- 적용 범위: `/admin/makeup`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -55,4 +56,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/makeup`, `/admin/skills`, `/admin/staff`의 화면 진입 DDL 호출을 같은 방식으로 점검/축소.
+- 다음 속도 개선 후보: `/admin/skills`, `/admin/staff`의 화면 진입 DDL 호출을 같은 방식으로 점검/축소.

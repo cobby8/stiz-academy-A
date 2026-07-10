@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 수업 관리 화면 지연 렌더링
+- 작업명: 출석 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/classes`
+- 범위: `/admin/attendance`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -39,9 +39,11 @@
 | 대기자 관리 화면 지연 렌더링 | 완료 | 대기 목록/정원 집계/반 목록 조회를 Suspense 안쪽으로 분리해 정원 카드 skeleton을 먼저 표시 |
 | 보강 관리 화면 지연 렌더링 | 완료 | 보강 목록/반 목록 조회를 Suspense 안쪽으로 분리해 카드/table skeleton을 먼저 표시 |
 | 수업 관리 화면 지연 렌더링 | 완료 | 프로그램/반 목록 조회를 Suspense 안쪽으로 분리해 수업 표 skeleton을 먼저 표시 |
+| 출석 관리 화면 지연 렌더링 | 완료 | 반 목록 조회를 Suspense 안쪽으로 분리해 출석 선택 skeleton을 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/attendance` 진입 시 반 목록 조회를 Suspense 경계 안쪽으로 옮기고, 날짜/반 선택 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/classes` 진입 시 프로그램/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 수업 표 skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/makeup` 진입 시 보강 목록/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 상태 카드/table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/waitlist` 진입 시 대기 목록/정원 집계/반 목록 병렬 조회를 Suspense 경계 안쪽으로 옮기고, 정원 카드/list skeleton을 먼저 렌더하도록 변경함.
@@ -51,12 +53,11 @@
 - 2026-07-10: `/admin/staff` 페이지 진입 시 스태프 관련 DDL 호출 2개를 제거하고, 오래된 DB에서도 최소 목록을 보여주도록 스태프/코치 읽기 fallback을 보강함.
 - 2026-07-10: `/admin/skills` 페이지 진입 시 `ensureSkillTables()` 호출을 제거하고, 스킬 생성/수정/평가 저장 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 - 2026-07-10: `/admin/makeup` 페이지 진입 시 `ensureMakeupSessionTable()` 호출을 제거하고, 보강 예약 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
-- 2026-07-10: `/admin/waitlist` 페이지 진입 시 `ensureWaitlistTable()` 호출을 제거하고, 대기 등록 같은 쓰기 작업에서만 테이블 구조를 보장하도록 분리함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/classes/page.tsx`
-- 주요 변경: 수업 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getPrograms()`/`getClasses()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/classes`
+- 변경 파일: `src/app/admin/attendance/page.tsx`
+- 주요 변경: 출석 관리 페이지를 Suspense로 감싸 skeleton을 먼저 보여주고, `getClasses()` 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/attendance`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과

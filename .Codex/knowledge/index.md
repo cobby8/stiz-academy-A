@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/attendance` 페이지는 반 목록 조회를 Suspense 안쪽으로 분리하고, 날짜/반 선택 skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/classes` 페이지는 프로그램/반 목록 조회를 Suspense 안쪽으로 분리하고, 수업 표 skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/makeup` 페이지는 보강 목록/반 목록 조회를 Suspense 안쪽으로 분리하고, 상태 카드/table skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/waitlist` 페이지는 대기 목록/정원 집계/반 목록 조회를 Suspense 안쪽으로 분리하고, 정원 카드/list skeleton을 먼저 렌더하도록 바꿨다.
@@ -67,6 +68,7 @@
 - `/admin/waitlist`는 대기 목록/정원 집계/반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 정원 카드/list skeleton을 먼저 렌더한다.
 - `/admin/makeup`은 보강 목록/반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 상태 카드/table skeleton을 먼저 렌더한다.
 - `/admin/classes`는 프로그램/반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 수업 표 skeleton을 먼저 렌더한다.
+- `/admin/attendance`는 반 목록 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 날짜/반 선택 skeleton을 먼저 렌더한다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
 - Pretendard 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 idle 시점에 삽입한다. Material Symbols stylesheet는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.

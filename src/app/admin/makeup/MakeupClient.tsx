@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     bookMakeupSession,
     cancelMakeupSession,
     updateMakeupStatus,
 } from "@/app/actions/admin";
-import { getAvailableMakeupSlots } from "@/lib/queries";
 
 // ── 타입 정의 ──────────────────────────────────────────────────────────────
 type MakeupItem = {
@@ -60,6 +58,11 @@ type MakeupSlot = {
     remaining: number;
 };
 
+type MakeupPayload = {
+    sessions: MakeupItem[];
+    classes: ClassItem[];
+};
+
 // 요일 한글 변환
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -82,14 +85,65 @@ const STATUS_TABS = [
     { key: "NO_SHOW", label: "노쇼" },
 ];
 
+function MakeupLoadingFallback() {
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                    <div className="h-8 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-72 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                </div>
+                <div className="h-10 w-28 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-24 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                    />
+                ))}
+            </div>
+            <div className="h-10 w-80 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+                {Array.from({ length: 8 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className="h-14 border-b border-gray-100 dark:border-gray-700 last:border-b-0 bg-gray-50/60 dark:bg-gray-900/40 animate-pulse"
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function MakeupErrorState({ onRetry }: { onRetry: () => void }) {
+    return (
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">보강 예약 정보를 불러오지 못했습니다.</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                다시 시도
+            </button>
+        </div>
+    );
+}
+
 export default function MakeupClient({
-    sessions,
-    classes,
+    sessions: initialSessions,
+    classes: initialClasses,
 }: {
-    sessions: MakeupItem[];
-    classes: ClassItem[];
+    sessions?: MakeupItem[];
+    classes?: ClassItem[];
 }) {
-    const router = useRouter();
+    const hasInitialData = Boolean(initialSessions && initialClasses);
+    const [sessions, setSessions] = useState<MakeupItem[]>(initialSessions ?? []);
+    const [classes, setClasses] = useState<ClassItem[]>(initialClasses ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [showBookModal, setShowBookModal] = useState(false);
@@ -97,6 +151,33 @@ export default function MakeupClient({
     const [studentsLoaded, setStudentsLoaded] = useState(false);
     const [studentsLoading, setStudentsLoading] = useState(false);
     const [studentsError, setStudentsError] = useState<string | null>(null);
+
+    const hasAnyData = sessions.length > 0 || classes.length > 0;
+
+    const loadMakeupData = useCallback(async () => {
+        setLoading(true);
+        setLoadError(null);
+
+        try {
+            const response = await fetch("/api/admin/makeup", { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load makeup data.");
+            }
+            const data = (await response.json()) as MakeupPayload;
+            setSessions(data.sessions);
+            setClasses(data.classes);
+        } catch (error) {
+            console.error("Failed to load makeup data:", error);
+            setLoadError("failed");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (hasInitialData) return;
+        void loadMakeupData();
+    }, [hasInitialData, loadMakeupData]);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -155,7 +236,7 @@ export default function MakeupClient({
         setBusy(true);
         try {
             await updateMakeupStatus(id, newStatus);
-            router.refresh();
+            await loadMakeupData();
         } catch (e: any) {
             alert(e.message || "상태 변경 실패");
         } finally {
@@ -170,12 +251,20 @@ export default function MakeupClient({
         setBusy(true);
         try {
             await cancelMakeupSession(id);
-            router.refresh();
+            await loadMakeupData();
         } catch (e: any) {
             alert(e.message || "취소 실패");
         } finally {
             setBusy(false);
         }
+    }
+
+    if (loading && !hasAnyData) {
+        return <MakeupLoadingFallback />;
+    }
+
+    if (loadError && !hasAnyData) {
+        return <MakeupErrorState onRetry={loadMakeupData} />;
     }
 
     return (
@@ -326,9 +415,9 @@ export default function MakeupClient({
                     onRetryLoadStudents={loadStudents}
                     classes={classes}
                     onClose={() => setShowBookModal(false)}
-                    onSuccess={() => {
+                    onSuccess={async () => {
                         setShowBookModal(false);
-                        router.refresh();
+                        await loadMakeupData();
                     }}
                 />
             )}
@@ -353,7 +442,7 @@ function BookMakeupModal({
     onRetryLoadStudents: () => Promise<void>;
     classes: ClassItem[];
     onClose: () => void;
-    onSuccess: () => void;
+    onSuccess: () => Promise<void> | void;
 }) {
     const [step, setStep] = useState(1); // 1: 학생+원래반 선택, 2: 보강반 선택
     const [studentId, setStudentId] = useState("");
@@ -431,7 +520,7 @@ function BookMakeupModal({
                 makeupClassId,
                 makeupDate,
             });
-            onSuccess();
+            await onSuccess();
         } catch (e: any) {
             alert(e.message || "보강 예약 실패");
         } finally {

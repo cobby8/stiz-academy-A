@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-10: `/admin/settings` 페이지는 학원 설정 조회를 Suspense 안쪽으로 분리하고, 설정 폼 skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: `/admin/schedule` 페이지는 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 Suspense 안쪽으로 분리하고, 시간표 skeleton을 먼저 렌더하도록 바꿨다.
 - 2026-07-10: 관리자 내부 반/출석/리포트/갤러리/설정 이동 링크에 `prefetch={false}`를 추가해 누르기 전 배경 route/data 조회를 줄였다.
 - 2026-07-10: `/admin/students/[id]` 페이지는 원생 활동 조회를 Suspense 안쪽으로 분리하고, 원생 상세 링크들의 prefetch를 꺼서 목록 화면의 배경 상세 조회를 막았다.
@@ -109,6 +110,7 @@
 - `/admin/students/[id]`는 원생 활동 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 원생 상세 링크에는 `prefetch={false}`를 둔다.
 - 관리자 내부 이동 링크는 무거운 route/data 조회가 많은 편이므로, 업무상 즉시 예열이 꼭 필요한 경우가 아니면 `prefetch={false}`를 기본으로 둔다.
 - `/admin/schedule`은 설정/시간표 override/코치/직접 슬롯/프로그램/Google Sheets 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 시간표 skeleton을 먼저 렌더한다.
+- `/admin/settings`는 학원 설정 조회를 Suspense 안쪽 서버 컴포넌트에서 스트리밍하고, 설정 폼 skeleton을 먼저 렌더한다.
 - 전역 레이아웃에는 `next/font/google` 후보 폰트를 등록하지 않고, 관리자 폰트 선택은 CSS fallback 스택으로 처리한다.
 - Pretendard 같은 런타임 외부 stylesheet는 전역 head에서 렌더 차단 리소스로 두지 않고, `DeferredFontStyles`가 idle 시점에 삽입한다. Material Symbols stylesheet는 실제 `.material-symbols-outlined`가 있는 페이지에서만 삽입한다.
 - `NEXT_PUBLIC_META_PIXEL_ID`가 없으면 Meta Pixel을 렌더하지 않는다. 기본 ID fallback은 전역 외부 스크립트 로드를 강제하므로 쓰지 않는다.

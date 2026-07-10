@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
@@ -214,13 +213,18 @@ function getLatestStatus(enrollments: Student["enrollments"]): string | null {
 }
 
 export default function StudentManagementClient({
-    students,
-    classes,
+    students: initialStudents = [],
+    classes: initialClasses = [],
 }: {
-    students: Student[];
-    classes: ClassItem[];
+    students?: Student[];
+    classes?: ClassItem[];
 }) {
-    const router = useRouter();
+    const [students, setStudents] = useState<Student[]>(initialStudents);
+    const [classes, setClasses] = useState<ClassItem[]>(initialClasses);
+    const [dataLoading, setDataLoading] = useState(
+        initialStudents.length === 0 && initialClasses.length === 0,
+    );
+    const [dataError, setDataError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -234,6 +238,38 @@ export default function StudentManagementClient({
     const [filterClass, setFilterClass] = useState("");
     const [filterGrade, setFilterGrade] = useState("");
     const [filterSchool, setFilterSchool] = useState("");
+
+    const loadData = useCallback(async () => {
+        setDataLoading(true);
+        setDataError(null);
+
+        try {
+            const response = await fetch("/api/admin/students", {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load students.");
+            }
+
+            const data = (await response.json()) as {
+                students?: Student[];
+                classes?: ClassItem[];
+            };
+
+            setStudents(data.students ?? []);
+            setClasses(data.classes ?? []);
+        } catch (error) {
+            console.error("Failed to load students:", error);
+            setDataError("원생 목록을 불러오지 못했습니다.");
+        } finally {
+            setDataLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadData();
+    }, [loadData]);
     // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
     const [filterStatus, setFilterStatus] = useState("ACTIVE");
 
@@ -312,7 +348,7 @@ export default function StudentManagementClient({
                 });
             }
             resetForm();
-            router.refresh();
+            await loadData();
         } catch (err: any) {
             alert(err.message || "저장 실패");
         } finally {
@@ -325,7 +361,7 @@ export default function StudentManagementClient({
         try {
             await deleteStudent(id);
             setDeleteConfirm(null);
-            router.refresh();
+            await loadData();
         } catch (err: any) {
             alert(err.message || "삭제 실패");
         } finally {
@@ -338,7 +374,7 @@ export default function StudentManagementClient({
         try {
             await enrollStudent(studentId, classId);
             setEnrollModal(null);
-            router.refresh();
+            await loadData();
         } catch (err: any) {
             alert(err.message || "수강 등록 실패");
         } finally {
@@ -410,6 +446,52 @@ export default function StudentManagementClient({
         result.sort((a, b) => a.name.localeCompare(b.name, "ko"));
         return result;
     }, [students, search, filterClass, filterGrade, filterSchool, filterStatus]);
+
+    if (dataLoading && students.length === 0) {
+        return (
+            <div className="max-w-5xl mx-auto space-y-6">
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                        <div
+                            key={index}
+                            className="h-20 rounded-xl border border-gray-200 bg-gray-100 animate-pulse dark:border-gray-700 dark:bg-gray-800"
+                        />
+                    ))}
+                </div>
+                <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                        <div className="h-7 w-36 rounded bg-gray-200 animate-pulse dark:bg-gray-700" />
+                        <div className="h-4 w-48 rounded bg-gray-100 animate-pulse dark:bg-gray-800" />
+                    </div>
+                    <div className="h-10 w-28 rounded-lg bg-gray-200 animate-pulse dark:bg-gray-700" />
+                </div>
+                <div className="h-11 w-full max-w-md rounded-lg bg-gray-100 animate-pulse dark:bg-gray-800" />
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                    {Array.from({ length: 8 }).map((_, index) => (
+                        <div
+                            key={index}
+                            className="h-12 border-b border-gray-100 bg-gray-50/60 animate-pulse last:border-b-0 dark:border-gray-700 dark:bg-gray-900/40"
+                        />
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    if (dataError && students.length === 0) {
+        return (
+            <div className="mx-auto max-w-5xl rounded-xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900/50 dark:bg-red-950/20">
+                <p className="font-bold text-red-700 dark:text-red-200">{dataError}</p>
+                <button
+                    type="button"
+                    onClick={() => void loadData()}
+                    className="mt-4 rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                >
+                    다시 불러오기
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-5xl mx-auto">
@@ -765,7 +847,7 @@ export default function StudentManagementClient({
                     onClose={() => setShowExcelUpload(false)}
                     onComplete={() => {
                         setShowExcelUpload(false);
-                        router.refresh(); // 목록 새로고침
+                        void loadData();
                     }}
                 />
             )}

@@ -1,9 +1,9 @@
 # STIZ 고도화 스크래치패드
 
 ## 현재 작업
-- 작업명: 스태프 관리 화면 지연 렌더링
+- 작업명: 스킬 관리 화면 지연 렌더링
 - 상태: 빌드 검증 완료
-- 범위: `/admin/staff`
+- 범위: `/admin/skills`
 - 기준일: 2026-07-10
 
 ## 진행 현황표
@@ -63,9 +63,11 @@
 | 학원 소개 설정 화면 지연 렌더링 | 완료 | 학원 설정 조회를 Suspense 안쪽으로 분리해 설정 skeleton 먼저 표시 |
 | 약관/개인정보 관리 화면 지연 렌더링 | 완료 | 약관/개인정보 설정 조회를 Suspense 안쪽으로 분리해 editor skeleton 먼저 표시 |
 | 스태프 관리 화면 지연 렌더링 | 완료 | 스태프/코치/초대 조회를 Suspense 안쪽으로 분리해 list skeleton 먼저 표시 |
+| 스킬 관리 화면 지연 렌더링 | 완료 | 스킬 카테고리 조회를 Suspense 안쪽으로 분리해 table skeleton 먼저 표시 |
 | 타입/빌드 검증 | 완료 | `npx.cmd tsc --noEmit`, `npx.cmd next build` 통과 |
 
 ## 작업 로그
+- 2026-07-10: `/admin/skills` 진입 시 스킬 카테고리 조회를 Suspense 안쪽으로 옮기고, table skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/staff` 진입 시 스태프/코치/초대 목록 조회를 Suspense 안쪽으로 옮기고, list skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/privacy`, `/admin/terms` 진입 시 약관/개인정보 설정 조회를 Suspense 안쪽으로 옮기고, editor skeleton을 먼저 렌더하도록 변경함.
 - 2026-07-10: `/admin/settings` 진입 시 학원 설정 조회를 Suspense 안쪽으로 옮기고, 설정 폼 skeleton을 먼저 렌더하도록 변경함.
@@ -77,9 +79,9 @@
 - 2026-07-10: `/admin/sms/templates` 진입 시 SMS 템플릿 조회를 Suspense 경계 안쪽으로 옮기고, card skeleton을 먼저 렌더하도록 변경함.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/staff/page.tsx`
-- 주요 변경: 스태프 관리 페이지를 Suspense로 감싸 list skeleton을 먼저 보여주고, 스태프/코치/초대 조회는 안쪽 서버 컴포넌트에서 스트리밍.
-- 적용 범위: `/admin/staff`
+- 변경 파일: `src/app/admin/skills/page.tsx`
+- 주요 변경: 스킬 관리 페이지를 Suspense로 감싸 table skeleton을 먼저 보여주고, 스킬 카테고리 조회는 안쪽 서버 컴포넌트에서 스트리밍.
+- 적용 범위: `/admin/skills`
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
@@ -87,4 +89,4 @@
 - 빌드 중 Supabase DB 접속 실패 로그는 로컬 네트워크 제한으로 발생했지만 fallback 처리되어 빌드 종료 코드는 0.
 
 ## 다음에 할 것
-- 다음 속도 개선 후보: `/admin/skills`처럼 아직 Suspense 분리되지 않은 단순 조회 화면을 추가 검색.
+- 다음 속도 개선 후보: 관리자 route 중 아직 Suspense 분리되지 않은 서버 조회 화면을 재검색.

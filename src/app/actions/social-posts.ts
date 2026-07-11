@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireAdmin, requireStaff } from "@/lib/auth-guard";
 import { generateSocialCaptionDraft } from "@/lib/socialCaptionAI";
 import {
@@ -28,6 +28,7 @@ type SaveDraftInput = {
 };
 
 function revalidateSocialPostPaths() {
+  revalidateTag("admin-gallery", { expire: 0 });
   revalidatePath("/staff/quick-post");
   revalidatePath("/admin/gallery");
   revalidatePath("/gallery");

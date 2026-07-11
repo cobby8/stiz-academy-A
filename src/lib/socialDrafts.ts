@@ -185,8 +185,7 @@ export async function createSocialPostDraftRecord(data: {
   return mapDraft(rows[0]);
 }
 
-export async function getPendingSocialPostDrafts(limit = 30) {
-  await requireAdmin();
+export async function readPendingSocialPostDrafts(limit = 30) {
   await ensureSocialPostDraftTable();
 
   const rows = await prisma.$queryRawUnsafe<any[]>(
@@ -198,6 +197,11 @@ export async function getPendingSocialPostDrafts(limit = 30) {
   );
 
   return rows.map(mapDraft);
+}
+
+export async function getPendingSocialPostDrafts(limit = 30) {
+  await requireAdmin();
+  return readPendingSocialPostDrafts(limit);
 }
 
 export async function getSocialPostDraftById(id: string) {

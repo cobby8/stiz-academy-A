@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
 
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   });
 
   if (result.ok) {
+    revalidateTag("admin-gallery", { expire: 0 });
     revalidatePath("/admin/gallery");
     revalidatePath("/gallery");
     revalidatePath("/");

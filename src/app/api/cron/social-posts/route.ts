@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { processSocialPostPublishQueue } from "@/lib/socialPostPublishing";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const result = await processSocialPostPublishQueue(1);
 
   if (result.processed > 0) {
+    revalidateTag("admin-gallery", { expire: 0 });
     revalidatePath("/admin/gallery");
     revalidatePath("/staff/quick-post");
     revalidatePath("/gallery");

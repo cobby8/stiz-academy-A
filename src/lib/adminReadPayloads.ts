@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { getInstagramRuntimeStatus } from "@/lib/instagram";
 import {
     getAcademySettings,
     getAllTestimonials,
@@ -12,6 +13,7 @@ import {
     getEnrollApplicationStats,
     getPendingRequestCount,
     getRecentPendingRequests,
+    getGalleryPosts,
     getPrograms,
     getSheetSlotCache,
     getSmsTemplates,
@@ -20,6 +22,7 @@ import {
     getTrialStats,
 } from "@/lib/queries";
 import { prisma } from "@/lib/prisma";
+import { readPendingSocialPostDrafts } from "@/lib/socialDrafts";
 
 const DASHBOARD_MONTHS = 6;
 
@@ -247,6 +250,28 @@ export const getCachedAdminSmsTemplatesPayload = unstable_cache(
     },
     ["admin-sms-templates-page-v1"],
     { revalidate: 60, tags: ["admin-sms-templates"] },
+);
+
+export const getCachedAdminGalleryPayload = unstable_cache(
+    async () => {
+        const [posts, classes, settings, socialDrafts] = await Promise.all([
+            getGalleryPosts({ limit: 100 }),
+            getClasses(),
+            getAcademySettings(),
+            readPendingSocialPostDrafts(30),
+        ]);
+        const settingsData = settings as any;
+        const instagramStatus = {
+            profileUrl: settingsData?.instagramUrl ?? "",
+            businessAccountId: settingsData?.instagramBusinessAccountId ?? "",
+            autoPublishEnabled: settingsData?.instagramAutoPublishEnabled === true,
+            ...getInstagramRuntimeStatus(settingsData?.instagramBusinessAccountId),
+        };
+
+        return { posts, classes, instagramStatus, socialDrafts };
+    },
+    ["admin-gallery-page-v1"],
+    { revalidate: 60, tags: ["admin-gallery", "admin-classes", "academy-settings"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

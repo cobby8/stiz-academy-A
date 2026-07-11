@@ -45,6 +45,10 @@ function revalidateTestimonialAdminCaches() {
     revalidateTag("admin-testimonials", { expire: 0 });
 }
 
+function revalidateGalleryAdminCaches() {
+    revalidateTag("admin-gallery", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -1148,6 +1152,7 @@ export async function createGalleryPost(data: {
         throw new Error("갤러리 게시물 생성 실패");
     }
     revalidatePath("/admin/gallery");
+    revalidateGalleryAdminCaches();
     revalidatePath("/gallery");
     revalidatePath("/mypage");
     revalidatePath("/");
@@ -1162,6 +1167,7 @@ export async function syncInstagramGalleryPosts() {
     });
 
     revalidatePath("/admin/gallery");
+    revalidateGalleryAdminCaches();
     revalidatePath("/gallery");
     revalidatePath("/");
     return result;
@@ -1191,6 +1197,7 @@ export async function updateGalleryPost(id: string, data: {
         throw new Error("갤러리 게시물 수정 실패");
     }
     revalidatePath("/admin/gallery");
+    revalidateGalleryAdminCaches();
     revalidatePath("/gallery");
     revalidatePath("/mypage");
     revalidatePath("/");
@@ -1205,6 +1212,7 @@ export async function deleteGalleryPost(id: string) {
         throw new Error("갤러리 게시물 삭제 실패");
     }
     revalidatePath("/admin/gallery");
+    revalidateGalleryAdminCaches();
     revalidatePath("/gallery");
     revalidatePath("/mypage");
     revalidatePath("/");

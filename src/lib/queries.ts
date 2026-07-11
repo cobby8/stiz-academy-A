@@ -156,8 +156,12 @@ export const getClasses = cache(async () => {
 });
 
 /** 원생 목록 조회 (학부모 정보 포함) */
-export const getStudents = cache(async () => {
+export const getStudents = cache(async (limit?: number) => {
     try {
+        const normalizedLimit =
+            typeof limit === "number" && Number.isFinite(limit) && limit > 0
+                ? Math.min(Math.floor(limit), 500)
+                : null;
         // 학생 목록 조회: 서브쿼리로 수강(Enrollment+Class) 정보를 JSON 배열로 포함
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `WITH enrollment_json AS (
@@ -187,7 +191,7 @@ export const getStudents = cache(async () => {
              FROM "Student" s
              LEFT JOIN "User" u ON s."parentId" = u.id
              LEFT JOIN enrollment_json ej ON ej."studentId" = s.id
-             ORDER BY s.name ASC`
+             ORDER BY s.name ASC${normalizedLimit ? ` LIMIT ${normalizedLimit}` : ""}`
         );
         return rows.map((r: any) => ({
             id: r.id,

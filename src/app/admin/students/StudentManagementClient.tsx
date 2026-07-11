@@ -218,15 +218,19 @@ function getLatestStatus(enrollments: Student["enrollments"]): string | null {
 export default function StudentManagementClient({
     students: initialStudents,
     classes: initialClasses,
+    partial: initialPartial = false,
 }: {
     students?: Student[];
     classes?: ClassItem[];
+    partial?: boolean;
 }) {
     const hasInitialData = Boolean(initialStudents || initialClasses);
     const [students, setStudents] = useState<Student[]>(initialStudents ?? []);
     const [classes, setClasses] = useState<ClassItem[]>(initialClasses ?? []);
     const [dataLoading, setDataLoading] = useState(!hasInitialData);
     const [dataError, setDataError] = useState<string | null>(null);
+    const [allStudentsLoaded, setAllStudentsLoaded] = useState(!initialPartial);
+    const [backgroundLoading, setBackgroundLoading] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -241,8 +245,9 @@ export default function StudentManagementClient({
     const [filterGrade, setFilterGrade] = useState("");
     const [filterSchool, setFilterSchool] = useState("");
 
-    const loadData = useCallback(async () => {
-        setDataLoading(true);
+    const loadData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+        if (background) setBackgroundLoading(true);
+        else setDataLoading(true);
         setDataError(null);
 
         try {
@@ -261,18 +266,30 @@ export default function StudentManagementClient({
 
             setStudents(data.students ?? []);
             setClasses(data.classes ?? []);
+            setAllStudentsLoaded(true);
         } catch (error) {
             console.error("Failed to load students:", error);
             setDataError("원생 목록을 불러오지 못했습니다.");
         } finally {
-            setDataLoading(false);
+            if (background) setBackgroundLoading(false);
+            else setDataLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        if (hasInitialData) return;
-        void loadData();
-    }, [hasInitialData, loadData]);
+        if (!hasInitialData) {
+            void loadData();
+            return;
+        }
+
+        if (!initialPartial) return;
+
+        const timer = window.setTimeout(() => {
+            void loadData({ background: true });
+        }, 1500);
+
+        return () => window.clearTimeout(timer);
+    }, [hasInitialData, initialPartial, loadData]);
     // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
     const [filterStatus, setFilterStatus] = useState("ACTIVE");
     const [visibleLimit, setVisibleLimit] = useState(STUDENT_PAGE_SIZE);
@@ -541,7 +558,17 @@ export default function StudentManagementClient({
                         {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : filterStatus === "NONE" ? "미배정" : "전체"} 원생: {filtered.length}명
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
+                    {!allStudentsLoaded && (
+                        <button
+                            type="button"
+                            onClick={() => void loadData({ background: true })}
+                            disabled={backgroundLoading}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                        >
+                            {backgroundLoading ? "전체 불러오는 중" : "전체 목록 불러오기"}
+                        </button>
+                    )}
                     {/* 엑셀 일괄 업로드 버튼 — 랠리즈 다운로드 파일용 */}
                     <button
                         onClick={() => setShowExcelUpload(true)}

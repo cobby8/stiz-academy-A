@@ -164,18 +164,25 @@ async function loadDashboardPayload() {
     };
 }
 
-export const getCachedAdminStudentsPayload = unstable_cache(
-    async () => {
-        const [students, classes] = await Promise.all([
-            getStudents(),
-            getClasses(),
-        ]);
+export function getCachedAdminStudentsPayload(limit?: number) {
+    const normalizedLimit =
+        typeof limit === "number" && Number.isFinite(limit) && limit > 0
+            ? Math.min(Math.floor(limit), 500)
+            : undefined;
 
-        return { students, classes };
-    },
-    ["admin-students-v1"],
-    { revalidate: 60, tags: ["admin-students", "admin-classes"] },
-);
+    return unstable_cache(
+        async () => {
+            const [students, classes] = await Promise.all([
+                getStudents(normalizedLimit),
+                getClasses(),
+            ]);
+
+            return { students, classes, partial: Boolean(normalizedLimit) };
+        },
+        [`admin-students-v2-${normalizedLimit ?? "all"}`],
+        { revalidate: 60, tags: ["admin-students", "admin-classes"] },
+    )();
+}
 
 export const getCachedAdminDashboardPrimaryPayload = unstable_cache(
     async () => {

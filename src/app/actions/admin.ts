@@ -49,6 +49,10 @@ function revalidateGalleryAdminCaches() {
     revalidateTag("admin-gallery", { expire: 0 });
 }
 
+function revalidateNoticeAdminCaches() {
+    revalidateTag("admin-notices", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -1251,6 +1255,7 @@ export async function createNotice(data: {
         throw new Error("공지사항 생성 실패");
     }
     revalidatePath("/admin/notices");
+    revalidateNoticeAdminCaches();
     revalidatePath("/notices");
     revalidatePath("/mypage");
     revalidatePath("/");
@@ -1283,6 +1288,7 @@ export async function updateNotice(id: string, data: {
         throw new Error("공지사항 수정 실패");
     }
     revalidatePath("/admin/notices");
+    revalidateNoticeAdminCaches();
     revalidatePath("/notices");
     revalidatePath("/mypage");
     revalidatePath("/");
@@ -1297,6 +1303,7 @@ export async function deleteNotice(id: string) {
         throw new Error("공지사항 삭제 실패");
     }
     revalidatePath("/admin/notices");
+    revalidateNoticeAdminCaches();
     revalidatePath("/notices");
     revalidatePath("/mypage");
     revalidatePath("/");

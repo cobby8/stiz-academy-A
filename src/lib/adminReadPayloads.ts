@@ -16,6 +16,7 @@ import {
     getGalleryPosts,
     getPayments,
     getPaymentSummary,
+    getNotices,
     getPrograms,
     getSheetSlotCache,
     getSmsTemplates,
@@ -290,6 +291,19 @@ export function getCachedAdminFinancePayload(year: number, month: number) {
         { revalidate: 30, tags: ["admin-finance", "admin-stats"] },
     )();
 }
+
+export const getCachedAdminNoticesPayload = unstable_cache(
+    async () => {
+        const [notices, classes] = await Promise.all([
+            getNotices({ limit: 100 }),
+            getClasses(),
+        ]);
+
+        return { notices, classes };
+    },
+    ["admin-notices-page-v1"],
+    { revalidate: 60, tags: ["admin-notices", "admin-classes"] },
+);
 
 export const getCachedAdminSchedulePayload = unstable_cache(
     async () => {

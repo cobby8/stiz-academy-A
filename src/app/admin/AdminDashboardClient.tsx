@@ -193,22 +193,27 @@ export default function AdminDashboardClient({
     const [data, setData] = useState<DashboardData | null>(initialData ?? null);
     const [loading, setLoading] = useState(!hasInitialData);
     const [error, setError] = useState<string | null>(null);
+    const [detailsLoaded, setDetailsLoaded] = useState(!hasInitialData);
+    const [detailsLoading, setDetailsLoading] = useState(false);
     const [systemStatus, setSystemStatus] = useState<SystemStatusData | null>(null);
     const [systemLoading, setSystemLoading] = useState(false);
     const [systemError, setSystemError] = useState(false);
 
     const loadDashboard = useCallback(async (showSkeleton = true) => {
         if (showSkeleton) setLoading(true);
+        else setDetailsLoading(true);
         setError(null);
 
         try {
             const res = await fetch("/api/admin/dashboard");
             if (!res.ok) throw new Error("Dashboard request failed");
             setData((await res.json()) as DashboardData);
+            setDetailsLoaded(true);
         } catch {
             setError("failed");
         } finally {
             if (showSkeleton) setLoading(false);
+            else setDetailsLoading(false);
         }
     }, []);
 
@@ -256,6 +261,9 @@ export default function AdminDashboardClient({
                     systemStatus={systemStatus}
                     systemLoading={systemLoading}
                     systemError={systemError}
+                    detailsLoaded={detailsLoaded}
+                    detailsLoading={detailsLoading}
+                    onLoadDetails={() => void loadDashboard(false)}
                     onRetrySystem={loadSystemStatus}
                 />
             )}
@@ -268,12 +276,18 @@ function DashboardContent({
     systemStatus,
     systemLoading,
     systemError,
+    detailsLoaded,
+    detailsLoading,
+    onLoadDetails,
     onRetrySystem,
 }: {
     data: DashboardData;
     systemStatus: SystemStatusData | null;
     systemLoading: boolean;
     systemError: boolean;
+    detailsLoaded: boolean;
+    detailsLoading: boolean;
+    onLoadDetails: () => void;
     onRetrySystem: () => void;
 }) {
     const { stats, pendingRequests, pendingCount, enrollStats, extendedStats, todayClasses, recentStudents } = data;
@@ -328,6 +342,8 @@ function DashboardContent({
                     icon={<SymbolIcon name="layers" size={20} className="text-purple-500" />} href="/admin/classes" />
             </div>
 
+            {detailsLoaded ? (
+                <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 매출</p>
@@ -390,7 +406,46 @@ function DashboardContent({
                     onRetry={onRetrySystem}
                 />
             </div>
+                </>
+            ) : (
+                <>
+                    <DeferredDetailsCard loading={detailsLoading} onLoad={onLoadDetails} />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <QuickManagementCard />
+                        <SystemStatusCard
+                            systemStatus={systemStatus}
+                            systemLoading={systemLoading}
+                            systemError={systemError}
+                            onRetry={onRetrySystem}
+                        />
+                    </div>
+                </>
+            )}
         </>
+    );
+}
+
+function DeferredDetailsCard({ loading, onLoad }: { loading: boolean; onLoad: () => void }) {
+    return (
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">상세 운영 데이터</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        매출 추이, 출석률, 최근 등록 학생은 필요할 때만 불러옵니다.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onLoad}
+                    disabled={loading}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                >
+                    <SymbolIcon name={loading ? "sync" : "download"} size={18} />
+                    {loading ? "불러오는 중" : "상세 데이터 불러오기"}
+                </button>
+            </div>
+        </div>
     );
 }
 

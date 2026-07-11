@@ -7,5 +7,5 @@ export const revalidate = 30;
 export default async function AdminDashboard() {
     const initialData = await getCachedAdminDashboardPrimaryPayload();
 
-    return <AdminDashboardClient initialData={initialData} hydrateFullData />;
+    return <AdminDashboardClient initialData={initialData} />;
 }

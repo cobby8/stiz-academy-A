@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getAttendanceByDateAndClass, getClasses } from "@/lib/queries";
+import { getCachedAdminAttendancePayload } from "@/lib/adminReadPayloads";
+import { getAttendanceByDateAndClass } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,10 @@ export async function GET(request: NextRequest) {
 
     if (!classId && !date) {
         try {
-            const classes = await getClasses();
+            const payload = await getCachedAdminAttendancePayload();
             return NextResponse.json(
-                { classes },
-                { headers: { "Cache-Control": "no-store" } },
+                payload,
+                { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
             );
         } catch (error) {
             console.error("[api/admin/attendance] classes failed:", error);

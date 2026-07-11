@@ -305,6 +305,16 @@ export const getCachedAdminNoticesPayload = unstable_cache(
     { revalidate: 60, tags: ["admin-notices", "admin-classes"] },
 );
 
+export const getCachedAdminAttendancePayload = unstable_cache(
+    async () => {
+        const classes = await getClasses();
+
+        return { classes };
+    },
+    ["admin-attendance-page-v1"],
+    { revalidate: 60, tags: ["admin-classes"] },
+);
+
 export const getCachedAdminSchedulePayload = unstable_cache(
     async () => {
         const settings = await (getAcademySettings() as Promise<any>);

@@ -14,12 +14,47 @@
 
 const https = require('https');
 const { Client } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 // --- CSV URL ---
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/12xfQWT6OYa0hH2Ajei7E48CF2aUh6vZ8WWeFeocZrzY/export?format=csv&gid=672309223';
 
 // --- DB 연결 (DIRECT_URL - PgBouncer 우회) ---
-const DB_URL = 'postgresql://postgres.gpjdtkumqxzfgkixjamp:0203ASDqwe!@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres';
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const eqIndex = trimmed.indexOf('=');
+    if (eqIndex === -1) continue;
+
+    const key = trimmed.slice(0, eqIndex).trim();
+    let value = trimmed.slice(eqIndex + 1).trim();
+    if (!key || process.env[key] !== undefined) continue;
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile(path.resolve(__dirname, '..', '.env.local'));
+loadEnvFile(path.resolve(__dirname, '..', '.env'));
+
+const DB_URL = process.env.DIRECT_URL;
+
+if (!DB_URL) {
+  throw new Error('DIRECT_URL environment variable is required.');
+}
 
 // --- 요일 매핑: CSV 컬럼인덱스 -> slotKey 접두사 ---
 const DAY_COLUMNS = {

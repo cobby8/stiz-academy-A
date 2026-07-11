@@ -10,6 +10,7 @@ import {
     getCustomClassSlots,
     getDashboardExtendedStats,
     getDashboardStats,
+    getEnrollApplications,
     getEnrollApplicationStats,
     getPendingRequestCount,
     getRecentPendingRequests,
@@ -313,6 +314,20 @@ export const getCachedAdminAttendancePayload = unstable_cache(
     },
     ["admin-attendance-page-v1"],
     { revalidate: 60, tags: ["admin-classes"] },
+);
+
+export const getCachedAdminApplyPayload = unstable_cache(
+    async () => {
+        const [applications, stats, classes] = await Promise.all([
+            getEnrollApplications(),
+            getEnrollApplicationStats(),
+            getClasses(),
+        ]);
+
+        return { applications, stats, classes };
+    },
+    ["admin-apply-v1"],
+    { revalidate: 30, tags: ["admin-apply", "admin-classes"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

@@ -25,7 +25,7 @@ export type AdminAuthUser = AuthUser & {
   appUserRole: AdminRole;
 };
 
-const ROLE_CACHE_TTL_MS = 30_000;
+const ROLE_CACHE_TTL_MS = 5 * 60_000;
 const roleCache = new Map<string, AppUserRoleRow & { expiresAt: number }>();
 
 function normalizeEmail(email: string | null | undefined) {

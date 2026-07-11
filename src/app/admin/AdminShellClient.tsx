@@ -2,10 +2,23 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
+import { useEffect, useState, useMemo } from "react";
 import { logout } from "@/app/actions/auth";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+
+const LazyBackupButtons = dynamic(() => import("./AdminBackupButtons"), {
+    ssr: false,
+    loading: () => <div className="px-8 py-3 text-xs text-gray-500">도구 준비 중...</div>,
+});
+
+const LazyNotificationBell = dynamic(() => import("./AdminNotificationBell"), {
+    ssr: false,
+    loading: () => (
+        <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800" aria-hidden="true" />
+    ),
+});
 
 // "학원운영" 탭에 속하는 경로 목록 — 이 경로로 시작하면 학원운영 탭 활성화
 const OPS_PATHS = [
@@ -168,7 +181,7 @@ export default function AdminShellClient({
 
                             <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
                             <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프 관리" />
-                            <BackupButtons />
+                            <LazyBackupButtons />
                         </>
                     )}
                 </nav>
@@ -212,7 +225,7 @@ export default function AdminShellClient({
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-2 md:gap-4">
                         {/* 알림 벨 — 읽지 않은 알림 수 배지 + 드롭다운 */}
-                        <NotificationBell />
+                        <LazyNotificationBell />
                         <span className="hidden text-sm font-medium text-gray-600 dark:text-gray-300 sm:inline">{userName}님, 환영합니다.</span>
                         <div className="w-8 h-8 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                             {userName.charAt(0) || "A"}
@@ -223,120 +236,6 @@ export default function AdminShellClient({
                     {children}
                 </div>
             </main>
-        </div>
-    );
-}
-
-function BackupButtons() {
-    const [busy, setBusy] = useState(false);
-    const [msg, setMsg] = useState<string | null>(null);
-    const [ok, setOk] = useState(true);
-
-    function show(text: string, isOk: boolean) {
-        setMsg(text);
-        setOk(isOk);
-    }
-
-    async function handleRestore(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (!confirm(`"${file.name}" 파일로 복원하시겠습니까?`)) { e.target.value = ""; return; }
-        setBusy(true);
-        setMsg(null);
-        try {
-            const json = JSON.parse(await file.text());
-            const res = await fetch("/api/admin/backup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(json) });
-            const data = await res.json();
-            data.success ? show("복원 완료", true) : show(`오류: ${data.error}`, false);
-        } catch { show("파일 파싱 오류", false); }
-        finally { setBusy(false); e.target.value = ""; }
-    }
-
-    async function handleCloudRestore() {
-        if (!confirm("가장 최근 자동 백업으로 복원하시겠습니까?")) return;
-        setBusy(true);
-        setMsg(null);
-        try {
-            const listRes = await fetch("/api/admin/cloud-backups");
-            const { files } = await listRes.json();
-            if (!files?.length) { show("클라우드 백업 없음 (자정에 자동 생성됩니다)", false); return; }
-            const res = await fetch("/api/admin/cloud-backups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: files[0].filename }) });
-            const data = await res.json();
-            data.success ? show(`복원 완료 (${files[0].filename.slice(12, 27)})`, true) : show(`오류: ${data.error}`, false);
-        } catch { show("복원 실패", false); }
-        finally { setBusy(false); }
-    }
-
-    async function handleBackupNow() {
-        if (!confirm("지금 즉시 클라우드에 백업하시겠습니까?")) return;
-        setBusy(true);
-        setMsg(null);
-        try {
-            const res = await fetch("/api/admin/backup-now", { method: "POST" });
-            const data = await res.json();
-            data.success ? show(`저장 완료 (${data.filename?.slice(12, 27)})`, true) : show(`오류: ${data.error}`, false);
-        } catch { show("백업 실패", false); }
-        finally { setBusy(false); }
-    }
-
-    async function handleSyncSchedule() {
-        setBusy(true);
-        setMsg(null);
-        try {
-            const res = await fetch("/api/admin/sync-schedule", { method: "POST" });
-            const data = await res.json();
-            data.success ? show(`시트 동기화 완료 (${data.synced}개 슬롯)`, true) : show(`오류: ${data.error}`, false);
-        } catch { show("동기화 실패", false); }
-        finally { setBusy(false); }
-    }
-
-    return (
-        <div className="px-4 py-2 space-y-1">
-            <button
-                onClick={handleSyncSchedule}
-                disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
-            >
-                <span className="text-xl">🔄</span>
-                <span>시트 동기화</span>
-            </button>
-            <a
-                href="/api/admin/backup"
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-            >
-                <span className="text-xl">💾</span>
-                <span>백업 다운로드</span>
-            </a>
-            <label className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}>
-                <span className="text-xl">📂</span>
-                <span>{busy ? "처리 중..." : "파일로 복원"}</span>
-                <input type="file" accept=".json" className="hidden" onChange={handleRestore} disabled={busy} />
-            </label>
-            <button
-                onClick={handleCloudRestore}
-                disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
-            >
-                <span className="text-xl">☁️</span>
-                <span>최신 자동백업 복원</span>
-            </button>
-            <button
-                onClick={handleBackupNow}
-                disabled={busy}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"}`}
-            >
-                <span className="text-xl">☁️</span>
-                <span>지금 클라우드에 저장</span>
-            </button>
-            <a
-                href="/api/admin/export-seed"
-                download="seed-data.ts"
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
-            >
-                <span className="text-xl">🌱</span>
-                <span>seed 내보내기</span>
-            </a>
-            {msg && <p className={`text-xs px-4 py-1 break-all ${ok ? "text-green-400" : "text-yellow-400"}`}>{msg}</p>}
         </div>
     );
 }
@@ -360,193 +259,5 @@ function NavItem({ href, active, icon, label, badge }: { href: string; active?: 
                 </span>
             )}
         </Link>
-    );
-}
-
-// ── 알림 벨 드롭다운 컴포넌트 ────────────────────────────────────────────────
-// 헤더에 표시되는 종 모양 아이콘 + 읽지 않은 알림 수 배지 + 드롭다운 목록
-interface NotificationItem {
-    id: string;
-    type: string;
-    title: string;
-    message: string;
-    linkUrl: string | null;
-    isRead: boolean;
-    createdAt: string;
-}
-
-function NotificationBell() {
-    const [open, setOpen] = useState(false);           // 드롭다운 열림/닫힘
-    const [unreadCount, setUnreadCount] = useState(0); // 읽지 않은 수
-    const [items, setItems] = useState<NotificationItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-    const router = useRouter();
-
-    // 알림 목록 조회 함수
-    const fetchNotifications = useCallback(async () => {
-        try {
-            const res = await fetch("/api/admin/notifications");
-            if (!res.ok) return;
-            const data = await res.json();
-            setUnreadCount(data.unreadCount ?? 0);
-            setItems(data.notifications ?? []);
-        } catch {
-            // 조회 실패해도 무시 — 벨 아이콘은 항상 표시
-        }
-    }, []);
-
-    // 드롭다운 바깥 클릭 시 닫기
-    useEffect(() => {
-        function handleClickOutside(e: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
-        }
-        if (open) document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [open]);
-
-    // 벨 클릭 — 드롭다운 토글 + 목록 갱신
-    function handleToggle() {
-        if (!open) fetchNotifications();
-        setOpen(!open);
-    }
-
-    // 개별 알림 클릭 — 읽음 처리 + 링크 이동
-    async function handleClick(item: NotificationItem) {
-        // 읽음 처리 (fire-and-forget)
-        if (!item.isRead) {
-            fetch("/api/admin/notifications", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: item.id }),
-            }).catch(() => {});
-            // UI 즉시 반영
-            setItems(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
-            setUnreadCount(prev => Math.max(0, prev - 1));
-        }
-        // 링크가 있으면 이동
-        if (item.linkUrl) {
-            router.push(item.linkUrl);
-        }
-        setOpen(false);
-    }
-
-    // 전체 읽음 처리
-    async function handleMarkAllRead() {
-        setLoading(true);
-        try {
-            await fetch("/api/admin/notifications", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ markAllRead: true }),
-            });
-            setItems(prev => prev.map(n => ({ ...n, isRead: true })));
-            setUnreadCount(0);
-        } catch {}
-        setLoading(false);
-    }
-
-    // 시간 포맷: "방금", "3분 전", "2시간 전", "3일 전"
-    function timeAgo(dateStr: string) {
-        const diff = Date.now() - new Date(dateStr).getTime();
-        const mins = Math.floor(diff / 60000);
-        if (mins < 1) return "방금";
-        if (mins < 60) return `${mins}분 전`;
-        const hours = Math.floor(mins / 60);
-        if (hours < 24) return `${hours}시간 전`;
-        const days = Math.floor(hours / 24);
-        return `${days}일 전`;
-    }
-
-    // 알림 타입별 아이콘 매핑
-    function typeIcon(type: string) {
-        switch (type) {
-            case "TRIAL_APPLICATION": return "person_add" as const;
-            case "ENROLL_APPLICATION": return "how_to_reg" as const;
-            case "REQUEST": return "mail" as const;
-            case "ATTENDANCE": return "check_circle" as const;
-            case "PAYMENT": return "payments" as const;
-            case "NOTICE": return "campaign" as const;
-            default: return "notifications";
-        }
-    }
-
-    return (
-        <div className="relative" ref={dropdownRef}>
-            {/* 벨 아이콘 버튼 */}
-            <button
-                onClick={handleToggle}
-                className="relative p-2 text-gray-500 hover:text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition-colors"
-                title="알림"
-            >
-                <FontFreeIcon name="notifications" size={22} />
-                {/* 읽지 않은 알림 수 배지 */}
-                {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-red-500 text-white">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                )}
-            </button>
-
-            {/* 드롭다운 패널 */}
-            {open && (
-                <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-sm bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden sm:w-96">
-                    {/* 헤더 */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                        <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">알림</h3>
-                        {unreadCount > 0 && (
-                            <button
-                                onClick={handleMarkAllRead}
-                                disabled={loading}
-                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                            >
-                                모두 읽음
-                            </button>
-                        )}
-                    </div>
-
-                    {/* 알림 목록 */}
-                    <div className="max-h-[400px] overflow-y-auto">
-                        {items.length === 0 ? (
-                            <div className="py-12 text-center text-gray-400 text-sm">
-                                <FontFreeIcon name="notifications_off" size={40} className="mx-auto mb-2" />
-                                알림이 없습니다
-                            </div>
-                        ) : (
-                            items.map(item => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => handleClick(item)}
-                                    className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-gray-50 dark:bg-gray-900 transition-colors border-b border-gray-50 ${
-                                        !item.isRead ? "bg-blue-50/50" : ""
-                                    }`}
-                                >
-                                    {/* 타입별 아이콘 */}
-                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                                        !item.isRead ? "bg-blue-100 text-blue-600" : "bg-gray-100 dark:bg-gray-800 text-gray-400"
-                                    }`}>
-                                        <FontFreeIcon name={typeIcon(item.type)} size={18} />
-                                    </div>
-                                    {/* 내용 */}
-                                    <div className="flex-1 min-w-0">
-                                        <p className={`text-sm truncate ${!item.isRead ? "font-semibold text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-300"}`}>
-                                            {item.title}
-                                        </p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{item.message}</p>
-                                        <p className="text-[11px] text-gray-400 mt-1">{timeAgo(item.createdAt)}</p>
-                                    </div>
-                                    {/* 읽지 않은 표시 점 */}
-                                    {!item.isRead && (
-                                        <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-2" />
-                                    )}
-                                </button>
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
     );
 }

@@ -19,6 +19,11 @@ import Image from "next/image";
 import { ThemeToggle } from "./ThemeToggle";
 import FontFreeIcon from "./ui/FontFreeIcon";
 
+const MOBILE_ACCOUNT_FALLBACK_ACTION_CLASS = [
+  "flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold",
+  "text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
+].join(" ");
+
 const DesktopAccountControls = dynamic(
   () => import("./PublicAccountControls").then((mod) => mod.DesktopAccountControls),
   {
@@ -99,9 +104,12 @@ function MobileAccountFallback() {
       </Link>
       <Link
         href="/staff/quick-post"
-        className="flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+        aria-label="사진 올리기"
+        title="사진 올리기"
+        className={MOBILE_ACCOUNT_FALLBACK_ACTION_CLASS}
       >
-        사진 올리기
+        <FontFreeIcon name="camera_alt" size={20} />
+        <span className="sr-only">사진 올리기</span>
       </Link>
     </div>
   );
@@ -324,13 +332,13 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
       {/* ===== 모바일 사이드바 — 카테고리 라벨 + 구분선으로 그룹핑 ===== */}
       <div
         className={[
-          "fixed top-0 right-0 z-[70] h-full w-72 bg-white dark:bg-gray-900 shadow-2xl",
+          "fixed top-0 right-0 z-[70] flex h-full w-72 flex-col bg-white dark:bg-gray-900 shadow-2xl",
           "transform transition-transform duration-300 ease-in-out",
           isMobileMenuOpen ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
         {/* 사이드바 상단 — 닫기 버튼 */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex shrink-0 items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
           <span className="font-bold text-brand-navy-900 dark:text-white">메뉴</span>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
@@ -342,7 +350,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
         </div>
 
         {/* 사이드바 메뉴 — 순서: 학원 소개 → 수업 안내 → 소식/안내 → 수업찾기 */}
-        <nav className="py-2 overflow-y-auto" style={{ maxHeight: "calc(100% - 260px)" }}>
+        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2">
           {/* 학원 소개 — 독립 링크, 맨 앞 배치 */}
           <Link
             href="/about"
@@ -396,7 +404,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
         </nav>
 
         {/* 사이드바 하단 — 연락처 + CTA */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
+        <div className="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
           <MobileAccountControls onNavigate={() => setIsMobileMenuOpen(false)} />
           <Link
             href="/apply"

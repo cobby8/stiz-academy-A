@@ -9,6 +9,7 @@ export type FontFreeIconName =
   | "block"
   | "bookmark"
   | "calendar_today"
+  | "camera_alt"
   | "call"
   | "campaign"
   | "chat_bubble"
@@ -72,6 +73,7 @@ const PATHS: Record<FontFreeIconName, ReactElement> = {
   block: <path d="M18.4 5.6 5.6 18.4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />,
   bookmark: <path d="M7 4.5h10v15l-5-3-5 3z" />,
   calendar_today: <path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z" />,
+  camera_alt: <path d="M4 7.5h3l1.5-2h7l1.5 2h3v11H4zm8 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM17.5 10h.1" />,
   call: <path d="M7.5 4.5 10 9l-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2 4.5 2.5-1.5 3c-.4.8-1.3 1.2-2.2 1A17 17 0 0 1 3.5 8.7c-.2-.9.2-1.8 1-2.2z" />,
   campaign: <path d="M4 10v4h3l7 4V6l-7 4zm12-2.5v9m2-7v5" />,
   chat_bubble: <path d="M5 6.5h14v9H9l-4 3z" />,

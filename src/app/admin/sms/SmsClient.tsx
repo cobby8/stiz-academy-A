@@ -14,11 +14,12 @@ interface CoachPhone {
 // 수신자 모드: 전체 코치 / 선택 코치 / 직접 입력
 type RecipientMode = "all" | "select" | "manual";
 
-export default function SmsClient() {
+export default function SmsClient({ coaches: initialCoaches }: { coaches?: CoachPhone[] }) {
     const [pending, startTransition] = useTransition();
     // 코치 전화번호 목록 (서버에서 가져옴)
-    const [coaches, setCoaches] = useState<CoachPhone[]>([]);
-    const [loadingCoaches, setLoadingCoaches] = useState(true);
+    const hasInitialCoaches = initialCoaches !== undefined;
+    const [coaches, setCoaches] = useState<CoachPhone[]>(initialCoaches ?? []);
+    const [loadingCoaches, setLoadingCoaches] = useState(!hasInitialCoaches);
 
     // 수신자 모드
     const [mode, setMode] = useState<RecipientMode>("all");
@@ -36,11 +37,12 @@ export default function SmsClient() {
 
     // 페이지 로드 시 코치 전화번호 목록 조회
     useEffect(() => {
+        if (hasInitialCoaches) return;
         getCoachPhones()
             .then(setCoaches)
             .catch(() => {})
             .finally(() => setLoadingCoaches(false));
-    }, []);
+    }, [hasInitialCoaches]);
 
     // 체크박스 토글
     function toggleCoach(id: string) {

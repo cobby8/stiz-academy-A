@@ -127,6 +127,12 @@ async function getRecentStudents() {
     }
 }
 
+async function getSmsCoachPhones() {
+    return prisma.$queryRawUnsafe<{ id: string; name: string; role: string; phone: string }[]>(
+        `SELECT id, name, role, phone FROM "Coach" WHERE phone IS NOT NULL AND phone != '' ORDER BY "order" ASC`,
+    );
+}
+
 async function loadDashboardPayload() {
     const [
         stats,
@@ -503,6 +509,16 @@ export function getCachedAdminReportListPayload(limit: number) {
         { revalidate: 30, tags: ["admin-attendance-report", "admin-classes"] },
     )();
 }
+
+export const getCachedAdminSmsPayload = unstable_cache(
+    async () => {
+        const coaches = await getSmsCoachPhones();
+
+        return { coaches };
+    },
+    ["admin-sms-page-v1"],
+    { revalidate: 60, tags: ["admin-coaches"] },
+);
 
 export const getCachedAdminSchedulePayload = unstable_cache(
     async () => {

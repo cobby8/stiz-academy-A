@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getSkillCategories, getStudentSkills, getSkillHistory } from "@/lib/queries";
+import { getCachedAdminSkillsPayload } from "@/lib/adminReadPayloads";
+import { getStudentSkills, getSkillHistory } from "@/lib/queries";
 
 /**
  * GET /api/admin/skills?studentId=xxx
@@ -19,10 +20,9 @@ export async function GET(request: NextRequest) {
 
     const studentId = request.nextUrl.searchParams.get("studentId");
     if (!studentId) {
-        const categories = await getSkillCategories();
         return NextResponse.json(
-            { categories },
-            { headers: { "Cache-Control": "no-store" } },
+            await getCachedAdminSkillsPayload(),
+            { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
         );
     }
 

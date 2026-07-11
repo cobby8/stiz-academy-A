@@ -67,6 +67,10 @@ function revalidateFeedbackAdminCaches() {
     revalidateTag("admin-feedback", { expire: 0 });
 }
 
+function revalidateSkillAdminCaches() {
+    revalidateTag("admin-skills", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -3694,6 +3698,7 @@ export async function createSkillCategory(data: {
         console.error("Failed to create skill category:", e);
         throw new Error("카테고리 등록 실패");
     }
+    revalidateSkillAdminCaches();
     revalidatePath("/admin/skills");
 }
 
@@ -3745,6 +3750,7 @@ export async function updateSkillCategory(
         console.error("Failed to update skill category:", e);
         throw new Error("카테고리 수정 실패");
     }
+    revalidateSkillAdminCaches();
     revalidatePath("/admin/skills");
 }
 
@@ -3768,6 +3774,7 @@ export async function deleteSkillCategory(id: string) {
         console.error("Failed to delete skill category:", e);
         throw new Error("카테고리 삭제 실패");
     }
+    revalidateSkillAdminCaches();
     revalidatePath("/admin/skills");
 }
 
@@ -3798,6 +3805,7 @@ export async function recordSkillAssessment(
         console.error("Failed to record skill assessment:", e);
         throw new Error("스킬 평가 저장 실패");
     }
+    revalidateSkillAdminCaches();
     revalidatePath("/admin/skills");
     revalidatePath("/mypage/skills");
 }

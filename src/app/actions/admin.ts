@@ -63,6 +63,10 @@ function revalidateRequestAdminCaches() {
     revalidateTag("admin-dashboard", { expire: 0 });
 }
 
+function revalidateFeedbackAdminCaches() {
+    revalidateTag("admin-feedback", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -1498,6 +1502,7 @@ export async function createFeedback(data: {
         console.error("Failed to create feedback:", e);
         throw new Error("피드백 작성 실패");
     }
+    revalidateFeedbackAdminCaches();
     revalidatePath("/admin/feedback");
     revalidatePath("/mypage");
 }
@@ -1522,6 +1527,7 @@ export async function updateFeedback(id: string, data: {
         console.error("Failed to update feedback:", e);
         throw new Error("피드백 수정 실패");
     }
+    revalidateFeedbackAdminCaches();
     revalidatePath("/admin/feedback");
     revalidatePath("/mypage");
 }
@@ -1535,6 +1541,7 @@ export async function deleteFeedback(id: string) {
         console.error("Failed to delete feedback:", e);
         throw new Error("피드백 삭제 실패");
     }
+    revalidateFeedbackAdminCaches();
     revalidatePath("/admin/feedback");
     revalidatePath("/mypage");
 }

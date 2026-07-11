@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getAllFeedbacks } from "@/lib/queries";
+import { getCachedAdminFeedbackPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,11 @@ export async function GET() {
     }
 
     try {
-        const feedbacks = await getAllFeedbacks();
+        const payload = await getCachedAdminFeedbackPayload();
 
         return NextResponse.json(
-            { feedbacks },
-            { headers: { "Cache-Control": "no-store" } },
+            payload,
+            { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
         );
     } catch (error) {
         console.error("[api/admin/feedback] failed:", error);

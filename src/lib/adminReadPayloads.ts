@@ -5,6 +5,7 @@ import {
     getAnnualEvents,
     getAllCoaches,
     getAllFaqs,
+    getAllFeedbacks,
     getAllRequests,
     getAllTestimonials,
     getBillingTemplates,
@@ -467,6 +468,16 @@ export const getCachedAdminFaqPayload = unstable_cache(
     },
     ["admin-faq-v1"],
     { revalidate: 60, tags: ["admin-faq"] },
+);
+
+export const getCachedAdminFeedbackPayload = unstable_cache(
+    async () => {
+        const feedbacks = await getAllFeedbacks();
+
+        return { feedbacks };
+    },
+    ["admin-feedback-page-v1"],
+    { revalidate: 60, tags: ["admin-feedback"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

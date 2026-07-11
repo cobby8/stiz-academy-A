@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getSessionsForReportList } from "@/lib/queries";
+import { getCachedAdminReportListPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +15,11 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 50;
 
     try {
-        const sessions = await getSessionsForReportList(limit);
+        const payload = await getCachedAdminReportListPayload(limit);
 
         return NextResponse.json(
-            { sessions },
-            { headers: { "Cache-Control": "no-store" } },
+            payload,
+            { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
         );
     } catch (error) {
         console.error("[api/admin/attendance/report] failed:", error);

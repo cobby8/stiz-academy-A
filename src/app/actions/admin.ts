@@ -71,6 +71,10 @@ function revalidateSkillAdminCaches() {
     revalidateTag("admin-skills", { expire: 0 });
 }
 
+function revalidateAttendanceReportAdminCaches() {
+    revalidateTag("admin-attendance-report", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -2927,6 +2931,7 @@ export async function saveSessionReport(data: {
         throw new Error("리포트 저장 실패");
     }
     revalidatePath("/admin/attendance");
+    revalidateAttendanceReportAdminCaches();
     revalidatePath("/admin/attendance/report");
 }
 
@@ -2986,6 +2991,7 @@ export async function publishSessionReport(sessionId: string, publish: boolean) 
         throw new Error("리포트 발행 상태 변경 실패");
     }
     revalidatePath("/admin/attendance");
+    revalidateAttendanceReportAdminCaches();
     revalidatePath("/admin/attendance/report");
     revalidatePath("/mypage/reports");
 }
@@ -3022,6 +3028,7 @@ export async function saveStudentSessionNotes(
         console.error("Failed to save student session notes:", e);
         throw new Error("학생별 노트 저장 실패");
     }
+    revalidateAttendanceReportAdminCaches();
     revalidatePath("/admin/attendance/report");
 }
 

@@ -89,9 +89,10 @@ function ReportListErrorState({ onRetry }: { onRetry: () => void }) {
     );
 }
 
-export default function ReportListClient() {
-    const [sessions, setSessions] = useState<ReportSession[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function ReportListClient({ sessions: initialSessions }: { sessions?: ReportSession[] }) {
+    const hasInitialData = initialSessions !== undefined;
+    const [sessions, setSessions] = useState<ReportSession[]>(initialSessions ?? []);
+    const [loading, setLoading] = useState(!hasInitialData);
     const [loadError, setLoadError] = useState(false);
 
     const loadSessions = useCallback(async () => {
@@ -115,8 +116,9 @@ export default function ReportListClient() {
     }, []);
 
     useEffect(() => {
+        if (hasInitialData) return;
         void loadSessions();
-    }, [loadSessions]);
+    }, [hasInitialData, loadSessions]);
 
     if (loading && sessions.length === 0) {
         return <ReportListLoadingFallback />;

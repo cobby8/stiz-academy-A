@@ -1,6 +1,8 @@
 import { unstable_cache } from "next/cache";
 import {
     getAcademySettings,
+    getAllTestimonials,
+    getBillingTemplates,
     getClasses,
     getClassSlotOverrides,
     getCoaches,
@@ -12,6 +14,7 @@ import {
     getRecentPendingRequests,
     getPrograms,
     getSheetSlotCache,
+    getSmsTemplates,
     getStudents,
     getTrialLeads,
     getTrialStats,
@@ -195,6 +198,55 @@ export const getCachedAdminProgramsPayload = unstable_cache(
     },
     ["admin-programs-page-v1"],
     { revalidate: 60, tags: ["admin-programs"] },
+);
+
+export const getCachedAdminCoachesPayload = unstable_cache(
+    async () => {
+        const coaches = await getCoaches();
+
+        return { coaches };
+    },
+    ["admin-coaches-page-v1"],
+    { revalidate: 60, tags: ["admin-coaches"] },
+);
+
+export const getCachedAdminTestimonialsPayload = unstable_cache(
+    async () => {
+        const [testimonials, settings] = await Promise.all([
+            getAllTestimonials(),
+            getAcademySettings(),
+        ]);
+
+        return {
+            testimonials,
+            naverPlaceUrl: settings?.naverPlaceUrl || "",
+        };
+    },
+    ["admin-testimonials-page-v1"],
+    { revalidate: 60, tags: ["admin-testimonials", "academy-settings"] },
+);
+
+export const getCachedAdminBillingPayload = unstable_cache(
+    async () => {
+        const [templates, programs] = await Promise.all([
+            getBillingTemplates(),
+            getPrograms(),
+        ]);
+
+        return { templates, programs };
+    },
+    ["admin-finance-billing-page-v1"],
+    { revalidate: 60, tags: ["admin-finance-billing", "admin-programs"] },
+);
+
+export const getCachedAdminSmsTemplatesPayload = unstable_cache(
+    async () => {
+        const templates = await getSmsTemplates();
+
+        return { templates };
+    },
+    ["admin-sms-templates-page-v1"],
+    { revalidate: 60, tags: ["admin-sms-templates"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

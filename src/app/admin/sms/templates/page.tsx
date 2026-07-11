@@ -6,9 +6,12 @@
  */
 
 import SmsTemplateClient from "./SmsTemplateClient";
+import { getCachedAdminSmsTemplatesPayload } from "@/lib/adminReadPayloads";
 
 export const revalidate = 30;
 
-export default function SmsTemplatesPage() {
-    return <SmsTemplateClient />;
+export default async function SmsTemplatesPage() {
+    const { templates } = await getCachedAdminSmsTemplatesPayload();
+
+    return <SmsTemplateClient templates={templates} />;
 }

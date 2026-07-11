@@ -41,6 +41,10 @@ function revalidateCoachAdminCaches() {
     revalidateTag("admin-coach-options", { expire: 0 });
 }
 
+function revalidateTestimonialAdminCaches() {
+    revalidateTag("admin-testimonials", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -462,6 +466,7 @@ export async function updateNaverPlaceUrl(url: string) {
         throw new Error("네이버 플레이스 URL 저장에 실패했습니다.");
     }
     revalidateTag(ACADEMY_SETTINGS_CACHE_TAG, { expire: 0 });
+    revalidateTestimonialAdminCaches();
     revalidatePath("/admin/testimonials");
     revalidatePath("/");
 }
@@ -1602,6 +1607,7 @@ export async function createTestimonial(data: {
         console.error("Failed to create Testimonial:", e);
         throw new Error("후기 생성 실패");
     }
+    revalidateTestimonialAdminCaches();
     revalidatePath("/admin/testimonials");
     revalidatePath("/");
 }
@@ -1632,6 +1638,7 @@ export async function updateTestimonial(id: string, data: {
         console.error("Failed to update Testimonial:", e);
         throw new Error("후기 수정 실패");
     }
+    revalidateTestimonialAdminCaches();
     revalidatePath("/admin/testimonials");
     revalidatePath("/");
 }
@@ -1645,6 +1652,7 @@ export async function deleteTestimonial(id: string) {
         console.error("Failed to delete Testimonial:", e);
         throw new Error("후기 삭제 실패");
     }
+    revalidateTestimonialAdminCaches();
     revalidatePath("/admin/testimonials");
     revalidatePath("/");
 }

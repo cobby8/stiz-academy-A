@@ -5,6 +5,7 @@ import {
     getAllTestimonials,
     getBillingTemplates,
     getClasses,
+    getClassCapacityInfo,
     getClassSlotOverrides,
     getCoaches,
     getCustomClassSlots,
@@ -24,6 +25,7 @@ import {
     getStudents,
     getTrialLeads,
     getTrialStats,
+    getWaitlistAll,
 } from "@/lib/queries";
 import { prisma } from "@/lib/prisma";
 import { readPendingSocialPostDrafts } from "@/lib/socialDrafts";
@@ -328,6 +330,20 @@ export const getCachedAdminApplyPayload = unstable_cache(
     },
     ["admin-apply-v1"],
     { revalidate: 30, tags: ["admin-apply", "admin-classes"] },
+);
+
+export const getCachedAdminWaitlistPayload = unstable_cache(
+    async () => {
+        const [waitlist, capacityInfo, classes] = await Promise.all([
+            getWaitlistAll(),
+            getClassCapacityInfo(),
+            getClasses(),
+        ]);
+
+        return { waitlist, capacityInfo, classes };
+    },
+    ["admin-waitlist-v1"],
+    { revalidate: 30, tags: ["admin-waitlist", "admin-classes", "admin-students"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

@@ -1,53 +1,10 @@
 import { NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
-import {
-    getClassCapacityInfo,
-    getCoachWorkload,
-    getEnrollmentTrend,
-    getMonthlyAttendanceRate,
-    getMonthlyRevenue,
-    getPaymentCollectionRate,
-    getTrialStats,
-} from "@/lib/queries";
+import { getCachedAdminStatsPayload } from "@/lib/adminReadPayloads";
 
 const STATS_CACHE_HEADERS = {
     "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
 };
-
-const getCachedStats = unstable_cache(
-    async () => {
-        const [
-            monthlyRevenue,
-            monthlyAttendance,
-            enrollmentTrend,
-            classCapacity,
-            trialStats,
-            coachWorkload,
-            collectionRate,
-        ] = await Promise.all([
-            getMonthlyRevenue(12),
-            getMonthlyAttendanceRate(12),
-            getEnrollmentTrend(12),
-            getClassCapacityInfo(),
-            getTrialStats(),
-            getCoachWorkload(),
-            getPaymentCollectionRate(),
-        ]);
-
-        return {
-            monthlyRevenue,
-            monthlyAttendance,
-            enrollmentTrend,
-            classCapacity,
-            trialStats,
-            coachWorkload,
-            collectionRate,
-        };
-    },
-    ["admin-stats-v1"],
-    { revalidate: 60, tags: ["admin-stats"] },
-);
 
 export async function GET() {
     try {
@@ -57,7 +14,7 @@ export async function GET() {
     }
 
     try {
-        return NextResponse.json(await getCachedStats(), { headers: STATS_CACHE_HEADERS });
+        return NextResponse.json(await getCachedAdminStatsPayload(), { headers: STATS_CACHE_HEADERS });
     } catch (error) {
         console.error("[api/admin/stats] failed:", error);
         return NextResponse.json({ error: "Failed to load stats" }, { status: 500 });

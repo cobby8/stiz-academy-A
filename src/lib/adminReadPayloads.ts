@@ -8,17 +8,22 @@ import {
     getClassCapacityInfo,
     getClassSlotOverrides,
     getCoaches,
+    getCoachWorkload,
     getCustomClassSlots,
     getDashboardExtendedStats,
     getDashboardStats,
     getEnrollApplications,
     getEnrollApplicationStats,
+    getEnrollmentTrend,
     getPendingRequestCount,
     getRecentPendingRequests,
     getGalleryPosts,
     getMakeupSessions,
+    getMonthlyAttendanceRate,
+    getMonthlyRevenue,
     getPayments,
     getPaymentSummary,
+    getPaymentCollectionRate,
     getNotices,
     getPrograms,
     getSheetSlotCache,
@@ -358,6 +363,40 @@ export const getCachedAdminMakeupPayload = unstable_cache(
     },
     ["admin-makeup-v1"],
     { revalidate: 30, tags: ["admin-makeup", "admin-classes"] },
+);
+
+export const getCachedAdminStatsPayload = unstable_cache(
+    async () => {
+        const [
+            monthlyRevenue,
+            monthlyAttendance,
+            enrollmentTrend,
+            classCapacity,
+            trialStats,
+            coachWorkload,
+            collectionRate,
+        ] = await Promise.all([
+            getMonthlyRevenue(12),
+            getMonthlyAttendanceRate(12),
+            getEnrollmentTrend(12),
+            getClassCapacityInfo(),
+            getTrialStats(),
+            getCoachWorkload(),
+            getPaymentCollectionRate(),
+        ]);
+
+        return {
+            monthlyRevenue,
+            monthlyAttendance,
+            enrollmentTrend,
+            classCapacity,
+            trialStats,
+            coachWorkload,
+            collectionRate,
+        };
+    },
+    ["admin-stats-v1"],
+    { revalidate: 60, tags: ["admin-stats"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

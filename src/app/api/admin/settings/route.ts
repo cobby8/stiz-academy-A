@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getAcademySettings } from "@/lib/queries";
+import { getCachedAdminSettingsPayload } from "@/lib/adminReadPayloads";
 
 const SETTINGS_CACHE_HEADERS = {
     "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
@@ -14,10 +14,8 @@ export async function GET() {
     }
 
     try {
-        const settings = await getAcademySettings();
-
         return NextResponse.json(
-            { settings, fetchError: false },
+            await getCachedAdminSettingsPayload(),
             { headers: SETTINGS_CACHE_HEADERS },
         );
     } catch (error) {

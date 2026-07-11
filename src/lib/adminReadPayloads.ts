@@ -427,6 +427,20 @@ export const getCachedAdminRequestsPayload = unstable_cache(
     { revalidate: 30, tags: ["admin-requests"] },
 );
 
+export const getCachedAdminSettingsPayload = unstable_cache(
+    async () => {
+        try {
+            const settings = await getAcademySettings();
+
+            return { settings, fetchError: false };
+        } catch {
+            return { settings: null, fetchError: true };
+        }
+    },
+    ["admin-settings-page-v1"],
+    { revalidate: 60, tags: ["academy-settings"] },
+);
+
 export const getCachedAdminSchedulePayload = unstable_cache(
     async () => {
         const settings = await (getAcademySettings() as Promise<any>);

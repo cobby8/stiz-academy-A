@@ -4,6 +4,7 @@ import {
     getAcademySettings,
     getAnnualEvents,
     getAllCoaches,
+    getAllFaqs,
     getAllRequests,
     getAllTestimonials,
     getBillingTemplates,
@@ -456,6 +457,16 @@ export const getCachedAdminAnnualPayload = unstable_cache(
     },
     ["admin-annual-v1"],
     { revalidate: 60, tags: ["admin-annual", "academy-settings"] },
+);
+
+export const getCachedAdminFaqPayload = unstable_cache(
+    async () => {
+        const faqs = await getAllFaqs();
+
+        return { faqs };
+    },
+    ["admin-faq-v1"],
+    { revalidate: 60, tags: ["admin-faq"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

@@ -53,6 +53,11 @@ function revalidateNoticeAdminCaches() {
     revalidateTag("admin-notices", { expire: 0 });
 }
 
+function revalidateStaffAdminCaches() {
+    revalidateTag("admin-staff", { expire: 0 });
+    revalidateTag("admin-coaches", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -4323,6 +4328,7 @@ export async function createStaffUser(data: {
         throw new Error((e as Error).message || "스태프 생성 실패");
     }
 
+    revalidateStaffAdminCaches();
     revalidatePath("/admin/staff");
 }
 
@@ -4354,6 +4360,7 @@ export async function updateUserRole(userId: string, newRole: "ADMIN" | "VICE_AD
         throw new Error((e as Error).message || "역할 변경 실패");
     }
 
+    revalidateStaffAdminCaches();
     revalidatePath("/admin/staff");
 }
 
@@ -4401,6 +4408,7 @@ export async function linkCoachToUser(userId: string, coachId: string | null) {
         throw new Error((e as Error).message || "코치 연결 실패");
     }
 
+    revalidateStaffAdminCaches();
     revalidatePath("/admin/staff");
 }
 
@@ -4509,6 +4517,7 @@ export async function inviteStaff(data: {
             `[STIZ 농구교실] ${data.name}님, 스태프 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
         ).catch(() => {}); // SMS 실패해도 초대는 유효
 
+        revalidateStaffAdminCaches();
         revalidatePath("/admin/staff");
         return { token };
     } catch (e) {
@@ -4540,6 +4549,7 @@ export async function cancelInvitation(invitationId: string) {
         throw new Error((e as Error).message || "초대 취소 실패");
     }
 
+    revalidateStaffAdminCaches();
     revalidatePath("/admin/staff");
 }
 
@@ -4586,6 +4596,7 @@ export async function resendInvitation(invitationId: string) {
             `[STIZ 농구교실] ${inv.name}님, 스태프 초대 링크를 재발송합니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
         );
 
+        revalidateStaffAdminCaches();
         revalidatePath("/admin/staff");
         return { ok: true };
     } catch (e) {

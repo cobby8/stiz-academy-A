@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { getInstagramRuntimeStatus } from "@/lib/instagram";
 import {
     getAcademySettings,
+    getAllCoaches,
     getAllTestimonials,
     getBillingTemplates,
     getClasses,
@@ -28,6 +29,8 @@ import {
     getPrograms,
     getSheetSlotCache,
     getSmsTemplates,
+    getStaffInvitations,
+    getStaffUsers,
     getStudents,
     getTrialLeads,
     getTrialStats,
@@ -397,6 +400,20 @@ export const getCachedAdminStatsPayload = unstable_cache(
     },
     ["admin-stats-v1"],
     { revalidate: 60, tags: ["admin-stats"] },
+);
+
+export const getCachedAdminStaffPayload = unstable_cache(
+    async () => {
+        const [staffUsers, coaches, invitations] = await Promise.all([
+            getStaffUsers(),
+            getAllCoaches(),
+            getStaffInvitations(),
+        ]);
+
+        return { staffUsers, coaches, invitations };
+    },
+    ["admin-staff-v1"],
+    { revalidate: 60, tags: ["admin-staff", "admin-coaches"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

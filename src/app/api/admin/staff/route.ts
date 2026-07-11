@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getAllCoaches, getStaffInvitations, getStaffUsers } from "@/lib/queries";
+import { getCachedAdminStaffPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
 
@@ -12,17 +12,13 @@ export async function GET() {
     }
 
     try {
-        const [staffUsers, coaches, invitations] = await Promise.all([
-            getStaffUsers(),
-            getAllCoaches(),
-            getStaffInvitations(),
-        ]);
+        const payload = await getCachedAdminStaffPayload();
 
         return NextResponse.json(
-            { staffUsers, coaches, invitations },
+            payload,
             {
                 headers: {
-                    "Cache-Control": "no-store",
+                    "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
                 },
             },
         );

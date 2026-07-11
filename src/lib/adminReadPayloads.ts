@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { getInstagramRuntimeStatus } from "@/lib/instagram";
 import {
     getAcademySettings,
+    getAnnualEvents,
     getAllCoaches,
     getAllRequests,
     getAllTestimonials,
@@ -439,6 +440,22 @@ export const getCachedAdminSettingsPayload = unstable_cache(
     },
     ["admin-settings-page-v1"],
     { revalidate: 60, tags: ["academy-settings"] },
+);
+
+export const getCachedAdminAnnualPayload = unstable_cache(
+    async () => {
+        const [events, settings] = await Promise.all([
+            getAnnualEvents(),
+            getAcademySettings(),
+        ]);
+
+        return {
+            events,
+            initialIcsUrl: settings?.googleCalendarIcsUrl || "",
+        };
+    },
+    ["admin-annual-v1"],
+    { revalidate: 60, tags: ["admin-annual", "academy-settings"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

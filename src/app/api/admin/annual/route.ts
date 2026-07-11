@@ -1,25 +1,8 @@
 import { NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
-import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings, getAnnualEvents } from "@/lib/queries";
+import { getCachedAdminAnnualPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
-
-const getCachedAnnualPayload = unstable_cache(
-    async () => {
-        const [events, settings] = await Promise.all([
-            getAnnualEvents(),
-            getAcademySettings(),
-        ]);
-
-        return {
-            events,
-            initialIcsUrl: settings?.googleCalendarIcsUrl || "",
-        };
-    },
-    ["admin-annual-v1"],
-    { revalidate: 60, tags: ["admin-annual", ACADEMY_SETTINGS_CACHE_TAG] },
-);
 
 export async function GET() {
     try {
@@ -29,11 +12,11 @@ export async function GET() {
     }
 
     try {
-        const payload = await getCachedAnnualPayload();
+        const payload = await getCachedAdminAnnualPayload();
 
         return NextResponse.json(
             payload,
-            { headers: { "Cache-Control": "no-store" } },
+            { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
         );
     } catch (error) {
         console.error("[api/admin/annual] failed:", error);

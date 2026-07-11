@@ -3,6 +3,7 @@ import { getInstagramRuntimeStatus } from "@/lib/instagram";
 import {
     getAcademySettings,
     getAllCoaches,
+    getAllRequests,
     getAllTestimonials,
     getBillingTemplates,
     getClasses,
@@ -414,6 +415,16 @@ export const getCachedAdminStaffPayload = unstable_cache(
     },
     ["admin-staff-v1"],
     { revalidate: 60, tags: ["admin-staff", "admin-coaches"] },
+);
+
+export const getCachedAdminRequestsPayload = unstable_cache(
+    async () => {
+        const requests = await getAllRequests();
+
+        return { requests };
+    },
+    ["admin-requests-page-v1"],
+    { revalidate: 30, tags: ["admin-requests"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

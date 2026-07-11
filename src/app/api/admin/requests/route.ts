@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getAllRequests } from "@/lib/queries";
+import { getCachedAdminRequestsPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,11 @@ export async function GET() {
     }
 
     try {
-        const requests = await getAllRequests();
+        const payload = await getCachedAdminRequestsPayload();
 
         return NextResponse.json(
-            { requests },
-            { headers: { "Cache-Control": "no-store" } },
+            payload,
+            { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
         );
     } catch (error) {
         console.error("[api/admin/requests] failed:", error);

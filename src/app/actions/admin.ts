@@ -58,6 +58,11 @@ function revalidateStaffAdminCaches() {
     revalidateTag("admin-coaches", { expire: 0 });
 }
 
+function revalidateRequestAdminCaches() {
+    revalidateTag("admin-requests", { expire: 0 });
+    revalidateTag("admin-dashboard", { expire: 0 });
+}
+
 function revalidateClassAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
     revalidateTag("admin-students", { expire: 0 });
@@ -1395,6 +1400,7 @@ export async function createParentRequest(data: {
     }
     revalidatePath("/mypage");
     revalidatePath("/admin");
+    revalidateRequestAdminCaches();
     revalidatePath("/admin/requests");
 }
 
@@ -1428,6 +1434,7 @@ export async function updateRequestStatus(id: string, status: string, adminNote?
         console.error("Failed to update request status:", e);
         throw new Error("요청 상태 변경 실패");
     }
+    revalidateRequestAdminCaches();
     revalidatePath("/admin/requests");
     revalidatePath("/admin");
     revalidatePath("/mypage");
@@ -1442,6 +1449,7 @@ export async function deleteParentRequest(id: string) {
         console.error("Failed to delete parent request:", e);
         throw new Error("요청 삭제 실패");
     }
+    revalidateRequestAdminCaches();
     revalidatePath("/admin/requests");
     revalidatePath("/admin");
     revalidatePath("/mypage");

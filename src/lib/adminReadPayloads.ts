@@ -16,6 +16,7 @@ import {
     getPendingRequestCount,
     getRecentPendingRequests,
     getGalleryPosts,
+    getMakeupSessions,
     getPayments,
     getPaymentSummary,
     getNotices,
@@ -344,6 +345,19 @@ export const getCachedAdminWaitlistPayload = unstable_cache(
     },
     ["admin-waitlist-v1"],
     { revalidate: 30, tags: ["admin-waitlist", "admin-classes", "admin-students"] },
+);
+
+export const getCachedAdminMakeupPayload = unstable_cache(
+    async () => {
+        const [sessions, classes] = await Promise.all([
+            getMakeupSessions(),
+            getClasses(),
+        ]);
+
+        return { sessions, classes };
+    },
+    ["admin-makeup-v1"],
+    { revalidate: 30, tags: ["admin-makeup", "admin-classes"] },
 );
 
 export const getCachedAdminSchedulePayload = unstable_cache(

@@ -62,6 +62,7 @@ type DashboardData = {
     extendedStats: ExtendedStats;
     todayClasses: TodayClass[];
     recentStudents: RecentStudent[];
+    todayLabel?: string;
 };
 
 type SystemStatusData = {
@@ -181,16 +182,23 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
     );
 }
 
-export default function AdminDashboardClient() {
-    const [data, setData] = useState<DashboardData | null>(null);
-    const [loading, setLoading] = useState(true);
+export default function AdminDashboardClient({
+    initialData,
+    hydrateFullData = false,
+}: {
+    initialData?: DashboardData;
+    hydrateFullData?: boolean;
+}) {
+    const hasInitialData = initialData !== undefined;
+    const [data, setData] = useState<DashboardData | null>(initialData ?? null);
+    const [loading, setLoading] = useState(!hasInitialData);
     const [error, setError] = useState<string | null>(null);
     const [systemStatus, setSystemStatus] = useState<SystemStatusData | null>(null);
     const [systemLoading, setSystemLoading] = useState(false);
     const [systemError, setSystemError] = useState(false);
 
-    const loadDashboard = useCallback(async () => {
-        setLoading(true);
+    const loadDashboard = useCallback(async (showSkeleton = true) => {
+        if (showSkeleton) setLoading(true);
         setError(null);
 
         try {
@@ -200,7 +208,7 @@ export default function AdminDashboardClient() {
         } catch {
             setError("failed");
         } finally {
-            setLoading(false);
+            if (showSkeleton) setLoading(false);
         }
     }, []);
 
@@ -220,8 +228,18 @@ export default function AdminDashboardClient() {
     }, []);
 
     useEffect(() => {
-        void loadDashboard();
-    }, [loadDashboard]);
+        if (!hasInitialData) {
+            void loadDashboard(true);
+            return;
+        }
+        if (!hydrateFullData) return;
+
+        const timer = window.setTimeout(() => {
+            void loadDashboard(false);
+        }, 1200);
+
+        return () => window.clearTimeout(timer);
+    }, [hasInitialData, hydrateFullData, loadDashboard]);
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
@@ -231,7 +249,7 @@ export default function AdminDashboardClient() {
             </div>
 
             {loading && !data && <DashboardPrimarySkeleton />}
-            {!loading && !data && error && <ErrorState onRetry={loadDashboard} />}
+            {!loading && !data && error && <ErrorState onRetry={() => void loadDashboard(true)} />}
             {data && (
                 <DashboardContent
                     data={data}
@@ -264,7 +282,7 @@ function DashboardContent({
         : extendedStats.thisMonthRevenue > 0 ? 100 : 0;
     const maxRevenue = Math.max(...extendedStats.monthlyRevenue.map((m) => m.amount), 1);
     const dayLabels: Record<string, string> = { Sun: "일", Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토" };
-    const todayLabel = dayLabels[["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()]] + "요일";
+    const todayLabel = data.todayLabel ?? `${dayLabels[["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()]]}요일`;
 
     return (
         <>

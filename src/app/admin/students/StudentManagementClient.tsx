@@ -65,6 +65,8 @@ const DAY_ORDER: Record<string, number> = {
     Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
 };
 
+const STUDENT_PAGE_SIZE = 50;
+
 // 요일 전체 라벨 (수강 등록 모달에서 사용)
 const DAY_FULL_LABELS: Record<string, string> = {
     Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일",
@@ -273,6 +275,7 @@ export default function StudentManagementClient({
     }, [hasInitialData, loadData]);
     // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
     const [filterStatus, setFilterStatus] = useState("ACTIVE");
+    const [visibleLimit, setVisibleLimit] = useState(STUDENT_PAGE_SIZE);
 
     // 필터 선택지: 학생 데이터에서 고유값 추출 (useMemo로 캐싱)
     const gradeOptions = useMemo(() => {
@@ -447,6 +450,16 @@ export default function StudentManagementClient({
         result.sort((a, b) => a.name.localeCompare(b.name, "ko"));
         return result;
     }, [students, search, filterClass, filterGrade, filterSchool, filterStatus]);
+
+    useEffect(() => {
+        setVisibleLimit(STUDENT_PAGE_SIZE);
+    }, [search, filterClass, filterGrade, filterSchool, filterStatus]);
+
+    const visibleStudents = useMemo(
+        () => filtered.slice(0, visibleLimit),
+        [filtered, visibleLimit],
+    );
+    const hasMoreStudents = visibleStudents.length < filtered.length;
 
     if (dataLoading && students.length === 0) {
         return (
@@ -752,7 +765,7 @@ export default function StudentManagementClient({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {filtered.map((s) => (
+                                {visibleStudents.map((s) => (
                                     <tr key={s.id} className="hover:bg-gray-50 dark:bg-gray-900 transition-colors">
                                         {/* 이름: 항상 표시, 클릭하면 상세 페이지로 이동 */}
                                         <td className="px-4 py-2">
@@ -837,6 +850,20 @@ export default function StudentManagementClient({
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                    <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                            {filtered.length}명 중 {visibleStudents.length}명 표시
+                        </span>
+                        {hasMoreStudents && (
+                            <button
+                                type="button"
+                                onClick={() => setVisibleLimit((current) => current + STUDENT_PAGE_SIZE)}
+                                className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                            >
+                                50명 더 보기
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

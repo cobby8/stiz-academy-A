@@ -1,9 +1,9 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 관리자 프로그램/시간표 본문 지연 제거
+- 작업명: 관리자 대시보드/원생 관리 1차 속도 개선
 - 상태: 구현 및 검증 완료, 커밋 준비 중
-- 범위: `/admin/programs`, `/admin/schedule`, 관리자 읽기 payload 공용화
+- 범위: `/admin`, `/admin/students`, 관리자 읽기 payload 공용화
 - 기준일: 2026-07-11
 
 ## 진행 현황표
@@ -19,9 +19,13 @@
 | 관리자 읽기 API 캐시 | 완료 | dashboard/finance/stats/content/operation API 서버 캐시 적용 |
 | 주요 메뉴 초기 데이터 주입 | 완료 | students/classes/trial 첫 진입 API 재호출 제거 |
 | 프로그램/시간표 본문 지연 제거 | 완료 | programs/schedule 첫 진입 API 재호출 제거 |
+| 대시보드 초기 렌더 경량화 | 완료 | 무거운 월별 통계/최근 목록은 첫 화면 후 백그라운드 로딩 |
+| 원생 목록 렌더 제한 | 완료 | 최초 50명만 그린 뒤 필요 시 더 보기 |
 | 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-11: `/admin` 콜드 진입이 약 25초까지 느린 것을 운영 탭에서 확인하고, 대시보드는 가벼운 핵심 요약을 먼저 렌더링한 뒤 월별 통계/최근 목록을 백그라운드에서 채우도록 분리.
+- 2026-07-11: `/admin/students`가 DOM 3천 개 이상과 버튼 700개 이상을 한 번에 그려 느려지는 것을 확인하고, 초기 렌더는 50명만 표시하며 “50명 더 보기”로 점진 표시하도록 변경.
 - 2026-07-11: 운영 관리자 탭에서 `/admin/programs`, `/admin/schedule`가 셸은 1초대에 뜨지만 본문은 약 5초 뒤 붙는 것을 확인하고, 서버 캐시 payload를 첫 렌더링에 주입해 추가 API 왕복을 제거.
 - 2026-07-11: `/admin/students`, `/admin/classes`, `/admin/trial` 페이지가 서버에서 캐시된 초기 데이터를 받아 렌더링하도록 바꾸고, 첫 진입 시 같은 API를 클라이언트에서 다시 호출하던 왕복을 제거.
 - 2026-07-11: DB 계측 결과 SQL 자체보다 반복 API/auth/왕복 비용이 병목에 가까워, 전역 `trial-count` 자동 조회 제거 및 운영 데이터 API 6개에 서버 캐시 적용.
@@ -32,14 +36,15 @@
 - 2026-07-11: 관리자 공통 헤더의 알림 자동 조회와 DDL/index 자동 보장 호출 제거.
 
 ## 구현 기록
-- 변경 파일: `src/lib/adminReadPayloads.ts`, `src/app/admin/programs/page.tsx`, `src/app/admin/schedule/page.tsx`
-- 주요 변경: 프로그램/시간표 관리자 페이지가 서버에서 캐시된 초기 데이터를 받아 렌더링하도록 했다.
-- 의도: 브라우저가 JS 실행 후 `/api/admin/programs`, `/api/admin/schedule`를 다시 기다리던 구간을 없애 관리자 본문 표시를 앞당긴다.
+- 변경 파일: `src/lib/adminReadPayloads.ts`, `src/app/admin/page.tsx`, `src/app/admin/AdminDashboardClient.tsx`, `src/app/api/admin/dashboard/route.ts`, `src/app/admin/students/StudentManagementClient.tsx`
+- 주요 변경: 대시보드 첫 화면 payload를 핵심 요약과 상세 통계로 나누고, 원생 목록은 최초 50명만 렌더링하도록 했다.
+- 의도: 선생님이 바로 보는 화면은 먼저 띄우고, 무거운 통계/긴 목록은 필요할 때 조금씩 붙여 관리자 체감 속도를 개선한다.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit` 통과
-- 운영 탭 계측: 기존 `/admin/programs`, `/admin/schedule`는 셸 표시 후 본문이 약 5초 뒤 표시됨
+- `npm.cmd run build` 통과. 로컬 네트워크에서 Supabase pooler 접속 경고가 출력됐지만 빌드는 exit code 0으로 완료됨.
+- 운영 탭 계측: 기존 `/admin` 콜드 진입 약 25초, `/admin/students` DOM 3,142개/버튼 737개로 확인
 
 ## 다음에 할 것
-- 배포 후 실제 로그인 세션에서 `/admin/programs`, `/admin/schedule` 본문 표시 시간이 줄었는지 재측정.
-- 남은 느린 화면은 “초기 데이터가 필요한 화면”과 “클릭할 때만 필요한 보조 데이터”로 더 분리.
+- 배포 후 실제 로그인 세션에서 `/admin`, `/admin/students` 체감 표시 시간이 줄었는지 재측정.
+- 남은 느린 화면은 “처음 꼭 보여야 하는 데이터”와 “필요할 때만 보는 보조 데이터”로 더 분리.

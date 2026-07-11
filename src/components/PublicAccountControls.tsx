@@ -18,6 +18,11 @@ const DESKTOP_LOGOUT_CLASS = [
   "dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
 ].join(" ");
 
+const MOBILE_SECONDARY_ACTION_CLASS = [
+  "flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold",
+  "text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
+].join(" ");
+
 function useAccountState() {
   const [appRole, setAppRole] = useState<AppRole | null>(null);
 
@@ -46,18 +51,25 @@ function useAccountState() {
         : appRole === "PARENT"
           ? "마이페이지"
           : "로그인";
+  const canAccessAdmin = appRole === "ADMIN" || appRole === "VICE_ADMIN";
 
-  return { accountHref, accountLabel, isLoggedIn: appRole !== null };
+  return { accountHref, accountLabel, canAccessAdmin, isLoggedIn: appRole !== null };
 }
 
 export function DesktopAccountControls() {
-  const { accountHref, accountLabel, isLoggedIn } = useAccountState();
+  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn } = useAccountState();
 
   return (
     <>
       <Link href={accountHref} className={DESKTOP_ACCOUNT_CLASS}>
         {accountLabel}
       </Link>
+
+      {canAccessAdmin && (
+        <Link href="/staff/quick-post" className={DESKTOP_LOGOUT_CLASS}>
+          사진 올리기
+        </Link>
+      )}
 
       {isLoggedIn && (
         <form action={logout} className="hidden md:block">
@@ -71,7 +83,7 @@ export function DesktopAccountControls() {
 }
 
 export function MobileAccountControls({ onNavigate }: { onNavigate?: () => void }) {
-  const { accountHref, accountLabel, isLoggedIn } = useAccountState();
+  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn } = useAccountState();
 
   return (
     <div className="grid grid-cols-2 gap-2 mb-3">
@@ -82,11 +94,16 @@ export function MobileAccountControls({ onNavigate }: { onNavigate?: () => void 
       >
         {accountLabel}
       </Link>
-      {isLoggedIn ? (
+
+      {canAccessAdmin ? (
+        <Link href="/staff/quick-post" onClick={onNavigate} className={MOBILE_SECONDARY_ACTION_CLASS}>
+          사진 올리기
+        </Link>
+      ) : isLoggedIn ? (
         <form action={logout}>
           <button
             type="submit"
-            className="flex min-h-11 w-full items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+            className={`${MOBILE_SECONDARY_ACTION_CLASS} w-full`}
           >
             로그아웃
           </button>
@@ -95,10 +112,18 @@ export function MobileAccountControls({ onNavigate }: { onNavigate?: () => void 
         <Link
           href="/staff/quick-post"
           onClick={onNavigate}
-          className="flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+          className={MOBILE_SECONDARY_ACTION_CLASS}
         >
           사진 올리기
         </Link>
+      )}
+
+      {canAccessAdmin && (
+        <form action={logout} className="col-span-2">
+          <button type="submit" className={`${MOBILE_SECONDARY_ACTION_CLASS} w-full`}>
+            로그아웃
+          </button>
+        </form>
       )}
     </div>
   );

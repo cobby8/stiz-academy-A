@@ -108,6 +108,12 @@ type ScheduleImportResult = {
     success: boolean;
     batchId: string | null;
     imported: number;
+    classSync: {
+        created: number;
+        updated: number;
+        skipped: number;
+        errors: string[];
+    };
     summary: ScheduleSlotImportPlan["summary"];
     issues: ScheduleSlotImportIssue[];
     message: string;
@@ -518,9 +524,33 @@ export default function ScheduleAdminModals({
                                 )}
 
                                 {scheduleImportResult && (
-                                    <p className={scheduleImportResult.success ? "mt-3 text-xs font-bold text-emerald-700 dark:text-emerald-300" : "mt-3 text-xs font-bold text-red-700 dark:text-red-300"}>
-                                        {scheduleImportResult.message}
-                                    </p>
+                                    <div className="mt-3 space-y-2">
+                                        <p className={scheduleImportResult.success ? "text-xs font-bold text-emerald-700 dark:text-emerald-300" : "text-xs font-bold text-red-700 dark:text-red-300"}>
+                                            {scheduleImportResult.message}
+                                        </p>
+                                        <div className="grid grid-cols-3 gap-2 text-xs">
+                                            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+                                                <p className="font-bold text-gray-500 dark:text-gray-400">반 생성</p>
+                                                <p className="font-black text-gray-900 dark:text-white">{scheduleImportResult.classSync.created}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+                                                <p className="font-bold text-gray-500 dark:text-gray-400">반 갱신</p>
+                                                <p className="font-black text-gray-900 dark:text-white">{scheduleImportResult.classSync.updated}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+                                                <p className="font-bold text-gray-500 dark:text-gray-400">건너뜀</p>
+                                                <p className="font-black text-gray-900 dark:text-white">{scheduleImportResult.classSync.skipped}</p>
+                                            </div>
+                                        </div>
+                                        {scheduleImportResult.classSync.errors.slice(0, 3).map((error, index) => (
+                                            <p
+                                                key={`${error}-${index}`}
+                                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
+                                            >
+                                                {error}
+                                            </p>
+                                        ))}
+                                    </div>
                                 )}
 
                                 {scheduleImportError && (

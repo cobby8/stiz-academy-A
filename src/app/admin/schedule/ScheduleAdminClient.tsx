@@ -121,6 +121,12 @@ type ScheduleImportResult = {
     success: boolean;
     batchId: string | null;
     imported: number;
+    classSync: {
+        created: number;
+        updated: number;
+        skipped: number;
+        errors: string[];
+    };
     summary: ScheduleSlotImportPlan["summary"];
     issues: ScheduleSlotImportIssue[];
     message: string;

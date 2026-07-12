@@ -17,9 +17,17 @@ type ImportActionResult = {
     success: boolean;
     batchId: string | null;
     imported: number;
+    classSync: ClassSyncResult;
     summary: ScheduleSlotImportPlan["summary"];
     issues: ScheduleSlotImportIssue[];
     message: string;
+};
+
+type ClassSyncResult = {
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: string[];
 };
 
 function normalizeBool(value: unknown): boolean {
@@ -169,6 +177,80 @@ async function upsertScheduleSlot(row: ScheduleSlotImportRow, batchId: string) {
     );
 }
 
+function getClassNameFromScheduleSlot(row: ScheduleSlotImportRow): string {
+    if (row.label?.trim()) return row.label.trim();
+    if (row.period != null) {
+        return `${row.dayLabel ?? row.dayKey} ${row.period}교시`;
+    }
+    return `${row.dayLabel ?? row.dayKey} ${row.startTime}`;
+}
+
+async function syncImportedScheduleSlotsToClasses(
+    rows: ScheduleSlotImportRow[],
+    validProgramIds: Set<string>,
+): Promise<ClassSyncResult> {
+    const result: ClassSyncResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+
+    for (const row of rows) {
+        if (row.isHidden || !row.programId || !validProgramIds.has(row.programId)) {
+            result.skipped++;
+            continue;
+        }
+
+        const className = getClassNameFromScheduleSlot(row);
+
+        try {
+            const existingRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM "Class" WHERE "slotKey" = $1 LIMIT 1`,
+                row.slotKey,
+            );
+
+            if (existingRows.length > 0) {
+                await prisma.$executeRawUnsafe(
+                    `UPDATE "Class" SET
+                        "programId" = $1,
+                        name = $2,
+                        "dayOfWeek" = $3,
+                        "startTime" = $4,
+                        "endTime" = $5,
+                        capacity = $6,
+                        "updatedAt" = NOW()
+                     WHERE "slotKey" = $7`,
+                    row.programId,
+                    className,
+                    row.dayKey,
+                    row.startTime,
+                    row.endTime,
+                    row.capacity,
+                    row.slotKey,
+                );
+                result.updated++;
+                continue;
+            }
+
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "Class" (
+                    id, "programId", name, "dayOfWeek", "startTime", "endTime",
+                    capacity, "slotKey", "createdAt", "updatedAt"
+                ) VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+                row.programId,
+                className,
+                row.dayKey,
+                row.startTime,
+                row.endTime,
+                row.capacity,
+                row.slotKey,
+            );
+            result.created++;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            result.errors.push(`${className}(${row.slotKey}) Class 연결 실패: ${message}`);
+        }
+    }
+
+    return result;
+}
+
 export async function previewLegacyScheduleSlotImport(): Promise<ScheduleSlotImportPlan> {
     await requireAdmin();
     const inputs = await loadLegacyScheduleInputs();
@@ -207,6 +289,7 @@ export async function importLegacyScheduleSlotsToDb(): Promise<ImportActionResul
             success: false,
             batchId,
             imported: 0,
+            classSync: { created: 0, updated: 0, skipped: 0, errors: [] },
             summary: plan.summary,
             issues: plan.issues,
             message: "오류가 있어 새 시간표 DB에는 반영하지 않았습니다.",
@@ -217,16 +300,23 @@ export async function importLegacyScheduleSlotsToDb(): Promise<ImportActionResul
         await upsertScheduleSlot(row, batchId);
     }
 
+    const classSync = await syncImportedScheduleSlotsToClasses(plan.slots, inputs.validProgramIds);
+
     revalidatePath("/admin/schedule");
     revalidatePath("/schedule");
     revalidatePath("/simulator");
+    revalidatePath("/admin/classes");
+    revalidatePath("/admin/students");
 
     return {
-        success: true,
+        success: classSync.errors.length === 0,
         batchId,
         imported: plan.slots.length,
+        classSync,
         summary: plan.summary,
         issues: plan.issues,
-        message: `${plan.slots.length}개 시간표 슬롯을 새 DB 원본으로 이관했습니다.`,
+        message: classSync.errors.length === 0
+            ? `${plan.slots.length}개 시간표 슬롯을 새 DB 원본으로 이관하고, ${classSync.created + classSync.updated}개 운영 반을 연결했습니다.`
+            : `${plan.slots.length}개 시간표 슬롯은 이관했지만, 운영 반 연결에 일부 실패했습니다.`,
     };
 }

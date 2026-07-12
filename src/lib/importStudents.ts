@@ -22,6 +22,7 @@ export interface RawCsvRow {
   rowNumber: number;         // CSV 원본 행 번호 (디버깅용)
   branch: string;            // 지점 (1호점/2호점)
   name: string;              // 학생 이름
+  gender: string | null;     // 학생 성별
   birthDate: string | null;  // 생년월일 ("2016. 8. 22" 형태)
   phone: string | null;      // 학생 전화번호
   parentName: string | null; // 학부모 이름
@@ -48,6 +49,7 @@ export interface TransformedStudent {
   // 학생 정보
   name: string;
   birthDate: Date | null;
+  gender: string | null;
   phone: string | null;
   school: string | null;
   grade: string | null;
@@ -71,6 +73,59 @@ export interface TransformedStudent {
   // 원본 행 번호 (디버깅용)
   rowNumber: number;
   branch: string;
+}
+
+export interface StudentRegistrationSheetRow {
+  rowNumber: number;
+  raw: Record<string, string>;
+  rowHash: string;
+  studentKey: string | null;
+  branch: string | null;
+  applicationAt: Date | null;
+  paymentDate: Date | null;
+  registrationMonth: string | null;
+  studentName: string;
+  studentGender: string | null;
+  grade: string | null;
+  uniformStatus: string | null;
+  paymentMethod: string | null;
+  paymentAmount: number | null;
+  tuitionAmount: number | null;
+  shuttleFee: number | null;
+  carryOverAmount: number | null;
+  shuttleNeeded: boolean;
+  shuttlePickup: string | null;
+  shuttlePreferredTime: string | null;
+  shuttleDropoff: string | null;
+  selectedSlotKeys: string[];
+  birthDate: Date | null;
+  parentName: string | null;
+  studentPhone: string | null;
+  parentPhone: string | null;
+  address: string | null;
+  school: string | null;
+  basketballExp: string | null;
+  hopeNote: string | null;
+  referralSource: string | null;
+  agreedPrivacy: boolean;
+  agreedTerms: boolean;
+  agreementJSON: Record<string, string | boolean>;
+  enrollmentPeriod: string | null;
+  status: "ACTIVE" | "PAUSED" | "WITHDRAWN";
+}
+
+export interface StudentRegistrationSheetParseResult {
+  headers: string[];
+  rows: StudentRegistrationSheetRow[];
+  summary: {
+    totalRows: number;
+    uniqueStudentKeys: number;
+    missingStudentKeyRows: number;
+    activeCount: number;
+    pausedCount: number;
+    withdrawnCount: number;
+  };
+  errors: { rowNumber: number; reason: string }[];
 }
 
 /** 이관 미리보기 결과 */
@@ -176,6 +231,38 @@ function parseSpreadsheetDate(raw: string | null): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
+function parseLooseDate(raw: string | null): Date | null {
+  if (!raw || !raw.trim()) return null;
+  const direct = parseSpreadsheetDate(raw);
+  if (direct) return direct;
+
+  const cleaned = raw.trim();
+  const koreanDateTime = cleaned.match(
+    /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})(?:\s+(오전|오후|AM|PM)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?/i
+  );
+  if (koreanDateTime) {
+    const [, y, m, d, meridiem, hh = "0", mm = "0", ss = "0"] = koreanDateTime;
+    let hour = Number(hh);
+    const marker = (meridiem || "").toUpperCase();
+    if ((marker === "오후" || marker === "PM") && hour < 12) hour += 12;
+    if ((marker === "오전" || marker === "AM") && hour === 12) hour = 0;
+    return new Date(Number(y), Number(m) - 1, Number(d), hour, Number(mm), Number(ss));
+  }
+
+  const parsed = new Date(cleaned);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseYearMonth(raw: string | null): { year: number | null; month: number | null } {
+  if (!raw || !raw.trim()) return { year: null, month: null };
+  const match = raw.trim().match(/(?:(\d{4})\s*년?)?\s*(\d{1,2})\s*월/);
+  if (!match) return { year: null, month: null };
+  return {
+    year: match[1] ? Number(match[1]) : null,
+    month: Number(match[2]),
+  };
+}
+
 /**
  * 결제방법 문자열에서 수강 상태를 분리
  * - "휴원" → PAUSED
@@ -185,8 +272,8 @@ function parseSpreadsheetDate(raw: string | null): Date | null {
 function extractStatus(paymentMethod: string | null): "ACTIVE" | "PAUSED" | "WITHDRAWN" {
   if (!paymentMethod) return "ACTIVE";
   const trimmed = paymentMethod.trim();
-  if (trimmed === "휴원") return "PAUSED";
-  if (trimmed === "퇴원") return "WITHDRAWN";
+  if (trimmed.includes("휴원")) return "PAUSED";
+  if (trimmed.includes("퇴원")) return "WITHDRAWN";
   return "ACTIVE";
 }
 
@@ -255,6 +342,50 @@ function parseAmount(raw: string | null): number | null {
   const cleaned = raw.replace(/[,\s원]/g, "");
   const num = Number(cleaned);
   return isNaN(num) ? null : num;
+}
+
+function normalizePhone(raw: string | null): string {
+  return (raw || "").replace(/[^0-9]/g, "");
+}
+
+function cleanString(raw: string | null | undefined): string | null {
+  const value = (raw || "").trim();
+  return value ? value : null;
+}
+
+function findHeaderValue(record: Record<string, string>, ...labels: string[]) {
+  for (const label of labels) {
+    if (record[label] != null) return record[label];
+  }
+  const normalized = Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [key.replace(/\s+/g, ""), value])
+  );
+  for (const label of labels) {
+    const value = normalized[label.replace(/\s+/g, "")];
+    if (value != null) return value;
+  }
+  return "";
+}
+
+function toAgreementBool(raw: string | null | undefined): boolean {
+  const value = (raw || "").trim();
+  if (!value) return false;
+  return /(동의|확인|예|yes|true|y)/i.test(value) && !/(미동의|거부|아니오|false|n)/i.test(value);
+}
+
+function toShuttleNeeded(raw: string | null | undefined): boolean {
+  const value = (raw || "").trim();
+  if (!value) return false;
+  if (/(미탑승|안함|없음|아니오|no|false)/i.test(value)) return false;
+  return /(탑승|이용|희망|예|yes|true)/i.test(value);
+}
+
+function stableHash(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(16);
 }
 
 // ──────────────────────────────────────────────
@@ -329,6 +460,7 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
         rowNumber,
         branch: (row[colIndex.branch] || "").trim(),
         name,
+        gender: colIndex.gender !== -1 ? row[colIndex.gender] || null : null,
         birthDate: row[colIndex.birthDate] || null,
         phone: row[colIndex.phone] || null,
         parentName: row[colIndex.parentName] || null,
@@ -342,8 +474,12 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
         referralSource: row[colIndex.referralSource] || null,
         uniformStatus: row[colIndex.uniformStatus] || null,
         classSelections: colIndex.dayColumns.map((idx) => row[idx] || ""),
-        year: colIndex.year !== -1 ? Number(row[colIndex.year]) || null : null,
-        month: colIndex.month !== -1 ? Number(row[colIndex.month]) || null : null,
+        year: colIndex.year !== -1
+          ? Number(row[colIndex.year]) || null
+          : parseYearMonth(colIndex.registrationMonth !== -1 ? row[colIndex.registrationMonth] || null : null).year,
+        month: colIndex.month !== -1
+          ? Number(row[colIndex.month]) || null
+          : parseYearMonth(colIndex.registrationMonth !== -1 ? row[colIndex.registrationMonth] || null : null).month,
       });
     } catch (err) {
       errors.push({
@@ -402,6 +538,7 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
       parentPhone: parentPhone || "00000000000",
       name: best.name,
       birthDate: parseSpreadsheetDate(best.birthDate),
+      gender: best.gender?.trim() || null,
       phone: best.phone?.trim() || null,
       school: best.school?.trim() || null,
       grade: best.grade?.trim() || null,
@@ -441,6 +578,7 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
 interface ColumnIndices {
   branch: number;
   name: number;
+  gender: number;
   birthDate: number;
   phone: number;
   parentName: number;
@@ -453,6 +591,7 @@ interface ColumnIndices {
   amount: number;
   referralSource: number;
   uniformStatus: number;
+  registrationMonth: number;
   year: number;
   month: number;
   dayColumns: number[]; // 요일별 수업선택 컬럼 인덱스들
@@ -468,6 +607,7 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
   const result: ColumnIndices = {
     branch: -1,
     name: -1,
+    gender: -1,
     birthDate: -1,
     phone: -1,
     parentName: -1,
@@ -480,6 +620,7 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
     amount: -1,
     referralSource: -1,
     uniformStatus: -1,
+    registrationMonth: -1,
     year: -1,
     month: -1,
     dayColumns: [],
@@ -492,6 +633,10 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
     // 지점
     if (h.includes("지점") || h.includes("호점") || lower.includes("branch")) {
       result.branch = i;
+    }
+    // 성별
+    else if (h.includes("성별") || lower.includes("gender")) {
+      result.gender = i;
     }
     // 이름 (학생 이름) — "이름" 포함하되 "부모"/"보호자"/"학부모" 미포함
     else if (
@@ -550,7 +695,7 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
       result.paymentMethod = i;
     }
     // 금액
-    else if (h.includes("금액") || h.includes("수강료") || h.includes("납부액")) {
+    else if (h.includes("결제액") || h.includes("금액") || h.includes("수강료") || h.includes("납부액")) {
       result.amount = i;
     }
     // 가입경로
@@ -560,6 +705,10 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
     // 유니폼
     else if (h.includes("유니폼") || h.includes("복장")) {
       result.uniformStatus = i;
+    }
+    // 수강신청 월
+    else if (h.includes("수강신청") && h.includes("월")) {
+      result.registrationMonth = i;
     }
     // 연도
     else if (h === "연도" || h === "년도" || lower === "year") {
@@ -576,4 +725,131 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
   }
 
   return result;
+}
+
+export function parseRegistrationSheetCsv(csvText: string): StudentRegistrationSheetParseResult {
+  const rows = parseCsvText(csvText);
+  if (rows.length < 2) {
+    return {
+      headers: rows[0] ?? [],
+      rows: [],
+      summary: {
+        totalRows: 0,
+        uniqueStudentKeys: 0,
+        missingStudentKeyRows: 0,
+        activeCount: 0,
+        pausedCount: 0,
+        withdrawnCount: 0,
+      },
+      errors: [{ rowNumber: 0, reason: "데이터가 없거나 헤더만 있습니다." }],
+    };
+  }
+
+  const headers = rows[0].map((header, index) => header.trim() || `__col_${index + 1}`);
+  const errors: { rowNumber: number; reason: string }[] = [];
+  const parsedRows: StudentRegistrationSheetRow[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.some((cell) => cell.trim())) continue;
+    const rowNumber = i + 1;
+
+    try {
+      const raw = headers.reduce<Record<string, string>>((acc, header, index) => {
+        acc[header] = row[index] || "";
+        return acc;
+      }, {});
+      const studentNameRaw = findHeaderValue(raw, "수강생 이름", "이름", "성명").trim();
+      const studentName = studentNameRaw || "(이름 없음)";
+      if (!studentNameRaw) {
+        errors.push({
+          rowNumber,
+          reason: "수강생 이름이 비어 있어 원본 행만 저장됩니다.",
+        });
+      }
+
+      const parentPhone = normalizePhone(findHeaderValue(raw, "학부모 전화번호(숫자만)", "학부모 전화번호", "보호자 전화번호"));
+      const studentPhone = normalizePhone(findHeaderValue(raw, "수강생 전화번호(숫자만)", "수강생 전화번호", "학생 전화번호"));
+      const parentName = cleanString(findHeaderValue(raw, "학부모 이름", "보호자 이름"));
+      const paymentMethod = cleanString(findHeaderValue(raw, "결제방법", "결제수단"));
+      const enrollmentPeriod = cleanString(findHeaderValue(raw, "재원기간"));
+      const selectedSlotKeys = extractSlotKeys(
+        headers.filter((header) => /\[?[월화수목금토일]요일\]?/.test(header)),
+        headers.filter((header) => /\[?[월화수목금토일]요일\]?/.test(header)).map((header) => raw[header] || "")
+      );
+      const privacyRaw = findHeaderValue(raw, "개인정보수집 동의", "개인정보 수집 동의");
+      const termsRaw = findHeaderValue(raw, "이용약관");
+      const noticeRaw = findHeaderValue(raw, "수강신청확정 안내");
+      const cautionRaw = findHeaderValue(raw, "주의사항 확인 및 동의");
+      const statusText = [paymentMethod, enrollmentPeriod].filter(Boolean).join(" ");
+      const rowHash = stableHash(JSON.stringify(raw));
+
+      parsedRows.push({
+        rowNumber,
+        raw,
+        rowHash,
+        studentKey: studentNameRaw && parentPhone ? `${studentNameRaw}__${parentPhone}` : null,
+        branch: cleanString(findHeaderValue(raw, "지점을 선택해주세요", "지점")),
+        applicationAt: parseLooseDate(findHeaderValue(raw, "타임스탬프")),
+        paymentDate: parseLooseDate(findHeaderValue(raw, "결제일")),
+        registrationMonth: cleanString(findHeaderValue(raw, "수강신청 월")),
+        studentName,
+        studentGender: cleanString(findHeaderValue(raw, "수강생 성별", "성별")),
+        grade: cleanString(findHeaderValue(raw, "학년", " 학년")),
+        uniformStatus: cleanString(findHeaderValue(raw, "유니폼")),
+        paymentMethod,
+        paymentAmount: parseAmount(findHeaderValue(raw, "결제액")),
+        tuitionAmount: parseAmount(findHeaderValue(raw, "수강료")),
+        shuttleFee: parseAmount(findHeaderValue(raw, "셔틀비")),
+        carryOverAmount: parseAmount(findHeaderValue(raw, "이월")),
+        shuttleNeeded: toShuttleNeeded(findHeaderValue(raw, "셔틀탑승 여부")),
+        shuttlePickup: cleanString(findHeaderValue(raw, "탑승 장소")),
+        shuttlePreferredTime: cleanString(findHeaderValue(raw, "탑승 희망 시간")),
+        shuttleDropoff: cleanString(findHeaderValue(raw, "하차 장소")),
+        selectedSlotKeys,
+        birthDate: parseSpreadsheetDate(findHeaderValue(raw, "수강생 생년월일", "생년월일")),
+        parentName,
+        studentPhone: studentPhone || null,
+        parentPhone: parentPhone || null,
+        address: cleanString(findHeaderValue(raw, "주소")),
+        school: cleanString(findHeaderValue(raw, "학교명", "학교")),
+        basketballExp: cleanString(findHeaderValue(raw, "농구경험")),
+        hopeNote: cleanString(findHeaderValue(raw, "바라는 점")),
+        referralSource: cleanString(findHeaderValue(raw, "가입경로")),
+        agreedPrivacy: toAgreementBool(privacyRaw),
+        agreedTerms: toAgreementBool(termsRaw),
+        agreementJSON: {
+          privacy: privacyRaw,
+          confirmationNotice: noticeRaw,
+          terms: termsRaw,
+          caution: cautionRaw,
+          privacyAgreed: toAgreementBool(privacyRaw),
+          termsAgreed: toAgreementBool(termsRaw),
+          cautionAgreed: toAgreementBool(cautionRaw),
+        },
+        enrollmentPeriod,
+        status: extractStatus(statusText),
+      });
+    } catch (err) {
+      errors.push({
+        rowNumber,
+        reason: err instanceof Error ? err.message : "등록 행 파싱 실패",
+      });
+    }
+  }
+
+  const studentKeys = new Set(parsedRows.map((row) => row.studentKey).filter(Boolean));
+  return {
+    headers,
+    rows: parsedRows,
+    summary: {
+      totalRows: parsedRows.length,
+      uniqueStudentKeys: studentKeys.size,
+      missingStudentKeyRows: parsedRows.filter((row) => !row.studentKey).length,
+      activeCount: parsedRows.filter((row) => row.status === "ACTIVE").length,
+      pausedCount: parsedRows.filter((row) => row.status === "PAUSED").length,
+      withdrawnCount: parsedRows.filter((row) => row.status === "WITHDRAWN").length,
+    },
+    errors,
+  };
 }

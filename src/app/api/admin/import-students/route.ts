@@ -16,13 +16,16 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import {
   parseAndTransformCsv,
+  parseRegistrationSheetCsv,
+  type StudentRegistrationSheetRow,
   type TransformedStudent,
 } from "@/lib/importStudents";
 
 export async function POST(request: NextRequest) {
   // 관리자 인증 확인
+  let adminUser: Awaited<ReturnType<typeof requireAdmin>>;
   try {
-    await requireAdmin();
+    adminUser = await requireAdmin();
   } catch {
     return NextResponse.json({ error: "인증 필요" }, { status: 401 });
   }
@@ -43,10 +46,18 @@ export async function POST(request: NextRequest) {
 
     // CSV 파싱 및 변환
     const preview = parseAndTransformCsv(csvText);
+    const registrationSheet = parseRegistrationSheetCsv(csvText);
 
     // 미리보기 모드: 파싱 결과만 반환
     if (mode === "preview") {
-      return NextResponse.json({ preview });
+      return NextResponse.json({
+        preview,
+        registrationSheet: {
+          summary: registrationSheet.summary,
+          headers: registrationSheet.headers,
+          errors: registrationSheet.errors,
+        },
+      });
     }
 
     // 실행 모드: DB에 삽입
@@ -57,8 +68,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await ensureStudentSheetImportTablesAvailable();
     const result = await executeImport(preview.students);
-    return NextResponse.json({ result, preview: { summary: preview.summary } });
+    const sheetImport = await storeRegistrationSheetImport(registrationSheet.rows, {
+      importedBy: adminUser.appUserId,
+      sourceUrl: null,
+      spreadsheetId: null,
+      spreadsheetTitle: "수강생 등록 CSV",
+      summary: registrationSheet.summary,
+      parseErrorCount: registrationSheet.errors.length,
+    });
+
+    return NextResponse.json({
+      result: { ...result, sheetImport },
+      preview: { summary: preview.summary },
+      registrationSheet: { summary: registrationSheet.summary },
+    });
   } catch (err) {
     console.error("[import-students] 오류:", err);
     return NextResponse.json(
@@ -81,6 +106,15 @@ interface ImportResult {
   created: { users: number; students: number; enrollments: number; payments: number };
   skipped: { users: number; students: number; enrollments: number; payments: number };
   failed: { rowNumber: number; name: string; reason: string }[];
+}
+
+interface RegistrationSheetImportMeta {
+  importedBy: string;
+  sourceUrl: string | null;
+  spreadsheetId: string | null;
+  spreadsheetTitle: string | null;
+  summary: unknown;
+  parseErrorCount: number;
 }
 
 /**
@@ -202,8 +236,8 @@ async function findOrCreateStudent(
   await prisma.$executeRawUnsafe(
     `INSERT INTO "Student" (
       id, name, "birthDate", "parentId", phone, school, grade, address,
-      "enrollDate", "referralSource", "uniformStatus", "createdAt", "updatedAt"
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())`,
+      "enrollDate", "referralSource", "uniformStatus", gender, "createdAt", "updatedAt"
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())`,
     id,
     s.name,
     birthDate,
@@ -214,7 +248,8 @@ async function findOrCreateStudent(
     s.address || null,
     s.enrollDate || null,
     s.referralSource || null,
-    s.uniformStatus || null
+    s.uniformStatus || null,
+    s.gender || null
   );
 
   result.created.students++;
@@ -318,4 +353,265 @@ async function createPaymentIfNeeded(
   );
 
   result.created.payments++;
+}
+
+async function ensureStudentSheetImportTablesAvailable() {
+  const rows = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(
+    `SELECT to_regclass('"StudentSheetImportBatch"') IS NOT NULL
+        AND to_regclass('"StudentSheetRawRow"') IS NOT NULL
+        AND to_regclass('"StudentRegistrationLedger"') IS NOT NULL
+        AND to_regclass('"StudentShuttleRide"') IS NOT NULL
+        AND to_regclass('"StudentChangeLog"') IS NOT NULL
+        AND to_regclass('"StudentTeamRosterEntry"') IS NOT NULL
+        AND to_regclass('"StudentSheetImportIssue"') IS NOT NULL
+      AS exists`
+  );
+
+  if (!rows[0]?.exists) {
+    throw new Error("수강생 시트 이관 DB 테이블이 아직 적용되지 않았습니다. prisma/sql/add_student_sheet_import.sql을 먼저 적용해주세요.");
+  }
+}
+
+async function storeRegistrationSheetImport(
+  rows: StudentRegistrationSheetRow[],
+  meta: RegistrationSheetImportMeta
+) {
+  const batchRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `INSERT INTO "StudentSheetImportBatch" (
+       id, source, "spreadsheetId", "spreadsheetTitle", "sourceUrl", "importedBy",
+       status, "totalRows", "registrationRows", "errorRows", "rawSummaryJSON",
+       message, "createdAt"
+     )
+     VALUES (
+       gen_random_uuid()::text, 'GOOGLE_SHEETS_CSV', $1, $2, $3, $4,
+       'RUNNING', $5, $6, $7, $8, '등록 탭 CSV 이관 진행', NOW()
+     )
+     RETURNING id`,
+    meta.spreadsheetId,
+    meta.spreadsheetTitle,
+    meta.sourceUrl,
+    meta.importedBy,
+    rows.length,
+    rows.length,
+    meta.parseErrorCount,
+    JSON.stringify(meta.summary)
+  );
+
+  const batchId = batchRows[0]?.id;
+  if (!batchId) {
+    throw new Error("수강생 시트 이관 배치를 생성하지 못했습니다.");
+  }
+
+  let rawRows = 0;
+  let ledgerRows = 0;
+  let issues = meta.parseErrorCount;
+
+  for (const row of rows) {
+    const studentId = await findStudentIdForRegistration(row);
+    const rawJSON = JSON.stringify(row.raw);
+    const normalizedJSON = JSON.stringify({
+      studentKey: row.studentKey,
+      branch: row.branch,
+      registrationMonth: row.registrationMonth,
+      selectedSlotKeys: row.selectedSlotKeys,
+      paymentAmount: row.paymentAmount,
+      tuitionAmount: row.tuitionAmount,
+      shuttleFee: row.shuttleFee,
+      carryOverAmount: row.carryOverAmount,
+      shuttleNeeded: row.shuttleNeeded,
+      status: row.status,
+    });
+
+    const rawRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
+      `INSERT INTO "StudentSheetRawRow" (
+         id, "batchId", "sheetName", "rowNumber", "rowHash", "studentKey",
+         "studentId", "rawJSON", "normalizedJSON", "createdAt"
+       )
+       VALUES (gen_random_uuid()::text, $1, '등록', $2, $3, $4, $5, $6, $7, NOW())
+       RETURNING id`,
+      batchId,
+      row.rowNumber,
+      row.rowHash,
+      row.studentKey,
+      studentId,
+      rawJSON,
+      normalizedJSON
+    );
+    rawRows++;
+
+    const rawRowId = rawRow[0]?.id ?? null;
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentRegistrationLedger" (
+         id, "batchId", "rawRowId", "studentId", "rowNumber", "studentKey",
+         branch, "applicationAt", "paymentDate", "registrationMonth",
+         "studentName", "studentGender", grade, "uniformStatus", "paymentMethod",
+         "paymentAmount", "tuitionAmount", "shuttleFee", "carryOverAmount",
+         "shuttleNeeded", "shuttlePickup", "shuttlePreferredTime", "shuttleDropoff",
+         "selectedSlotKeysJSON", "birthDate", "parentName", "studentPhone", "parentPhone",
+         address, school, "basketballExp", "hopeNote", "referralSource",
+         "agreedPrivacy", "agreedTerms", "agreementJSON", "enrollmentPeriod",
+         status, "rawJSON", "createdAt", "updatedAt"
+       )
+       VALUES (
+         gen_random_uuid()::text, $1, $2, $3, $4, $5,
+         $6, $7, $8, $9,
+         $10, $11, $12, $13, $14,
+         $15, $16, $17, $18,
+         $19, $20, $21, $22,
+         $23, $24, $25, $26, $27,
+         $28, $29, $30, $31, $32,
+         $33, $34, $35, $36,
+         $37, $38, NOW(), NOW()
+       )`,
+      batchId,
+      rawRowId,
+      studentId,
+      row.rowNumber,
+      row.studentKey,
+      row.branch,
+      row.applicationAt,
+      row.paymentDate,
+      row.registrationMonth,
+      row.studentName,
+      row.studentGender,
+      row.grade,
+      row.uniformStatus,
+      row.paymentMethod,
+      row.paymentAmount,
+      row.tuitionAmount,
+      row.shuttleFee,
+      row.carryOverAmount,
+      row.shuttleNeeded,
+      row.shuttlePickup,
+      row.shuttlePreferredTime,
+      row.shuttleDropoff,
+      JSON.stringify(row.selectedSlotKeys),
+      row.birthDate,
+      row.parentName,
+      row.studentPhone,
+      row.parentPhone,
+      row.address,
+      row.school,
+      row.basketballExp,
+      row.hopeNote,
+      row.referralSource,
+      row.agreedPrivacy,
+      row.agreedTerms,
+      JSON.stringify(row.agreementJSON),
+      row.enrollmentPeriod,
+      row.status,
+      rawJSON
+    );
+    ledgerRows++;
+
+    if (studentId) {
+      await updateStudentFromRegistrationRow(studentId, rawRowId, row);
+    } else {
+      await createImportIssue(
+        batchId,
+        "등록",
+        row.rowNumber,
+        "WARNING",
+        row.studentKey
+          ? "원본 등록 행은 저장했지만 기존/신규 Student와 연결하지 못했습니다."
+          : "원본 등록 행은 저장했지만 학생 이름 또는 학부모 전화번호가 부족해 Student 연결키를 만들지 못했습니다.",
+        rawJSON
+      );
+      issues++;
+    }
+  }
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "StudentSheetImportBatch"
+     SET status = 'COMPLETED',
+         "totalRows" = $2,
+         "registrationRows" = $3,
+         "errorRows" = $4,
+         message = $5,
+         "completedAt" = NOW()
+     WHERE id = $1`,
+    batchId,
+    rows.length,
+    ledgerRows,
+    issues,
+    `등록 원본 ${rawRows}행, 등록 원장 ${ledgerRows}행 저장 완료`
+  );
+
+  return { batchId, rawRows, registrationRows: ledgerRows, issues };
+}
+
+async function findStudentIdForRegistration(row: StudentRegistrationSheetRow) {
+  if (!row.studentName || !row.parentPhone) return null;
+  const found = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT s.id
+     FROM "Student" s
+     INNER JOIN "User" u ON u.id = s."parentId"
+     WHERE s.name = $1
+       AND regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g') = $2
+     LIMIT 1`,
+    row.studentName,
+    row.parentPhone
+  );
+  return found[0]?.id ?? null;
+}
+
+async function updateStudentFromRegistrationRow(
+  studentId: string,
+  rawRowId: string | null,
+  row: StudentRegistrationSheetRow
+) {
+  await prisma.$executeRawUnsafe(
+    `UPDATE "Student"
+     SET branch = COALESCE($2, branch),
+         gender = COALESCE($3, gender),
+         phone = COALESCE($4, phone),
+         school = COALESCE($5, school),
+         grade = COALESCE($6, grade),
+         address = COALESCE($7, address),
+         "birthDate" = COALESCE($8::timestamp, "birthDate"),
+         "referralSource" = COALESCE($9, "referralSource"),
+         "uniformStatus" = COALESCE($10, "uniformStatus"),
+         "basketballExp" = COALESCE($11, "basketballExp"),
+         "hopeNote" = COALESCE($12, "hopeNote"),
+         "agreementsJSON" = $13,
+         "sourceImportRowId" = COALESCE($14, "sourceImportRowId"),
+         "updatedAt" = NOW()
+     WHERE id = $1`,
+    studentId,
+    row.branch,
+    row.studentGender,
+    row.studentPhone,
+    row.school,
+    row.grade,
+    row.address,
+    row.birthDate,
+    row.referralSource,
+    row.uniformStatus,
+    row.basketballExp,
+    row.hopeNote,
+    JSON.stringify(row.agreementJSON),
+    rawRowId
+  );
+}
+
+async function createImportIssue(
+  batchId: string,
+  sheetName: string,
+  rowNumber: number,
+  severity: "WARNING" | "ERROR",
+  message: string,
+  rawJSON: string
+) {
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "StudentSheetImportIssue" (
+       id, "batchId", "sheetName", "rowNumber", severity, message, "rawJSON", "createdAt"
+     )
+     VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW())`,
+    batchId,
+    sheetName,
+    rowNumber,
+    severity,
+    message,
+    rawJSON
+  );
 }

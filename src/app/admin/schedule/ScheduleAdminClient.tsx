@@ -557,7 +557,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                             className={`flex items-center gap-1 px-3 py-2 text-sm font-bold transition-colors ${
                                 adminViewMode === "edit"
                                     ? "bg-brand-navy-900 text-white"
-                                    : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:bg-gray-900"
+                                    : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
                             }`}
                         >
                             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>edit</span>
@@ -568,7 +568,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                             className={`flex items-center gap-1 px-3 py-2 text-sm font-bold transition-colors ${
                                 adminViewMode === "table"
                                     ? "bg-brand-navy-900 text-white"
-                                    : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:bg-gray-900"
+                                    : "bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
                             }`}
                         >
                             <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>table_chart</span>
@@ -577,11 +577,11 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                     </div>
                     <button
                         onClick={() => { setSheetUrlInput(sheetUrl || ""); setShowSheetModal(true); }}
-                        className={`bg-white dark:bg-gray-800 border text-sm font-bold px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 ${hasSheetUrl ? "border-green-300 text-green-800 hover:bg-green-50" : "border-amber-300 text-amber-800 hover:bg-amber-50"}`}
+                        className={`bg-white border text-sm font-bold px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 dark:bg-gray-800 ${hasSheetUrl ? "border-green-300 text-green-800 hover:bg-green-50 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10" : "border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"}`}
                     >
                         <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>link</span>
                         구글시트 연동{hasSheetUrl ? " " : " 설정"}
-                        {hasSheetUrl && <span className="material-symbols-outlined text-green-600" style={{ fontSize: "16px" }}>check_circle</span>}
+                        {hasSheetUrl && <span className="material-symbols-outlined text-green-600 dark:text-emerald-300" style={{ fontSize: "16px" }}>check_circle</span>}
                     </button>
                 </div>
             </div>
@@ -589,7 +589,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
             {/* 표 보기 모드 — 공개 시간표 미리보기 (편집 불가) */}
             {adminViewMode === "table" && (
                 <div className="space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                         <span className="font-bold">미리보기 모드</span> — 학부모에게 보이는 시간표와 동일한 표 형태입니다. 편집하려면 "편집" 버튼을 눌러주세요.
                     </div>
                     <ScheduleTableView slots={mergedSlotsForTable} />
@@ -597,12 +597,12 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
             )}
 
             {adminViewMode === "edit" && !hasSheetUrl && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                     <p className="font-bold mb-1">구글시트 URL이 설정되지 않았습니다.</p>
                     <p>
                         <button
                             onClick={() => setShowSheetModal(true)}
-                            className="underline font-medium hover:text-amber-900"
+                            className="underline font-medium hover:text-amber-900 dark:hover:text-amber-200"
                         >
                             구글시트 연동 설정
                         </button>
@@ -628,7 +628,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                     </div>
 
                     {/* 수업 카드 목록 — 컴팩트 한 줄 카드 */}
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-gray-100 dark:divide-gray-700">
                         {/* 시트 슬롯 — 클릭하면 편집 모달 열림 */}
                         {sheetByDay[dayKey].map((slot) => {
                             const s = getState(slot.slotKey);
@@ -642,7 +642,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                                     key={slot.slotKey}
                                     type="button"
                                     onClick={() => setEditingSlotKey(slot.slotKey)}
-                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:bg-gray-900 transition-colors flex items-center gap-3 group"
+                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800 transition-colors flex items-center gap-3 group"
                                 >
                                     {/* 교시 뱃지 */}
                                     <span className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">
@@ -665,21 +665,21 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
 
                                     {/* 학년 범위 */}
                                     {slot.gradeRange && (
-                                        <span className="bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
+                                        <span className="bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 shrink-0 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                                             {slot.gradeRange}
                                         </span>
                                     )}
 
                                     {/* 인원 현황 */}
                                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                                        isFull ? "bg-red-100 text-red-700" : "bg-green-50 text-green-700"
+                                        isFull ? "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300" : "bg-green-50 text-green-700 dark:bg-emerald-500/10 dark:text-emerald-300"
                                     }`}>
                                         {slot.enrolled}/{s.capacity}명{isFull && " 마감"}
                                     </span>
 
                                     {/* 코치 */}
                                     {assignedCoach && (
-                                        <span className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-300 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full shrink-0">
+                                        <span className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-300 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full shrink-0 dark:border-orange-500/30 dark:bg-orange-500/10">
                                             {assignedCoach.imageUrl && <img src={assignedCoach.imageUrl} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />}
                                             {assignedCoach.name}
                                         </span>
@@ -687,7 +687,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
 
                                     {/* 숨김 상태 표시 */}
                                     {s.isHidden && (
-                                        <span className="flex items-center gap-0.5 text-[11px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full shrink-0">
+                                        <span className="flex items-center gap-0.5 text-[11px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full shrink-0 dark:text-gray-300">
                                             <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>visibility_off</span>
                                             숨김
                                         </span>
@@ -718,7 +718,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                                     key={`custom-${cs.id}`}
                                     type="button"
                                     onClick={() => startEditCustom(cs)}
-                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:bg-gray-900 transition-colors flex items-center gap-3 group"
+                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800 transition-colors flex items-center gap-3 group"
                                 >
                                     {/* 커스텀 뱃지 */}
                                     <span className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0">
@@ -735,21 +735,21 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
 
                                     {/* 학년 범위 */}
                                     {cs.gradeRange && (
-                                        <span className="bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
+                                        <span className="bg-blue-50 text-blue-700 text-[11px] font-bold px-2 py-0.5 rounded-full border border-blue-200 shrink-0 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                                             {cs.gradeRange}
                                         </span>
                                     )}
 
                                     {/* 인원 현황 */}
                                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                                        isFull ? "bg-red-100 text-red-700" : "bg-green-50 text-green-700"
+                                        isFull ? "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300" : "bg-green-50 text-green-700 dark:bg-emerald-500/10 dark:text-emerald-300"
                                     }`}>
                                         {cs.enrolled}/{cs.capacity}명{isFull && " 마감"}
                                     </span>
 
                                     {/* 코치 */}
                                     {cs.coach && (
-                                        <span className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-300 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full shrink-0">
+                                        <span className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-300 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full shrink-0 dark:border-orange-500/30 dark:bg-orange-500/10">
                                             {cs.coach.imageUrl && <img src={cs.coach.imageUrl} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />}
                                             {cs.coach.name}
                                         </span>
@@ -757,7 +757,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
 
                                     {/* 숨김 상태 */}
                                     {cs.isHidden && (
-                                        <span className="flex items-center gap-0.5 text-[11px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full shrink-0">
+                                        <span className="flex items-center gap-0.5 text-[11px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full shrink-0 dark:text-gray-300">
                                             <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>visibility_off</span>
                                             숨김
                                         </span>

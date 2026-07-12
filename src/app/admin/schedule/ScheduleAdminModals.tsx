@@ -172,7 +172,7 @@ export default function ScheduleAdminModals({
                                     {DAY_LABEL[editingSheetSlot.dayKey]} {editingSheetSlot.startTime} ~ {editingSheetSlot.endTime}
                                 </span>
                                 {editingSheetSlot.gradeRange && (
-                                    <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                                    <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                                         {editingSheetSlot.gradeRange}
                                     </span>
                                 )}
@@ -282,7 +282,7 @@ export default function ScheduleAdminModals({
                                         )}
                                     </div>
                                     {coaches.length === 0 && (
-                                        <p className="text-xs text-amber-600 mt-1">등록된 코치가 없습니다. <a href="/admin/coaches" className="underline">코치 추가</a></p>
+                                        <p className="text-xs text-amber-600 mt-1 dark:text-amber-300">등록된 코치가 없습니다. <a href="/admin/coaches" className="underline">코치 추가</a></p>
                                     )}
                                 </div>
 
@@ -317,7 +317,7 @@ export default function ScheduleAdminModals({
                         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-b-2xl">
                             <div className="flex items-center gap-2">
                                 {editingSheetState.error && <span className="text-xs text-red-500 flex items-center gap-1"><span className="material-symbols-outlined" style={{ fontSize: "14px" }}>error</span>{editingSheetState.error}</span>}
-                                {editingSheetState.saved && !editingSheetState.dirty && <span className="text-xs text-green-600 font-medium flex items-center gap-1"><span className="material-symbols-outlined" style={{ fontSize: "14px" }}>check_circle</span>저장됨</span>}
+                                {editingSheetState.saved && !editingSheetState.dirty && <span className="text-xs text-green-600 font-medium flex items-center gap-1 dark:text-emerald-300"><span className="material-symbols-outlined" style={{ fontSize: "14px" }}>check_circle</span>저장됨</span>}
                             </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={onCloseSheetSlot} className="bg-white dark:bg-gray-800 border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 transition">
@@ -359,7 +359,7 @@ export default function ScheduleAdminModals({
                                 {deletingCustomId === editingCustomSlot.id ? (
                                     <span className="flex items-center gap-2">
                                         <span className="text-xs text-gray-500 dark:text-gray-400">정말 삭제할까요?</span>
-                                        <button onClick={() => onConfirmDeleteCustom(editingCustomSlot.id)} disabled={customPending} className="text-xs text-red-600 hover:text-red-800 font-bold">삭제 확인</button>
+                                    <button onClick={() => onConfirmDeleteCustom(editingCustomSlot.id)} disabled={customPending} className="text-xs text-red-600 hover:text-red-800 font-bold dark:text-red-300 dark:hover:text-red-200">삭제 확인</button>
                                         <button onClick={onCancelDeleteCustom} className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-200">취소</button>
                                     </span>
                                 ) : (
@@ -401,13 +401,13 @@ export default function ScheduleAdminModals({
                             </button>
                         </div>
                         <div className="p-6 space-y-4">
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
                                 <p className="font-bold mb-1">URL 확인 방법</p>
                                 <p>구글시트 열기 → 주소창 URL 복사</p>
-                                <p className="mt-1 font-mono bg-green-100 px-2 py-1 rounded">spreadsheets/d/.../edit?gid=... 형태 그대로</p>
+                                <p className="mt-1 font-mono bg-green-100 px-2 py-1 rounded dark:bg-emerald-500/10 dark:text-emerald-200">spreadsheets/d/.../edit?gid=... 형태 그대로</p>
                                 <p className="mt-1 font-bold">시트가 "링크가 있는 모든 사용자 - 뷰어" 공개 설정이어야 합니다.</p>
                             </div>
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                                 <p className="font-bold mb-1">운영 방식</p>
                                 <p>화면은 저장된 DB 시간표를 읽고, 구글시트는 아래 “지금 동기화”를 눌렀을 때만 가져옵니다.</p>
                             </div>
@@ -422,13 +422,13 @@ export default function ScheduleAdminModals({
                                 />
                             </div>
                             {sheetError && (
-                                <p className="text-sm text-red-600 font-medium flex items-center gap-1">
+                                <p className="text-sm text-red-600 font-medium flex items-center gap-1 dark:text-red-300">
                                     <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>warning</span>
                                     {sheetError}
                                 </p>
                             )}
                             {sheetSyncMessage && (
-                                <p className="text-sm text-green-700 font-medium flex items-center gap-1">
+                                <p className="text-sm text-green-700 font-medium flex items-center gap-1 dark:text-emerald-300">
                                     <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>check_circle</span>
                                     {sheetSyncMessage}
                                 </p>

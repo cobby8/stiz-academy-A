@@ -1,21 +1,22 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 사이트/관리자 다크모드 대비 전수 보정
-- 상태: 구현 완료, 검증 완료
-- 범위: 전역 다크모드 배경/칩/뱃지/보조 텍스트 대비 안전망
+- 작업명: 브라우저 헤더와 잔여 카드/뱃지 다크모드 보정
+- 상태: 구현 완료, 검증 완료, 커밋 준비
+- 범위: `/staff/quick-post`, `/admin/settings`, `/admin/schedule`, PWA theme-color/manifest, `/admin` 첫 진입 사이트 탭 확인
 - 기준일: 2026-07-12
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 전수 검색 | 완료 | `src/app`, `src/components`의 밝은 배경/컬러 칩/뱃지/텍스트 패턴 확인 |
-| 전역 보정 | 완료 | `bg-surface-*`, pastel `bg-*-50/100`, slash opacity 칩, 컬러 텍스트/테두리 보정 |
-| 회색 보조 텍스트 | 완료 | `text-gray-500` 누락 영역은 다크모드에서 `gray-400`으로 보정 |
-| 브라우저 확인 | 완료 | Playwright + 로컬 Chrome으로 대표 페이지와 위험 패턴 fixture 색상 확인 |
-| 검증 | 완료 | `npx.cmd tsc --noEmit`, `npm.cmd run build` 통과 |
+| `/admin` 첫 진입 탭 | 완료 | `/admin` 진입 시 사이트 탭이 먼저 선택되는 기존 수정 확인 |
+| 브라우저/PWA 헤더 | 완료 | `theme-color`를 다크모드에서 `#0f172a`로 자동 갱신하고 manifest 기본색도 보정 |
+| 선생님 빠른 업로드 | 완료 | `/staff/quick-post` 밝은 배경/제목/상태 카드/업로드 박스 대비 보정 |
+| 관리자 카드/뱃지 | 완료 | `/admin/settings`, `/admin/schedule`의 폰트 카드, 시간표 뱃지, 모달 안내 박스 대비 보정 |
+| 검증 | 완료 | `npx.cmd tsc --noEmit`, 로컬 Chrome fixture 검사, `npm.cmd run build` 통과 |
 
 ## 작업 로그
+- 2026-07-12: `/admin` 첫 진입 사이트 탭 적용을 확인하고, 브라우저/PWA 헤더 색상과 `/staff/quick-post`, `/admin/settings`, `/admin/schedule`의 잔여 카드/뱃지/모달 다크모드 대비를 명시 `dark:*` 클래스로 보강했다.
 - 2026-07-12: 사이트/관리자 전역 다크모드 대비를 전수 점검해 `bg-surface-warm/section`, pastel 칩/뱃지, slash opacity 배경, 컬러 텍스트/테두리, `text-gray-500` 누락을 `globals.css` 안전망으로 보정했다.
 - 2026-07-12: 사이트 운영 점검 봇을 매일 KST 새벽 2시에 백그라운드 실행하도록 `/api/cron/site-ops-bot`와 Vercel cron `0 17 * * *`를 추가했다. 기존 관리자 수동 실행은 유지하고, cron도 같은 점검/자동조치/관리자 알림 로직을 사용한다.
 - 2026-07-12: `/admin` 첫 진입 탭을 사이트로 바꾸고, 대시보드에 사이트 점검 봇 수동 실행 카드를 추가했다. 점검 봇은 DB/기본 설정/콘텐츠/시간표/신청 링크/백업/인스타 상태를 확인하고, 안전한 항목은 자동 조치하며 수동 확인 항목은 관리자 알림으로 남긴다.
@@ -32,12 +33,12 @@
 - 2026-07-11: Google Sheets 시간표를 수동 동기화 + DB 캐시 방식으로 전환해 페이지 진입 시 외부 시트를 기다리지 않도록 했다.
 
 ## 구현 기록
-- 변경 파일: `src/app/globals.css`
+- 변경 파일: `src/components/ThemeColorUpdater.tsx`, `src/app/layout.tsx`, `public/manifest.json`, `src/app/staff/quick-post/QuickPostClient.tsx`, `src/app/staff/quick-post/page.tsx`, `src/app/admin/settings/AdminSettingsClient.tsx`, `src/app/admin/schedule/ScheduleAdminClient.tsx`, `src/app/admin/schedule/ScheduleAdminModals.tsx`
 - 주요 변경:
-  - 다크모드에서 `bg-surface-warm`, `bg-surface-section`이 밝은 바탕으로 남지 않도록 보정.
-  - `bg-orange-50`, `bg-blue-50/70`, `bg-green-100`처럼 칩/뱃지에 쓰는 밝은 pastel 배경을 어두운 색으로 변환.
-  - `text-orange-700`, `text-green-700/70` 같은 상태 텍스트를 다크모드용 밝은 색으로 보정.
-  - 밝은 상태 테두리와 hover 배경도 함께 보정.
+  - 다크모드일 때 브라우저/PWA 헤더가 밝은 주황색으로 남지 않도록 `theme-color`를 런타임 갱신.
+  - 선생님 빠른 업로드 화면의 제목, 폼, 상태 메시지, 업로드 박스에 명시 다크모드 색상 추가.
+  - 관리자 폰트 설정 카드와 추천/선택 뱃지가 다크모드에서 밝은 배경 위 흰 글자로 묻히지 않도록 보정.
+  - 관리자 시간표의 학년/정원/코치 뱃지, 구글시트 버튼, 안내/모달 박스 대비 보정.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit`: 통과

@@ -196,20 +196,20 @@ export default function QuickPostClient({
   }
 
   return (
-    <main className="min-h-screen bg-surface-warm px-4 py-5">
+    <main className="min-h-screen bg-surface-warm px-4 py-5 dark:bg-gray-950 dark:text-gray-100">
       <div className="mx-auto max-w-md space-y-4">
         <header className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-brand-orange-600">{currentUser.role}</p>
-            <h1 className="text-2xl font-black text-brand-navy-900">사진 올리기</h1>
-            <p className="text-sm text-gray-600">{currentUser.name} 선생님</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-brand-orange-600 dark:text-brand-neon-lime">{currentUser.role}</p>
+            <h1 className="text-2xl font-black text-brand-navy-900 dark:text-white">사진 올리기</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{currentUser.name} 선생님</p>
           </div>
-          <Link href="/" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600">
+          <Link href="/" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
             홈
           </Link>
         </header>
 
-        <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div className="grid grid-cols-2 gap-2">
             {LESSON_TYPES.map((type) => (
               <button
@@ -218,8 +218,8 @@ export default function QuickPostClient({
                 onClick={() => setLessonType(type)}
                 className={`min-h-10 rounded-lg border px-3 text-sm font-bold transition ${
                   lessonType === type
-                    ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700"
-                    : "border-gray-200 bg-white text-gray-600"
+                    ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
+                    : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                 }`}
               >
                 {type}
@@ -231,7 +231,7 @@ export default function QuickPostClient({
             value={memo}
             onChange={(event) => setMemo(event.target.value)}
             rows={3}
-            className="mt-3 w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm leading-6 outline-none focus:border-brand-orange-500"
+            className="mt-3 w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm leading-6 text-gray-900 outline-none placeholder:text-gray-400 focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
             placeholder="오늘 수업 포인트를 짧게 적어주세요"
           />
 
@@ -256,21 +256,21 @@ export default function QuickPostClient({
         </section>
 
         {message && (
-          <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-bold text-green-700">
+          <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-bold text-green-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
             <SymbolIcon name="check_circle" size={17} />
             {message}
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
             {error}
           </div>
         )}
 
         {draft && (
           <section className="space-y-3">
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
               <div className="flex items-center gap-2 text-sm font-black">
                 <SymbolIcon name="check_circle" size={18} />
                 {isPublished
@@ -279,7 +279,7 @@ export default function QuickPostClient({
                     ? "홈페이지 게시 완료"
                     : "AI 초안 준비 완료"}
               </div>
-              <p className="mt-2 text-xs leading-5 text-green-700">
+              <p className="mt-2 text-xs leading-5 text-green-700 dark:text-emerald-300">
                 {isPublished
                   ? "홈페이지 갤러리와 인스타그램 게시가 완료됐습니다."
                   : hasPublishingStatus
@@ -301,7 +301,7 @@ export default function QuickPostClient({
                 <div className="mt-3 grid grid-cols-1 gap-2">
                   <Link
                     href="/gallery"
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-green-200 bg-white px-3 text-sm font-black text-green-700"
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-green-200 bg-white px-3 text-sm font-black text-green-700 dark:border-emerald-500/30 dark:bg-gray-900 dark:text-emerald-300"
                   >
                     홈페이지 갤러리 보기
                     <SymbolIcon name="arrow_forward" size={17} />
@@ -359,7 +359,7 @@ export default function QuickPostClient({
                 type="button"
                 onClick={resetFlow}
                 disabled={busy}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-black text-gray-700 disabled:opacity-60"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-black text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               >
                 <SymbolIcon name="refresh" size={18} />
                 새로 작성
@@ -369,19 +369,19 @@ export default function QuickPostClient({
         )}
 
         {!draft && !busy && (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-white/70 p-6 text-center text-gray-500">
-            <SymbolIcon name="cloud_upload" size={36} className="mx-auto mb-2 text-gray-400" />
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white/70 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900/80 dark:text-gray-300">
+            <SymbolIcon name="cloud_upload" size={36} className="mx-auto mb-2 text-gray-400 dark:text-gray-500" />
             <p className="text-sm font-bold">사진을 고르면 인스타 피드 형태로 미리보기가 만들어집니다.</p>
             <p className="mt-1 text-xs">문구를 확인한 뒤 승인 과정 없이 바로 게시할 수 있습니다.</p>
           </div>
         )}
 
         {hasPublishingStatus && !busy && (
-          <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-700">
+          <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
             <SymbolIcon name="progress_activity" size={18} className="mt-0.5 shrink-0 animate-spin" />
             <div>
               <p>인스타그램 게시를 처리 중입니다.</p>
-              <p className="mt-1 text-xs font-medium text-blue-600">
+              <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-300">
                 홈페이지 갤러리는 이미 반영됐습니다. 실패하면 서버가 재시도합니다.
               </p>
             </div>
@@ -389,7 +389,7 @@ export default function QuickPostClient({
         )}
 
         {busy && (
-          <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm font-bold text-gray-600">
+          <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm font-bold text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
             <SymbolIcon name="auto_awesome" size={18} className="mt-0.5 shrink-0 text-brand-orange-500" />
             <div className="min-w-0 flex-1">
               <p>{progressText || "처리 중입니다."}</p>
@@ -401,9 +401,9 @@ export default function QuickPostClient({
                       {uploadProgress.done}/{uploadProgress.total}
                     </span>
                   </div>
-                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
                     <div
-                      className="h-full rounded-full bg-brand-orange-500 transition-all"
+                      className="h-full rounded-full bg-brand-orange-500 transition-all dark:bg-brand-neon-lime"
                       style={{ width: `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%` }}
                     />
                   </div>

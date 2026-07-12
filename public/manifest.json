@@ -4,8 +4,8 @@
   "description": "스티즈농구교실 다산점 - 출결/결제/시간표 관리",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#f97316",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
   "orientation": "portrait",
   "icons": [
     {

@@ -12,7 +12,7 @@ function AppliesTo({ pages }: { pages: string[] }) {
     return (
         <div className="flex flex-wrap gap-1.5 mt-1 mb-3">
             {pages.map((p) => (
-                <span key={p} className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-medium">
+                <span key={p} className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-medium dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                     📍 {p}
                 </span>
             ))}
@@ -30,7 +30,7 @@ function FontCard({ option, selected, name, onSelect }: {
     return (
         <label
             className={`cursor-pointer rounded-xl border-2 p-3.5 transition-all flex flex-col gap-1.5 ${
-                selected ? "border-brand-orange-500 dark:border-brand-neon-lime bg-orange-50 shadow-sm" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 bg-white dark:bg-gray-800"
+                selected ? "border-brand-orange-500 bg-orange-50 shadow-sm dark:border-brand-neon-lime dark:bg-brand-neon-lime/10" : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-500"
             }`}
             onClick={() => onSelect(option.key)}
         >
@@ -45,7 +45,7 @@ function FontCard({ option, selected, name, onSelect }: {
             <p style={{ fontFamily: option.css === "inherit" ? undefined : option.css }} className="text-sm text-gray-600 dark:text-gray-300 leading-snug truncate">
                 {option.sample}
             </p>
-            <p className="text-[10px] text-gray-400">{option.nameEn}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500">{option.nameEn}</p>
         </label>
     );
 }
@@ -53,7 +53,7 @@ function FontCard({ option, selected, name, onSelect }: {
 // ─── 섹션 헤더 ────────────────────────────────────────────────────────────────
 function SectionHeader({ title }: { title: string }) {
     return (
-        <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 dark:border-brand-neon-lime pb-2 mb-2 inline-block">
+        <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 dark:border-brand-neon-lime pb-2 mb-2 inline-block dark:text-white">
             {title}
         </h2>
     );
@@ -209,18 +209,18 @@ export default function AdminSettingsClient({
     return (
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-gray-900">
             {fetchErrorState && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm">
+                <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
                     데이터베이스 연결에 문제가 발생했습니다. 새 스키마 동기화(db push)가 필요합니다.
                 </div>
             )}
             {saveSuccess && (
-                <div className="bg-green-50 text-green-700 p-4 rounded-lg font-medium border border-green-200 mb-4 text-sm flex justify-between items-center">
+                <div className="bg-green-50 text-green-700 p-4 rounded-lg font-medium border border-green-200 mb-4 text-sm flex justify-between items-center dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
                     <span>✓ 저장되었습니다. 폰트 변경은 새로고침 후 반영됩니다.</span>
                     <button onClick={() => setSaveSuccess(false)} className="text-green-400 hover:text-green-600 font-bold ml-4">✕</button>
                 </div>
             )}
             {actionError && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-4 text-sm flex justify-between items-center">
+                <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-4 text-sm flex justify-between items-center dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
                     <span>⚠ {actionError}</span>
                     <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold ml-4">✕</button>
                 </div>

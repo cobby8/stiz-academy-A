@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import MetaPixel from "@/components/MetaPixel";
 import DeferredFontStyles from "@/components/DeferredFontStyles";
 import PwaUpdater from "@/components/PwaUpdater";
+import ThemeColorUpdater from "@/components/ThemeColorUpdater";
 
 export const metadata: Metadata = {
     title: "스티즈농구교실 다산점 | 스마트 학원 관리",
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
     // iOS Safari용 PWA 설정 (Apple은 manifest를 완전히 지원하지 않아 별도 메타 태그 필요)
     appleWebApp: {
         capable: true,
-        statusBarStyle: "default",
+        statusBarStyle: "black-translucent",
         title: "스티즈농구",
     },
     // Open Graph: 카카오톡/페이스북 등에서 링크 공유 시 미리보기 카드에 표시되는 정보
@@ -58,8 +59,8 @@ export default async function RootLayout({
             suppressHydrationWarning
         >
             <head>
-                {/* PWA 테마 색상 - 브라우저 상단 바 색상을 브랜드 오렌지로 */}
-                <meta name="theme-color" content="#f97316" />
+                {/* PWA 테마 색상은 ThemeColorUpdater가 현재 테마에 맞게 갱신합니다. */}
+                <meta name="theme-color" content="#0f172a" />
                 {/* iOS에서 홈 화면 아이콘으로 쓸 이미지 */}
                 <link rel="apple-touch-icon" href="/icon-192.png" />
             </head>
@@ -80,6 +81,7 @@ export default async function RootLayout({
                 >
                     <DeferredFontStyles />
                     <MetaPixel />
+                    <ThemeColorUpdater />
                     <PwaUpdater />
                     {children}
                 </ThemeProvider>

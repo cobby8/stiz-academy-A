@@ -24,6 +24,7 @@
 | 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-12: 관리자 사이드바의 백업/복원/시트 동기화 도구를 첫 진입에서 바로 로드하지 않고, “시스템 도구”를 열 때만 lazy chunk로 로드하도록 변경. `npm.cmd run build` 통과.
 - 2026-07-12: 관리자 콜드스타트 완화 후보로 Vercel Fluid Compute를 `vercel.json`에 `"fluid": true`로 활성화. `vercel.json` JSON parse 검증 통과.
 - 2026-07-12: `/admin` 첫 화면 핵심 payload에서 대시보드 카운트/신청 통계/오늘 수업 조회를 4개 병렬 DB 호출에서 1개 통합 SQL 호출로 줄임. `npm.cmd run build` 통과.
 - 2026-07-12: 실제 Chrome 로그인 세션 기준 실서버 `/admin` 첫 진입 DOM 9.46초, 재로드 0.84초, 홈페이지 0.35~0.56초로 확인. Vercel 함수 기본 리전과 Supabase Seoul DB 거리 문제가 큰 원인으로 보여 `vercel.json`에 `regions: ["icn1"]` 적용.
@@ -33,10 +34,6 @@
 - 2026-07-11: `/admin/students`, `/admin/classes`, `/admin/trial` 페이지가 서버에서 캐시된 초기 데이터를 받아 렌더링하도록 바꾸고, 첫 진입 시 같은 API를 클라이언트에서 다시 호출하던 왕복을 제거.
 - 2026-07-11: DB 계측 결과 SQL 자체보다 반복 API/auth/왕복 비용이 병목에 가까워, 전역 `trial-count` 자동 조회 제거 및 운영 데이터 API 6개에 서버 캐시 적용.
 - 2026-07-11: 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 관리자 API에 60초 서버 캐시 적용 및 저장 액션 캐시 무효화.
-- 2026-07-11: Google Sheets 시간표 자동 cron 제거, 관리자 수동 동기화 버튼으로 `SheetSlotCache` 저장 후 화면은 DB 캐시만 읽도록 전환.
-- 2026-07-11: `/api/admin/finance`, `/api/admin/stats`에 단기 private/server cache 적용 및 관련 저장 작업 후 캐시 무효화.
-- 2026-07-11: `/api/admin/dashboard` 15초 cache, `/api/admin/dashboard/system` 수동 확인형으로 변경.
-- 2026-07-11: 관리자 공통 헤더의 알림 자동 조회와 DDL/index 자동 보장 호출 제거.
 
 ## 구현 기록
 - 변경 파일: `src/lib/adminReadPayloads.ts`, `src/app/admin/page.tsx`, `src/app/admin/AdminDashboardClient.tsx`, `src/app/api/admin/dashboard/route.ts`, `src/app/admin/students/StudentManagementClient.tsx`
@@ -46,6 +43,7 @@
 ## 테스트 결과
 - `vercel.json` JSON parse 검증 통과.
 - `npm.cmd run build` 통과. `/admin` primary dashboard SQL merge 검증 완료.
+- `npm.cmd run build` 통과. 관리자 시스템 도구 lazy chunk 전환 검증 완료.
 - `npx.cmd tsc --noEmit` 통과
 - `npm.cmd run build` 통과. 로컬 네트워크에서 Supabase pooler 접속 경고가 출력됐지만 빌드는 exit code 0으로 완료됨.
 - 운영 탭 계측: 기존 `/admin` 콜드 진입 약 25초, `/admin/students` DOM 3,142개/버튼 737개로 확인

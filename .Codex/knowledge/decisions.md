@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-07-12: 드문 관리자 도구는 클릭 후 로드한다
+- 결정: 관리자 사이드바의 백업/복원/시트 동기화 도구는 `/admin` 첫 진입 때 바로 로드하지 않고, “시스템 도구” 버튼을 열 때만 `AdminBackupButtons` lazy chunk를 로드한다.
+- 이유: 관리자 첫 화면은 선생님들이 매일 보는 업무 진입점이고, 백업/복원/수동 동기화는 필요할 때만 쓰는 보조 기능이다. 처음부터 함께 내려받으면 작은 기능이라도 첫 렌더 JS 부담이 늘어나므로, 자주 쓰지 않는 도구는 접힌 서랍처럼 필요할 때만 꺼내는 편이 체감 속도에 유리하다.
+
 ## 2026-07-12: Vercel Fluid Compute를 관리자 콜드스타트 완화 옵션으로 켠다
 - 결정: `vercel.json`에 `"fluid": true`를 추가해 Vercel Functions에 Fluid Compute를 명시적으로 활성화한다.
 - 이유: Vercel 문서상 Fluid Compute는 함수 pre-warming, Node.js bytecode caching, 기존 idle resource 우선 사용 등 콜드스타트 영향을 줄이는 기능을 제공한다. 관리자 페이지는 동적 함수와 DB 인증/조회가 필요한 구조라 첫 진입 지연 완화 효과가 크다.

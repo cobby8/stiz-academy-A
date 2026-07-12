@@ -52,6 +52,7 @@ export default function AdminShellClient({
     const userName = initialUserName;
     const userEmail = initialUserEmail;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [systemToolsOpen, setSystemToolsOpen] = useState(false);
     // 현재 URL 경로를 기반으로 활성 탭을 자동 결정
     // "/admin" 정확 일치(대시보드) 또는 OPS_PATHS로 시작하면 "학원운영"
     const autoTab = useMemo(() => {
@@ -67,6 +68,7 @@ export default function AdminShellClient({
     useEffect(() => {
         setActiveTab(autoTab);
         setMobileMenuOpen(false);
+        setSystemToolsOpen(false);
     }, [autoTab, pathname]);
 
     return (
@@ -192,7 +194,28 @@ export default function AdminShellClient({
 
                             <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
                             <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프 관리" />
-                            <LazyBackupButtons />
+                            <div className="pt-1">
+                                <button
+                                    type="button"
+                                    aria-controls="admin-system-tools"
+                                    aria-expanded={systemToolsOpen}
+                                    onClick={() => setSystemToolsOpen((current) => !current)}
+                                    className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                                >
+                                    <FontFreeIcon name="sync" size={20} />
+                                    <span className="flex-1 truncate">시스템 도구</span>
+                                    <FontFreeIcon
+                                        name="expand_more"
+                                        size={18}
+                                        className={`transition-transform ${systemToolsOpen ? "rotate-180" : ""}`}
+                                    />
+                                </button>
+                                {systemToolsOpen && (
+                                    <div id="admin-system-tools" className="mt-1">
+                                        <LazyBackupButtons />
+                                    </div>
+                                )}
+                            </div>
                         </>
                     )}
                 </nav>

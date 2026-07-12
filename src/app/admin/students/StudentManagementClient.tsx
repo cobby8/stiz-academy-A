@@ -56,6 +56,31 @@ type ClassItem = {
     program: { id: string; name: string } | null;
 };
 
+type ScheduleMismatch = {
+    slotKey: string;
+    sheetCount: number;
+    dbCount: number;
+    diff: number;
+};
+
+type SheetImportSummary = {
+    id: string;
+    status: string;
+    totalRows: number;
+    registrationRows: number;
+    vehicleRows: number;
+    changeRows: number;
+    teamRows: number;
+    errorRows: number;
+    message: string | null;
+    createdAt: string;
+    completedAt: string | null;
+    uniqueStudents: number;
+    linkedRegistrations: number;
+    scheduleMismatchCount: number;
+    topScheduleMismatches: ScheduleMismatch[];
+} | null;
+
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
@@ -110,6 +135,37 @@ function groupClassesByProgram(classes: ClassItem[]) {
     }
 
     return Array.from(groups.values());
+}
+
+function ImportSummaryMetric({
+    label,
+    value,
+    warning = false,
+}: {
+    label: string;
+    value: number;
+    warning?: boolean;
+}) {
+    return (
+        <div className="rounded-lg bg-gray-50 px-2 py-2 dark:bg-gray-800">
+            <p className="text-gray-500 dark:text-gray-400">{label}</p>
+            <p
+                className={`font-extrabold ${
+                    warning
+                        ? "text-amber-700 dark:text-amber-200"
+                        : "text-gray-900 dark:text-white"
+                }`}
+            >
+                {value.toLocaleString()}
+            </p>
+        </div>
+    );
+}
+
+function formatSlotLabel(slotKey: string) {
+    const [day, period] = slotKey.split("-");
+    const dayLabel = DAY_LABELS[day] ?? day;
+    return period ? `${dayLabel} ${period}교시` : slotKey;
 }
 
 function toDateStr(d: Date | string | null): string {
@@ -223,15 +279,20 @@ function getLatestStatus(enrollments: Student["enrollments"]): string | null {
 export default function StudentManagementClient({
     students: initialStudents,
     classes: initialClasses,
+    sheetImportSummary: initialSheetImportSummary,
     partial: initialPartial = false,
 }: {
     students?: Student[];
     classes?: ClassItem[];
+    sheetImportSummary?: SheetImportSummary;
     partial?: boolean;
 }) {
     const hasInitialData = Boolean(initialStudents || initialClasses);
     const [students, setStudents] = useState<Student[]>(initialStudents ?? []);
     const [classes, setClasses] = useState<ClassItem[]>(initialClasses ?? []);
+    const [sheetImportSummary, setSheetImportSummary] = useState<SheetImportSummary>(
+        initialSheetImportSummary ?? null
+    );
     const [dataLoading, setDataLoading] = useState(!hasInitialData);
     const [dataError, setDataError] = useState<string | null>(null);
     const [allStudentsLoaded, setAllStudentsLoaded] = useState(!initialPartial);
@@ -267,10 +328,12 @@ export default function StudentManagementClient({
             const data = (await response.json()) as {
                 students?: Student[];
                 classes?: ClassItem[];
+                sheetImportSummary?: SheetImportSummary;
             };
 
             setStudents(data.students ?? []);
             setClasses(data.classes ?? []);
+            setSheetImportSummary(data.sheetImportSummary ?? null);
             setAllStudentsLoaded(true);
         } catch (error) {
             console.error("Failed to load students:", error);
@@ -530,7 +593,71 @@ export default function StudentManagementClient({
 
     return (
         <div className="max-w-5xl mx-auto">
-            {/* 상태별 요약 카드 — 클릭하면 해당 필터 적용 */}
+            {sheetImportSummary && (
+                <div className="mb-5 rounded-xl border border-lime-300/40 bg-white p-4 shadow-sm dark:border-lime-300/30 dark:bg-gray-900">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-lime-100 px-2 py-0.5 text-xs font-bold text-lime-800 dark:bg-lime-300/15 dark:text-lime-200">
+                                    DB 이관 {sheetImportSummary.status}
+                                </span>
+                                <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                    최신 구글시트 원본 기준
+                                </span>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                완료 시각:{" "}
+                                {sheetImportSummary.completedAt
+                                    ? new Date(sheetImportSummary.completedAt).toLocaleString("ko-KR")
+                                    : new Date(sheetImportSummary.createdAt).toLocaleString("ko-KR")}
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-7">
+                            <ImportSummaryMetric label="고유" value={sheetImportSummary.uniqueStudents} />
+                            <ImportSummaryMetric label="등록" value={sheetImportSummary.registrationRows} />
+                            <ImportSummaryMetric label="차량" value={sheetImportSummary.vehicleRows} />
+                            <ImportSummaryMetric label="변동" value={sheetImportSummary.changeRows} />
+                            <ImportSummaryMetric label="대표팀" value={sheetImportSummary.teamRows} />
+                            <ImportSummaryMetric
+                                label="시간표"
+                                value={sheetImportSummary.scheduleMismatchCount}
+                                warning={sheetImportSummary.scheduleMismatchCount > 0}
+                            />
+                            <ImportSummaryMetric
+                                label="확인"
+                                value={sheetImportSummary.errorRows}
+                                warning={sheetImportSummary.errorRows > 0}
+                            />
+                        </div>
+                    </div>
+                    {sheetImportSummary.scheduleMismatchCount > 0 && (
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-lime-300/25 dark:bg-lime-300/10 dark:text-lime-100">
+                            <p className="font-bold">
+                                시트 등록 인원과 DB 활성 수강 인원이 다른 반이 {sheetImportSummary.scheduleMismatchCount}개 있습니다.
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {sheetImportSummary.topScheduleMismatches.map((item) => (
+                                    <span
+                                        key={item.slotKey}
+                                        className="rounded-full bg-white px-2 py-1 font-semibold text-amber-900 ring-1 ring-amber-200 dark:bg-gray-950 dark:text-lime-100 dark:ring-lime-300/25"
+                                    >
+                                        {formatSlotLabel(item.slotKey)} 시트 {item.sheetCount} / DB {item.dbCount}
+                                        {" "}
+                                        ({item.diff > 0 ? `+${item.diff}` : item.diff})
+                                    </span>
+                                ))}
+                                {sheetImportSummary.scheduleMismatchCount > sheetImportSummary.topScheduleMismatches.length && (
+                                    <span className="rounded-full px-2 py-1 font-semibold text-amber-800 dark:text-lime-200">
+                                        외 {sheetImportSummary.scheduleMismatchCount - sheetImportSummary.topScheduleMismatches.length}개
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 상태별 요약 카드 - 클릭하면 해당 필터 적용 */}
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
                 {[
                     { label: "활성", value: "ACTIVE", count: statusCounts.active, color: "bg-emerald-50 border-emerald-200 text-emerald-700", icon: "person" },

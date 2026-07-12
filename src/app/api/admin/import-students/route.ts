@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { fetchStudentOperationSheets } from "@/lib/googleSheetsCsv";
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     const registrationCsvText =
       typeof csvText === "string" && csvText.trim()
         ? csvText
-        : sheetMap["등록"] || sheetMap.registration || "";
+        : getRegistrationCsvText(sheetMap);
 
     if (!registrationCsvText && Object.keys(sheetMap).length === 0) {
       return NextResponse.json(
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
         parseErrorCount: registrationSheet.errors.length + auxiliarySheets.errors.length,
       }
     );
+    revalidateStudentImportCaches();
 
     return NextResponse.json({
       result: { ...result, sheetImport },
@@ -170,6 +172,31 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function revalidateStudentImportCaches() {
+  for (const tag of [
+    "admin-students",
+    "admin-student-imports",
+    "admin-classes",
+    "admin-schedule",
+    "admin-dashboard",
+  ]) {
+    revalidateTag(tag, { expire: 0 });
+  }
+
+  revalidatePath("/admin/students");
+  revalidatePath("/admin/classes");
+  revalidatePath("/admin/schedule");
+}
+
+function getRegistrationCsvText(sheetMap: Record<string, string>) {
+  return (
+    sheetMap["등록"] ||
+    Object.entries(sheetMap).find(([name]) => name.trim() === "등록" || name.includes("등록"))?.[1] ||
+    sheetMap.registration ||
+    ""
+  );
 }
 
 // ──────────────────────────────────────────────

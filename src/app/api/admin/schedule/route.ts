@@ -13,6 +13,11 @@ const SCHEDULE_CACHE_HEADERS = {
     "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
 };
 
+type AdminScheduleSettings = {
+    googleSheetsScheduleUrl?: string | null;
+    googlesheetsscheduleurl?: string | null;
+} | null;
+
 export async function GET() {
     const timing = createAdminTiming("admin-schedule");
 
@@ -23,23 +28,28 @@ export async function GET() {
     }
 
     try {
-        const settings = await timing.measure("settings", () => getAcademySettings() as Promise<any>);
-        const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
-
-        const [overrides, coaches, customSlots, programs, legacySlots, dbScheduleData] = await timing.measure("data", () => Promise.all([
-            getClassSlotOverrides(),
-            getCoaches(),
-            getCustomClassSlots(),
-            getPrograms(),
-            sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
+        const [settings, dbScheduleData, coaches, programs] = await timing.measure("primary-data", () => Promise.all([
+            getAcademySettings() as Promise<AdminScheduleSettings>,
             getScheduleSlotAdminData(),
+            getCoaches(),
+            getPrograms(),
         ]));
-        const scheduleData = dbScheduleData ?? {
-            slots: legacySlots,
-            overrides,
-            customSlots,
-            scheduleSource: "SHEET_CACHE" as const,
-        };
+        const sheetUrl = settings?.googleSheetsScheduleUrl ?? settings?.googlesheetsscheduleurl ?? null;
+
+        let scheduleData = dbScheduleData;
+        if (!scheduleData) {
+            const [overrides, customSlots, legacySlots] = await timing.measure("legacy-fallback-data", () => Promise.all([
+                getClassSlotOverrides(),
+                getCustomClassSlots(),
+                sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
+            ]));
+            scheduleData = {
+                slots: legacySlots,
+                overrides,
+                customSlots,
+                scheduleSource: "SHEET_CACHE" as const,
+            };
+        }
 
         return timedJson(
             timing,

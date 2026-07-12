@@ -230,37 +230,60 @@ const DAY_MAP: Record<string, string> = {
  * - 큰따옴표 안의 구분자는 무시
  */
 function parseCsvText(csvText: string): string[][] {
-  const lines = csvText.split(/\r?\n/);
-  if (lines.length === 0) return [];
+  if (!csvText.trim()) return [];
 
-  // 첫 줄로 구분자 감지: 탭이 쉼표보다 많으면 탭 구분
-  const firstLine = lines[0];
+  const firstLine = csvText.split(/\r?\n/, 1)[0] || "";
   const tabCount = (firstLine.match(/\t/g) || []).length;
   const commaCount = (firstLine.match(/,/g) || []).length;
   const delimiter = tabCount >= commaCount ? "\t" : ",";
 
-  return lines
-    .filter((line) => line.trim() !== "") // 빈 줄 제거
-    .map((line) => {
-      // 간단한 CSV 파서: 큰따옴표 안의 구분자는 무시
-      const cells: string[] = [];
-      let current = "";
-      let inQuotes = false;
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let current = "";
+  let inQuotes = false;
 
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') {
-          inQuotes = !inQuotes;
-        } else if (ch === delimiter && !inQuotes) {
-          cells.push(current.trim());
-          current = "";
-        } else {
-          current += ch;
-        }
+  const pushCell = () => {
+    row.push(current.trim());
+    current = "";
+  };
+
+  const pushRow = () => {
+    if (row.some((cell) => cell.trim())) rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < csvText.length; i++) {
+    const ch = csvText[i];
+    const next = csvText[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
       }
-      cells.push(current.trim());
-      return cells;
-    });
+      continue;
+    }
+
+    if (ch === delimiter && !inQuotes) {
+      pushCell();
+      continue;
+    }
+
+    if ((ch === "\n" || ch === "\r") && !inQuotes) {
+      pushCell();
+      pushRow();
+      if (ch === "\r" && next === "\n") i++;
+      continue;
+    }
+
+    current += ch;
+  }
+
+  pushCell();
+  pushRow();
+  return rows;
 }
 
 /**

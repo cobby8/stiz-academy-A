@@ -104,6 +104,19 @@ interface ImportHistoryBatch {
   issues: ImportHistoryIssue[];
 }
 
+type ImportDetailType = "shuttle" | "changes" | "team" | "issues";
+
+type ImportDetailRow = Record<string, string | number | boolean | null>;
+
+interface ImportDetailState {
+  batchId: string;
+  type: ImportDetailType;
+  loading: boolean;
+  error: string | null;
+  total: number;
+  rows: ImportDetailRow[] | null;
+}
+
 // ──────────────────────────────────────────────
 // 상태 상수
 // ──────────────────────────────────────────────
@@ -731,6 +744,53 @@ function ImportHistoryPanel({
   loading: boolean;
   onLoad: () => void;
 }) {
+  const [detail, setDetail] = useState<ImportDetailState | null>(null);
+
+  const loadBatchDetail = async (batchId: string, type: ImportDetailType) => {
+    setDetail({
+      batchId,
+      type,
+      loading: true,
+      error: null,
+      total: 0,
+      rows: null,
+    });
+
+    try {
+      const params = new URLSearchParams({
+        batchId,
+        type,
+        limit: "30",
+      });
+      const res = await fetch(`/api/admin/import-students/details?${params}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "상세 내역을 불러오지 못했습니다.");
+      }
+
+      setDetail({
+        batchId,
+        type,
+        loading: false,
+        error: null,
+        total: data.total ?? 0,
+        rows: Array.isArray(data.rows) ? data.rows : [],
+      });
+    } catch (err) {
+      setDetail({
+        batchId,
+        type,
+        loading: false,
+        error: err instanceof Error ? err.message : "상세 내역을 불러오지 못했습니다.",
+        total: 0,
+        rows: [],
+      });
+    }
+  };
+
   return (
     <section className="rounded-xl border bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -811,6 +871,32 @@ function ImportHistoryPanel({
                 <span>대표팀 {batch.teamRows.toLocaleString()}건</span>
               </div>
 
+              <div className="mt-3 flex flex-wrap gap-2">
+                {([
+                  ["shuttle", "차량 확인"],
+                  ["changes", "변동 확인"],
+                  ["team", "대표팀 확인"],
+                  ["issues", "이슈 확인"],
+                ] as const).map(([type, label]) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => void loadBatchDetail(batch.id, type)}
+                    disabled={detail?.batchId === batch.id && detail.type === type && detail.loading}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-wait disabled:opacity-60 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      {detail?.batchId === batch.id && detail.type === type && detail.loading
+                        ? "progress_activity"
+                        : "manage_search"}
+                    </span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {detail?.batchId === batch.id ? <ImportDetailBox detail={detail} /> : null}
+
               {batch.message ? (
                 <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{batch.message}</p>
               ) : null}
@@ -835,6 +921,128 @@ function ImportHistoryPanel({
       ) : null}
     </section>
   );
+}
+
+function ImportDetailBox({ detail }: { detail: ImportDetailState }) {
+  return (
+    <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-950">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+          {getImportDetailTitle(detail.type)}
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          전체 {detail.total.toLocaleString()}건 중 최대 30건 표시
+        </p>
+      </div>
+
+      {detail.loading ? (
+        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+          상세 내역을 불러오는 중입니다.
+        </p>
+      ) : null}
+
+      {detail.error ? (
+        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+          {detail.error}
+        </div>
+      ) : null}
+
+      {!detail.loading && !detail.error && detail.rows?.length === 0 ? (
+        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+          표시할 상세 내역이 없습니다.
+        </p>
+      ) : null}
+
+      {!detail.loading && !detail.error && detail.rows && detail.rows.length > 0 ? (
+        <div className="mt-3 grid gap-2">
+          {detail.rows.map((row, index) => (
+            <DetailRowCard key={String(row.id ?? index)} type={detail.type} row={row} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailRowCard({ type, row }: { type: ImportDetailType; row: ImportDetailRow }) {
+  if (type === "shuttle") {
+    return (
+      <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+        <p className="font-bold text-gray-900 dark:text-white">
+          {detailText(row, "monthLabel")} · {detailText(row, "dayLabel")} {detailText(row, "classTime")}
+        </p>
+        <p className="mt-1">
+          {detailText(row, "studentName")} · 도착 {detailText(row, "arrivalTime")} · {detailText(row, "destination")}
+        </p>
+        <p className="mt-1 text-gray-500 dark:text-gray-400">
+          {detailText(row, "memo") !== "-" ? detailText(row, "memo") : detailText(row, "note")}
+        </p>
+      </div>
+    );
+  }
+
+  if (type === "changes") {
+    return (
+      <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+        <p className="font-bold text-gray-900 dark:text-white">
+          {detailDate(row, "occurredAt")} · {detailText(row, "changeSummary")}
+        </p>
+        <p className="mt-1">
+          등록 {detailBoolean(row, "registrationReflected")} · 랠리즈 {detailBoolean(row, "rallyzReflected")} · 차량 {detailBoolean(row, "vehicleReflected")}
+        </p>
+        <p className="mt-1 text-gray-500 dark:text-gray-400">{detailText(row, "note")}</p>
+      </div>
+    );
+  }
+
+  if (type === "team") {
+    return (
+      <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+        <p className="font-bold text-gray-900 dark:text-white">
+          #{detailText(row, "jerseyNumber")} {detailText(row, "studentName")}
+        </p>
+        <p className="mt-1">
+          {detailText(row, "grade")} · {detailText(row, "branch")} · {detailText(row, "phone")}
+        </p>
+        <p className="mt-1 text-gray-500 dark:text-gray-400">
+          DB 연결 {detailText(row, "studentId") !== "-" ? "완료" : "확인 필요"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+      <p className="font-bold">
+        {detailText(row, "severity")} · {detailText(row, "sheetName")}
+        {detailText(row, "rowNumber") !== "-" ? ` ${detailText(row, "rowNumber")}행` : ""}
+      </p>
+      <p className="mt-1">{detailText(row, "message")}</p>
+    </div>
+  );
+}
+
+function getImportDetailTitle(type: ImportDetailType) {
+  if (type === "shuttle") return "차량 상세";
+  if (type === "changes") return "변동내역 상세";
+  if (type === "team") return "대표팀 상세";
+  return "확인 필요 이슈";
+}
+
+function detailText(row: ImportDetailRow, key: string) {
+  const value = row[key];
+  if (value === null || value === undefined || value === "") return "-";
+  return String(value);
+}
+
+function detailDate(row: ImportDetailRow, key: string) {
+  const value = row[key];
+  if (typeof value !== "string" || !value) return "-";
+  return new Date(value).toLocaleDateString("ko-KR");
+}
+
+function detailBoolean(row: ImportDetailRow, key: string) {
+  return row[key] ? "완료" : "대기";
 }
 
 function ImportMetric({

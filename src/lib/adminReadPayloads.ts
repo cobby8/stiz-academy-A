@@ -48,6 +48,11 @@ import { readPendingSocialPostDrafts } from "@/lib/socialDrafts";
 
 const DASHBOARD_MONTHS = 6;
 
+type AdminScheduleSettingsPayload = {
+    googleSheetsScheduleUrl?: string | null;
+    googlesheetsscheduleurl?: string | null;
+} | null;
+
 function getMonthLabels(date = new Date()) {
     return Array.from({ length: DASHBOARD_MONTHS }, (_, index) => {
         const month = new Date(date.getFullYear(), date.getMonth() - (DASHBOARD_MONTHS - 1 - index), 1);
@@ -298,16 +303,119 @@ export function getCachedAdminStudentsPayload(limit?: number) {
 
     return unstable_cache(
         async () => {
-            const [students, classes] = await Promise.all([
+            const [students, classes, sheetImportSummary] = await Promise.all([
                 getStudents(normalizedLimit),
                 getClasses(),
+                getStudentSheetImportSummary(),
             ]);
 
-            return { students, classes, partial: Boolean(normalizedLimit) };
+            return { students, classes, sheetImportSummary, partial: Boolean(normalizedLimit) };
         },
         [`admin-students-v2-${normalizedLimit ?? "all"}`],
-        { revalidate: 60, tags: ["admin-students", "admin-classes"] },
+        { revalidate: 60, tags: ["admin-students", "admin-classes", "admin-student-imports"] },
     )();
+}
+
+async function getStudentSheetImportSummary() {
+    try {
+        const [rows, scheduleMismatchRows] = await Promise.all([
+            prisma.$queryRawUnsafe<{
+            id: string;
+            status: string;
+            totalRows: number;
+            registrationRows: number;
+            vehicleRows: number;
+            changeRows: number;
+            teamRows: number;
+            errorRows: number;
+            message: string | null;
+            createdAt: Date;
+            completedAt: Date | null;
+            uniqueStudents: number;
+            linkedRegistrations: number;
+        }[]>(
+                `SELECT b.id, b.status, b."totalRows", b."registrationRows",
+                        b."vehicleRows", b."changeRows", b."teamRows", b."errorRows",
+                        b.message, b."createdAt", b."completedAt",
+                        COALESCE(COUNT(DISTINCT r."studentKey") FILTER (WHERE r."studentKey" IS NOT NULL), 0)::int AS "uniqueStudents",
+                        COALESCE(COUNT(*) FILTER (WHERE r."studentId" IS NOT NULL), 0)::int AS "linkedRegistrations"
+                 FROM "StudentSheetImportBatch" b
+                 LEFT JOIN "StudentRegistrationLedger" r ON r."batchId" = b.id
+                 GROUP BY b.id
+                 ORDER BY b."createdAt" DESC
+                 LIMIT 1`
+            ),
+            prisma.$queryRawUnsafe<{
+                slotKey: string;
+                sheetCount: number;
+                dbCount: number;
+                diff: number;
+                totalMismatchCount: number;
+            }[]>(
+                `WITH latest AS (
+                    SELECT id
+                    FROM "StudentSheetImportBatch"
+                    WHERE status = 'COMPLETED'
+                    ORDER BY "createdAt" DESC
+                    LIMIT 1
+                ),
+                sheet_slots AS (
+                    SELECT
+                        slot_key AS "slotKey",
+                        COUNT(DISTINCT COALESCE(r."studentKey", r."studentId", r."studentName" || ':' || COALESCE(r."parentPhone", r."rowNumber"::text)))::int AS "sheetCount"
+                    FROM "StudentRegistrationLedger" r
+                    JOIN latest ON latest.id = r."batchId"
+                    CROSS JOIN LATERAL jsonb_array_elements_text(
+                        COALESCE(NULLIF(r."selectedSlotKeysJSON", ''), '[]')::jsonb
+                    ) AS slot_key
+                    GROUP BY slot_key
+                ),
+                db_slots AS (
+                    SELECT
+                        c."slotKey" AS "slotKey",
+                        COUNT(DISTINCT e."studentId")::int AS "dbCount"
+                    FROM "Enrollment" e
+                    JOIN "Class" c ON c.id = e."classId"
+                    WHERE e.status = 'ACTIVE'
+                      AND c."slotKey" IS NOT NULL
+                    GROUP BY c."slotKey"
+                ),
+                mismatches AS (
+                    SELECT
+                        COALESCE(sheet_slots."slotKey", db_slots."slotKey") AS "slotKey",
+                        COALESCE(sheet_slots."sheetCount", 0)::int AS "sheetCount",
+                        COALESCE(db_slots."dbCount", 0)::int AS "dbCount",
+                        (COALESCE(db_slots."dbCount", 0) - COALESCE(sheet_slots."sheetCount", 0))::int AS diff
+                    FROM sheet_slots
+                    FULL OUTER JOIN db_slots ON db_slots."slotKey" = sheet_slots."slotKey"
+                    WHERE COALESCE(sheet_slots."sheetCount", 0) <> COALESCE(db_slots."dbCount", 0)
+                )
+                SELECT
+                    "slotKey",
+                    "sheetCount",
+                    "dbCount",
+                    diff,
+                    COUNT(*) OVER ()::int AS "totalMismatchCount"
+                FROM mismatches
+                ORDER BY ABS(diff) DESC, "slotKey" ASC
+                LIMIT 8`
+            ),
+        ]);
+
+        const latest = rows[0];
+        if (!latest) return null;
+
+        return {
+            ...latest,
+            createdAt: latest.createdAt.toISOString(),
+            completedAt: latest.completedAt?.toISOString() ?? null,
+            scheduleMismatchCount: scheduleMismatchRows[0]?.totalMismatchCount ?? 0,
+            topScheduleMismatches: scheduleMismatchRows.map(({ totalMismatchCount, ...row }) => row),
+        };
+    } catch (error) {
+        console.error("[admin-students] import summary failed:", error);
+        return null;
+    }
 }
 
 export const getCachedAdminDashboardPrimaryPayload = unstable_cache(
@@ -637,23 +745,28 @@ export const getCachedAdminSmsPayload = unstable_cache(
 
 export const getCachedAdminSchedulePayload = unstable_cache(
     async () => {
-        const settings = await (getAcademySettings() as Promise<any>);
-        const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
-
-        const [overrides, coaches, customSlots, programs, legacySlots, dbScheduleData] = await Promise.all([
-            getClassSlotOverrides(),
-            getCoaches(),
-            getCustomClassSlots(),
-            getPrograms(),
-            sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
+        const [settings, dbScheduleData, coaches, programs] = await Promise.all([
+            getAcademySettings() as Promise<AdminScheduleSettingsPayload>,
             getScheduleSlotAdminData(),
+            getCoaches(),
+            getPrograms(),
         ]);
-        const scheduleData = dbScheduleData ?? {
-            slots: legacySlots,
-            overrides,
-            customSlots,
-            scheduleSource: "SHEET_CACHE" as const,
-        };
+        const sheetUrl = settings?.googleSheetsScheduleUrl ?? settings?.googlesheetsscheduleurl ?? null;
+
+        let scheduleData = dbScheduleData;
+        if (!scheduleData) {
+            const [overrides, customSlots, legacySlots] = await Promise.all([
+                getClassSlotOverrides(),
+                getCustomClassSlots(),
+                sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
+            ]);
+            scheduleData = {
+                slots: legacySlots,
+                overrides,
+                customSlots,
+                scheduleSource: "SHEET_CACHE" as const,
+            };
+        }
 
         return {
             slots: scheduleData.slots,

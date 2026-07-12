@@ -1,22 +1,22 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 관리자 기본 사이트 탭 및 사이트 운영 점검 봇
+- 작업명: 사이트 운영 점검 봇 새벽 자동 실행
 - 상태: 구현 완료, 검증 완료
-- 범위: `/admin` 첫 진입 탭, 대시보드 수동 점검 카드, 사이트 운영 점검 API/서버 로직
+- 범위: Vercel Cron, cron 전용 API, 사이트 운영 점검 봇 자동 실행
 - 기준일: 2026-07-12
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 기본 탭 변경 | 완료 | `/admin` 첫 진입 시 학원운영 대신 사이트 탭이 선택되도록 변경 |
-| 점검 봇 서버 로직 | 완료 | DB, 기본 설정, 콘텐츠, 시간표, 신청 링크, 백업, 인스타 게시 대기열 점검 |
-| 자동 조치 | 완료 | 안전한 항목만 자동 처리: 기본 설정 row 생성, 백업 bucket 생성 |
-| 관리자 알림 | 완료 | 수동 확인이 필요한 warning/critical 항목은 관리자/부관리자 알림으로 기록 |
-| 속도 보호 | 완료 | 점검 봇은 첫 진입 자동 실행 없이 대시보드 버튼으로만 수동 실행 |
-| 검증 | 완료 | `npx.cmd tsc --noEmit`, `npm.cmd run build` 통과 |
+| cron API | 완료 | `GET /api/cron/site-ops-bot` 추가, `CRON_SECRET` 인증 적용 |
+| 실행 시간 | 완료 | Vercel cron `0 17 * * *` 등록, KST 새벽 2시 실행 |
+| 공용 실행 함수 | 완료 | 관리자 수동 실행과 cron 실행이 같은 `runSiteOpsBot` 로직을 사용 |
+| 속도 보호 | 완료 | 관리자 첫 진입 자동 실행은 여전히 없음 |
+| 검증 | 완료 | `tsc --noEmit`, `npm run build` 통과 |
 
 ## 작업 로그
+- 2026-07-12: 사이트 운영 점검 봇을 매일 KST 새벽 2시에 백그라운드 실행하도록 `/api/cron/site-ops-bot`와 Vercel cron `0 17 * * *`를 추가했다. 기존 관리자 수동 실행은 유지하고, cron도 같은 점검/자동조치/관리자 알림 로직을 사용한다.
 - 2026-07-12: `/admin` 첫 진입 탭을 사이트로 바꾸고, 대시보드에 사이트 점검 봇 수동 실행 카드를 추가했다. 점검 봇은 DB/기본 설정/콘텐츠/시간표/신청 링크/백업/인스타 상태를 확인하고, 안전한 항목은 자동 조치하며 수동 확인 항목은 관리자 알림으로 남긴다.
 - 2026-07-12: 관리자 속도 추가 점검으로 원생 자동 전체 재조회 제거, 체험/수강신청 점진 렌더링, 원생 상태 계산 캐시, 관리자 조회용 DB 인덱스/SQL 파일을 추가했다. live DB push는 별도 명시 승인 필요.
 - 2026-07-12: 홈페이지 첫 방문 기본 테마를 `system`에서 `dark`로 변경했다. 저장된 사용자 선택이 없는 경우 다크모드로 시작하고, 사용자가 토글로 바꾼 선택은 유지된다.
@@ -31,16 +31,17 @@
 - 2026-07-11: Google Sheets 시간표를 수동 동기화 + DB 캐시 방식으로 전환해 페이지 진입 시 외부 시트를 기다리지 않도록 했다.
 
 ## 구현 기록
-- 변경 파일: `src/app/admin/AdminShellClient.tsx`, `src/app/admin/AdminDashboardClient.tsx`, `src/lib/siteOpsBot.ts`, `src/app/api/admin/site-ops-bot/route.ts`
+- 변경 파일: `src/app/api/cron/site-ops-bot/route.ts`, `src/lib/siteOpsBot.ts`, `vercel.json`
 - 주요 변경:
-  - `/admin` 정확 진입 시 관리자 사이드바 기본 탭을 사이트로 변경.
-  - 사이트 점검 봇 API `POST /api/admin/site-ops-bot` 추가.
-  - 사이트 운영 점검 결과를 관리자 대시보드 카드에서 수동 실행/확인하도록 추가.
-  - warning/critical 항목을 `Notification`에 `SITE_OPS` 타입으로 기록하고, 6시간 중복 알림을 막음.
+  - cron 전용 `GET /api/cron/site-ops-bot` 추가.
+  - 운영 환경에서는 `Authorization: Bearer ${CRON_SECRET}` 없으면 거부.
+  - Vercel cron에 매일 UTC 17:00 실행 등록. 한국 시간으로 다음 날 새벽 2시.
+  - `runSiteOpsBot`을 관리자 수동 실행과 cron 실행에서 공용으로 사용하도록 인자를 선택값으로 변경.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit`: 통과
+- `vercel.json` JSON parse: 통과
 - `npm.cmd run build`: 통과 (로컬 Supabase pooler 접속 경고는 기존 fallback으로 흡수, exit 0)
 
 ## 다음에 할 것
-- 운영 관리자 계정에서 “사이트 점검 봇”을 한 번 실행해 실제 알림/수동 조치 링크가 현장 데이터와 맞는지 확인한다.
+- 배포 후 Vercel Cron 로그에서 `/api/cron/site-ops-bot`가 KST 새벽 2시에 실행되는지 확인한다.

@@ -345,7 +345,7 @@ async function notifyManualActions(checks: SiteOpsCheck[]) {
   return true;
 }
 
-export async function runSiteOpsBot(_requestedBy: AdminAuthUser): Promise<SiteOpsBotResult> {
+export async function runSiteOpsBot(_requestedBy?: AdminAuthUser | "cron"): Promise<SiteOpsBotResult> {
   const checks: SiteOpsCheck[] = [];
   let dbAvailable = true;
 

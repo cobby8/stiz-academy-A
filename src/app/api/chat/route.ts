@@ -211,6 +211,77 @@ const getCachedCoaches = unstable_cache(
 // 학부모가 "월요일 수업하는 선생님 누구야?" 같은 질문에 답하기 위함
 const getCachedCoachSlots = unstable_cache(
   async () => {
+    // 요일 한글 매핑
+    const dayMap: Record<string, string> = {
+      Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
+    };
+
+    try {
+      const dbSlots = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT ss."slotKey", ss.period, ss."dayKey", ss.label,
+                ss."startTime", ss."endTime", ss."gradeRange", ss.capacity,
+                ss."enrolledSnapshot", ss."coachId",
+                co.name AS "coachName",
+                p.name AS "programName",
+                COALESCE(ec.active_enrolled, 0)::int AS active_enrolled
+         FROM "ScheduleSlot" ss
+         LEFT JOIN "Coach" co ON ss."coachId" = co.id
+         LEFT JOIN "Program" p ON ss."programId" = p.id
+         LEFT JOIN (
+           SELECT c."slotKey", COUNT(e.id)::int AS active_enrolled
+           FROM "Class" c
+           LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+           WHERE c."slotKey" IS NOT NULL
+           GROUP BY c."slotKey"
+         ) ec ON ec."slotKey" = ss."slotKey"
+         WHERE ss."coachId" IS NOT NULL
+           AND ss."isHidden" = false
+           AND (ss."activeFrom" IS NULL OR ss."activeFrom" <= NOW())
+           AND (ss."activeTo" IS NULL OR ss."activeTo" >= NOW())
+         ORDER BY
+           CASE ss."dayKey"
+             WHEN 'Mon' THEN 1 WHEN 'Tue' THEN 2 WHEN 'Wed' THEN 3
+             WHEN 'Thu' THEN 4 WHEN 'Fri' THEN 5 WHEN 'Sat' THEN 6 WHEN 'Sun' THEN 7
+             ELSE 99
+           END,
+           ss."displayOrder" ASC,
+           ss."startTime" ASC`
+      );
+
+      if (dbSlots.length > 0) {
+        const coachMap: Record<string, { coachName: string; slots: string[] }> = {};
+        for (const slot of dbSlots) {
+          const coachName = slot.coachName ?? slot.coachname;
+          const coachId = slot.coachId ?? slot.coachid;
+          if (!coachName || !coachId) continue;
+
+          const slotKey = String(slot.slotKey ?? slot.slotkey ?? "");
+          const slotNum = Number(slot.period ?? slotKey.split("-")[1] ?? 0);
+          const dayKor = dayMap[slot.dayKey ?? slot.daykey] ?? (slot.dayKey ?? slot.daykey ?? "");
+          const label = slot.label ?? "";
+          const start = slot.startTime ?? slot.starttime ?? "";
+          const end = slot.endTime ?? slot.endtime ?? "";
+          const program = slot.programName ?? slot.programname ?? "";
+          const grade = slot.gradeRange ?? slot.graderange ?? "";
+          const gradeTag = grade ? `, ${grade}` : "";
+          const enrolled = Number(slot.active_enrolled ?? slot.activeEnrolled ?? slot.enrolledSnapshot ?? slot.enrolledsnapshot ?? 0);
+          const capacity = Number(slot.capacity ?? 12);
+          const capTag = capacity > 0 ? `, ${enrolled}/${capacity}명` : "";
+          const slotTag = slotNum > 0 ? `${slotNum}교시 ` : "";
+          const slotInfo = `${dayKor} ${slotTag}${start}~${end} ${label}${gradeTag}${capTag}${program ? ` (${program})` : ""}`.trim();
+
+          if (!coachMap[coachId]) coachMap[coachId] = { coachName, slots: [] };
+          coachMap[coachId].slots.push(slotInfo);
+        }
+        return coachMap;
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!message.includes("ScheduleSlot")) {
+        console.error("[chat] getCoachSlots ScheduleSlot failed:", e);
+      }
+    }
+
     try {
       // ClassSlotOverride: slotKey에서 요일 추출 (예: "Mon-3" → "Mon")
       const overrides = await prisma.$queryRawUnsafe<any[]>(
@@ -235,11 +306,6 @@ const getCachedCoachSlots = unstable_cache(
          LEFT JOIN "Program" p ON ccs."programId" = p.id
          WHERE ccs."coachId" IS NOT NULL AND ccs."isHidden" = false`
       );
-
-      // 요일 한글 매핑
-      const dayMap: Record<string, string> = {
-        Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
-      };
 
       // 코치별로 담당 반/요일을 그룹핑
       const coachMap: Record<string, { coachName: string; slots: string[] }> = {};
@@ -293,7 +359,7 @@ const getCachedCoachSlots = unstable_cache(
       return {};
     }
   },
-  ["chat-coach-slots"],
+  ["chat-coach-slots-v2"],
   { revalidate: 300 } // 5분 캐시
 );
 
@@ -391,13 +457,62 @@ const getCachedFaq = unstable_cache(
 const getCachedSlotGrades = unstable_cache(
   async () => {
     try {
+      const dbSlots = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT ss."dayKey", ss."dayLabel", ss."startTime", ss."endTime", ss.label,
+                ss."gradeRange", ss.capacity, ss."enrolledSnapshot",
+                COALESCE(ec.active_enrolled, 0)::int AS active_enrolled
+         FROM "ScheduleSlot" ss
+         LEFT JOIN (
+           SELECT c."slotKey", COUNT(e.id)::int AS active_enrolled
+           FROM "Class" c
+           LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+           WHERE c."slotKey" IS NOT NULL
+           GROUP BY c."slotKey"
+         ) ec ON ec."slotKey" = ss."slotKey"
+         WHERE ss."isHidden" = false
+           AND ss."gradeRange" IS NOT NULL
+           AND ss."gradeRange" <> ''
+           AND (ss."activeFrom" IS NULL OR ss."activeFrom" <= NOW())
+           AND (ss."activeTo" IS NULL OR ss."activeTo" >= NOW())
+         ORDER BY
+           CASE ss."dayKey"
+             WHEN 'Mon' THEN 1 WHEN 'Tue' THEN 2 WHEN 'Wed' THEN 3
+             WHEN 'Thu' THEN 4 WHEN 'Fri' THEN 5 WHEN 'Sat' THEN 6 WHEN 'Sun' THEN 7
+             ELSE 99
+           END,
+           ss."displayOrder" ASC,
+           ss."startTime" ASC`
+      );
+
+      if (dbSlots.length > 0) {
+        return {
+          sheetSlots: dbSlots.map((r: any) => ({
+            dayLabel: r.dayLabel ?? r.daylabel ?? "",
+            startTime: r.startTime ?? r.starttime ?? "",
+            endTime: r.endTime ?? r.endtime ?? "",
+            label: r.label ?? "",
+            gradeRange: r.gradeRange ?? r.graderange ?? "",
+            enrolled: Number(r.active_enrolled ?? r.activeEnrolled ?? r.enrolledSnapshot ?? r.enrolledsnapshot ?? 0),
+            capacity: Number(r.capacity ?? 12),
+          })),
+          customSlots: [],
+        };
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!message.includes("ScheduleSlot")) {
+        console.error("[chat] getSlotGrades ScheduleSlot failed:", e);
+      }
+    }
+
+    try {
       // 1) Google Sheets 기반 슬롯: SheetSlotCache JSON에서 학년 범위 추출
       const sheetRows = await prisma.$queryRawUnsafe<any[]>(
         `SELECT "slotsJson" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`
       );
       const sheetSlots: Array<{
         dayLabel: string; startTime: string; endTime: string;
-        gradeRange: string; enrolled: number;
+        gradeRange: string; enrolled: number; capacity?: number; label?: string;
       }> = [];
       if (sheetRows[0]) {
         const json = sheetRows[0].slotsJson ?? sheetRows[0].slotsjson ?? "[]";
@@ -443,7 +558,7 @@ const getCachedSlotGrades = unstable_cache(
       return { sheetSlots: [], customSlots: [] };
     }
   },
-  ["chat-slot-grades"],
+  ["chat-slot-grades-v2"],
   { revalidate: 300 } // 5분 캐시
 );
 
@@ -474,7 +589,7 @@ function buildSystemPrompt(
   notices: any[],
   faq: any[],
   slotGrades: {
-    sheetSlots: Array<{ dayLabel: string; startTime: string; endTime: string; gradeRange: string; enrolled: number }>;
+    sheetSlots: Array<{ dayLabel: string; startTime: string; endTime: string; gradeRange: string; enrolled: number; capacity?: number; label?: string }>;
     customSlots: Array<{ dayLabel: string; startTime: string; endTime: string; gradeRange: string; enrolled: number; capacity: number; label: string }>;
   }
 ): string {
@@ -625,7 +740,11 @@ function buildSystemPrompt(
   const gradeLines: string[] = [];
   // Google Sheets 기반 슬롯의 학년 범위
   for (const s of slotGrades.sheetSlots) {
-    gradeLines.push(`- ${s.dayLabel} ${s.startTime}~${s.endTime}: ${s.gradeRange} (${s.enrolled}명 수강중)`);
+    const labelTag = s.label ? ` ${s.label}` : "";
+    const fullTag = typeof s.capacity === "number" && s.capacity > 0
+      ? `${s.enrolled}/${s.capacity}명${s.enrolled >= s.capacity ? " [마감]" : ""}`
+      : `${s.enrolled}명 수강중`;
+    gradeLines.push(`- ${s.dayLabel} ${s.startTime}~${s.endTime}${labelTag}: ${s.gradeRange} (${fullTag})`);
   }
   // CustomClassSlot의 학년 범위
   for (const s of slotGrades.customSlots) {

@@ -1,6 +1,6 @@
 import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms, getSheetSlotCache } from "@/lib/queries";
-import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import { buildMergedSlots } from "@/lib/mergeSlots";
+import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SimulatorClient from "./SimulatorClient";
@@ -13,12 +13,10 @@ export const metadata = {
 };
 
 export default async function SimulatorPage() {
-    // schedule/page.tsx와 동일한 데이터 조회 패턴 — 5개 쿼리를 병렬 실행
-    const [settings, cachedSlots, overridesList, customSlotsList, programs] = await Promise.all([
+    // schedule/page.tsx와 동일하게 DB 시간표를 우선 사용하고, 없을 때만 시트 캐시로 fallback
+    const [settings, dbScheduleData, programs] = await Promise.all([
         getAcademySettings(),
-        getSheetSlotCache(),
-        getClassSlotOverrides(),
-        getCustomClassSlots(),
+        getScheduleSlotAdminData(),
         getPrograms(),
     ]);
 
@@ -27,10 +25,21 @@ export default async function SimulatorPage() {
     const trialFormUrl = (settings as any).trialFormUrl as string | null | undefined;
     const enrollFormUrl = (settings as any).enrollFormUrl as string | null | undefined;
 
-    const rawSlots: SheetClassSlot[] = cachedSlots ?? [];
+    const scheduleData = dbScheduleData ?? await (async () => {
+        const [cachedSlots, overridesList, customSlotsList] = await Promise.all([
+            getSheetSlotCache(),
+            getClassSlotOverrides(),
+            getCustomClassSlots(),
+        ]);
+        return {
+            slots: cachedSlots ?? [],
+            overrides: overridesList,
+            customSlots: customSlotsList,
+        };
+    })();
 
     // 공통 함수로 시트 슬롯 + 오버라이드 + 커스텀 슬롯 병합
-    const allSlots = buildMergedSlots(rawSlots, overridesList, customSlotsList);
+    const allSlots = buildMergedSlots(scheduleData.slots, scheduleData.overrides, scheduleData.customSlots);
 
     // 프로그램 정보 (이름 매칭용)
     const programList = (programs as any[]).map((p) => ({ id: p.id, name: p.name }));

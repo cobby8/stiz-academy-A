@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-13: 공개 시간표, 수업 찾기, 챗봇 코치/학년 추천 데이터, 사이트 운영 점검봇이 `ScheduleSlot` DB를 우선 조회하고 없을 때만 기존 시트 캐시로 fallback하도록 전환했다.
 - 2026-07-13: 관리자 시간표 API/초기 payload가 `ScheduleSlot`을 우선 읽고, 기존 저장 액션이 `ScheduleSlot`과 `Class`에도 미러링되도록 보강했다.
 - 2026-07-13: `ScheduleSlot` 이관 성공 시 같은 `slotKey`의 `Class`를 생성/갱신해 기존 `Enrollment(ACTIVE)` 인원 집계와 연결되도록 했다.
 - 2026-07-12: 시간표 이관 검증에서 시트 인원은 참고값으로만 보고, 실제 운영 인원은 `Class`와 `Enrollment(ACTIVE)` 집계 기준으로 비교하도록 보강했다.

@@ -1,6 +1,6 @@
 import { getAcademySettings, getClassSlotOverrides, getCustomClassSlots, getPrograms, getSheetSlotCache } from "@/lib/queries";
-import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import { buildMergedSlots } from "@/lib/mergeSlots";
+import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import ScheduleClient from "./ScheduleClient";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
@@ -12,19 +12,29 @@ export const revalidate = 300;
 export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점 요일별 수업 시간표. 프로그램별 클래스 시간 및 담당 코치 확인." };
 
 export default async function SchedulePage() {
-    const [settings, cachedSlots, overridesList, customSlotsList, programs] = await Promise.all([
+    const [settings, dbScheduleData, programs] = await Promise.all([
         getAcademySettings(),
-        getSheetSlotCache(),
-        getClassSlotOverrides(),
-        getCustomClassSlots(),
+        getScheduleSlotAdminData(),
         getPrograms(),
     ]);
 
     const phone = (settings as any).contactPhone || "010-0000-0000";
-    const rawSlots: SheetClassSlot[] = cachedSlots ?? [];
+
+    const scheduleData = dbScheduleData ?? await (async () => {
+        const [cachedSlots, overridesList, customSlotsList] = await Promise.all([
+            getSheetSlotCache(),
+            getClassSlotOverrides(),
+            getCustomClassSlots(),
+        ]);
+        return {
+            slots: cachedSlots ?? [],
+            overrides: overridesList,
+            customSlots: customSlotsList,
+        };
+    })();
 
     // 공통 함수로 시트 슬롯 + 오버라이드 + 커스텀 슬롯 병합
-    const allSlots = buildMergedSlots(rawSlots, overridesList, customSlotsList);
+    const allSlots = buildMergedSlots(scheduleData.slots, scheduleData.overrides, scheduleData.customSlots);
 
     return (
         <PublicPageLayout>

@@ -130,8 +130,9 @@ async function checkPublicContent(checks: SiteOpsCheck[]) {
 }
 
 async function checkSchedule(checks: SiteOpsCheck[], settings: any) {
-  const [classCount, customSlotCount, sheetRows] = await Promise.all([
+  const [classCount, scheduleSlotCount, customSlotCount, sheetRows] = await Promise.all([
     countRows(`SELECT COUNT(*)::int AS count FROM "Class"`),
+    countRows(`SELECT COUNT(*)::int AS count FROM "ScheduleSlot" WHERE "isHidden" = false`).catch(() => 0),
     countRows(`SELECT COUNT(*)::int AS count FROM "CustomClassSlot" WHERE "isHidden" = false`),
     prisma.$queryRawUnsafe<any[]>(
       `SELECT "slotsJson", "syncedAt" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`,
@@ -150,8 +151,11 @@ async function checkSchedule(checks: SiteOpsCheck[], settings: any) {
     sheetSlotCount = 0;
   }
 
-  const hasScheduleData = classCount > 0 || customSlotCount > 0 || sheetSlotCount > 0;
-  const staleSheet = Boolean(sheetUrl && isOlderThan(syncedAt, 14));
+  const hasScheduleData = scheduleSlotCount > 0 || classCount > 0 || customSlotCount > 0 || sheetSlotCount > 0;
+  const staleSheet = Boolean(scheduleSlotCount === 0 && sheetUrl && isOlderThan(syncedAt, 14));
+  const readyMessage = scheduleSlotCount > 0
+    ? `DB 시간표 ${scheduleSlotCount}개가 준비되어 있습니다. 연결 반 ${classCount}개`
+    : `시간표 데이터가 준비되어 있습니다. 반 ${classCount}개, 동기화 슬롯 ${sheetSlotCount}개`;
 
   checks.push({
     id: "schedule-data",
@@ -160,7 +164,7 @@ async function checkSchedule(checks: SiteOpsCheck[], settings: any) {
     message: hasScheduleData
       ? staleSheet
         ? "구글시트 시간표 동기화가 14일 이상 오래됐습니다."
-        : `시간표 데이터가 준비되어 있습니다. 반 ${classCount}개, 동기화 슬롯 ${sheetSlotCount}개`
+        : readyMessage
       : "공개 시간표에 보여줄 수업 데이터가 없습니다.",
     actionHref: "/admin/schedule",
     actionLabel: staleSheet ? "동기화하기" : "시간표 관리",

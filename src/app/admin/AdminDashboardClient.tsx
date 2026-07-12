@@ -73,6 +73,27 @@ type SystemStatusData = {
     };
 };
 
+type SiteOpsCheckStatus = "ok" | "fixed" | "warning" | "critical";
+
+type SiteOpsCheck = {
+    id: string;
+    label: string;
+    status: SiteOpsCheckStatus;
+    message: string;
+    actionLabel?: string;
+    actionHref?: string;
+};
+
+type SiteOpsBotResult = {
+    checkedAt: string;
+    ok: boolean;
+    fixedCount: number;
+    manualActionCount: number;
+    criticalCount: number;
+    checks: SiteOpsCheck[];
+    notified: boolean;
+};
+
 function SymbolIcon({
     name,
     size = 18,
@@ -198,6 +219,9 @@ export default function AdminDashboardClient({
     const [systemStatus, setSystemStatus] = useState<SystemStatusData | null>(null);
     const [systemLoading, setSystemLoading] = useState(false);
     const [systemError, setSystemError] = useState(false);
+    const [siteOpsResult, setSiteOpsResult] = useState<SiteOpsBotResult | null>(null);
+    const [siteOpsLoading, setSiteOpsLoading] = useState(false);
+    const [siteOpsError, setSiteOpsError] = useState(false);
 
     const loadDashboard = useCallback(async (showSkeleton = true) => {
         if (showSkeleton) setLoading(true);
@@ -232,6 +256,24 @@ export default function AdminDashboardClient({
         }
     }, []);
 
+    const runSiteOpsBot = useCallback(async () => {
+        setSiteOpsError(false);
+        setSiteOpsLoading(true);
+
+        try {
+            const res = await fetch("/api/admin/site-ops-bot", {
+                method: "POST",
+                cache: "no-store",
+            });
+            if (!res.ok) throw new Error("Site ops bot request failed");
+            setSiteOpsResult((await res.json()) as SiteOpsBotResult);
+        } catch {
+            setSiteOpsError(true);
+        } finally {
+            setSiteOpsLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (!hasInitialData) {
             void loadDashboard(true);
@@ -261,10 +303,14 @@ export default function AdminDashboardClient({
                     systemStatus={systemStatus}
                     systemLoading={systemLoading}
                     systemError={systemError}
+                    siteOpsResult={siteOpsResult}
+                    siteOpsLoading={siteOpsLoading}
+                    siteOpsError={siteOpsError}
                     detailsLoaded={detailsLoaded}
                     detailsLoading={detailsLoading}
                     onLoadDetails={() => void loadDashboard(false)}
                     onRetrySystem={loadSystemStatus}
+                    onRunSiteOpsBot={runSiteOpsBot}
                 />
             )}
         </div>
@@ -276,19 +322,27 @@ function DashboardContent({
     systemStatus,
     systemLoading,
     systemError,
+    siteOpsResult,
+    siteOpsLoading,
+    siteOpsError,
     detailsLoaded,
     detailsLoading,
     onLoadDetails,
     onRetrySystem,
+    onRunSiteOpsBot,
 }: {
     data: DashboardData;
     systemStatus: SystemStatusData | null;
     systemLoading: boolean;
     systemError: boolean;
+    siteOpsResult: SiteOpsBotResult | null;
+    siteOpsLoading: boolean;
+    siteOpsError: boolean;
     detailsLoaded: boolean;
     detailsLoading: boolean;
     onLoadDetails: () => void;
     onRetrySystem: () => void;
+    onRunSiteOpsBot: () => void;
 }) {
     const { stats, pendingRequests, pendingCount, enrollStats, extendedStats, todayClasses, recentStudents } = data;
     const revDiff = extendedStats.lastMonthRevenue > 0
@@ -396,9 +450,15 @@ function DashboardContent({
                 pendingRequests={pendingRequests}
             />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <ProgramStudentsCard programStudents={extendedStats.programStudents} />
                 <QuickManagementCard />
+                <SiteOpsBotCard
+                    result={siteOpsResult}
+                    loading={siteOpsLoading}
+                    error={siteOpsError}
+                    onRun={onRunSiteOpsBot}
+                />
                 <SystemStatusCard
                     systemStatus={systemStatus}
                     systemLoading={systemLoading}
@@ -410,8 +470,14 @@ function DashboardContent({
             ) : (
                 <>
                     <DeferredDetailsCard loading={detailsLoading} onLoad={onLoadDetails} />
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <QuickManagementCard />
+                        <SiteOpsBotCard
+                            result={siteOpsResult}
+                            loading={siteOpsLoading}
+                            error={siteOpsError}
+                            onRun={onRunSiteOpsBot}
+                        />
                         <SystemStatusCard
                             systemStatus={systemStatus}
                             systemLoading={systemLoading}
@@ -635,6 +701,130 @@ function QuickManagementCard() {
                 <QuickLink title="시간표" href="/admin/schedule" color="orange" />
                 <QuickLink title="설정" href="/admin/settings" color="blue" />
             </div>
+        </div>
+    );
+}
+
+function SiteOpsBotCard({
+    result,
+    loading,
+    error,
+    onRun,
+}: {
+    result: SiteOpsBotResult | null;
+    loading: boolean;
+    error: boolean;
+    onRun: () => void;
+}) {
+    const attentionItems = result?.checks.filter((check) => check.status === "warning" || check.status === "critical") ?? [];
+    const fixedItems = result?.checks.filter((check) => check.status === "fixed") ?? [];
+    const previewItems = attentionItems.length > 0 ? attentionItems.slice(0, 3) : fixedItems.slice(0, 2);
+    const statusLabel = !result
+        ? "미점검"
+        : result.ok
+            ? result.fixedCount > 0 ? "자동 조치 완료" : "정상"
+            : result.criticalCount > 0 ? "긴급 확인" : "확인 필요";
+    const statusClass = !result
+        ? "bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-300"
+        : result.ok
+            ? "bg-green-100 text-green-700"
+            : result.criticalCount > 0
+                ? "bg-red-100 text-red-700"
+                : "bg-yellow-100 text-yellow-700";
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+            <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white">사이트 점검 봇</h3>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {result ? new Date(result.checkedAt).toLocaleString("ko-KR") : "필요할 때 수동 점검"}
+                    </p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${statusClass}`}>
+                    {loading ? "점검 중" : statusLabel}
+                </span>
+            </div>
+
+            <button
+                type="button"
+                onClick={onRun}
+                disabled={loading}
+                className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+                <SymbolIcon name={loading ? "sync" : "smart_toy"} size={18} />
+                {loading ? "점검 중" : "점검 실행"}
+            </button>
+
+            {error && (
+                <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    점검을 실행하지 못했습니다. 잠시 후 다시 시도해주세요.
+                </p>
+            )}
+
+            {!result && !error && (
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                    사이트 운영 상태, 백업, 신청 링크, 인스타 게시 대기열을 확인합니다.
+                </p>
+            )}
+
+            {result && (
+                <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="rounded-lg bg-gray-50 px-2 py-2 dark:bg-gray-900">
+                            <p className="font-bold text-gray-900 dark:text-white">{result.checks.length}</p>
+                            <p className="text-gray-500 dark:text-gray-400">점검</p>
+                        </div>
+                        <div className="rounded-lg bg-green-50 px-2 py-2">
+                            <p className="font-bold text-green-700">{result.fixedCount}</p>
+                            <p className="text-green-700/70">자동조치</p>
+                        </div>
+                        <div className="rounded-lg bg-yellow-50 px-2 py-2">
+                            <p className="font-bold text-yellow-700">{result.manualActionCount}</p>
+                            <p className="text-yellow-700/70">확인</p>
+                        </div>
+                    </div>
+
+                    {previewItems.length === 0 ? (
+                        <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
+                            현재 수동 조치가 필요한 항목은 없습니다.
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {previewItems.map((item) => (
+                                <div key={item.id} className="rounded-lg border border-gray-100 px-3 py-2 dark:border-gray-700">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-900 dark:text-white">{item.label}</p>
+                                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.message}</p>
+                                        </div>
+                                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                            item.status === "critical"
+                                                ? "bg-red-100 text-red-700"
+                                                : item.status === "fixed"
+                                                    ? "bg-green-100 text-green-700"
+                                                    : "bg-yellow-100 text-yellow-700"
+                                        }`}>
+                                            {item.status === "critical" ? "긴급" : item.status === "fixed" ? "완료" : "확인"}
+                                        </span>
+                                    </div>
+                                    {item.actionHref && item.actionLabel && (
+                                        <Link href={item.actionHref} prefetch={false} className="mt-2 inline-flex text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime">
+                                            {item.actionLabel} &rarr;
+                                        </Link>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {result.notified && (
+                        <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                            수동 조치가 필요한 항목은 관리자 알림으로도 남겼습니다.
+                        </p>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

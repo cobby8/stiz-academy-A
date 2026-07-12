@@ -54,9 +54,9 @@ export default function AdminShellClient({
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [systemToolsOpen, setSystemToolsOpen] = useState(false);
     // 현재 URL 경로를 기반으로 활성 탭을 자동 결정
-    // "/admin" 정확 일치(대시보드) 또는 OPS_PATHS로 시작하면 "학원운영"
+    // "/admin" 첫 진입은 사이트 관리부터 보여준다.
     const autoTab = useMemo(() => {
-        if (pathname === "/admin") return "ops" as const;
+        if (pathname === "/admin") return "site" as const;
         if (OPS_PATHS.some((p) => pathname.startsWith(p))) return "ops" as const;
         return "site" as const;
     }, [pathname]);

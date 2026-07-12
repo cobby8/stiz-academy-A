@@ -128,6 +128,66 @@ export interface StudentRegistrationSheetParseResult {
   errors: { rowNumber: number; reason: string }[];
 }
 
+export interface StudentShuttleSheetRow {
+  rowNumber: number;
+  sheetName: string;
+  raw: Record<string, string>;
+  rowHash: string;
+  studentKey: string | null;
+  monthLabel: string;
+  studentName: string | null;
+  studentPhone: string | null;
+  parentPhone: string | null;
+  dayLabel: string | null;
+  classTime: string | null;
+  arrivalTime: string | null;
+  destination: string | null;
+  note: string | null;
+  memo: string | null;
+}
+
+export interface StudentChangeSheetRow {
+  rowNumber: number;
+  sheetName: string;
+  raw: Record<string, string>;
+  rowHash: string;
+  occurredAt: Date | null;
+  changeSummary: string | null;
+  registrationReflected: boolean;
+  rallyzReflected: boolean;
+  vehicleReflected: boolean;
+  alarmStatus: string | null;
+  note: string | null;
+}
+
+export interface StudentTeamRosterSheetRow {
+  rowNumber: number;
+  sheetName: string;
+  raw: Record<string, string>;
+  rowHash: string;
+  studentKey: string | null;
+  studentName: string;
+  birthDate: Date | null;
+  jerseyNumber: string | null;
+  phone: string | null;
+  grade: string | null;
+  branch: string | null;
+  eventColumnsJSON: Record<string, string>;
+}
+
+export interface StudentAuxiliarySheetsParseResult {
+  shuttleRows: StudentShuttleSheetRow[];
+  changeRows: StudentChangeSheetRow[];
+  teamRows: StudentTeamRosterSheetRow[];
+  summary: {
+    shuttleRows: number;
+    changeRows: number;
+    teamRows: number;
+    totalRows: number;
+  };
+  errors: { sheetName: string; rowNumber: number; reason: string }[];
+}
+
 /** 이관 미리보기 결과 */
 export interface ImportPreviewResult {
   students: TransformedStudent[];
@@ -386,6 +446,43 @@ function stableHash(value: string): string {
     hash = (hash * 31 + value.charCodeAt(i)) | 0;
   }
   return Math.abs(hash).toString(16);
+}
+
+function normalizeHeaderKey(value: string): string {
+  return value.replace(/\s+/g, "").trim();
+}
+
+function detectHeaderRow(rows: string[][], expectedLabels: string[]): number {
+  const normalizedLabels = expectedLabels.map(normalizeHeaderKey);
+  for (let i = 0; i < rows.length; i++) {
+    const normalizedRow = rows[i].map(normalizeHeaderKey);
+    const matchCount = normalizedLabels.filter((label) =>
+      normalizedRow.some((header) => header.includes(label))
+    ).length;
+    if (matchCount >= Math.min(2, normalizedLabels.length)) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+function buildSheetRecord(headers: string[], row: string[]): Record<string, string> {
+  return headers.reduce<Record<string, string>>((acc, header, index) => {
+    acc[header] = row[index] || "";
+    return acc;
+  }, {});
+}
+
+function toSheetBool(raw: string | null | undefined): boolean {
+  const value = (raw || "").trim();
+  if (!value) return false;
+  if (/(미완료|미반영|아니오|false|no|x|×)/i.test(value)) return false;
+  return /(완료|반영|확인|예|true|yes|y|o|v|✓|✔|✅)/i.test(value);
+}
+
+function extractMonthLabel(sheetName: string): string {
+  const match = sheetName.match(/(\d{1,2})\s*월/);
+  return match ? `${match[1]}월` : sheetName;
 }
 
 // ──────────────────────────────────────────────
@@ -852,4 +949,212 @@ export function parseRegistrationSheetCsv(csvText: string): StudentRegistrationS
     },
     errors,
   };
+}
+
+export function parseShuttleSheetCsv(
+  csvText: string,
+  sheetName: string
+): { rows: StudentShuttleSheetRow[]; errors: { sheetName: string; rowNumber: number; reason: string }[] } {
+  const rows = parseCsvText(csvText);
+  const errors: { sheetName: string; rowNumber: number; reason: string }[] = [];
+  const parsedRows: StudentShuttleSheetRow[] = [];
+  if (rows.length < 2) return { rows: parsedRows, errors };
+
+  const headerIndex = detectHeaderRow(rows, ["수강생 이름", "요일", "수업시간", "목적지"]);
+  const headers = rows[headerIndex].map((header, index) => header.trim() || `__col_${index + 1}`);
+  const monthLabel = extractMonthLabel(sheetName);
+
+  for (let i = headerIndex + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.some((cell) => cell.trim())) continue;
+    const rowNumber = i + 1;
+
+    try {
+      const raw = buildSheetRecord(headers, row);
+      const studentName = cleanString(findHeaderValue(raw, "수강생 이름", "이름"));
+      const studentPhone = normalizePhone(findHeaderValue(raw, "수강생 전화번호", "학생 전화번호"));
+      const parentPhone = normalizePhone(findHeaderValue(raw, "학부모 전화번호", "보호자 전화번호"));
+      const studentKey =
+        studentName && (parentPhone || studentPhone)
+          ? `${studentName}__${parentPhone || studentPhone}`
+          : null;
+
+      parsedRows.push({
+        rowNumber,
+        sheetName,
+        raw,
+        rowHash: stableHash(JSON.stringify(raw)),
+        studentKey,
+        monthLabel,
+        studentName,
+        studentPhone: studentPhone || null,
+        parentPhone: parentPhone || null,
+        dayLabel: cleanString(findHeaderValue(raw, "요일")),
+        classTime: cleanString(findHeaderValue(raw, "수업시간")),
+        arrivalTime: cleanString(findHeaderValue(raw, "도착시간")),
+        destination: cleanString(findHeaderValue(raw, "목적지")),
+        note: cleanString(findHeaderValue(raw, "비고")),
+        memo: cleanString(findHeaderValue(raw, "메모")),
+      });
+    } catch (err) {
+      errors.push({
+        sheetName,
+        rowNumber,
+        reason: err instanceof Error ? err.message : "차량 행 파싱 실패",
+      });
+    }
+  }
+
+  return { rows: parsedRows, errors };
+}
+
+export function parseChangeSheetCsv(
+  csvText: string,
+  sheetName = "변동내역메모"
+): { rows: StudentChangeSheetRow[]; errors: { sheetName: string; rowNumber: number; reason: string }[] } {
+  const rows = parseCsvText(csvText);
+  const errors: { sheetName: string; rowNumber: number; reason: string }[] = [];
+  const parsedRows: StudentChangeSheetRow[] = [];
+  if (rows.length < 2) return { rows: parsedRows, errors };
+
+  const headerIndex = detectHeaderRow(rows, ["날짜", "변동내역", "등록시트 반영"]);
+  const headers = rows[headerIndex].map((header, index) => header.trim() || `__col_${index + 1}`);
+
+  for (let i = headerIndex + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.some((cell) => cell.trim())) continue;
+    const rowNumber = i + 1;
+
+    try {
+      const raw = buildSheetRecord(headers, row);
+      parsedRows.push({
+        rowNumber,
+        sheetName,
+        raw,
+        rowHash: stableHash(JSON.stringify(raw)),
+        occurredAt: parseLooseDate(findHeaderValue(raw, "날짜", "일자")),
+        changeSummary: cleanString(findHeaderValue(raw, "변동내역", "내용")),
+        registrationReflected: toSheetBool(findHeaderValue(raw, "등록시트 반영", "등록 반영")),
+        rallyzReflected: toSheetBool(findHeaderValue(raw, "랠리즈 반영", "랠리즈")),
+        vehicleReflected: toSheetBool(findHeaderValue(raw, "차량 반영", "차량")),
+        alarmStatus: cleanString(findHeaderValue(raw, "알람", "알림")),
+        note: cleanString(findHeaderValue(raw, "비고", "메모")),
+      });
+    } catch (err) {
+      errors.push({
+        sheetName,
+        rowNumber,
+        reason: err instanceof Error ? err.message : "변동내역 행 파싱 실패",
+      });
+    }
+  }
+
+  return { rows: parsedRows, errors };
+}
+
+export function parseTeamRosterSheetCsv(
+  csvText: string,
+  sheetName = "대표팀 명단"
+): { rows: StudentTeamRosterSheetRow[]; errors: { sheetName: string; rowNumber: number; reason: string }[] } {
+  const rows = parseCsvText(csvText);
+  const errors: { sheetName: string; rowNumber: number; reason: string }[] = [];
+  const parsedRows: StudentTeamRosterSheetRow[] = [];
+  if (rows.length < 2) return { rows: parsedRows, errors };
+
+  const headerIndex = detectHeaderRow(rows, ["이름", "생년월일", "백넘버"]);
+  const headers = rows[headerIndex].map((header, index) => header.trim() || `__col_${index + 1}`);
+  const baseHeaders = new Set(["이름", "생년월일", "백넘버", "연락처", "학년", "지점"]);
+
+  for (let i = headerIndex + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.some((cell) => cell.trim())) continue;
+    const rowNumber = i + 1;
+
+    try {
+      const raw = buildSheetRecord(headers, row);
+      const studentNameRaw = findHeaderValue(raw, "이름", "수강생 이름").trim();
+      const studentName = studentNameRaw || "(이름 없음)";
+      const phone = normalizePhone(findHeaderValue(raw, "연락처", "전화번호"));
+      const eventColumnsJSON = headers.reduce<Record<string, string>>((acc, header) => {
+        if (!baseHeaders.has(header) && raw[header]) acc[header] = raw[header];
+        return acc;
+      }, {});
+
+      if (!studentNameRaw) {
+        errors.push({
+          sheetName,
+          rowNumber,
+          reason: "대표팀 명단 이름이 비어 있어 원본 행만 저장됩니다.",
+        });
+      }
+
+      parsedRows.push({
+        rowNumber,
+        sheetName,
+        raw,
+        rowHash: stableHash(JSON.stringify(raw)),
+        studentKey: studentNameRaw && phone ? `${studentNameRaw}__${phone}` : null,
+        studentName,
+        birthDate: parseSpreadsheetDate(findHeaderValue(raw, "생년월일", "생일")),
+        jerseyNumber: cleanString(findHeaderValue(raw, "백넘버", "등번호")),
+        phone: phone || null,
+        grade: cleanString(findHeaderValue(raw, "학년")),
+        branch: cleanString(findHeaderValue(raw, "지점")),
+        eventColumnsJSON,
+      });
+    } catch (err) {
+      errors.push({
+        sheetName,
+        rowNumber,
+        reason: err instanceof Error ? err.message : "대표팀 명단 행 파싱 실패",
+      });
+    }
+  }
+
+  return { rows: parsedRows, errors };
+}
+
+export function parseStudentAuxiliarySheetsCsv(
+  csvSheets: Record<string, string>
+): StudentAuxiliarySheetsParseResult {
+  const result: StudentAuxiliarySheetsParseResult = {
+    shuttleRows: [],
+    changeRows: [],
+    teamRows: [],
+    summary: { shuttleRows: 0, changeRows: 0, teamRows: 0, totalRows: 0 },
+    errors: [],
+  };
+
+  for (const [sheetName, csvText] of Object.entries(csvSheets)) {
+    if (!csvText?.trim()) continue;
+
+    if (sheetName.includes("차량")) {
+      const parsed = parseShuttleSheetCsv(csvText, sheetName);
+      result.shuttleRows.push(...parsed.rows);
+      result.errors.push(...parsed.errors);
+      continue;
+    }
+
+    if (sheetName.includes("변동")) {
+      const parsed = parseChangeSheetCsv(csvText, sheetName);
+      result.changeRows.push(...parsed.rows);
+      result.errors.push(...parsed.errors);
+      continue;
+    }
+
+    if (sheetName.includes("대표팀")) {
+      const parsed = parseTeamRosterSheetCsv(csvText, sheetName);
+      result.teamRows.push(...parsed.rows);
+      result.errors.push(...parsed.errors);
+    }
+  }
+
+  result.summary = {
+    shuttleRows: result.shuttleRows.length,
+    changeRows: result.changeRows.length,
+    teamRows: result.teamRows.length,
+    totalRows: result.shuttleRows.length + result.changeRows.length + result.teamRows.length,
+  };
+
+  return result;
 }

@@ -17,7 +17,11 @@ import { prisma } from "@/lib/prisma";
 import {
   parseAndTransformCsv,
   parseRegistrationSheetCsv,
+  parseStudentAuxiliarySheetsCsv,
+  type StudentChangeSheetRow,
   type StudentRegistrationSheetRow,
+  type StudentShuttleSheetRow,
+  type StudentTeamRosterSheetRow,
   type TransformedStudent,
 } from "@/lib/importStudents";
 
@@ -32,12 +36,22 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { mode, csvText } = body as {
+    const { mode, csvText, csvSheets } = body as {
       mode: "preview" | "execute";
-      csvText: string;
+      csvText?: string;
+      csvSheets?: Record<string, string>;
     };
 
-    if (!csvText || typeof csvText !== "string") {
+    const sheetMap =
+      csvSheets && typeof csvSheets === "object" && !Array.isArray(csvSheets)
+        ? csvSheets
+        : {};
+    const registrationCsvText =
+      typeof csvText === "string" && csvText.trim()
+        ? csvText
+        : sheetMap["등록"] || sheetMap.registration || "";
+
+    if (!registrationCsvText && Object.keys(sheetMap).length === 0) {
       return NextResponse.json(
         { error: "CSV 데이터가 없습니다." },
         { status: 400 }
@@ -45,8 +59,13 @@ export async function POST(request: NextRequest) {
     }
 
     // CSV 파싱 및 변환
-    const preview = parseAndTransformCsv(csvText);
-    const registrationSheet = parseRegistrationSheetCsv(csvText);
+    const preview = registrationCsvText
+      ? parseAndTransformCsv(registrationCsvText)
+      : emptyImportPreview();
+    const registrationSheet = registrationCsvText
+      ? parseRegistrationSheetCsv(registrationCsvText)
+      : emptyRegistrationSheet();
+    const auxiliarySheets = parseStudentAuxiliarySheetsCsv(sheetMap);
 
     // 미리보기 모드: 파싱 결과만 반환
     if (mode === "preview") {
@@ -56,6 +75,10 @@ export async function POST(request: NextRequest) {
           summary: registrationSheet.summary,
           headers: registrationSheet.headers,
           errors: registrationSheet.errors,
+        },
+        auxiliarySheets: {
+          summary: auxiliarySheets.summary,
+          errors: auxiliarySheets.errors,
         },
       });
     }
@@ -70,19 +93,31 @@ export async function POST(request: NextRequest) {
 
     await ensureStudentSheetImportTablesAvailable();
     const result = await executeImport(preview.students);
-    const sheetImport = await storeRegistrationSheetImport(registrationSheet.rows, {
-      importedBy: adminUser.appUserId,
-      sourceUrl: null,
-      spreadsheetId: null,
-      spreadsheetTitle: "수강생 등록 CSV",
-      summary: registrationSheet.summary,
-      parseErrorCount: registrationSheet.errors.length,
-    });
+    const sheetImport = await storeStudentSheetImport(
+      {
+        registrationRows: registrationSheet.rows,
+        shuttleRows: auxiliarySheets.shuttleRows,
+        changeRows: auxiliarySheets.changeRows,
+        teamRows: auxiliarySheets.teamRows,
+      },
+      {
+        importedBy: adminUser.appUserId,
+        sourceUrl: null,
+        spreadsheetId: null,
+        spreadsheetTitle: "수강생 등록 CSV",
+        summary: {
+          registration: registrationSheet.summary,
+          auxiliary: auxiliarySheets.summary,
+        },
+        parseErrorCount: registrationSheet.errors.length + auxiliarySheets.errors.length,
+      }
+    );
 
     return NextResponse.json({
       result: { ...result, sheetImport },
       preview: { summary: preview.summary },
       registrationSheet: { summary: registrationSheet.summary },
+      auxiliarySheets: { summary: auxiliarySheets.summary },
     });
   } catch (err) {
     console.error("[import-students] 오류:", err);
@@ -115,6 +150,45 @@ interface RegistrationSheetImportMeta {
   spreadsheetTitle: string | null;
   summary: unknown;
   parseErrorCount: number;
+}
+
+interface StudentSheetImportRows {
+  registrationRows: StudentRegistrationSheetRow[];
+  shuttleRows: StudentShuttleSheetRow[];
+  changeRows: StudentChangeSheetRow[];
+  teamRows: StudentTeamRosterSheetRow[];
+}
+
+function emptyImportPreview() {
+  return {
+    students: [],
+    summary: {
+      totalRows: 0,
+      uniqueStudents: 0,
+      activeCount: 0,
+      pausedCount: 0,
+      withdrawnCount: 0,
+      branch1Count: 0,
+      branch2Count: 0,
+    },
+    errors: [],
+  };
+}
+
+function emptyRegistrationSheet() {
+  return {
+    headers: [],
+    rows: [],
+    summary: {
+      totalRows: 0,
+      uniqueStudentKeys: 0,
+      missingStudentKeyRows: 0,
+      activeCount: 0,
+      pausedCount: 0,
+      withdrawnCount: 0,
+    },
+    errors: [],
+  };
 }
 
 /**
@@ -372,27 +446,37 @@ async function ensureStudentSheetImportTablesAvailable() {
   }
 }
 
-async function storeRegistrationSheetImport(
-  rows: StudentRegistrationSheetRow[],
+async function storeStudentSheetImport(
+  rows: StudentSheetImportRows,
   meta: RegistrationSheetImportMeta
 ) {
+  const totalRows =
+    rows.registrationRows.length +
+    rows.shuttleRows.length +
+    rows.changeRows.length +
+    rows.teamRows.length;
+
   const batchRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
     `INSERT INTO "StudentSheetImportBatch" (
        id, source, "spreadsheetId", "spreadsheetTitle", "sourceUrl", "importedBy",
-       status, "totalRows", "registrationRows", "errorRows", "rawSummaryJSON",
+       status, "totalRows", "registrationRows", "vehicleRows", "changeRows", "teamRows",
+       "errorRows", "rawSummaryJSON",
        message, "createdAt"
      )
      VALUES (
        gen_random_uuid()::text, 'GOOGLE_SHEETS_CSV', $1, $2, $3, $4,
-       'RUNNING', $5, $6, $7, $8, '등록 탭 CSV 이관 진행', NOW()
+       'RUNNING', $5, $6, $7, $8, $9, $10, $11, '수강생 시트 CSV 이관 진행', NOW()
      )
      RETURNING id`,
     meta.spreadsheetId,
     meta.spreadsheetTitle,
     meta.sourceUrl,
     meta.importedBy,
-    rows.length,
-    rows.length,
+    totalRows,
+    rows.registrationRows.length,
+    rows.shuttleRows.length,
+    rows.changeRows.length,
+    rows.teamRows.length,
     meta.parseErrorCount,
     JSON.stringify(meta.summary)
   );
@@ -404,9 +488,12 @@ async function storeRegistrationSheetImport(
 
   let rawRows = 0;
   let ledgerRows = 0;
+  let shuttleRows = 0;
+  let changeRows = 0;
+  let teamRows = 0;
   let issues = meta.parseErrorCount;
 
-  for (const row of rows) {
+  for (const row of rows.registrationRows) {
     const studentId = await findStudentIdForRegistration(row);
     const rawJSON = JSON.stringify(row.raw);
     const normalizedJSON = JSON.stringify({
@@ -521,23 +608,218 @@ async function storeRegistrationSheetImport(
     }
   }
 
+  for (const row of rows.shuttleRows) {
+    const studentId = await findStudentIdByNameAndPhones(
+      row.studentName,
+      row.parentPhone,
+      row.studentPhone
+    );
+    const rawJSON = JSON.stringify(row.raw);
+    const normalizedJSON = JSON.stringify({
+      studentKey: row.studentKey,
+      monthLabel: row.monthLabel,
+      dayLabel: row.dayLabel,
+      classTime: row.classTime,
+      arrivalTime: row.arrivalTime,
+      destination: row.destination,
+    });
+    const rawRowId = await insertStudentSheetRawRow({
+      batchId,
+      sheetName: row.sheetName,
+      rowNumber: row.rowNumber,
+      rowHash: row.rowHash,
+      studentKey: row.studentKey,
+      studentId,
+      rawJSON,
+      normalizedJSON,
+    });
+    rawRows++;
+
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentShuttleRide" (
+         id, "batchId", "rawRowId", "studentId", "monthLabel", "rowNumber",
+         "studentName", "studentPhone", "parentPhone", "dayLabel", "classTime",
+         "arrivalTime", destination, note, memo, "rawJSON", "createdAt", "updatedAt"
+       )
+       VALUES (
+         gen_random_uuid()::text, $1, $2, $3, $4, $5,
+         $6, $7, $8, $9, $10,
+         $11, $12, $13, $14, $15, NOW(), NOW()
+       )`,
+      batchId,
+      rawRowId,
+      studentId,
+      row.monthLabel,
+      row.rowNumber,
+      row.studentName,
+      row.studentPhone,
+      row.parentPhone,
+      row.dayLabel,
+      row.classTime,
+      row.arrivalTime,
+      row.destination,
+      row.note,
+      row.memo,
+      rawJSON
+    );
+    shuttleRows++;
+
+    if (!studentId) {
+      await createImportIssue(
+        batchId,
+        row.sheetName,
+        row.rowNumber,
+        "WARNING",
+        "차량 행은 저장했지만 Student와 연결하지 못했습니다.",
+        rawJSON
+      );
+      issues++;
+    }
+  }
+
+  for (const row of rows.changeRows) {
+    const rawJSON = JSON.stringify(row.raw);
+    const normalizedJSON = JSON.stringify({
+      occurredAt: row.occurredAt,
+      changeSummary: row.changeSummary,
+      registrationReflected: row.registrationReflected,
+      rallyzReflected: row.rallyzReflected,
+      vehicleReflected: row.vehicleReflected,
+    });
+    const rawRowId = await insertStudentSheetRawRow({
+      batchId,
+      sheetName: row.sheetName,
+      rowNumber: row.rowNumber,
+      rowHash: row.rowHash,
+      studentKey: null,
+      studentId: null,
+      rawJSON,
+      normalizedJSON,
+    });
+    rawRows++;
+
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentChangeLog" (
+         id, "batchId", "rawRowId", "rowNumber", "occurredAt", "changeSummary",
+         "registrationReflected", "rallyzReflected", "vehicleReflected",
+         "alarmStatus", note, "rawJSON", "createdAt"
+       )
+       VALUES (
+         gen_random_uuid()::text, $1, $2, $3, $4, $5,
+         $6, $7, $8,
+         $9, $10, $11, NOW()
+       )`,
+      batchId,
+      rawRowId,
+      row.rowNumber,
+      row.occurredAt,
+      row.changeSummary,
+      row.registrationReflected,
+      row.rallyzReflected,
+      row.vehicleReflected,
+      row.alarmStatus,
+      row.note,
+      rawJSON
+    );
+    changeRows++;
+  }
+
+  for (const row of rows.teamRows) {
+    const studentId = await findStudentIdByNameAndPhones(
+      row.studentName,
+      row.phone,
+      row.phone
+    );
+    const rawJSON = JSON.stringify(row.raw);
+    const normalizedJSON = JSON.stringify({
+      studentKey: row.studentKey,
+      jerseyNumber: row.jerseyNumber,
+      grade: row.grade,
+      branch: row.branch,
+      eventColumnsJSON: row.eventColumnsJSON,
+    });
+    const rawRowId = await insertStudentSheetRawRow({
+      batchId,
+      sheetName: row.sheetName,
+      rowNumber: row.rowNumber,
+      rowHash: row.rowHash,
+      studentKey: row.studentKey,
+      studentId,
+      rawJSON,
+      normalizedJSON,
+    });
+    rawRows++;
+
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentTeamRosterEntry" (
+         id, "batchId", "rawRowId", "studentId", "rowNumber", "studentName",
+         "birthDate", "jerseyNumber", phone, grade, branch, "eventColumnsJSON",
+         "rawJSON", "createdAt", "updatedAt"
+       )
+       VALUES (
+         gen_random_uuid()::text, $1, $2, $3, $4, $5,
+         $6, $7, $8, $9, $10, $11,
+         $12, NOW(), NOW()
+       )`,
+      batchId,
+      rawRowId,
+      studentId,
+      row.rowNumber,
+      row.studentName,
+      row.birthDate,
+      row.jerseyNumber,
+      row.phone,
+      row.grade,
+      row.branch,
+      JSON.stringify(row.eventColumnsJSON),
+      rawJSON
+    );
+    teamRows++;
+
+    if (!studentId) {
+      await createImportIssue(
+        batchId,
+        row.sheetName,
+        row.rowNumber,
+        "WARNING",
+        "대표팀 명단 행은 저장했지만 Student와 연결하지 못했습니다.",
+        rawJSON
+      );
+      issues++;
+    }
+  }
+
   await prisma.$executeRawUnsafe(
     `UPDATE "StudentSheetImportBatch"
      SET status = 'COMPLETED',
          "totalRows" = $2,
          "registrationRows" = $3,
-         "errorRows" = $4,
-         message = $5,
+         "vehicleRows" = $4,
+         "changeRows" = $5,
+         "teamRows" = $6,
+         "errorRows" = $7,
+         message = $8,
          "completedAt" = NOW()
      WHERE id = $1`,
     batchId,
-    rows.length,
+    totalRows,
     ledgerRows,
+    shuttleRows,
+    changeRows,
+    teamRows,
     issues,
-    `등록 원본 ${rawRows}행, 등록 원장 ${ledgerRows}행 저장 완료`
+    `원본 ${rawRows}행, 등록 ${ledgerRows}행, 차량 ${shuttleRows}행, 변동 ${changeRows}행, 대표팀 ${teamRows}행 저장 완료`
   );
 
-  return { batchId, rawRows, registrationRows: ledgerRows, issues };
+  return {
+    batchId,
+    rawRows,
+    registrationRows: ledgerRows,
+    shuttleRows,
+    changeRows,
+    teamRows,
+    issues,
+  };
 }
 
 async function findStudentIdForRegistration(row: StudentRegistrationSheetRow) {
@@ -553,6 +835,63 @@ async function findStudentIdForRegistration(row: StudentRegistrationSheetRow) {
     row.parentPhone
   );
   return found[0]?.id ?? null;
+}
+
+async function findStudentIdByNameAndPhones(
+  studentName: string | null,
+  parentPhone: string | null,
+  studentPhone: string | null
+) {
+  if (!studentName || studentName === "(이름 없음)") return null;
+
+  const normalizedParentPhone = (parentPhone || "").replace(/[^0-9]/g, "");
+  const normalizedStudentPhone = (studentPhone || "").replace(/[^0-9]/g, "");
+  if (!normalizedParentPhone && !normalizedStudentPhone) return null;
+
+  const found = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT s.id
+     FROM "Student" s
+     INNER JOIN "User" u ON u.id = s."parentId"
+     WHERE s.name = $1
+       AND (
+         ($2 <> '' AND regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g') = $2)
+         OR ($3 <> '' AND regexp_replace(COALESCE(s.phone, ''), '[^0-9]', '', 'g') = $3)
+       )
+     LIMIT 1`,
+    studentName,
+    normalizedParentPhone,
+    normalizedStudentPhone
+  );
+  return found[0]?.id ?? null;
+}
+
+async function insertStudentSheetRawRow(input: {
+  batchId: string;
+  sheetName: string;
+  rowNumber: number;
+  rowHash: string | null;
+  studentKey: string | null;
+  studentId: string | null;
+  rawJSON: string;
+  normalizedJSON: string | null;
+}) {
+  const rawRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `INSERT INTO "StudentSheetRawRow" (
+       id, "batchId", "sheetName", "rowNumber", "rowHash", "studentKey",
+       "studentId", "rawJSON", "normalizedJSON", "createdAt"
+     )
+     VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, NOW())
+     RETURNING id`,
+    input.batchId,
+    input.sheetName,
+    input.rowNumber,
+    input.rowHash,
+    input.studentKey,
+    input.studentId,
+    input.rawJSON,
+    input.normalizedJSON
+  );
+  return rawRow[0]?.id ?? null;
 }
 
 async function updateStudentFromRegistrationRow(

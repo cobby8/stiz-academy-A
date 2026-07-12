@@ -149,6 +149,17 @@ export default function AdminShellClient({
                             <NavItem href="/admin/terms" active={pathname.startsWith("/admin/terms")} icon="📜" label="이용약관 관리" />
                             <NavItem href="/admin/privacy" active={pathname.startsWith("/admin/privacy")} icon="🔐" label="개인정보처리방침" />
 
+                            <div className="mt-4 border-t border-white/10 pt-4">
+                                <Link
+                                    href="/"
+                                    prefetch={false}
+                                    className="flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white hover:text-brand-navy-900"
+                                >
+                                    <FontFreeIcon name="home" size={18} />
+                                    <span>홈페이지 보기</span>
+                                </Link>
+                            </div>
+
                         </>
                     )}
 

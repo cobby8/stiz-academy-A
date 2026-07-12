@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth-guard";
+import { createAdminTiming, requireTimedAdmin, timedJson } from "@/lib/adminTiming";
 import {
     getAcademySettings,
     getClassSlotOverrides,
@@ -14,25 +13,28 @@ const SCHEDULE_CACHE_HEADERS = {
 };
 
 export async function GET() {
+    const timing = createAdminTiming("admin-schedule");
+
     try {
-        await requireAdmin();
+        await requireTimedAdmin(timing);
     } catch {
-        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+        return timedJson(timing, { error: "Authentication required" }, { status: 401 });
     }
 
     try {
-        const settings = await (getAcademySettings() as Promise<any>);
+        const settings = await timing.measure("settings", () => getAcademySettings() as Promise<any>);
         const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
 
-        const [overrides, coaches, customSlots, programs, slots] = await Promise.all([
+        const [overrides, coaches, customSlots, programs, slots] = await timing.measure("data", () => Promise.all([
             getClassSlotOverrides(),
             getCoaches(),
             getCustomClassSlots(),
             getPrograms(),
             sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
-        ]);
+        ]));
 
-        return NextResponse.json(
+        return timedJson(
+            timing,
             {
                 slots,
                 overrides,
@@ -46,6 +48,6 @@ export async function GET() {
         );
     } catch (error) {
         console.error("[api/admin/schedule] failed:", error);
-        return NextResponse.json({ error: "Failed to load schedule data" }, { status: 500 });
+        return timedJson(timing, { error: "Failed to load schedule data" }, { status: 500 });
     }
 }

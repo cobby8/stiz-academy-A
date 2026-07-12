@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
-import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { createAdminTiming, requireTimedAdmin, timedJson } from "@/lib/adminTiming";
 
 const STUDENT_OPTIONS_CACHE_SECONDS = 60;
 const STUDENT_OPTIONS_CACHE_HEADERS = {
@@ -37,15 +36,18 @@ const getCachedStudentOptions = unstable_cache(
 );
 
 export async function GET() {
+    const timing = createAdminTiming("admin-student-options");
+
     try {
-        await requireAdmin();
+        await requireTimedAdmin(timing);
     } catch {
-        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+        return timedJson(timing, { error: "Authentication required" }, { status: 401 });
     }
 
-    const students = await getCachedStudentOptions();
+    const students = await timing.measure("data", () => getCachedStudentOptions());
 
-    return NextResponse.json(
+    return timedJson(
+        timing,
         { students },
         {
             headers: STUDENT_OPTIONS_CACHE_HEADERS,

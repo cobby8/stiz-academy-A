@@ -1,25 +1,27 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth-guard";
 import { getCachedAdminGalleryPayload } from "@/lib/adminReadPayloads";
+import { createAdminTiming, requireTimedAdmin, timedJson } from "@/lib/adminTiming";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+    const timing = createAdminTiming("admin-gallery");
+
     try {
-        await requireAdmin();
+        await requireTimedAdmin(timing);
     } catch {
-        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+        return timedJson(timing, { error: "Authentication required" }, { status: 401 });
     }
 
     try {
-        const payload = await getCachedAdminGalleryPayload();
+        const payload = await timing.measure("data", () => getCachedAdminGalleryPayload());
 
-        return NextResponse.json(
+        return timedJson(
+            timing,
             payload,
             { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
         );
     } catch (error) {
         console.error("[api/admin/gallery] failed:", error);
-        return NextResponse.json({ error: "Failed to load gallery data" }, { status: 500 });
+        return timedJson(timing, { error: "Failed to load gallery data" }, { status: 500 });
     }
 }

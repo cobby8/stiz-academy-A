@@ -1,20 +1,22 @@
-import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth-guard";
 import { getCachedAdminApplyPayload } from "@/lib/adminReadPayloads";
+import { createAdminTiming, requireTimedAdmin, timedJson } from "@/lib/adminTiming";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+    const timing = createAdminTiming("admin-apply");
+
     try {
-        await requireAdmin();
+        await requireTimedAdmin(timing);
     } catch {
-        return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+        return timedJson(timing, { error: "Authentication required" }, { status: 401 });
     }
 
     try {
-        const payload = await getCachedAdminApplyPayload();
+        const payload = await timing.measure("data", () => getCachedAdminApplyPayload());
 
-        return NextResponse.json(
+        return timedJson(
+            timing,
             payload,
             {
                 headers: {
@@ -24,6 +26,6 @@ export async function GET() {
         );
     } catch (error) {
         console.error("[api/admin/apply] failed:", error);
-        return NextResponse.json({ error: "Failed to load applications" }, { status: 500 });
+        return timedJson(timing, { error: "Failed to load applications" }, { status: 500 });
     }
 }

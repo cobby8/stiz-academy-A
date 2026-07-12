@@ -107,6 +107,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
+const APPLICATION_PAGE_SIZE = 50;
 
 const EMPTY_STATS: EnrollStats = {
     PENDING: 0,
@@ -181,6 +182,7 @@ export default function ApplyAdminClient({
     const [loading, setLoading] = useState(!hasInitialData);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
+    const [visibleLimit, setVisibleLimit] = useState(APPLICATION_PAGE_SIZE);
     const [activeTab, setActiveTab] = useState<TabType>("applications");
 
     // 모달 상태
@@ -221,6 +223,15 @@ export default function ApplyAdminClient({
         if (filter === "ALL") return applications;
         return applications.filter((a) => a.status === filter);
     }, [applications, filter]);
+    const visibleApps = useMemo(
+        () => filteredApps.slice(0, visibleLimit),
+        [filteredApps, visibleLimit],
+    );
+    const hasMoreApps = visibleApps.length < filteredApps.length;
+
+    useEffect(() => {
+        setVisibleLimit(APPLICATION_PAGE_SIZE);
+    }, [filter]);
     const hasOpenModal = Boolean(showApproveModal || showRejectModal || showDetailModal);
 
     // 날짜 포맷
@@ -392,7 +403,7 @@ export default function ApplyAdminClient({
                         </div>
                     ) : (
                         <div className="grid gap-4">
-                            {filteredApps.map((app) => {
+                            {visibleApps.map((app) => {
                                 const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
                                 const age = calcAge(app.childBirthDate);
                                 return (
@@ -569,6 +580,20 @@ export default function ApplyAdminClient({
                                     </div>
                                 );
                             })}
+                            <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+                                <span>
+                                    {filteredApps.length}건 중 {visibleApps.length}건 표시
+                                </span>
+                                {hasMoreApps && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setVisibleLimit((current) => current + APPLICATION_PAGE_SIZE)}
+                                        className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                    >
+                                        50건 더 보기
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )}
                 </>

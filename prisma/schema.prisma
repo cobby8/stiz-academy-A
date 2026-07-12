@@ -105,6 +105,8 @@ model Enrollment {
 
   @@unique([studentId, classId])
   @@index([classId, status])
+  @@index([createdAt])
+  @@index([status, updatedAt])
 }
 
 model Session {
@@ -180,6 +182,8 @@ model Payment {
   @@index([status])
   @@index([studentId, year, month])
   @@index([studentId, dueDate])
+  @@index([dueDate])
+  @@index([status, dueDate])
 }
 
 // 청구 템플릿 — 매월 자동 청구서 생성의 기준 데이터
@@ -375,7 +379,7 @@ model Notification {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
-  @@index([userId, isRead])
+  @@index([userId, isRead, createdAt])
   @@index([createdAt])
 }
 
@@ -405,6 +409,7 @@ model Feedback {
 
   @@index([studentId, sessionDate])
   @@index([coachId])
+  @@index([createdAt])
 }
 
 model ParentRequest {
@@ -494,6 +499,7 @@ model TrialLead {
 
   @@index([status])
   @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 // 대기자 관리 — 반 정원 초과 시 대기열에 등록, 자리 생기면 제안/수락/거절 처리
@@ -511,6 +517,7 @@ model Waitlist {
 
   @@unique([studentId, classId])
   @@index([classId, status])
+  @@index([classId, priority, createdAt])
 }
 
 // 보강/메이크업 수업 예약 — 결석 시 다른 반에서 보충 수업을 받는 기록
@@ -528,6 +535,8 @@ model MakeupSession {
 
   @@index([studentId])
   @@index([makeupClassId, makeupDate])
+  @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 // 기술 카테고리 마스터 — 드리블, 슈팅, 패스 등 평가 항목을 관리

@@ -204,15 +204,20 @@ function shortenParentName(name: string | null): string {
  */
 function getLatestStatus(enrollments: Student["enrollments"]): string | null {
     if (!enrollments || enrollments.length === 0) return null;
-    // ACTIVE가 하나라도 있으면 활성
-    if (enrollments.some((e) => e.status === "ACTIVE")) return "ACTIVE";
-    // 없으면 가장 최근 생성된 enrollment의 상태를 기준으로 판단
-    const sorted = [...enrollments].sort((a, b) => {
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return dateB - dateA; // 최신순
-    });
-    return sorted[0].status;
+    let latest = enrollments[0];
+    let latestTime = latest.createdAt ? new Date(latest.createdAt).getTime() : 0;
+
+    for (const enrollment of enrollments) {
+        if (enrollment.status === "ACTIVE") return "ACTIVE";
+
+        const createdAt = enrollment.createdAt ? new Date(enrollment.createdAt).getTime() : 0;
+        if (createdAt > latestTime) {
+            latest = enrollment;
+            latestTime = createdAt;
+        }
+    }
+
+    return latest.status;
 }
 
 export default function StudentManagementClient({
@@ -279,17 +284,8 @@ export default function StudentManagementClient({
     useEffect(() => {
         if (!hasInitialData) {
             void loadData();
-            return;
         }
-
-        if (!initialPartial) return;
-
-        const timer = window.setTimeout(() => {
-            void loadData({ background: true });
-        }, 1500);
-
-        return () => window.clearTimeout(timer);
-    }, [hasInitialData, initialPartial, loadData]);
+    }, [hasInitialData, loadData]);
     // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
     const [filterStatus, setFilterStatus] = useState("ACTIVE");
     const [visibleLimit, setVisibleLimit] = useState(STUDENT_PAGE_SIZE);
@@ -305,6 +301,14 @@ export default function StudentManagementClient({
         const set = new Set<string>();
         students.forEach((s) => { if (s.school) set.add(s.school); });
         return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"));
+    }, [students]);
+
+    const studentStatusById = useMemo(() => {
+        const statusMap = new Map<string, string | null>();
+        students.forEach((student) => {
+            statusMap.set(student.id, getLatestStatus(student.enrollments));
+        });
+        return statusMap;
     }, [students]);
 
     // Form state
@@ -412,7 +416,7 @@ export default function StudentManagementClient({
         let noEnrollment = 0;
 
         for (const s of students) {
-            const status = getLatestStatus(s.enrollments);
+            const status = studentStatusById.get(s.id) ?? null;
             if (!status) {
                 noEnrollment++;
             } else if (status === "ACTIVE") {
@@ -427,20 +431,20 @@ export default function StudentManagementClient({
         }
 
         return { active, paused, withdrawn, noEnrollment, total: students.length };
-    }, [students]);
+    }, [students, studentStatusById]);
 
     // 검색 + 필터 조합 (AND 조건): useMemo로 캐싱하여 불필요한 재계산 방지
     // 결과를 이름 가나다순으로 정렬
     const filtered = useMemo(() => {
+        const query = search.trim().toLowerCase();
         const result = students.filter((s) => {
             // 텍스트 검색
-            if (search) {
-                const q = search.toLowerCase();
+            if (query) {
                 const matchSearch =
-                    s.name.toLowerCase().includes(q) ||
-                    (s.parent.name && s.parent.name.toLowerCase().includes(q)) ||
-                    (s.parent.phone && s.parent.phone.includes(q)) ||
-                    (s.school && s.school.toLowerCase().includes(q));
+                    s.name.toLowerCase().includes(query) ||
+                    (s.parent.name && s.parent.name.toLowerCase().includes(query)) ||
+                    (s.parent.phone && s.parent.phone.includes(query)) ||
+                    (s.school && s.school.toLowerCase().includes(query));
                 if (!matchSearch) return false;
             }
             // 반(Class) 필터: 해당 반에 수강 중인 학생만
@@ -454,7 +458,7 @@ export default function StudentManagementClient({
             if (filterSchool && s.school !== filterSchool) return false;
             // 수강 상태 필터: 최신 enrollment 상태 기준으로 판단
             if (filterStatus) {
-                const latestStatus = getLatestStatus(s.enrollments);
+                const latestStatus = studentStatusById.get(s.id) ?? null;
                 if (filterStatus === "NONE") {
                     if (latestStatus !== null) return false;
                 } else {
@@ -466,7 +470,7 @@ export default function StudentManagementClient({
         // 이름 가나다순 정렬 (기본 정렬)
         result.sort((a, b) => a.name.localeCompare(b.name, "ko"));
         return result;
-    }, [students, search, filterClass, filterGrade, filterSchool, filterStatus]);
+    }, [students, search, filterClass, filterGrade, filterSchool, filterStatus, studentStatusById]);
 
     useEffect(() => {
         setVisibleLimit(STUDENT_PAGE_SIZE);

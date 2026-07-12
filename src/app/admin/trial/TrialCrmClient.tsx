@@ -92,6 +92,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 // 상태 순서 (파이프라인 흐름)
 const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST"] as const;
+const TRIAL_PAGE_SIZE = 50;
 
 function TrialCrmLoadingFallback() {
     return (
@@ -162,6 +163,7 @@ export default function TrialCrmClient({
     const [loading, setLoading] = useState(!hasInitialData);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
+    const [visibleLimit, setVisibleLimit] = useState(TRIAL_PAGE_SIZE);
     const [busy, setBusy] = useState(false);
 
     // 모달 상태
@@ -198,6 +200,15 @@ export default function TrialCrmClient({
         if (filter === "ALL") return leads;
         return leads.filter((l) => l.status === filter);
     }, [leads, filter]);
+    const visibleLeads = useMemo(
+        () => filteredLeads.slice(0, visibleLimit),
+        [filteredLeads, visibleLimit],
+    );
+    const hasMoreLeads = visibleLeads.length < filteredLeads.length;
+
+    useEffect(() => {
+        setVisibleLimit(TRIAL_PAGE_SIZE);
+    }, [filter]);
 
     // 상태 변경 핸들러
     async function handleStatusChange(lead: TrialLead, newStatus: string) {
@@ -345,7 +356,7 @@ export default function TrialCrmClient({
                 </div>
             ) : (
                 <div className="grid gap-4">
-                    {filteredLeads.map((lead) => {
+                    {visibleLeads.map((lead) => {
                         const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
                         return (
                             <div
@@ -528,6 +539,20 @@ export default function TrialCrmClient({
                             </div>
                         );
                     })}
+                    <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                            {filteredLeads.length}건 중 {visibleLeads.length}건 표시
+                        </span>
+                        {hasMoreLeads && (
+                            <button
+                                type="button"
+                                onClick={() => setVisibleLimit((current) => current + TRIAL_PAGE_SIZE)}
+                                className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                            >
+                                50건 더 보기
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
 

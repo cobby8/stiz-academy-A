@@ -26,6 +26,7 @@ import {
   type StudentTeamRosterSheetRow,
   type TransformedStudent,
 } from "@/lib/importStudents";
+import { findStudentIdentityMatch } from "@/lib/studentSheetMatching";
 
 export async function POST(request: NextRequest) {
   // 관리자 인증 확인
@@ -798,11 +799,14 @@ async function storeStudentSheetImport(
   }
 
   for (const row of rows.teamRows) {
-    const studentId = await findStudentIdByNameAndPhones(
-      row.studentName,
-      row.phone,
-      row.phone
-    );
+    const teamMatch = await findStudentIdentityMatch(prisma, {
+      studentName: row.studentName,
+      parentPhone: row.phone,
+      studentPhone: row.phone,
+      birthDate: row.birthDate,
+      grade: row.grade,
+    });
+    const studentId = teamMatch?.studentId ?? null;
     const rawJSON = JSON.stringify(row.raw);
     const normalizedJSON = JSON.stringify({
       studentKey: row.studentKey,
@@ -896,18 +900,16 @@ async function storeStudentSheetImport(
 }
 
 async function findStudentIdForRegistration(row: StudentRegistrationSheetRow) {
-  if (!row.studentName || !row.parentPhone) return null;
-  const found = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT s.id
-     FROM "Student" s
-     INNER JOIN "User" u ON u.id = s."parentId"
-     WHERE s.name = $1
-       AND regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g') = $2
-     LIMIT 1`,
-    row.studentName,
-    row.parentPhone
-  );
-  return found[0]?.id ?? null;
+  const match = await findStudentIdentityMatch(prisma, {
+    studentName: row.studentName,
+    parentPhone: row.parentPhone,
+    studentPhone: row.studentPhone,
+    parentName: row.parentName,
+    birthDate: row.birthDate,
+    grade: row.grade,
+    school: row.school,
+  });
+  return match?.studentId ?? null;
 }
 
 async function findStudentIdByNameAndPhones(
@@ -915,27 +917,12 @@ async function findStudentIdByNameAndPhones(
   parentPhone: string | null,
   studentPhone: string | null
 ) {
-  if (!studentName || studentName === "(이름 없음)") return null;
-
-  const normalizedParentPhone = (parentPhone || "").replace(/[^0-9]/g, "");
-  const normalizedStudentPhone = (studentPhone || "").replace(/[^0-9]/g, "");
-  if (!normalizedParentPhone && !normalizedStudentPhone) return null;
-
-  const found = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT s.id
-     FROM "Student" s
-     INNER JOIN "User" u ON u.id = s."parentId"
-     WHERE s.name = $1
-       AND (
-         ($2 <> '' AND regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g') = $2)
-         OR ($3 <> '' AND regexp_replace(COALESCE(s.phone, ''), '[^0-9]', '', 'g') = $3)
-       )
-     LIMIT 1`,
+  const match = await findStudentIdentityMatch(prisma, {
     studentName,
-    normalizedParentPhone,
-    normalizedStudentPhone
-  );
-  return found[0]?.id ?? null;
+    parentPhone,
+    studentPhone,
+  });
+  return match?.studentId ?? null;
 }
 
 async function insertStudentSheetRawRow(input: {

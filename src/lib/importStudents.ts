@@ -13,6 +13,12 @@
  * 6. 수업선택에서 교시 추출 → slotKey 변환
  */
 
+import {
+  cleanSheetString,
+  findSheetValue,
+  normalizePhoneDigits,
+} from "@/lib/studentSheetMatching";
+
 // ──────────────────────────────────────────────
 // 타입 정의
 // ──────────────────────────────────────────────
@@ -428,26 +434,15 @@ function parseAmount(raw: string | null): number | null {
 }
 
 function normalizePhone(raw: string | null): string {
-  return (raw || "").replace(/[^0-9]/g, "");
+  return normalizePhoneDigits(raw);
 }
 
 function cleanString(raw: string | null | undefined): string | null {
-  const value = (raw || "").trim();
-  return value ? value : null;
+  return cleanSheetString(raw);
 }
 
 function findHeaderValue(record: Record<string, string>, ...labels: string[]) {
-  for (const label of labels) {
-    if (record[label] != null) return record[label];
-  }
-  const normalized = Object.fromEntries(
-    Object.entries(record).map(([key, value]) => [key.replace(/\s+/g, ""), value])
-  );
-  for (const label of labels) {
-    const value = normalized[label.replace(/\s+/g, "")];
-    if (value != null) return value;
-  }
-  return "";
+  return findSheetValue(record, ...labels);
 }
 
 function toAgreementBool(raw: string | null | undefined): boolean {

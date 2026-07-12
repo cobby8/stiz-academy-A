@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-07-13: 월별 수강생 중복은 연락처 기반으로 우선 매칭한다
+- 결정: Google Sheets 월별 데이터에 같은 학생이 반복 등장할 때는 아이 이름만으로 확정 연결하지 않고, 아이 이름과 학부모 연락처, 학생 연락처, 생년월일을 우선순위로 기존 `Student`와 매칭한다. 이름만 유일하게 맞는 경우는 약한 후보로 표시하되 자동 적용하지 않는다.
+- 이유: 계속 다니는 아이들은 여러 월 시트에 반복되지만, 이름만으로 합치면 동명이인이나 형제 계정이 섞일 수 있다. 연락처와 생년월일은 학생을 구분하는 신분증 같은 역할을 하므로 자동 이관은 강한 근거가 있을 때만 진행하고, 애매한 행은 관리자 확인 대상으로 남기는 편이 운영 데이터가 안전하다.
+
 ## 2026-07-12: Move schedule operation from sheet cache toward DB-first slots
 - Decision: Add `ScheduleSlot`, `ScheduleImportBatch`, and `ScheduleImportIssue` as the DB-first source for academy schedule operations. Keep `SheetSlotCache`, `ClassSlotOverride`, and `CustomClassSlot` as legacy inputs during migration, then import them into `ScheduleSlot`.
 - Reason: The academy already runs enrollments, attendance, payments, trials, waitlists, and makeup sessions through DB tables, but the schedule source still depends on a sheet cache. A dedicated slot table makes the schedule the same kind of durable operational record as the rest of the academy system.

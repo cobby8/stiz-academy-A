@@ -64,7 +64,7 @@ export default async function RootLayout({
                 <link rel="apple-touch-icon" href="/icon-192.png" />
             </head>
             <body
-                className="antialiased selection:bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 selection:text-white"
+                className="antialiased selection:bg-brand-orange-500 selection:text-white dark:selection:bg-brand-neon-lime dark:selection:text-brand-navy-900"
                 style={
                     {
                         "--font-body": bodyFontCss,

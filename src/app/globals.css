@@ -40,6 +40,12 @@
   --foreground: #111827;
 }
 
+.dark {
+  --background: var(--color-gray-950);
+  --foreground: var(--color-gray-100);
+  color-scheme: dark;
+}
+
 /* 모바일 기본 폰트 17px — 학부모(30~40대) 스마트폰 가독성 향상 */
 html {
   font-size: 17px;
@@ -114,6 +120,96 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-font-feature-settings: "liga";
   font-feature-settings: "liga";
   -webkit-font-smoothing: antialiased;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.dark textarea,
+.dark select {
+  background-color: var(--color-gray-800);
+  color: var(--color-gray-100);
+  border-color: var(--color-gray-600);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--color-gray-400);
+}
+
+.dark .bg-white:not([class*="dark:bg-"]) {
+  background-color: var(--color-gray-800);
+}
+
+.dark .bg-gray-50:not([class*="dark:bg-"]) {
+  background-color: var(--color-gray-900);
+}
+
+.dark .bg-gray-100:not([class*="dark:bg-"]) {
+  background-color: var(--color-gray-800);
+}
+
+.dark .bg-gray-200:not([class*="dark:bg-"]) {
+  background-color: var(--color-gray-700);
+}
+
+.dark .text-gray-900:not([class*="dark:text-"]),
+.dark .text-gray-800:not([class*="dark:text-"]),
+.dark .text-brand-navy-900:not([class*="dark:text-"]),
+.dark .text-black:not([class*="dark:text-"]) {
+  color: var(--color-gray-100);
+}
+
+.dark .text-gray-700:not([class*="dark:text-"]) {
+  color: var(--color-gray-200);
+}
+
+.dark .text-gray-600:not([class*="dark:text-"]) {
+  color: var(--color-gray-300);
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: var(--color-gray-900);
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: var(--color-gray-800);
+}
+
+.dark .hover\:bg-gray-200:hover {
+  background-color: var(--color-gray-700);
+}
+
+.dark .hover\:bg-white:hover {
+  background-color: var(--color-gray-800);
+}
+
+.dark .hover\:bg-blue-50:hover {
+  background-color: color-mix(in srgb, var(--color-blue-500) 16%, var(--color-gray-900));
+}
+
+.dark .hover\:bg-brand-orange-50:hover {
+  background-color: color-mix(in srgb, var(--color-brand-neon-lime) 14%, var(--color-gray-900));
+}
+
+.dark .hover\:text-gray-900:hover,
+.dark .hover\:text-gray-800:hover {
+  color: var(--color-gray-100);
+}
+
+.dark .hover\:text-gray-700:hover {
+  color: var(--color-gray-200);
+}
+
+.dark .hover\:text-gray-600:hover {
+  color: var(--color-gray-300);
+}
+
+.dark .hover\:text-brand-navy-900:hover {
+  color: var(--color-gray-100);
+}
+
+.dark .hover\:text-blue-600:hover,
+.dark .hover\:text-blue-800:hover {
+  color: var(--color-blue-300);
 }
 
 /* Event detail panel animations */

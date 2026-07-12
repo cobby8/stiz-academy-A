@@ -24,6 +24,7 @@
 | 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-12: `/admin/gallery` 첫 진입 체감 개선을 위해 초기 데이터가 있으면 클라이언트 재조회/refresh를 생략하고, 갤러리 카드는 최초 12개만 렌더링한 뒤 “더 보기”로 점진 표시하도록 변경. `npm.cmd run build`, `npx.cmd tsc --noEmit` 통과.
 - 2026-07-12: 관리자 사이드바의 백업/복원/시트 동기화 도구를 첫 진입에서 바로 로드하지 않고, “시스템 도구”를 열 때만 lazy chunk로 로드하도록 변경. `npm.cmd run build` 통과.
 - 2026-07-12: 관리자 콜드스타트 완화 후보로 Vercel Fluid Compute를 `vercel.json`에 `"fluid": true`로 활성화. `vercel.json` JSON parse 검증 통과.
 - 2026-07-12: `/admin` 첫 화면 핵심 payload에서 대시보드 카운트/신청 통계/오늘 수업 조회를 4개 병렬 DB 호출에서 1개 통합 SQL 호출로 줄임. `npm.cmd run build` 통과.
@@ -33,7 +34,6 @@
 - 2026-07-11: 운영 관리자 탭에서 `/admin/programs`, `/admin/schedule`가 셸은 1초대에 뜨지만 본문은 약 5초 뒤 붙는 것을 확인하고, 서버 캐시 payload를 첫 렌더링에 주입해 추가 API 왕복을 제거.
 - 2026-07-11: `/admin/students`, `/admin/classes`, `/admin/trial` 페이지가 서버에서 캐시된 초기 데이터를 받아 렌더링하도록 바꾸고, 첫 진입 시 같은 API를 클라이언트에서 다시 호출하던 왕복을 제거.
 - 2026-07-11: DB 계측 결과 SQL 자체보다 반복 API/auth/왕복 비용이 병목에 가까워, 전역 `trial-count` 자동 조회 제거 및 운영 데이터 API 6개에 서버 캐시 적용.
-- 2026-07-11: 프로그램/코치/FAQ/연간일정/SMS 템플릿/청구 템플릿 관리자 API에 60초 서버 캐시 적용 및 저장 액션 캐시 무효화.
 
 ## 구현 기록
 - 변경 파일: `src/lib/adminReadPayloads.ts`, `src/app/admin/page.tsx`, `src/app/admin/AdminDashboardClient.tsx`, `src/app/api/admin/dashboard/route.ts`, `src/app/admin/students/StudentManagementClient.tsx`
@@ -45,6 +45,7 @@
 - `npm.cmd run build` 통과. `/admin` primary dashboard SQL merge 검증 완료.
 - `npm.cmd run build` 통과. 관리자 시스템 도구 lazy chunk 전환 검증 완료.
 - `npx.cmd tsc --noEmit` 통과
+- `npm.cmd run build`, `npx.cmd tsc --noEmit` 통과. `/admin/gallery` 점진 렌더링 및 초기 재조회 생략 변경 검증 완료.
 - `npm.cmd run build` 통과. 로컬 네트워크에서 Supabase pooler 접속 경고가 출력됐지만 빌드는 exit code 0으로 완료됨.
 - 운영 탭 계측: 기존 `/admin` 콜드 진입 약 25초, `/admin/students` DOM 3,142개/버튼 737개로 확인
 

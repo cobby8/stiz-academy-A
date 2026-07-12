@@ -17,6 +17,8 @@ const GalleryPostFormModal = dynamic(() => import("./GalleryPostFormModal"), {
   loading: () => null,
 });
 
+const VISIBLE_POST_INCREMENT = 12;
+
 type MediaItem = { url: string; type: "image" | "video" };
 type GalleryPost = {
   id: string;
@@ -150,6 +152,7 @@ export default function GalleryAdminClient({
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
   const [draftBusy, setDraftBusy] = useState<{ id: string; action: "save" | "publish" | "reject" } | null>(null);
   const [pageMessage, setPageMessage] = useState<{ ok: boolean; message: string } | null>(null);
+  const [visiblePostCount, setVisiblePostCount] = useState(VISIBLE_POST_INCREMENT);
 
   const loadGallery = useCallback(async () => {
     setLoading(true);
@@ -163,6 +166,7 @@ export default function GalleryAdminClient({
       setClasses(data.classes);
       setInstagramStatus(data.instagramStatus);
       setDrafts(data.socialDrafts);
+      setVisiblePostCount(VISIBLE_POST_INCREMENT);
     } catch (error) {
       console.error("Failed to load gallery data:", error);
       setLoadError(true);
@@ -172,11 +176,13 @@ export default function GalleryAdminClient({
   }, []);
 
   useEffect(() => {
-    void loadGallery();
-  }, [loadGallery]);
+    if (!hasInitialData) void loadGallery();
+  }, [hasInitialData, loadGallery]);
 
   const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
   const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");
+  const visiblePosts = posts.slice(0, visiblePostCount);
+  const hasMorePosts = visiblePostCount < posts.length;
 
   function closeForm() {
     setShowForm(false);
@@ -545,72 +551,91 @@ export default function GalleryAdminClient({
           <p className="font-medium">아직 갤러리 게시물이 없습니다.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {posts.map((post) => {
-            const media = parseMedia(post.mediaJSON);
-            const firstImage = media.find((item) => item.type === "image");
-            return (
-              <div
-                key={post.id}
-                className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
-              >
-                <div className="relative aspect-video bg-gray-100 dark:bg-gray-900">
-                  {firstImage ? (
-                    <img src={firstImage.url} alt={post.title || ""} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-gray-300">
-                      <FontFreeIcon name="image" size={48} />
-                    </div>
-                  )}
-                  <div className="absolute right-2 top-2 flex gap-1">
-                    {post.isPublic ? (
-                      <span className="flex items-center gap-1 rounded-full bg-green-500 px-2 py-0.5 text-xs text-white">
-                        <FontFreeIcon name="visibility" size={10} /> 공개
-                      </span>
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {visiblePosts.map((post) => {
+              const media = parseMedia(post.mediaJSON);
+              const firstImage = media.find((item) => item.type === "image");
+              return (
+                <div
+                  key={post.id}
+                  className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm transition hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div className="relative aspect-video bg-gray-100 dark:bg-gray-900">
+                    {firstImage ? (
+                      <img
+                        src={firstImage.url}
+                        alt={post.title || ""}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
-                      <span className="flex items-center gap-1 rounded-full bg-gray-500 px-2 py-0.5 text-xs text-white">
-                        <FontFreeIcon name="visibility_off" size={10} /> 비공개
+                      <div className="flex h-full items-center justify-center text-gray-300">
+                        <FontFreeIcon name="image" size={48} />
+                      </div>
+                    )}
+                    <div className="absolute right-2 top-2 flex gap-1">
+                      {post.isPublic ? (
+                        <span className="flex items-center gap-1 rounded-full bg-green-500 px-2 py-0.5 text-xs text-white">
+                          <FontFreeIcon name="visibility" size={10} /> 공개
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 rounded-full bg-gray-500 px-2 py-0.5 text-xs text-white">
+                          <FontFreeIcon name="visibility_off" size={10} /> 비공개
+                        </span>
+                      )}
+                      {media.length > 1 && (
+                        <span className="rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">+{media.length - 1}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="truncate text-sm font-bold text-gray-900 dark:text-white">
+                        {post.title || "제목 없음"}
+                      </h3>
+                      <span className="shrink-0 text-xs text-gray-400">
+                        {new Date(post.createdAt).toLocaleDateString("ko-KR")}
+                      </span>
+                    </div>
+                    {post.className && (
+                      <span className="mb-2 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
+                        {post.className}
                       </span>
                     )}
-                    {media.length > 1 && (
-                      <span className="rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">+{media.length - 1}</span>
-                    )}
+                    {post.caption && <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{post.caption}</p>}
+                    <div className="mt-3 flex gap-2 border-t border-gray-50 pt-3">
+                      <button
+                        onClick={() => startEdit(post)}
+                        className="flex items-center gap-1 text-xs text-gray-500 transition hover:text-brand-orange-500"
+                      >
+                        <FontFreeIcon name="edit" size={14} /> 수정
+                      </button>
+                      <button
+                        onClick={() => handleDelete(post.id)}
+                        className="flex items-center gap-1 text-xs text-gray-500 transition hover:text-red-500"
+                      >
+                        <FontFreeIcon name="delete" size={14} /> 삭제
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="p-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="truncate text-sm font-bold text-gray-900 dark:text-white">
-                      {post.title || "제목 없음"}
-                    </h3>
-                    <span className="shrink-0 text-xs text-gray-400">
-                      {new Date(post.createdAt).toLocaleDateString("ko-KR")}
-                    </span>
-                  </div>
-                  {post.className && (
-                    <span className="mb-2 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
-                      {post.className}
-                    </span>
-                  )}
-                  {post.caption && <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{post.caption}</p>}
-                  <div className="mt-3 flex gap-2 border-t border-gray-50 pt-3">
-                    <button
-                      onClick={() => startEdit(post)}
-                      className="flex items-center gap-1 text-xs text-gray-500 transition hover:text-brand-orange-500"
-                    >
-                      <FontFreeIcon name="edit" size={14} /> 수정
-                    </button>
-                    <button
-                      onClick={() => handleDelete(post.id)}
-                      className="flex items-center gap-1 text-xs text-gray-500 transition hover:text-red-500"
-                    >
-                      <FontFreeIcon name="delete" size={14} /> 삭제
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          {hasMorePosts && (
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setVisiblePostCount((count) => count + VISIBLE_POST_INCREMENT)}
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+              >
+                더 보기 {Math.min(visiblePostCount, posts.length)}/{posts.length}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

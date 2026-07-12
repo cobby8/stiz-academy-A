@@ -52,6 +52,30 @@ interface ImportResultData {
   created: { users: number; students: number; enrollments: number; payments: number };
   skipped: { users: number; students: number; enrollments: number; payments: number };
   failed: { rowNumber: number; name: string; reason: string }[];
+  sheetImport?: {
+    batchId: string;
+    rawRows: number;
+    registrationRows: number;
+    shuttleRows?: number;
+    changeRows?: number;
+    teamRows?: number;
+    issues: number;
+  };
+}
+
+interface AuxiliarySummary {
+  shuttleRows: number;
+  changeRows: number;
+  teamRows: number;
+  totalRows: number;
+}
+
+interface ImportSourceInfo {
+  type: "csv" | "googleSheet";
+  spreadsheetId: string | null;
+  sourceUrl: string | null;
+  fetchedSheets: string[];
+  skippedSheets: { sheetName: string; reason: string }[];
 }
 
 // ──────────────────────────────────────────────
@@ -75,15 +99,19 @@ const METHOD_LABEL: Record<string, string> = {
 // 메인 컴포넌트
 // ──────────────────────────────────────────────
 
-export default function ImportClient() {
+export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl?: string }) {
   // 단계 관리: upload → preview → result
   const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
 
   // CSV 텍스트 (붙여넣기 또는 파일에서 읽음)
   const [csvText, setCsvText] = useState("");
+  const [sheetUrl, setSheetUrl] = useState(defaultSheetUrl);
+  const [importSource, setImportSource] = useState<"csv" | "googleSheet">("csv");
 
   // 미리보기 결과
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const [auxiliarySummary, setAuxiliarySummary] = useState<AuxiliarySummary | null>(null);
+  const [sourceInfo, setSourceInfo] = useState<ImportSourceInfo | null>(null);
 
   // 실행 결과
   const [importResult, setImportResult] = useState<ImportResultData | null>(null);
@@ -116,20 +144,29 @@ export default function ImportClient() {
   );
 
   // ──── 미리보기 요청 ────
-  const handlePreview = useCallback(async () => {
-    if (!csvText.trim()) {
+  const handlePreview = useCallback(async (source: "csv" | "googleSheet" = "csv") => {
+    if (source === "csv" && !csvText.trim()) {
       setError("CSV 데이터를 입력해주세요.");
+      return;
+    }
+    if (source === "googleSheet" && !sheetUrl.trim()) {
+      setError("구글시트 URL을 입력해주세요.");
       return;
     }
 
     setLoading(true);
     setError(null);
+    setImportSource(source);
 
     try {
       const res = await fetch("/api/admin/import-students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "preview", csvText }),
+        body: JSON.stringify(
+          source === "googleSheet"
+            ? { mode: "preview", source: "googleSheet", sheetUrl }
+            : { mode: "preview", csvText }
+        ),
       });
 
       const data = await res.json();
@@ -139,13 +176,15 @@ export default function ImportClient() {
       }
 
       setPreview(data.preview);
+      setAuxiliarySummary(data.auxiliarySheets?.summary ?? null);
+      setSourceInfo(data.source ?? null);
       setStep("preview");
     } catch {
       setError("서버 통신 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [csvText]);
+  }, [csvText, sheetUrl]);
 
   // ──── 실행 요청 ────
   const handleExecute = useCallback(async () => {
@@ -158,7 +197,11 @@ export default function ImportClient() {
       const res = await fetch("/api/admin/import-students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "execute", csvText }),
+        body: JSON.stringify(
+          importSource === "googleSheet"
+            ? { mode: "execute", source: "googleSheet", sheetUrl }
+            : { mode: "execute", csvText }
+        ),
       });
 
       const data = await res.json();
@@ -168,21 +211,26 @@ export default function ImportClient() {
       }
 
       setImportResult(data.result);
+      setAuxiliarySummary(data.auxiliarySheets?.summary ?? auxiliarySummary);
+      setSourceInfo(data.source ?? sourceInfo);
       setStep("result");
     } catch {
       setError("서버 통신 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [csvText]);
+  }, [auxiliarySummary, csvText, importSource, sheetUrl, sourceInfo]);
 
   // ──── 초기화 (다시 시작) ────
   const handleReset = useCallback(() => {
     setStep("upload");
     setCsvText("");
     setPreview(null);
+    setAuxiliarySummary(null);
+    setSourceInfo(null);
     setImportResult(null);
     setError(null);
+    setImportSource("csv");
     setStatusFilter("ALL");
   }, []);
 
@@ -232,6 +280,40 @@ export default function ImportClient() {
       {/* ===== 1단계: 업로드 ===== */}
       {step === "upload" && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-6 space-y-4">
+          <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-blue-600 dark:text-blue-300">sync</span>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                    구글시트에서 바로 가져오기
+                  </p>
+                  <p className="mt-1 text-xs text-blue-700 dark:text-blue-200">
+                    등록, 차량, 변동내역, 대표팀 명단 탭을 한 번에 읽어 DB 이관 미리보기를 만듭니다.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 md:flex-row">
+                  <input
+                    value={sheetUrl}
+                    onChange={(event) => {
+                      setSheetUrl(event.target.value);
+                      setError(null);
+                    }}
+                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                    className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-blue-500/40 dark:bg-gray-900 dark:text-white"
+                  />
+                  <button
+                    onClick={() => handlePreview("googleSheet")}
+                    disabled={loading || !sheetUrl.trim()}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loading ? "불러오는 중..." : "구글시트 미리보기"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             <span className="material-symbols-outlined text-xl align-middle mr-2 text-blue-500">
               upload_file
@@ -280,7 +362,7 @@ export default function ImportClient() {
           {/* 미리보기 버튼 */}
           <div className="pt-2">
             <button
-              onClick={handlePreview}
+              onClick={() => handlePreview("csv")}
               disabled={loading || !csvText.trim()}
               className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
@@ -313,6 +395,31 @@ export default function ImportClient() {
             <SummaryCard label="1호점" value={preview.summary.branch1Count} icon="location_on" />
             <SummaryCard label="2호점" value={preview.summary.branch2Count} icon="location_on" color="blue" />
           </div>
+
+          {auxiliarySummary && auxiliarySummary.totalRows > 0 && (
+            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="material-symbols-outlined text-base">dataset</span>
+                <span className="font-semibold">보조 탭 감지</span>
+                <span>차량 {auxiliarySummary.shuttleRows.toLocaleString()}행</span>
+                <span>변동 {auxiliarySummary.changeRows.toLocaleString()}행</span>
+                <span>대표팀 {auxiliarySummary.teamRows.toLocaleString()}행</span>
+              </div>
+              {sourceInfo?.type === "googleSheet" && (
+                <p className="mt-2 text-xs text-blue-700 dark:text-blue-200">
+                  읽은 탭: {sourceInfo.fetchedSheets.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
+          {sourceInfo?.skippedSheets?.length ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+              일부 탭은 없거나 읽을 수 없어 건너뛰었습니다:{" "}
+              {sourceInfo.skippedSheets.slice(0, 8).map((sheet) => sheet.sheetName).join(", ")}
+              {sourceInfo.skippedSheets.length > 8 ? " ..." : ""}
+            </div>
+          ) : null}
 
           {/* 에러 목록 (있는 경우) */}
           {preview.errors.length > 0 && (
@@ -496,6 +603,24 @@ export default function ImportClient() {
               skipped={importResult.skipped.payments}
             />
           </div>
+
+          {importResult.sheetImport && (
+            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="material-symbols-outlined text-base">database</span>
+                <span className="font-semibold">시트 원본 저장</span>
+                <span>원본 {importResult.sheetImport.rawRows.toLocaleString()}행</span>
+                <span>등록 {importResult.sheetImport.registrationRows.toLocaleString()}행</span>
+                <span>차량 {(importResult.sheetImport.shuttleRows ?? 0).toLocaleString()}행</span>
+                <span>변동 {(importResult.sheetImport.changeRows ?? 0).toLocaleString()}행</span>
+                <span>대표팀 {(importResult.sheetImport.teamRows ?? 0).toLocaleString()}행</span>
+                <span>확인 필요 {importResult.sheetImport.issues.toLocaleString()}건</span>
+              </div>
+              <p className="mt-2 text-xs text-blue-700 dark:text-blue-200">
+                배치 ID: {importResult.sheetImport.batchId}
+              </p>
+            </div>
+          )}
 
           {/* 실패 목록 */}
           {importResult.failed.length > 0 && (

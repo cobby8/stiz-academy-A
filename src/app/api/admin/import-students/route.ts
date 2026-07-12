@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { fetchStudentOperationSheets } from "@/lib/googleSheetsCsv";
 import {
   parseAndTransformCsv,
   parseRegistrationSheetCsv,
@@ -36,16 +37,40 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { mode, csvText, csvSheets } = body as {
+    const { mode, csvText, csvSheets, source, sheetUrl } = body as {
       mode: "preview" | "execute";
       csvText?: string;
       csvSheets?: Record<string, string>;
+      source?: "csv" | "googleSheet";
+      sheetUrl?: string;
     };
 
-    const sheetMap =
+    let sheetMap =
       csvSheets && typeof csvSheets === "object" && !Array.isArray(csvSheets)
         ? csvSheets
         : {};
+    let sourceUrl: string | null = null;
+    let spreadsheetId: string | null = null;
+    let fetchedSheets: string[] = [];
+    let skippedSheets: { sheetName: string; reason: string }[] = [];
+
+    if (source === "googleSheet") {
+      const targetSheetUrl = sheetUrl?.trim() || await getDefaultStudentSheetUrl();
+      if (!targetSheetUrl) {
+        return NextResponse.json(
+          { error: "구글시트 URL이 없습니다. URL을 입력하거나 설정에 저장해주세요." },
+          { status: 400 }
+        );
+      }
+
+      const fetched = await fetchStudentOperationSheets(targetSheetUrl);
+      sheetMap = { ...fetched.csvSheets, ...sheetMap };
+      sourceUrl = fetched.sourceUrl;
+      spreadsheetId = fetched.spreadsheetId;
+      fetchedSheets = fetched.fetchedSheets;
+      skippedSheets = fetched.skippedSheets;
+    }
+
     const registrationCsvText =
       typeof csvText === "string" && csvText.trim()
         ? csvText
@@ -80,6 +105,13 @@ export async function POST(request: NextRequest) {
           summary: auxiliarySheets.summary,
           errors: auxiliarySheets.errors,
         },
+        source: {
+          type: source === "googleSheet" ? "googleSheet" : "csv",
+          spreadsheetId,
+          sourceUrl,
+          fetchedSheets,
+          skippedSheets,
+        },
       });
     }
 
@@ -102,9 +134,9 @@ export async function POST(request: NextRequest) {
       },
       {
         importedBy: adminUser.appUserId,
-        sourceUrl: null,
-        spreadsheetId: null,
-        spreadsheetTitle: "수강생 등록 CSV",
+        sourceUrl,
+        spreadsheetId,
+        spreadsheetTitle: source === "googleSheet" ? "수강생 운영 구글시트" : "수강생 등록 CSV",
         summary: {
           registration: registrationSheet.summary,
           auxiliary: auxiliarySheets.summary,
@@ -118,6 +150,13 @@ export async function POST(request: NextRequest) {
       preview: { summary: preview.summary },
       registrationSheet: { summary: registrationSheet.summary },
       auxiliarySheets: { summary: auxiliarySheets.summary },
+      source: {
+        type: source === "googleSheet" ? "googleSheet" : "csv",
+        spreadsheetId,
+        sourceUrl,
+        fetchedSheets,
+        skippedSheets,
+      },
     });
   } catch (err) {
     console.error("[import-students] 오류:", err);
@@ -444,6 +483,13 @@ async function ensureStudentSheetImportTablesAvailable() {
   if (!rows[0]?.exists) {
     throw new Error("수강생 시트 이관 DB 테이블이 아직 적용되지 않았습니다. prisma/sql/add_student_sheet_import.sql을 먼저 적용해주세요.");
   }
+}
+
+async function getDefaultStudentSheetUrl() {
+  const rows = await prisma.$queryRawUnsafe<{ googleSheetsScheduleUrl?: string | null; googlesheetsscheduleurl?: string | null }[]>(
+    `SELECT "googleSheetsScheduleUrl" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+  );
+  return rows[0]?.googleSheetsScheduleUrl ?? rows[0]?.googlesheetsscheduleurl ?? null;
 }
 
 async function storeStudentSheetImport(

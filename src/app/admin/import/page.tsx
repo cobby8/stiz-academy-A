@@ -7,10 +7,12 @@
  */
 
 import ImportClient from "./ImportClient";
+import { getCachedAdminSettingsPayload } from "@/lib/adminReadPayloads";
 
 // ISR 30초 — 관리자 페이지 공통 설정
 export const revalidate = 30;
 
-export default function ImportPage() {
-  return <ImportClient />;
+export default async function ImportPage() {
+  const { settings } = await getCachedAdminSettingsPayload();
+  return <ImportClient defaultSheetUrl={settings?.googleSheetsScheduleUrl ?? ""} />;
 }

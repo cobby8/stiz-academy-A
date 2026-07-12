@@ -7,6 +7,7 @@ import {
     getPrograms,
     getSheetSlotCache,
 } from "@/lib/queries";
+import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
 
 const SCHEDULE_CACHE_HEADERS = {
     "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
@@ -25,24 +26,32 @@ export async function GET() {
         const settings = await timing.measure("settings", () => getAcademySettings() as Promise<any>);
         const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
 
-        const [overrides, coaches, customSlots, programs, slots] = await timing.measure("data", () => Promise.all([
+        const [overrides, coaches, customSlots, programs, legacySlots, dbScheduleData] = await timing.measure("data", () => Promise.all([
             getClassSlotOverrides(),
             getCoaches(),
             getCustomClassSlots(),
             getPrograms(),
             sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
+            getScheduleSlotAdminData(),
         ]));
+        const scheduleData = dbScheduleData ?? {
+            slots: legacySlots,
+            overrides,
+            customSlots,
+            scheduleSource: "SHEET_CACHE" as const,
+        };
 
         return timedJson(
             timing,
             {
-                slots,
-                overrides,
+                slots: scheduleData.slots,
+                overrides: scheduleData.overrides,
                 coaches,
-                customSlots,
-                hasSheetUrl: Boolean(sheetUrl),
+                customSlots: scheduleData.customSlots,
+                hasSheetUrl: Boolean(sheetUrl) || Boolean(dbScheduleData),
                 sheetUrl: sheetUrl ?? null,
                 programs,
+                scheduleSource: scheduleData.scheduleSource,
             },
             { headers: SCHEDULE_CACHE_HEADERS },
         );

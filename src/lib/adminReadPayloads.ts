@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { getInstagramRuntimeStatus } from "@/lib/instagram";
+import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
 import {
     getAcademySettings,
     getAnnualEvents,
@@ -639,22 +640,30 @@ export const getCachedAdminSchedulePayload = unstable_cache(
         const settings = await (getAcademySettings() as Promise<any>);
         const sheetUrl = settings?.googleSheetsScheduleUrl as string | null | undefined;
 
-        const [overrides, coaches, customSlots, programs, slots] = await Promise.all([
+        const [overrides, coaches, customSlots, programs, legacySlots, dbScheduleData] = await Promise.all([
             getClassSlotOverrides(),
             getCoaches(),
             getCustomClassSlots(),
             getPrograms(),
             sheetUrl ? getSheetSlotCache().then((cachedSlots) => cachedSlots ?? []) : Promise.resolve([]),
+            getScheduleSlotAdminData(),
         ]);
+        const scheduleData = dbScheduleData ?? {
+            slots: legacySlots,
+            overrides,
+            customSlots,
+            scheduleSource: "SHEET_CACHE" as const,
+        };
 
         return {
-            slots,
-            overrides,
+            slots: scheduleData.slots,
+            overrides: scheduleData.overrides,
             coaches,
-            customSlots,
-            hasSheetUrl: Boolean(sheetUrl),
+            customSlots: scheduleData.customSlots,
+            hasSheetUrl: Boolean(sheetUrl) || Boolean(dbScheduleData),
             sheetUrl: sheetUrl ?? null,
             programs,
+            scheduleSource: scheduleData.scheduleSource,
         };
     },
     ["admin-schedule-page-v1"],

@@ -14,6 +14,7 @@ import {
 } from "@/app/actions/scheduleSlotImport";
 import { updateAcademySettings } from "@/app/actions/admin";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
+import type { SchedulePayloadSource } from "@/lib/scheduleSlotPayload";
 import type { ScheduleSlotImportIssue, ScheduleSlotImportPlan } from "@/lib/scheduleSlotImport";
 import type { MergedSlot } from "@/app/schedule/ScheduleClient";
 
@@ -115,6 +116,7 @@ interface SchedulePayload {
     hasSheetUrl: boolean;
     sheetUrl: string | null;
     programs: Program[];
+    scheduleSource?: SchedulePayloadSource;
 }
 
 type ScheduleImportResult = {
@@ -140,6 +142,7 @@ interface ScheduleAdminClientProps {
     hasSheetUrl?: boolean;
     sheetUrl?: string | null;
     programs?: Program[];
+    scheduleSource?: SchedulePayloadSource;
 }
 
 function defaultCustomSlotForm(): CustomSlotForm {
@@ -246,6 +249,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
         hasSheetUrl: initialHasSheetUrl = false,
         sheetUrl: initialSheetUrl = null,
         programs: initialPrograms = [],
+        scheduleSource: initialScheduleSource = "SHEET_CACHE",
     } = props;
     const hasInitialData = Boolean(
         props.slots ||
@@ -254,7 +258,8 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
         props.customSlots ||
         props.hasSheetUrl !== undefined ||
         props.sheetUrl !== undefined ||
-        props.programs,
+        props.programs ||
+        props.scheduleSource,
     );
     const [slots, setSlots] = useState<SheetClassSlot[]>(initialSlots);
     const [stateMap, setStateMap] = useState<Record<string, SlotState>>(() => buildInitialState(initialOverrides));
@@ -263,6 +268,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
     const [hasSheetUrl, setHasSheetUrl] = useState(initialHasSheetUrl);
     const [sheetUrl, setSheetUrl] = useState<string | null>(initialSheetUrl);
     const [programs, setPrograms] = useState<Program[]>(initialPrograms);
+    const [scheduleSource, setScheduleSource] = useState<SchedulePayloadSource>(initialScheduleSource);
     const [loading, setLoading] = useState(!hasInitialData);
     const [loadError, setLoadError] = useState(false);
     const [pending, startTransition] = useTransition();
@@ -413,6 +419,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
             setHasSheetUrl(data.hasSheetUrl);
             setSheetUrl(data.sheetUrl);
             setPrograms(data.programs);
+            setScheduleSource(data.scheduleSource ?? "SHEET_CACHE");
         } catch (error) {
             console.error("Failed to load schedule data:", error);
             setLoadError(true);
@@ -427,6 +434,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
     }, [hasInitialData, loadScheduleData]);
 
     const coachMap = useMemo(() => Object.fromEntries(coaches.map((c) => [c.id, c])), [coaches]);
+    const isDbScheduleSource = scheduleSource === "SCHEDULE_SLOT";
 
     function getState(slotKey: string): SlotState {
         return stateMap[slotKey] ?? defaultSlotState();
@@ -616,7 +624,9 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">수업시간표 관리</h1>
                     <p className="text-gray-500 dark:text-gray-400 text-sm">
-                        학년·인원은 구글시트에서 자동 동기화됩니다. 카드를 클릭하면 편집할 수 있습니다.
+                        {isDbScheduleSource
+                            ? "시간표는 DB 원본을 우선 사용하고, 인원은 실제 수강 등록 기준으로 계산됩니다."
+                            : "학년·인원은 구글시트 캐시에서 불러옵니다. 카드를 클릭하면 편집할 수 있습니다."}
                     </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -650,7 +660,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                         className={`bg-white border text-sm font-bold px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 dark:bg-gray-800 ${hasSheetUrl ? "border-green-300 text-green-800 hover:bg-green-50 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10" : "border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-300 dark:hover:bg-amber-500/10"}`}
                     >
                         <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>link</span>
-                        구글시트 연동{hasSheetUrl ? " " : " 설정"}
+                        {isDbScheduleSource ? "DB 시간표 원본" : `구글시트 연동${hasSheetUrl ? " " : " 설정"}`}
                         {hasSheetUrl && <span className="material-symbols-outlined text-green-600 dark:text-emerald-300" style={{ fontSize: "16px" }}>check_circle</span>}
                     </button>
                 </div>
@@ -666,7 +676,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                 </div>
             )}
 
-            {adminViewMode === "edit" && !hasSheetUrl && (
+            {adminViewMode === "edit" && !hasSheetUrl && !isDbScheduleSource && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                     <p className="font-bold mb-1">구글시트 URL이 설정되지 않았습니다.</p>
                     <p>

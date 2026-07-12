@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-13: 관리자 시간표 API/초기 payload가 `ScheduleSlot`을 우선 읽고, 기존 저장 액션이 `ScheduleSlot`과 `Class`에도 미러링되도록 보강했다.
 - 2026-07-13: `ScheduleSlot` 이관 성공 시 같은 `slotKey`의 `Class`를 생성/갱신해 기존 `Enrollment(ACTIVE)` 인원 집계와 연결되도록 했다.
 - 2026-07-12: 시간표 이관 검증에서 시트 인원은 참고값으로만 보고, 실제 운영 인원은 `Class`와 `Enrollment(ACTIVE)` 집계 기준으로 비교하도록 보강했다.
 - 2026-07-12: 스프레드시트 기반 시간표를 실제 DB 원본으로 전환하기 위해 `ScheduleSlot` 이관 모델/검증 액션/관리자 이관 미리보기 UI를 추가했다.
@@ -106,7 +107,7 @@
 
 - 기준일: 2026-07-13
 - 문서 수: 5
-- 최근 지식: 시간표는 구글시트 캐시를 계속 읽는 중간 단계를 거치되, `ScheduleSlot`/`ScheduleImportBatch`/`ScheduleImportIssue`로 DB 원본 전환 기반을 만들었다. 시트 인원은 운영 원본이 아니라 참고 스냅샷이며, 실제 운영 인원은 `Class.slotKey`에 연결된 `Enrollment(ACTIVE)` 수로 계산한다. `ScheduleSlot` 이관 성공 시 같은 `slotKey`의 `Class`를 생성/갱신해 기존 수강 등록과 끊기지 않게 한다. 관리자 화면에서 이관 미리보기로 오류와 인원 차이를 먼저 확인하고, 오류가 없을 때만 새 DB 원본에 반영한다. 사용자 화면에서는 DB 인덱스/DDL/배경 카운트 자동 조회를 피하고, 인덱스 적용은 Prisma schema/SQL 운영 작업으로 분리한다.
+- 최근 지식: 시간표는 `ScheduleSlot`을 DB 원본으로 전환 중이다. 관리자 시간표 API와 초기 payload는 `ScheduleSlot`이 있으면 우선 읽고, 아직 없으면 기존 `SheetSlotCache`로 fallback한다. 시트 인원은 운영 원본이 아니라 참고 스냅샷이며, 실제 운영 인원은 `Class.slotKey`에 연결된 `Enrollment(ACTIVE)` 수로 계산한다. 기존 저장 액션도 `ScheduleSlot`과 `Class`에 미러링되어 DB 원본 조회 상태에서 편집 내용이 유지된다. 사용자 화면에서는 DB 인덱스/DDL/배경 카운트 자동 조회를 피하고, 인덱스 적용은 Prisma schema/SQL 운영 작업으로 분리한다.
 
 ## 목차
 - [architecture.md](architecture.md): 프로젝트 구조와 주요 기능

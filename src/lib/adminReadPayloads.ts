@@ -105,6 +105,131 @@ async function getTodayClasses() {
     }
 }
 
+type DashboardPrimaryRow = {
+    studentCount: number | null;
+    programCount: number | null;
+    coachCount: number | null;
+    classCount: number | null;
+    pendingCount: number | null;
+    enrollPending: number | null;
+    enrollApproved: number | null;
+    enrollRejected: number | null;
+    enrollCancelled: number | null;
+    enrollTotal: number | null;
+    todayClasses: unknown;
+};
+
+function readJsonArray<T>(value: unknown): T[] {
+    if (Array.isArray(value)) return value as T[];
+    if (typeof value !== "string") return [];
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+async function loadDashboardPrimaryPayload() {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const today = days[new Date().getDay()];
+
+    try {
+        const rows = await prisma.$queryRawUnsafe<DashboardPrimaryRow[]>(
+            `SELECT
+                (SELECT COUNT(*)::int FROM "Student") AS "studentCount",
+                (SELECT COUNT(*)::int FROM "Program") AS "programCount",
+                (SELECT COUNT(*)::int FROM "Coach") AS "coachCount",
+                (SELECT COUNT(*)::int FROM "Class") AS "classCount",
+                (SELECT COUNT(*)::int FROM "ParentRequest" WHERE status = 'PENDING') AS "pendingCount",
+                (SELECT COUNT(*)::int FROM "EnrollmentApplication" WHERE status = 'PENDING') AS "enrollPending",
+                (SELECT COUNT(*)::int FROM "EnrollmentApplication" WHERE status = 'APPROVED') AS "enrollApproved",
+                (SELECT COUNT(*)::int FROM "EnrollmentApplication" WHERE status = 'REJECTED') AS "enrollRejected",
+                (SELECT COUNT(*)::int FROM "EnrollmentApplication" WHERE status = 'CANCELLED') AS "enrollCancelled",
+                (SELECT COUNT(*)::int FROM "EnrollmentApplication") AS "enrollTotal",
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id', tc.id,
+                                'name', tc.name,
+                                'startTime', tc."startTime",
+                                'endTime', tc."endTime",
+                                'capacity', tc.capacity,
+                                'programName', tc."programName",
+                                'enrolled', tc.enrolled
+                            )
+                            ORDER BY tc."startTime" ASC
+                        ),
+                        '[]'::json
+                    )
+                    FROM (
+                        SELECT c.id, c.name, c."startTime", c."endTime", c.capacity,
+                               p.name AS "programName",
+                               (
+                                   SELECT COUNT(*)::int
+                                   FROM "Enrollment" e
+                                   WHERE e."classId" = c.id AND e.status = 'ACTIVE'
+                               ) AS enrolled
+                        FROM "Class" c
+                        LEFT JOIN "Program" p ON c."programId" = p.id
+                        WHERE c."dayOfWeek" = $1
+                        ORDER BY c."startTime" ASC
+                    ) tc
+                ) AS "todayClasses"`,
+            today,
+        );
+
+        const row = rows[0];
+        if (!row) throw new Error("No dashboard primary row returned");
+
+        const todayClasses = readJsonArray<any>((row as any).todayClasses ?? (row as any).todayclasses).map((item) => ({
+            id: item.id,
+            name: item.name,
+            startTime: item.startTime ?? null,
+            endTime: item.endTime ?? null,
+            capacity: Number(item.capacity ?? 0),
+            programName: item.programName ?? null,
+            enrolled: Number(item.enrolled ?? 0),
+        }));
+
+        return {
+            stats: {
+                studentCount: Number(row.studentCount ?? 0),
+                programCount: Number(row.programCount ?? 0),
+                coachCount: Number(row.coachCount ?? 0),
+                classCount: Number(row.classCount ?? 0),
+            },
+            pendingRequests: [],
+            pendingCount: Number(row.pendingCount ?? 0),
+            enrollStats: {
+                PENDING: Number(row.enrollPending ?? 0),
+                APPROVED: Number(row.enrollApproved ?? 0),
+                REJECTED: Number(row.enrollRejected ?? 0),
+                CANCELLED: Number(row.enrollCancelled ?? 0),
+                total: Number(row.enrollTotal ?? 0),
+            },
+            extendedStats: getEmptyExtendedStats(),
+            todayClasses,
+            recentStudents: [],
+            todayLabel: getTodayLabel(),
+        };
+    } catch (error) {
+        console.error("[loadDashboardPrimaryPayload] failed:", error);
+        return {
+            stats: { studentCount: 0, programCount: 0, coachCount: 0, classCount: 0 },
+            pendingRequests: [],
+            pendingCount: 0,
+            enrollStats: { PENDING: 0, APPROVED: 0, REJECTED: 0, CANCELLED: 0, total: 0 },
+            extendedStats: getEmptyExtendedStats(),
+            todayClasses: [],
+            recentStudents: [],
+            todayLabel: getTodayLabel(),
+        };
+    }
+}
+
 async function getRecentStudents() {
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
@@ -185,26 +310,8 @@ export function getCachedAdminStudentsPayload(limit?: number) {
 }
 
 export const getCachedAdminDashboardPrimaryPayload = unstable_cache(
-    async () => {
-        const [stats, pendingCount, enrollStats, todayClasses] = await Promise.all([
-            getDashboardStats(),
-            getPendingRequestCount(),
-            getEnrollApplicationStats(),
-            getTodayClasses(),
-        ]);
-
-        return {
-            stats,
-            pendingRequests: [],
-            pendingCount,
-            enrollStats,
-            extendedStats: getEmptyExtendedStats(),
-            todayClasses,
-            recentStudents: [],
-            todayLabel: getTodayLabel(),
-        };
-    },
-    ["admin-dashboard-primary-v1"],
+    loadDashboardPrimaryPayload,
+    ["admin-dashboard-primary-v2"],
     { revalidate: 60, tags: ["admin-dashboard"] },
 );
 

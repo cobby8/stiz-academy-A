@@ -155,6 +155,7 @@ export default function GalleryAdminClient({
     setLoading(true);
     setLoadError(false);
     try {
+      await fetch("/api/admin/gallery/refresh", { method: "POST", cache: "no-store" });
       const response = await fetch("/api/admin/gallery", { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load gallery data.");
       const data = (await response.json()) as GalleryPayload;
@@ -171,9 +172,8 @@ export default function GalleryAdminClient({
   }, []);
 
   useEffect(() => {
-    if (hasInitialData) return;
     void loadGallery();
-  }, [hasInitialData, loadGallery]);
+  }, [loadGallery]);
 
   const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
   const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");

@@ -148,6 +148,7 @@ export default function GalleryAdminClient({
   const [editingPost, setEditingPost] = useState<GalleryPost | null>(null);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
+  const [draftBusy, setDraftBusy] = useState<{ id: string; action: "save" | "publish" | "reject" } | null>(null);
   const [pageMessage, setPageMessage] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadGallery = useCallback(async () => {
@@ -218,9 +219,20 @@ export default function GalleryAdminClient({
     setDrafts((prev) => prev.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)));
   }
 
+  function runDraftAction(id: string, action: "save" | "publish" | "reject", task: () => Promise<void>) {
+    setDraftBusy({ id, action });
+    startTransition(async () => {
+      try {
+        await task();
+      } finally {
+        setDraftBusy((current) => (current?.id === id && current.action === action ? null : current));
+      }
+    });
+  }
+
   function handleDraftSave(draft: SocialPostDraft) {
     setDraftMessage(null);
-    startTransition(async () => {
+    runDraftAction(draft.id, "save", async () => {
       try {
         const result = await saveSocialPostDraft(draft.id, {
           title: draft.title,
@@ -241,7 +253,7 @@ export default function GalleryAdminClient({
   function handleDraftPublish(draft: SocialPostDraft) {
     if (!confirm("이 초안을 홈페이지 갤러리에 게시하고 인스타그램 자동 게시 큐에 넣을까요?")) return;
     setDraftMessage(null);
-    startTransition(async () => {
+    runDraftAction(draft.id, "publish", async () => {
       try {
         const result = await publishSocialPostDraftToGallery(draft.id);
         patchDraft(draft.id, result.draft);
@@ -256,11 +268,16 @@ export default function GalleryAdminClient({
   function handleDraftReject(draft: SocialPostDraft) {
     if (!confirm("이 초안을 반려할까요?")) return;
     setDraftMessage(null);
-    startTransition(async () => {
+    runDraftAction(draft.id, "reject", async () => {
       try {
-        await rejectSocialPostDraft(draft.id);
+        const result = await rejectSocialPostDraft(draft.id);
         setDrafts((prev) => prev.filter((item) => item.id !== draft.id));
-        setDraftMessage("초안을 반려했습니다.");
+        await loadGallery();
+        setDraftMessage(
+          result.removedGalleryPostId
+            ? "초안을 반려하고 연결된 갤러리 게시물을 삭제했습니다."
+            : "초안을 반려했습니다.",
+        );
       } catch (error) {
         setDraftMessage(error instanceof Error ? error.message : "반려 처리에 실패했습니다.");
       }
@@ -412,7 +429,10 @@ export default function GalleryAdminClient({
             {drafts.map((draft) => {
               const media = parseMedia(draft.mediaJSON).filter((item) => item.type === "image");
               const hasPublishingStatus = draft.status === "PUBLISHING";
-              const isDraftLocked = isPending || hasPublishingStatus;
+              const isDraftBusy = draftBusy?.id === draft.id;
+              const isPublishingDraft = isDraftBusy && draftBusy?.action === "publish";
+              const isRejectingDraft = isDraftBusy && draftBusy?.action === "reject";
+              const isEditLocked = isDraftBusy || hasPublishingStatus;
               return (
                 <div key={draft.id} className="grid gap-4 rounded-lg border border-gray-200 p-3 md:grid-cols-[minmax(220px,320px)_1fr]">
                   <InstagramFeedPreview
@@ -461,7 +481,7 @@ export default function GalleryAdminClient({
                       <button
                         type="button"
                         onClick={() => handleDraftSave(draft)}
-                        disabled={isDraftLocked}
+                        disabled={isEditLocked}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 text-xs font-black text-gray-700 disabled:opacity-50"
                       >
                         <FontFreeIcon name="save" size={15} />
@@ -470,10 +490,10 @@ export default function GalleryAdminClient({
                       <button
                         type="button"
                         onClick={() => handleDraftPublish(draft)}
-                        disabled={isDraftLocked}
+                        disabled={isEditLocked}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-brand-orange-500 px-2 text-xs font-black text-white disabled:opacity-50"
                       >
-                        {hasPublishingStatus ? (
+                        {isPublishingDraft || hasPublishingStatus ? (
                           <FontFreeIcon name="sync" size={15} className="animate-spin" />
                         ) : (
                           <FontFreeIcon name="send" size={15} />
@@ -483,11 +503,15 @@ export default function GalleryAdminClient({
                       <button
                         type="button"
                         onClick={() => handleDraftReject(draft)}
-                        disabled={isDraftLocked}
+                        disabled={isRejectingDraft}
                         className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-gray-100 px-2 text-xs font-black text-gray-600 disabled:opacity-50"
                       >
-                        <FontFreeIcon name="block" size={15} />
-                        반려
+                        {isRejectingDraft ? (
+                          <FontFreeIcon name="sync" size={15} className="animate-spin" />
+                        ) : (
+                          <FontFreeIcon name="block" size={15} />
+                        )}
+                        {isRejectingDraft ? "반려 중" : "반려"}
                       </button>
                     </div>
                   </div>

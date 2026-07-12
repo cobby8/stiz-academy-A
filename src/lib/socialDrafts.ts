@@ -277,19 +277,34 @@ export async function updateSocialPostDraftRecord(
 export async function rejectSocialPostDraftRecord(id: string) {
   await ensureSocialPostDraftTable();
 
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `UPDATE "SocialPostDraft"
-     SET status = 'REJECTED', "rejectedAt" = NOW(), "updatedAt" = NOW()
-     WHERE id = $1 AND status IN ('DRAFT', 'READY', 'FAILED')
-     RETURNING *`,
-    id,
-  );
+  const result = await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRawUnsafe<any[]>(
+      `UPDATE "SocialPostDraft"
+       SET status = 'REJECTED',
+           "rejectedAt" = NOW(),
+           "instagramNextRetryAt" = NULL,
+           "updatedAt" = NOW()
+       WHERE id = $1 AND status IN ('DRAFT', 'READY', 'FAILED', 'PUBLISHING')
+       RETURNING *`,
+      id,
+    );
 
-  if (!rows[0]) {
+    const draft = rows[0] ? mapDraft(rows[0]) : null;
+    if (draft?.galleryPostId) {
+      await tx.$executeRawUnsafe(`DELETE FROM "GalleryPost" WHERE id = $1`, draft.galleryPostId);
+    }
+
+    return {
+      draft,
+      removedGalleryPostId: draft?.galleryPostId ?? null,
+    };
+  });
+
+  if (!result.draft) {
     throw new Error("반려할 수 있는 초안을 찾지 못했습니다.");
   }
 
-  return mapDraft(rows[0]);
+  return result;
 }
 
 export async function markSocialPostDraftPublished(

@@ -84,9 +84,9 @@ export async function saveSocialPostDraft(id: string, data: SaveDraftInput) {
 
 export async function rejectSocialPostDraft(id: string) {
   await requireAdmin();
-  const draft = await rejectSocialPostDraftRecord(id);
+  const result = await rejectSocialPostDraftRecord(id);
   revalidateSocialPostPaths();
-  return { ok: true, draft };
+  return { ok: true, ...result };
 }
 
 function canPublishDraftStatus(status: SocialPostDraft["status"]) {

@@ -1,5 +1,10 @@
 # Decisions
 
+## 2026-07-12: Move schedule operation from sheet cache toward DB-first slots
+- Decision: Add `ScheduleSlot`, `ScheduleImportBatch`, and `ScheduleImportIssue` as the DB-first source for academy schedule operations. Keep `SheetSlotCache`, `ClassSlotOverride`, and `CustomClassSlot` as legacy inputs during migration, then import them into `ScheduleSlot`.
+- Reason: The academy already runs enrollments, attendance, payments, trials, waitlists, and makeup sessions through DB tables, but the schedule source still depends on a sheet cache. A dedicated slot table makes the schedule the same kind of durable operational record as the rest of the academy system.
+- Security note: New public-schema Supabase tables should not be assumed to be exposed automatically. The SQL setup enables RLS and revokes anon/authenticated Data API access until an explicit public policy is needed.
+
 ## 2026-07-12: 다크모드 브랜드 강조색은 주황이 아니라 라임으로 치환한다
 - 결정: 라이트모드의 브랜드 강조색은 기존 주황을 유지하되, 다크모드에서는 `--brand-accent`를 `brand-neon-lime`으로 정의한다. 전역 안전망은 `brand-orange`/`orange` 배경·텍스트·테두리·hover·focus 누락분을 라임 계열로 바꾸고, 라임 배경 위 흰 글자는 남색 글자로 보정한다.
 - 이유: 다크모드에서 주황을 단순히 어둡게 만들면 브랜드 체계가 흔들리고, 화면마다 갈색/주황 잔상이 남는다. 라이트=주황, 다크=라임이라는 규칙을 하나의 수도꼭지처럼 `--brand-accent`에 모으면 컴포넌트가 놓친 부분도 일관되게 따라간다.

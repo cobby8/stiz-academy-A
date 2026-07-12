@@ -69,6 +69,7 @@ model Program {
   classes            Class[]
   slotOverrides      ClassSlotOverride[]
   customClassSlots   CustomClassSlot[]
+  scheduleSlots      ScheduleSlot[]
 }
 
 model Class {
@@ -297,6 +298,80 @@ model CustomClassSlot {
   program    Program? @relation(fields: [programId], references: [id], onUpdate: NoAction)
 }
 
+model ScheduleImportBatch {
+  id             String                @id @default(dbgenerated("(gen_random_uuid())::text"))
+  source         String                @default("GOOGLE_SHEETS")
+  sourceUrl      String?
+  status         String                @default("PENDING")
+  importedBy     String?
+  totalRows      Int                   @default(0)
+  validRows      Int                   @default(0)
+  errorRows      Int                   @default(0)
+  message        String?
+  rawSummaryJSON String?
+  createdAt      DateTime              @default(now()) @db.Timestamptz(6)
+  completedAt    DateTime?             @db.Timestamptz(6)
+  slots          ScheduleSlot[]
+  issues         ScheduleImportIssue[]
+
+  @@index([status, createdAt])
+  @@index([source, createdAt])
+}
+
+model ScheduleImportIssue {
+  id        String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId   String
+  rowNumber Int?
+  slotKey   String?
+  severity  String              @default("ERROR")
+  message   String
+  rawJSON   String?
+  createdAt DateTime            @default(now()) @db.Timestamptz(6)
+  batch     ScheduleImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([batchId])
+  @@index([severity])
+  @@index([slotKey])
+}
+
+model ScheduleSlot {
+  id               String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slotKey          String               @unique
+  source           String               @default("DB")
+  period           Int?
+  dayKey           String
+  dayLabel         String?
+  isWeekend        Boolean              @default(false)
+  startTime        String
+  endTime          String
+  label            String?
+  gradeRange       String?
+  gradesJSON       String               @default("[]")
+  enrolledSnapshot Int                  @default(0)
+  capacity         Int                  @default(12)
+  note             String?
+  isHidden         Boolean              @default(false)
+  displayOrder     Int                  @default(0)
+  activeFrom       DateTime?            @db.Timestamptz(6)
+  activeTo         DateTime?            @db.Timestamptz(6)
+  coachId          String?
+  programId        String?
+  importBatchId    String?
+  rawJSON          String?
+  createdAt        DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  coach            Coach?               @relation(fields: [coachId], references: [id], onUpdate: NoAction)
+  program          Program?             @relation(fields: [programId], references: [id], onUpdate: NoAction)
+  importBatch      ScheduleImportBatch? @relation(fields: [importBatchId], references: [id], onUpdate: NoAction)
+
+  @@index([dayKey, startTime])
+  @@index([isHidden])
+  @@index([coachId])
+  @@index([programId])
+  @@index([importBatchId])
+  @@index([source])
+}
+
 model Coach {
   id          String              @id @default(uuid())
   name        String
@@ -311,6 +386,7 @@ model Coach {
   user        User?               @relation(fields: [userId], references: [id], onUpdate: NoAction)
   slots       ClassSlotOverride[]
   customSlots CustomClassSlot[]
+  scheduleSlots ScheduleSlot[]
 }
 
 model SheetSlotCache {

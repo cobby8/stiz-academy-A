@@ -78,6 +78,32 @@ interface ImportSourceInfo {
   skippedSheets: { sheetName: string; reason: string }[];
 }
 
+interface ImportHistoryIssue {
+  id: string;
+  sheetName: string | null;
+  rowNumber: number | null;
+  severity: string;
+  message: string;
+  createdAt: string;
+}
+
+interface ImportHistoryBatch {
+  id: string;
+  source: string;
+  spreadsheetTitle: string | null;
+  status: string;
+  totalRows: number;
+  registrationRows: number;
+  vehicleRows: number;
+  changeRows: number;
+  teamRows: number;
+  errorRows: number;
+  message: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  issues: ImportHistoryIssue[];
+}
+
 // ──────────────────────────────────────────────
 // 상태 상수
 // ──────────────────────────────────────────────
@@ -119,6 +145,9 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
   // 로딩/에러 상태
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<ImportHistoryBatch[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   // 테이블 필터
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -187,6 +216,29 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
   }, [csvText, sheetUrl]);
 
   // ──── 실행 요청 ────
+  const loadImportHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+
+    try {
+      const res = await fetch("/api/admin/import-students/history", {
+        cache: "no-store",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setHistoryError(data.error || "최근 이관 기록을 불러오지 못했습니다.");
+        return;
+      }
+
+      setHistory(data.batches ?? []);
+    } catch {
+      setHistoryError("서버 통신 오류로 최근 이관 기록을 불러오지 못했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   const handleExecute = useCallback(async () => {
     if (!confirm("이관을 실행하시겠습니까? DB에 데이터가 삽입됩니다.")) return;
 
@@ -214,12 +266,13 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
       setAuxiliarySummary(data.auxiliarySheets?.summary ?? auxiliarySummary);
       setSourceInfo(data.source ?? sourceInfo);
       setStep("result");
+      void loadImportHistory();
     } catch {
       setError("서버 통신 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [auxiliarySummary, csvText, importSource, sheetUrl, sourceInfo]);
+  }, [auxiliarySummary, csvText, importSource, loadImportHistory, sheetUrl, sourceInfo]);
 
   // ──── 초기화 (다시 시작) ────
   const handleReset = useCallback(() => {
@@ -278,6 +331,13 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
       )}
 
       {/* ===== 1단계: 업로드 ===== */}
+      <ImportHistoryPanel
+        batches={history}
+        error={historyError}
+        loading={historyLoading}
+        onLoad={loadImportHistory}
+      />
+
       {step === "upload" && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-6 space-y-4">
           <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
@@ -658,6 +718,148 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
 // ──────────────────────────────────────────────
 // 서브 컴포넌트
 // ──────────────────────────────────────────────
+
+/** 최근 이관 기록 패널 */
+function ImportHistoryPanel({
+  batches,
+  error,
+  loading,
+  onLoad,
+}: {
+  batches: ImportHistoryBatch[] | null;
+  error: string | null;
+  loading: boolean;
+  onLoad: () => void;
+}) {
+  return (
+    <section className="rounded-xl border bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            최근 이관 기록
+          </h2>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            최근 5개 배치와 확인이 필요한 이슈만 가볍게 조회합니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onLoad}
+          disabled={loading}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-lime-300 dark:text-gray-950 dark:hover:bg-lime-200"
+        >
+          <span className={`material-symbols-outlined text-base ${loading ? "animate-spin" : ""}`}>
+            {loading ? "progress_activity" : "history"}
+          </span>
+          {loading ? "불러오는 중" : "최근 기록 불러오기"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+          {error}
+        </div>
+      )}
+
+      {!batches && !loading ? (
+        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+          필요할 때만 기록을 불러와 관리자 화면 초기 속도를 유지합니다.
+        </p>
+      ) : null}
+
+      {batches?.length === 0 ? (
+        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+          아직 저장된 이관 기록이 없습니다.
+        </p>
+      ) : null}
+
+      {batches && batches.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {batches.map((batch) => (
+            <article
+              key={batch.id}
+              className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
+            >
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800 dark:bg-lime-300/15 dark:text-lime-200">
+                      {batch.status}
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {batch.spreadsheetTitle || batch.source}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {new Date(batch.createdAt).toLocaleString("ko-KR")} · {batch.id}
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs md:min-w-72">
+                  <ImportMetric label="원본" value={batch.totalRows} />
+                  <ImportMetric label="등록" value={batch.registrationRows} />
+                  <ImportMetric
+                    label="확인"
+                    value={batch.errorRows}
+                    tone={batch.errorRows > 0 ? "warn" : "ok"}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-300">
+                <span>차량 {batch.vehicleRows.toLocaleString()}건</span>
+                <span>변동 {batch.changeRows.toLocaleString()}건</span>
+                <span>대표팀 {batch.teamRows.toLocaleString()}건</span>
+              </div>
+
+              {batch.message ? (
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{batch.message}</p>
+              ) : null}
+
+              {batch.issues.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {batch.issues.map((issue) => (
+                    <div
+                      key={issue.id}
+                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100"
+                    >
+                      <span className="font-semibold">{issue.severity}</span>
+                      {issue.sheetName ? ` · ${issue.sheetName}` : ""}
+                      {issue.rowNumber ? ` ${issue.rowNumber}행` : ""} · {issue.message}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ImportMetric({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "ok" | "warn";
+}) {
+  const toneClass =
+    tone === "warn"
+      ? "text-amber-700 dark:text-amber-200"
+      : tone === "ok"
+      ? "text-green-700 dark:text-lime-200"
+      : "text-gray-900 dark:text-white";
+
+  return (
+    <div className="rounded-md bg-white px-2 py-2 dark:bg-gray-800">
+      <p className="text-gray-500 dark:text-gray-400">{label}</p>
+      <p className={`font-bold ${toneClass}`}>{value.toLocaleString()}</p>
+    </div>
+  );
+}
 
 /** 단계 표시 바 */
 function StepIndicator({ current }: { current: "upload" | "preview" | "result" }) {

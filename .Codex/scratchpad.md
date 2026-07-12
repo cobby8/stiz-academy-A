@@ -2,8 +2,8 @@
 
 ## 현재 작업
 - 작업명: 스프레드시트 운영 흐름을 DB 원본 운영으로 전환
-- 상태: 공개 조회 흐름 DB 우선 전환 진행
-- 범위: 시간표 DB 모델, 이관 검증/실행 액션, ScheduleSlot 우선 조회와 저장 미러링, 공개 시간표/챗봇/점검봇 조회 전환
+- 상태: 수강생 시트 DB 저장 구조 추가
+- 범위: 시간표 DB 원본화, 공개 조회 DB 우선 전환, 수강생 시트 원본/정규화 저장 모델
 - 기준일: 2026-07-13
 
 ## 진행 현황표
@@ -16,10 +16,12 @@
 | ScheduleSlot-Class 연결 | 완료 | 이관 성공 시 `Class`를 slotKey 기준으로 생성/갱신 |
 | 관리자 UI 전환 | 완료 | `ScheduleSlot`이 있으면 관리자 시간표가 DB 원본을 우선 조회 |
 | 공개 화면 조회 전환 | 완료 | `/schedule`, 수업 찾기, 챗봇, 점검봇이 `ScheduleSlot`을 우선 조회하고 없으면 기존 시트 캐시로 fallback |
-| 수강생 운영 연결 | 대기 | `Enrollment`와 새 `ScheduleSlot`/`Class` 연결 정책 확정 필요 |
+| 수강생 시트 저장 구조 | 완료 | 원본 행 보존, 등록 원장, 차량, 변동내역, 대표팀 명단 저장 모델/SQL 추가 |
+| 수강생 운영 연결 | 진행 중 | 다음 단계에서 `등록` 탭 미리보기/검증과 `Enrollment` 연결 확장 |
 | 배포/검증/의존 제거 | 대기 | SQL 적용, 실데이터 검증, 구글시트 fallback 제거 순서 |
 
 ## 작업 로그
+- 2026-07-13: 2026 다산점 가입신청서의 등록/차량/변동내역/대표팀 데이터를 모두 보존할 수 있도록 원본 행/정규화 저장용 Prisma 모델과 Supabase SQL을 추가했다.
 - 2026-07-13: 공개 시간표/수업 찾기/챗봇/점검봇이 `ScheduleSlot`을 먼저 읽고, DB가 없을 때만 기존 시트 캐시로 fallback하도록 전환했다.
 - 2026-07-13: 관리자 시간표 API/초기 payload가 `ScheduleSlot`을 우선 읽고, 기존 저장 액션이 `ScheduleSlot`과 `Class`에도 미러링되도록 보강했다.
 - 2026-07-13: `ScheduleSlot` 이관 성공 시 같은 `slotKey`의 `Class`를 생성/갱신해 기존 `Enrollment` 집계와 끊기지 않게 연결했다.
@@ -33,14 +35,15 @@
 - 2026-07-12: 관리자 속도 추가 점검으로 원생 자동 전체 재조회 제거, 체험/수강신청 점진 렌더링, 원생 상태 계산 캐시, 관리자 조회용 SQL 인덱스를 추가했다.
 
 ## 구현 기록
-- 변경 파일: `src/app/schedule/page.tsx`, `src/app/simulator/page.tsx`, `src/app/api/chat/route.ts`, `src/lib/siteOpsBot.ts`
+- 변경 파일: `prisma/schema.prisma`, `prisma/sql/add_student_sheet_import.sql`
 - 주요 변경:
-  - 공개 시간표와 수업 찾기 페이지가 `ScheduleSlot`을 우선 사용하고 없을 때만 `SheetSlotCache`/override/직접 슬롯을 조회.
-  - 챗봇 코치 담당 수업과 반별 학년/정원 현황을 `ScheduleSlot` + `Enrollment(ACTIVE)` 집계 기준으로 우선 조회.
-  - 점검봇 시간표 체크가 DB 시간표 존재 시 오래된 구글시트 동기화를 경고하지 않도록 조정.
+  - `Student`에 지점, 농구경험, 바라는 점, 동의 원본, 마지막 이관 원본 행 필드 추가.
+  - `StudentSheetImportBatch`/`StudentSheetRawRow`로 시트 행 전체를 원본 JSON으로 보존하는 구조 추가.
+  - `StudentRegistrationLedger`, `StudentShuttleRide`, `StudentChangeLog`, `StudentTeamRosterEntry`, `StudentSheetImportIssue` 모델과 운영 SQL 추가.
 
 ## 테스트 결과
+- `npx.cmd prisma validate`: 통과
 - `npx.cmd tsc --noEmit`: 통과
 
 ## 다음에 할 것
-- 수강생/등록/출석/결제 운영 화면에서 `Class`와 `ScheduleSlot` 연결을 더 명확히 노출하고, 등록 변경 시 정원 집계가 자연스럽게 갱신되는 흐름을 점검한다.
+- `등록` 탭 CSV/시트 데이터를 새 저장 구조에 맞게 파싱하고, 원본 행 보존 + 미리보기 검증을 먼저 구현한다.

@@ -22,30 +22,41 @@ model User {
 }
 
 model Student {
-  id          String       @id @default(uuid())
-  name        String
-  birthDate   DateTime
-  gender      String?
-  memo        String?
-  parentId    String
-  phone       String?      // 학생 휴대폰번호
-  school      String?      // 학교명
-  grade       String?      // 학년 (예: "2026년 초등 5학년")
-  address     String?      // 주소
-  enrollDate  DateTime?    // 입회일자
-  referralSource String?   // 가입경로 (예: "지인소개", "네이버", "전단지" 등)
-  uniformStatus  String?   // 유니폼 상태 (예: "수령완료", "미수령", "추가주문" 등)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  attendances  Attendance[]
-  enrollments  Enrollment[]
-  guardians    Guardian[]
-  payments     Payment[]
-  sessionNotes StudentSessionNote[]
-  parent       User         @relation(fields: [parentId], references: [id])
+  id                  String                      @id @default(uuid())
+  name                String
+  birthDate           DateTime
+  gender              String?
+  memo                String?
+  parentId            String
+  branch              String? // 지점 원본값 (예: "2호점 : 행정복지센터...")
+  phone               String? // 학생 휴대폰번호
+  school              String? // 학교명
+  grade               String? // 학년 (예: "2026년 초등 5학년")
+  address             String? // 주소
+  enrollDate          DateTime? // 입회일자
+  referralSource      String? // 가입경로 (예: "지인소개", "네이버", "전단지" 등)
+  uniformStatus       String? // 유니폼 상태 (예: "수령완료", "미수령", "추가주문" 등)
+  basketballExp       String? // 농구 경험
+  hopeNote            String? // 바라는 점
+  agreementsJSON      String                      @default("{}") // 개인정보/이용약관/주의사항 동의 원본
+  sourceImportRowId   String? // 마지막 시트 이관 원본 행
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  attendances         Attendance[]
+  enrollments         Enrollment[]
+  guardians           Guardian[]
+  payments            Payment[]
+  sessionNotes        StudentSessionNote[]
+  importRawRows       StudentSheetRawRow[]
+  registrationLedgers StudentRegistrationLedger[]
+  shuttleRides        StudentShuttleRide[]
+  teamRosterEntries   StudentTeamRosterEntry[]
+  parent              User                        @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
   @@index([name, parentId])
+  @@index([branch])
+  @@index([sourceImportRowId])
 }
 
 model Program {
@@ -82,7 +93,7 @@ model Class {
   endTime      String
   location     String?
   capacity     Int
-  slotKey      String?      @unique  // 시간표 슬롯과 연결 (예: "Mon-3", "custom-uuid")
+  slotKey      String?      @unique // 시간표 슬롯과 연결 (예: "Mon-3", "custom-uuid")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   instructor   User?        @relation(fields: [instructorId], references: [id])
@@ -111,21 +122,21 @@ model Enrollment {
 }
 
 model Session {
-  id          String       @id @default(uuid())
-  classId     String
-  date        DateTime
-  notes       String?
-  topic       String?      // 수업 주제 (예: "드리블 연습")
-  content     String?      // 수업 상세 내용
-  photosJSON  String?      // 수업 사진 URL 배열 (JSON 문자열로 저장)
-  coachId     String?      // 담당 코치 ID (Coach 테이블 참조용, FK 없음)
-  published   Boolean      @default(false)  // 학부모 공개 여부 (true일 때만 학부모가 열람 가능)
-  publishedAt DateTime?    // 발행 시각 (published=true로 변경된 시점)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  attendances Attendance[]
+  id           String               @id @default(uuid())
+  classId      String
+  date         DateTime
+  notes        String?
+  topic        String? // 수업 주제 (예: "드리블 연습")
+  content      String? // 수업 상세 내용
+  photosJSON   String? // 수업 사진 URL 배열 (JSON 문자열로 저장)
+  coachId      String? // 담당 코치 ID (Coach 테이블 참조용, FK 없음)
+  published    Boolean              @default(false) // 학부모 공개 여부 (true일 때만 학부모가 열람 가능)
+  publishedAt  DateTime? // 발행 시각 (published=true로 변경된 시점)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  attendances  Attendance[]
   studentNotes StudentSessionNote[]
-  class       Class        @relation(fields: [classId], references: [id])
+  class        Class                @relation(fields: [classId], references: [id])
 
   @@index([classId, date])
   @@index([published, date])
@@ -150,8 +161,8 @@ model StudentSessionNote {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   sessionId String
   studentId String
-  note      String   // 코치가 작성하는 개별 코멘트 (예: "드리블 실력 많이 향상됨")
-  rating    Int?     // 수업 참여도/성과 점수 (1~5, 선택사항)
+  note      String // 코치가 작성하는 개별 코멘트 (예: "드리블 실력 많이 향상됨")
+  rating    Int? // 수업 참여도/성과 점수 (1~5, 선택사항)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
   session   Session  @relation(fields: [sessionId], references: [id])
@@ -168,13 +179,13 @@ model Payment {
   status        String
   dueDate       DateTime
   paidDate      DateTime?
-  type          String    @default("MONTHLY")  // MONTHLY(월 수강료), SHUTTLE(셔틀), UNIFORM(유니폼), OTHER(기타)
-  method        String?                        // 결제수단: RALLYZ(랠리즈), CARD(카드), CASH(현금영수증), UNPAID(미결제)
-  description   String?                        // 청구 항목 설명 (예: "4월 수강료")
-  month         Int?                           // 청구 대상 월 (1~12)
-  year          Int?                           // 청구 대상 연도
-  autoGenerated Boolean   @default(false)      // 자동 생성 여부 (Cron/일괄 생성 구분)
-  notifiedAt    DateTime?                      // 미납 알림 발송 시각
+  type          String    @default("MONTHLY") // MONTHLY(월 수강료), SHUTTLE(셔틀), UNIFORM(유니폼), OTHER(기타)
+  method        String? // 결제수단: RALLYZ(랠리즈), CARD(카드), CASH(현금영수증), UNPAID(미결제)
+  description   String? // 청구 항목 설명 (예: "4월 수강료")
+  month         Int? // 청구 대상 월 (1~12)
+  year          Int? // 청구 대상 연도
+  autoGenerated Boolean   @default(false) // 자동 생성 여부 (Cron/일괄 생성 구분)
+  notifiedAt    DateTime? // 미납 알림 발송 시각
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   student       Student   @relation(fields: [studentId], references: [id])
@@ -190,13 +201,13 @@ model Payment {
 // 청구 템플릿 — 매월 자동 청구서 생성의 기준 데이터
 model BillingTemplate {
   id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  name        String                          // 템플릿 이름 (예: "초등 주3회 수강료")
-  amount      Int                             // 청구 금액
-  type        String   @default("MONTHLY")    // MONTHLY, SHUTTLE, UNIFORM, OTHER
-  description String?                         // 청구서에 표시될 설명
-  isActive    Boolean  @default(true)         // 활성 여부 (비활성이면 자동 생성에서 제외)
-  dueDay      Int      @default(10)           // 매월 납부 기한일 (1~28)
-  programId   String?                         // 연결된 프로그램 (선택)
+  name        String // 템플릿 이름 (예: "초등 주3회 수강료")
+  amount      Int // 청구 금액
+  type        String   @default("MONTHLY") // MONTHLY, SHUTTLE, UNIFORM, OTHER
+  description String? // 청구서에 표시될 설명
+  isActive    Boolean  @default(true) // 활성 여부 (비활성이면 자동 생성에서 제외)
+  dueDay      Int      @default(10) // 매월 납부 기한일 (1~28)
+  programId   String? // 연결된 프로그램 (선택)
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
@@ -223,43 +234,43 @@ model Stop {
 }
 
 model AcademySettings {
-  id                      String   @id @default("singleton")
-  introductionTitle       String?  @default("다산신도시 No.1 스티즈농구교실")
-  introductionText        String?
-  shuttleInfoText         String?
-  contactPhone            String?
-  address                 String?
-  operatingHours          String?
-  privacyPolicy           String?
-  footerDescription       String?
-  footerCopyright         String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  pageDesignJSON          String?
-  googleCalendarIcsUrl    String?
-  classDays               String?
-  siteBodyFont            String?  @default("system")
-  siteHeadingFont         String?  @default("system")
-  termsOfService          String?
-  trialTitle              String?  @default("체험수업 안내")
-  trialContent            String?
-  trialFormUrl            String?
-  enrollTitle             String?  @default("수강신청 안내")
-  enrollContent           String?
-  enrollFormUrl           String?
-  googleSheetsScheduleUrl String?
-  youtubeUrl              String?
-  instagramUrl            String?
-  instagramBusinessAccountId String?
-  instagramAutoPublishEnabled Boolean @default(false)
-  kakaoChannelUrl         String?
-  philosophyText          String?
-  facilitiesText          String?
-  facilitiesImagesJSON    String?
-  naverPlaceUrl           String?  // 네이버 플레이스 리뷰 URL
-  uniformFormUrl          String?  // 유니폼 신청 구글폼 URL
-  useBuiltInTrialForm     Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
-  useBuiltInEnrollForm    Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
+  id                          String   @id @default("singleton")
+  introductionTitle           String?  @default("다산신도시 No.1 스티즈농구교실")
+  introductionText            String?
+  shuttleInfoText             String?
+  contactPhone                String?
+  address                     String?
+  operatingHours              String?
+  privacyPolicy               String?
+  footerDescription           String?
+  footerCopyright             String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  pageDesignJSON              String?
+  googleCalendarIcsUrl        String?
+  classDays                   String?
+  siteBodyFont                String?  @default("system")
+  siteHeadingFont             String?  @default("system")
+  termsOfService              String?
+  trialTitle                  String?  @default("체험수업 안내")
+  trialContent                String?
+  trialFormUrl                String?
+  enrollTitle                 String?  @default("수강신청 안내")
+  enrollContent               String?
+  enrollFormUrl               String?
+  googleSheetsScheduleUrl     String?
+  youtubeUrl                  String?
+  instagramUrl                String?
+  instagramBusinessAccountId  String?
+  instagramAutoPublishEnabled Boolean  @default(false)
+  kakaoChannelUrl             String?
+  philosophyText              String?
+  facilitiesText              String?
+  facilitiesImagesJSON        String?
+  naverPlaceUrl               String? // 네이버 플레이스 리뷰 URL
+  uniformFormUrl              String? // 유니폼 신청 구글폼 URL
+  useBuiltInTrialForm         Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
+  useBuiltInEnrollForm        Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
 }
 
 model ClassSlotOverride {
@@ -373,19 +384,19 @@ model ScheduleSlot {
 }
 
 model Coach {
-  id          String              @id @default(uuid())
-  name        String
-  role        String
-  description String?
-  imageUrl    String?
-  phone       String?             // SMS 수신 전화번호 (예: "01012345678")
-  userId      String?  @unique   // User 테이블과 연결 (INSTRUCTOR 역할 사용자)
-  order       Int                 @default(0)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  user        User?               @relation(fields: [userId], references: [id], onUpdate: NoAction)
-  slots       ClassSlotOverride[]
-  customSlots CustomClassSlot[]
+  id            String              @id @default(uuid())
+  name          String
+  role          String
+  description   String?
+  imageUrl      String?
+  phone         String? // SMS 수신 전화번호 (예: "01012345678")
+  userId        String?             @unique // User 테이블과 연결 (INSTRUCTOR 역할 사용자)
+  order         Int                 @default(0)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  user          User?               @relation(fields: [userId], references: [id], onUpdate: NoAction)
+  slots         ClassSlotOverride[]
+  customSlots   CustomClassSlot[]
   scheduleSlots ScheduleSlot[]
 }
 
@@ -395,6 +406,215 @@ model SheetSlotCache {
   syncedAt  DateTime @default(now()) @updatedAt
 }
 
+model StudentSheetImportBatch {
+  id                   String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  source               String                      @default("GOOGLE_SHEETS")
+  spreadsheetId        String?
+  spreadsheetTitle     String?
+  sourceUrl            String?
+  importedBy           String?
+  status               String                      @default("PENDING")
+  totalRows            Int                         @default(0)
+  registrationRows     Int                         @default(0)
+  vehicleRows          Int                         @default(0)
+  changeRows           Int                         @default(0)
+  teamRows             Int                         @default(0)
+  errorRows            Int                         @default(0)
+  rawSummaryJSON       String?
+  message              String?
+  createdAt            DateTime                    @default(now()) @db.Timestamptz(6)
+  completedAt          DateTime?                   @db.Timestamptz(6)
+  rawRows              StudentSheetRawRow[]
+  registrationRowsData StudentRegistrationLedger[]
+  shuttleRides         StudentShuttleRide[]
+  changeLogs           StudentChangeLog[]
+  teamRosterEntries    StudentTeamRosterEntry[]
+  issues               StudentSheetImportIssue[]
+
+  @@index([status, createdAt])
+  @@index([source, createdAt])
+  @@index([spreadsheetId])
+}
+
+model StudentSheetRawRow {
+  id                  String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId             String
+  sheetName           String
+  rowNumber           Int
+  rowHash             String?
+  studentKey          String?
+  studentId           String?
+  rawJSON             String
+  normalizedJSON      String?
+  createdAt           DateTime                    @default(now()) @db.Timestamptz(6)
+  batch               StudentSheetImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student             Student?                    @relation(fields: [studentId], references: [id], onUpdate: NoAction)
+  registrationLedgers StudentRegistrationLedger[]
+  shuttleRides        StudentShuttleRide[]
+  changeLogs          StudentChangeLog[]
+  teamRosterEntries   StudentTeamRosterEntry[]
+
+  @@unique([batchId, sheetName, rowNumber])
+  @@index([batchId])
+  @@index([sheetName])
+  @@index([studentKey])
+  @@index([studentId])
+  @@index([rowHash])
+}
+
+model StudentRegistrationLedger {
+  id                   String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId              String
+  rawRowId             String?
+  studentId            String?
+  parentUserId         String?
+  rowNumber            Int
+  studentKey           String?
+  branch               String?
+  applicationAt        DateTime?               @db.Timestamptz(6)
+  paymentDate          DateTime?               @db.Timestamptz(6)
+  registrationMonth    String?
+  studentName          String
+  studentGender        String?
+  grade                String?
+  uniformStatus        String?
+  paymentMethod        String?
+  paymentAmount        Int?
+  tuitionAmount        Int?
+  shuttleFee           Int?
+  carryOverAmount      Int?
+  shuttleNeeded        Boolean                 @default(false)
+  shuttlePickup        String?
+  shuttlePreferredTime String?
+  shuttleDropoff       String?
+  selectedSlotKeysJSON String                  @default("[]")
+  birthDate            DateTime?               @db.Timestamptz(6)
+  parentName           String?
+  studentPhone         String?
+  parentPhone          String?
+  address              String?
+  school               String?
+  basketballExp        String?
+  hopeNote             String?
+  referralSource       String?
+  agreedPrivacy        Boolean                 @default(false)
+  agreedTerms          Boolean                 @default(false)
+  agreementJSON        String                  @default("{}")
+  enrollmentPeriod     String?
+  status               String                  @default("ACTIVE")
+  rawJSON              String?
+  createdAt            DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  batch                StudentSheetImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rawRow               StudentSheetRawRow?     @relation(fields: [rawRowId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  student              Student?                @relation(fields: [studentId], references: [id], onUpdate: NoAction)
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId])
+  @@index([rawRowId])
+  @@index([studentId])
+  @@index([studentKey])
+  @@index([registrationMonth])
+  @@index([status])
+}
+
+model StudentShuttleRide {
+  id           String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId      String
+  rawRowId     String?
+  studentId    String?
+  monthLabel   String
+  rowNumber    Int
+  studentName  String?
+  studentPhone String?
+  parentPhone  String?
+  dayLabel     String?
+  classTime    String?
+  arrivalTime  String?
+  destination  String?
+  note         String?
+  memo         String?
+  rawJSON      String?
+  createdAt    DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  batch        StudentSheetImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rawRow       StudentSheetRawRow?     @relation(fields: [rawRowId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  student      Student?                @relation(fields: [studentId], references: [id], onUpdate: NoAction)
+
+  @@unique([batchId, monthLabel, rowNumber])
+  @@index([batchId])
+  @@index([rawRowId])
+  @@index([studentId])
+  @@index([monthLabel])
+  @@index([dayLabel])
+}
+
+model StudentChangeLog {
+  id                    String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId               String
+  rawRowId              String?
+  rowNumber             Int
+  occurredAt            DateTime?               @db.Timestamptz(6)
+  changeSummary         String?
+  registrationReflected Boolean                 @default(false)
+  rallyzReflected       Boolean                 @default(false)
+  vehicleReflected      Boolean                 @default(false)
+  alarmStatus           String?
+  note                  String?
+  rawJSON               String?
+  createdAt             DateTime                @default(now()) @db.Timestamptz(6)
+  batch                 StudentSheetImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rawRow                StudentSheetRawRow?     @relation(fields: [rawRowId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId])
+  @@index([rawRowId])
+  @@index([occurredAt])
+}
+
+model StudentTeamRosterEntry {
+  id               String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId          String
+  rawRowId         String?
+  studentId        String?
+  rowNumber        Int
+  studentName      String
+  birthDate        DateTime?               @db.Timestamptz(6)
+  jerseyNumber     String?
+  phone            String?
+  grade            String?
+  branch           String?
+  eventColumnsJSON String                  @default("{}")
+  rawJSON          String?
+  createdAt        DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  batch            StudentSheetImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rawRow           StudentSheetRawRow?     @relation(fields: [rawRowId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  student          Student?                @relation(fields: [studentId], references: [id], onUpdate: NoAction)
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId])
+  @@index([rawRowId])
+  @@index([studentId])
+  @@index([branch])
+}
+
+model StudentSheetImportIssue {
+  id        String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId   String
+  sheetName String?
+  rowNumber Int?
+  severity  String                  @default("ERROR")
+  message   String
+  rawJSON   String?
+  createdAt DateTime                @default(now()) @db.Timestamptz(6)
+  batch     StudentSheetImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([batchId])
+  @@index([sheetName])
+  @@index([severity])
+}
+
 model AnnualEvent {
   id            String    @id
   title         String
@@ -402,27 +622,27 @@ model AnnualEvent {
   endDate       DateTime?
   description   String?
   category      String?   @default("일반")
-  googleEventId String?   // 구글 캘린더 이벤트 ID (양방향 동기화용)
+  googleEventId String? // 구글 캘린더 이벤트 ID (양방향 동기화용)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime
 }
 
 model GalleryPost {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  classId   String?
-  title     String?
-  caption   String?
-  mediaJSON String   @default("[]")
-  isPublic  Boolean  @default(true)
-  source    String   @default("WEBSITE")
-  externalId String?
-  externalUrl String?
-  instagramMediaId String?
-  instagramPermalink String?
-  instagramPublishedAt DateTime? @db.Timestamptz(6)
+  id                    String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  classId               String?
+  title                 String?
+  caption               String?
+  mediaJSON             String    @default("[]")
+  isPublic              Boolean   @default(true)
+  source                String    @default("WEBSITE")
+  externalId            String?
+  externalUrl           String?
+  instagramMediaId      String?
+  instagramPermalink    String?
+  instagramPublishedAt  DateTime? @db.Timestamptz(6)
   instagramPublishError String?
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([classId])
   @@index([createdAt])
@@ -448,7 +668,7 @@ model Notice {
 model Notification {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   userId    String
-  type      String          // ATTENDANCE, NOTICE, PAYMENT
+  type      String // ATTENDANCE, NOTICE, PAYMENT
   title     String
   message   String
   linkUrl   String?
@@ -460,12 +680,12 @@ model Notification {
 }
 
 model PushSubscription {
-  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId         String
-  endpoint       String   @unique
-  p256dh         String
-  auth           String
-  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([userId])
 }
@@ -478,7 +698,7 @@ model Feedback {
   category    String    @default("GENERAL") // SKILL, ATTITUDE, PHYSICAL, GENERAL
   title       String
   content     String
-  rating      Int?      // 1~5
+  rating      Int? // 1~5
   isPublic    Boolean   @default(true)
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
@@ -489,17 +709,17 @@ model Feedback {
 }
 
 model ParentRequest {
-  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId     String
-  studentId  String
-  type       String          // ABSENCE, SHUTTLE, EARLY_LEAVE, OTHER
-  title      String
-  content    String
-  date       DateTime?       @db.Timestamptz(6)
-  status     String    @default("PENDING") // PENDING, CONFIRMED, COMPLETED
-  adminNote  String?
-  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String
+  studentId String
+  type      String // ABSENCE, SHUTTLE, EARLY_LEAVE, OTHER
+  title     String
+  content   String
+  date      DateTime? @db.Timestamptz(6)
+  status    String    @default("PENDING") // PENDING, CONFIRMED, COMPLETED
+  adminNote String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([userId])
   @@index([status])
@@ -520,12 +740,12 @@ model Faq {
 // 학부모 후기 — 관리자가 등록/수정/삭제/순서변경 가능
 model Testimonial {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  name      String   // 작성자명 (예: "김O O")
-  info      String   // 관계/정보 (예: "초3 학부모")
-  text      String   // 후기 내용
-  rating    Int      @default(5)  // 별점 1~5
-  order     Int      @default(0)  // 표시 순서 (작을수록 먼저)
-  isPublic  Boolean  @default(true)  // 공개 여부
+  name      String // 작성자명 (예: "김O O")
+  info      String // 관계/정보 (예: "초3 학부모")
+  text      String // 후기 내용
+  rating    Int      @default(5) // 별점 1~5
+  order     Int      @default(0) // 표시 순서 (작을수록 먼저)
+  isPublic  Boolean  @default(true) // 공개 여부
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 }
@@ -533,9 +753,9 @@ model Testimonial {
 model Guardian {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   studentId String
-  relation  String   // 관계 (예: "부", "모", "조부모" 등)
-  name      String   // 보호자 이름
-  phone     String?  // 보호자 연락처
+  relation  String // 관계 (예: "부", "모", "조부모" 등)
+  name      String // 보호자 이름
+  phone     String? // 보호자 연락처
   isPrimary Boolean  @default(false) // 주 보호자 여부
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
@@ -551,8 +771,8 @@ model TrialLead {
   childAge           String?
   parentName         String
   parentPhone        String
-  source             String    @default("WEBSITE")   // WEBSITE, NAVER, REFERRAL, OTHER
-  status             String    @default("NEW")       // NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST
+  source             String    @default("WEBSITE") // WEBSITE, NAVER, REFERRAL, OTHER
+  status             String    @default("NEW") // NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST
   scheduledDate      DateTime? @db.Timestamptz(6)
   scheduledClassId   String?
   attendedDate       DateTime? @db.Timestamptz(6)
@@ -561,15 +781,15 @@ model TrialLead {
   lostReason         String?
   memo               String?
   // Phase A 추가 필드 — 체험 신청 폼에서 수집하는 상세 정보
-  childBirthDate     DateTime? @db.Timestamptz(6)    // 아이 생년월일
-  childGrade         String?                         // 학년 (7세/초1~초6/중1~중3/성인)
-  childGender        String?                         // 성별 (남/여)
-  basketballExp      String?                         // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
-  preferredDays      String?                         // 희망 요일 콤마 구분 "Mon,Wed"
-  preferredSlotKey   String?                         // 희망 시간표 슬롯 "Mon-4"
-  hopeNote           String?                         // 바라는 점 (자유 입력)
-  agreedTerms        Boolean   @default(false)       // 이용약관 동의 여부
-  agreedPrivacy      Boolean   @default(false)       // 개인정보 수집/이용 동의 여부
+  childBirthDate     DateTime? @db.Timestamptz(6) // 아이 생년월일
+  childGrade         String? // 학년 (7세/초1~초6/중1~중3/성인)
+  childGender        String? // 성별 (남/여)
+  basketballExp      String? // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
+  preferredDays      String? // 희망 요일 콤마 구분 "Mon,Wed"
+  preferredSlotKey   String? // 희망 시간표 슬롯 "Mon-4"
+  hopeNote           String? // 바라는 점 (자유 입력)
+  agreedTerms        Boolean   @default(false) // 이용약관 동의 여부
+  agreedPrivacy      Boolean   @default(false) // 개인정보 수집/이용 동의 여부
   createdAt          DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
@@ -580,16 +800,16 @@ model TrialLead {
 
 // 대기자 관리 — 반 정원 초과 시 대기열에 등록, 자리 생기면 제안/수락/거절 처리
 model Waitlist {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  studentId   String
-  classId     String
-  priority    Int       @default(0)              // 우선순위 (낮을수록 먼저, 자동 증가)
-  status      String    @default("WAITING")      // WAITING, OFFERED, ENROLLED, CANCELLED
-  offeredAt   DateTime? @db.Timestamptz(6)       // 자리 제안 시각
-  respondBy   DateTime? @db.Timestamptz(6)       // 응답 기한 (offeredAt + 3일)
-  memo        String?                            // 관리자 메모
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId String
+  classId   String
+  priority  Int       @default(0) // 우선순위 (낮을수록 먼저, 자동 증가)
+  status    String    @default("WAITING") // WAITING, OFFERED, ENROLLED, CANCELLED
+  offeredAt DateTime? @db.Timestamptz(6) // 자리 제안 시각
+  respondBy DateTime? @db.Timestamptz(6) // 응답 기한 (offeredAt + 3일)
+  memo      String? // 관리자 메모
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@unique([studentId, classId])
   @@index([classId, status])
@@ -598,16 +818,16 @@ model Waitlist {
 
 // 보강/메이크업 수업 예약 — 결석 시 다른 반에서 보충 수업을 받는 기록
 model MakeupSession {
-  id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   studentId       String
-  originalClassId String    // 원래 수강 중인 반 ID
-  originalDate    DateTime  @db.Timestamptz(6) // 결석한 날짜
-  makeupClassId   String    // 보강 받을 반 ID
-  makeupDate      DateTime  @db.Timestamptz(6) // 보강 수업 날짜
-  status          String    @default("BOOKED") // BOOKED, ATTENDED, CANCELLED, NO_SHOW
-  requestId       String?   // 학부모 결석 요청 ID (ParentRequest 연결, 선택)
-  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  originalClassId String // 원래 수강 중인 반 ID
+  originalDate    DateTime @db.Timestamptz(6) // 결석한 날짜
+  makeupClassId   String // 보강 받을 반 ID
+  makeupDate      DateTime @db.Timestamptz(6) // 보강 수업 날짜
+  status          String   @default("BOOKED") // BOOKED, ATTENDED, CANCELLED, NO_SHOW
+  requestId       String? // 학부모 결석 요청 ID (ParentRequest 연결, 선택)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([studentId])
   @@index([makeupClassId, makeupDate])
@@ -629,14 +849,14 @@ model SkillCategory {
 
 // 원생별 기술 기록 — 코치가 원생의 카테고리별 레벨을 평가한 이력
 model SkillRecord {
-  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  studentId   String
-  categoryId  String
-  level       Int
-  assessedBy  String
-  assessedAt  DateTime @default(now()) @db.Timestamptz(6)
-  note        String?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId  String
+  categoryId String
+  level      Int
+  assessedBy String
+  assessedAt DateTime @default(now()) @db.Timestamptz(6)
+  note       String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([studentId, categoryId])
   @@index([assessedAt])
@@ -644,44 +864,44 @@ model SkillRecord {
 
 // 수강 신청서 — 구글폼 대신 자체 수강 신청 접수 (Phase B)
 model EnrollmentApplication {
-  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  trialLeadId         String?   // TrialLead 연결 (체험 거친 경우, null=직접 수강)
+  id                 String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  trialLeadId        String? // TrialLead 연결 (체험 거친 경우, null=직접 수강)
   // 아이 정보
-  childName           String
-  childBirthDate      DateTime  @db.Timestamptz(6)
-  childGender         String?
-  childGrade          String?
-  childSchool         String?
-  childPhone          String?
+  childName          String
+  childBirthDate     DateTime  @db.Timestamptz(6)
+  childGender        String?
+  childGrade         String?
+  childSchool        String?
+  childPhone         String?
   // 보호자 정보
-  parentName          String
-  parentPhone         String
-  parentRelation      String?   // 부/모/기타
-  address             String?
+  parentName         String
+  parentPhone        String
+  parentRelation     String? // 부/모/기타
+  address            String?
   // 수강 정보
-  preferredSlotKeys   String?   // 콤마 구분 "Mon-4,Wed-6"
-  assignedClassId     String?   // 관리자 배정 반
+  preferredSlotKeys  String? // 콤마 구분 "Mon-4,Wed-6"
+  assignedClassId    String? // 관리자 배정 반
   // 부가 정보
-  basketballExp       String?   // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
-  uniformSize         String?
-  shuttleNeeded       Boolean   @default(false)
-  shuttlePickup       String?
-  shuttleTime         String?   // 셔틀 희망 시간 (예: "15:30")
-  shuttleDropoff      String?   // 셔틀 하차 장소 (예: "다산자이 정문")
-  paymentMethod       String?
-  referralSource      String?
-  memo                String?
+  basketballExp      String? // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
+  uniformSize        String?
+  shuttleNeeded      Boolean   @default(false)
+  shuttlePickup      String?
+  shuttleTime        String? // 셔틀 희망 시간 (예: "15:30")
+  shuttleDropoff     String? // 셔틀 하차 장소 (예: "다산자이 정문")
+  paymentMethod      String?
+  referralSource     String?
+  memo               String?
   // 동의
-  agreedTerms         Boolean   @default(false)
-  agreedPrivacy       Boolean   @default(false)
+  agreedTerms        Boolean   @default(false)
+  agreedPrivacy      Boolean   @default(false)
   // 처리 상태
-  status              String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
-  processedAt         DateTime? @db.Timestamptz(6)
-  processedNote       String?
-  convertedStudentId  String?
+  status             String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  processedAt        DateTime? @db.Timestamptz(6)
+  processedNote      String?
+  convertedStudentId String?
   // 타임스탬프
-  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([status])
   @@index([trialLeadId])
@@ -692,31 +912,31 @@ model EnrollmentApplication {
 // SMS 템플릿 — 상황별 자동 발송 메시지를 관리자가 편집/ON-OFF할 수 있는 시스템
 model SmsTemplate {
   id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  trigger     String   @unique  // 트리거 코드 (TRIAL_NEW_ADMIN, TRIAL_CONFIRM_PARENT 등)
-  name        String            // 관리자에게 보여줄 이름 (예: "체험 신청 접수 — 관리자용")
-  target      String            // 수신 대상: ADMIN, COACH, PARENT
-  body        String            // 메시지 본문 (변수 포함: {{childName}} 등)
-  isActive    Boolean  @default(true)   // ON/OFF 토글
-  description String?           // 이 알림이 언제 발송되는지 설명
-  variables   String?           // 사용 가능한 변수 목록 (JSON: ["childName","parentName",...])
+  trigger     String   @unique // 트리거 코드 (TRIAL_NEW_ADMIN, TRIAL_CONFIRM_PARENT 등)
+  name        String // 관리자에게 보여줄 이름 (예: "체험 신청 접수 — 관리자용")
+  target      String // 수신 대상: ADMIN, COACH, PARENT
+  body        String // 메시지 본문 (변수 포함: {{childName}} 등)
+  isActive    Boolean  @default(true) // ON/OFF 토글
+  description String? // 이 알림이 언제 발송되는지 설명
+  variables   String? // 사용 가능한 변수 목록 (JSON: ["childName","parentName",...])
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 }
 
 // 스태프 초대 링크 — 원장이 생성한 초대를 통해 스태프가 직접 가입
 model StaffInvitation {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  token       String    @unique @default(dbgenerated("(gen_random_uuid())::text")) // URL 토큰
-  name        String    // 초대 대상 이름
-  phone       String    // 초대 대상 전화번호 (하이픈 없이)
-  role        Role      @default(INSTRUCTOR) // 부여할 역할
-  status      String    @default("PENDING")  // PENDING, ACCEPTED, CANCELLED, EXPIRED
-  expiresAt   DateTime  @db.Timestamptz(6)   // 만료 시각
-  acceptedAt  DateTime? @db.Timestamptz(6)   // 수락 시각
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  token          String    @unique @default(dbgenerated("(gen_random_uuid())::text")) // URL 토큰
+  name           String // 초대 대상 이름
+  phone          String // 초대 대상 전화번호 (하이픈 없이)
+  role           Role      @default(INSTRUCTOR) // 부여할 역할
+  status         String    @default("PENDING") // PENDING, ACCEPTED, CANCELLED, EXPIRED
+  expiresAt      DateTime  @db.Timestamptz(6) // 만료 시각
+  acceptedAt     DateTime? @db.Timestamptz(6) // 수락 시각
   acceptedUserId String? // 가입 완료된 User ID
-  createdBy   String    // 초대 생성자 (ADMIN User ID)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  createdBy      String // 초대 생성자 (ADMIN User ID)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([status])
   @@index([phone])

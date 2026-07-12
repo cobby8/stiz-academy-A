@@ -15,7 +15,7 @@ export default function DonutChart({
     value,
     max,
     label = "",
-    color = "#f97316",
+    color = "var(--brand-accent)",
     size = 140,
     strokeWidth = 14,
 }: DonutChartProps) {

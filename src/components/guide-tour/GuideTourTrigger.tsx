@@ -141,7 +141,7 @@ function showCompletionToast() {
       <div style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:6px">둘러보기 완료!</div>
       <div style="font-size:13px;color:#666;line-height:1.6">
         궁금한 프로그램을 찾으셨나요?<br/>
-        <a href="/apply" style="color:#f97316;font-weight:600;text-decoration:underline">
+        <a href="/apply" style="color:var(--brand-accent);font-weight:600;text-decoration:underline">
           체험수업 신청하기 →
         </a>
       </div>

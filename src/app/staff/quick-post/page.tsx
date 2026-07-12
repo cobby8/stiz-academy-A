@@ -25,7 +25,7 @@ export default async function StaffQuickPostPage() {
           </p>
           <Link
             href="/login?redirect=/staff/quick-post"
-            className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-brand-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-brand-orange-600"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-brand-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
           >
             로그인하기
           </Link>

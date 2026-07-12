@@ -195,6 +195,15 @@ export default function QuickPostClient({
     setUploadProgress(null);
   }
 
+  function goBack() {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    window.location.href = "/";
+  }
+
   return (
     <main className="min-h-screen bg-surface-warm px-4 py-5 dark:bg-gray-950 dark:text-gray-100">
       <div className="mx-auto max-w-md space-y-4">
@@ -204,9 +213,20 @@ export default function QuickPostClient({
             <h1 className="text-2xl font-black text-brand-navy-900 dark:text-white">사진 올리기</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">{currentUser.name} 선생님</p>
           </div>
-          <Link href="/" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
-            홈
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goBack}
+              className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-bold text-gray-600 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:text-brand-neon-lime"
+            >
+              <SymbolIcon name="arrow_back" size={15} />
+              이전
+            </button>
+            <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-bold text-gray-600 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:text-brand-neon-lime">
+              <SymbolIcon name="home" size={15} />
+              홈
+            </Link>
+          </div>
         </header>
 
         <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -218,7 +238,7 @@ export default function QuickPostClient({
                 onClick={() => setLessonType(type)}
                 className={`min-h-10 rounded-lg border px-3 text-sm font-bold transition ${
                   lessonType === type
-                    ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
+                    ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime dark:text-brand-navy-900"
                     : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                 }`}
               >
@@ -248,7 +268,7 @@ export default function QuickPostClient({
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={busy}
-            className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-4 py-3 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-60"
+            className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-4 py-3 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-60 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
           >
             <SymbolIcon name={busy ? "progress_activity" : "photo_camera"} size={20} className={busy ? "animate-spin" : ""} />
             사진 선택하고 AI 초안 만들기
@@ -345,7 +365,7 @@ export default function QuickPostClient({
                   type="button"
                   onClick={handlePublish}
                   disabled={busy || hasPublishingStatus}
-                  className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-3 text-sm font-black text-white disabled:opacity-60"
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-orange-500 px-3 text-sm font-black text-white disabled:opacity-60 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
                 >
                   <SymbolIcon
                     name={hasPublishingStatus ? "progress_activity" : "send"}
@@ -390,7 +410,7 @@ export default function QuickPostClient({
 
         {busy && (
           <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm font-bold text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-            <SymbolIcon name="auto_awesome" size={18} className="mt-0.5 shrink-0 text-brand-orange-500" />
+            <SymbolIcon name="auto_awesome" size={18} className="mt-0.5 shrink-0 text-brand-orange-500 dark:text-brand-neon-lime" />
             <div className="min-w-0 flex-1">
               <p>{progressText || "처리 중입니다."}</p>
               {uploadProgress && uploadProgress.total > 0 && (

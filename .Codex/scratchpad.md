@@ -1,21 +1,23 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 브라우저 헤더와 잔여 카드/뱃지 다크모드 보정
+- 작업명: 다크모드 브랜드 주황 → 라임 전환 보정
 - 상태: 구현 완료, 검증 완료, 커밋 준비
-- 범위: `/staff/quick-post`, `/admin/settings`, `/admin/schedule`, PWA theme-color/manifest, `/admin` 첫 진입 사이트 탭 확인
+- 범위: 전역 브랜드 강조색 안전망, PWA theme-color/manifest, SVG 차트 기본 강조색, `/staff/quick-post` 이전 버튼/CTA
 - 기준일: 2026-07-12
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
 | `/admin` 첫 진입 탭 | 완료 | `/admin` 진입 시 사이트 탭이 먼저 선택되는 기존 수정 확인 |
-| 브라우저/PWA 헤더 | 완료 | `theme-color`를 다크모드에서 `#0f172a`로 자동 갱신하고 manifest 기본색도 보정 |
-| 선생님 빠른 업로드 | 완료 | `/staff/quick-post` 밝은 배경/제목/상태 카드/업로드 박스 대비 보정 |
-| 관리자 카드/뱃지 | 완료 | `/admin/settings`, `/admin/schedule`의 폰트 카드, 시간표 뱃지, 모달 안내 박스 대비 보정 |
-| 검증 | 완료 | `npx.cmd tsc --noEmit`, 로컬 Chrome fixture 검사, `npm.cmd run build` 통과 |
+| 브라우저/PWA 헤더 | 완료 | 다크모드 `theme-color`와 manifest 기본색을 라임 `#ccff00`으로 변경 |
+| 전역 브랜드색 안전망 | 완료 | 다크모드에서 orange/brand-orange 배경·텍스트·테두리·hover·focus를 라임 계열로 매핑 |
+| 선생님 빠른 업로드 | 완료 | 이전/홈 버튼 추가, 수업 선택/CTA/게시 버튼/로딩 아이콘 라임 전환 |
+| 차트/가이드 | 완료 | SVG 차트 기본 강조색과 가이드 투어 버튼/링크를 테마별 CSS 변수로 전환 |
+| 검증 | 완료 | `npx.cmd tsc --noEmit`, 로컬 Chrome 계산색 검사, `npm.cmd run build` 통과 |
 
 ## 작업 로그
+- 2026-07-12: 다크모드 브랜드 주황색이 라임으로 바뀌도록 전역 `--brand-accent` 안전망을 추가하고, PWA 헤더/차트/가이드 투어의 하드코딩 주황을 테마 변수로 전환했다. `/staff/quick-post`에는 이전 버튼과 명시 라임 CTA를 추가했다.
 - 2026-07-12: `/admin` 첫 진입 사이트 탭 적용을 확인하고, 브라우저/PWA 헤더 색상과 `/staff/quick-post`, `/admin/settings`, `/admin/schedule`의 잔여 카드/뱃지/모달 다크모드 대비를 명시 `dark:*` 클래스로 보강했다.
 - 2026-07-12: 사이트/관리자 전역 다크모드 대비를 전수 점검해 `bg-surface-warm/section`, pastel 칩/뱃지, slash opacity 배경, 컬러 텍스트/테두리, `text-gray-500` 누락을 `globals.css` 안전망으로 보정했다.
 - 2026-07-12: 사이트 운영 점검 봇을 매일 KST 새벽 2시에 백그라운드 실행하도록 `/api/cron/site-ops-bot`와 Vercel cron `0 17 * * *`를 추가했다. 기존 관리자 수동 실행은 유지하고, cron도 같은 점검/자동조치/관리자 알림 로직을 사용한다.
@@ -33,12 +35,12 @@
 - 2026-07-11: Google Sheets 시간표를 수동 동기화 + DB 캐시 방식으로 전환해 페이지 진입 시 외부 시트를 기다리지 않도록 했다.
 
 ## 구현 기록
-- 변경 파일: `src/components/ThemeColorUpdater.tsx`, `src/app/layout.tsx`, `public/manifest.json`, `src/app/staff/quick-post/QuickPostClient.tsx`, `src/app/staff/quick-post/page.tsx`, `src/app/admin/settings/AdminSettingsClient.tsx`, `src/app/admin/schedule/ScheduleAdminClient.tsx`, `src/app/admin/schedule/ScheduleAdminModals.tsx`
+- 변경 파일: `src/app/globals.css`, `src/app/staff/quick-post/QuickPostClient.tsx`, `src/app/staff/quick-post/page.tsx`, `src/components/ThemeColorUpdater.tsx`, `src/app/layout.tsx`, `public/manifest.json`, `src/components/charts/*`, `src/components/SkillRadarChart.tsx`, `src/components/guide-tour/*`, `src/app/admin/stats/StatsClient.tsx`
 - 주요 변경:
-  - 다크모드일 때 브라우저/PWA 헤더가 밝은 주황색으로 남지 않도록 `theme-color`를 런타임 갱신.
-  - 선생님 빠른 업로드 화면의 제목, 폼, 상태 메시지, 업로드 박스에 명시 다크모드 색상 추가.
-  - 관리자 폰트 설정 카드와 추천/선택 뱃지가 다크모드에서 밝은 배경 위 흰 글자로 묻히지 않도록 보정.
-  - 관리자 시간표의 학년/정원/코치 뱃지, 구글시트 버튼, 안내/모달 박스 대비 보정.
+  - `--brand-accent`를 라이트=주황, 다크=라임으로 정의하고 주황 유틸리티 누락분을 다크모드에서 라임으로 보정.
+  - 다크모드 라임 배경 위 `text-white`는 남색 글자로 자동 보정해 버튼 글자가 묻히지 않게 처리.
+  - 빠른 사진 올리기 헤더에 이전/홈 버튼을 배치하고, 주요 액션 버튼을 라임 CTA로 명시.
+  - 차트/가이드 투어/PWA 메타 색상처럼 CSS 클래스 안전망이 닿지 않는 하드코딩 주황을 테마 변수 기반으로 전환.
 
 ## 테스트 결과
 - `npx.cmd tsc --noEmit`: 통과

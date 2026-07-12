@@ -94,11 +94,11 @@ export default function SkillRadarChart({
                 />
             ))}
 
-            {/* 데이터 영역 — 반투명 오렌지 */}
+            {/* 데이터 영역 — 테마별 브랜드 강조색 */}
             <polygon
                 points={dataPolygon}
-                fill="rgba(249, 115, 22, 0.25)"
-                stroke="#f97316"
+                fill="color-mix(in srgb, var(--brand-accent) 25%, transparent)"
+                stroke="var(--brand-accent)"
                 strokeWidth="2"
             />
 
@@ -109,7 +109,7 @@ export default function SkillRadarChart({
                     cx={p.x}
                     cy={p.y}
                     r="4"
-                    fill="#f97316"
+                    fill="var(--brand-accent)"
                     stroke="#fff"
                     strokeWidth="1.5"
                 />
@@ -157,7 +157,7 @@ export default function SkillRadarChart({
                     x={p.x}
                     y={p.y - 10}
                     textAnchor="middle"
-                    className="fill-orange-600 text-[10px] font-bold"
+                    className="fill-[var(--brand-accent)] text-[10px] font-bold"
                 >
                     {values[i] ?? 0}
                 </text>

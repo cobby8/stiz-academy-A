@@ -14,7 +14,7 @@ interface LineChartProps {
 
 export default function LineChart({
     data,
-    color = "#f97316",    // 기본: brand-orange
+    color = "var(--brand-accent)",    // 기본: 테마별 브랜드 강조색
     height = 200,
     unit = "",
     formatValue,
@@ -45,6 +45,7 @@ export default function LineChart({
 
     // SVG path의 d 속성 — 직선 연결
     const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+    const gradientId = `lineGrad-${color.replace(/[^a-zA-Z0-9_-]/g, "") || "accent"}`;
 
     // 영역 채우기용 path (선 아래 그라데이션)
     const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + chartH} L ${points[0].x} ${padding.top + chartH} Z`;
@@ -56,7 +57,7 @@ export default function LineChart({
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="xMidYMid meet">
             {/* 그라데이션 정의 */}
             <defs>
-                <linearGradient id={`lineGrad-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={color} stopOpacity="0.2" />
                     <stop offset="100%" stopColor={color} stopOpacity="0.02" />
                 </linearGradient>
@@ -80,7 +81,7 @@ export default function LineChart({
             })}
 
             {/* 영역 채우기 */}
-            <path d={areaPath} fill={`url(#lineGrad-${color.replace("#", "")})`} />
+            <path d={areaPath} fill={`url(#${gradientId})`} />
 
             {/* 선 */}
             <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />

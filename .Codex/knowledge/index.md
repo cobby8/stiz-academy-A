@@ -1,4 +1,5 @@
 # 최근 변경 추가
+- 2026-07-12: 다크모드에서 브랜드 주황 강조색이 라임으로 전환되도록 `--brand-accent` 안전망을 추가하고, PWA 헤더/manifest, SVG 차트, 가이드 투어, `/staff/quick-post` CTA와 이전 버튼을 보강했다.
 - 2026-07-12: `/admin` 첫 진입 사이트 탭 적용을 확인하고, 브라우저/PWA `theme-color`와 `/staff/quick-post`, `/admin/settings`, `/admin/schedule`의 카드/뱃지/모달 잔여 다크모드 대비를 명시 `dark:*`로 보강했다.
 - 2026-07-12: 사이트/관리자 다크모드 전역 대비를 다시 전수 점검해 `bg-surface-warm/section`, pastel 칩/뱃지, slash opacity 배경, 컬러 상태 텍스트/테두리, `text-gray-500` 누락을 `globals.css` 안전망으로 보정했다.
 - 2026-07-12: 사이트 운영 점검 봇을 `GET /api/cron/site-ops-bot`로 백그라운드 실행할 수 있게 하고, Vercel Cron에 매일 KST 새벽 2시 실행 스케줄을 추가했다.

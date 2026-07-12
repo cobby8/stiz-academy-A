@@ -327,12 +327,12 @@ export default function StatsClient({
                 {/* 매출 추이 */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-orange-500">payments</span>
+                        <span className="material-symbols-outlined text-orange-500 dark:text-brand-neon-lime">payments</span>
                         매출 추이
                     </h3>
                     <LineChart
                         data={revenueData.map((d) => ({ label: d.label, value: d.amount }))}
-                        color="#f97316"
+                        color="var(--brand-accent)"
                         height={220}
                         formatValue={formatKRW}
                     />
@@ -420,7 +420,7 @@ export default function StatsClient({
                 {/* 체험 전환율 도넛 */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-orange-500">handshake</span>
+                        <span className="material-symbols-outlined text-orange-500 dark:text-brand-neon-lime">handshake</span>
                         체험 전환율
                     </h3>
                     <div className="flex justify-center">
@@ -428,7 +428,7 @@ export default function StatsClient({
                             value={trialStats.CONVERTED}
                             max={trialStats.ATTENDED + trialStats.CONVERTED}
                             label="체험 참석 대비 전환"
-                            color="#f97316"
+                            color="var(--brand-accent)"
                             size={160}
                         />
                     </div>

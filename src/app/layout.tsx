@@ -60,7 +60,7 @@ export default async function RootLayout({
         >
             <head>
                 {/* PWA 테마 색상은 ThemeColorUpdater가 현재 테마에 맞게 갱신합니다. */}
-                <meta name="theme-color" content="#0f172a" />
+                <meta name="theme-color" content="#ccff00" />
                 {/* iOS에서 홈 화면 아이콘으로 쓸 이미지 */}
                 <link rel="apple-touch-icon" href="/icon-192.png" />
             </head>

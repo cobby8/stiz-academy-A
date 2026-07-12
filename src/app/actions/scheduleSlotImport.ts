@@ -31,7 +31,7 @@ function normalizeText(value: unknown): string | null {
 }
 
 async function loadLegacyScheduleInputs() {
-    const [cacheRows, overridesRows, customRows, coachRows, programRows] = await Promise.all([
+    const [cacheRows, overridesRows, customRows, coachRows, programRows, enrollmentRows] = await Promise.all([
         prisma.$queryRawUnsafe<any[]>(`SELECT "slotsJson" FROM "SheetSlotCache" WHERE id = 'singleton' LIMIT 1`),
         prisma.$queryRawUnsafe<any[]>(
             `SELECT "slotKey", label, note, "isHidden", capacity, "coachId", "programId",
@@ -45,6 +45,13 @@ async function loadLegacyScheduleInputs() {
         ),
         prisma.$queryRawUnsafe<{ id: string }[]>(`SELECT id FROM "Coach"`),
         prisma.$queryRawUnsafe<{ id: string }[]>(`SELECT id FROM "Program"`),
+        prisma.$queryRawUnsafe<any[]>(
+            `SELECT c."slotKey", COUNT(e.id)::int AS enrolled
+             FROM "Class" c
+             LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+             WHERE c."slotKey" IS NOT NULL
+             GROUP BY c."slotKey"`
+        ),
     ]);
 
     const rawSlots: SheetClassSlot[] = cacheRows[0]
@@ -84,6 +91,11 @@ async function loadLegacyScheduleInputs() {
         customSlots,
         validCoachIds: new Set(coachRows.map((row) => row.id)),
         validProgramIds: new Set(programRows.map((row) => row.id)),
+        enrollmentCountsBySlotKey: new Map(
+            enrollmentRows
+                .map((row) => [row.slotKey ?? row.slotkey, Number(row.enrolled ?? 0)] as const)
+                .filter(([slotKey]) => typeof slotKey === "string" && slotKey.length > 0),
+        ),
     };
 }
 

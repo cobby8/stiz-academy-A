@@ -67,6 +67,7 @@ export type ScheduleSlotImportPlan = {
         validSlots: number;
         errorCount: number;
         warningCount: number;
+        enrollmentMismatchCount: number;
     };
 };
 
@@ -76,6 +77,7 @@ type BuildImportPlanInput = {
     customSlots: LegacyCustomSlot[];
     validCoachIds?: Set<string>;
     validProgramIds?: Set<string>;
+    enrollmentCountsBySlotKey?: Map<string, number>;
 };
 
 function toSafeInt(value: unknown, fallback: number): number {
@@ -98,6 +100,7 @@ function validateSlot(
     seenSlotKeys: Set<string>,
     validCoachIds?: Set<string>,
     validProgramIds?: Set<string>,
+    enrollmentCountsBySlotKey?: Map<string, number>,
 ): ScheduleSlotImportIssue[] {
     const issues: ScheduleSlotImportIssue[] = [];
     const rawJSON = slot.rawJSON;
@@ -126,6 +129,16 @@ function validateSlot(
         issues.push({ slotKey: slot.slotKey, severity: "WARNING", message: "이관 시점 인원이 정원보다 많습니다.", rawJSON });
     }
 
+    const currentEnrollmentCount = enrollmentCountsBySlotKey?.get(slot.slotKey);
+    if (currentEnrollmentCount != null && currentEnrollmentCount !== slot.enrolledSnapshot) {
+        issues.push({
+            slotKey: slot.slotKey,
+            severity: "WARNING",
+            message: `시트 인원(${slot.enrolledSnapshot}명)과 현재 등록 인원(${currentEnrollmentCount}명)이 다릅니다. 실제 운영 인원은 등록 데이터를 기준으로 계산됩니다.`,
+            rawJSON,
+        });
+    }
+
     if (slot.coachId && validCoachIds && !validCoachIds.has(slot.coachId)) {
         issues.push({ slotKey: slot.slotKey, severity: "WARNING", message: "존재하지 않는 코치 ID가 연결되어 있습니다.", rawJSON });
     }
@@ -143,6 +156,7 @@ export function buildScheduleSlotImportPlan({
     customSlots,
     validCoachIds,
     validProgramIds,
+    enrollmentCountsBySlotKey,
 }: BuildImportPlanInput): ScheduleSlotImportPlan {
     const overrideMap = new Map(overrides.map((override) => [override.slotKey, override]));
     const seenSlotKeys = new Set<string>();
@@ -176,7 +190,7 @@ export function buildScheduleSlotImportPlan({
             rawJSON: JSON.stringify({ sheetSlot, override: override ?? null }),
         };
 
-        const rowIssues = validateSlot(row, seenSlotKeys, validCoachIds, validProgramIds);
+        const rowIssues = validateSlot(row, seenSlotKeys, validCoachIds, validProgramIds, enrollmentCountsBySlotKey);
         issues.push(...rowIssues);
         if (!rowIssues.some((issue) => issue.severity === "ERROR")) {
             slots.push(row);
@@ -207,7 +221,7 @@ export function buildScheduleSlotImportPlan({
             rawJSON: JSON.stringify({ customSlot }),
         };
 
-        const rowIssues = validateSlot(row, seenSlotKeys, validCoachIds, validProgramIds);
+        const rowIssues = validateSlot(row, seenSlotKeys, validCoachIds, validProgramIds, enrollmentCountsBySlotKey);
         issues.push(...rowIssues);
         if (!rowIssues.some((issue) => issue.severity === "ERROR")) {
             slots.push(row);
@@ -217,6 +231,7 @@ export function buildScheduleSlotImportPlan({
 
     const errorCount = issues.filter((issue) => issue.severity === "ERROR").length;
     const warningCount = issues.filter((issue) => issue.severity === "WARNING").length;
+    const enrollmentMismatchCount = issues.filter((issue) => issue.message.includes("현재 등록 인원")).length;
 
     return {
         slots,
@@ -226,6 +241,7 @@ export function buildScheduleSlotImportPlan({
             validSlots: slots.length,
             errorCount,
             warningCount,
+            enrollmentMismatchCount,
         },
     };
 }

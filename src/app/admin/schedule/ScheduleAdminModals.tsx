@@ -446,7 +446,7 @@ export default function ScheduleAdminModals({
                                             새 DB 원본 이관
                                         </p>
                                         <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
-                                            현재 구글시트 캐시와 직접 추가한 수업을 먼저 검증한 뒤, 오류가 없을 때만 새 시간표 DB에 반영합니다.
+                                            현재 구글시트 캐시와 직접 추가한 수업을 먼저 검증한 뒤, 오류가 없을 때만 새 시간표 DB에 반영합니다. 인원은 시트 숫자가 아니라 실제 수강 등록 데이터로 계산합니다.
                                         </p>
                                     </div>
                                     <div className="flex shrink-0 flex-wrap gap-2">
@@ -470,7 +470,7 @@ export default function ScheduleAdminModals({
                                 </div>
 
                                 {displayedImportSummary && (
-                                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
                                         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
                                             <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400">전체</p>
                                             <p className="text-base font-black text-gray-900 dark:text-white">{displayedImportSummary.totalSlots}</p>
@@ -486,6 +486,10 @@ export default function ScheduleAdminModals({
                                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
                                             <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">주의</p>
                                             <p className="text-base font-black text-amber-800 dark:text-amber-200">{displayedImportSummary.warningCount}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 dark:border-sky-500/30 dark:bg-sky-500/10">
+                                            <p className="text-[11px] font-bold text-sky-700 dark:text-sky-300">인원 차이</p>
+                                            <p className="text-base font-black text-sky-800 dark:text-sky-200">{displayedImportSummary.enrollmentMismatchCount}</p>
                                         </div>
                                     </div>
                                 )}

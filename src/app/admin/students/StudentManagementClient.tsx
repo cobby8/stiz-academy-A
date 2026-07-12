@@ -81,6 +81,30 @@ type SheetImportSummary = {
     topScheduleMismatches: ScheduleMismatch[];
 } | null;
 
+type ReconcileSample = {
+    studentId: string;
+    studentName: string;
+    slotKey: string;
+    currentStatus?: string | null;
+    targetStatus?: string | null;
+};
+
+type ReconcilePreview = {
+    batchId: string | null;
+    expectedActivePairs: number;
+    missingEnrollments: number;
+    reactivations: number;
+    pauseExtras: number;
+    unresolvedLedgerRows: number;
+    missingClassSlots: number;
+    outsideScopeActiveStudents: number;
+    samples: {
+        missing: ReconcileSample[];
+        reactivations: ReconcileSample[];
+        pauseExtras: ReconcileSample[];
+    };
+};
+
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
@@ -166,6 +190,73 @@ function formatSlotLabel(slotKey: string) {
     const [day, period] = slotKey.split("-");
     const dayLabel = DAY_LABELS[day] ?? day;
     return period ? `${dayLabel} ${period}교시` : slotKey;
+}
+
+function ReconcilePreviewBox({
+    preview,
+    applying,
+    onApply,
+}: {
+    preview: ReconcilePreview;
+    applying: boolean;
+    onApply: () => void;
+}) {
+    const actionCount =
+        preview.missingEnrollments + preview.reactivations + preview.pauseExtras;
+
+    return (
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+            <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-6">
+                <ImportSummaryMetric label="기준" value={preview.expectedActivePairs} />
+                <ImportSummaryMetric label="추가" value={preview.missingEnrollments} warning={preview.missingEnrollments > 0} />
+                <ImportSummaryMetric label="활성화" value={preview.reactivations} warning={preview.reactivations > 0} />
+                <ImportSummaryMetric label="정지" value={preview.pauseExtras} warning={preview.pauseExtras > 0} />
+                <ImportSummaryMetric label="미연결" value={preview.unresolvedLedgerRows} warning={preview.unresolvedLedgerRows > 0} />
+                <ImportSummaryMetric label="반 없음" value={preview.missingClassSlots} warning={preview.missingClassSlots > 0} />
+            </div>
+
+            <p className="mt-3 text-xs text-gray-600 dark:text-gray-300">
+                시트 원장에 DB 학생으로 연결된 대상만 적용합니다. 시트에 없는 기존 활성 학생 {preview.outsideScopeActiveStudents}명은 자동 변경하지 않습니다.
+            </p>
+
+            <div className="mt-3 grid gap-2 text-xs md:grid-cols-3">
+                <ReconcileSampleList title="추가 예정" rows={preview.samples.missing} />
+                <ReconcileSampleList title="활성화 예정" rows={preview.samples.reactivations} />
+                <ReconcileSampleList title="정지 예정" rows={preview.samples.pauseExtras} />
+            </div>
+
+            <div className="mt-3 flex justify-end">
+                <button
+                    type="button"
+                    onClick={onApply}
+                    disabled={applying || actionCount === 0 || preview.missingClassSlots > 0}
+                    className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                >
+                    {applying ? "적용 중" : actionCount === 0 ? "적용할 변경 없음" : "시트 기준 적용"}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function ReconcileSampleList({ title, rows }: { title: string; rows: ReconcileSample[] }) {
+    return (
+        <div className="rounded-md bg-gray-50 p-2 dark:bg-gray-900">
+            <p className="font-bold text-gray-900 dark:text-white">{title}</p>
+            {rows.length === 0 ? (
+                <p className="mt-1 text-gray-500 dark:text-gray-400">대상 없음</p>
+            ) : (
+                <div className="mt-1 space-y-1">
+                    {rows.map((row) => (
+                        <p key={`${title}-${row.studentId}-${row.slotKey}`} className="text-gray-600 dark:text-gray-300">
+                            {row.studentName} · {formatSlotLabel(row.slotKey)}
+                            {row.targetStatus ? ` → ${row.targetStatus}` : ""}
+                        </p>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 function toDateStr(d: Date | string | null): string {
@@ -297,6 +388,10 @@ export default function StudentManagementClient({
     const [dataError, setDataError] = useState<string | null>(null);
     const [allStudentsLoaded, setAllStudentsLoaded] = useState(!initialPartial);
     const [backgroundLoading, setBackgroundLoading] = useState(false);
+    const [reconcilePreview, setReconcilePreview] = useState<ReconcilePreview | null>(null);
+    const [reconcileLoading, setReconcileLoading] = useState(false);
+    const [reconcileApplying, setReconcileApplying] = useState(false);
+    const [reconcileError, setReconcileError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -343,6 +438,56 @@ export default function StudentManagementClient({
             else setDataLoading(false);
         }
     }, []);
+
+    const loadReconcilePreview = useCallback(async () => {
+        setReconcileLoading(true);
+        setReconcileError(null);
+
+        try {
+            const response = await fetch("/api/admin/import-students/reconcile", {
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "시간표 차이 점검에 실패했습니다.");
+            }
+
+            setReconcilePreview(data as ReconcilePreview);
+        } catch (error) {
+            setReconcileError(error instanceof Error ? error.message : "시간표 차이 점검에 실패했습니다.");
+        } finally {
+            setReconcileLoading(false);
+        }
+    }, []);
+
+    const applyReconcile = useCallback(async () => {
+        if (!confirm("최신 시트 원장을 기준으로 수강 등록 상태를 맞출까요? 삭제는 하지 않고 상태만 정리합니다.")) {
+            return;
+        }
+
+        setReconcileApplying(true);
+        setReconcileError(null);
+
+        try {
+            const response = await fetch("/api/admin/import-students/reconcile", {
+                method: "POST",
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "시트 기준 적용에 실패했습니다.");
+            }
+
+            setReconcilePreview((data.after ?? null) as ReconcilePreview | null);
+            await loadData({ background: true });
+        } catch (error) {
+            setReconcileError(error instanceof Error ? error.message : "시트 기준 적용에 실패했습니다.");
+        } finally {
+            setReconcileApplying(false);
+        }
+    }, [loadData]);
 
     useEffect(() => {
         if (!hasInitialData) {
@@ -652,6 +797,31 @@ export default function StudentManagementClient({
                                     </span>
                                 )}
                             </div>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => void loadReconcilePreview()}
+                                    disabled={reconcileLoading}
+                                    className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                                >
+                                    {reconcileLoading ? "점검 중" : "차이 점검"}
+                                </button>
+                                <span className="text-xs text-amber-800 dark:text-lime-200">
+                                    시트에 연결된 학생만 안전하게 맞춥니다.
+                                </span>
+                            </div>
+                            {reconcileError && (
+                                <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+                                    {reconcileError}
+                                </div>
+                            )}
+                            {reconcilePreview && (
+                                <ReconcilePreviewBox
+                                    preview={reconcilePreview}
+                                    applying={reconcileApplying}
+                                    onApply={() => void applyReconcile()}
+                                />
+                            )}
                         </div>
                     )}
                 </div>

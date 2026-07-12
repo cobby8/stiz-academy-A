@@ -1,6 +1,7 @@
 "use client";
 
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
+import type { ScheduleSlotImportIssue, ScheduleSlotImportPlan } from "@/lib/scheduleSlotImport";
 
 interface Coach {
     id: string;
@@ -76,6 +77,11 @@ interface ScheduleAdminModalsProps {
     sheetError: string | null;
     sheetSyncing: boolean;
     sheetSyncMessage: string | null;
+    scheduleImportPreview: ScheduleSlotImportPlan | null;
+    scheduleImportResult: ScheduleImportResult | null;
+    scheduleImportLoading: boolean;
+    scheduleImportApplying: boolean;
+    scheduleImportError: string | null;
     isAddingCustom: boolean;
     onCloseSheetSlot: () => void;
     onUpdateSlot: (slotKey: string, patch: Partial<SlotState>) => void;
@@ -90,11 +96,22 @@ interface ScheduleAdminModalsProps {
     onSheetUrlChange: (value: string) => void;
     onSaveSheetUrl: () => void;
     onSyncSheet: () => void;
+    onPreviewScheduleImport: () => void;
+    onImportScheduleSlots: () => void;
     onClearSheetUrl: () => void;
     onCloseAddCustom: () => void;
     onNewCustomFormChange: (form: CustomSlotForm) => void;
     onSaveNewCustom: () => void;
 }
+
+type ScheduleImportResult = {
+    success: boolean;
+    batchId: string | null;
+    imported: number;
+    summary: ScheduleSlotImportPlan["summary"];
+    issues: ScheduleSlotImportIssue[];
+    message: string;
+};
 
 const DAY_LABEL: Record<string, string> = {
     Mon: "월요일",
@@ -137,6 +154,11 @@ export default function ScheduleAdminModals({
     sheetError,
     sheetSyncing,
     sheetSyncMessage,
+    scheduleImportPreview,
+    scheduleImportResult,
+    scheduleImportLoading,
+    scheduleImportApplying,
+    scheduleImportError,
     isAddingCustom,
     onCloseSheetSlot,
     onUpdateSlot,
@@ -151,12 +173,17 @@ export default function ScheduleAdminModals({
     onSheetUrlChange,
     onSaveSheetUrl,
     onSyncSheet,
+    onPreviewScheduleImport,
+    onImportScheduleSlots,
     onClearSheetUrl,
     onCloseAddCustom,
     onNewCustomFormChange,
     onSaveNewCustom,
 }: ScheduleAdminModalsProps) {
     const coachMap = Object.fromEntries(coaches.map((coach) => [coach.id, coach]));
+    const displayedImportSummary = scheduleImportResult?.summary ?? scheduleImportPreview?.summary ?? null;
+    const displayedImportIssues = scheduleImportResult?.issues ?? scheduleImportPreview?.issues ?? [];
+    const canRunScheduleImport = scheduleImportPreview?.summary.errorCount === 0;
 
     return (
         <>
@@ -410,6 +437,93 @@ export default function ScheduleAdminModals({
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                                 <p className="font-bold mb-1">운영 방식</p>
                                 <p>화면은 저장된 DB 시간표를 읽고, 구글시트는 아래 “지금 동기화”를 눌렀을 때만 가져옵니다.</p>
+                            </div>
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-900">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <p className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100">
+                                            <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime" style={{ fontSize: "18px" }}>database</span>
+                                            새 DB 원본 이관
+                                        </p>
+                                        <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
+                                            현재 구글시트 캐시와 직접 추가한 수업을 먼저 검증한 뒤, 오류가 없을 때만 새 시간표 DB에 반영합니다.
+                                        </p>
+                                    </div>
+                                    <div className="flex shrink-0 flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={onPreviewScheduleImport}
+                                            disabled={scheduleImportLoading || scheduleImportApplying}
+                                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                                        >
+                                            {scheduleImportLoading ? "검증 중..." : "이관 미리보기"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={onImportScheduleSlots}
+                                            disabled={!canRunScheduleImport || scheduleImportLoading || scheduleImportApplying}
+                                            className="rounded-lg bg-brand-orange-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                        >
+                                            {scheduleImportApplying ? "이관 중..." : "DB 원본으로 이관"}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {displayedImportSummary && (
+                                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                        <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+                                            <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400">전체</p>
+                                            <p className="text-base font-black text-gray-900 dark:text-white">{displayedImportSummary.totalSlots}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                                            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">정상</p>
+                                            <p className="text-base font-black text-emerald-800 dark:text-emerald-200">{displayedImportSummary.validSlots}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-500/30 dark:bg-red-500/10">
+                                            <p className="text-[11px] font-bold text-red-700 dark:text-red-300">오류</p>
+                                            <p className="text-base font-black text-red-800 dark:text-red-200">{displayedImportSummary.errorCount}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                                            <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">주의</p>
+                                            <p className="text-base font-black text-amber-800 dark:text-amber-200">{displayedImportSummary.warningCount}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {displayedImportIssues.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                        {displayedImportIssues.slice(0, 5).map((issue, index) => (
+                                            <p
+                                                key={`${issue.slotKey ?? "global"}-${index}`}
+                                                className={
+                                                    issue.severity === "ERROR"
+                                                        ? "rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
+                                                        : "rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                                                }
+                                            >
+                                                <span className="font-black">{issue.severity === "ERROR" ? "오류" : "주의"}</span>
+                                                {issue.slotKey ? ` · ${issue.slotKey}` : ""} · {issue.message}
+                                            </p>
+                                        ))}
+                                        {displayedImportIssues.length > 5 && (
+                                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                외 {displayedImportIssues.length - 5}건은 이관 기록에 저장됩니다.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {scheduleImportResult && (
+                                    <p className={scheduleImportResult.success ? "mt-3 text-xs font-bold text-emerald-700 dark:text-emerald-300" : "mt-3 text-xs font-bold text-red-700 dark:text-red-300"}>
+                                        {scheduleImportResult.message}
+                                    </p>
+                                )}
+
+                                {scheduleImportError && (
+                                    <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+                                        {scheduleImportError}
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1.5">구글시트 URL</label>

@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-07-12: Vercel Functions를 Supabase Seoul DB 가까운 `icn1`에서 실행한다
+- 결정: `vercel.json`에 `regions: ["icn1"]`을 추가해 배포 함수의 기본 실행 리전을 서울로 고정한다.
+- 이유: 실제 Chrome 로그인 세션에서 실서버 `/admin` 첫 진입은 DOM 9.46초였지만 재로드는 0.84초였고, 홈페이지는 0.35~0.56초였다. 관리자 페이지는 인증/DB 조회가 필요한 동적 함수라 함수 실행 지역과 Supabase DB 지역 거리가 콜드 스타트와 첫 DB 연결 지연을 크게 만든다. Vercel 공식 문서도 함수와 데이터소스를 가까운 리전에 두는 것을 권장한다.
+
 ## 2026-07-11: 자주 쓰는 관리자 화면은 캐시된 초기 payload를 서버에서 주입한다
 - 결정: `/admin/students`, `/admin/classes`, `/admin/trial`의 읽기 payload를 `src/lib/adminReadPayloads.ts`로 공유하고, 페이지 서버 렌더링에서 초기 데이터로 넘긴다.
 - 이유: DB 조회와 서버 캐시는 이미 충분히 빨라도, 브라우저가 첫 렌더 후 같은 API를 다시 호출하면 네트워크 왕복과 hydration 이후 대기 시간이 남는다. 자주 쓰는 메뉴는 첫 HTML/RSC 흐름에 데이터를 태워 보내는 편이 체감 속도에 유리하다.

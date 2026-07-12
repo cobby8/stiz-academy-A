@@ -5,6 +5,7 @@ import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, getFontCss } from "@/lib/fonts
 import { ThemeProvider } from "@/components/ThemeProvider";
 import MetaPixel from "@/components/MetaPixel";
 import DeferredFontStyles from "@/components/DeferredFontStyles";
+import PwaUpdater from "@/components/PwaUpdater";
 
 export const metadata: Metadata = {
     title: "스티즈농구교실 다산점 | 스마트 학원 관리",
@@ -79,6 +80,7 @@ export default async function RootLayout({
                 >
                     <DeferredFontStyles />
                     <MetaPixel />
+                    <PwaUpdater />
                     {children}
                 </ThemeProvider>
             </body>

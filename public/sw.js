@@ -2,7 +2,7 @@
 // public/ 폴더에 있어야 브라우저가 접근 가능
 
 // 캐시 버전 - 업데이트 시 이 이름을 바꾸면 이전 캐시가 자동 삭제됨
-const CACHE_NAME = "stiz-v1";
+const CACHE_NAME = "stiz-v20260712-1";
 
 // 앱 설치 시 미리 캐시할 핵심 파일 목록 (오프라인에서도 보이게)
 const PRE_CACHE = [
@@ -24,16 +24,24 @@ self.addEventListener("install", (event) => {
 // activate: 새 버전 활성화 시 이전 캐시 정리
 self.addEventListener("activate", (event) => {
     event.waitUntil(
-        caches.keys().then((keys) =>
-            Promise.all(
-                keys
-                    .filter((key) => key !== CACHE_NAME)
-                    .map((key) => caches.delete(key))
+        caches
+            .keys()
+            .then((keys) =>
+                Promise.all(
+                    keys
+                        .filter((key) => key !== CACHE_NAME)
+                        .map((key) => caches.delete(key))
+                )
             )
-        )
+            .then(() => self.clients.claim())
     );
-    // 현재 열린 모든 탭에 즉시 적용
-    self.clients.claim();
+});
+
+// 페이지에서 새 버전 적용을 요청하면 대기 없이 바로 교체
+self.addEventListener("message", (event) => {
+    if (event.data?.type === "SKIP_WAITING") {
+        self.skipWaiting();
+    }
 });
 
 // fetch: 네트워크 우선, 실패하면 캐시에서 제공 (Network-first 전략)

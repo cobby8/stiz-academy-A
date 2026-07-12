@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { deleteGalleryPost, syncInstagramGalleryPosts } from "@/app/actions/admin";
 import {
-  publishSocialPostDraftToGallery,
+  publishSocialPostDraft,
   rejectSocialPostDraft,
   saveSocialPostDraft,
 } from "@/app/actions/social-posts";
@@ -251,13 +251,17 @@ export default function GalleryAdminClient({
   }
 
   function handleDraftPublish(draft: SocialPostDraft) {
-    if (!confirm("이 초안을 홈페이지 갤러리에 게시하고 인스타그램 자동 게시 큐에 넣을까요?")) return;
+    if (!confirm("이 초안을 홈페이지 갤러리와 인스타그램에 바로 게시할까요?")) return;
     setDraftMessage(null);
     runDraftAction(draft.id, "publish", async () => {
       try {
-        const result = await publishSocialPostDraftToGallery(draft.id);
+        const result = await publishSocialPostDraft(draft.id);
         patchDraft(draft.id, result.draft);
-        setDraftMessage("홈페이지 갤러리에 게시됐습니다. 인스타그램은 서버에서 자동 게시됩니다.");
+        setDraftMessage(
+          result.ok
+            ? "홈페이지 갤러리와 인스타그램 게시가 완료됐습니다."
+            : "홈페이지 갤러리는 게시됐고, 인스타그램은 재시도 대기 중입니다.",
+        );
         await loadGallery();
       } catch (error) {
         setDraftMessage(error instanceof Error ? error.message : "게시 중 오류가 발생했습니다.");
@@ -360,12 +364,12 @@ export default function GalleryAdminClient({
                 </span>
                 {instagramStatus.autoPublishEnabled && (
                   <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
-                    자동 업로드 ON
+                    즉시 업로드 ON
                   </span>
                 )}
               </div>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                기존 인스타 게시물을 홈페이지 갤러리로 가져오고, 승인된 초안을 인스타그램에 게시합니다.
+                승인된 초안은 홈페이지 갤러리 등록 후 인스타그램에 바로 게시합니다.
               </p>
               {syncResult && (
                 <p className={`mt-1 text-xs font-medium ${syncResult.ok ? "text-green-600" : "text-red-600"}`}>
@@ -460,7 +464,7 @@ export default function GalleryAdminClient({
                         )}
                         {hasPublishingStatus && (
                           <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">
-                            자동 게시 중
+                            게시 처리 중
                           </span>
                         )}
                       </div>

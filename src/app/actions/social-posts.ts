@@ -136,7 +136,7 @@ export async function publishSocialPostDraftToInstagram(id: string) {
     throw new Error("인스타그램 자동 게시에는 사진이 최소 1장 필요합니다.");
   }
 
-  const result = await publishSocialDraftToInstagramNow(id);
+  const result = await publishSocialDraftToInstagramNow(id, { queueMode: true });
   revalidateSocialPostPaths();
   return result;
 }

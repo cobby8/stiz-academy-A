@@ -96,13 +96,14 @@ export async function publishSocialDraftToInstagramNow(
   }
 
   const galleryPostId = currentDraft.galleryPostId || await upsertGalleryPostFromSocialDraft(currentDraft);
-  if (!currentDraft.galleryPostId) {
-    await markSocialPostDraftPublishing(id, { galleryPostId });
+  let workingDraft = currentDraft;
+  if (!currentDraft.galleryPostId || (options.queueMode && currentDraft.status !== "PUBLISHING")) {
+    workingDraft = await markSocialPostDraftPublishing(id, { galleryPostId });
   }
 
   const attemptDraft = options.queueMode
     ? await markSocialPostDraftPublishAttempt(id)
-    : currentDraft;
+    : workingDraft;
 
   if (options.queueMode && !attemptDraft) {
     const latest = await getSocialPostDraftById(id);

@@ -24,6 +24,7 @@
 | 검증 | 완료 | `npx.cmd tsc --noEmit` 통과 |
 
 ## 작업 로그
+- 2026-07-12: 관리자 콜드스타트 완화 후보로 Vercel Fluid Compute를 `vercel.json`에 `"fluid": true`로 활성화. `vercel.json` JSON parse 검증 통과.
 - 2026-07-12: `/admin` 첫 화면 핵심 payload에서 대시보드 카운트/신청 통계/오늘 수업 조회를 4개 병렬 DB 호출에서 1개 통합 SQL 호출로 줄임. `npm.cmd run build` 통과.
 - 2026-07-12: 실제 Chrome 로그인 세션 기준 실서버 `/admin` 첫 진입 DOM 9.46초, 재로드 0.84초, 홈페이지 0.35~0.56초로 확인. Vercel 함수 기본 리전과 Supabase Seoul DB 거리 문제가 큰 원인으로 보여 `vercel.json`에 `regions: ["icn1"]` 적용.
 - 2026-07-11: `/admin` 콜드 진입이 약 25초까지 느린 것을 운영 탭에서 확인하고, 대시보드는 가벼운 핵심 요약을 먼저 렌더링한 뒤 월별 통계/최근 목록을 백그라운드에서 채우도록 분리.
@@ -43,6 +44,7 @@
 - 의도: 선생님이 바로 보는 화면은 먼저 띄우고, 무거운 통계/긴 목록은 필요할 때 조금씩 붙여 관리자 체감 속도를 개선한다.
 
 ## 테스트 결과
+- `vercel.json` JSON parse 검증 통과.
 - `npm.cmd run build` 통과. `/admin` primary dashboard SQL merge 검증 완료.
 - `npx.cmd tsc --noEmit` 통과
 - `npm.cmd run build` 통과. 로컬 네트워크에서 Supabase pooler 접속 경고가 출력됐지만 빌드는 exit code 0으로 완료됨.

@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-07-12: Vercel Fluid Compute를 관리자 콜드스타트 완화 옵션으로 켠다
+- 결정: `vercel.json`에 `"fluid": true`를 추가해 Vercel Functions에 Fluid Compute를 명시적으로 활성화한다.
+- 이유: Vercel 문서상 Fluid Compute는 함수 pre-warming, Node.js bytecode caching, 기존 idle resource 우선 사용 등 콜드스타트 영향을 줄이는 기능을 제공한다. 관리자 페이지는 동적 함수와 DB 인증/조회가 필요한 구조라 첫 진입 지연 완화 효과가 크다.
+
 ## 2026-07-12: 관리자 첫 화면의 핵심 payload는 DB 왕복 수를 최소화한다
 - 결정: `/admin` primary dashboard payload는 대시보드 카운트, 신청 통계, 오늘 수업을 각각 별도 Promise로 조회하지 않고 하나의 raw SQL 호출로 묶는다.
 - 이유: 운영 계측상 관리자 첫 진입은 콜드스타트와 첫 DB 연결 지연이 크게 작용한다. 작은 쿼리라도 여러 DB 왕복이 겹치면 서버 함수가 화면 HTML을 반환하기 전에 기다리는 단계가 늘어나므로, 첫 화면에 필요한 핵심 숫자는 한 번에 가져오는 편이 낫다.

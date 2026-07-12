@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   fetchRecentInstagramMedia,
   toGalleryMediaJSON,
@@ -21,6 +22,11 @@ type InstagramGalleryInsert = {
   externalId: string;
   externalUrl: string | null;
   publishedAt: string | null;
+};
+
+type GalleryMediaItem = {
+  url: string;
+  type: "image" | "video";
 };
 
 let galleryInstagramColumnsEnsured = false;
@@ -68,6 +74,116 @@ function toInsertRow(media: InstagramRemoteMedia): InstagramGalleryInsert | null
   };
 }
 
+function safePathSegment(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80) || "media";
+}
+
+function parseGalleryMediaItems(mediaJSON: string): GalleryMediaItem[] {
+  try {
+    const parsed = JSON.parse(mediaJSON);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is GalleryMediaItem => {
+      return typeof item?.url === "string" && (item.type === "image" || item.type === "video");
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function compressImageForInstagramArchive(buffer: Buffer) {
+  const sharp = (await import("sharp")).default;
+  return sharp(buffer, { failOn: "none" })
+    .rotate()
+    .resize({
+      width: 1440,
+      height: 1440,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({
+      quality: 58,
+      effort: 6,
+      smartSubsample: true,
+    })
+    .toBuffer();
+}
+
+async function archiveInstagramImage({
+  url,
+  externalId,
+  index,
+}: {
+  url: string;
+  externalId: string;
+  index: number;
+}) {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; STIZGallerySync/1.0)",
+      Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Instagram image download failed: ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error(`Instagram media is not an image: ${contentType || "unknown"}`);
+  }
+
+  const original = Buffer.from(await response.arrayBuffer());
+  const compressed = await compressImageForInstagramArchive(original);
+  const supabase = createAdminClient();
+  const bucket = "uploads";
+  await supabase.storage.createBucket(bucket, { public: true }).catch(() => {});
+
+  const path = `instagram-gallery/${safePathSegment(externalId)}-${index}-${Date.now()}.webp`;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(path, compressed, {
+      contentType: "image/webp",
+      cacheControl: "31536000",
+      upsert: true,
+    });
+
+  if (error) {
+    throw new Error(`Supabase upload failed: ${error.message}`);
+  }
+
+  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+  return urlData.publicUrl;
+}
+
+async function archiveInstagramMediaJSON(mediaJSON: string, externalId: string) {
+  const items = parseGalleryMediaItems(mediaJSON);
+  if (items.length === 0) return mediaJSON;
+
+  const archivedItems: GalleryMediaItem[] = [];
+  for (const [index, item] of items.entries()) {
+    if (item.type !== "image") {
+      archivedItems.push(item);
+      continue;
+    }
+
+    if (item.url.includes(".supabase.co/storage/") || item.url.includes(".supabase.in/storage/")) {
+      archivedItems.push(item);
+      continue;
+    }
+
+    const archivedUrl = await archiveInstagramImage({
+      url: item.url,
+      externalId,
+      index,
+    });
+    archivedItems.push({ ...item, url: archivedUrl });
+  }
+
+  return JSON.stringify(archivedItems);
+}
+
 export async function syncInstagramGalleryPostsToDb({
   businessAccountId,
   limit = 25,
@@ -94,28 +210,43 @@ export async function syncInstagramGalleryPostsToDb({
       .map(toInsertRow)
       .filter((row): row is InstagramGalleryInsert => row !== null);
 
-    if (candidates.length === 0) {
+    const archivedCandidates: InstagramGalleryInsert[] = [];
+    for (const candidate of candidates) {
+      try {
+        archivedCandidates.push({
+          ...candidate,
+          mediaJSON: await archiveInstagramMediaJSON(candidate.mediaJSON, candidate.externalId),
+        });
+      } catch (error) {
+        console.warn(
+          `[instagram/gallery-sync] archive failed for ${candidate.externalId}:`,
+          (error as Error).message,
+        );
+      }
+    }
+
+    if (archivedCandidates.length === 0) {
       return {
         ok: true,
         imported: 0,
         refreshed: 0,
-        skipped: result.media.length,
+        skipped: candidates.length,
         fetched: result.media.length,
         message: `인스타그램 게시물 0개를 가져왔고 ${result.media.length}개는 건너뛰었습니다.`,
       };
     }
 
-    const idPlaceholders = candidates.map((_, index) => `$${index + 1}`).join(", ");
+    const idPlaceholders = archivedCandidates.map((_, index) => `$${index + 1}`).join(", ");
     const existingRows = await prisma.$queryRawUnsafe<Array<{ externalId: string }>>(
       `SELECT "externalId" AS "externalId"
        FROM "GalleryPost"
        WHERE source = 'INSTAGRAM'
          AND "externalId" IN (${idPlaceholders})`,
-      ...candidates.map((row) => row.externalId),
+      ...archivedCandidates.map((row) => row.externalId),
     );
     const existingIds = new Set(existingRows.map((row) => row.externalId).filter(Boolean));
-    const rowsToRefresh = candidates.filter((row) => existingIds.has(row.externalId));
-    const rowsToInsert = candidates.filter((row) => !existingIds.has(row.externalId));
+    const rowsToRefresh = archivedCandidates.filter((row) => existingIds.has(row.externalId));
+    const rowsToInsert = archivedCandidates.filter((row) => !existingIds.has(row.externalId));
 
     if (rowsToRefresh.length > 0) {
       const refreshValuesSql = rowsToRefresh

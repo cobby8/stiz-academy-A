@@ -30,6 +30,11 @@ type RelinkSourceRow = {
   school?: string | null;
 };
 
+type RelinkDb = {
+  $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;
+  $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
+};
+
 type RelinkCandidate = {
   kind: RelinkKind;
   id: string;
@@ -44,6 +49,8 @@ type RelinkCandidate = {
 
 type RelinkReviewRow = Omit<RelinkCandidate, "match"> & {
   match: StudentIdentityMatch | null;
+  canCreateStudent?: boolean;
+  createBlockedReason?: string | null;
 };
 
 type RelinkPreview = {
@@ -154,6 +161,60 @@ function hasReviewableIdentity(input: StudentIdentityInput) {
       cleanSheetString(input.grade) ||
       cleanSheetString(input.school)
   );
+}
+
+function parseStudentBirthDate(value: Date | string | null | undefined) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  const cleaned = String(value).trim();
+  if (!cleaned) return null;
+
+  const spaced = cleaned.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})$/);
+  if (spaced) {
+    const [, year, month, day] = spaced;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  const separated = cleaned.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
+  if (separated) {
+    const [, year, month, day] = separated;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  const compact = cleaned.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact) {
+    const [, year, month, day] = compact;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  const shortCompact = cleaned.match(/^(\d{2})(\d{2})(\d{2})$/);
+  if (shortCompact) {
+    const [, shortYear, month, day] = shortCompact;
+    const currentShortYear = new Date().getFullYear() % 100;
+    const year = Number(shortYear) <= currentShortYear ? 2000 + Number(shortYear) : 1900 + Number(shortYear);
+    return new Date(year, Number(month) - 1, Number(day));
+  }
+
+  const serial = Number(cleaned);
+  if (Number.isFinite(serial) && serial > 20000 && serial < 60000) {
+    return new Date(1899, 11, 30 + Math.floor(serial));
+  }
+
+  const parsed = new Date(cleaned);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getTeamCreateBlockedReason(input: StudentIdentityInput) {
+  if (!cleanSheetString(input.studentName) || input.studentName === "(이름 없음)") {
+    return "이름 확인 필요";
+  }
+  if (!parseStudentBirthDate(input.birthDate)) {
+    return "생년월일 확인 필요";
+  }
+  return null;
 }
 
 async function readSourceRows(batchId: string): Promise<RelinkSourceRow[]> {
@@ -270,15 +331,22 @@ async function buildPreview(batchId: string | null, reviewLimit = 24): Promise<R
         matchedSamples.push({ ...candidateBase, match });
       }
       if (reviewRows.length < reviewLimit) {
-        reviewRows.push({ ...candidateBase, match });
+        reviewRows.push({ ...candidateBase, match, canCreateStudent: false, createBlockedReason: null });
       }
     } else {
       unmatched[row.kind]++;
+      const createBlockedReason =
+        row.kind === "team" ? getTeamCreateBlockedReason(input) : null;
       if (unmatchedSamples.length < 12) {
         unmatchedSamples.push(candidateBase);
       }
       if (reviewRows.length < reviewLimit) {
-        reviewRows.push({ ...candidateBase, match: null });
+        reviewRows.push({
+          ...candidateBase,
+          match: null,
+          canCreateStudent: row.kind === "team" && !createBlockedReason,
+          createBlockedReason,
+        });
       }
     }
   }
@@ -310,14 +378,14 @@ function revalidateRelinkCaches() {
   revalidatePath("/admin/schedule");
 }
 
-async function applyCandidate(batchId: string, candidate: RelinkCandidate) {
+async function applyCandidate(batchId: string, candidate: RelinkCandidate, db: RelinkDb = prisma) {
   const studentKey =
     candidate.studentName && (candidate.parentPhone || candidate.studentPhone)
       ? `${candidate.studentName}__${candidate.parentPhone || candidate.studentPhone}`
       : null;
 
   if (candidate.kind === "registration") {
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE "StudentRegistrationLedger"
        SET "studentId" = $2, "updatedAt" = NOW()
        WHERE id = $1`,
@@ -327,7 +395,7 @@ async function applyCandidate(batchId: string, candidate: RelinkCandidate) {
   }
 
   if (candidate.kind === "shuttle") {
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE "StudentShuttleRide"
        SET "studentId" = $2,
            "studentName" = COALESCE($3, "studentName"),
@@ -344,7 +412,7 @@ async function applyCandidate(batchId: string, candidate: RelinkCandidate) {
   }
 
   if (candidate.kind === "team") {
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE "StudentTeamRosterEntry"
        SET "studentId" = $2,
            phone = COALESCE($3, phone),
@@ -357,7 +425,7 @@ async function applyCandidate(batchId: string, candidate: RelinkCandidate) {
   }
 
   if (candidate.rawRowId) {
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE "StudentSheetRawRow"
        SET "studentId" = $2,
            "studentKey" = COALESCE($3, "studentKey")
@@ -368,7 +436,7 @@ async function applyCandidate(batchId: string, candidate: RelinkCandidate) {
     );
   }
 
-  await prisma.$executeRawUnsafe(
+  await db.$executeRawUnsafe(
     `DELETE FROM "StudentSheetImportIssue"
      WHERE "batchId" = $1
        AND "sheetName" = $2
@@ -379,6 +447,156 @@ async function applyCandidate(batchId: string, candidate: RelinkCandidate) {
     candidate.sheetName,
     candidate.rowNumber
   );
+}
+
+async function createStudentFromTeamRow(batchId: string, input: unknown) {
+  if (!input || typeof input !== "object") {
+    throw new Error("새 학생을 만들 원본 행 정보가 없습니다.");
+  }
+
+  const body = input as { kind?: string; id?: string };
+  if (body.kind !== "team" || !body.id) {
+    throw new Error("대표팀 원본 행만 새 학생으로 만들 수 있습니다.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRawUnsafe<
+      (RelinkSourceRow & {
+        studentId: string | null;
+        branch: string | null;
+        jerseyNumber: string | null;
+      })[]
+    >(
+      `SELECT id, "rawRowId", '대표팀 명단' AS "sheetName", "rowNumber", "rawJSON",
+              "studentName", phone AS "studentPhone", "birthDate", grade,
+              branch, "jerseyNumber", "studentId"
+       FROM "StudentTeamRosterEntry"
+       WHERE "batchId" = $1
+         AND id = $2
+       FOR UPDATE`,
+      batchId,
+      body.id
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new Error("대표팀 원본 행을 찾을 수 없습니다.");
+    }
+    if (row.studentId) {
+      throw new Error("이미 학생과 연결된 대표팀 원본 행입니다.");
+    }
+
+    const extracted = extractInput({ ...row, kind: "team", parentPhone: null });
+    const studentName = cleanSheetString(extracted.studentName);
+    if (!studentName || studentName === "(이름 없음)") {
+      throw new Error("학생 이름이 없어 새 학생을 만들 수 없습니다.");
+    }
+
+    const existingMatch = await findStudentIdentityMatch(tx, extracted);
+    if (existingMatch) {
+      await applyCandidate(
+        batchId,
+        {
+          kind: "team",
+          id: row.id,
+          rawRowId: row.rawRowId,
+          sheetName: row.sheetName,
+          rowNumber: row.rowNumber,
+          studentName,
+          studentPhone: normalizePhoneDigits(extracted.studentPhone) || null,
+          parentPhone: normalizePhoneDigits(extracted.parentPhone) || null,
+          match: existingMatch,
+        },
+        tx
+      );
+
+      const applied = emptyKindCounts();
+      applied.team = 1;
+      return { studentId: existingMatch.studentId, created: false, applied };
+    }
+
+    const birthDate = parseStudentBirthDate(extracted.birthDate);
+    if (!birthDate) {
+      throw new Error("생년월일을 해석할 수 없어 새 학생을 만들 수 없습니다. 원생 관리에서 직접 등록 후 연결해주세요.");
+    }
+
+    const phone = normalizePhoneDigits(extracted.studentPhone) || null;
+    const parentName = `${studentName} 보호자(확인 필요)`;
+    const parentEmail = `team_${row.id}@stiz.local`;
+    const parentRows = await tx.$queryRawUnsafe<{ id: string }[]>(
+      `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
+       ON CONFLICT (email)
+       DO UPDATE SET
+         name = EXCLUDED.name,
+         phone = COALESCE(EXCLUDED.phone, "User".phone),
+         "updatedAt" = NOW()
+       RETURNING id`,
+      parentEmail,
+      parentName,
+      phone
+    );
+    const parentId = parentRows[0]?.id;
+    if (!parentId) {
+      throw new Error("임시 보호자 계정을 만들지 못했습니다.");
+    }
+
+    const memo = [
+      "대표팀 명단에서 생성됨",
+      `원본 행: ${row.sheetName} ${row.rowNumber}행`,
+      row.jerseyNumber ? `백넘버: ${row.jerseyNumber}` : null,
+      "보호자 정보 확인 필요",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const studentRows = await tx.$queryRawUnsafe<{ id: string }[]>(
+      `INSERT INTO "Student" (
+         id, name, "birthDate", gender, "parentId", phone, grade, branch,
+         memo, "sourceImportRowId", "createdAt", "updatedAt"
+       )
+       VALUES (
+         gen_random_uuid()::text, $1, $2::timestamp, NULL, $3, $4, $5, $6,
+         $7, $8, NOW(), NOW()
+       )
+       RETURNING id`,
+      studentName,
+      birthDate,
+      parentId,
+      phone,
+      cleanSheetString(extracted.grade),
+      cleanSheetString(row.branch),
+      memo,
+      row.rawRowId
+    );
+    const studentId = studentRows[0]?.id;
+    if (!studentId) {
+      throw new Error("학생을 만들지 못했습니다.");
+    }
+
+    await applyCandidate(
+      batchId,
+      {
+        kind: "team",
+        id: row.id,
+        rawRowId: row.rawRowId,
+        sheetName: row.sheetName,
+        rowNumber: row.rowNumber,
+        studentName,
+        studentPhone: phone,
+        parentPhone: phone,
+        match: {
+          studentId,
+          confidence: "strong",
+          matchedBy: "manual",
+        },
+      },
+      tx
+    );
+
+    const applied = emptyKindCounts();
+    applied.team = 1;
+    return { studentId, created: true, applied };
+  });
 }
 
 async function applyManualCandidate(batchId: string, input: unknown) {
@@ -483,6 +701,27 @@ export async function POST(request: NextRequest) {
         success: true,
         manual: true,
         applied,
+        after: await buildPreview(batchId),
+      });
+    }
+
+    if (body?.action === "createStudentFromTeam") {
+      const result = await createStudentFromTeamRow(batchId, body);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "StudentSheetImportBatch"
+         SET "errorRows" = (
+           SELECT COUNT(*)::int
+           FROM "StudentSheetImportIssue"
+           WHERE "batchId" = $1
+         )
+         WHERE id = $1`,
+        batchId
+      );
+      revalidateRelinkCaches();
+
+      return NextResponse.json({
+        success: true,
+        ...result,
         after: await buildPreview(batchId),
       });
     }

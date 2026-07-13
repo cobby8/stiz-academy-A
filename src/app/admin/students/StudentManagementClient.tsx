@@ -125,6 +125,8 @@ type RelinkReviewRow = {
     studentPhone: string | null;
     parentPhone: string | null;
     match: RelinkMatch | null;
+    canCreateStudent?: boolean;
+    createBlockedReason?: string | null;
 };
 
 type RelinkPreview = {
@@ -323,6 +325,7 @@ function RelinkPreviewBox({
     onSelectionChange,
     onApplyAuto,
     onApplyManual,
+    onCreateTeamStudent,
 }: {
     preview: RelinkPreview;
     applying: boolean;
@@ -333,6 +336,7 @@ function RelinkPreviewBox({
     onSelectionChange: (rowKey: string, studentId: string) => void;
     onApplyAuto: () => void;
     onApplyManual: (row: RelinkReviewRow, studentId: string) => void;
+    onCreateTeamStudent: (row: RelinkReviewRow) => void;
 }) {
     const applyReadyTotal = totalRelinkCount(preview.applyReady);
     const weakTotal = totalRelinkCount(preview.weakOnly);
@@ -435,14 +439,31 @@ function RelinkPreviewBox({
                                             ))}
                                         </select>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => onApplyManual(row, selectedStudentId)}
-                                        disabled={!selectedStudentId || manualApplyingId === row.id}
-                                        className="rounded-lg border border-gray-200 px-3 py-2 font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-900"
-                                    >
-                                        {manualApplyingId === row.id ? "연결 중" : "연결"}
-                                    </button>
+                                    <div className="flex flex-col gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => onApplyManual(row, selectedStudentId)}
+                                            disabled={!selectedStudentId || manualApplyingId === row.id}
+                                            className="rounded-lg border border-gray-200 px-3 py-2 font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-900"
+                                        >
+                                            {manualApplyingId === row.id ? "처리 중" : "연결"}
+                                        </button>
+                                        {row.kind === "team" && !row.match && row.canCreateStudent && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onCreateTeamStudent(row)}
+                                                disabled={manualApplyingId === row.id}
+                                                className="rounded-lg bg-lime-100 px-3 py-2 font-bold text-lime-900 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                                            >
+                                                {manualApplyingId === row.id ? "생성 중" : "새 학생 생성"}
+                                            </button>
+                                        )}
+                                        {row.kind === "team" && !row.match && !row.canCreateStudent && row.createBlockedReason && (
+                                            <span className="rounded-lg bg-amber-50 px-3 py-2 text-center text-[11px] font-bold text-amber-800 dark:bg-amber-300/15 dark:text-amber-100">
+                                                {row.createBlockedReason}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -812,6 +833,43 @@ export default function StudentManagementClient({
             setManualRelinkApplyingId(null);
         }
     }, [loadData, studentOptions]);
+
+    const createTeamStudentFromRow = useCallback(async (row: RelinkReviewRow) => {
+        if (row.kind !== "team") return;
+
+        if (!confirm(`${row.studentName || "대표팀 원본 학생"}을 새 학생으로 만들고 이 대표팀 행과 연결할까요? 보호자 정보는 확인 필요 상태로 저장됩니다.`)) {
+            return;
+        }
+
+        setManualRelinkApplyingId(row.id);
+        setRelinkError(null);
+
+        try {
+            const response = await fetch("/api/admin/import-students/relink", {
+                method: "POST",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "createStudentFromTeam",
+                    kind: row.kind,
+                    id: row.id,
+                }),
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "대표팀 원본으로 학생 생성에 실패했습니다.");
+            }
+
+            setRelinkPreview((data.after ?? null) as RelinkPreview | null);
+            setStudentOptions([]);
+            await loadData({ background: true });
+        } catch (error) {
+            setRelinkError(error instanceof Error ? error.message : "대표팀 원본으로 학생 생성에 실패했습니다.");
+        } finally {
+            setManualRelinkApplyingId(null);
+        }
+    }, [loadData]);
 
     useEffect(() => {
         if (!hasInitialData) {
@@ -1186,6 +1244,7 @@ export default function StudentManagementClient({
                                 }
                                 onApplyAuto={() => void applyRelink()}
                                 onApplyManual={(row, studentId) => void applyManualRelink(row, studentId)}
+                                onCreateTeamStudent={(row) => void createTeamStudentFromRow(row)}
                             />
                         )}
                     </div>

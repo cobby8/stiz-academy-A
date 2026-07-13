@@ -42,6 +42,10 @@ type RelinkCandidate = {
   match: StudentIdentityMatch;
 };
 
+type RelinkReviewRow = Omit<RelinkCandidate, "match"> & {
+  match: StudentIdentityMatch | null;
+};
+
 type RelinkPreview = {
   batchId: string | null;
   scanned: Record<RelinkKind, number>;
@@ -54,6 +58,7 @@ type RelinkPreview = {
     matched: RelinkCandidate[];
     unmatched: Pick<RelinkCandidate, "kind" | "id" | "sheetName" | "rowNumber" | "studentName" | "studentPhone" | "parentPhone">[];
   };
+  reviewRows: RelinkReviewRow[];
 };
 
 const emptyKindCounts = (): Record<RelinkKind, number> => ({
@@ -175,7 +180,13 @@ async function readSourceRows(batchId: string): Promise<RelinkSourceRow[]> {
   ];
 }
 
-async function buildPreview(batchId: string | null): Promise<RelinkPreview> {
+function clampReviewLimit(value: string | null) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 24;
+  return Math.min(50, Math.max(0, Math.floor(parsed)));
+}
+
+async function buildPreview(batchId: string | null, reviewLimit = 24): Promise<RelinkPreview> {
   if (!batchId) {
     return {
       batchId: null,
@@ -186,6 +197,7 @@ async function buildPreview(batchId: string | null): Promise<RelinkPreview> {
       unmatched: emptyKindCounts(),
       byConfidence: { strong: 0, medium: 0, weak: 0 },
       samples: { matched: [], unmatched: [] },
+      reviewRows: [],
     };
   }
 
@@ -203,6 +215,7 @@ async function buildPreview(batchId: string | null): Promise<RelinkPreview> {
   const matchCache = new Map<string, StudentIdentityMatch | null>();
   const matchedSamples: RelinkCandidate[] = [];
   const unmatchedSamples: RelinkPreview["samples"]["unmatched"] = [];
+  const reviewRows: RelinkReviewRow[] = [];
 
   for (const row of rows) {
     scanned[row.kind]++;
@@ -236,10 +249,16 @@ async function buildPreview(batchId: string | null): Promise<RelinkPreview> {
       if (matchedSamples.length < 12) {
         matchedSamples.push({ ...candidateBase, match });
       }
+      if (reviewRows.length < reviewLimit) {
+        reviewRows.push({ ...candidateBase, match });
+      }
     } else {
       unmatched[row.kind]++;
       if (unmatchedSamples.length < 12) {
         unmatchedSamples.push(candidateBase);
+      }
+      if (reviewRows.length < reviewLimit) {
+        reviewRows.push({ ...candidateBase, match: null });
       }
     }
   }
@@ -256,6 +275,7 @@ async function buildPreview(batchId: string | null): Promise<RelinkPreview> {
       matched: matchedSamples,
       unmatched: unmatchedSamples,
     },
+    reviewRows,
   };
 }
 
@@ -340,7 +360,57 @@ async function applyCandidate(batchId: string, candidate: RelinkCandidate) {
   );
 }
 
-export async function GET() {
+async function applyManualCandidate(batchId: string, input: unknown) {
+  if (!input || typeof input !== "object") {
+    throw new Error("수동 연결 정보가 없습니다.");
+  }
+
+  const body = input as { kind?: string; id?: string; studentId?: string };
+  if (!["registration", "shuttle", "team"].includes(body.kind ?? "")) {
+    throw new Error("알 수 없는 원본 종류입니다.");
+  }
+  if (!body.id || !body.studentId) {
+    throw new Error("원본 행과 연결할 학생을 선택해주세요.");
+  }
+
+  const students = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT id FROM "Student" WHERE id = $1 LIMIT 1`,
+    body.studentId
+  );
+  if (!students[0]) {
+    throw new Error("선택한 학생을 찾을 수 없습니다.");
+  }
+
+  const row = (await readSourceRows(batchId)).find(
+    (sourceRow) => sourceRow.kind === body.kind && sourceRow.id === body.id
+  );
+  if (!row) {
+    throw new Error("이미 연결되었거나 최신 이관 배치에서 찾을 수 없는 행입니다.");
+  }
+
+  const extracted = extractInput(row);
+  await applyCandidate(batchId, {
+    kind: row.kind,
+    id: row.id,
+    rawRowId: row.rawRowId,
+    sheetName: row.sheetName,
+    rowNumber: row.rowNumber,
+    studentName: cleanSheetString(extracted.studentName),
+    studentPhone: normalizePhoneDigits(extracted.studentPhone) || null,
+    parentPhone: normalizePhoneDigits(extracted.parentPhone) || null,
+    match: {
+      studentId: body.studentId,
+      confidence: "strong",
+      matchedBy: "manual",
+    },
+  });
+
+  const applied = emptyKindCounts();
+  applied[row.kind] = 1;
+  return applied;
+}
+
+export async function GET(request: NextRequest) {
   try {
     await requireAdmin();
   } catch {
@@ -348,7 +418,8 @@ export async function GET() {
   }
 
   try {
-    return NextResponse.json(await buildPreview(await getLatestBatchId()));
+    const reviewLimit = clampReviewLimit(request.nextUrl.searchParams.get("reviewLimit"));
+    return NextResponse.json(await buildPreview(await getLatestBatchId(), reviewLimit));
   } catch (error) {
     console.error("[api/admin/import-students/relink] preview failed:", error);
     return NextResponse.json(
@@ -366,11 +437,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const body = await request.json().catch(() => null);
     const includeWeak = request.nextUrl.searchParams.get("includeWeak") === "true";
     const batchId = await getLatestBatchId();
     if (!batchId) {
       return NextResponse.json({ error: "완료된 수강생 이관 배치가 없습니다." }, { status: 400 });
     }
+
+    if (body?.action === "manual") {
+      const applied = await applyManualCandidate(batchId, body);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "StudentSheetImportBatch"
+         SET "errorRows" = (
+           SELECT COUNT(*)::int
+           FROM "StudentSheetImportIssue"
+           WHERE "batchId" = $1
+         )
+         WHERE id = $1`,
+        batchId
+      );
+      revalidateRelinkCaches();
+
+      return NextResponse.json({
+        success: true,
+        manual: true,
+        applied,
+        after: await buildPreview(batchId),
+      });
+    }
+
     const before = await buildPreview(batchId);
 
     const rows = await readSourceRows(batchId);

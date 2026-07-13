@@ -20,7 +20,8 @@ export type StudentIdentityMatch = {
     | "student_phone"
     | "birth_date"
     | "parent_name_school_grade"
-    | "unique_name";
+    | "unique_name"
+    | "manual";
 };
 
 type StudentIdRow = { id: string };

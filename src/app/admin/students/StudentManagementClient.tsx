@@ -105,6 +105,45 @@ type ReconcilePreview = {
     };
 };
 
+type RelinkKind = "registration" | "shuttle" | "team";
+
+type RelinkCounts = Record<RelinkKind, number>;
+
+type RelinkMatch = {
+    studentId: string;
+    confidence: "strong" | "medium" | "weak";
+    matchedBy: string;
+};
+
+type RelinkReviewRow = {
+    kind: RelinkKind;
+    id: string;
+    rawRowId: string | null;
+    sheetName: string;
+    rowNumber: number;
+    studentName: string | null;
+    studentPhone: string | null;
+    parentPhone: string | null;
+    match: RelinkMatch | null;
+};
+
+type RelinkPreview = {
+    batchId: string | null;
+    scanned: RelinkCounts;
+    matched: RelinkCounts;
+    applyReady: RelinkCounts;
+    weakOnly: RelinkCounts;
+    unmatched: RelinkCounts;
+    byConfidence: Record<RelinkMatch["confidence"], number>;
+    reviewRows: RelinkReviewRow[];
+};
+
+type StudentOption = {
+    id: string;
+    name: string;
+    parent?: { name: string | null };
+};
+
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
@@ -115,6 +154,12 @@ const DAY_ORDER: Record<string, number> = {
 };
 
 const STUDENT_PAGE_SIZE = 50;
+
+const RELINK_KIND_LABELS: Record<RelinkKind, string> = {
+    registration: "등록",
+    shuttle: "차량",
+    team: "대표팀",
+};
 
 // 요일 전체 라벨 (수강 등록 모달에서 사용)
 const DAY_FULL_LABELS: Record<string, string> = {
@@ -259,6 +304,150 @@ function ReconcileSampleList({ title, rows }: { title: string; rows: ReconcileSa
     );
 }
 
+function totalRelinkCount(counts: RelinkCounts) {
+    return counts.registration + counts.shuttle + counts.team;
+}
+
+function relinkRowKey(row: Pick<RelinkReviewRow, "kind" | "id">) {
+    return `${row.kind}:${row.id}`;
+}
+
+function RelinkPreviewBox({
+    preview,
+    applying,
+    manualApplyingId,
+    studentOptions,
+    studentOptionsLoading,
+    selections,
+    onSelectionChange,
+    onApplyAuto,
+    onApplyManual,
+}: {
+    preview: RelinkPreview;
+    applying: boolean;
+    manualApplyingId: string | null;
+    studentOptions: StudentOption[];
+    studentOptionsLoading: boolean;
+    selections: Record<string, string>;
+    onSelectionChange: (rowKey: string, studentId: string) => void;
+    onApplyAuto: () => void;
+    onApplyManual: (row: RelinkReviewRow, studentId: string) => void;
+}) {
+    const applyReadyTotal = totalRelinkCount(preview.applyReady);
+    const weakTotal = totalRelinkCount(preview.weakOnly);
+    const unmatchedTotal = totalRelinkCount(preview.unmatched);
+    const scannedTotal = totalRelinkCount(preview.scanned);
+    const studentOptionById = new Map(studentOptions.map((student) => [student.id, student]));
+
+    return (
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+            <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+                <ImportSummaryMetric label="검토" value={scannedTotal} warning={scannedTotal > 0} />
+                <ImportSummaryMetric label="확정 후보" value={applyReadyTotal} warning={applyReadyTotal > 0} />
+                <ImportSummaryMetric label="이름 후보" value={weakTotal} warning={weakTotal > 0} />
+                <ImportSummaryMetric label="후보 없음" value={unmatchedTotal} warning={unmatchedTotal > 0} />
+            </div>
+
+            <div className="mt-3 flex flex-col gap-2 text-xs text-gray-600 dark:text-gray-300 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                    강한/중간 후보는 연락처·생년월일 등으로 확인된 행입니다. 이름만 맞는 후보와 후보 없는 행은 한 줄씩 확인 후 연결합니다.
+                </span>
+                <button
+                    type="button"
+                    onClick={onApplyAuto}
+                    disabled={applying || applyReadyTotal === 0}
+                    className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                >
+                    {applying ? "적용 중" : applyReadyTotal === 0 ? "확정 후보 없음" : "확정 후보 적용"}
+                </button>
+            </div>
+
+            <div className="mt-3 overflow-hidden rounded-lg border border-gray-100 dark:border-gray-800">
+                {preview.reviewRows.length === 0 ? (
+                    <div className="bg-gray-50 px-3 py-4 text-center text-xs text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                        재연결이 필요한 원본 행이 없습니다.
+                    </div>
+                ) : (
+                    <div className="divide-y divide-gray-100 text-xs dark:divide-gray-800">
+                        {preview.reviewRows.map((row) => {
+                            const key = relinkRowKey(row);
+                            const selectedStudentId = selections[key] ?? row.match?.studentId ?? "";
+                            const matchedStudent = row.match ? studentOptionById.get(row.match.studentId) : null;
+                            const matchLabel = row.match
+                                ? row.match.confidence === "weak"
+                                    ? "이름 후보"
+                                    : "확정 후보"
+                                : "후보 없음";
+
+                            return (
+                                <div key={key} className="grid gap-2 bg-white px-3 py-3 dark:bg-gray-950 md:grid-cols-[1.1fr_1.1fr_1.5fr_auto] md:items-center">
+                                    <div>
+                                        <p className="font-bold text-gray-900 dark:text-white">
+                                            {RELINK_KIND_LABELS[row.kind]} · {row.sheetName} {row.rowNumber}행
+                                        </p>
+                                        <p className="mt-0.5 text-gray-500 dark:text-gray-400">
+                                            {row.studentName || "이름 없음"}
+                                        </p>
+                                    </div>
+                                    <div className="text-gray-600 dark:text-gray-300">
+                                        <p>학생 {formatPhone(row.studentPhone)}</p>
+                                        <p>보호자 {formatPhone(row.parentPhone)}</p>
+                                    </div>
+                                    <div>
+                                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                                            <span
+                                                className={`rounded-full px-2 py-0.5 font-bold ${
+                                                    row.match
+                                                        ? row.match.confidence === "weak"
+                                                            ? "bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-100"
+                                                            : "bg-lime-100 text-lime-800 dark:bg-lime-300/15 dark:text-lime-100"
+                                                        : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                                                }`}
+                                            >
+                                                {matchLabel}
+                                            </span>
+                                            {matchedStudent && (
+                                                <span className="text-gray-500 dark:text-gray-400">
+                                                    {matchedStudent.name}
+                                                    {matchedStudent.parent?.name ? ` (${matchedStudent.parent.name})` : ""}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <select
+                                            value={selectedStudentId}
+                                            onChange={(event) => onSelectionChange(key, event.target.value)}
+                                            disabled={studentOptionsLoading}
+                                            className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                        >
+                                            <option value="">
+                                                {studentOptionsLoading ? "학생 목록 불러오는 중" : "연결할 학생 선택"}
+                                            </option>
+                                            {studentOptions.map((student) => (
+                                                <option key={student.id} value={student.id}>
+                                                    {student.name}
+                                                    {student.parent?.name ? ` (${student.parent.name})` : ""}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => onApplyManual(row, selectedStudentId)}
+                                        disabled={!selectedStudentId || manualApplyingId === row.id}
+                                        className="rounded-lg border border-gray-200 px-3 py-2 font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-900"
+                                    >
+                                        {manualApplyingId === row.id ? "연결 중" : "연결"}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function toDateStr(d: Date | string | null): string {
     if (!d) return "";
     const date = typeof d === "string" ? new Date(d) : d;
@@ -392,6 +581,14 @@ export default function StudentManagementClient({
     const [reconcileLoading, setReconcileLoading] = useState(false);
     const [reconcileApplying, setReconcileApplying] = useState(false);
     const [reconcileError, setReconcileError] = useState<string | null>(null);
+    const [relinkPreview, setRelinkPreview] = useState<RelinkPreview | null>(null);
+    const [relinkLoading, setRelinkLoading] = useState(false);
+    const [relinkApplying, setRelinkApplying] = useState(false);
+    const [relinkError, setRelinkError] = useState<string | null>(null);
+    const [manualRelinkApplyingId, setManualRelinkApplyingId] = useState<string | null>(null);
+    const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
+    const [studentOptionsLoading, setStudentOptionsLoading] = useState(false);
+    const [manualRelinkSelections, setManualRelinkSelections] = useState<Record<string, string>>({});
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -439,6 +636,28 @@ export default function StudentManagementClient({
         }
     }, []);
 
+    const ensureStudentOptions = useCallback(async () => {
+        if (studentOptions.length > 0 || studentOptionsLoading) return;
+
+        setStudentOptionsLoading(true);
+        try {
+            const response = await fetch("/api/admin/student-options", {
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "학생 선택 목록을 불러오지 못했습니다.");
+            }
+
+            setStudentOptions(data.students ?? []);
+        } catch (error) {
+            setRelinkError(error instanceof Error ? error.message : "학생 선택 목록을 불러오지 못했습니다.");
+        } finally {
+            setStudentOptionsLoading(false);
+        }
+    }, [studentOptions.length, studentOptionsLoading]);
+
     const loadReconcilePreview = useCallback(async () => {
         setReconcileLoading(true);
         setReconcileError(null);
@@ -460,6 +679,31 @@ export default function StudentManagementClient({
             setReconcileLoading(false);
         }
     }, []);
+
+    const loadRelinkPreview = useCallback(async () => {
+        setRelinkLoading(true);
+        setRelinkError(null);
+
+        try {
+            const response = await fetch("/api/admin/import-students/relink?reviewLimit=30", {
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "미연결 원본 점검에 실패했습니다.");
+            }
+
+            setRelinkPreview(data as RelinkPreview);
+            if ((data.reviewRows ?? []).length > 0) {
+                void ensureStudentOptions();
+            }
+        } catch (error) {
+            setRelinkError(error instanceof Error ? error.message : "미연결 원본 점검에 실패했습니다.");
+        } finally {
+            setRelinkLoading(false);
+        }
+    }, [ensureStudentOptions]);
 
     const applyReconcile = useCallback(async () => {
         if (!confirm("최신 시트 원장을 기준으로 수강 등록 상태를 맞출까요? 삭제는 하지 않고 상태만 정리합니다.")) {
@@ -488,6 +732,81 @@ export default function StudentManagementClient({
             setReconcileApplying(false);
         }
     }, [loadData]);
+
+    const applyRelink = useCallback(async () => {
+        if (!confirm("연락처나 생년월일로 확인된 미연결 원본 행을 기존 학생과 연결할까요? 이름만 맞는 후보는 자동 적용하지 않습니다.")) {
+            return;
+        }
+
+        setRelinkApplying(true);
+        setRelinkError(null);
+
+        try {
+            const response = await fetch("/api/admin/import-students/relink", {
+                method: "POST",
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "미연결 원본 적용에 실패했습니다.");
+            }
+
+            setRelinkPreview((data.after ?? null) as RelinkPreview | null);
+            await loadData({ background: true });
+        } catch (error) {
+            setRelinkError(error instanceof Error ? error.message : "미연결 원본 적용에 실패했습니다.");
+        } finally {
+            setRelinkApplying(false);
+        }
+    }, [loadData]);
+
+    const applyManualRelink = useCallback(async (row: RelinkReviewRow, studentId: string) => {
+        if (!studentId) return;
+
+        const student = studentOptions.find((option) => option.id === studentId);
+        const label = student
+            ? `${student.name}${student.parent?.name ? ` (${student.parent.name})` : ""}`
+            : "선택한 학생";
+
+        if (!confirm(`${row.studentName || "이름 없는 원본 행"}을 ${label}에게 연결할까요?`)) {
+            return;
+        }
+
+        setManualRelinkApplyingId(row.id);
+        setRelinkError(null);
+
+        try {
+            const response = await fetch("/api/admin/import-students/relink", {
+                method: "POST",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "manual",
+                    kind: row.kind,
+                    id: row.id,
+                    studentId,
+                }),
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "수동 연결에 실패했습니다.");
+            }
+
+            setRelinkPreview((data.after ?? null) as RelinkPreview | null);
+            setManualRelinkSelections((current) => {
+                const next = { ...current };
+                delete next[relinkRowKey(row)];
+                return next;
+            });
+            await loadData({ background: true });
+        } catch (error) {
+            setRelinkError(error instanceof Error ? error.message : "수동 연결에 실패했습니다.");
+        } finally {
+            setManualRelinkApplyingId(null);
+        }
+    }, [loadData, studentOptions]);
 
     useEffect(() => {
         if (!hasInitialData) {
@@ -582,8 +901,8 @@ export default function StudentManagementClient({
             }
             resetForm();
             await loadData();
-        } catch (err: any) {
-            alert(err.message || "저장 실패");
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : "저장 실패");
         } finally {
             setBusy(false);
         }
@@ -595,8 +914,8 @@ export default function StudentManagementClient({
             await deleteStudent(id);
             setDeleteConfirm(null);
             await loadData();
-        } catch (err: any) {
-            alert(err.message || "삭제 실패");
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : "삭제 실패");
         } finally {
             setBusy(false);
         }
@@ -608,8 +927,8 @@ export default function StudentManagementClient({
             await enrollStudent(studentId, classId);
             setEnrollModal(null);
             await loadData();
-        } catch (err: any) {
-            alert(err.message || "수강 등록 실패");
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : "수강 등록 실패");
         } finally {
             setBusy(false);
         }
@@ -824,6 +1143,47 @@ export default function StudentManagementClient({
                             )}
                         </div>
                     )}
+                    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="font-bold">차량·대표팀 원본 학생 연결 점검</p>
+                                <p className="mt-1 text-gray-500 dark:text-gray-400">
+                                    시트 원본 중 기존 학생과 아직 연결되지 않은 행을 확인하고, 확정 후보 또는 수동 선택으로 연결합니다.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void loadRelinkPreview()}
+                                disabled={relinkLoading}
+                                className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                            >
+                                {relinkLoading ? "점검 중" : "미연결 점검"}
+                            </button>
+                        </div>
+                        {relinkError && (
+                            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+                                {relinkError}
+                            </div>
+                        )}
+                        {relinkPreview && (
+                            <RelinkPreviewBox
+                                preview={relinkPreview}
+                                applying={relinkApplying}
+                                manualApplyingId={manualRelinkApplyingId}
+                                studentOptions={studentOptions}
+                                studentOptionsLoading={studentOptionsLoading}
+                                selections={manualRelinkSelections}
+                                onSelectionChange={(rowKey, studentId) =>
+                                    setManualRelinkSelections((current) => ({
+                                        ...current,
+                                        [rowKey]: studentId,
+                                    }))
+                                }
+                                onApplyAuto={() => void applyRelink()}
+                                onApplyManual={(row, studentId) => void applyManualRelink(row, studentId)}
+                            />
+                        )}
+                    </div>
                 </div>
             )}
 

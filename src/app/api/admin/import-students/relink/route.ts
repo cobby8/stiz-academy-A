@@ -53,6 +53,7 @@ type RelinkPreview = {
   applyReady: Record<RelinkKind, number>;
   weakOnly: Record<RelinkKind, number>;
   unmatched: Record<RelinkKind, number>;
+  ignored: Record<RelinkKind, number>;
   byConfidence: Record<StudentIdentityMatch["confidence"], number>;
   samples: {
     matched: RelinkCandidate[];
@@ -143,6 +144,18 @@ function identityCacheKey(input: StudentIdentityInput) {
   ].join("|");
 }
 
+function hasReviewableIdentity(input: StudentIdentityInput) {
+  return Boolean(
+    cleanSheetString(input.studentName) ||
+      normalizePhoneDigits(input.parentPhone) ||
+      normalizePhoneDigits(input.studentPhone) ||
+      cleanSheetString(input.parentName) ||
+      input.birthDate ||
+      cleanSheetString(input.grade) ||
+      cleanSheetString(input.school)
+  );
+}
+
 async function readSourceRows(batchId: string): Promise<RelinkSourceRow[]> {
   const [registrations, shuttles, teams] = await Promise.all([
     prisma.$queryRawUnsafe<Omit<RelinkSourceRow, "kind">[]>(
@@ -195,6 +208,7 @@ async function buildPreview(batchId: string | null, reviewLimit = 24): Promise<R
       applyReady: emptyKindCounts(),
       weakOnly: emptyKindCounts(),
       unmatched: emptyKindCounts(),
+      ignored: emptyKindCounts(),
       byConfidence: { strong: 0, medium: 0, weak: 0 },
       samples: { matched: [], unmatched: [] },
       reviewRows: [],
@@ -207,6 +221,7 @@ async function buildPreview(batchId: string | null, reviewLimit = 24): Promise<R
   const applyReady = emptyKindCounts();
   const weakOnly = emptyKindCounts();
   const unmatched = emptyKindCounts();
+  const ignored = emptyKindCounts();
   const byConfidence: Record<StudentIdentityMatch["confidence"], number> = {
     strong: 0,
     medium: 0,
@@ -220,6 +235,11 @@ async function buildPreview(batchId: string | null, reviewLimit = 24): Promise<R
   for (const row of rows) {
     scanned[row.kind]++;
     const input = extractInput(row);
+    if (!hasReviewableIdentity(input)) {
+      ignored[row.kind]++;
+      continue;
+    }
+
     const key = identityCacheKey(input);
     let match = matchCache.get(key);
     if (match === undefined) {
@@ -270,6 +290,7 @@ async function buildPreview(batchId: string | null, reviewLimit = 24): Promise<R
     applyReady,
     weakOnly,
     unmatched,
+    ignored,
     byConfidence,
     samples: {
       matched: matchedSamples,
@@ -474,6 +495,8 @@ export async function POST(request: NextRequest) {
 
     for (const row of rows) {
       const input = extractInput(row);
+      if (!hasReviewableIdentity(input)) continue;
+
       const key = identityCacheKey(input);
       let match = matchCache.get(key);
       if (match === undefined) {

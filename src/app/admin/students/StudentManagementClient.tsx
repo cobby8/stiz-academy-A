@@ -134,6 +134,7 @@ type RelinkPreview = {
     applyReady: RelinkCounts;
     weakOnly: RelinkCounts;
     unmatched: RelinkCounts;
+    ignored: RelinkCounts;
     byConfidence: Record<RelinkMatch["confidence"], number>;
     reviewRows: RelinkReviewRow[];
 };
@@ -336,21 +337,25 @@ function RelinkPreviewBox({
     const applyReadyTotal = totalRelinkCount(preview.applyReady);
     const weakTotal = totalRelinkCount(preview.weakOnly);
     const unmatchedTotal = totalRelinkCount(preview.unmatched);
+    const ignoredTotal = totalRelinkCount(preview.ignored);
     const scannedTotal = totalRelinkCount(preview.scanned);
+    const reviewableTotal = scannedTotal - ignoredTotal;
     const studentOptionById = new Map(studentOptions.map((student) => [student.id, student]));
 
     return (
         <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-            <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-3 lg:grid-cols-6">
                 <ImportSummaryMetric label="검토" value={scannedTotal} warning={scannedTotal > 0} />
+                <ImportSummaryMetric label="실제 후보" value={reviewableTotal} warning={reviewableTotal > 0} />
                 <ImportSummaryMetric label="확정 후보" value={applyReadyTotal} warning={applyReadyTotal > 0} />
                 <ImportSummaryMetric label="이름 후보" value={weakTotal} warning={weakTotal > 0} />
                 <ImportSummaryMetric label="후보 없음" value={unmatchedTotal} warning={unmatchedTotal > 0} />
+                <ImportSummaryMetric label="검토 제외" value={ignoredTotal} />
             </div>
 
             <div className="mt-3 flex flex-col gap-2 text-xs text-gray-600 dark:text-gray-300 sm:flex-row sm:items-center sm:justify-between">
                 <span>
-                    강한/중간 후보는 연락처·생년월일 등으로 확인된 행입니다. 이름만 맞는 후보와 후보 없는 행은 한 줄씩 확인 후 연결합니다.
+                    빈 서식 행은 검토 제외로 분리하고, 이름·연락처·생년월일 등 단서가 있는 행만 연결 후보로 보여줍니다. 후보 없음 {unmatchedTotal}건은 수동 확인이 필요합니다.
                 </span>
                 <button
                     type="button"

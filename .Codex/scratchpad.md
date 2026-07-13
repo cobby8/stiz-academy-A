@@ -19,9 +19,10 @@
 | 수강생 시트 저장 구조 | 완료 | 원본 행 보존, 등록 원장, 차량, 변동내역, 대표팀 명단 저장 모델/SQL 추가 |
 | 수강생 운영 연결 | 완료 | 최신 이관 요약, 시간표 차이, 차량/변동/대표팀/이슈 지연 조회 UI 추가 |
 | 시간표 정합성 적용 | 완료 | 시트 기준 수강 등록 미리보기/적용 API와 관리자 진입점 추가 |
-| 배포/검증/의존 제거 | 진행 중 | 수동 이관 후 캐시 무효화, 관리자 시간표 fallback 조회 축소, 수강생 중복 매칭 보강 |
+| 배포/검증/의존 제거 | 진행 중 | 운영 DB에 `ScheduleSlot` 32건 이관 완료, 수강생 중복 매칭 보강 |
 
 ## 작업 로그
+- 2026-07-13: 실제 Supabase DB에 시간표 이관 테이블을 적용하고, 기존 시트 캐시/수동 슬롯 32건을 `ScheduleSlot`으로 이관했다. 운영 반은 31건 갱신/1건 생성됐고 홈페이지/관리자 조회 형태로 정상 조회됨을 확인했다.
 - 2026-07-13: 수강생 시트 중복 학생을 이름+학부모/학생 연락처/생년월일 기준으로 매칭하는 공통 유틸과 relink API를 추가하고, 차량 1410행을 실제 DB의 기존 학생과 강한 매칭으로 재연결했다.
 - 2026-07-13: 최신 시트 원장을 기준으로 수강 등록 누락/초과 활성 상태를 미리보고 적용할 수 있는 reconciliation API와 관리자 버튼을 추가했다.
 - 2026-07-13: 실제 수강생 운영 시트를 DB에 이관하고, 최신 이관 요약/시간표 차이/차량·변동·대표팀·이슈 상세 지연 조회를 관리자 UI에 추가했다.
@@ -52,6 +53,7 @@
 - 변경 API/UI 린트: 통과
 - 수강 등록 reconciliation 검증: 추가 32/정지 27/반 없음 0, 적용 SQL `EXPLAIN` 통과
 - 수강생 relink 검증: 적용 전 차량 2404행 중 1410행 강한 매칭, 적용 후 차량 994행/대표팀 13행은 보류, 대표팀 1행 약한 이름 단독 매칭은 미적용
+- 시간표 DB 이관 검증: `ScheduleSlot`/`ScheduleImportBatch`/`ScheduleImportIssue` 실제 DB 적용, 배치 `cd03bfa2-b204-4dc4-8690-0a39d252c093` `IMPORTED`, 슬롯 32/32 이관, 운영 반 31건 갱신/1건 생성, 오류 0/경고 21
 - `npx.cmd eslint src\lib\studentSheetMatching.ts src\lib\importStudents.ts src\app\api\admin\import-students\route.ts src\app\api\admin\import-students\relink\route.ts`: 통과
 - `git diff --check`: 통과
 

@@ -107,8 +107,8 @@ export default function InviteAcceptForm({
     function handleAccept() {
         setPasswordError("");
 
-        if (password.length < 6) {
-            setPasswordError("비밀번호는 6자 이상이어야 합니다.");
+        if (password.length < 10) {
+            setPasswordError("비밀번호는 10자 이상이어야 합니다.");
             return;
         }
         if (password !== confirmPassword) {
@@ -279,8 +279,8 @@ export default function InviteAcceptForm({
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder="6자 이상"
-                                minLength={6}
+                                placeholder="10자 이상"
+                                minLength={10}
                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                                 autoFocus
                             />
@@ -292,7 +292,7 @@ export default function InviteAcceptForm({
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 placeholder="비밀번호 재입력"
-                                minLength={6}
+                                minLength={10}
                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500"
                             />
                         </div>

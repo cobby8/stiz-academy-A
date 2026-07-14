@@ -90,4 +90,15 @@ ALTER TABLE "StaffInvitation"
   ADD CONSTRAINT "StaffInvitation_status_check"
   CHECK (status IN ('PENDING', 'PROCESSING', 'RECOVERY_REQUIRED', 'RECOVERING', 'ACCEPTED', 'CANCELLED', 'EXPIRED'));
 
+-- 이 데이터는 서버 액션만 직접 사용한다. Supabase Data API의 공개/일반 로그인 역할에는 노출하지 않는다.
+ALTER TABLE "StaffInvitation" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "StaffInvitationOtpSend" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "StaffInvitationRecoveryLog" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "StaffInvitationAuthAttempt" ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE "StaffInvitation" FROM anon, authenticated;
+REVOKE ALL ON TABLE "StaffInvitationOtpSend" FROM anon, authenticated;
+REVOKE ALL ON TABLE "StaffInvitationRecoveryLog" FROM anon, authenticated;
+REVOKE ALL ON TABLE "StaffInvitationAuthAttempt" FROM anon, authenticated;
+
 COMMIT;

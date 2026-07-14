@@ -2662,8 +2662,158 @@ export async function deleteBillingTemplate(id: string) {
     revalidateTag("admin-finance-billing", { expire: 0 });
 }
 
+type MonthlyInvoicePreviewSample = {
+    studentId: string;
+    studentName: string;
+    templateName: string;
+    type: string;
+    amount: number;
+    dueDay: number;
+    action: "CREATE" | "SKIP";
+};
+
+type MonthlyInvoicePreview = {
+    year: number;
+    month: number;
+    activeTemplateCount: number;
+    targetStudentCount: number;
+    createCount: number;
+    skipCount: number;
+    createAmount: number;
+    skipAmount: number;
+    samples: MonthlyInvoicePreviewSample[];
+};
+
+const MONTHLY_INVOICE_TARGETS_SQL = `
+    WITH templates AS (
+        SELECT id, name, amount, type, description, "dueDay", "programId"
+        FROM "BillingTemplate"
+        WHERE "isActive" = true
+    ),
+    active_students AS (
+        SELECT DISTINCT
+            s.id AS "studentId",
+            s.name AS "studentName",
+            c."programId"
+        FROM "Student" s
+        JOIN "Enrollment" e ON e."studentId" = s.id
+        JOIN "Class" c ON c.id = e."classId"
+        WHERE e.status = 'ACTIVE'
+    ),
+    target_pairs AS (
+        SELECT DISTINCT ON (t.id, a."studentId")
+            t.id AS "templateId",
+            t.name AS "templateName",
+            t.amount,
+            COALESCE(t.type, 'MONTHLY') AS type,
+            COALESCE(t.description, t.name) AS description,
+            LEAST(GREATEST(COALESCE(t."dueDay", 10), 1), 28) AS "dueDay",
+            a."studentId",
+            a."studentName"
+        FROM templates t
+        JOIN active_students a
+          ON t."programId" IS NULL OR t."programId" = a."programId"
+        ORDER BY t.id, a."studentId"
+    ),
+    actions AS (
+        SELECT
+            tp.*,
+            p.id AS "existingPaymentId",
+            CASE WHEN p.id IS NULL THEN 'CREATE' ELSE 'SKIP' END AS action
+        FROM target_pairs tp
+        LEFT JOIN "Payment" p
+          ON p."studentId" = tp."studentId"
+         AND p.year = $1
+         AND p.month = $2
+         AND p.type = tp.type
+    )
+`;
+
+export async function previewMonthlyInvoices(year: number, month: number): Promise<MonthlyInvoicePreview> {
+    await requireAdmin();
+    await ensurePaymentColumns();
+    await ensureBillingTemplateTable();
+
+    try {
+        const [summaryRows, samples] = await Promise.all([
+            prisma.$queryRawUnsafe<{
+                activeTemplateCount: number;
+                targetStudentCount: number;
+                createCount: number;
+                skipCount: number;
+                createAmount: number;
+                skipAmount: number;
+            }[]>(
+                `
+                ${MONTHLY_INVOICE_TARGETS_SQL}
+                SELECT
+                    (SELECT COUNT(*)::int FROM templates) AS "activeTemplateCount",
+                    (SELECT COUNT(DISTINCT "studentId")::int FROM target_pairs) AS "targetStudentCount",
+                    COUNT(CASE WHEN action = 'CREATE' THEN 1 END)::int AS "createCount",
+                    COUNT(CASE WHEN action = 'SKIP' THEN 1 END)::int AS "skipCount",
+                    COALESCE(SUM(CASE WHEN action = 'CREATE' THEN amount ELSE 0 END), 0)::int AS "createAmount",
+                    COALESCE(SUM(CASE WHEN action = 'SKIP' THEN amount ELSE 0 END), 0)::int AS "skipAmount"
+                FROM actions
+                `,
+                year,
+                month,
+            ),
+            prisma.$queryRawUnsafe<MonthlyInvoicePreviewSample[]>(
+                `
+                ${MONTHLY_INVOICE_TARGETS_SQL}
+                SELECT
+                    "studentId",
+                    "studentName",
+                    "templateName",
+                    type,
+                    amount::int AS amount,
+                    "dueDay"::int AS "dueDay",
+                    action
+                FROM actions
+                ORDER BY
+                    CASE action WHEN 'CREATE' THEN 1 ELSE 2 END,
+                    "studentName",
+                    "templateName"
+                LIMIT 20
+                `,
+                year,
+                month,
+            ),
+        ]);
+
+        const summary = summaryRows[0] ?? {
+            activeTemplateCount: 0,
+            targetStudentCount: 0,
+            createCount: 0,
+            skipCount: 0,
+            createAmount: 0,
+            skipAmount: 0,
+        };
+
+        return {
+            year,
+            month,
+            activeTemplateCount: Number(summary.activeTemplateCount ?? 0),
+            targetStudentCount: Number(summary.targetStudentCount ?? 0),
+            createCount: Number(summary.createCount ?? 0),
+            skipCount: Number(summary.skipCount ?? 0),
+            createAmount: Number(summary.createAmount ?? 0),
+            skipAmount: Number(summary.skipAmount ?? 0),
+            samples: samples.map((sample) => ({
+                ...sample,
+                amount: Number(sample.amount ?? 0),
+                dueDay: Number(sample.dueDay ?? 10),
+                action: sample.action,
+            })),
+        };
+    } catch (e) {
+        console.error("Failed to preview monthly invoices:", e);
+        throw new Error("월별 청구 대상 미리보기 실패");
+    }
+}
+
 // ── 월별 청구서 자동 생성 ────────────────────────────────────────────────────────
-// 활성 템플릿 기준으로 모든 ACTIVE 수강생에게 청구서를 생성한다.
+// 활성 템플릿 기준으로 ACTIVE 수강생에게 청구서를 생성한다.
 // 중복 방지: 같은 학생+같은 year+month+type 조합이 이미 있으면 건너뜀
 export async function generateMonthlyInvoices(year: number, month: number) {
     await requireAdmin();
@@ -2671,96 +2821,45 @@ export async function generateMonthlyInvoices(year: number, month: number) {
     await ensureBillingTemplateTable();
 
     try {
-        // 1) 활성 청구 템플릿 조회
-        const templates = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, name, amount, type, description, "dueDay"
-             FROM "BillingTemplate" WHERE "isActive" = true`
-        );
-        if (templates.length === 0) {
+        const preview = await previewMonthlyInvoices(year, month);
+        if (preview.activeTemplateCount === 0) {
             return { created: 0, skipped: 0, message: "활성 청구 템플릿이 없습니다." };
         }
 
-        // 2) ACTIVE 수강생 목록 (중복 제거 — 여러 반에 등록된 학생도 1번만)
-        const students = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT DISTINCT s.id
-             FROM "Student" s
-             JOIN "Enrollment" e ON s.id = e."studentId"
-             WHERE e.status = 'ACTIVE'`
+        const insertResult = await prisma.$executeRawUnsafe(
+            `
+            ${MONTHLY_INVOICE_TARGETS_SQL}
+            INSERT INTO "Payment" (
+                id, "studentId", amount, status, "dueDate", type, description,
+                month, year, "autoGenerated", "createdAt", "updatedAt"
+            )
+            SELECT
+                gen_random_uuid()::text,
+                "studentId",
+                amount,
+                'PENDING',
+                make_date($1::int, $2::int, "dueDay"::int)::timestamp,
+                type,
+                description,
+                $2,
+                $1,
+                true,
+                NOW(),
+                NOW()
+            FROM actions
+            WHERE action = 'CREATE'
+            `,
+            year,
+            month,
         );
-
-        let created = 0;
-        let skipped = 0;
-
-        // 3) 학생 x 템플릿 조합별로 청구서 생성
-        for (const tpl of templates) {
-            const dueDay = Number(tpl.dueDay ?? tpl.dueday ?? 10);
-            // 납부 기한: 해당 월의 dueDay일 (28일 초과 방지)
-            const safeDueDay = Math.min(dueDay, 28);
-            const dueDateStr = `${year}-${String(month).padStart(2, "0")}-${String(safeDueDay).padStart(2, "0")}`;
-            const tplType = tpl.type ?? "MONTHLY";
-            const tplDesc = tpl.description || tpl.name;
-
-            for (const stu of students) {
-                // 중복 검사: 같은 학생+연+월+유형이 이미 존재하면 스킵
-                const existing = await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT id FROM "Payment"
-                     WHERE "studentId" = $1 AND year = $2 AND month = $3 AND type = $4
-                     LIMIT 1`,
-                    stu.id, year, month, tplType,
-                );
-                if (existing.length > 0) {
-                    skipped++;
-                    continue;
-                }
-
-                await prisma.$executeRawUnsafe(
-                    `INSERT INTO "Payment" (id, "studentId", amount, status, "dueDate", type, description, month, year, "autoGenerated", "createdAt", "updatedAt")
-                     VALUES (gen_random_uuid()::text, $1, $2, 'PENDING', $3::timestamp, $4, $5, $6, $7, true, NOW(), NOW())`,
-                    stu.id,
-                    Number(tpl.amount),
-                    dueDateStr,
-                    tplType,
-                    tplDesc,
-                    month,
-                    year,
-                );
-                created++;
-            }
-        }
 
         revalidateFinanceCaches();
 
-        // 학부모에게 수납 안내 SMS 발송 (fire-and-forget)
-        // 학생별 보호자 전화번호를 조회하여 INVOICE_PARENT 템플릿 발송
-        if (created > 0) {
-            try {
-                const stuIds = students.map((s: any) => s.id);
-                const phList = stuIds.map((_: string, i: number) => `$${i + 1}`).join(",");
-                const stuParents = await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT s.id, s.name, u.phone
-                     FROM "Student" s JOIN "User" u ON s."parentId" = u.id
-                     WHERE s.id IN (${phList}) AND u.phone IS NOT NULL AND u.phone != ''`,
-                    ...stuIds,
-                );
-                for (const sp of stuParents) {
-                    const phone = sp.phone;
-                    const childName = sp.name;
-                    // 첫 번째 템플릿의 금액을 사용 (모든 학생 동일 금액 가정)
-                    const amt = templates[0]?.amount ?? 0;
-                    const safeDueDay = Math.min(Number(templates[0]?.dueDay ?? templates[0]?.dueday ?? 10), 28);
-                    sendParentSms(phone, "INVOICE_PARENT", {
-                        childName,
-                        month: String(month),
-                        amount: Number(amt).toLocaleString("ko-KR"),
-                        dueDate: `${month}월 ${safeDueDay}일`,
-                    }).catch(() => {});
-                }
-            } catch (e) {
-                console.error("[generateMonthlyInvoices SMS] failed:", e);
-            }
-        }
-
-        return { created, skipped, message: `${created}건 생성, ${skipped}건 중복 스킵` };
+        return {
+            created: Number(insertResult ?? 0),
+            skipped: preview.skipCount,
+            message: `${Number(insertResult ?? 0)}건 생성, ${preview.skipCount}건 기존 청구서 유지`,
+        };
     } catch (e) {
         console.error("Failed to generate monthly invoices:", e);
         throw new Error("월별 청구서 생성 실패");

@@ -5,6 +5,7 @@ import {
     createPayment,
     updatePaymentStatus,
     deletePayment,
+    previewMonthlyInvoices,
     generateMonthlyInvoices,
     sendUnpaidReminders,
     bulkUpdatePaymentStatus,
@@ -80,6 +81,26 @@ type PaymentReconcilePreview = {
     }[];
 };
 
+type MonthlyInvoicePreview = {
+    year: number;
+    month: number;
+    activeTemplateCount: number;
+    targetStudentCount: number;
+    createCount: number;
+    skipCount: number;
+    createAmount: number;
+    skipAmount: number;
+    samples: {
+        studentId: string;
+        studentName: string;
+        templateName: string;
+        type: string;
+        amount: number;
+        dueDay: number;
+        action: "CREATE" | "SKIP";
+    }[];
+};
+
 const EMPTY_SUMMARY: Summary = {
     totalCount: 0,
     totalAmount: 0,
@@ -87,6 +108,11 @@ const EMPTY_SUMMARY: Summary = {
     unpaidAmount: 0,
     paidCount: 0,
     unpaidCount: 0,
+};
+
+const MONTHLY_INVOICE_ACTION_LABELS: Record<string, string> = {
+    CREATE: "생성 예정",
+    SKIP: "기존 청구 유지",
 };
 
 // 상태 라벨 + 색상 매핑
@@ -219,6 +245,10 @@ export default function FinanceClient({
     const [sheetPreviewLoading, setSheetPreviewLoading] = useState(false);
     const [sheetApplying, setSheetApplying] = useState(false);
     const [sheetError, setSheetError] = useState<string | null>(null);
+    const [invoicePreview, setInvoicePreview] = useState<MonthlyInvoicePreview | null>(null);
+    const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
+    const [invoiceGenerating, setInvoiceGenerating] = useState(false);
+    const [invoiceError, setInvoiceError] = useState<string | null>(null);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -265,6 +295,8 @@ export default function FinanceClient({
         setLoadError(null);
         setSheetPreview(null);
         setSheetError(null);
+        setInvoicePreview(null);
+        setInvoiceError(null);
         setSelectedIds(new Set()); // 선택 초기화
         try {
             const res = await fetch(`/api/admin/finance?year=${y}&month=${m}`);
@@ -350,18 +382,52 @@ export default function FinanceClient({
         }
     }
 
-    // 이달 청구서 자동 생성
+    // 이달 청구서 생성 대상 미리보기
+    async function handlePreviewInvoices() {
+        setInvoicePreviewLoading(true);
+        setInvoiceError(null);
+
+        try {
+            const preview = await previewMonthlyInvoices(year, month);
+            setInvoicePreview(preview);
+        } catch (err: unknown) {
+            setInvoiceError(getErrorMessage(err, "청구 대상 확인 실패"));
+            setInvoicePreview(null);
+        } finally {
+            setInvoicePreviewLoading(false);
+        }
+    }
+
+    // 이달 청구서 생성
     async function handleGenerateInvoices() {
-        if (!confirm(`${year}년 ${month}월 청구서를 자동 생성하시겠습니까?\n활성 템플릿 기준으로 모든 수강생에게 청구서가 생성됩니다.`)) return;
-        setBusy(true);
+        if (!invoicePreview) {
+            await handlePreviewInvoices();
+            return;
+        }
+
+        if (invoicePreview.createCount === 0) {
+            alert("새로 생성할 청구서가 없습니다.");
+            return;
+        }
+
+        const confirmMessage =
+            `${year}년 ${month}월 청구서를 생성할까요?\n` +
+            `생성 예정 ${invoicePreview.createCount}건, 총 ${formatAmount(invoicePreview.createAmount)}입니다.\n` +
+            `기존 청구 ${invoicePreview.skipCount}건은 그대로 둡니다.`;
+
+        if (!confirm(confirmMessage)) return;
+
+        setInvoiceGenerating(true);
+        setInvoiceError(null);
+
         try {
             const result = await generateMonthlyInvoices(year, month);
             alert(result.message);
             await loadMonth(year, month);
         } catch (err: unknown) {
-            alert(getErrorMessage(err, "청구서 생성 실패"));
+            setInvoiceError(getErrorMessage(err, "청구서 생성 실패"));
         } finally {
-            setBusy(false);
+            setInvoiceGenerating(false);
         }
     }
 
@@ -479,6 +545,7 @@ export default function FinanceClient({
     const sheetApplyCount = sheetPreview
         ? sheetPreview.summary.create + sheetPreview.summary.update
         : 0;
+    const invoiceCreateCount = invoicePreview?.createCount ?? 0;
 
     if (loading && !hasAnyData) {
         return <FinanceLoadingFallback year={year} month={month} />;
@@ -505,14 +572,14 @@ export default function FinanceClient({
                         <span className="material-symbols-outlined text-sm align-middle mr-1">fact_check</span>
                         {sheetPreviewLoading ? "점검 중..." : "시트 기준 점검"}
                     </button>
-                    {/* 이달 청구서 생성 버튼 */}
+                    {/* 이달 청구서 생성 대상 확인 버튼 */}
                     <button
-                        onClick={handleGenerateInvoices}
-                        disabled={busy}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-50 text-sm"
+                        onClick={handlePreviewInvoices}
+                        disabled={busy || invoicePreviewLoading || invoiceGenerating}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-50 text-sm dark:bg-brand-neon-lime dark:text-brand-navy-900"
                     >
                         <span className="material-symbols-outlined text-sm align-middle mr-1">receipt_long</span>
-                        이달 청구서 생성
+                        {invoicePreviewLoading ? "확인 중..." : "청구 대상 확인"}
                     </button>
                     {/* 미납 알림 발송 버튼 */}
                     <button
@@ -545,6 +612,93 @@ export default function FinanceClient({
                 <span className="text-lg font-bold text-gray-900 dark:text-white">{year}년 {month}월</span>
                 <button onClick={nextMonth} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-300 font-bold">&rarr;</button>
             </div>
+
+            {(invoiceError || invoicePreview) && (
+                <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 className="text-base font-extrabold text-gray-900 dark:text-white">월별 청구 대상 확인</h2>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                활성 청구 템플릿과 현재 수강 중인 학생을 기준으로 계산합니다. 기존 청구서는 중복 생성하지 않습니다.
+                            </p>
+                        </div>
+
+                        {invoicePreview && (
+                            <button
+                                type="button"
+                                onClick={handleGenerateInvoices}
+                                disabled={invoiceGenerating || invoiceCreateCount === 0}
+                                className="rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                            >
+                                {invoiceGenerating ? "생성 중..." : invoiceCreateCount === 0 ? "생성할 청구 없음" : "청구서 생성"}
+                            </button>
+                        )}
+                    </div>
+
+                    {invoiceError && (
+                        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                            {invoiceError}
+                        </p>
+                    )}
+
+                    {invoicePreview && (
+                        <>
+                            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <p className="text-xs font-bold text-gray-600 dark:text-gray-300">활성 템플릿</p>
+                                    <p className="mt-1 text-xl font-extrabold text-gray-900 dark:text-white">{invoicePreview.activeTemplateCount}개</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">청구 기준</p>
+                                </div>
+                                <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/30">
+                                    <p className="text-xs font-bold text-blue-700 dark:text-blue-200">대상 학생</p>
+                                    <p className="mt-1 text-xl font-extrabold text-blue-800 dark:text-blue-100">{invoicePreview.targetStudentCount}명</p>
+                                    <p className="text-xs text-blue-600 dark:text-blue-300">현재 수강 중</p>
+                                </div>
+                                <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950/30">
+                                    <p className="text-xs font-bold text-green-700 dark:text-green-200">생성 예정</p>
+                                    <p className="mt-1 text-xl font-extrabold text-green-800 dark:text-green-100">{invoicePreview.createCount}건</p>
+                                    <p className="text-xs text-green-600 dark:text-green-300">{formatAmount(invoicePreview.createAmount)}</p>
+                                </div>
+                                <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950/30">
+                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-200">기존 유지</p>
+                                    <p className="mt-1 text-xl font-extrabold text-amber-800 dark:text-amber-100">{invoicePreview.skipCount}건</p>
+                                    <p className="text-xs text-amber-600 dark:text-amber-300">중복 방지</p>
+                                </div>
+                            </div>
+
+                            {invoicePreview.activeTemplateCount === 0 && (
+                                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+                                    활성 청구 템플릿이 없습니다. 먼저 청구 템플릿을 등록해야 월별 청구서를 만들 수 있습니다.
+                                </p>
+                            )}
+
+                            {invoicePreview.samples.length > 0 && (
+                                <div className="mt-3 overflow-hidden rounded-lg border border-gray-100 dark:border-gray-700">
+                                    {invoicePreview.samples.map((sample) => (
+                                        <div key={`${sample.action}-${sample.studentId}-${sample.templateName}-${sample.type}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 dark:border-gray-700">
+                                            <div>
+                                                <span className="font-bold text-gray-900 dark:text-white">{sample.studentName}</span>
+                                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    {sample.templateName} · {TYPE_LABELS[sample.type] ?? sample.type} · 매월 {sample.dueDay}일
+                                                </span>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className={`rounded-full px-2 py-1 text-xs font-bold ${sample.action === "CREATE"
+                                                    ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200"
+                                                    : "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                                                    }`}>
+                                                    {MONTHLY_INVOICE_ACTION_LABELS[sample.action] ?? sample.action}
+                                                </span>
+                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{formatAmount(sample.amount)}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
 
             {(sheetError || sheetPreview) && (
                 <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">

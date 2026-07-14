@@ -90,6 +90,8 @@ interface TrialLead {
     enrollGuideSentAt: string | null;
     enrollApplicationReceivedAt: string | null;
     enrollApplicationId: string | null;
+    coachNoticeSentAt: string | null;
+    coachNoticeSentTo: string | null;
     convertedDate: string | null;
     convertedStudentId: string | null;
     lostReason: string | null;

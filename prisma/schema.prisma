@@ -781,6 +781,8 @@ model TrialLead {
   enrollGuideSentAt DateTime? @db.Timestamptz(6)
   enrollApplicationReceivedAt DateTime? @db.Timestamptz(6)
   enrollApplicationId String?
+  coachNoticeSentAt DateTime? @db.Timestamptz(6)
+  coachNoticeSentTo String?
   convertedDate      DateTime? @db.Timestamptz(6)
   convertedStudentId String?
   lostReason         String?

@@ -58,6 +58,14 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
         '["childName","childGrade","parentName"]',
     ],
     [
+        "TRIAL_COACH_NOTICE",
+        "체험수업 담당 선생님 알림",
+        "COACH",
+        "[STIZ] 체험수업 알림\n학생: {{childName}} {{childGrade}} {{childSchool}}\n일정: {{trialDate}}\n수업: {{className}} {{scheduleLabel}}\n희망: {{preferredSlotKey}}\n학부모: {{parentName}} {{parentPhone}}\n메모: {{memo}}",
+        "관리자가 체험 CRM에서 담당 선생님에게 체험수업 정보를 즉시 공유할 때 사용",
+        '["childName","childGrade","childSchool","trialDate","className","scheduleLabel","preferredSlotKey","parentName","parentPhone","memo"]',
+    ],
+    [
         "ENROLL_NEW_ADMIN",
         "수강 신청 접수 (관리자)",
         "ADMIN",

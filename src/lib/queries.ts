@@ -1899,6 +1899,8 @@ export const getTrialLeads = cache(async (status?: string) => {
             enrollGuideSentAt: r.enrollGuideSentAt ?? r.enrollguidesentat ?? null,
             enrollApplicationReceivedAt: r.enrollApplicationReceivedAt ?? r.enrollapplicationreceivedat ?? null,
             enrollApplicationId: r.enrollApplicationId ?? r.enrollapplicationid ?? null,
+            coachNoticeSentAt: r.coachNoticeSentAt ?? r.coachnoticesentat ?? null,
+            coachNoticeSentTo: r.coachNoticeSentTo ?? r.coachnoticesentto ?? null,
             convertedDate: r.convertedDate ?? r.converteddate ?? null,
             convertedStudentId: r.convertedStudentId ?? r.convertedstudentid ?? null,
             lostReason: r.lostReason ?? r.lostreason ?? null,

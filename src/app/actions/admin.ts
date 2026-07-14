@@ -3088,6 +3088,8 @@ export async function ensureTrialLeadTable() {
             ['"enrollGuideSentAt"', "TIMESTAMPTZ"],
             ['"enrollApplicationReceivedAt"', "TIMESTAMPTZ"],
             ['"enrollApplicationId"', "TEXT"],
+            ['"coachNoticeSentAt"', "TIMESTAMPTZ"],
+            ['"coachNoticeSentTo"', "TEXT"],
             ['"trialFeeConfirmed"', "BOOLEAN DEFAULT false"],
             ['"hopeNote"', "TEXT"],
             ['"agreedTerms"', "BOOLEAN DEFAULT false"],
@@ -4235,6 +4237,129 @@ export async function sendPostTrialEnrollGuide(trialLeadId: string): Promise<{ e
     return { enrollLink };
 }
 
+export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentTo: string[] }> {
+    await requireAdmin();
+    await ensureTrialLeadTable();
+
+    const leads = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id, "childName", "childGrade", "childSchool", "parentName", "parentPhone",
+                "scheduledDate", "scheduledClassId", "preferredSlotKey", "trialDate",
+                "preferredDay", "preferredPeriod", memo, "hopeNote"
+         FROM "TrialLead"
+         WHERE id = $1
+         LIMIT 1`,
+        trialLeadId,
+    );
+    if (leads.length === 0) throw new Error("체험 리드를 찾을 수 없습니다.");
+
+    const lead = leads[0];
+    let slotKey = lead.preferredSlotKey ?? lead.preferredslotkey ?? null;
+    let className = "";
+    let scheduleLabel = "";
+
+    const scheduledClassId = lead.scheduledClassId ?? lead.scheduledclassid;
+    if (scheduledClassId) {
+        const classRows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT name, "slotKey", "dayOfWeek", "startTime", "endTime", "instructorId"
+             FROM "Class"
+             WHERE id = $1
+             LIMIT 1`,
+            scheduledClassId,
+        );
+        const cls = classRows[0];
+        if (cls) {
+            className = cls.name ?? "";
+            slotKey = cls.slotKey ?? cls.slotkey ?? slotKey;
+            scheduleLabel = [cls.dayOfWeek ?? cls.dayofweek, cls.startTime ?? cls.starttime, cls.endTime ?? cls.endtime]
+                .filter(Boolean)
+                .join(" ");
+        }
+    }
+
+    if (!slotKey) {
+        throw new Error("담당 선생님을 찾을 수 있는 수업/희망 시간 정보가 없습니다.");
+    }
+
+    const coachRows = await prisma.$queryRawUnsafe<{ id: string; name: string; phone: string }[]>(
+        `SELECT DISTINCT c.id, c.name, c.phone
+         FROM "ScheduleSlot" ss
+         JOIN "Coach" c ON c.id = ss."coachId"
+         WHERE ss."slotKey" = $1 AND c.phone IS NOT NULL AND c.phone != ''
+         UNION
+         SELECT DISTINCT c.id, c.name, c.phone
+         FROM "ClassSlotOverride" o
+         JOIN "Coach" c ON c.id = o."coachId"
+         WHERE o."slotKey" = $1 AND c.phone IS NOT NULL AND c.phone != ''
+         UNION
+         SELECT DISTINCT c.id, c.name, c.phone
+         FROM "CustomClassSlot" cs
+         JOIN "Coach" c ON c.id = cs."coachId"
+         WHERE (cs.id = $1 OR ('custom-' || cs.id) = $1)
+           AND c.phone IS NOT NULL AND c.phone != ''`,
+        slotKey,
+    );
+
+    if (coachRows.length === 0) {
+        throw new Error("해당 시간대에 전화번호가 등록된 담당 선생님이 없습니다.");
+    }
+
+    const trialDate = lead.trialDate ?? lead.trialdate ?? lead.scheduledDate ?? lead.scheduleddate;
+    const trialDateText = trialDate
+        ? new Date(trialDate).toLocaleString("ko-KR", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            weekday: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+        })
+        : "";
+
+    const { renderSmsTemplate } = await import("@/lib/smsTemplate");
+    const renderedMessage = await renderSmsTemplate("TRIAL_COACH_NOTICE", {
+        childName: lead.childName ?? lead.childname ?? "",
+        childGrade: lead.childGrade ?? lead.childgrade ?? "",
+        childSchool: lead.childSchool ?? lead.childschool ?? "",
+        parentName: lead.parentName ?? lead.parentname ?? "",
+        parentPhone: lead.parentPhone ?? lead.parentphone ?? "",
+        trialDate: trialDateText,
+        className,
+        scheduleLabel,
+        preferredSlotKey: slotKey,
+        memo: lead.memo ?? lead.hopeNote ?? lead.hopenote ?? "",
+    });
+    const message = renderedMessage || `[STIZ] 체험수업 알림
+학생: ${lead.childName ?? lead.childname ?? ""}
+일정: ${trialDateText}
+수업: ${className || scheduleLabel || slotKey}
+학부모: ${lead.parentName ?? lead.parentname ?? ""} ${lead.parentPhone ?? lead.parentphone ?? ""}`;
+
+    const sentNames: string[] = [];
+    const sentPhones = new Set<string>();
+    for (const coach of coachRows) {
+        if (!coach.phone || sentPhones.has(coach.phone)) continue;
+        sentPhones.add(coach.phone);
+        await sendSms(coach.phone, message);
+        sentNames.push(coach.name || coach.phone);
+    }
+
+    await prisma.$executeRawUnsafe(
+        `UPDATE "TrialLead"
+         SET "coachNoticeSentAt" = NOW(),
+             "coachNoticeSentTo" = $1,
+             "updatedAt" = NOW()
+         WHERE id = $2`,
+        sentNames.join(", "),
+        trialLeadId,
+    );
+
+    revalidatePath("/admin/trial");
+    revalidatePath("/admin/apply");
+    revalidateTrialAdminCaches();
+
+    return { sentTo: sentNames };
+}
+
 import { sendSms, sendSmsBulk } from "@/lib/sms";
 
 /**
@@ -4363,6 +4488,7 @@ export async function resetSmsTemplate(id: string) {
         const defaultBodies: Record<string, string> = {
             TRIAL_NEW_ADMIN: "[STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}}) - {{parentName}}",
             TRIAL_NEW_COACH: "[STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}})",
+            TRIAL_COACH_NOTICE: "[STIZ] 체험수업 알림\n학생: {{childName}} {{childGrade}} {{childSchool}}\n일정: {{trialDate}}\n수업: {{className}} {{scheduleLabel}}\n희망: {{preferredSlotKey}}\n학부모: {{parentName}} {{parentPhone}}\n메모: {{memo}}",
             ENROLL_NEW_ADMIN: "[STIZ] 새 수강 신청\n{{childName}} ({{childGrade}}) - {{parentName}}",
             ENROLL_NEW_COACH: "[STIZ] 새 수강 신청\n{{childName}} ({{childGrade}})",
             TRIAL_CONFIRM_PARENT: "[STIZ] {{childName}} 체험수업 신청이 접수되었습니다.\n일정 확정 시 다시 안내드리겠습니다.\n문의: {{academyPhone}}",

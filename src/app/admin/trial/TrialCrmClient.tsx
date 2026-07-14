@@ -6,6 +6,7 @@ import {
     updateTrialLead,
     deleteTrialLead,
     sendPostTrialEnrollGuide,
+    sendTrialCoachNotice,
 } from "@/app/actions/admin";
 
 const TrialCrmModals = dynamic(() => import("./TrialCrmModals"), {
@@ -29,6 +30,8 @@ export interface TrialLead {
     enrollGuideSentAt: string | null;
     enrollApplicationReceivedAt: string | null;
     enrollApplicationId: string | null;
+    coachNoticeSentAt: string | null;
+    coachNoticeSentTo: string | null;
     convertedDate: string | null;
     convertedStudentId: string | null;
     lostReason: string | null;
@@ -273,6 +276,22 @@ export default function TrialCrmClient({
         }
     }
 
+    async function handleSendCoachNotice(lead: TrialLead) {
+        if (busy) return;
+        if (!confirm(`"${lead.childName}" 체험수업 정보를 담당 선생님에게 문자로 공유할까요?`)) return;
+
+        setBusy(true);
+        try {
+            const result = await sendTrialCoachNotice(lead.id);
+            await loadTrialData();
+            alert(`담당 선생님에게 체험수업 알림을 보냈습니다.\n수신: ${result.sentTo.join(", ")}`);
+        } catch (e) {
+            alert((e as Error).message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
     // 날짜 포맷 헬퍼
     function formatDate(dateStr: string | null) {
         if (!dateStr) return "-";
@@ -439,8 +458,15 @@ export default function TrialCrmClient({
                                                 )}
                                             </div>
                                         )}
-                                        {(lead.postTrialConsultedAt || lead.enrollGuideSentAt || lead.enrollApplicationReceivedAt) && (
+                                        {(lead.postTrialConsultedAt || lead.enrollGuideSentAt || lead.enrollApplicationReceivedAt || lead.coachNoticeSentAt) && (
                                             <div className="flex flex-wrap gap-2 mt-2">
+                                                {lead.coachNoticeSentAt && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-violet-50 text-violet-700">
+                                                        <span className="material-symbols-outlined text-xs">school</span>
+                                                        담당쌤 알림 {formatDate(lead.coachNoticeSentAt)}
+                                                        {lead.coachNoticeSentTo ? ` · ${lead.coachNoticeSentTo}` : ""}
+                                                    </span>
+                                                )}
                                                 {lead.postTrialConsultedAt && (
                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sky-50 text-sky-700">
                                                         <span className="material-symbols-outlined text-xs">call</span>
@@ -554,6 +580,18 @@ export default function TrialCrmClient({
                                         >
                                             <span className="material-symbols-outlined text-xl">edit_note</span>
                                         </button>
+
+                                        {lead.status !== "CONVERTED" && lead.status !== "LOST" && (
+                                            <button
+                                                onClick={() => handleSendCoachNotice(lead)}
+                                                disabled={busy}
+                                                className="flex items-center gap-1.5 px-3 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors text-sm font-medium"
+                                                title="담당 선생님에게 체험수업 정보를 문자로 공유"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">school</span>
+                                                {lead.coachNoticeSentAt ? "쌤 알림 재전송" : "담당쌤 알림"}
+                                            </button>
+                                        )}
 
                                         {/* 체험 후 유선상담 + 수강신청/입학 안내 문자 발송 */}
                                         {lead.status === "ATTENDED" && (

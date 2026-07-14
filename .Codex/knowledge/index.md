@@ -26,3 +26,6 @@
 - 공개 홈페이지와 관리자 페이지가 같은 Next.js 앱 안에 있다.
 - 관리자 속도 개선 방향은 서버 초기 payload 축소, 지연 로딩, 서버 캐시, 불필요한 prefetch 제거를 우선한다.
 - 스프레드시트는 2026년 7월 기준 이관 자료로 사용하고, 8월 이후 운영은 DB 중심으로 전환하는 방향이다.
+
+## 2026-07-15 추가 지식
+- 결제 운영은 기존 Payment 153건을 PaymentInvoice와 1:1로 백필했고, PaymentTransaction/PaymentWebhookEvent/PaymentAuditLog로 온라인 납부와 추적 기록을 분리한다.

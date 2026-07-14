@@ -19,6 +19,14 @@ import {
 import { publishGalleryPostToInstagram } from "@/lib/instagram";
 import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
 import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings } from "@/lib/queries";
+import {
+    ensureInvoiceForPayment,
+    ensureInvoicesForMonth,
+    ensurePaymentInfrastructure,
+    markOverduePayments,
+    markPaymentPaid,
+    recordPaymentAudit,
+} from "@/lib/payment-ledger";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
@@ -1068,14 +1076,18 @@ export async function createPayment(data: {
         const dueDate = new Date(data.dueDate);
         const year = dueDate.getFullYear();
         const month = dueDate.getMonth() + 1;
+        await ensurePaymentInfrastructure();
         // type과 description을 포함하여 INSERT (수동 생성 시 유형/설명 저장)
-        await prisma.$executeRawUnsafe(
+        const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
             `INSERT INTO "Payment" (id, "studentId", amount, status, "dueDate", year, month, type, description, "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4::timestamp, $5, $6, $7, $8, NOW(), NOW())`,
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4::timestamp, $5, $6, $7, $8, NOW(), NOW())
+             RETURNING id`,
             data.studentId, data.amount, data.status || "PENDING", data.dueDate,
             year, month,
             data.type || "MONTHLY", data.description || null,
         );
+        const paymentId = rows[0]?.id;
+        const invoice = paymentId ? await ensureInvoiceForPayment(paymentId) : null;
 
         // 수납 안내 알림 → 해당 학부모
         const amountStr = data.amount.toLocaleString("ko-KR");
@@ -1084,7 +1096,7 @@ export async function createPayment(data: {
             "PAYMENT",
             "수납 안내",
             `${amountStr}원 수납 요청이 등록되었습니다.`,
-            "/mypage",
+            invoice?.id ? `/payments/${invoice.id}` : "/mypage",
         );
     } catch (e) {
         console.error("Failed to create payment:", e);
@@ -1097,11 +1109,42 @@ export async function createPayment(data: {
 export async function updatePaymentStatus(id: string, status: string) {
     await requireAdmin();
     try {
-        const paidDate = status === "PAID" ? ", \"paidDate\" = NOW()" : "";
+        await ensurePaymentInfrastructure();
+        if (status === "PAID") {
+            await markPaymentPaid({
+                paymentId: id,
+                actorType: "ADMIN",
+                method: "MANUAL",
+            });
+            revalidateFinanceCaches();
+            return;
+        }
+
+        const invoice = await ensureInvoiceForPayment(id);
+        const invoiceStatus = status === "OVERDUE"
+            ? "OVERDUE"
+            : status === "REFUNDED"
+                ? "CANCELED"
+                : "ISSUED";
+
         await prisma.$executeRawUnsafe(
-            `UPDATE "Payment" SET status = $1${paidDate}, "updatedAt" = NOW() WHERE id = $2`,
+            `UPDATE "Payment" SET status = $1, "paidDate" = NULL, "updatedAt" = NOW() WHERE id = $2`,
             status, id,
         );
+        if (invoice?.id) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "PaymentInvoice" SET status = $1, "updatedAt" = NOW() WHERE id = $2`,
+                invoiceStatus,
+                invoice.id,
+            );
+        }
+        await recordPaymentAudit({
+            paymentId: id,
+            invoiceId: invoice?.id ?? null,
+            actorType: "ADMIN",
+            action: "PAYMENT_STATUS_UPDATE",
+            message: `Payment status changed to ${status}`,
+        });
     } catch (e) {
         console.error("Failed to update payment:", e);
         throw new Error("수납 상태 변경 실패");
@@ -1112,6 +1155,9 @@ export async function updatePaymentStatus(id: string, status: string) {
 export async function deletePayment(id: string) {
     await requireAdmin();
     try {
+        await ensurePaymentInfrastructure();
+        await prisma.$executeRawUnsafe(`DELETE FROM "PaymentTransaction" WHERE "paymentId" = $1`, id);
+        await prisma.$executeRawUnsafe(`DELETE FROM "PaymentInvoice" WHERE "paymentId" = $1`, id);
         await prisma.$executeRawUnsafe(`DELETE FROM "Payment" WHERE id = $1`, id);
     } catch (e) {
         console.error("Failed to delete payment:", e);
@@ -2524,6 +2570,7 @@ export async function getClassSyncPreview(): Promise<{
 let _paymentColumnsEnsured = false;
 export async function ensurePaymentColumns() {
     if (_paymentColumnsEnsured) return;
+    await ensurePaymentInfrastructure();
     const columns: [string, string][] = [
         ["type", "TEXT DEFAULT 'MONTHLY'"],
         ["description", "TEXT"],
@@ -2853,11 +2900,14 @@ export async function generateMonthlyInvoices(year: number, month: number) {
             month,
         );
 
+        const invoiceResult = await ensureInvoicesForMonth(year, month);
+
         revalidateFinanceCaches();
 
         return {
             created: Number(insertResult ?? 0),
             skipped: preview.skipCount,
+            invoices: invoiceResult.invoiceCount,
             message: `${Number(insertResult ?? 0)}건 생성, ${preview.skipCount}건 기존 청구서 유지`,
         };
     } catch (e) {
@@ -2869,9 +2919,26 @@ export async function generateMonthlyInvoices(year: number, month: number) {
 // ── 미납 알림 일괄 발송 ──────────────────────────────────────────────────────────
 // PENDING/OVERDUE 상태인 결제 건의 학부모에게 알림을 보낸다.
 // 이미 알림이 발송된 건(notifiedAt != null)은 건너뜀 (강제 재발송 옵션 있음)
+export async function refreshPaymentLedger(year: number, month: number) {
+    await requireAdmin();
+    await ensurePaymentInfrastructure();
+    const [invoiceResult, overdueResult] = await Promise.all([
+        ensureInvoicesForMonth(year, month),
+        markOverduePayments(),
+    ]);
+    revalidateFinanceCaches();
+    return {
+        invoices: invoiceResult.invoiceCount,
+        overdue: overdueResult.updated,
+        message: `${invoiceResult.invoiceCount} invoices checked, ${overdueResult.updated} overdue payments updated`,
+    };
+}
+
 export async function sendUnpaidReminders(forceResend?: boolean) {
     await requireAdmin();
     await ensurePaymentColumns();
+    await ensurePaymentInfrastructure();
+    await markOverduePayments();
 
     try {
         // 미납 결제 건 조회
@@ -2940,7 +3007,22 @@ export async function sendUnpaidReminders(forceResend?: boolean) {
         const ids = unpaid.map((u: any) => u.id);
         const placeholders = ids.map((_: any, i: number) => `$${i + 1}`).join(",");
         await prisma.$executeRawUnsafe(
-            `UPDATE "Payment" SET "notifiedAt" = NOW(), "updatedAt" = NOW() WHERE id IN (${placeholders})`,
+            `UPDATE "Payment"
+             SET "notifiedAt" = NOW(),
+                 "lastReminderAt" = NOW(),
+                 "reminderCount" = COALESCE("reminderCount", 0) + 1,
+                 "updatedAt" = NOW()
+             WHERE id IN (${placeholders})`,
+            ...ids,
+        );
+        await prisma.$executeRawUnsafe(
+            `UPDATE "PaymentInvoice"
+             SET "sentAt" = COALESCE("sentAt", NOW()),
+                 "lastReminderAt" = NOW(),
+                 "reminderCount" = "reminderCount" + 1,
+                 status = CASE WHEN status = 'ISSUED' THEN 'SENT' ELSE status END,
+                 "updatedAt" = NOW()
+             WHERE "paymentId" IN (${placeholders})`,
             ...ids,
         );
 
@@ -2959,13 +3041,40 @@ export async function bulkUpdatePaymentStatus(ids: string[], newStatus: string) 
     if (ids.length === 0) return;
 
     try {
-        const paidDate = newStatus === "PAID" ? `, "paidDate" = NOW()` : "";
+        await ensurePaymentInfrastructure();
+        if (newStatus === "PAID") {
+            await Promise.all(ids.map((id) => markPaymentPaid({
+                paymentId: id,
+                actorType: "ADMIN",
+                method: "MANUAL",
+            })));
+            revalidateFinanceCaches();
+            return;
+        }
+
         const placeholders = ids.map((_, i) => `$${i + 2}`).join(",");
         await prisma.$executeRawUnsafe(
-            `UPDATE "Payment" SET status = $1${paidDate}, "updatedAt" = NOW() WHERE id IN (${placeholders})`,
+            `UPDATE "Payment" SET status = $1, "paidDate" = NULL, "updatedAt" = NOW() WHERE id IN (${placeholders})`,
             newStatus,
             ...ids,
         );
+        const invoiceStatus = newStatus === "OVERDUE"
+            ? "OVERDUE"
+            : newStatus === "REFUNDED"
+                ? "CANCELED"
+                : "ISSUED";
+        const invoicePlaceholders = ids.map((_, i) => `$${i + 2}`).join(",");
+        await prisma.$executeRawUnsafe(
+            `UPDATE "PaymentInvoice" SET status = $1, "updatedAt" = NOW() WHERE "paymentId" IN (${invoicePlaceholders})`,
+            invoiceStatus,
+            ...ids,
+        );
+        await recordPaymentAudit({
+            actorType: "ADMIN",
+            action: "PAYMENT_BULK_STATUS_UPDATE",
+            message: `Payment bulk status changed to ${newStatus}`,
+            metadata: { paymentIds: ids },
+        });
     } catch (e) {
         console.error("Failed to bulk update payment status:", e);
         throw new Error("일괄 상태 변경 실패");

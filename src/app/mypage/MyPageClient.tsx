@@ -72,6 +72,14 @@ type ChildData = {
         status: string;
         dueDate: Date | string;
         paidDate: Date | string | null;
+        type?: string;
+        description?: string | null;
+        method?: string | null;
+        receiptUrl?: string | null;
+        invoiceId?: string | null;
+        invoiceNo?: string | null;
+        invoiceStatus?: string | null;
+        invoiceCheckoutUrl?: string | null;
     }[];
 };
 
@@ -579,6 +587,14 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${PAYMENT_STATUS[p.status]?.color || ""}`}>
                                 {PAYMENT_STATUS[p.status]?.label || p.status}
                             </span>
+                            {p.invoiceId && (
+                                <Link
+                                    href={`/payments/${p.invoiceId}`}
+                                    className="ml-3 rounded-full bg-brand-orange-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                >
+                                    납부하기
+                                </Link>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -652,6 +668,16 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                             </span>
                                             {p.paidDate && (
                                                 <p className="text-xs text-gray-400 mt-1">{toDateStr(p.paidDate)} 납부</p>
+                                            )}
+                                            {p.receiptUrl && (
+                                                <a
+                                                    href={p.receiptUrl}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="mt-1 block text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime"
+                                                >
+                                                    영수증
+                                                </a>
                                             )}
                                         </div>
                                     </div>

@@ -43,3 +43,6 @@
 - 2026-07-13: 스프레드시트 시간표를 `ScheduleSlot` DB 원본으로 이관하고 공개/관리자 조회를 DB 우선으로 전환했다.
 - 2026-07-13: 수강생 시트 원본, 등록, 차량, 변동, 대회 명단 저장 모델을 추가했다.
 - 2026-07-12: 관리자 진입 기본 탭을 사이트로 바꾸고 사이트 운영 점검 봇 기반을 추가했다.
+
+## 최신 작업 로그
+- 2026-07-15: DB 기반 결제 장부(PaymentInvoice/PaymentTransaction/PaymentWebhookEvent/PaymentAuditLog)를 추가하고 기존 Payment 153건을 청구서로 백필했다.

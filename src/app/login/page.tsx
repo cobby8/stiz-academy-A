@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { login, signup } from "@/app/actions/auth";
 import Image from "next/image";
+import Link from "next/link";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [signupRole, setSignupRole] = useState<"PARENT" | "INSTRUCTOR">("PARENT");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // 비밀번호 보기/숨기기 토글 상태
@@ -15,18 +15,15 @@ export default function LoginPage() {
   // 개인정보보호법 준수: 회원가입 시 동의 체크박스 상태
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
-  const [redirectTo, setRedirectTo] = useState("/admin");
-
-  useEffect(() => {
-    const value = new URLSearchParams(window.location.search).get("redirect");
-    if (value?.startsWith("/") && !value.startsWith("//")) {
-      setRedirectTo(value);
-    }
-  }, []);
 
   async function handleSubmit(formData: FormData) {
     setError(null);
     setLoading(true);
+
+    const requestedPath = new URLSearchParams(window.location.search).get("redirect");
+    if (requestedPath?.startsWith("/") && !requestedPath.startsWith("//")) {
+      formData.set("redirectTo", requestedPath);
+    }
 
     try {
       const action = mode === "login" ? login : signup;
@@ -84,7 +81,6 @@ export default function LoginPage() {
                 setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
                 setAgreePrivacy(false); // 동의 체크박스 초기화
                 setAgreeTerms(false);
-                setSignupRole("PARENT");
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "login"
@@ -102,7 +98,6 @@ export default function LoginPage() {
                 setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
                 setAgreePrivacy(false);
                 setAgreeTerms(false);
-                setSignupRole("PARENT");
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "signup"
@@ -123,43 +118,8 @@ export default function LoginPage() {
 
           {/* 폼 — 기존 구조 100% 유지, 포커스 색상만 브랜드 오렌지로 통일 */}
           <form action={handleSubmit} className="space-y-4">
-            <input type="hidden" name="redirectTo" value={redirectTo} />
-            {mode === "signup" && <input type="hidden" name="signupRole" value={signupRole} />}
             {mode === "signup" && (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                    계정 유형
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSignupRole("PARENT")}
-                      className={`min-h-12 rounded-lg border px-3 text-sm font-bold transition-colors ${
-                        signupRole === "PARENT"
-                          ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime"
-                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300"
-                      }`}
-                    >
-                      학부모
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSignupRole("INSTRUCTOR")}
-                      className={`min-h-12 rounded-lg border px-3 text-sm font-bold transition-colors ${
-                        signupRole === "INSTRUCTOR"
-                          ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime"
-                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300"
-                      }`}
-                    >
-                      선생님
-                    </button>
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
-                    로그인은 하나로 통합되고, 가입 시 선택한 유형에 따라 기본 화면이 달라집니다.
-                  </p>
-                </div>
-
                 <div>
                   <label
                     htmlFor="name"
@@ -322,7 +282,7 @@ export default function LoginPage() {
                     : "계정 생성 중..."
                   : mode === "login"
                     ? "로그인"
-                    : `${signupRole === "INSTRUCTOR" ? "선생님" : "학부모"} 계정 만들기`}
+                    : "학부모 계정 만들기"}
               </span>
             </button>
           </form>
@@ -330,9 +290,9 @@ export default function LoginPage() {
 
         {/* 하단 링크 — 기존 구조 유지 */}
         <div className="text-center mt-6">
-          <a href="/" className="text-sm text-brand-navy-700 hover:text-brand-orange-500 dark:text-gray-200 dark:hover:text-brand-neon-lime transition-colors">
+          <Link href="/" className="text-sm text-brand-navy-700 hover:text-brand-orange-500 dark:text-gray-200 dark:hover:text-brand-neon-lime transition-colors">
             홈페이지로 돌아가기
-          </a>
+          </Link>
         </div>
       </div>
     </div>

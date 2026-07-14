@@ -9,12 +9,22 @@ export function normalizeAppRole(value: unknown): AppRole {
 
 export function defaultPathForRole(role: AppRole) {
   if (role === "ADMIN" || role === "VICE_ADMIN") return "/admin";
-  if (role === "INSTRUCTOR") return "/staff/quick-post";
+  if (role === "INSTRUCTOR") return "/staff";
   return "/mypage";
 }
 
 export function isSafeInternalPath(path?: string | null) {
-  return Boolean(path && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/login"));
+  if (!path || !path.startsWith("/") || path.startsWith("//")) return false;
+  if (/[\\\u0000-\u001f\u007f]/.test(path)) return false;
+
+  try {
+    const decoded = decodeURIComponent(path);
+    if (!decoded.startsWith("/") || decoded.startsWith("//") || decoded.includes("\\")) return false;
+    const parsed = new URL(path, "https://stiz.internal");
+    return parsed.origin === "https://stiz.internal" && !parsed.pathname.startsWith("/login");
+  } catch {
+    return false;
+  }
 }
 
 export function canRoleAccessPath(role: AppRole, path?: string | null) {

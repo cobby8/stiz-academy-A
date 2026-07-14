@@ -11,10 +11,6 @@ import {
   type AppRole,
 } from "@/lib/auth-routes";
 
-function normalizeSignupRole(value: FormDataEntryValue | null): "PARENT" | "INSTRUCTOR" {
-  return value === "INSTRUCTOR" ? "INSTRUCTOR" : "PARENT";
-}
-
 async function getRoleByEmail(email?: string | null): Promise<AppRole | null> {
   if (!email) return null;
 
@@ -26,19 +22,16 @@ async function getRoleByEmail(email?: string | null): Promise<AppRole | null> {
   return rows[0] ? normalizeAppRole(rows[0].role) : null;
 }
 
-async function upsertSignupUser(data: {
+async function insertSignupUser(data: {
   id: string;
   email: string;
   name: string;
-  role: "PARENT" | "INSTRUCTOR";
+  role: "PARENT";
 }) {
   await prisma.$executeRawUnsafe(
     `INSERT INTO "User" (id, email, name, role, "createdAt", "updatedAt")
      VALUES ($1, $2, $3, $4::"Role", NOW(), NOW())
-     ON CONFLICT (email) DO UPDATE
-     SET name = EXCLUDED.name,
-         role = EXCLUDED.role,
-         "updatedAt" = NOW()`,
+     ON CONFLICT (email) DO NOTHING`,
     data.id,
     data.email,
     data.name,
@@ -72,10 +65,12 @@ export async function login(formData: FormData) {
     return { error: `로그인 오류: ${error.message}` };
   }
 
-  const role =
-    (await getRoleByEmail(data.user?.email)) ||
-    normalizeAppRole(data.user?.user_metadata?.role);
-  const destination = resolveRedirectForRole(role, redirectTo);
+  // 실제 권한은 DB 역할만 신뢰합니다. DB에 없는 계정은 안전한 학부모로 제한합니다.
+  const role = (await getRoleByEmail(data.user?.email)) || "PARENT";
+  const destination =
+    role === "INSTRUCTOR" && !redirectTo
+      ? "/staff"
+      : resolveRedirectForRole(role, redirectTo);
 
   await supabase.auth.updateUser({
     data: {
@@ -94,7 +89,8 @@ export async function signup(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
   const name = String(formData.get("name") || "").trim();
-  const role = normalizeSignupRole(formData.get("signupRole"));
+  // 공개 회원가입은 학부모 전용입니다. 선생님 계정은 관리자 초대 흐름에서만 생성합니다.
+  const role = "PARENT" as const;
 
   if (!email || !password || !name) {
     return { error: "모든 필수 항목을 입력해주세요." };
@@ -126,7 +122,7 @@ export async function signup(formData: FormData) {
     return { error: "계정 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  await upsertSignupUser({
+  await insertSignupUser({
     id: data.user.id,
     email,
     name,

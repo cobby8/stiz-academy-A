@@ -442,7 +442,10 @@ async function applyCandidate(batchId: string, candidate: RelinkCandidate, db: R
        AND "sheetName" = $2
        AND "rowNumber" = $3
        AND severity = 'WARNING'
-       AND message LIKE '%Student와 연결하지 못했습니다.%'`,
+       AND (
+         message LIKE '%Student와 연결하지 못했습니다.%'
+         OR message LIKE '%no matching Student%'
+       )`,
     batchId,
     candidate.sheetName,
     candidate.rowNumber
@@ -533,7 +536,7 @@ async function createStudentFromTeamRow(batchId: string, input: unknown) {
        RETURNING id`,
       parentEmail,
       parentName,
-      phone
+      null
     );
     const parentId = parentRows[0]?.id;
     if (!parentId) {
@@ -583,7 +586,7 @@ async function createStudentFromTeamRow(batchId: string, input: unknown) {
         rowNumber: row.rowNumber,
         studentName,
         studentPhone: phone,
-        parentPhone: phone,
+        parentPhone: null,
         match: {
           studentId,
           confidence: "strong",

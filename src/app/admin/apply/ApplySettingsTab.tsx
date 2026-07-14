@@ -143,30 +143,6 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
             )}
 
-            <SettingsCard badge="폼 전환" badgeColor="bg-purple-50 text-purple-700 border border-purple-200" title="신청 폼 모드 설정">
-                <p className="text-sm text-gray-500 dark:text-gray-400 -mt-1 mb-3">OFF = 구글폼 외부 링크로 이동 | ON = 자체 폼 페이지(/apply/trial, /apply/enroll) 사용</p>
-
-                <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-700">
-                    <div>
-                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">체험수업 자체 폼</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                            {useBuiltInTrialForm ? "자체 폼 페이지로 이동합니다" : "구글폼 URL로 새 탭 이동합니다"}
-                        </p>
-                    </div>
-                    <Toggle checked={useBuiltInTrialForm} onClick={() => setUseBuiltInTrialForm(!useBuiltInTrialForm)} />
-                </div>
-
-                <div className="flex items-center justify-between py-3">
-                    <div>
-                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">수강신청 자체 폼</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                            {useBuiltInEnrollForm ? "자체 폼 페이지로 이동합니다" : "구글폼 URL로 새 탭 이동합니다"}
-                        </p>
-                    </div>
-                    <Toggle checked={useBuiltInEnrollForm} onClick={() => setUseBuiltInEnrollForm(!useBuiltInEnrollForm)} />
-                </div>
-            </SettingsCard>
-
             <SettingsCard badge="체험수업" badgeColor="bg-orange-100 text-brand-orange-600 dark:text-brand-neon-lime border border-orange-200" title="체험수업 안내 설정">
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">섹션 제목</label>
@@ -267,28 +243,6 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </button>
             </div>
         </div>
-    );
-}
-
-function Toggle({ checked, onClick }: { checked: boolean; onClick: () => void }) {
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={checked}
-            onClick={onClick}
-            className={[
-                "relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:ring-offset-2",
-                checked ? "bg-brand-orange-500 dark:bg-brand-neon-lime" : "bg-gray-300 dark:bg-gray-600",
-            ].join(" ")}
-        >
-            <span
-                className={[
-                    "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200",
-                    checked ? "translate-x-6" : "translate-x-1",
-                ].join(" ")}
-            />
-        </button>
     );
 }
 

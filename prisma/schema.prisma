@@ -122,23 +122,32 @@ model Enrollment {
 }
 
 model Session {
-  id           String               @id @default(uuid())
-  classId      String
-  date         DateTime
-  notes        String?
-  topic        String? // 수업 주제 (예: "드리블 연습")
-  content      String? // 수업 상세 내용
-  photosJSON   String? // 수업 사진 URL 배열 (JSON 문자열로 저장)
-  coachId      String? // 담당 코치 ID (Coach 테이블 참조용, FK 없음)
-  published    Boolean              @default(false) // 학부모 공개 여부 (true일 때만 학부모가 열람 가능)
-  publishedAt  DateTime? // 발행 시각 (published=true로 변경된 시점)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  attendances  Attendance[]
-  studentNotes StudentSessionNote[]
-  class        Class                @relation(fields: [classId], references: [id])
+  id              String               @id @default(uuid())
+  classId         String
+  date            DateTime
+  sessionKey      String?              @unique // 같은 반·날짜의 수업 중복 생성을 막는 키
+  status          String               @default("PLANNED") // PLANNED, IN_PROGRESS, COMPLETED
+  notes           String?
+  topic           String? // 수업 주제 (예: "드리블 연습")
+  plannedContent  String? // 수업 전에 작성한 예정 수업 내용
+  content         String? // 수업 중 실제로 진행한 내용
+  photosJSON      String? // 수업 사진 URL 배열 (JSON 문자열로 저장)
+  coachId         String? // 담당 코치 ID (Coach 테이블 참조용, FK 없음)
+  startedAt       DateTime?            @db.Timestamptz(6) // 실제 수업 시작 시각
+  endedAt         DateTime?            @db.Timestamptz(6) // 실제 수업 종료 시각
+  startedByUserId String? // 수업 시작을 확인한 User ID
+  endedByUserId   String? // 수업 종료를 확인한 User ID
+  published       Boolean              @default(false) // 학부모 공개 여부 (true일 때만 학부모가 열람 가능)
+  publishedAt     DateTime? // 발행 시각 (published=true로 변경된 시점)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  attendances     Attendance[]
+  studentNotes    StudentSessionNote[]
+  class           Class                @relation(fields: [classId], references: [id])
 
   @@index([classId, date])
+  @@index([status, date])
+  @@index([startedAt])
   @@index([published, date])
 }
 

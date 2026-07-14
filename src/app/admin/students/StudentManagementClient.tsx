@@ -81,6 +81,86 @@ type SheetImportSummary = {
     topScheduleMismatches: ScheduleMismatch[];
 } | null;
 
+type CurrentRosterReport = {
+    batch: {
+        id: string;
+        status: string;
+        spreadsheetTitle: string | null;
+        sourceUrl: string | null;
+        totalRows: number;
+        registrationRows: number;
+        errorRows: number;
+        createdAt: string;
+        completedAt: string | null;
+    } | null;
+    targetMonth: {
+        requestedMonth: number | null;
+        monthNumber: number | null;
+        label: string;
+    };
+    summary: {
+        targetMonthNumber: number | null;
+        targetRows: number;
+        uniqueStudentKeys: number;
+        linkedRows: number;
+        linkedStudents: number;
+        unresolvedRows: number;
+        activeRows: number;
+        pausedRows: number;
+        withdrawnRows: number;
+        rowsWithSlots: number;
+        selectedSlotPairs: number;
+        missingClassSlots: number;
+        studentsWithHistory: number;
+        previousLedgerRows: number;
+        duplicateStudentGroups: number;
+        nameConflictGroups: number;
+    } | null;
+    monthDistribution: {
+        monthNumber: number | null;
+        label: string;
+        rowCount: number;
+        linkedRows: number;
+        activeRows: number;
+    }[];
+    unresolvedRows: {
+        id: string;
+        rowNumber: number;
+        studentName: string;
+        parentName: string | null;
+        parentPhone: string | null;
+        studentPhone: string | null;
+        birthDate: string | null;
+        school: string | null;
+        grade: string | null;
+        registrationMonth: string | null;
+        status: string;
+    }[];
+    duplicateStudentGroups: {
+        studentName: string;
+        parentPhone: string | null;
+        studentCount: number;
+        studentIds: string[];
+        parentNames: string[];
+    }[];
+    nameConflictGroups: {
+        studentName: string;
+        studentCount: number;
+        studentIds: string[];
+    }[];
+    historySamples: {
+        studentId: string;
+        studentName: string;
+        parentPhone: string | null;
+        previousRows: number;
+        previousMonths: string[];
+    }[];
+    missingClassSlots: {
+        slotKey: string;
+        rowCount: number;
+    }[];
+};
+
 type ReconcileSample = {
     studentId: string;
     studentName: string;
@@ -238,6 +318,160 @@ function formatSlotLabel(slotKey: string) {
     const [day, period] = slotKey.split("-");
     const dayLabel = DAY_LABELS[day] ?? day;
     return period ? `${dayLabel} ${period}교시` : slotKey;
+}
+
+function formatReportPhone(value: string | null | undefined) {
+    const digits = (value ?? "").replace(/[^0-9]/g, "");
+    if (digits.length === 11) {
+        return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    }
+    return value || "연락처 없음";
+}
+
+function formatReportList(values: string[] | null | undefined) {
+    if (!values || values.length === 0) return "없음";
+    return values.slice(0, 4).join(", ");
+}
+
+function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
+    if (!report.batch || !report.summary) {
+        return (
+            <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300">
+                완료된 수강생 시트 이관 배치가 아직 없습니다.
+            </div>
+        );
+    }
+
+    const { summary } = report;
+    const riskCount =
+        summary.unresolvedRows +
+        summary.missingClassSlots +
+        summary.duplicateStudentGroups +
+        summary.nameConflictGroups;
+
+    return (
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-lime-100 px-2 py-0.5 text-xs font-bold text-lime-800 dark:bg-lime-300/15 dark:text-lime-200">
+                            읽기 전용
+                        </span>
+                        <p className="text-sm font-extrabold text-gray-900 dark:text-white">
+                            {report.targetMonth.label} 최신 원생목록 점검
+                        </p>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        최신 이관 배치 기준으로 학생 연결, 이전 이력, 중복 의심 항목만 점검합니다.
+                    </p>
+                </div>
+                <span
+                    className={`rounded-full px-2 py-1 text-xs font-bold ${
+                        riskCount > 0
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-100"
+                            : "bg-emerald-100 text-emerald-800 dark:bg-emerald-300/15 dark:text-emerald-100"
+                    }`}
+                >
+                    {riskCount > 0 ? `확인 필요 ${riskCount.toLocaleString()}건` : "자동 정리 가능"}
+                </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4 lg:grid-cols-8">
+                <ImportSummaryMetric label="대상 행" value={summary.targetRows} />
+                <ImportSummaryMetric label="고유키" value={summary.uniqueStudentKeys} />
+                <ImportSummaryMetric label="연결 행" value={summary.linkedRows} />
+                <ImportSummaryMetric label="연결 학생" value={summary.linkedStudents} />
+                <ImportSummaryMetric label="미연결" value={summary.unresolvedRows} warning={summary.unresolvedRows > 0} />
+                <ImportSummaryMetric label="이전 이력" value={summary.studentsWithHistory} />
+                <ImportSummaryMetric label="중복 의심" value={summary.duplicateStudentGroups} warning={summary.duplicateStudentGroups > 0} />
+                <ImportSummaryMetric label="동명이인" value={summary.nameConflictGroups} warning={summary.nameConflictGroups > 0} />
+            </div>
+
+            {report.monthDistribution.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    {report.monthDistribution.map((item) => (
+                        <span
+                            key={`${item.monthNumber ?? "none"}-${item.label}`}
+                            className={`rounded-full px-2 py-1 font-semibold ring-1 ${
+                                item.monthNumber === report.targetMonth.monthNumber
+                                    ? "bg-lime-100 text-lime-900 ring-lime-300 dark:bg-lime-300/15 dark:text-lime-100 dark:ring-lime-300/30"
+                                    : "bg-gray-50 text-gray-600 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700"
+                            }`}
+                        >
+                            {item.label} {item.rowCount.toLocaleString()}행 · 연결 {item.linkedRows.toLocaleString()}행
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {report.historySamples.length > 0 && (
+                    <div className="rounded-lg bg-gray-50 p-3 text-xs dark:bg-gray-900">
+                        <p className="font-bold text-gray-900 dark:text-white">이전 월 이력 연결 샘플</p>
+                        <div className="mt-2 space-y-1 text-gray-600 dark:text-gray-300">
+                            {report.historySamples.map((row) => (
+                                <p key={row.studentId}>
+                                    {row.studentName} · 이전 {row.previousRows.toLocaleString()}행 · {formatReportList(row.previousMonths)}
+                                </p>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {report.missingClassSlots.length > 0 && (
+                    <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-300/10 dark:text-amber-100">
+                        <p className="font-bold">반/시간표 미매칭</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {report.missingClassSlots.map((slot) => (
+                                <span key={slot.slotKey} className="rounded-full bg-white px-2 py-1 font-semibold ring-1 ring-amber-200 dark:bg-gray-950 dark:ring-amber-300/25">
+                                    {formatSlotLabel(slot.slotKey)} {slot.rowCount.toLocaleString()}행
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {report.unresolvedRows.length > 0 && (
+                    <div className="rounded-lg bg-red-50 p-3 text-xs text-red-900 dark:bg-red-500/10 dark:text-red-100">
+                        <p className="font-bold">미연결 등록 행</p>
+                        <div className="mt-2 space-y-1">
+                            {report.unresolvedRows.map((row) => (
+                                <p key={row.id}>
+                                    #{row.rowNumber} {row.studentName} · {formatReportPhone(row.parentPhone)} · {row.school ?? "학교 미입력"} · {row.grade ?? "학년 미입력"}
+                                </p>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {report.duplicateStudentGroups.length > 0 && (
+                    <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-300/10 dark:text-amber-100">
+                        <p className="font-bold">같은 보호자 연락처의 중복 Student 의심</p>
+                        <div className="mt-2 space-y-1">
+                            {report.duplicateStudentGroups.map((group) => (
+                                <p key={`${group.studentName}-${group.parentPhone}`}>
+                                    {group.studentName} · {formatReportPhone(group.parentPhone)} · {group.studentCount.toLocaleString()}개 ID · 보호자 {formatReportList(group.parentNames)}
+                                </p>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {report.nameConflictGroups.length > 0 && (
+                    <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                        <p className="font-bold text-gray-900 dark:text-white">이름만으로는 위험한 후보</p>
+                        <div className="mt-2 space-y-1">
+                            {report.nameConflictGroups.map((group) => (
+                                <p key={group.studentName}>
+                                    {group.studentName} · 기존 Student {group.studentCount.toLocaleString()}개
+                                </p>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 }
 
 function ReconcilePreviewBox({
@@ -603,6 +837,9 @@ export default function StudentManagementClient({
     const [dataError, setDataError] = useState<string | null>(null);
     const [allStudentsLoaded, setAllStudentsLoaded] = useState(!initialPartial);
     const [backgroundLoading, setBackgroundLoading] = useState(false);
+    const [currentRosterReport, setCurrentRosterReport] = useState<CurrentRosterReport | null>(null);
+    const [currentRosterLoading, setCurrentRosterLoading] = useState(false);
+    const [currentRosterError, setCurrentRosterError] = useState<string | null>(null);
     const [reconcilePreview, setReconcilePreview] = useState<ReconcilePreview | null>(null);
     const [reconcileLoading, setReconcileLoading] = useState(false);
     const [reconcileApplying, setReconcileApplying] = useState(false);
@@ -683,6 +920,28 @@ export default function StudentManagementClient({
             setStudentOptionsLoading(false);
         }
     }, [studentOptions.length, studentOptionsLoading]);
+
+    const loadCurrentRosterReport = useCallback(async () => {
+        setCurrentRosterLoading(true);
+        setCurrentRosterError(null);
+
+        try {
+            const response = await fetch("/api/admin/import-students/current-roster?month=7", {
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "최신 원생목록 점검에 실패했습니다.");
+            }
+
+            setCurrentRosterReport(data as CurrentRosterReport);
+        } catch (error) {
+            setCurrentRosterError(error instanceof Error ? error.message : "최신 원생목록 점검에 실패했습니다.");
+        } finally {
+            setCurrentRosterLoading(false);
+        }
+    }, []);
 
     const loadReconcilePreview = useCallback(async () => {
         setReconcileLoading(true);
@@ -1156,6 +1415,30 @@ export default function StudentManagementClient({
                                 warning={sheetImportSummary.errorRows > 0}
                             />
                         </div>
+                    </div>
+                    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="font-bold">7월 최신 원생목록 점검</p>
+                                <p className="mt-1 text-gray-500 dark:text-gray-400">
+                                    실제 변경 없이 7월 등록 행의 학생 연결, 이전 이력, 중복 의심 항목을 먼저 확인합니다.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void loadCurrentRosterReport()}
+                                disabled={currentRosterLoading}
+                                className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                            >
+                                {currentRosterLoading ? "점검 중" : "7월 원생 점검"}
+                            </button>
+                        </div>
+                        {currentRosterError && (
+                            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+                                {currentRosterError}
+                            </div>
+                        )}
+                        {currentRosterReport && <CurrentRosterReportBox report={currentRosterReport} />}
                     </div>
                     {sheetImportSummary.scheduleMismatchCount > 0 && (
                         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-lime-300/25 dark:bg-lime-300/10 dark:text-lime-100">

@@ -1,9 +1,9 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 자체 체험/수강 신청 폼을 기존 Google Form 항목과 동일하게 구현
-- 상태: 구현 및 타입 검증 완료
-- 범위: 신청 페이지 라우팅, 체험/수강 폼 입력 항목, DB 저장 컬럼, 관리자 신청 표시
+- 작업명: 7월 최신 원생목록 DB 정리 준비
+- 상태: 7월 최신 원생 진단 리포트 구현 및 검증 완료
+- 범위: 최신 수강생 시트 배치 기준 연결률/이력/중복 의심/시간표 누락 진단 API와 관리자 UI
 - 기준일: 2026-07-14
 
 ## 진행 현황표
@@ -22,6 +22,7 @@
 | 배포/검증/의존 제거 | 진행 중 | 대표팀 미연결 14건 중 8건 실제 학생 생성/연결 완료, 6건만 원본 확인 필요 |
 
 ## 작업 로그
+- 2026-07-14: 관리자 원생 관리에 7월 최신 원생목록 점검 패널을 추가하고, 최신 이관 배치 기준 연결률/중복 의심/이전 이력/시간표 누락을 읽기 전용 API로 확인하도록 했다.
 - 2026-07-14: Google Form 2개를 확인해 체험/수강 자체 신청 폼 항목을 맞추고, 누락 필드를 DB 저장/관리자 표시까지 연결했다.
 - 2026-07-14: 대표팀 미연결 원본 중 생년월일 확인 가능한 8건을 실제 DB 학생으로 생성하고 원본 행과 연결했다. 남은 6건만 이슈로 유지했다.
 - 2026-07-13: 대표팀 미연결 원본에서 새 학생 생성 후 원본 행과 즉시 연결하는 관리자 액션을 추가했다. 생년월일이 해석되는 8건만 버튼을 보이고, 6건은 확인 필요로 표시한다.
@@ -35,13 +36,14 @@
 - 2026-07-13: 공개 시간표/수업 찾기/챗봇/점검봇이 `ScheduleSlot`을 먼저 읽고, DB가 없을 때만 기존 시트 캐시로 fallback하도록 전환했다.
 
 ## 구현 기록
-- 변경 파일: `prisma/schema.prisma`, `prisma/sql/add_student_sheet_import.sql`
+- 변경 파일: `src/app/api/admin/import-students/current-roster/route.ts`, `src/app/admin/students/StudentManagementClient.tsx`
 - 주요 변경:
-  - `Student`에 지점, 농구경험, 바라는 점, 동의 원본, 마지막 이관 원본 행 필드 추가.
-  - `StudentSheetImportBatch`/`StudentSheetRawRow`로 시트 행 전체를 원본 JSON으로 보존하는 구조 추가.
-  - `StudentRegistrationLedger`, `StudentShuttleRide`, `StudentChangeLog`, `StudentTeamRosterEntry`, `StudentSheetImportIssue` 모델과 운영 SQL 추가.
+  - 최신 `StudentSheetImportBatch(COMPLETED)` 기준으로 7월 등록 행을 집계하는 읽기 전용 API 추가.
+  - 대상 행/고유키/연결 행/연결 학생/미연결/이전 이력/중복 의심/동명이인 지표 계산.
+  - 관리자 원생 관리 상단에 버튼식 지연 로딩 패널 추가로 첫 진입 속도 영향 최소화.
 
 ## 테스트 결과
+- 7월 원생 진단 리포트 검증: `npx.cmd tsc --noEmit`, `npx.cmd prisma validate`, `git diff --check` 통과. Supabase 읽기 전용 검증에서 최신 배치 `822a636d-10d3-4afb-924a-66421bd824f9` 기준 7월 대상 224행/미연결 0건/시간표 누락 0건 확인.
 - 자체 신청 폼 항목 보강 검증: `npx.cmd tsc --noEmit` 통과, `git diff --check` 통과. `npm.cmd run lint`는 기존 레포 전역 lint 오류 695건으로 실패하며, 이번 변경과 무관한 기존 `any`/스크립트/관리자 훅 규칙 오류가 대부분.
 - `npx.cmd prisma validate`: 통과
 - `npx.cmd tsc --noEmit`: 통과
@@ -58,4 +60,4 @@
 - `git diff --check`: 통과
 
 ## 다음에 할 것
-- 실제 브라우저에서 `/apply/trial`, `/apply/enroll` 제출 플로우를 한 번 더 점검하고, 운영 DB 컬럼은 첫 제출 시 자동 보강되도록 둔다.
+- 7월 리포트 결과를 바탕으로 중복 의심 `Student` 병합 미리보기 API를 만들고, 대표 ID로 수강/결제/출석/시트 원본 연결을 옮기는 안전한 적용 단계를 준비한다.

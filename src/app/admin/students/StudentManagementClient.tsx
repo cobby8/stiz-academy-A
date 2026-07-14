@@ -926,6 +926,13 @@ export default function StudentManagementClient({
         }
     }, []);
 
+    const requestFullStudentLoad = useCallback(() => {
+        if (allStudentsLoaded || backgroundLoading) return;
+
+        setAutoLoadRequested(true);
+        void loadData({ background: true });
+    }, [allStudentsLoaded, backgroundLoading, loadData]);
+
     const ensureStudentOptions = useCallback(async () => {
         if (studentOptions.length > 0 || studentOptionsLoading) return;
 
@@ -1167,12 +1174,11 @@ export default function StudentManagementClient({
         if (!initialPartial || allStudentsLoaded || backgroundLoading || autoLoadRequested) return;
 
         const timer = window.setTimeout(() => {
-            setAutoLoadRequested(true);
-            void loadData({ background: true });
+            requestFullStudentLoad();
         }, 700);
 
         return () => window.clearTimeout(timer);
-    }, [allStudentsLoaded, autoLoadRequested, backgroundLoading, initialPartial, loadData]);
+    }, [allStudentsLoaded, autoLoadRequested, backgroundLoading, initialPartial, requestFullStudentLoad]);
     // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
     const [filterStatus, setFilterStatus] = useState("ACTIVE");
     const [visibleLimit, setVisibleLimit] = useState(STUDENT_PAGE_SIZE);
@@ -1323,10 +1329,8 @@ export default function StudentManagementClient({
 
     const applyStatusFilter = useCallback((value: string) => {
         setFilterStatus(value);
-        if (!allStudentsLoaded && !backgroundLoading) {
-            void loadData({ background: true });
-        }
-    }, [allStudentsLoaded, backgroundLoading, loadData]);
+        requestFullStudentLoad();
+    }, [requestFullStudentLoad]);
 
     // 검색 + 필터 조합 (AND 조건): useMemo로 캐싱하여 불필요한 재계산 방지
     // 결과를 이름 가나다순으로 정렬
@@ -1344,7 +1348,7 @@ export default function StudentManagementClient({
             }
             // 반(Class) 필터: 해당 반에 수강 중인 학생만
             if (filterClass) {
-                const hasClass = s.enrollments?.some((e) => e.classId === filterClass);
+                const hasClass = s.enrollments?.some((e) => e.classId === filterClass && e.status === "ACTIVE");
                 if (!hasClass) return false;
             }
             // 학년 필터
@@ -1376,6 +1380,13 @@ export default function StudentManagementClient({
         [filtered, visibleLimit],
     );
     const hasMoreStudents = visibleStudents.length < filtered.length;
+    const hasAnyFilter = Boolean(search.trim() || filterClass || filterGrade || filterSchool || filterStatus);
+    const hasCustomFilter = Boolean(search.trim() || filterClass || filterGrade || filterSchool || filterStatus !== "ACTIVE");
+    const emptyStudentsMessage = !allStudentsLoaded && hasAnyFilter
+        ? "전체 원생 목록을 동기화하는 중입니다. 잠시 후 자동으로 결과가 갱신됩니다."
+        : hasAnyFilter
+            ? "조건에 맞는 원생이 없습니다."
+            : "등록된 원생이 없습니다. \"원생 등록\" 버튼으로 새 원생을 등록하세요.";
 
     if (dataLoading && students.length === 0) {
         return (
@@ -1677,7 +1688,10 @@ export default function StudentManagementClient({
                     type="text"
                     placeholder="이름, 학부모명, 전화번호, 학교명으로 검색..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        if (e.target.value.trim()) requestFullStudentLoad();
+                    }}
                     className="w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 />
             </div>
@@ -1687,7 +1701,10 @@ export default function StudentManagementClient({
                 {/* 반(Class) 필터 */}
                 <select
                     value={filterClass}
-                    onChange={(e) => setFilterClass(e.target.value)}
+                    onChange={(e) => {
+                        setFilterClass(e.target.value);
+                        if (e.target.value) requestFullStudentLoad();
+                    }}
                     className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 반</option>
@@ -1700,7 +1717,10 @@ export default function StudentManagementClient({
                 {/* 학년 필터 */}
                 <select
                     value={filterGrade}
-                    onChange={(e) => setFilterGrade(e.target.value)}
+                    onChange={(e) => {
+                        setFilterGrade(e.target.value);
+                        if (e.target.value) requestFullStudentLoad();
+                    }}
                     className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학년</option>
@@ -1711,7 +1731,10 @@ export default function StudentManagementClient({
                 {/* 학교 필터 */}
                 <select
                     value={filterSchool}
-                    onChange={(e) => setFilterSchool(e.target.value)}
+                    onChange={(e) => {
+                        setFilterSchool(e.target.value);
+                        if (e.target.value) requestFullStudentLoad();
+                    }}
                     className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학교</option>
@@ -1722,7 +1745,7 @@ export default function StudentManagementClient({
                 {/* 수강 상태 필터 */}
                 <select
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
+                    onChange={(e) => applyStatusFilter(e.target.value)}
                     className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 상태</option>
@@ -1732,13 +1755,15 @@ export default function StudentManagementClient({
                     <option value="NONE">미배정</option>
                 </select>
                 {/* 초기화 버튼: 필터가 하나라도 설정돼 있으면 표시 */}
-                {(filterClass || filterGrade || filterSchool || filterStatus) && (
+                {hasCustomFilter && (
                     <button
                         onClick={() => {
+                            setSearch("");
                             setFilterClass("");
                             setFilterGrade("");
                             setFilterSchool("");
-                            setFilterStatus("");
+                            setFilterStatus("ACTIVE");
+                            requestFullStudentLoad();
                         }}
                         className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-200 underline"
                     >
@@ -1858,7 +1883,7 @@ export default function StudentManagementClient({
             {/* Student list */}
             {filtered.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
-                    {search ? "검색 결과가 없습니다." : "등록된 원생이 없습니다. \"원생 등록\" 버튼으로 새 원생을 등록하세요."}
+                    {emptyStudentsMessage}
                 </div>
             ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
@@ -1975,6 +2000,7 @@ export default function StudentManagementClient({
                     <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
                         <span>
                             {filtered.length}명 중 {visibleStudents.length}명 표시
+                            {!allStudentsLoaded && " · 전체 동기화 중"}
                         </span>
                         {hasMoreStudents && (
                             <button

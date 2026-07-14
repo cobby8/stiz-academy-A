@@ -10,15 +10,21 @@ const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
 const ATT_STATUS: Record<string, { label: string; color: string }> = {
-    PRESENT: { label: "출석", color: "bg-green-100 text-green-700" },
-    ABSENT: { label: "결석", color: "bg-red-100 text-red-700" },
-    LATE: { label: "지각", color: "bg-yellow-100 text-yellow-700" },
-    EXCUSED: { label: "사유결석", color: "bg-blue-100 text-blue-700" },
+    PRESENT: { label: "출석", color: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-300/10 dark:text-emerald-100 dark:ring-emerald-300/20" },
+    ABSENT: { label: "결석", color: "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20" },
+    LATE: { label: "지각", color: "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-300/10 dark:text-amber-100 dark:ring-amber-300/20" },
+    EXCUSED: { label: "사유결석", color: "bg-sky-50 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-300/10 dark:text-sky-100 dark:ring-sky-300/20" },
 };
 const PAY_STATUS: Record<string, { label: string; color: string }> = {
-    PENDING: { label: "미납", color: "text-yellow-600 bg-yellow-50" },
-    PAID: { label: "납부완료", color: "text-green-600 bg-green-50" },
-    OVERDUE: { label: "연체", color: "text-red-600 bg-red-50" },
+    PENDING: { label: "미납", color: "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-300/10 dark:text-amber-100 dark:ring-amber-300/20" },
+    PAID: { label: "납부완료", color: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-300/10 dark:text-emerald-100 dark:ring-emerald-300/20" },
+    OVERDUE: { label: "연체", color: "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20" },
+};
+const ENROLLMENT_STATUS: Record<string, { label: string; color: string }> = {
+    ACTIVE: { label: "수강 중", color: "bg-lime-100 text-lime-800 ring-1 ring-lime-200 dark:bg-lime-300/15 dark:text-lime-100 dark:ring-lime-300/25" },
+    PAUSED: { label: "휴원", color: "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-300/10 dark:text-amber-100 dark:ring-amber-300/20" },
+    WITHDRAWN: { label: "퇴원", color: "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20" },
+    NONE: { label: "미배정", color: "bg-gray-50 text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700" },
 };
 
 function toDateStr(d: Date | string | null): string {
@@ -76,6 +82,31 @@ type StudentActivityData = {
     attendanceStats: { total: number; present: number; absent: number; late: number; excused: number; rate: number };
     galleryPosts: { id: string; title: string | null; mediaJSON: string; createdAt: Date | string }[];
 };
+
+function getEnrollmentStatusInfo(status: string | null) {
+    return ENROLLMENT_STATUS[status ?? "NONE"] ?? ENROLLMENT_STATUS.NONE;
+}
+
+function getRepresentativeEnrollmentStatus(enrollments: StudentActivityData["enrollments"]) {
+    if (enrollments.length === 0) return null;
+    if (enrollments.some((enrollment) => enrollment.status === "ACTIVE")) return "ACTIVE";
+
+    return [...enrollments].sort((a, b) => {
+        const bTime = new Date(b.createdAt).getTime();
+        const aTime = new Date(a.createdAt).getTime();
+        return bTime - aTime;
+    })[0]?.status ?? null;
+}
+
+function sortEnrollments(enrollments: StudentActivityData["enrollments"]) {
+    const statusOrder: Record<string, number> = { ACTIVE: 0, PAUSED: 1, WITHDRAWN: 2 };
+
+    return [...enrollments].sort((a, b) => {
+        const statusDiff = (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+        if (statusDiff !== 0) return statusDiff;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+}
 
 export default function StudentDetailClient({
     data: initialData,
@@ -222,7 +253,11 @@ export default function StudentDetailClient({
         });
     }
 
-    const activeEnrollments = enrollments.filter(e => e.status === "ACTIVE");
+    const sortedEnrollments = sortEnrollments(enrollments);
+    const activeEnrollments = sortedEnrollments.filter(e => e.status === "ACTIVE");
+    const inactiveEnrollments = sortedEnrollments.filter(e => e.status !== "ACTIVE");
+    const representativeStatus = getRepresentativeEnrollmentStatus(enrollments);
+    const representativeStatusInfo = getEnrollmentStatusInfo(representativeStatus);
     const totalPaid = payments.filter(p => p.status === "PAID").reduce((s, p) => s + p.amount, 0);
     const unpaid = payments.filter(p => p.status === "PENDING" || p.status === "OVERDUE");
 
@@ -234,7 +269,14 @@ export default function StudentDetailClient({
                     <SymbolIcon name="arrow_back" size={20} className="text-gray-500 dark:text-gray-400" />
                 </Link>
                 <div>
-                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">{student.name} <span className="text-gray-400 font-normal text-lg">학생</span></h1>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">
+                            {student.name} <span className="text-gray-400 font-normal text-lg">학생</span>
+                        </h1>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${representativeStatusInfo.color}`}>
+                            {representativeStatusInfo.label}
+                        </span>
+                    </div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                         {calcAge(student.birthDate)}세 ({toDateStr(student.birthDate)})
                         {student.gender && ` · ${student.gender}`}
@@ -256,9 +298,9 @@ export default function StudentDetailClient({
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">결석/지각</p>
                     <p className="text-2xl font-extrabold">
-                        <span className={attendanceStats.absent > 0 ? "text-red-600" : "text-gray-900 dark:text-white"}>{attendanceStats.absent}</span>
+                        <span className={attendanceStats.absent > 0 ? "text-red-600 dark:text-red-300" : "text-gray-900 dark:text-white"}>{attendanceStats.absent}</span>
                         <span className="text-gray-300 mx-1">/</span>
-                        <span className={attendanceStats.late > 0 ? "text-yellow-600" : "text-gray-900 dark:text-white"}>{attendanceStats.late}</span>
+                        <span className={attendanceStats.late > 0 ? "text-amber-600 dark:text-amber-200" : "text-gray-900 dark:text-white"}>{attendanceStats.late}</span>
                     </p>
                     <p className="text-xs text-gray-400">결석 / 지각</p>
                 </div>
@@ -270,7 +312,7 @@ export default function StudentDetailClient({
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">총 납부액</p>
                     <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{formatKRW(totalPaid)}</p>
-                    {unpaid.length > 0 && <p className="text-xs text-red-500">미납 {unpaid.length}건</p>}
+                    {unpaid.length > 0 && <p className="text-xs text-red-500 dark:text-red-300">미납 {unpaid.length}건</p>}
                 </div>
             </div>
 
@@ -347,13 +389,13 @@ export default function StudentDetailClient({
                             onChange={e => { setMemo(e.target.value); setMemoSaved(false); }}
                             rows={4}
                             placeholder="원생에 대한 메모를 입력하세요 (특이사항, 건강 이슈 등)"
-                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 resize-none rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500 dark:focus:ring-brand-neon-lime"
                         />
                         <div className="flex items-center justify-between mt-2">
-                            {memoSaved && <span className="text-xs text-green-600 font-medium">저장됨</span>}
+                            {memoSaved && <span className="text-xs text-green-600 font-medium dark:text-lime-200">저장됨</span>}
                             {!memoSaved && <span />}
                             <button onClick={saveMemo} disabled={isPending}
-                                className="flex items-center gap-1 text-sm bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50">
+                                className="flex items-center gap-1 text-sm bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-orange-600 dark:hover:bg-lime-200 transition disabled:opacity-50">
                                 <SymbolIcon name="save" size={14} /> {isPending ? "저장 중..." : "저장"}
                             </button>
                         </div>
@@ -362,20 +404,48 @@ export default function StudentDetailClient({
                     {/* 수강 반 */}
                     <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                            <SymbolIcon name="menu_book" size={16} className="text-gray-400" /> 수강 중인 반
+                            <SymbolIcon name="menu_book" size={16} className="text-gray-400" /> 수강 정보
                         </h3>
                         {activeEnrollments.length === 0 ? (
                             <p className="text-sm text-gray-400">수강 중인 반이 없습니다</p>
                         ) : (
                             <div className="space-y-2">
                                 {activeEnrollments.map(e => (
-                                    <div key={e.id} className="bg-gray-50 dark:bg-gray-900 rounded-xl p-3">
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white">{e.className}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    <div key={e.id} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <p className="font-bold text-sm text-gray-900 dark:text-white">{e.className}</p>
+                                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${getEnrollmentStatusInfo(e.status).color}`}>
+                                                {getEnrollmentStatusInfo(e.status).label}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                             {e.programName} · {DAY_LABELS[e.dayOfWeek] || e.dayOfWeek} {e.startTime}~{e.endTime}
                                         </p>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                        {inactiveEnrollments.length > 0 && (
+                            <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                <p className="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">이전/휴원 이력</p>
+                                <div className="space-y-2">
+                                    {inactiveEnrollments.map((e) => {
+                                        const info = getEnrollmentStatusInfo(e.status);
+                                        return (
+                                            <div key={e.id} className="rounded-xl border border-gray-100 p-3 dark:border-gray-700 dark:bg-gray-900/50">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="font-medium text-sm text-gray-800 dark:text-gray-100">{e.className}</p>
+                                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${info.color}`}>
+                                                        {info.label}
+                                                    </span>
+                                                </div>
+                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    {e.programName} · {DAY_LABELS[e.dayOfWeek] || e.dayOfWeek} {e.startTime}~{e.endTime}
+                                                </p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -405,7 +475,7 @@ export default function StudentDetailClient({
                                         {attendances.map(a => {
                                             const info = ATT_STATUS[a.status] || ATT_STATUS.PRESENT;
                                             return (
-                                                <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-900">
+                                                <tr key={a.id} className="border-b border-gray-50 transition hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900/70">
                                                     <td className="py-2 px-3 text-gray-700 dark:text-gray-200">{toDateStr(a.date)}</td>
                                                     <td className="py-2 px-3 text-gray-600 dark:text-gray-300">{a.className}</td>
                                                     <td className="py-2 px-3">
@@ -442,7 +512,7 @@ export default function StudentDetailClient({
                                         {payments.map(p => {
                                             const info = PAY_STATUS[p.status] || PAY_STATUS.PENDING;
                                             return (
-                                                <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-900">
+                                                <tr key={p.id} className="border-b border-gray-50 transition hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900/70">
                                                     <td className="py-2 px-3 text-gray-700 dark:text-gray-200">{toDateStr(p.dueDate)}</td>
                                                     <td className="py-2 px-3 font-medium text-gray-900 dark:text-white">{formatKRW(p.amount)}</td>
                                                     <td className="py-2 px-3">

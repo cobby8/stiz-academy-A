@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import {
     updateTrialLead,
     deleteTrialLead,
-    generateEnrollLink,
+    sendPostTrialEnrollGuide,
 } from "@/app/actions/admin";
 
 const TrialCrmModals = dynamic(() => import("./TrialCrmModals"), {
@@ -25,6 +25,10 @@ export interface TrialLead {
     scheduledDate: string | null;
     scheduledClassId: string | null;
     attendedDate: string | null;
+    postTrialConsultedAt: string | null;
+    enrollGuideSentAt: string | null;
+    enrollApplicationReceivedAt: string | null;
+    enrollApplicationId: string | null;
     convertedDate: string | null;
     convertedStudentId: string | null;
     lostReason: string | null;
@@ -248,6 +252,27 @@ export default function TrialCrmClient({
         }
     }
 
+    async function handleSendEnrollGuide(lead: TrialLead) {
+        if (busy) return;
+        if (!confirm(`"${lead.childName}" 체험 후 유선상담을 완료 처리하고 수강신청/입학 안내 문자를 발송할까요?`)) return;
+
+        setBusy(true);
+        try {
+            const result = await sendPostTrialEnrollGuide(lead.id);
+            try {
+                await navigator.clipboard.writeText(result.enrollLink);
+            } catch {
+                // Clipboard access can fail on some mobile browsers; SMS sending is the main action.
+            }
+            await loadTrialData();
+            alert("수강신청/입학 안내 문자를 발송했습니다.");
+        } catch (e) {
+            alert((e as Error).message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
     // 날짜 포맷 헬퍼
     function formatDate(dateStr: string | null) {
         if (!dateStr) return "-";
@@ -414,6 +439,28 @@ export default function TrialCrmClient({
                                                 )}
                                             </div>
                                         )}
+                                        {(lead.postTrialConsultedAt || lead.enrollGuideSentAt || lead.enrollApplicationReceivedAt) && (
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {lead.postTrialConsultedAt && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sky-50 text-sky-700">
+                                                        <span className="material-symbols-outlined text-xs">call</span>
+                                                        상담완료 {formatDate(lead.postTrialConsultedAt)}
+                                                    </span>
+                                                )}
+                                                {lead.enrollGuideSentAt && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
+                                                        <span className="material-symbols-outlined text-xs">sms</span>
+                                                        안내발송 {formatDate(lead.enrollGuideSentAt)}
+                                                    </span>
+                                                )}
+                                                {lead.enrollApplicationReceivedAt && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700">
+                                                        <span className="material-symbols-outlined text-xs">assignment_turned_in</span>
+                                                        수강신청 접수 {formatDate(lead.enrollApplicationReceivedAt)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                         {/* 신청 상세 정보 — 학년, 학교, 체험 희망 일정 */}
                                         {(lead.childGrade || lead.childSchool || lead.basketballExp || lead.preferredSlotKey || lead.trialDate || lead.preferredDay || lead.preferredPeriod) && (
                                             <div className="flex flex-wrap gap-2 mt-2">
@@ -508,25 +555,16 @@ export default function TrialCrmClient({
                                             <span className="material-symbols-outlined text-xl">edit_note</span>
                                         </button>
 
-                                        {/* 수강 안내 링크 복사 — ATTENDED 상태에서만 활성 */}
-                                        {/* 체험 완료된 학부모에게 수강 신청 링크를 보낼 때 사용 */}
+                                        {/* 체험 후 유선상담 + 수강신청/입학 안내 문자 발송 */}
                                         {lead.status === "ATTENDED" && (
                                             <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const link = await generateEnrollLink(lead.id);
-                                                        await navigator.clipboard.writeText(link);
-                                                        alert("수강 안내 링크가 클립보드에 복사되었습니다.\n학부모님께 보내주세요.");
-                                                    } catch (e) {
-                                                        alert((e as Error).message);
-                                                    }
-                                                }}
+                                                onClick={() => handleSendEnrollGuide(lead)}
                                                 disabled={busy}
                                                 className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                                                title="수강 신청 링크를 복사하여 학부모에게 전달"
+                                                title="체험 후 유선상담 완료 기록과 수강신청/입학 안내 문자를 발송"
                                             >
-                                                <span className="material-symbols-outlined text-lg">content_copy</span>
-                                                수강 안내
+                                                <span className="material-symbols-outlined text-lg">sms</span>
+                                                {lead.enrollGuideSentAt ? "안내 재발송" : "상담 후 안내"}
                                             </button>
                                         )}
 

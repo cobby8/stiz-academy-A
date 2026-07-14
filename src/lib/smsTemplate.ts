@@ -98,6 +98,14 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
         '["childName","parentName","academyPhone","enrollLink"]',
     ],
     [
+        "TRIAL_ENROLL_GUIDE_PARENT",
+        "체험 후 입학 안내 (학부모)",
+        "PARENT",
+        "[STIZ] {{childName}} 학생 체험수업 상담 감사드립니다.\n정규 수강신청서는 아래 링크에서 작성해주세요.\n{{enrollLink}}\n작성 후 확인되는 대로 입학 안내를 도와드리겠습니다.\n문의: {{academyPhone}}",
+        "체험완료 후 유선상담을 마치고 관리자가 입학/수강신청 안내를 발송할 때 사용",
+        '["childName","parentName","academyPhone","enrollLink"]',
+    ],
+    [
         "ENROLL_CONFIRM_PARENT",
         "수강 신청 확인 (학부모)",
         "PARENT",

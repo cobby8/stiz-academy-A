@@ -86,6 +86,10 @@ interface TrialLead {
     scheduledDate: string | null;
     scheduledClassId: string | null;
     attendedDate: string | null;
+    postTrialConsultedAt: string | null;
+    enrollGuideSentAt: string | null;
+    enrollApplicationReceivedAt: string | null;
+    enrollApplicationId: string | null;
     convertedDate: string | null;
     convertedStudentId: string | null;
     lostReason: string | null;

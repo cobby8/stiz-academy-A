@@ -3084,6 +3084,10 @@ export async function ensureTrialLeadTable() {
             ['"preferredPeriod"', "TEXT"],
             ['"trialDate"', "TIMESTAMPTZ"],
             ['"attendedSmsSentAt"', "TIMESTAMPTZ"],
+            ['"postTrialConsultedAt"', "TIMESTAMPTZ"],
+            ['"enrollGuideSentAt"', "TIMESTAMPTZ"],
+            ['"enrollApplicationReceivedAt"', "TIMESTAMPTZ"],
+            ['"enrollApplicationId"', "TEXT"],
             ['"trialFeeConfirmed"', "BOOLEAN DEFAULT false"],
             ['"hopeNote"', "TEXT"],
             ['"agreedTerms"', "BOOLEAN DEFAULT false"],
@@ -4179,6 +4183,58 @@ export async function generateEnrollLink(trialLeadId: string): Promise<string> {
 // ── SMS 수동 발송 (관리자 전용) ──────────────────────────────────────────────
 // 관리자가 코치 또는 직접 입력한 번호로 문자를 보내는 기능
 
+export async function sendPostTrialEnrollGuide(trialLeadId: string): Promise<{ enrollLink: string }> {
+    await requireAdmin();
+    await ensureTrialLeadTable();
+
+    const leads = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id, "childName", "parentName", "parentPhone", status
+         FROM "TrialLead"
+         WHERE id = $1
+         LIMIT 1`,
+        trialLeadId,
+    );
+    if (leads.length === 0) {
+        throw new Error("체험 리드를 찾을 수 없습니다.");
+    }
+
+    const lead = leads[0];
+    const parentPhone = lead.parentPhone ?? lead.parentphone;
+    if (!parentPhone) {
+        throw new Error("학부모 연락처가 없어 안내 문자를 보낼 수 없습니다.");
+    }
+
+    const settings = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+    );
+    const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
+    const enrollLink = buildEnrollLink(trialLeadId);
+    const childName = lead.childName ?? lead.childname ?? "";
+    const parentName = lead.parentName ?? lead.parentname ?? "";
+
+    await sendParentSms(parentPhone, "TRIAL_ENROLL_GUIDE_PARENT", {
+        childName,
+        parentName,
+        academyPhone,
+        enrollLink,
+    });
+
+    await prisma.$executeRawUnsafe(
+        `UPDATE "TrialLead"
+         SET "postTrialConsultedAt" = COALESCE("postTrialConsultedAt", NOW()),
+             "enrollGuideSentAt" = NOW(),
+             "updatedAt" = NOW()
+         WHERE id = $1`,
+        trialLeadId,
+    );
+
+    revalidatePath("/admin/trial");
+    revalidatePath("/admin/apply");
+    revalidateTrialAdminCaches();
+
+    return { enrollLink };
+}
+
 import { sendSms, sendSmsBulk } from "@/lib/sms";
 
 /**
@@ -4311,6 +4367,7 @@ export async function resetSmsTemplate(id: string) {
             ENROLL_NEW_COACH: "[STIZ] 새 수강 신청\n{{childName}} ({{childGrade}})",
             TRIAL_CONFIRM_PARENT: "[STIZ] {{childName}} 체험수업 신청이 접수되었습니다.\n일정 확정 시 다시 안내드리겠습니다.\n문의: {{academyPhone}}",
             TRIAL_SCHEDULED_PARENT: "[STIZ] {{childName}} 체험수업 일정이 확정되었습니다.\n일시: {{scheduledDate}}\n반: {{className}}\n문의: {{academyPhone}}",
+            TRIAL_ENROLL_GUIDE_PARENT: "[STIZ] {{childName}} 학생 체험수업 상담 감사드립니다.\n정규 수강신청서는 아래 링크에서 작성해주세요.\n{{enrollLink}}\n작성 후 확인되는 대로 입학 안내를 도와드리겠습니다.\n문의: {{academyPhone}}",
             ENROLL_CONFIRM_PARENT: "[STIZ] {{childName}} 수강 신청이 접수되었습니다.\n승인 후 안내드리겠습니다.\n문의: {{academyPhone}}",
             ENROLL_APPROVED_PARENT: "[STIZ] {{childName}} 수강이 확정되었습니다.\n배정 반: {{className}}\n상세 안내는 별도 연락드리겠습니다.",
             INVOICE_PARENT: "[STIZ] {{month}}월 수강료 안내\n{{childName}}: {{amount}}원\n납부기한: {{dueDate}}",

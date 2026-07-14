@@ -196,6 +196,8 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
         // 관리자 페이지 캐시 무효화 (새 신청이 바로 보이도록)
         revalidatePath("/admin/trial");
         revalidatePath("/admin");
+        revalidatePath("/admin/apply");
+        revalidatePath("/admin/trial");
 
         // SMS 템플릿 변수 — 관리자/코치/학부모 공통으로 사용
         const smsVars = {
@@ -386,6 +388,8 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
     // DDL ensure — 테이블이 없으면 자동 생성
     await ensureEnrollmentApplicationTable();
 
+    let matchedTrialLeadId = data.trialLeadId || null;
+
     // trialLeadId가 있으면 존재 여부 확인
     if (data.trialLeadId) {
         try {
@@ -395,10 +399,38 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             );
             if (lead.length === 0) {
                 // 존재하지 않는 trialLeadId는 null로 처리 (에러 대신 무시)
-                data.trialLeadId = undefined;
+                matchedTrialLeadId = null;
             }
         } catch {
-            data.trialLeadId = undefined;
+            matchedTrialLeadId = null;
+        }
+    }
+
+    if (!matchedTrialLeadId) {
+        try {
+            await ensureTrialLeadTable();
+            const phoneDigits = normalizePhone(parentPhone).replace(/\D/g, "");
+            const matches = await prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id
+                 FROM "TrialLead"
+                 WHERE TRIM("childName") = $1
+                   AND regexp_replace(COALESCE("parentPhone", ''), '[^0-9]', '', 'g') = $2
+                   AND status IN ('ATTENDED', 'SCHEDULED', 'CONTACTED', 'NEW')
+                 ORDER BY
+                   CASE status
+                     WHEN 'ATTENDED' THEN 1
+                     WHEN 'SCHEDULED' THEN 2
+                     WHEN 'CONTACTED' THEN 3
+                     ELSE 4
+                   END,
+                   COALESCE("attendedDate", "trialDate", "scheduledDate", "createdAt") DESC
+                 LIMIT 1`,
+                childName,
+                phoneDigits,
+            );
+            matchedTrialLeadId = matches[0]?.id ?? null;
+        } catch (matchError) {
+            console.warn("[submitEnrollApplication] trial lead auto match failed:", matchError);
         }
     }
 
@@ -425,7 +457,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                 $23, $24, $25, $26,
                 'PENDING', NOW(), NOW()
             ) RETURNING id`,
-            data.trialLeadId || null,           // $1
+            matchedTrialLeadId || null,         // $1
             childName,                          // $2
             data.childBirthDate,                // $3
             data.childGender || null,           // $4
@@ -453,6 +485,18 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             data.shuttleNoticeConfirmed ?? false,     // $26
         );
 
+        if (matchedTrialLeadId && rows[0]?.id) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "TrialLead"
+                 SET "enrollApplicationReceivedAt" = COALESCE("enrollApplicationReceivedAt", NOW()),
+                     "enrollApplicationId" = $1,
+                     "updatedAt" = NOW()
+                 WHERE id = $2`,
+                rows[0].id,
+                matchedTrialLeadId,
+            );
+        }
+
         // 관리자 페이지 캐시 무효화
         revalidatePath("/admin");
 
@@ -467,6 +511,10 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
         // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
         // 템플릿 기반 SMS: ENROLL_NEW_ADMIN(관리자), ENROLL_NEW_COACH(코치)
         // slotKeys: 희망 슬롯이 있으면 해당 슬롯 담당 코치에게만 SMS 발송
+        revalidatePath("/admin");
+        revalidatePath("/admin/apply");
+        revalidatePath("/admin/trial");
+
         const enrollSlotKeys = data.preferredSlotKeys
             ? data.preferredSlotKeys.split(",").map(k => k.trim()).filter(Boolean)
             : undefined;

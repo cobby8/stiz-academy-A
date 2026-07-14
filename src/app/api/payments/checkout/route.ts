@@ -17,7 +17,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "청구서 ID가 필요합니다." }, { status: 400 });
         }
 
-        const origin = req.headers.get("origin") || new URL(req.url).origin;
+        const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+        const origin = configuredOrigin && /^https?:\/\//i.test(configuredOrigin)
+            ? new URL(configuredOrigin).origin
+            : new URL(req.url).origin;
         const result = await createCheckoutSession({
             invoiceId,
             parentEmail: user.email,

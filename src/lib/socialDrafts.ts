@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import type { SocialMediaItem } from "@/lib/socialCaptionAI";
+import { normalizeSubjectStudentIds } from "@/lib/studentMediaConsentPolicy";
+
+export { normalizeSubjectStudentIds } from "@/lib/studentMediaConsentPolicy";
 
 export type SocialPostDraftStatus = "DRAFT" | "READY" | "PUBLISHING" | "PUBLISHED" | "REJECTED" | "FAILED";
 
@@ -11,6 +14,7 @@ export type SocialPostDraft = {
   authorRole: string | null;
   sessionId: string | null;
   classId: string | null;
+  subjectStudentIds: string[];
   source: string | null;
   status: SocialPostDraftStatus;
   lessonType: string | null;
@@ -50,6 +54,7 @@ function mapDraft(row: any): SocialPostDraft {
     authorRole: row.authorRole ?? null,
     sessionId: row.sessionId ?? null,
     classId: row.classId ?? null,
+    subjectStudentIds: normalizeSubjectStudentIds(row.subjectStudentIdsJSON),
     source: row.source ?? null,
     status: row.status,
     lessonType: row.lessonType ?? null,
@@ -111,6 +116,7 @@ export async function ensureSocialPostDraftTable() {
       "authorRole" TEXT,
       "sessionId" TEXT,
       "classId" TEXT,
+      "subjectStudentIdsJSON" TEXT NOT NULL DEFAULT '[]',
       source TEXT,
       status TEXT NOT NULL DEFAULT 'DRAFT',
       "lessonType" TEXT,
@@ -139,6 +145,7 @@ export async function ensureSocialPostDraftTable() {
     ["sessionId", "TEXT"],
     ["classId", "TEXT"],
     ["source", "TEXT"],
+    ["subjectStudentIdsJSON", "TEXT NOT NULL DEFAULT '[]'"],
     ["instagramPublishAttempts", "INTEGER NOT NULL DEFAULT 0"],
     ["instagramLastAttemptAt", "TIMESTAMPTZ"],
     ["instagramNextRetryAt", "TIMESTAMPTZ"],
@@ -179,6 +186,7 @@ export async function createSocialPostDraftRecord(data: {
   isPublic?: boolean;
   sessionId?: string | null;
   classId?: string | null;
+  subjectStudentIds?: string[];
   source?: string | null;
 }) {
   await ensureSocialPostDraftTable();
@@ -187,12 +195,12 @@ export async function createSocialPostDraftRecord(data: {
     `INSERT INTO "SocialPostDraft" (
        id, "authorUserId", "authorName", "authorRole", status,
        "lessonType", memo, title, caption, hashtags, "mediaJSON", "isPublic",
-       "sessionId", "classId", source, "submittedAt", "createdAt", "updatedAt"
+       "sessionId", "classId", source, "subjectStudentIdsJSON", "submittedAt", "createdAt", "updatedAt"
      )
      VALUES (
        (gen_random_uuid())::text, $1, $2, $3, 'READY',
        $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-       NOW(), NOW(), NOW()
+       $14, NOW(), NOW(), NOW()
      )
      RETURNING *`,
     data.authorUserId,
@@ -208,6 +216,7 @@ export async function createSocialPostDraftRecord(data: {
     data.sessionId || null,
     data.classId || null,
     data.source || null,
+    JSON.stringify(normalizeSubjectStudentIds(data.subjectStudentIds)),
   );
 
   return mapDraft(rows[0]);
@@ -267,6 +276,7 @@ export async function updateSocialPostDraftRecord(
     lessonType?: string | null;
     memo?: string | null;
     isPublic?: boolean;
+    subjectStudentIds?: string[];
   },
   options?: { authorUserId?: string | null },
 ) {
@@ -280,10 +290,11 @@ export async function updateSocialPostDraftRecord(
          "lessonType" = $4,
          memo = $5,
          "isPublic" = $6,
+         "subjectStudentIdsJSON" = CASE WHEN $7::boolean THEN $8 ELSE "subjectStudentIdsJSON" END,
          "updatedAt" = NOW()
-     WHERE id = $7
+     WHERE id = $9
        AND status IN ('DRAFT', 'READY', 'FAILED')
-       AND ($8::text IS NULL OR "authorUserId" = $8)
+       AND ($10::text IS NULL OR "authorUserId" = $10)
      RETURNING *`,
     data.title || null,
     data.caption || null,
@@ -291,6 +302,8 @@ export async function updateSocialPostDraftRecord(
     data.lessonType || null,
     data.memo || null,
     data.isPublic !== false,
+    data.subjectStudentIds !== undefined,
+    JSON.stringify(normalizeSubjectStudentIds(data.subjectStudentIds)),
     id,
     options?.authorUserId || null,
   );

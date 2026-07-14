@@ -298,6 +298,7 @@ model PaymentWebhookEvent {
 
   @@index([orderId])
   @@index([paymentKey])
+  @@unique([provider, eventId])
 }
 
 model PaymentAuditLog {
@@ -770,6 +771,24 @@ model GalleryPost {
   @@index([externalId])
 }
 
+// 학생 사진의 내부 보관·홈페이지·외부 SNS 공개 동의를 변경 이력 방식으로 보관한다.
+model StudentMediaConsent {
+  id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId         String
+  guardianUserId    String?
+  internalAllowed   Boolean   @default(false)
+  galleryAllowed    Boolean   @default(false)
+  instagramAllowed  Boolean   @default(false)
+  policyVersion     String
+  evidenceJSON      String?
+  recordedByUserId  String?
+  recordedAt        DateTime  @default(now()) @db.Timestamptz(6)
+  revokedAt         DateTime? @db.Timestamptz(6)
+
+  @@index([studentId, recordedAt])
+  @@index([revokedAt])
+}
+
 model Notice {
   id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   authorUserId    String?
@@ -814,7 +833,7 @@ model NotificationDelivery {
   recipientPhone  String?
   channel         String // IN_APP, PUSH, SMS
   dedupeKey       String    @unique
-  status          String    @default("PENDING") // PENDING, SENT, FAILED, SKIPPED
+  status          String    @default("PENDING") // PENDING, SENT, PARTIAL, FAILED, SKIPPED
   attemptCount    Int       @default(0)
   sentAt          DateTime? @db.Timestamptz(6)
   failedAt        DateTime? @db.Timestamptz(6)

@@ -15,6 +15,7 @@ import {
   type SocialPostDraft,
 } from "@/lib/socialDrafts";
 import { materializePrivateMediaJSON } from "@/lib/sessionPhotoStorage";
+import { assertSocialDraftMediaConsent } from "@/lib/studentMediaConsent";
 
 const MAX_QUEUE_ATTEMPTS = 3;
 const RETRY_DELAYS_MINUTES = [1, 5];
@@ -35,6 +36,7 @@ async function ensureDraftMediaIsPublic(draft: SocialPostDraft) {
 }
 
 export async function upsertGalleryPostFromSocialDraft(draft: SocialPostDraft) {
+  await assertSocialDraftMediaConsent(draft, "GALLERY");
   draft = await ensureDraftMediaIsPublic(draft);
   await ensureGalleryPostInstagramColumns();
 
@@ -113,6 +115,9 @@ export async function publishSocialDraftToInstagramNow(
     throw new Error("게시할 수 있는 초안을 찾지 못했습니다.");
   }
 
+  // 대기 중 동의가 철회될 수 있으므로 실제 외부 발행 직전에 다시 확인합니다.
+  await assertSocialDraftMediaConsent(currentDraft, "INSTAGRAM");
+
   currentDraft = await ensureDraftMediaIsPublic(currentDraft);
 
   const mediaItems = parseSocialDraftMedia(currentDraft.mediaJSON).filter((item) => item.type === "image");
@@ -135,7 +140,7 @@ export async function publishSocialDraftToInstagramNow(
     return { ok: true as const, draft: latest ?? currentDraft, skipped: true as const };
   }
 
-  const settings = (await getAcademySettings()) as any;
+  const settings = await getAcademySettings();
   const caption = fullSocialCaption(currentDraft.caption, currentDraft.hashtags);
   const result = await publishGalleryPostToInstagram({
     businessAccountId: settings.instagramBusinessAccountId,

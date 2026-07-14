@@ -53,6 +53,7 @@ type PaymentTransactionRow = {
     studentId: string;
     parentId: string | null;
     orderId: string;
+    paymentKey?: string | null;
     amount: number;
     status: string;
     invoiceStatus?: string;
@@ -202,6 +203,8 @@ export async function ensurePaymentInfrastructure() {
         `CREATE INDEX IF NOT EXISTS "PaymentTransaction_payment_status_idx" ON "PaymentTransaction" ("paymentId", status)`,
         `CREATE INDEX IF NOT EXISTS "PaymentWebhookEvent_order_idx" ON "PaymentWebhookEvent" ("orderId")`,
         `CREATE INDEX IF NOT EXISTS "PaymentWebhookEvent_paymentKey_idx" ON "PaymentWebhookEvent" ("paymentKey")`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS "PaymentWebhookEvent_provider_eventId_key"
+         ON "PaymentWebhookEvent" (provider, "eventId")`,
         `CREATE INDEX IF NOT EXISTS "PaymentAuditLog_payment_idx" ON "PaymentAuditLog" ("paymentId", "createdAt" DESC)`,
     ];
 
@@ -640,10 +643,127 @@ function encodeTossSecret(secretKey: string) {
     return Buffer.from(`${secretKey}:`).toString("base64");
 }
 
+type TossPaymentResult = Record<string, unknown> & {
+    paymentKey?: string;
+    orderId?: string;
+    status?: string;
+    totalAmount?: number;
+    method?: string;
+};
+
+type TossLookupResult =
+    | { kind: "verified"; payment: TossPaymentResult }
+    | { kind: "rejected"; status: number }
+    | { kind: "retryable"; reason: string };
+
+async function requestTossPayment(path: string): Promise<TossLookupResult> {
+    const { secretKey } = getPaymentProviderConfig();
+    if (!secretKey) return { kind: "retryable", reason: "TOSS_SECRET_NOT_CONFIGURED" };
+
+    try {
+        const response = await fetch(`https://api.tosspayments.com${path}`, {
+            method: "GET",
+            headers: { Authorization: `Basic ${encodeTossSecret(secretKey)}` },
+            cache: "no-store",
+        });
+        if (response.status === 429 || response.status >= 500) {
+            return { kind: "retryable", reason: `TOSS_LOOKUP_${response.status}` };
+        }
+        if (!response.ok) return { kind: "rejected", status: response.status };
+        return { kind: "verified", payment: await response.json() as TossPaymentResult };
+    } catch {
+        return { kind: "retryable", reason: "TOSS_LOOKUP_NETWORK_ERROR" };
+    }
+}
+
+async function getVerifiedTossPayment(paymentKey: string | null, orderId: string | null) {
+    if (!paymentKey && !orderId) return { kind: "rejected", status: 400 } as const;
+    const path = paymentKey
+        ? `/v1/payments/${encodeURIComponent(paymentKey)}`
+        : `/v1/payments/orders/${encodeURIComponent(orderId!)}`;
+    return requestTossPayment(path);
+}
+
+async function finalizeVerifiedTossPayment(input: {
+    tx: PaymentTransactionRow;
+    payment: TossPaymentResult;
+    actorType: "PARENT" | "WEBHOOK";
+    actorId?: string | null;
+}) {
+    const paymentKey = readString(input.payment.paymentKey);
+    const orderId = readString(input.payment.orderId);
+    const amount = readNumber(input.payment.totalAmount);
+    if (
+        input.payment.status !== "DONE"
+        || !paymentKey
+        || orderId !== input.tx.orderId
+        || amount !== Number(input.tx.amount)
+    ) {
+        return { ok: false as const, error: "TOSS_PAYMENT_NOT_VERIFIED" };
+    }
+
+    const receiptUrl = readString(asRecord(input.payment.receipt).url)
+        ?? readString(asRecord(input.payment.card).receiptUrl);
+
+    return prisma.$transaction(async (db) => {
+        const locked = await db.$queryRawUnsafe<PaymentTransactionRow[]>(
+            `SELECT tx.*, i.status AS "invoiceStatus", p.status AS "paymentStatus"
+             FROM "PaymentTransaction" tx
+             JOIN "PaymentInvoice" i ON i.id = tx."invoiceId"
+             JOIN "Payment" p ON p.id = tx."paymentId"
+             WHERE tx.id = $1
+             FOR UPDATE OF tx, i, p`,
+            input.tx.id,
+        );
+        const current = locked[0];
+        if (!current) return { ok: false as const, error: "TRANSACTION_NOT_FOUND" };
+        if (current.status === "DONE" && current.paymentStatus === "PAID" && current.invoiceStatus === "PAID") {
+            return { ok: true as const, alreadyConfirmed: true };
+        }
+        if (!["READY", "IN_PROGRESS", "DONE"].includes(current.status)
+            || ["REFUNDED", "CANCELED"].includes(current.paymentStatus ?? "")
+            || ["REFUNDED", "CANCELED"].includes(current.invoiceStatus ?? "")
+            || current.status === "CANCELED") {
+            return { ok: false as const, error: "PAYMENT_ALREADY_CLOSED" };
+        }
+
+        const paymentUpdated = await db.$executeRawUnsafe(
+            `UPDATE "Payment" SET status = 'PAID', "paidDate" = COALESCE("paidDate", NOW()),
+             method = COALESCE($2, method), "paidProvider" = 'TOSS', "providerOrderId" = $3,
+             "providerPaymentKey" = $4, "receiptUrl" = COALESCE($5, "receiptUrl"), "updatedAt" = NOW()
+             WHERE id = $1 AND status IN ('PENDING', 'OVERDUE', 'PAID')`,
+            current.paymentId, readString(input.payment.method), orderId, paymentKey, receiptUrl,
+        );
+        const invoiceUpdated = await db.$executeRawUnsafe(
+            `UPDATE "PaymentInvoice" SET status = 'PAID', "paidAt" = COALESCE("paidAt", NOW()), "updatedAt" = NOW()
+             WHERE id = $1 AND status IN ('ISSUED', 'SENT', 'OVERDUE', 'PAID')`,
+            current.invoiceId,
+        );
+        const transactionUpdated = await db.$executeRawUnsafe(
+            `UPDATE "PaymentTransaction" SET status = 'DONE', "paymentKey" = $2,
+             method = COALESCE($3, method), "receiptUrl" = COALESCE($4, "receiptUrl"),
+             "approvedAt" = COALESCE("approvedAt", NOW()), "rawResponse" = $5::jsonb, "updatedAt" = NOW()
+             WHERE id = $1 AND status IN ('READY', 'IN_PROGRESS', 'DONE')`,
+            current.id, paymentKey, readString(input.payment.method), receiptUrl, JSON.stringify(input.payment),
+        );
+        if (paymentUpdated !== 1 || invoiceUpdated !== 1 || transactionUpdated !== 1) {
+            throw new Error("PAYMENT_LEDGER_STATE_CONFLICT");
+        }
+        await db.$executeRawUnsafe(
+            `INSERT INTO "PaymentAuditLog" (id, "paymentId", "invoiceId", "transactionId", "actorType", "actorId", action, message, metadata, "createdAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, 'PAYMENT_MARK_PAID', 'Verified Toss payment marked as paid', $6::jsonb, NOW())`,
+            current.paymentId, current.invoiceId, current.id, input.actorType, input.actorId ?? null,
+            JSON.stringify({ provider: "TOSS", orderId, paymentKey: "[verified]" }),
+        );
+        return { ok: true as const, alreadyConfirmed: false };
+    });
+}
+
 export async function confirmTossPayment(input: {
     paymentKey: string;
     orderId: string;
     amount: number;
+    parentEmail: string;
 }) {
     await ensurePaymentInfrastructure();
 
@@ -652,25 +772,21 @@ export async function confirmTossPayment(input: {
          FROM "PaymentTransaction" tx
          JOIN "PaymentInvoice" i ON i.id = tx."invoiceId"
          JOIN "Payment" p ON p.id = tx."paymentId"
-         WHERE tx."orderId" = $1
+         JOIN "User" u ON u.id = tx."parentId"
+         WHERE tx."orderId" = $1 AND LOWER(u.email) = LOWER($2)
          LIMIT 1`,
         input.orderId,
+        input.parentEmail,
     );
     const tx = txRows[0];
     if (!tx) return { ok: false as const, error: "결제 주문을 찾을 수 없습니다." };
 
     if (Number(tx.amount) !== Number(input.amount)) {
-        await prisma.$executeRawUnsafe(
-            `UPDATE "PaymentTransaction"
-             SET status = 'ABORTED', "failureCode" = 'AMOUNT_MISMATCH',
-                 "failureMessage" = '결제 금액이 청구 금액과 다릅니다.', "updatedAt" = NOW()
-             WHERE id = $1`,
-            tx.id,
-        );
         return { ok: false as const, error: "결제 금액이 청구 금액과 다릅니다." };
     }
 
-    if (tx.status === "DONE" || tx.paymentStatus === "PAID" || tx.invoiceStatus === "PAID") {
+    if ((tx.status === "DONE" || tx.paymentStatus === "PAID" || tx.invoiceStatus === "PAID")
+        && tx.paymentKey === input.paymentKey) {
         return { ok: true as const, alreadyConfirmed: true };
     }
 
@@ -692,13 +808,27 @@ export async function confirmTossPayment(input: {
         }),
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({
+        code: `TOSS_HTTP_${response.status}`,
+        message: "Toss 결제 승인 응답을 확인할 수 없습니다.",
+    }));
 
     if (!response.ok) {
+        const lookup = await getVerifiedTossPayment(input.paymentKey, input.orderId);
+        if (lookup.kind === "verified") {
+            const recovered = await finalizeVerifiedTossPayment({
+                tx,
+                payment: lookup.payment,
+                actorType: "PARENT",
+                actorId: tx.parentId,
+            });
+            if (recovered.ok) return { ok: true as const, payment: lookup.payment, recovered: true as const };
+        }
+
+        const retryable = response.status === 429 || response.status >= 500 || lookup.kind === "retryable";
         await prisma.$executeRawUnsafe(
             `UPDATE "PaymentTransaction"
-             SET status = 'ABORTED',
-                 "paymentKey" = $2,
+             SET "paymentKey" = $2,
                  "failureCode" = $3,
                  "failureMessage" = $4,
                  "rawResponse" = $5::jsonb,
@@ -710,25 +840,22 @@ export async function confirmTossPayment(input: {
             result.message ?? "Toss payment confirm failed",
             JSON.stringify(result),
         );
-        return { ok: false as const, error: result.message ?? "결제 승인에 실패했습니다." };
+        return {
+            ok: false as const,
+            retryable,
+            error: retryable
+                ? "결제 승인 상태를 확인 중입니다. 잠시 후 다시 확인해 주세요."
+                : result.message ?? "결제 승인에 실패했습니다.",
+        };
     }
 
-    const method = result.method ?? null;
-    const receiptUrl = result.receipt?.url ?? result.card?.receiptUrl ?? null;
+    if (result.status !== "DONE" || result.paymentKey !== input.paymentKey
+        || result.orderId !== input.orderId || Number(result.totalAmount) !== Number(tx.amount)) {
+        return { ok: false as const, error: "Toss 결제 검증에 실패했습니다." };
+    }
 
-    await markPaymentPaid({
-        paymentId: tx.paymentId,
-        invoiceId: tx.invoiceId,
-        transactionId: tx.id,
-        actorType: "PARENT",
-        actorId: tx.parentId ?? null,
-        method,
-        provider: "TOSS",
-        orderId: input.orderId,
-        paymentKey: input.paymentKey,
-        receiptUrl,
-        rawResponse: result,
-    });
+    const finalized = await finalizeVerifiedTossPayment({ tx, payment: result, actorType: "PARENT", actorId: tx.parentId });
+    if (!finalized.ok) return { ok: false as const, error: "결제 완료 처리에 실패했습니다." };
 
     return { ok: true as const, payment: result };
 }
@@ -743,13 +870,20 @@ export async function recordTossWebhook(payload: unknown) {
     const paymentKey = readString(data.paymentKey);
     const orderId = readString(data.orderId);
 
-    const eventRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    const eventRows = await prisma.$queryRawUnsafe<Array<{ id: string; processed: boolean }>>(
         `INSERT INTO "PaymentWebhookEvent" (
             id, provider, "eventId", "eventType", "paymentKey", "orderId",
             payload, "receivedAt"
         )
         VALUES (gen_random_uuid()::text, 'TOSS', $1, $2, $3, $4, $5::jsonb, NOW())
-        RETURNING id`,
+        ON CONFLICT (provider, "eventId")
+        DO UPDATE SET
+          "eventType" = CASE WHEN "PaymentWebhookEvent".processed THEN "PaymentWebhookEvent"."eventType" ELSE EXCLUDED."eventType" END,
+          "paymentKey" = CASE WHEN "PaymentWebhookEvent".processed THEN "PaymentWebhookEvent"."paymentKey" ELSE EXCLUDED."paymentKey" END,
+          "orderId" = CASE WHEN "PaymentWebhookEvent".processed THEN "PaymentWebhookEvent"."orderId" ELSE EXCLUDED."orderId" END,
+          payload = CASE WHEN "PaymentWebhookEvent".processed THEN "PaymentWebhookEvent".payload ELSE EXCLUDED.payload END,
+          "receivedAt" = NOW()
+        RETURNING id, processed`,
         eventId,
         eventType,
         paymentKey,
@@ -758,6 +892,9 @@ export async function recordTossWebhook(payload: unknown) {
     );
 
     const eventRecordId = eventRows[0]?.id ?? null;
+    if (eventRows[0]?.processed) {
+        return { ok: true as const, processed: true, duplicate: true, eventId: eventRecordId };
+    }
     if (!orderId && !paymentKey) {
         return { ok: true as const, processed: false, eventId: eventRecordId };
     }
@@ -781,20 +918,32 @@ export async function recordTossWebhook(payload: unknown) {
         return { ok: true as const, processed: false, eventId: eventRecordId };
     }
 
-    const webhookAmount = readNumber(data.totalAmount) ?? readNumber(data.amount) ?? Number(tx.amount);
-    if (data.status === "DONE" && Number(webhookAmount) === Number(tx.amount)) {
-        await markPaymentPaid({
-            paymentId: tx.paymentId,
-            invoiceId: tx.invoiceId,
-            transactionId: tx.id,
-            actorType: "WEBHOOK",
-            method: readString(data.method),
-            provider: "TOSS",
-            orderId: tx.orderId,
-            paymentKey,
-            receiptUrl: readString(asRecord(data.receipt).url),
-            rawResponse: payload,
-        });
+    const lookup = await getVerifiedTossPayment(paymentKey, orderId);
+    if (lookup.kind === "retryable") {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "PaymentWebhookEvent" SET error = $2 WHERE id = $1`,
+            eventRecordId, lookup.reason,
+        );
+        return { ok: false as const, processed: false, retryable: true, eventId: eventRecordId };
+    }
+
+    const verified = lookup.kind === "verified" ? lookup.payment : null;
+    const matches = verified
+        && verified.status === "DONE"
+        && verified.orderId === tx.orderId
+        && verified.paymentKey
+        && (!paymentKey || verified.paymentKey === paymentKey)
+        && Number(verified.totalAmount) === Number(tx.amount);
+
+    if (matches) {
+        const finalized = await finalizeVerifiedTossPayment({ tx, payment: verified, actorType: "WEBHOOK" });
+        if (!finalized.ok) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "PaymentWebhookEvent" SET error = $2, "processedAt" = NOW() WHERE id = $1`,
+                eventRecordId, finalized.error,
+            );
+            return { ok: true as const, processed: false, eventId: eventRecordId };
+        }
 
         await prisma.$executeRawUnsafe(
             `UPDATE "PaymentWebhookEvent"
@@ -802,7 +951,12 @@ export async function recordTossWebhook(payload: unknown) {
              WHERE id = $1`,
             eventRecordId,
         );
+        return { ok: true as const, processed: true, eventId: eventRecordId };
     }
 
-    return { ok: true as const, processed: true, eventId: eventRecordId };
+    await prisma.$executeRawUnsafe(
+        `UPDATE "PaymentWebhookEvent" SET error = 'TOSS_PAYMENT_NOT_VERIFIED', "processedAt" = NOW() WHERE id = $1`,
+        eventRecordId,
+    );
+    return { ok: true as const, processed: false, eventId: eventRecordId };
 }

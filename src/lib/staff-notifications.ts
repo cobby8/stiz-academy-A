@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { sendPushToUser } from "@/lib/pushNotification";
+import { sendPushToUser, type PushDeliveryResult } from "@/lib/pushNotification";
 
 export type ParentRecipient = {
   studentId: string;
@@ -7,8 +7,15 @@ export type ParentRecipient = {
   userId: string;
 };
 
+export type ParentNotificationResult = {
+  sent: boolean;
+  duplicate: boolean;
+  inAppCreated: boolean;
+  push: PushDeliveryResult | null;
+};
+
 export async function getClassParentRecipients(classId: string, studentIds?: string[]) {
-  const rows = await prisma.$queryRawUnsafe<ParentRecipient[]>(
+  return prisma.$queryRawUnsafe<ParentRecipient[]>(
     `SELECT DISTINCT s.id AS "studentId", s.name AS "studentName", s."parentId" AS "userId"
      FROM "Enrollment" e
      JOIN "Student" s ON s.id = e."studentId"
@@ -18,10 +25,9 @@ export async function getClassParentRecipients(classId: string, studentIds?: str
     classId,
     studentIds?.length ? studentIds : null,
   );
-  return rows;
 }
 
-/** DB의 고유 dedupeKey를 먼저 선점한 요청만 앱 알림과 푸시를 발송합니다. */
+/** 앱 알림과 푸시를 서로 다른 장부 행으로 기록해 채널별 실제 결과를 보존합니다. */
 export async function deliverParentNotification(input: {
   eventType: string;
   dedupeKey: string;
@@ -32,15 +38,15 @@ export async function deliverParentNotification(input: {
   sessionId?: string;
   attendanceId?: string;
   noticeId?: string;
-}) {
-  const claimed = await prisma.$queryRawUnsafe<{ id: string }[]>(
+}): Promise<ParentNotificationResult> {
+  const inAppClaimed = await prisma.$queryRawUnsafe<{ id: string }[]>(
     `WITH delivery AS (
        INSERT INTO "NotificationDelivery" (
          id, "eventType", "sessionId", "attendanceId", "noticeId", "studentId",
-         "recipientUserId", channel, "dedupeKey", status, "attemptCount", "createdAt", "updatedAt"
+         "recipientUserId", channel, "dedupeKey", status, "attemptCount", "sentAt", "createdAt", "updatedAt"
        ) VALUES (
          gen_random_uuid()::text, $1, $2, $3, $4, $5, $6,
-         'IN_APP', $7, 'PENDING', 1, NOW(), NOW()
+         'IN_APP', $7, 'SENT', 1, NOW(), NOW(), NOW()
        ) ON CONFLICT ("dedupeKey") DO NOTHING
        RETURNING id
      ), notification AS (
@@ -60,26 +66,90 @@ export async function deliverParentNotification(input: {
     input.linkUrl,
   );
 
-  if (!claimed[0]) return { sent: false, duplicate: true };
+  const pushClaimed = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `INSERT INTO "NotificationDelivery" (
+       id, "eventType", "sessionId", "attendanceId", "noticeId", "studentId",
+       "recipientUserId", channel, "dedupeKey", status, "attemptCount", "createdAt", "updatedAt"
+     ) VALUES (
+       gen_random_uuid()::text, $1, $2, $3, $4, $5, $6,
+       'PUSH', $7, 'PENDING', 1, NOW(), NOW()
+     ) ON CONFLICT ("dedupeKey") DO NOTHING
+     RETURNING id`,
+    input.eventType,
+    input.sessionId ?? null,
+    input.attendanceId ?? null,
+    input.noticeId ?? null,
+    input.recipient.studentId,
+    input.recipient.userId,
+    `${input.dedupeKey}:push`,
+  );
+
+  // 두 장부가 모두 이미 있으면 같은 이벤트의 재호출이므로 다시 발송하지 않습니다.
+  if (!pushClaimed[0]) {
+    return {
+      sent: false,
+      duplicate: !inAppClaimed[0],
+      inAppCreated: Boolean(inAppClaimed[0]),
+      push: null,
+    };
+  }
 
   try {
-    await sendPushToUser(input.recipient.userId, {
+    const push = await sendPushToUser(input.recipient.userId, {
       title: input.title,
       body: input.message,
       url: input.linkUrl,
       tag: input.eventType,
     });
+    const deliveryStatus =
+      push.status === "SENT"
+        ? "SENT"
+        : push.status === "PARTIAL"
+          ? "PARTIAL"
+        : push.status === "NO_SUBSCRIPTION" || push.status === "NOT_CONFIGURED"
+          ? "SKIPPED"
+          : "FAILED";
+    const errorCode = push.status === "SENT" ? null : push.errorCode ?? push.status;
+
     await prisma.$executeRawUnsafe(
-      `UPDATE "NotificationDelivery" SET status = 'SENT', "sentAt" = NOW(), "updatedAt" = NOW() WHERE id = $1`,
-      claimed[0].id,
+      `UPDATE "NotificationDelivery"
+       SET status = $2,
+           "sentAt" = CASE WHEN $2 IN ('SENT', 'PARTIAL') THEN NOW() ELSE NULL END,
+           "failedAt" = CASE WHEN $2 IN ('FAILED', 'PARTIAL') THEN NOW() ELSE NULL END,
+           "errorCode" = $3,
+           "updatedAt" = NOW()
+       WHERE id = $1`,
+      pushClaimed[0].id,
+      deliveryStatus,
+      errorCode,
     );
-    return { sent: true, duplicate: false };
+    return {
+      sent: push.sentCount > 0,
+      duplicate: false,
+      inAppCreated: Boolean(inAppClaimed[0]),
+      push,
+    };
   } catch (error) {
+    const errorCode = error instanceof Error ? error.message.slice(0, 200) : "PUSH_FAILED";
     await prisma.$executeRawUnsafe(
-      `UPDATE "NotificationDelivery" SET status = 'FAILED', "failedAt" = NOW(), "errorCode" = $2, "updatedAt" = NOW() WHERE id = $1`,
-      claimed[0].id,
-      error instanceof Error ? error.message.slice(0, 200) : "PUSH_FAILED",
+      `UPDATE "NotificationDelivery"
+       SET status = 'FAILED', "failedAt" = NOW(), "errorCode" = $2, "updatedAt" = NOW()
+       WHERE id = $1`,
+      pushClaimed[0].id,
+      errorCode,
     );
-    return { sent: false, duplicate: false };
+    return {
+      sent: false,
+      duplicate: false,
+      inAppCreated: Boolean(inAppClaimed[0]),
+      push: {
+        status: "FAILED",
+        subscriptionCount: 0,
+        sentCount: 0,
+        failedCount: 1,
+        removedCount: 0,
+        errorCode,
+      },
+    };
   }
 }

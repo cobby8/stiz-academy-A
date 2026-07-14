@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
-import { requireAdmin, requireStaff } from "@/lib/auth-guard";
+import { requireAdmin, requireOwner, requireStaff } from "@/lib/auth-guard";
 import { generateSocialCaptionDraft } from "@/lib/socialCaptionAI";
 import {
   publishSocialDraftToInstagramNow,
@@ -16,8 +16,10 @@ import {
   safeSocialDraftMediaJSON,
   updateSocialPostDraftRecord,
   type SocialPostDraft,
+  normalizeSubjectStudentIds,
 } from "@/lib/socialDrafts";
 import { removePublishedMediaCopies } from "@/lib/sessionPhotoStorage";
+import { assertSocialDraftMediaConsent } from "@/lib/studentMediaConsent";
 
 type SaveDraftInput = {
   title?: string | null;
@@ -26,6 +28,7 @@ type SaveDraftInput = {
   lessonType?: string | null;
   memo?: string | null;
   isPublic?: boolean;
+  subjectStudentIds?: string[];
 };
 
 function revalidateSocialPostPaths() {
@@ -45,6 +48,7 @@ export async function createSocialPostDraft(data: {
   sessionId?: string | null;
   classId?: string | null;
   source?: string | null;
+  subjectStudentIds?: string[];
 }) {
   const staff = await requireStaff();
   // 일반 빠른 업로드에서는 클라이언트가 보낸 저장소 메타데이터를 신뢰하지 않습니다.
@@ -76,10 +80,12 @@ export async function createSocialPostDraft(data: {
     caption: aiDraft.caption,
     hashtags: aiDraft.hashtags,
     mediaJSON,
-    isPublic: data.isPublic !== false,
+    // 선생님 초안은 관리자 검토 전 공개 상태가 될 수 없습니다.
+    isPublic: staff.appUserRole === "INSTRUCTOR" ? false : data.isPublic !== false,
     sessionId: data.sessionId,
     classId: data.classId,
     source: data.source,
+    subjectStudentIds: normalizeSubjectStudentIds(data.subjectStudentIds),
   });
 
   revalidateSocialPostPaths();
@@ -90,7 +96,13 @@ export async function saveSocialPostDraft(id: string, data: SaveDraftInput) {
   const staff = await requireStaff();
   const authorUserId = staff.appUserRole === "INSTRUCTOR" ? staff.appUserId : null;
 
-  const draft = await updateSocialPostDraftRecord(id, data, { authorUserId });
+  const normalizedData = data.subjectStudentIds === undefined
+    ? data
+    : { ...data, subjectStudentIds: normalizeSubjectStudentIds(data.subjectStudentIds) };
+  const safeData = staff.appUserRole === "INSTRUCTOR"
+    ? { ...normalizedData, isPublic: false }
+    : normalizedData;
+  const draft = await updateSocialPostDraftRecord(id, safeData, { authorUserId });
   revalidateSocialPostPaths();
   return { ok: true, draft };
 }
@@ -123,6 +135,7 @@ export async function publishSocialPostDraftToGallery(id: string) {
 
   const currentDraft = await getSocialPostDraftById(id);
   assertCanPublishDraft(currentDraft, staff);
+  const consent = await assertSocialDraftMediaConsent(currentDraft!, "GALLERY");
 
   const mediaItems = parseSocialDraftMedia(currentDraft!.mediaJSON).filter((item) => item.type === "image");
   if (mediaItems.length === 0) {
@@ -132,19 +145,31 @@ export async function publishSocialPostDraftToGallery(id: string) {
   const galleryPostId = await upsertGalleryPostFromSocialDraft(currentDraft!);
   const draft = await markSocialPostDraftPublishing(id, { galleryPostId });
 
+  console.info("[media-consent] gallery-approved", {
+    draftId: id,
+    galleryPostId,
+    approvedByUserId: staff.appUserId,
+    scope: consent.scope,
+    studentCount: consent.studentCount,
+  });
+
   revalidateSocialPostPaths();
-  return { ok: true, draft, galleryPostId };
+  return { ok: true, draft, galleryPostId, consent };
 }
 
 export async function publishSocialPostDraftToInstagram(id: string) {
-  const staff = await requireAdmin();
+  // 외부 SNS 게시 권한은 현재 역할 체계에서 최고 관리자(원장)에게만 부여합니다.
+  const owner = await requireOwner();
 
   const currentDraft = await getSocialPostDraftById(id);
   if (currentDraft?.status === "PUBLISHED") {
     return { ok: true, draft: currentDraft };
   }
 
-  assertCanPublishDraft(currentDraft, staff);
+  if (!currentDraft || !canPublishDraftStatus(currentDraft.status)) {
+    throw new Error("게시할 수 있는 초안을 찾지 못했습니다.");
+  }
+  const consent = await assertSocialDraftMediaConsent(currentDraft, "INSTAGRAM");
 
   const mediaItems = parseSocialDraftMedia(currentDraft!.mediaJSON).filter((item) => item.type === "image");
   if (mediaItems.length === 0) {
@@ -152,8 +177,14 @@ export async function publishSocialPostDraftToInstagram(id: string) {
   }
 
   const result = await publishSocialDraftToInstagramNow(id, { queueMode: true });
+  console.info("[media-consent] instagram-approved", {
+    draftId: id,
+    approvedByAuthUserId: owner.id,
+    scope: consent.scope,
+    studentCount: consent.studentCount,
+  });
   revalidateSocialPostPaths();
-  return result;
+  return { ...result, consent };
 }
 
 export async function publishSocialPostDraft(id: string) {

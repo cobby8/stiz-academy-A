@@ -23,7 +23,7 @@ export async function createStaffClassNotice(input: { classId: string; title: st
   );
   const noticeId = notices[0].id;
   const recipients = await getClassParentRecipients(classId);
-  await Promise.all(recipients.map((recipient) => deliverParentNotification({
+  const deliveries = await Promise.all(recipients.map((recipient) => deliverParentNotification({
     eventType: "CLASS_NOTICE",
     dedupeKey: `notice:${noticeId}:student:${recipient.studentId}:user:${recipient.userId}`,
     recipient,
@@ -32,5 +32,28 @@ export async function createStaffClassNotice(input: { classId: string; title: st
     linkUrl: "/notices",
     noticeId,
   })));
-  return { ok: true as const, noticeId, recipientCount: recipients.length };
+  const pushSentCount = deliveries.filter((delivery) => delivery.sent).length;
+  const inAppCreatedCount = deliveries.filter((delivery) => delivery.inAppCreated).length;
+  const duplicateCount = deliveries.filter((delivery) => delivery.duplicate).length;
+  const noSubscriptionCount = deliveries.filter(
+    (delivery) => delivery.push?.status === "NO_SUBSCRIPTION",
+  ).length;
+  const pushFailedCount = deliveries.filter(
+    (delivery) => delivery.push?.status === "FAILED" || delivery.push?.status === "PARTIAL",
+  ).length;
+  const pushSkippedCount = deliveries.filter(
+    (delivery) => delivery.push?.status === "NOT_CONFIGURED",
+  ).length;
+
+  return {
+    ok: true as const,
+    noticeId,
+    recipientCount: recipients.length,
+    inAppCreatedCount,
+    pushSentCount,
+    pushFailedCount,
+    pushSkippedCount,
+    noSubscriptionCount,
+    duplicateCount,
+  };
 }

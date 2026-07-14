@@ -51,12 +51,12 @@ export default async function ApplyPage() {
                 trialTitle={settings?.trialTitle || "체험수업 안내"}
                 trialContentHtml={toSafeApplyContent(settings?.trialContent)}
                 trialFormUrl={settings?.trialFormUrl || null}
+                useBuiltInTrialForm={Boolean(settings?.useBuiltInTrialForm)}
                 enrollTitle={settings?.enrollTitle || "수강신청 안내"}
                 enrollContentHtml={toSafeApplyContent(settings?.enrollContent)}
                 enrollFormUrl={settings?.enrollFormUrl || null}
+                useBuiltInEnrollForm={Boolean(settings?.useBuiltInEnrollForm)}
                 uniformFormUrl={settings?.uniformFormUrl || null}
-                useBuiltInTrialForm={settings?.useBuiltInTrialForm ?? false}
-                useBuiltInEnrollForm={settings?.useBuiltInEnrollForm ?? false}
                 faqData={faqData}
             />
 

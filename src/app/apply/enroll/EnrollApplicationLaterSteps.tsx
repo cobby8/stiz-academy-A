@@ -26,8 +26,10 @@ interface FormData {
     parentPhone: string;
     parentRelation: string;
     address: string;
+    enrollmentMonths: string[];
     preferredSlotKeys: string[];
     basketballExp: string;
+    shuttleChoice: string;
     shuttleNeeded: boolean;
     shuttlePickup: string;
     shuttleDropoff: string;
@@ -36,6 +38,8 @@ interface FormData {
     memo: string;
     agreedTerms: boolean;
     agreedPrivacy: boolean;
+    applicationNoticeConfirmed: boolean;
+    shuttleNoticeConfirmed: boolean;
     honeypot: string;
 }
 
@@ -48,18 +52,17 @@ interface EnrollApplicationLaterStepsProps {
 }
 
 const SOURCE_OPTIONS = [
+    { value: "NAVER_SEARCH", label: "네이버 키워드 검색(남양주 농구교실, 다산농구교실 등)" },
+    { value: "PORTAL_OTHER", label: "네이버 외(다음, 구글 등) 포털검색" },
+    { value: "NAVER_BLOG", label: "스티즈농구교실 네이버 블로그" },
+    { value: "YOUTUBE", label: "유튜브" },
+    { value: "INSTAGRAM", label: "인스타그램" },
     { value: "REFERRAL", label: "지인소개" },
     { value: "PASSBY", label: "지나가다 발견" },
-    { value: "NAVER_SEARCH", label: "네이버 키워드 검색" },
-    { value: "NAVER_BLOG", label: "네이버 블로그" },
-    { value: "PORTAL_OTHER", label: "기타 포털검색(다음/구글)" },
-    { value: "INSTAGRAM", label: "인스타그램" },
+    { value: "SMS_PROMOTION", label: "문자홍보" },
     { value: "SOOMGO", label: "숨고" },
-    { value: "EXISTING_STUDENT", label: "기존 수강생" },
-    { value: "OTHER", label: "기타" },
+    { value: "DANGGEUN", label: "당근마켓" },
 ];
-
-const RELATION_OPTIONS = ["부", "모", "기타"];
 
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_LABELS: Record<string, string> = {
@@ -72,12 +75,13 @@ const DAY_LABELS: Record<string, string> = {
     Sun: "일",
 };
 
-const BASKETBALL_EXP_OPTIONS = [
-    { value: "없음", label: "없음" },
-    { value: "1년 미만", label: "1년 미만" },
-    { value: "1~3년", label: "1~3년" },
-    { value: "3년 이상", label: "3년 이상" },
-];
+function getEnrollmentMonthOptions() {
+    const now = new Date();
+    return [0, 1].map((offset) => {
+        const date = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+        return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+    });
+}
 
 export default function EnrollApplicationLaterSteps({
     step,
@@ -86,6 +90,7 @@ export default function EnrollApplicationLaterSteps({
     update,
     toggleSlot,
 }: EnrollApplicationLaterStepsProps) {
+    const enrollmentMonthOptions = getEnrollmentMonthOptions();
     const slotsByDay = DAY_ORDER.reduce<Record<string, AvailableSlot[]>>((acc, day) => {
         const daySlots = availableSlots.filter((slot) => slot.dayOfWeek === day);
         if (daySlots.length > 0) acc[day] = daySlots;
@@ -137,26 +142,6 @@ export default function EnrollApplicationLaterSteps({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">관계</label>
-                        <div className="flex gap-3">
-                            {RELATION_OPTIONS.map((relation) => (
-                                <button
-                                    key={relation}
-                                    type="button"
-                                    onClick={() => update("parentRelation", relation)}
-                                    className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                        form.parentRelation === relation
-                                            ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime"
-                                            : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-                                    }`}
-                                >
-                                    {relation}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             주소 <span className="text-gray-400 text-xs font-normal">(선택)</span>
                         </label>
@@ -177,6 +162,38 @@ export default function EnrollApplicationLaterSteps({
                         <FontFreeIcon name="sports_basketball" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
                         수강 정보
                     </h2>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                            수강신청 월 <span className="text-red-500">*</span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {enrollmentMonthOptions.map((month) => {
+                                const selected = form.enrollmentMonths.includes(month);
+                                return (
+                                    <button
+                                        key={month}
+                                        type="button"
+                                        onClick={() =>
+                                            update(
+                                                "enrollmentMonths",
+                                                selected
+                                                    ? form.enrollmentMonths.filter((item) => item !== month)
+                                                    : [...form.enrollmentMonths, month]
+                                            )
+                                        }
+                                        className={`py-3 px-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
+                                            selected
+                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10 text-brand-orange-600 dark:text-brand-neon-lime"
+                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+                                        }`}
+                                    >
+                                        {month}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
@@ -231,40 +248,51 @@ export default function EnrollApplicationLaterSteps({
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             농구 경험 <span className="text-gray-400 text-xs font-normal">(선택)</span>
                         </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {BASKETBALL_EXP_OPTIONS.map((option) => (
+                        <textarea
+                            value={form.basketballExp}
+                            onChange={(event) => update("basketballExp", event.target.value)}
+                            placeholder="농구를 해본 경험이 얼마나 있는지 간단하게 적어주세요."
+                            rows={3}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white resize-none"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                            셔틀탑승 여부 <span className="text-red-500">*</span>
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">주1회: 월 10,000원 / 2회: 15,000원 / 3회: 20,000원</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            {["탑승", "미탑승"].map((choice) => (
                                 <button
-                                    key={option.value}
+                                    key={choice}
                                     type="button"
-                                    onClick={() => update("basketballExp", form.basketballExp === option.value ? "" : option.value)}
-                                    className={`py-2.5 px-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                        form.basketballExp === option.value
-                                            ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime"
+                                    onClick={() => {
+                                        update("shuttleChoice", choice);
+                                        update("shuttleNeeded", choice === "탑승");
+                                        if (choice === "미탑승") {
+                                            update("shuttlePickup", "");
+                                            update("shuttleTime", "");
+                                            update("shuttleDropoff", "");
+                                            update("shuttleNoticeConfirmed", false);
+                                        }
+                                    }}
+                                    className={`py-3 px-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
+                                        form.shuttleChoice === choice
+                                            ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10 text-brand-orange-600 dark:text-brand-neon-lime"
                                             : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
                                     }`}
                                 >
-                                    {option.label}
+                                    {choice}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    <div>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={form.shuttleNeeded}
-                                onChange={(event) => update("shuttleNeeded", event.target.checked)}
-                                className="w-5 h-5 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50"
-                            />
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">셔틀 이용을 희망합니다</span>
-                        </label>
-                    </div>
-
-                    {form.shuttleNeeded && (
+                    {form.shuttleChoice === "탑승" && (
                         <div className="space-y-4 pl-2 border-l-2 border-brand-orange-200 ml-2">
                             <TextInput
                                 label="셔틀 탑승 장소"
@@ -274,14 +302,13 @@ export default function EnrollApplicationLaterSteps({
                             />
                             <TextInput
                                 label="셔틀 하차 장소"
-                                labelSuffix="(탑승지와 다른 경우)"
                                 value={form.shuttleDropoff}
                                 onChange={(value) => update("shuttleDropoff", value)}
                                 placeholder="예: 한강 자이 아파트 후문"
                             />
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                    셔틀 희망 시간 <span className="text-gray-400 text-xs font-normal">(선택)</span>
+                                    셔틀 희망 시간 <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="time"
@@ -290,11 +317,21 @@ export default function EnrollApplicationLaterSteps({
                                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
                                 />
                             </div>
+                            <TermsAccordion
+                                title="주의사항 확인 및 동의"
+                                required
+                                checked={form.shuttleNoticeConfirmed}
+                                onCheck={(value) => update("shuttleNoticeConfirmed", value)}
+                            >
+                                <ShuttleNoticeContent />
+                            </TermsAccordion>
                         </div>
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">어떻게 알게 되셨나요?</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                            가입경로 <span className="text-red-500">*</span>
+                        </label>
                         <select
                             value={form.referralSource}
                             onChange={(event) => update("referralSource", event.target.value)}
@@ -309,12 +346,12 @@ export default function EnrollApplicationLaterSteps({
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                            기타 요청사항 <span className="text-gray-400 text-xs font-normal">(선택)</span>
+                            바라는 점 <span className="text-gray-400 text-xs font-normal">(선택)</span>
                         </label>
                         <textarea
                             value={form.memo}
                             onChange={(event) => update("memo", event.target.value)}
-                            placeholder="궁금하신 점이나 요청사항을 자유롭게 적어주세요"
+                            placeholder="농구를 배움으로써 어떤 부분이 성장하기를 기대하시는지 적어주세요."
                             rows={3}
                             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white resize-none"
                         />
@@ -334,9 +371,9 @@ export default function EnrollApplicationLaterSteps({
                             <SummaryRow label="이름" value={form.childName} strong />
                             <SummaryRow label="생년월일" value={form.childBirthDate} />
                             <SummaryRow label="성별" value={form.childGender} />
-                            <SummaryRow label="학년" value={form.childGrade} />
+                            {form.childGrade && <SummaryRow label="학년" value={form.childGrade} />}
                             <SummaryRow label="학교" value={form.childSchool} />
-                            {form.childPhone && <SummaryRow label="학생 연락처" value={form.childPhone} />}
+                            <SummaryRow label="수강생 연락처" value={form.childPhone} />
                         </SummarySection>
 
                         <hr className="border-gray-200 dark:border-gray-700" />
@@ -344,19 +381,26 @@ export default function EnrollApplicationLaterSteps({
                         <SummarySection title="보호자 정보" icon="person">
                             <SummaryRow label="이름" value={form.parentName} strong />
                             <SummaryRow label="연락처" value={form.parentPhone} />
-                            {form.parentRelation && <SummaryRow label="관계" value={form.parentRelation} />}
                             {form.address && <SummaryRow label="주소" value={form.address} />}
                         </SummarySection>
 
                         <hr className="border-gray-200 dark:border-gray-700" />
 
                         <SummarySection title="수강 정보" icon="sports_basketball">
+                            <SummaryRow label="수강신청 월" value={form.enrollmentMonths.join(", ")} />
                             {selectedSlotsLabel && <SummaryRow label="희망 수업" value={selectedSlotsLabel} />}
                             {form.basketballExp && <SummaryRow label="농구 경험" value={form.basketballExp} />}
-                            {form.shuttleNeeded && <SummaryRow label="셔틀 탑승" value={form.shuttlePickup || "이용 희망"} />}
+                            <SummaryRow label="셔틀탑승 여부" value={form.shuttleChoice} />
+                            {form.shuttleChoice === "탑승" && <SummaryRow label="셔틀 탑승" value={form.shuttlePickup} />}
                             {form.shuttleDropoff && <SummaryRow label="셔틀 하차" value={form.shuttleDropoff} />}
                             {form.shuttleTime && <SummaryRow label="셔틀 시간" value={form.shuttleTime} />}
-                            {form.memo && <SummaryRow label="요청사항" value={form.memo} />}
+                            {form.referralSource && (
+                                <SummaryRow
+                                    label="가입경로"
+                                    value={SOURCE_OPTIONS.find((option) => option.value === form.referralSource)?.label || form.referralSource}
+                                />
+                            )}
+                            {form.memo && <SummaryRow label="바라는 점" value={form.memo} />}
                         </SummarySection>
                     </div>
 
@@ -376,6 +420,15 @@ export default function EnrollApplicationLaterSteps({
                         onCheck={(value) => update("agreedPrivacy", value)}
                     >
                         <EnrollPrivacyContent />
+                    </TermsAccordion>
+
+                    <TermsAccordion
+                        title="수강신청확정 안내"
+                        required
+                        checked={form.applicationNoticeConfirmed}
+                        onCheck={(value) => update("applicationNoticeConfirmed", value)}
+                    >
+                        <ApplicationNoticeContent />
                     </TermsAccordion>
 
                     <div className="absolute left-[-9999px]" aria-hidden="true">
@@ -515,11 +568,36 @@ function EnrollPrivacyContent() {
     return (
         <div className="space-y-2">
             <p className="font-semibold text-gray-800 dark:text-gray-100">개인정보 수집/이용 동의</p>
-            <p><strong>수집 항목:</strong> 아이 이름, 생년월일, 성별, 학년, 학교명, 학생 연락처, 보호자 이름, 보호자 연락처, 관계, 주소</p>
+            <p><strong>수집 항목:</strong> 수강생 이름, 생년월일, 성별, 학교명, 수강생 연락처, 학부모 이름, 학부모 연락처, 주소</p>
             <p><strong>수집 목적:</strong> 수강 신청 접수, 반 배정, 수강료 안내, 셔틀 운행, 수업 운영</p>
             <p><strong>보유 기간:</strong> 수강 종료 후 1년 (미등록 시 6개월)</p>
             <p><strong>동의 거부 권리:</strong> 동의를 거부할 수 있으나, 동의하지 않을 경우 수강 신청이 불가합니다.</p>
             <p>수집된 개인정보는 목적 외 용도로 사용되지 않으며, 제3자에게 제공되지 않습니다.</p>
+        </div>
+    );
+}
+
+function ApplicationNoticeContent() {
+    return (
+        <div className="space-y-2">
+            <p>본 신청서는 희망 요일과 시간대에 대한 접수이며 수강신청확정을 의미하지 않습니다.</p>
+            <p>수강신청확정은 반개설 확정 연락을 받은 후 결제를 완료하면 최종 확정됩니다.</p>
+            <p>희망 시간대 수강신청이 어려울 경우, 시간표 중 가능한 시간대로 다시 신청할 수 있습니다.</p>
+            <p>같은 클래스가 4인 이상 모집되면 반개설이 완료되며 원에서 확정 연락을 드립니다.</p>
+        </div>
+    );
+}
+
+function ShuttleNoticeContent() {
+    return (
+        <div className="space-y-2">
+            <p>1. 셔틀버스는 최초 노선 설정에 합의한 구간만 운행합니다.</p>
+            <p>2. 원활한 운행을 위해 반드시 탑승시간을 준수해 주세요.</p>
+            <p>3. 탑승 시간을 어길 시 다음 운행 일정으로 인해 탑승이 어려울 수 있습니다.</p>
+            <p>4. 노선 변경 및 시간 변경이 생기면 원으로 미리 연락해 주세요.</p>
+            <p>5. 월~금 평일만 운행하며, 진건지구와 플루리움 일대까지 가능합니다.</p>
+            <p>6. 아파트 단지는 입구 안쪽 회차 구간에서 승하차합니다.</p>
+            <p>7. 기타 문의는 070-8824-5712로 연락해 주세요.</p>
         </div>
     );
 }

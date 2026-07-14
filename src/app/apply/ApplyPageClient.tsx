@@ -16,13 +16,12 @@ interface ApplyPageClientProps {
     trialTitle: string;
     trialContentHtml: string | null;
     trialFormUrl: string | null;
+    useBuiltInTrialForm: boolean;
     enrollTitle: string;
     enrollContentHtml: string | null;
     enrollFormUrl: string | null;
-    uniformFormUrl: string | null;
-    // 자체 폼 ON/OFF 플래그 (false=구글폼 외부 링크, true=자체 폼 페이지)
-    useBuiltInTrialForm: boolean;
     useBuiltInEnrollForm: boolean;
+    uniformFormUrl: string | null;
     // DB에서 가져온 FAQ 데이터 (없으면 기본 FAQ 표시)
     faqData?: FaqItem[];
 }
@@ -170,12 +169,12 @@ export default function ApplyPageClient({
     trialTitle,
     trialContentHtml,
     trialFormUrl,
+    useBuiltInTrialForm,
     enrollTitle,
     enrollContentHtml,
     enrollFormUrl,
-    uniformFormUrl,
-    useBuiltInTrialForm,
     useBuiltInEnrollForm,
+    uniformFormUrl,
     faqData,
 }: ApplyPageClientProps) {
     // 모달 상태 — trial/enroll/uniform 중 하나 또는 null
@@ -214,9 +213,8 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {/* 체험수업 신청 — useBuiltInTrialForm에 따라 자체 폼 또는 구글폼 분기 */}
+                                    {/* 체험수업 신청 — 자체 폼 모드이면 내부 신청 페이지로 이동 */}
                                     {useBuiltInTrialForm ? (
-                                        // 자체 폼 모드: /apply/trial 페이지로 이동
                                         <Link
                                             href="/apply/trial"
                                             data-tour-target="trial-apply-btn"
@@ -225,7 +223,6 @@ export default function ApplyPageClient({
                                             체험수업 신청하기
                                         </Link>
                                     ) : trialFormUrl ? (
-                                        // 구글폼 모드: 플로팅 모달로 구글폼 표시
                                         <button
                                             type="button"
                                             onClick={() => setModal("trial")}
@@ -235,8 +232,7 @@ export default function ApplyPageClient({
                                             체험수업 신청하기
                                         </button>
                                     ) : (
-                                        // 구글폼 URL이 설정되지 않은 경우 안내
-                                        <p className="text-sm text-gray-400 italic">구글폼 URL이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
+                                        <p className="text-sm text-gray-400 italic">신청 폼이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
                                     )}
                                     {/* 약관 안내 — 독립 이용약관 페이지로 링크 */}
                                     <p className="mt-3 text-xs text-gray-400">
@@ -273,9 +269,8 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {/* 수강신청 — useBuiltInEnrollForm에 따라 자체 폼 또는 구글폼 분기 */}
+                                    {/* 수강신청 — 자체 폼 모드이면 내부 신청 페이지로 이동 */}
                                     {useBuiltInEnrollForm ? (
-                                        // 자체 폼 모드: /apply/enroll 페이지로 이동
                                         <Link
                                             href="/apply/enroll"
                                             className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
@@ -283,7 +278,6 @@ export default function ApplyPageClient({
                                             수강신청하기
                                         </Link>
                                     ) : enrollFormUrl ? (
-                                        // 구글폼 모드: 플로팅 모달로 구글폼 표시
                                         <button
                                             type="button"
                                             onClick={() => setModal("enroll")}
@@ -292,8 +286,7 @@ export default function ApplyPageClient({
                                             수강신청하기
                                         </button>
                                     ) : (
-                                        // 구글폼 URL이 설정되지 않은 경우 안내
-                                        <p className="text-sm text-gray-400 italic">구글폼 URL이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
+                                        <p className="text-sm text-gray-400 italic">신청 폼이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
                                     )}
                                 </div>
                             </div>

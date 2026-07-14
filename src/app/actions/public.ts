@@ -31,6 +31,7 @@ export async function ensureEnrollmentApplicationTable() {
                 "parentPhone" TEXT NOT NULL,
                 "parentRelation" TEXT,
                 address TEXT,
+                "enrollmentMonths" TEXT,
                 "preferredSlotKeys" TEXT,
                 "assignedClassId" TEXT,
                 "basketballExp" TEXT,
@@ -44,6 +45,8 @@ export async function ensureEnrollmentApplicationTable() {
                 memo TEXT,
                 "agreedTerms" BOOLEAN DEFAULT false,
                 "agreedPrivacy" BOOLEAN DEFAULT false,
+                "applicationNoticeConfirmed" BOOLEAN DEFAULT false,
+                "shuttleNoticeConfirmed" BOOLEAN DEFAULT false,
                 status TEXT DEFAULT 'PENDING',
                 "processedAt" TIMESTAMPTZ,
                 "processedNote" TEXT,
@@ -62,6 +65,16 @@ export async function ensureEnrollmentApplicationTable() {
         await prisma.$executeRawUnsafe(
             `CREATE INDEX IF NOT EXISTS "EnrollmentApplication_createdAt_idx" ON "EnrollmentApplication" ("createdAt")`
         );
+        const extendedColumns: [string, string][] = [
+            ['"enrollmentMonths"', "TEXT"],
+            ['"applicationNoticeConfirmed"', "BOOLEAN DEFAULT false"],
+            ['"shuttleNoticeConfirmed"', "BOOLEAN DEFAULT false"],
+        ];
+        for (const [col, type] of extendedColumns) {
+            await prisma.$executeRawUnsafe(
+                `ALTER TABLE "EnrollmentApplication" ADD COLUMN IF NOT EXISTS ${col} ${type}`
+            );
+        }
     } catch (e) {
         console.warn("[DDL] EnrollmentApplication ensure failed:", (e as Error).message);
     }
@@ -70,18 +83,23 @@ export async function ensureEnrollmentApplicationTable() {
 
 // ── 체험수업 신청 입력 타입 ──────────────────────────────────────────────────
 interface TrialApplicationInput {
+    trialDate?: string;          // Google Form: 체험수업 희망일
+    trialDay?: string;           // Google Form: 요일
+    trialPeriod?: string;        // Google Form: 교시
     childName: string;
-    childBirthDate: string;      // ISO 문자열 "2018-05-15"
+    childBirthDate?: string;     // 이전 자체 폼 호환
     childGrade: string;
     childGender?: string;
-    basketballExp: string;
-    parentName: string;
+    childSchool?: string;
+    basketballExp?: string;
+    parentName?: string;
     parentPhone: string;
     preferredSlotKey?: string;    // 희망 슬롯 "Mon-4"
     hopeNote?: string;
     source: string;               // 가입 경로
-    agreedTerms: boolean;
-    agreedPrivacy: boolean;
+    trialFeeConfirmed?: boolean;
+    agreedTerms?: boolean;
+    agreedPrivacy?: boolean;
     honeypot?: string;            // 스팸 방지용 — 빈값이어야 정상
 }
 
@@ -112,15 +130,19 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
 
     // 필수값 검증
     const childName = data.childName?.trim();
-    const parentName = data.parentName?.trim();
+    const parentName = data.parentName?.trim() || "미입력";
     const parentPhone = data.parentPhone?.trim();
 
+    if (!data.trialDate) throw new Error("체험수업 희망일을 선택해주세요.");
+    if (!data.trialDay) throw new Error("요일을 선택해주세요.");
+    if (!data.trialPeriod) throw new Error("교시를 선택해주세요.");
     if (!childName) throw new Error("아이 이름을 입력해주세요.");
-    if (!parentName) throw new Error("보호자 이름을 입력해주세요.");
-    if (!parentPhone) throw new Error("보호자 연락처를 입력해주세요.");
-    if (!data.agreedTerms || !data.agreedPrivacy) {
-        throw new Error("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
-    }
+    if (!data.childGender) throw new Error("성별을 선택해주세요.");
+    if (!data.childSchool?.trim()) throw new Error("학교를 입력해주세요.");
+    if (!data.childGrade) throw new Error("학년을 선택해주세요.");
+    if (!parentPhone) throw new Error("학부모 연락처를 입력해주세요.");
+    if (!data.source) throw new Error("신청경로를 선택해주세요.");
+    if (!data.trialFeeConfirmed) throw new Error("체험수업 비용 확인에 체크해주세요.");
 
     // 전화번호 형식 검증 (숫자만 추출 후 11자리 확인)
     const phoneDigits = parentPhone.replace(/\D/g, "");
@@ -135,16 +157,18 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
         // TrialLead INSERT — status='NEW'로 생성
         const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
             `INSERT INTO "TrialLead" (
-                id, "childName", "childAge", "childBirthDate", "childGrade", "childGender",
+                id, "childName", "childAge", "childBirthDate", "childGrade", "childGender", "childSchool",
                 "basketballExp", "parentName", "parentPhone",
-                "preferredSlotKey", "hopeNote", source,
+                "scheduledDate", "preferredDays", "preferredSlotKey", "preferredDay", "preferredPeriod", "trialDate",
+                "hopeNote", source, "trialFeeConfirmed",
                 "agreedTerms", "agreedPrivacy",
                 status, "createdAt", "updatedAt"
             ) VALUES (
-                gen_random_uuid()::text, $1, $2, $3::timestamptz, $4, $5,
-                $6, $7, $8,
-                $9, $10, $11,
-                $12, $13,
+                gen_random_uuid()::text, $1, $2, $3::timestamptz, $4, $5, $6,
+                $7, $8, $9,
+                $10::timestamptz, $11, $12, $13, $14, $15::timestamptz,
+                $16, $17, $18,
+                $19, $20,
                 'NEW', NOW(), NOW()
             ) RETURNING id`,
             childName,
@@ -152,14 +176,21 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
             data.childBirthDate || null,                          // childBirthDate
             data.childGrade || null,                              // childGrade
             data.childGender || null,                             // childGender
+            data.childSchool?.trim() || null,                     // childSchool
             data.basketballExp || null,                           // basketballExp
             parentName,
             normalizePhone(parentPhone),
-            data.preferredSlotKey || null,                        // preferredSlotKey
+            data.trialDate || null,                               // scheduledDate
+            data.trialDay || null,                                // preferredDays
+            data.preferredSlotKey || `${data.trialDay}-${data.trialPeriod}`, // preferredSlotKey
+            data.trialDay || null,                                // preferredDay
+            data.trialPeriod || null,                             // preferredPeriod
+            data.trialDate || null,                               // trialDate
             data.hopeNote?.trim() || null,                        // hopeNote
             data.source || "WEBSITE",                             // source
-            data.agreedTerms,                                     // agreedTerms
-            data.agreedPrivacy,                                   // agreedPrivacy
+            data.trialFeeConfirmed ?? false,                      // trialFeeConfirmed
+            data.agreedTerms ?? false,                            // agreedTerms
+            data.agreedPrivacy ?? false,                          // agreedPrivacy
         );
 
         // 관리자 페이지 캐시 무효화 (새 신청이 바로 보이도록)
@@ -287,6 +318,7 @@ interface EnrollApplicationInput {
     parentPhone: string;
     parentRelation?: string;
     address?: string;
+    enrollmentMonths?: string;   // 콤마 구분 "2026년 7월,2026년 8월"
     preferredSlotKeys?: string;  // 콤마 구분 "Mon-4,Wed-6"
     basketballExp?: string;      // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
     uniformSize?: string;
@@ -299,6 +331,8 @@ interface EnrollApplicationInput {
     memo?: string;
     agreedTerms: boolean;
     agreedPrivacy: boolean;
+    applicationNoticeConfirmed?: boolean;
+    shuttleNoticeConfirmed?: boolean;
     honeypot?: string;           // 스팸 방지용 — 빈값이어야 정상
 }
 
@@ -324,10 +358,23 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
 
     if (!childName) throw new Error("아이 이름을 입력해주세요.");
     if (!data.childBirthDate) throw new Error("아이 생년월일을 입력해주세요.");
+    if (!data.childPhone?.trim()) throw new Error("수강생 전화번호를 입력해주세요.");
     if (!parentName) throw new Error("보호자 이름을 입력해주세요.");
     if (!parentPhone) throw new Error("보호자 연락처를 입력해주세요.");
+    if (!data.childSchool?.trim()) throw new Error("학교명을 입력해주세요.");
+    if (!data.enrollmentMonths?.trim()) throw new Error("수강신청 월을 선택해주세요.");
+    if (!data.referralSource) throw new Error("가입경로를 선택해주세요.");
+    if (data.shuttleNeeded && (!data.shuttlePickup?.trim() || !data.shuttleTime || !data.shuttleDropoff?.trim())) {
+        throw new Error("셔틀 탑승을 선택한 경우 탑승 장소, 희망 시간, 하차 장소를 모두 입력해주세요.");
+    }
+    if (data.shuttleNeeded && !data.shuttleNoticeConfirmed) {
+        throw new Error("셔틀 주의사항을 확인해주세요.");
+    }
     if (!data.agreedTerms || !data.agreedPrivacy) {
         throw new Error("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
+    }
+    if (!data.applicationNoticeConfirmed) {
+        throw new Error("수강신청확정 안내를 확인해주세요.");
     }
 
     // 전화번호 형식 검증
@@ -357,25 +404,25 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
 
     try {
         // EnrollmentApplication INSERT — status='PENDING'으로 생성
-        // 23개 파라미터: basketballExp, shuttleTime, shuttleDropoff 추가
+        // Google Form 항목 parity: 수강신청 월/확정 안내/셔틀 주의사항 확인까지 저장
         const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
             `INSERT INTO "EnrollmentApplication" (
                 id, "trialLeadId",
                 "childName", "childBirthDate", "childGender", "childGrade", "childSchool", "childPhone",
                 "parentName", "parentPhone", "parentRelation", address,
-                "preferredSlotKeys", "basketballExp", "uniformSize",
+                "enrollmentMonths", "preferredSlotKeys", "basketballExp", "uniformSize",
                 "shuttleNeeded", "shuttlePickup", "shuttleTime", "shuttleDropoff",
                 "paymentMethod", "referralSource", memo,
-                "agreedTerms", "agreedPrivacy",
+                "agreedTerms", "agreedPrivacy", "applicationNoticeConfirmed", "shuttleNoticeConfirmed",
                 status, "createdAt", "updatedAt"
             ) VALUES (
                 gen_random_uuid()::text, $1,
                 $2, $3::timestamptz, $4, $5, $6, $7,
                 $8, $9, $10, $11,
-                $12, $13, $14,
-                $15, $16, $17, $18,
-                $19, $20, $21,
-                $22, $23,
+                $12, $13, $14, $15,
+                $16, $17, $18, $19,
+                $20, $21, $22,
+                $23, $24, $25, $26,
                 'PENDING', NOW(), NOW()
             ) RETURNING id`,
             data.trialLeadId || null,           // $1
@@ -389,18 +436,21 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             normalizePhone(parentPhone),        // $9
             data.parentRelation || null,        // $10
             data.address?.trim() || null,       // $11
-            data.preferredSlotKeys || null,     // $12
-            data.basketballExp || null,         // $13 (신규)
-            data.uniformSize || null,           // $14
-            data.shuttleNeeded ?? false,        // $15 (|| -> ?? 변경: R-3 수정)
-            data.shuttlePickup?.trim() || null, // $16
-            data.shuttleTime || null,           // $17 (신규)
-            data.shuttleDropoff?.trim() || null,// $18 (신규)
-            data.paymentMethod || null,         // $19
-            data.referralSource || null,        // $20
-            data.memo?.trim() || null,          // $21
-            data.agreedTerms,                   // $22
-            data.agreedPrivacy,                 // $23
+            data.enrollmentMonths || null,      // $12
+            data.preferredSlotKeys || null,     // $13
+            data.basketballExp || null,         // $14
+            data.uniformSize || null,           // $15
+            data.shuttleNeeded ?? false,        // $16
+            data.shuttlePickup?.trim() || null, // $17
+            data.shuttleTime || null,           // $18
+            data.shuttleDropoff?.trim() || null,// $19
+            data.paymentMethod || null,         // $20
+            data.referralSource || null,        // $21
+            data.memo?.trim() || null,          // $22
+            data.agreedTerms,                   // $23
+            data.agreedPrivacy,                 // $24
+            data.applicationNoticeConfirmed ?? false, // $25
+            data.shuttleNoticeConfirmed ?? false,     // $26
         );
 
         // 관리자 페이지 캐시 무효화

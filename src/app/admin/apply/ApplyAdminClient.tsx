@@ -30,6 +30,7 @@ interface EnrollApplication {
     parentPhone: string;
     parentRelation: string | null;
     address: string | null;
+    enrollmentMonths: string | null;
     preferredSlotKeys: string | null;
     assignedClassId: string | null;
     basketballExp: string | null;
@@ -41,6 +42,8 @@ interface EnrollApplication {
     paymentMethod: string | null;
     referralSource: string | null;
     memo: string | null;
+    applicationNoticeConfirmed: boolean;
+    shuttleNoticeConfirmed: boolean;
     status: string;
     processedAt: string | null;
     processedNote: string | null;
@@ -480,6 +483,15 @@ export default function ApplyAdminClient({
                                                                 {app.childGender}
                                                             </span>
                                                         )}
+                                                    </div>
+                                                )}
+
+                                                {/* 희망 시간대 */}
+                                                {app.enrollmentMonths && (
+                                                    <div className="flex items-center gap-1 mt-2 text-xs text-lime-700 bg-lime-50 rounded-lg px-3 py-1.5">
+                                                        <span className="material-symbols-outlined text-sm">calendar_month</span>
+                                                        <span className="font-medium">수강 월:</span>
+                                                        {app.enrollmentMonths}
                                                     </div>
                                                 )}
 

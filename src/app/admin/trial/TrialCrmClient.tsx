@@ -35,8 +35,13 @@ export interface TrialLead {
     childBirthDate: string | null;
     childGrade: string | null;
     childGender: string | null;
+    childSchool: string | null;
     basketballExp: string | null;
     preferredSlotKey: string | null;
+    preferredDay: string | null;
+    preferredPeriod: string | null;
+    trialDate: string | null;
+    trialFeeConfirmed: boolean;
     hopeNote: string | null;
     agreedTerms: boolean;
     agreedPrivacy: boolean;
@@ -409,13 +414,19 @@ export default function TrialCrmClient({
                                                 )}
                                             </div>
                                         )}
-                                        {/* Phase A 추가 정보 — 학년, 농구경험, 희망슬롯 */}
-                                        {(lead.childGrade || lead.basketballExp || lead.preferredSlotKey) && (
+                                        {/* 신청 상세 정보 — 학년, 학교, 체험 희망 일정 */}
+                                        {(lead.childGrade || lead.childSchool || lead.basketballExp || lead.preferredSlotKey || lead.trialDate || lead.preferredDay || lead.preferredPeriod) && (
                                             <div className="flex flex-wrap gap-2 mt-2">
                                                 {lead.childGrade && (
                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
                                                         <span className="material-symbols-outlined text-xs">school</span>
                                                         {lead.childGrade}
+                                                    </span>
+                                                )}
+                                                {lead.childSchool && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700">
+                                                        <span className="material-symbols-outlined text-xs">apartment</span>
+                                                        {lead.childSchool}
                                                     </span>
                                                 )}
                                                 {lead.basketballExp && (
@@ -424,10 +435,28 @@ export default function TrialCrmClient({
                                                         {lead.basketballExp}
                                                     </span>
                                                 )}
+                                                {lead.trialDate && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700">
+                                                        <span className="material-symbols-outlined text-xs">event</span>
+                                                        희망일: {formatDate(lead.trialDate)}
+                                                    </span>
+                                                )}
+                                                {(lead.preferredDay || lead.preferredPeriod) && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700">
+                                                        <span className="material-symbols-outlined text-xs">schedule</span>
+                                                        {lead.preferredDay ? `${lead.preferredDay}요일` : "요일 미입력"} {lead.preferredPeriod ? `${lead.preferredPeriod}교시` : ""}
+                                                    </span>
+                                                )}
                                                 {lead.preferredSlotKey && (
                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700">
                                                         <span className="material-symbols-outlined text-xs">schedule</span>
                                                         희망: {lead.preferredSlotKey}
+                                                    </span>
+                                                )}
+                                                {lead.trialFeeConfirmed && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-lime-50 text-lime-700">
+                                                        <span className="material-symbols-outlined text-xs">paid</span>
+                                                        체험비 확인
                                                     </span>
                                                 )}
                                             </div>

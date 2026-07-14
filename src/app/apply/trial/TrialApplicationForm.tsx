@@ -3,9 +3,9 @@
 /**
  * 체험수업 신청 폼 — 3단계 스텝 폼 (모바일 퍼스트)
  *
- * Step 1: 아이 정보 (이름, 생년월일, 학년, 농구 경험)
- * Step 2: 보호자 + 희망 수업 (보호자 정보, 시간표 슬롯 선택, 바라는 점, 가입경로)
- * Step 3: 동의 + 제출 (이용약관, 개인정보 동의, honeypot)
+ * Step 1: 체험 일정 (희망일, 요일, 교시)
+ * Step 2: 아이/보호자 정보 (이름, 성별, 학교, 학년, 연락처, 신청경로)
+ * Step 3: 비용 확인 + 제출 (체험비 확인, honeypot)
  */
 
 import { useState, useTransition } from "react";
@@ -22,71 +22,57 @@ interface Props {
 
 // ── 학년 옵션 ────────────────────────────────────────────────────────────────
 const GRADE_OPTIONS = [
-    "7세", "초1", "초2", "초3", "초4", "초5", "초6",
-    "중1", "중2", "중3", "성인",
+    "6세", "7세", "초1", "초2", "초3", "초4", "초5", "초6",
+    "중1", "중2", "중3", "고1", "고2", "고3", "성인",
 ];
 
-// ── 농구 경험 옵션 ───────────────────────────────────────────────────────────
-const EXP_OPTIONS = [
-    { value: "없음", label: "없음 (처음이에요)" },
-    { value: "1년 미만", label: "1년 미만" },
-    { value: "1~3년", label: "1~3년" },
-    { value: "3년 이상", label: "3년 이상" },
-];
-
-// ── 가입 경로 옵션 (9개) ────────────────────────────────────────────────────
+// ── 신청 경로 옵션 — Google Form과 동일 ─────────────────────────────────────
 const SOURCE_OPTIONS = [
-    { value: "REFERRAL", label: "지인소개" },
-    { value: "PASSBY", label: "지나가다 발견" },
     { value: "NAVER_SEARCH", label: "네이버 키워드 검색" },
-    { value: "NAVER_BLOG", label: "네이버 블로그" },
-    { value: "PORTAL_OTHER", label: "기타 포털검색(다음/구글)" },
+    { value: "PORTAL_OTHER", label: "네이버 외 포털검색" },
+    { value: "NAVER_BLOG", label: "스티즈 네이버블로그" },
     { value: "INSTAGRAM", label: "인스타그램" },
+    { value: "YOUTUBE", label: "유튜브" },
+    { value: "PASSBY", label: "지나가다발견" },
+    { value: "REFERRAL", label: "지인소개" },
     { value: "SOOMGO", label: "숨고" },
-    { value: "EXISTING_STUDENT", label: "기존 수강생" },
+    { value: "DANGGEUN", label: "당근마켓" },
     { value: "OTHER", label: "기타" },
 ];
 
-// ── 요일 순서 ────────────────────────────────────────────────────────────────
-const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DAY_LABELS: Record<string, string> = {
-    Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
-};
+const TRIAL_DAY_OPTIONS = ["월", "화", "수", "목", "금", "토"];
+const TRIAL_PERIOD_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
 // ── 폼 데이터 타입 ───────────────────────────────────────────────────────────
 interface FormData {
+    trialDate: string;
+    trialDay: string;
+    trialPeriod: string;
     childName: string;
-    childBirthDate: string;
     childGrade: string;
     childGender: string;
-    basketballExp: string;
-    parentName: string;
+    childSchool: string;
     parentPhone: string;
-    preferredSlotKey: string;
-    hopeNote: string;
     source: string;
-    agreedTerms: boolean;
-    agreedPrivacy: boolean;
+    trialFeeConfirmed: boolean;
     honeypot: string;
 }
 
 const INITIAL_FORM: FormData = {
+    trialDate: "",
+    trialDay: "",
+    trialPeriod: "",
     childName: "",
-    childBirthDate: "",
     childGrade: "",
     childGender: "",
-    basketballExp: "",
-    parentName: "",
+    childSchool: "",
     parentPhone: "",
-    preferredSlotKey: "",
-    hopeNote: "",
     source: "",
-    agreedTerms: false,
-    agreedPrivacy: false,
+    trialFeeConfirmed: false,
     honeypot: "",
 };
 
-export default function TrialApplicationForm({ availableSlots, contactPhone }: Props) {
+export default function TrialApplicationForm({ contactPhone }: Props) {
     const [step, setStep] = useState(1);          // 현재 스텝 (1~3)
     const [form, setForm] = useState<FormData>(INITIAL_FORM);
     const [error, setError] = useState("");
@@ -101,23 +87,26 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
 
     // ── Step 1 유효성 검사 ───────────────────────────────────────────────────
     const validateStep1 = (): boolean => {
-        if (!form.childName.trim()) { setError("아이 이름을 입력해주세요."); return false; }
-        if (!form.childBirthDate) { setError("아이 생년월일을 선택해주세요."); return false; }
-        if (!form.childGrade) { setError("학년을 선택해주세요."); return false; }
-        if (!form.basketballExp) { setError("농구 경험을 선택해주세요."); return false; }
+        if (!form.trialDate) { setError("체험수업 희망일을 선택해주세요."); return false; }
+        if (!form.trialDay) { setError("요일을 선택해주세요."); return false; }
+        if (!form.trialPeriod) { setError("교시를 선택해주세요."); return false; }
         return true;
     };
 
     // ── Step 2 유효성 검사 ───────────────────────────────────────────────────
     const validateStep2 = (): boolean => {
-        if (!form.parentName.trim()) { setError("보호자 이름을 입력해주세요."); return false; }
-        if (!form.parentPhone.trim()) { setError("보호자 연락처를 입력해주세요."); return false; }
+        if (!form.childName.trim()) { setError("아이 이름을 입력해주세요."); return false; }
+        if (!form.childGender) { setError("성별을 선택해주세요."); return false; }
+        if (!form.childSchool.trim()) { setError("학교를 입력해주세요."); return false; }
+        if (!form.childGrade) { setError("학년을 선택해주세요."); return false; }
+        if (!form.parentPhone.trim()) { setError("학부모 연락처를 입력해주세요."); return false; }
         // 전화번호 형식 체크 (10~11자리 숫자)
         const digits = form.parentPhone.replace(/\D/g, "");
         if (digits.length < 10 || digits.length > 11) {
             setError("올바른 전화번호를 입력해주세요. (예: 010-1234-5678)");
             return false;
         }
+        if (!form.source) { setError("신청경로를 선택해주세요."); return false; }
         return true;
     };
 
@@ -140,8 +129,8 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
 
     // ── 제출 ─────────────────────────────────────────────────────────────────
     const handleSubmit = () => {
-        if (!form.agreedTerms || !form.agreedPrivacy) {
-            setError("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
+        if (!form.trialFeeConfirmed) {
+            setError("체험수업 비용 확인에 체크해주세요.");
             return;
         }
         startTransition(async () => {
@@ -153,8 +142,8 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                 });
                 setCompleted(true);
                 window.scrollTo({ top: 0, behavior: "smooth" });
-            } catch (e: any) {
-                setError(e.message || "신청 중 오류가 발생했습니다.");
+            } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : "신청 중 오류가 발생했습니다.");
             }
         });
     };
@@ -187,13 +176,6 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
         );
     }
 
-    // ── 슬롯을 요일별로 그룹핑 ───────────────────────────────────────────────
-    const slotsByDay = DAY_ORDER.reduce<Record<string, AvailableSlot[]>>((acc, day) => {
-        const daySlots = availableSlots.filter((s) => s.dayOfWeek === day);
-        if (daySlots.length > 0) acc[day] = daySlots;
-        return acc;
-    }, {});
-
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             {/* 진행 표시줄 — 3단계 */}
@@ -221,7 +203,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                             <span className={`ml-2 text-xs font-medium hidden sm:inline ${
                                 n === step ? "text-gray-900 dark:text-white" : "text-gray-400"
                             }`}>
-                                {n === 1 ? "아이 정보" : n === 2 ? "보호자/수업" : "동의/제출"}
+                                {n === 1 ? "체험 일정" : n === 2 ? "신청 정보" : "비용 확인"}
                             </span>
                             {/* 연결선 */}
                             {n < 3 && (
@@ -244,18 +226,87 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                     </div>
                 )}
 
-                {/* ──────────── Step 1: 아이 정보 ──────────── */}
+                {/* ──────────── Step 1: 체험 일정 ──────────── */}
                 {step === 1 && (
                     <div className="space-y-5">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <FontFreeIcon name="calendar_today" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
+                            체험 일정
+                        </h2>
+
+                        {/* 체험수업 희망일 */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                                체험수업 희망일 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="date"
+                                value={form.trialDate}
+                                onChange={(e) => update("trialDate", e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
+                            />
+                        </div>
+
+                        {/* 요일 */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                                요일 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                                {TRIAL_DAY_OPTIONS.map((day) => (
+                                    <button
+                                        key={day}
+                                        type="button"
+                                        onClick={() => update("trialDay", day)}
+                                        className={`py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
+                                            form.trialDay === day
+                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10 text-brand-orange-600 dark:text-brand-neon-lime"
+                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+                                        }`}
+                                    >
+                                        {day}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 교시 */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                                교시 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="grid grid-cols-4 gap-2">
+                                {TRIAL_PERIOD_OPTIONS.map((period) => (
+                                    <button
+                                        key={period}
+                                        type="button"
+                                        onClick={() => update("trialPeriod", period)}
+                                        className={`py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
+                                            form.trialPeriod === period
+                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10 text-brand-orange-600 dark:text-brand-neon-lime"
+                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+                                        }`}
+                                    >
+                                        {period}교시
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ──────────── Step 2: 보호자 + 희망 수업 ──────────── */}
+                {step === 2 && (
+                    <div className="space-y-5">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             <FontFreeIcon name="child_care" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
-                            아이 정보
+                            아이 정보 / 연락처
                         </h2>
 
                         {/* 아이 이름 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                아이 이름 <span className="text-red-500">*</span>
+                                이름 <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
@@ -266,16 +317,39 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                             />
                         </div>
 
-                        {/* 생년월일 */}
+                        {/* 성별 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                생년월일 <span className="text-red-500">*</span>
+                                성별 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="flex gap-3">
+                                {["남", "여"].map((gender) => (
+                                    <button
+                                        key={gender}
+                                        type="button"
+                                        onClick={() => update("childGender", gender)}
+                                        className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
+                                            form.childGender === gender
+                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10 text-brand-orange-600 dark:text-brand-neon-lime"
+                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
+                                        }`}
+                                    >
+                                        {gender}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 학교 */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                                학교 <span className="text-red-500">*</span>
                             </label>
                             <input
-                                type="date"
-                                min="1950-01-01" max="2025-12-31"
-                                value={form.childBirthDate}
-                                onChange={(e) => update("childBirthDate", e.target.value)}
+                                type="text"
+                                value={form.childSchool}
+                                onChange={(e) => update("childSchool", e.target.value)}
+                                placeholder="다산초등학교"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
                             />
                         </div>
@@ -291,84 +365,16 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white bg-white dark:bg-gray-800"
                             >
                                 <option value="">선택해주세요</option>
-                                {GRADE_OPTIONS.map((g) => (
-                                    <option key={g} value={g}>{g}</option>
+                                {GRADE_OPTIONS.map((grade) => (
+                                    <option key={grade} value={grade}>{grade}</option>
                                 ))}
                             </select>
                         </div>
 
-                        {/* 성별 — 선택사항 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">성별</label>
-                            <div className="flex gap-3">
-                                {["남", "여"].map((g) => (
-                                    <button
-                                        key={g}
-                                        type="button"
-                                        onClick={() => update("childGender", g)}
-                                        className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                            form.childGender === g
-                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime"
-                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {g}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 농구 경험 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                                농구 경험 <span className="text-red-500">*</span>
-                            </label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {EXP_OPTIONS.map((opt) => (
-                                    <button
-                                        key={opt.value}
-                                        type="button"
-                                        onClick={() => update("basketballExp", opt.value)}
-                                        className={`py-3 px-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                            form.basketballExp === opt.value
-                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime"
-                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* ──────────── Step 2: 보호자 + 희망 수업 ──────────── */}
-                {step === 2 && (
-                    <div className="space-y-5">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <FontFreeIcon name="person" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
-                            보호자 정보 / 희망 수업
-                        </h2>
-
-                        {/* 보호자 이름 */}
+                        {/* 학부모 연락처 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                보호자 이름 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                value={form.parentName}
-                                onChange={(e) => update("parentName", e.target.value)}
-                                placeholder="홍부모"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
-                        </div>
-
-                        {/* 보호자 연락처 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                보호자 연락처 <span className="text-red-500">*</span>
+                                학부모 연락처 <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="tel"
@@ -381,91 +387,17 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                                     else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
                                     update("parentPhone", formatted);
                                 }}
-                                placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
+                                placeholder="'-'없이 숫자만 입력해주세요"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
                             />
                             <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                         </div>
 
-                        {/* 희망 체험 일정 — 시간표 그리드 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                                희망 체험 일정 <span className="text-gray-400 text-xs font-normal">(선택)</span>
-                            </label>
-                            {Object.keys(slotsByDay).length > 0 ? (
-                                <div className="space-y-3">
-                                    {DAY_ORDER.filter((d) => slotsByDay[d]).map((day) => (
-                                        <div key={day}>
-                                            {/* 요일 헤더 */}
-                                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase">
-                                                {DAY_LABELS[day]}요일
-                                            </p>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                {slotsByDay[day]!.map((slot) => {
-                                                    const isFull = slot.available <= 0;
-                                                    const isSelected = form.preferredSlotKey === slot.slotKey;
-                                                    return (
-                                                        <button
-                                                            key={slot.slotKey}
-                                                            type="button"
-                                                            disabled={isFull}
-                                                            onClick={() =>
-                                                                update(
-                                                                    "preferredSlotKey",
-                                                                    isSelected ? "" : slot.slotKey
-                                                                )
-                                                            }
-                                                            className={`py-2.5 px-3 rounded-xl border text-xs font-medium transition-colors ${
-                                                                isFull
-                                                                    ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-300 cursor-not-allowed"
-                                                                    : isSelected
-                                                                    ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime ring-2 ring-brand-orange-500 dark:focus:ring-brand-neon-lime/30"
-                                                                    : "border-gray-300 text-gray-700 dark:text-gray-200 hover:border-brand-navy-400 cursor-pointer"
-                                                            }`}
-                                                        >
-                                                            {/* 시간 표시 */}
-                                                            <span className="block font-semibold text-sm">
-                                                                {slot.startTime}~{slot.endTime}
-                                                            </span>
-                                                            {/* 수업명 */}
-                                                            <span className="block mt-0.5 truncate">{slot.className}</span>
-                                                            {/* 잔여 석 표시 */}
-                                                            <span className={`block mt-1 ${
-                                                                isFull ? "text-gray-300" : slot.available <= 3 ? "text-red-500" : "text-green-600"
-                                                            }`}>
-                                                                {isFull ? "마감" : `잔여 ${slot.available}석`}
-                                                            </span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-gray-400 text-sm py-4 text-center">
-                                    현재 조회 가능한 시간표가 없습니다. 신청 후 담당자가 안내해드립니다.
-                                </p>
-                            )}
-                        </div>
-
-                        {/* 바라는 점 */}
+                        {/* 신청 경로 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                바라는 점 <span className="text-gray-400 text-xs font-normal">(선택)</span>
+                                신청경로 <span className="text-red-500">*</span>
                             </label>
-                            <textarea
-                                value={form.hopeNote}
-                                onChange={(e) => update("hopeNote", e.target.value)}
-                                placeholder="궁금하신 점이나 바라는 점을 자유롭게 적어주세요"
-                                rows={3}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white resize-none"
-                            />
-                        </div>
-
-                        {/* 가입 경로 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">어떻게 알게 되셨나요?</label>
                             <select
                                 value={form.source}
                                 onChange={(e) => update("source", e.target.value)}
@@ -485,52 +417,41 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                     <div className="space-y-5">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             <FontFreeIcon name="verified" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
-                            약관 동의 및 제출
+                            비용 확인 및 제출
                         </h2>
 
                         {/* 입력 정보 요약 — 제출 전 확인용 */}
                         <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-2 text-sm">
                             <h3 className="font-semibold text-gray-900 dark:text-white mb-2">입력 정보 확인</h3>
                             <div className="grid grid-cols-2 gap-y-1.5 gap-x-4">
+                                <span className="text-gray-500 dark:text-gray-400">희망일</span>
+                                <span className="text-gray-900 dark:text-white">{form.trialDate}</span>
+                                <span className="text-gray-500 dark:text-gray-400">요일/교시</span>
+                                <span className="text-gray-900 dark:text-white">{form.trialDay}요일 {form.trialPeriod}교시</span>
                                 <span className="text-gray-500 dark:text-gray-400">아이 이름</span>
                                 <span className="text-gray-900 dark:text-white font-medium">{form.childName}</span>
-                                <span className="text-gray-500 dark:text-gray-400">생년월일</span>
-                                <span className="text-gray-900 dark:text-white">{form.childBirthDate}</span>
+                                <span className="text-gray-500 dark:text-gray-400">성별</span>
+                                <span className="text-gray-900 dark:text-white">{form.childGender}</span>
+                                <span className="text-gray-500 dark:text-gray-400">학교</span>
+                                <span className="text-gray-900 dark:text-white">{form.childSchool}</span>
                                 <span className="text-gray-500 dark:text-gray-400">학년</span>
                                 <span className="text-gray-900 dark:text-white">{form.childGrade}</span>
-                                <span className="text-gray-500 dark:text-gray-400">농구 경험</span>
-                                <span className="text-gray-900 dark:text-white">{form.basketballExp}</span>
-                                <span className="text-gray-500 dark:text-gray-400">보호자</span>
-                                <span className="text-gray-900 dark:text-white font-medium">{form.parentName}</span>
                                 <span className="text-gray-500 dark:text-gray-400">연락처</span>
                                 <span className="text-gray-900 dark:text-white">{form.parentPhone}</span>
-                                {form.preferredSlotKey && (
-                                    <>
-                                        <span className="text-gray-500 dark:text-gray-400">희망 수업</span>
-                                        <span className="text-gray-900 dark:text-white">{form.preferredSlotKey}</span>
-                                    </>
-                                )}
+                                <span className="text-gray-500 dark:text-gray-400">신청경로</span>
+                                <span className="text-gray-900 dark:text-white">
+                                    {SOURCE_OPTIONS.find((option) => option.value === form.source)?.label || form.source}
+                                </span>
                             </div>
                         </div>
 
-                        {/* 이용약관 동의 */}
                         <TermsAccordion
-                            title="이용약관 동의"
+                            title="체험수업 비용 확인"
                             required
-                            checked={form.agreedTerms}
-                            onCheck={(v) => update("agreedTerms", v)}
+                            checked={form.trialFeeConfirmed}
+                            onCheck={(v) => update("trialFeeConfirmed", v)}
                         >
-                            <TermsContent />
-                        </TermsAccordion>
-
-                        {/* 개인정보 수집/이용 동의 */}
-                        <TermsAccordion
-                            title="개인정보 수집/이용 동의"
-                            required
-                            checked={form.agreedPrivacy}
-                            onCheck={(v) => update("agreedPrivacy", v)}
-                        >
-                            <PrivacyContent />
+                            <TrialFeeContent />
                         </TermsAccordion>
 
                         {/* honeypot 필드 — 스팸봇 차단용, 사용자에게 보이지 않음 */}
@@ -650,30 +571,13 @@ function TermsAccordion({
 }
 
 // ── 이용약관 내용 ─────────────────────────────────────────────────────────────
-function TermsContent() {
+function TrialFeeContent() {
     return (
         <div className="space-y-2">
-            <p className="font-semibold text-gray-800 dark:text-gray-100">STIZ 농구교실 이용약관</p>
-            <p>1. 체험수업은 1회 1만원의 체험비가 있습니다.</p>
-            <p>2. 체험수업 시 운동복과 실내화를 반드시 준비해주세요.</p>
-            <p>3. 수업 중 안전사고에 대비하여 코치의 안전 지시를 따라주세요.</p>
-            <p>4. 체험수업 후 정규 등록 시 체험비는 첫 달 수강료에서 차감됩니다.</p>
-            <p>5. 체험수업 일정은 사전 협의 후 확정되며, 당일 취소 시 체험비 환불이 불가합니다.</p>
-            <p>6. 학원 내 분실물에 대해 학원은 책임지지 않습니다.</p>
-        </div>
-    );
-}
-
-// ── 개인정보 수집/이용 동의 내용 ──────────────────────────────────────────────
-function PrivacyContent() {
-    return (
-        <div className="space-y-2">
-            <p className="font-semibold text-gray-800 dark:text-gray-100">개인정보 수집/이용 동의</p>
-            <p><strong>수집 항목:</strong> 아이 이름, 생년월일, 학년, 성별, 보호자 이름, 연락처</p>
-            <p><strong>수집 목적:</strong> 체험수업 신청 접수, 일정 안내, 수업 배정</p>
-            <p><strong>보유 기간:</strong> 체험수업 종료 후 6개월 (미등록 시) 또는 정규 등록 시 회원 탈퇴 시까지</p>
-            <p><strong>동의 거부 권리:</strong> 동의를 거부할 수 있으나, 동의하지 않을 경우 체험수업 신청이 불가합니다.</p>
-            <p>수집된 개인정보는 목적 외 용도로 사용되지 않으며, 제3자에게 제공되지 않습니다.</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-100">체험수업 비용 안내</p>
+            <p>체험수업 비용은 1만원입니다.</p>
+            <p>입금계좌: 카카오뱅크 3333-05-1344817 김수빈</p>
+            <p>신청 후 안내문자를 받으셔야 체험수업이 확정됩니다.</p>
         </div>
     );
 }

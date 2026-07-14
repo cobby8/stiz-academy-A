@@ -16,6 +16,7 @@ interface EnrollApplication {
     parentPhone: string;
     parentRelation: string | null;
     address: string | null;
+    enrollmentMonths: string | null;
     preferredSlotKeys: string | null;
     assignedClassId: string | null;
     basketballExp: string | null;
@@ -27,6 +28,8 @@ interface EnrollApplication {
     paymentMethod: string | null;
     referralSource: string | null;
     memo: string | null;
+    applicationNoticeConfirmed: boolean;
+    shuttleNoticeConfirmed: boolean;
     status: string;
     processedAt: string | null;
     processedNote: string | null;
@@ -88,6 +91,23 @@ const DAY_LABELS: Record<string, string> = {
     Sat: "토",
     Sun: "일",
 };
+
+function formatDetailDate(dateStr: string | null) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function InfoRow({ label, value }: { label: string; value: string | null | undefined | boolean }) {
+    if (value === null || value === undefined || value === "") return null;
+    const displayValue = typeof value === "boolean" ? (value ? "네" : "아니오") : value;
+    return (
+        <div className="flex items-start gap-2 text-sm">
+            <span className="text-gray-500 dark:text-gray-400 min-w-[80px] flex-shrink-0">{label}</span>
+            <span className="text-gray-900 dark:text-white font-medium">{displayValue}</span>
+        </div>
+    );
+}
 
 export default function ApplyAdminModals({
     approveApp,
@@ -387,23 +407,6 @@ function DetailModal({
 }) {
     const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
 
-    function formatDate(dateStr: string | null) {
-        if (!dateStr) return "-";
-        const date = new Date(dateStr);
-        return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-    }
-
-    function InfoRow({ label, value }: { label: string; value: string | null | undefined | boolean }) {
-        if (value === null || value === undefined || value === "") return null;
-        const displayValue = typeof value === "boolean" ? (value ? "네" : "아니오") : value;
-        return (
-            <div className="flex items-start gap-2 text-sm">
-                <span className="text-gray-500 dark:text-gray-400 min-w-[80px] flex-shrink-0">{label}</span>
-                <span className="text-gray-900 dark:text-white font-medium">{displayValue}</span>
-            </div>
-        );
-    }
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
             <div
@@ -429,7 +432,7 @@ function DetailModal({
                         </h3>
                         <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
                             <InfoRow label="이름" value={app.childName} />
-                            <InfoRow label="생년월일" value={formatDate(app.childBirthDate)} />
+                            <InfoRow label="생년월일" value={formatDetailDate(app.childBirthDate)} />
                             <InfoRow label="성별" value={app.childGender} />
                             <InfoRow label="학년" value={app.childGrade} />
                             <InfoRow label="학교" value={app.childSchool} />
@@ -456,6 +459,7 @@ function DetailModal({
                             수강 정보
                         </h3>
                         <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+                            <InfoRow label="수강 월" value={app.enrollmentMonths} />
                             <InfoRow label="희망 시간" value={app.preferredSlotKeys} />
                             <InfoRow label="농구 경험" value={app.basketballExp} />
                             <InfoRow label="셔틀" value={app.shuttleNeeded} />
@@ -463,6 +467,8 @@ function DetailModal({
                             <InfoRow label="하차지" value={app.shuttleDropoff} />
                             <InfoRow label="셔틀 시간" value={app.shuttleTime} />
                             <InfoRow label="유입경로" value={app.referralSource ? (SOURCE_LABELS[app.referralSource] || app.referralSource) : null} />
+                            <InfoRow label="확정 안내 확인" value={app.applicationNoticeConfirmed} />
+                            <InfoRow label="셔틀 주의 확인" value={app.shuttleNoticeConfirmed} />
                         </div>
                     </div>
 
@@ -477,7 +483,7 @@ function DetailModal({
                         <div>
                             <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">처리 정보</h3>
                             <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
-                                <InfoRow label="처리일" value={formatDate(app.processedAt)} />
+                                <InfoRow label="처리일" value={formatDetailDate(app.processedAt)} />
                                 <InfoRow label="처리메모" value={app.processedNote} />
                             </div>
                         </div>

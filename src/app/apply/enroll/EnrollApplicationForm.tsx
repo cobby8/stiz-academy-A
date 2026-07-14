@@ -3,9 +3,9 @@
 /**
  * 수강 신청 폼 — 4단계 스텝 폼 (모바일 퍼스트)
  *
- * Step 1: 아이 정보 (이름, 생년월일, 성별, 학년, 학교명, 학생 휴대폰)
- * Step 2: 보호자 정보 (이름, 연락처, 관계, 주소)
- * Step 3: 수강 정보 (희망 수업, 유니폼, 셔틀, 결제수단, 가입경로, 요청사항)
+ * Step 1: 아이 정보 (이름, 성별, 생년월일, 학생 전화번호, 학교명)
+ * Step 2: 보호자 정보 (이름, 연락처, 주소)
+ * Step 3: 수강 정보 (수강 월, 희망 수업, 셔틀, 가입경로, 요청사항)
  * Step 4: 확인 + 동의 (입력 정보 요약, 이용약관, 개인정보 동의, honeypot)
  *
  * trialData가 있으면 체험 데이터를 자동 채움 (수정 가능)
@@ -38,12 +38,6 @@ interface Props {
     trialLeadId: string | null;            // TrialLead ID (DB 연결용)
 }
 
-// ── 학년 옵션 ────────────────────────────────────────────────────────────────
-const GRADE_OPTIONS = [
-    "7세", "초1", "초2", "초3", "초4", "초5", "초6",
-    "중1", "중2", "중3", "성인",
-];
-
 // ── 폼 데이터 타입 ──────────────────────────────────────────────────────────
 interface FormData {
     childName: string;
@@ -56,8 +50,10 @@ interface FormData {
     parentPhone: string;
     parentRelation: string;
     address: string;
+    enrollmentMonths: string[];
     preferredSlotKeys: string[];  // 복수 선택 가능 ["Mon-4", "Wed-6"]
     basketballExp: string;        // 농구 경험
+    shuttleChoice: string;        // "탑승" | "미탑승"
     shuttleNeeded: boolean;
     shuttlePickup: string;
     shuttleTime: string;          // 셔틀 희망 시간
@@ -66,6 +62,8 @@ interface FormData {
     memo: string;
     agreedTerms: boolean;
     agreedPrivacy: boolean;
+    applicationNoticeConfirmed: boolean;
+    shuttleNoticeConfirmed: boolean;
     honeypot: string;
 }
 
@@ -92,8 +90,10 @@ export default function EnrollApplicationForm({
         parentPhone: trialData?.parentPhone || "",
         parentRelation: "",
         address: "",
+        enrollmentMonths: [],
         preferredSlotKeys: [],
         basketballExp: "",
+        shuttleChoice: "",
         shuttleNeeded: false,
         shuttlePickup: "",
         shuttleTime: "",
@@ -102,6 +102,8 @@ export default function EnrollApplicationForm({
         memo: "",
         agreedTerms: false,
         agreedPrivacy: false,
+        applicationNoticeConfirmed: false,
+        shuttleNoticeConfirmed: false,
         honeypot: "",
     });
     const [error, setError] = useState("");
@@ -119,8 +121,8 @@ export default function EnrollApplicationForm({
         if (!form.childName.trim()) { setError("아이 이름을 입력해주세요."); return false; }
         if (!form.childBirthDate) { setError("아이 생년월일을 선택해주세요."); return false; }
         if (!form.childGender) { setError("성별을 선택해주세요."); return false; }
-        if (!form.childGrade) { setError("학년을 선택해주세요."); return false; }
         if (!form.childSchool.trim()) { setError("학교명을 입력해주세요."); return false; }
+        if (!form.childPhone.trim()) { setError("수강생 전화번호를 입력해주세요."); return false; }
         return true;
     };
 
@@ -136,12 +138,25 @@ export default function EnrollApplicationForm({
         return true;
     };
 
-    // Step 3은 필수 입력 없음 (모두 선택사항)
+    // ── Step 3 유효성 검사: 수강 정보 ───────────────────────────────────────
+    const validateStep3 = (): boolean => {
+        if (form.enrollmentMonths.length === 0) { setError("수강신청 월을 선택해주세요."); return false; }
+        if (!form.referralSource) { setError("가입경로를 선택해주세요."); return false; }
+        if (!form.shuttleChoice) { setError("셔틀탑승 여부를 선택해주세요."); return false; }
+        if (form.shuttleChoice === "탑승") {
+            if (!form.shuttlePickup.trim()) { setError("셔틀 탑승 장소를 입력해주세요."); return false; }
+            if (!form.shuttleTime) { setError("셔틀 희망 시간을 입력해주세요."); return false; }
+            if (!form.shuttleDropoff.trim()) { setError("셔틀 하차 장소를 입력해주세요."); return false; }
+            if (!form.shuttleNoticeConfirmed) { setError("셔틀 주의사항을 확인해주세요."); return false; }
+        }
+        return true;
+    };
 
     // ── 다음 단계 ────────────────────────────────────────────────────────────
     const goNext = () => {
         if (step === 1 && !validateStep1()) return;
         if (step === 2 && !validateStep2()) return;
+        if (step === 3 && !validateStep3()) return;
         setError("");
         setStep((s) => Math.min(s + 1, TOTAL_STEPS));
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -170,6 +185,10 @@ export default function EnrollApplicationForm({
             setError("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
             return;
         }
+        if (!form.applicationNoticeConfirmed) {
+            setError("수강신청확정 안내를 확인해주세요.");
+            return;
+        }
         startTransition(async () => {
             try {
                 await submitEnrollApplication({
@@ -184,9 +203,10 @@ export default function EnrollApplicationForm({
                     parentPhone: form.parentPhone,
                     parentRelation: form.parentRelation || undefined,
                     address: form.address || undefined,
+                    enrollmentMonths: form.enrollmentMonths.join(",") || undefined,
                     preferredSlotKeys: form.preferredSlotKeys.join(",") || undefined,
                     basketballExp: form.basketballExp || undefined,
-                    shuttleNeeded: form.shuttleNeeded,
+                    shuttleNeeded: form.shuttleChoice === "탑승",
                     shuttlePickup: form.shuttlePickup || undefined,
                     shuttleTime: form.shuttleTime || undefined,
                     shuttleDropoff: form.shuttleDropoff || undefined,
@@ -194,6 +214,8 @@ export default function EnrollApplicationForm({
                     memo: form.memo || undefined,
                     agreedTerms: form.agreedTerms,
                     agreedPrivacy: form.agreedPrivacy,
+                    applicationNoticeConfirmed: form.applicationNoticeConfirmed,
+                    shuttleNoticeConfirmed: form.shuttleNoticeConfirmed,
                     honeypot: form.honeypot,
                 });
                 trackMetaEvent("CompleteRegistration", {
@@ -202,8 +224,8 @@ export default function EnrollApplicationForm({
                 });
                 setCompleted(true);
                 window.scrollTo({ top: 0, behavior: "smooth" });
-            } catch (e: any) {
-                setError(e.message || "신청 중 오류가 발생했습니다.");
+            } catch (e: unknown) {
+                setError(e instanceof Error ? e.message : "신청 중 오류가 발생했습니다.");
             }
         });
     };
@@ -335,7 +357,7 @@ export default function EnrollApplicationForm({
                                 성별 <span className="text-red-500">*</span>
                             </label>
                             <div className="flex gap-3">
-                                {["남", "여"].map((g) => (
+                                {["남자", "여자"].map((g) => (
                                     <button
                                         key={g}
                                         type="button"
@@ -352,23 +374,6 @@ export default function EnrollApplicationForm({
                             </div>
                         </div>
 
-                        {/* 학년 (필수) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                학년 <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                                value={form.childGrade}
-                                onChange={(e) => update("childGrade", e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white bg-white dark:bg-gray-800"
-                            >
-                                <option value="">선택해주세요</option>
-                                {GRADE_OPTIONS.map((g) => (
-                                    <option key={g} value={g}>{g}</option>
-                                ))}
-                            </select>
-                        </div>
-
                         {/* 학교명 (필수) */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
@@ -383,10 +388,10 @@ export default function EnrollApplicationForm({
                             />
                         </div>
 
-                        {/* 학생 휴대폰 (선택, 중학생 이상) */}
+                        {/* 수강생 전화번호 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                학생 휴대폰 <span className="text-gray-400 text-xs font-normal">(선택, 중학생 이상)</span>
+                                수강생 전화번호(숫자만) <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="tel"

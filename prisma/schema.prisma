@@ -784,9 +784,14 @@ model TrialLead {
   childBirthDate     DateTime? @db.Timestamptz(6) // 아이 생년월일
   childGrade         String? // 학년 (7세/초1~초6/중1~중3/성인)
   childGender        String? // 성별 (남/여)
+  childSchool        String? // 학교/유치원
   basketballExp      String? // 농구 경험 (없음/1년 미만/1~3년/3년 이상)
   preferredDays      String? // 희망 요일 콤마 구분 "Mon,Wed"
   preferredSlotKey   String? // 희망 시간표 슬롯 "Mon-4"
+  preferredDay       String? // Google Form: 요일
+  preferredPeriod    String? // Google Form: 교시
+  trialDate          DateTime? @db.Timestamptz(6) // Google Form: 체험수업 희망일
+  trialFeeConfirmed  Boolean   @default(false) // Google Form: 체험수업 비용 확인
   hopeNote           String? // 바라는 점 (자유 입력)
   agreedTerms        Boolean   @default(false) // 이용약관 동의 여부
   agreedPrivacy      Boolean   @default(false) // 개인정보 수집/이용 동의 여부
@@ -879,6 +884,7 @@ model EnrollmentApplication {
   parentRelation     String? // 부/모/기타
   address            String?
   // 수강 정보
+  enrollmentMonths   String? // Google Form: 수강신청 월, 콤마 구분
   preferredSlotKeys  String? // 콤마 구분 "Mon-4,Wed-6"
   assignedClassId    String? // 관리자 배정 반
   // 부가 정보
@@ -894,6 +900,8 @@ model EnrollmentApplication {
   // 동의
   agreedTerms        Boolean   @default(false)
   agreedPrivacy      Boolean   @default(false)
+  applicationNoticeConfirmed Boolean @default(false) // Google Form: 수강신청확정 안내 확인
+  shuttleNoticeConfirmed     Boolean @default(false) // Google Form: 셔틀 주의사항 확인
   // 처리 상태
   status             String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
   processedAt        DateTime? @db.Timestamptz(6)

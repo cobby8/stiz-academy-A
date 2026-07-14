@@ -46,6 +46,40 @@ type FinancePayload = {
     summary: Summary;
 };
 
+type PaymentReconcilePreview = {
+    batch: {
+        id: string;
+        createdAt: string;
+        completedAt: string | null;
+        spreadsheetTitle: string | null;
+    } | null;
+    year: number;
+    month: number;
+    summary: {
+        create: number;
+        update: number;
+        unchanged: number;
+        review: number;
+        createAmount: number;
+        updateAmount: number;
+        reviewAmount: number;
+    };
+    samples: {
+        studentId: string;
+        studentName: string;
+        rowCount: number;
+        paymentMethods: string[] | null;
+        targetStatus: string | null;
+        targetAmount: number | null;
+        targetMethod: string | null;
+        existingStatus: string | null;
+        existingAmount: number | null;
+        existingMethod: string | null;
+        reviewReason: string | null;
+        action: "CREATE" | "UPDATE" | "UNCHANGED" | "REVIEW";
+    }[];
+};
+
 const EMPTY_SUMMARY: Summary = {
     totalCount: 0,
     totalAmount: 0,
@@ -71,6 +105,13 @@ const TYPE_LABELS: Record<string, string> = {
     OTHER: "기타",
 };
 
+const SHEET_RECONCILE_ACTION_LABELS: Record<string, string> = {
+    CREATE: "생성",
+    UPDATE: "수정",
+    REVIEW: "확인 필요",
+    UNCHANGED: "동일",
+};
+
 function toDateStr(d: Date | string | null): string {
     if (!d) return "-";
     const date = typeof d === "string" ? new Date(d) : d;
@@ -79,6 +120,10 @@ function toDateStr(d: Date | string | null): string {
 
 function formatAmount(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
 }
 
 function FinanceLoadingFallback({ year, month }: { year: number; month: number }) {
@@ -170,6 +215,10 @@ export default function FinanceClient({
     const [studentsLoaded, setStudentsLoaded] = useState(false);
     const [studentsLoading, setStudentsLoading] = useState(false);
     const [studentsError, setStudentsError] = useState<string | null>(null);
+    const [sheetPreview, setSheetPreview] = useState<PaymentReconcilePreview | null>(null);
+    const [sheetPreviewLoading, setSheetPreviewLoading] = useState(false);
+    const [sheetApplying, setSheetApplying] = useState(false);
+    const [sheetError, setSheetError] = useState<string | null>(null);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -214,6 +263,8 @@ export default function FinanceClient({
         setMonth(m);
         setLoading(true);
         setLoadError(null);
+        setSheetPreview(null);
+        setSheetError(null);
         setSelectedIds(new Set()); // 선택 초기화
         try {
             const res = await fetch(`/api/admin/finance?year=${y}&month=${m}`);
@@ -265,8 +316,8 @@ export default function FinanceClient({
             setPaymentType("MONTHLY");
             setDescription("");
             await loadMonth(year, month);
-        } catch (err: any) {
-            alert(err.message || "생성 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "생성 실패"));
         } finally {
             setBusy(false);
         }
@@ -278,8 +329,8 @@ export default function FinanceClient({
         try {
             await updatePaymentStatus(id, newStatus);
             await loadMonth(year, month);
-        } catch (err: any) {
-            alert(err.message || "상태 변경 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "상태 변경 실패"));
         } finally {
             setBusy(false);
         }
@@ -292,8 +343,8 @@ export default function FinanceClient({
             await deletePayment(id);
             setDeleteConfirm(null);
             await loadMonth(year, month);
-        } catch (err: any) {
-            alert(err.message || "삭제 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "삭제 실패"));
         } finally {
             setBusy(false);
         }
@@ -307,8 +358,8 @@ export default function FinanceClient({
             const result = await generateMonthlyInvoices(year, month);
             alert(result.message);
             await loadMonth(year, month);
-        } catch (err: any) {
-            alert(err.message || "청구서 생성 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "청구서 생성 실패"));
         } finally {
             setBusy(false);
         }
@@ -322,10 +373,69 @@ export default function FinanceClient({
             const result = await sendUnpaidReminders();
             alert(result.message);
             await loadMonth(year, month);
-        } catch (err: any) {
-            alert(err.message || "알림 발송 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "알림 발송 실패"));
         } finally {
             setBusy(false);
+        }
+    }
+
+    async function loadSheetPreview() {
+        setSheetPreviewLoading(true);
+        setSheetError(null);
+
+        try {
+            const response = await fetch(`/api/admin/finance/sheet-reconcile?year=${year}&month=${month}`, {
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "시트 기준 점검에 실패했습니다.");
+            }
+
+            setSheetPreview(data as PaymentReconcilePreview);
+        } catch (err: unknown) {
+            setSheetError(getErrorMessage(err, "시트 기준 점검에 실패했습니다."));
+            setSheetPreview(null);
+        } finally {
+            setSheetPreviewLoading(false);
+        }
+    }
+
+    async function applySheetPreview() {
+        if (!sheetPreview) return;
+
+        const createCount = sheetPreview.summary.create;
+        const updateCount = sheetPreview.summary.update;
+        const reviewCount = sheetPreview.summary.review;
+        const confirmMessage =
+            `${year}년 ${month}월 시트 원장을 기준으로 수납 기록을 반영할까요?\n` +
+            `생성 ${createCount}건, 수정 ${updateCount}건이 적용됩니다.\n` +
+            `확인 필요 ${reviewCount}건은 자동 변경하지 않습니다.`;
+
+        if (!confirm(confirmMessage)) return;
+
+        setSheetApplying(true);
+        setSheetError(null);
+
+        try {
+            const response = await fetch(`/api/admin/finance/sheet-reconcile?year=${year}&month=${month}`, {
+                method: "POST",
+                cache: "no-store",
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "시트 기준 적용에 실패했습니다.");
+            }
+
+            await loadMonth(year, month);
+            setSheetPreview((data.after ?? null) as PaymentReconcilePreview | null);
+        } catch (err: unknown) {
+            setSheetError(getErrorMessage(err, "시트 기준 적용에 실패했습니다."));
+        } finally {
+            setSheetApplying(false);
         }
     }
 
@@ -338,8 +448,8 @@ export default function FinanceClient({
             await bulkUpdatePaymentStatus(Array.from(selectedIds), "PAID");
             setSelectedIds(new Set());
             await loadMonth(year, month);
-        } catch (err: any) {
-            alert(err.message || "일괄 처리 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "일괄 처리 실패"));
         } finally {
             setBusy(false);
         }
@@ -366,6 +476,9 @@ export default function FinanceClient({
     const payRate = summary.totalAmount > 0
         ? Math.round((summary.paidAmount / summary.totalAmount) * 100)
         : 0;
+    const sheetApplyCount = sheetPreview
+        ? sheetPreview.summary.create + sheetPreview.summary.update
+        : 0;
 
     if (loading && !hasAnyData) {
         return <FinanceLoadingFallback year={year} month={month} />;
@@ -384,6 +497,14 @@ export default function FinanceClient({
                     <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">원생별 수납 현황을 관리합니다.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={loadSheetPreview}
+                        disabled={busy || sheetPreviewLoading || sheetApplying}
+                        className="bg-gray-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-800 transition disabled:opacity-50 text-sm dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                    >
+                        <span className="material-symbols-outlined text-sm align-middle mr-1">fact_check</span>
+                        {sheetPreviewLoading ? "점검 중..." : "시트 기준 점검"}
+                    </button>
                     {/* 이달 청구서 생성 버튼 */}
                     <button
                         onClick={handleGenerateInvoices}
@@ -424,6 +545,101 @@ export default function FinanceClient({
                 <span className="text-lg font-bold text-gray-900 dark:text-white">{year}년 {month}월</span>
                 <button onClick={nextMonth} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-300 font-bold">&rarr;</button>
             </div>
+
+            {(sheetError || sheetPreview) && (
+                <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 className="text-base font-extrabold text-gray-900 dark:text-white">시트 원장 기준 수납 점검</h2>
+                            {sheetPreview?.batch ? (
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    마지막 가져오기: {toDateStr(sheetPreview.batch.completedAt ?? sheetPreview.batch.createdAt)}
+                                    {sheetPreview.batch.spreadsheetTitle ? ` · ${sheetPreview.batch.spreadsheetTitle}` : ""}
+                                </p>
+                            ) : (
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">완료된 원장 가져오기 기록을 기준으로 비교합니다.</p>
+                            )}
+                        </div>
+
+                        {sheetPreview && (
+                            <button
+                                type="button"
+                                onClick={applySheetPreview}
+                                disabled={sheetApplying || sheetApplyCount === 0}
+                                className="rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                            >
+                                {sheetApplying ? "적용 중..." : sheetApplyCount === 0 ? "적용할 변경 없음" : "변경 적용"}
+                            </button>
+                        )}
+                    </div>
+
+                    {sheetError && (
+                        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                            {sheetError}
+                        </p>
+                    )}
+
+                    {sheetPreview && (
+                        <>
+                            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950/30">
+                                    <p className="text-xs font-bold text-green-700 dark:text-green-200">생성</p>
+                                    <p className="mt-1 text-xl font-extrabold text-green-800 dark:text-green-100">{sheetPreview.summary.create}건</p>
+                                    <p className="text-xs text-green-600 dark:text-green-300">{formatAmount(sheetPreview.summary.createAmount)}</p>
+                                </div>
+                                <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/30">
+                                    <p className="text-xs font-bold text-blue-700 dark:text-blue-200">수정</p>
+                                    <p className="mt-1 text-xl font-extrabold text-blue-800 dark:text-blue-100">{sheetPreview.summary.update}건</p>
+                                    <p className="text-xs text-blue-600 dark:text-blue-300">{formatAmount(sheetPreview.summary.updateAmount)}</p>
+                                </div>
+                                <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950/30">
+                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-200">확인 필요</p>
+                                    <p className="mt-1 text-xl font-extrabold text-amber-800 dark:text-amber-100">{sheetPreview.summary.review}건</p>
+                                    <p className="text-xs text-amber-600 dark:text-amber-300">자동 변경 제외</p>
+                                </div>
+                                <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <p className="text-xs font-bold text-gray-600 dark:text-gray-300">동일</p>
+                                    <p className="mt-1 text-xl font-extrabold text-gray-900 dark:text-white">{sheetPreview.summary.unchanged}건</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">변경 없음</p>
+                                </div>
+                            </div>
+
+                            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                                휴원, 퇴원, 추가수강, 이월처럼 자동 판단이 위험한 건은 확인 필요로 남깁니다.
+                            </p>
+
+                            {sheetPreview.samples.length > 0 && (
+                                <div className="mt-3 overflow-hidden rounded-lg border border-gray-100 dark:border-gray-700">
+                                    {sheetPreview.samples.map((sample) => (
+                                        <div key={`${sample.action}-${sample.studentId}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 dark:border-gray-700">
+                                            <div>
+                                                <span className="font-bold text-gray-900 dark:text-white">{sample.studentName}</span>
+                                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    {sample.paymentMethods?.join(", ") || "-"} · {sample.rowCount}행
+                                                </span>
+                                                {sample.reviewReason && (
+                                                    <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-200">{sample.reviewReason}</p>
+                                                )}
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                                                    {SHEET_RECONCILE_ACTION_LABELS[sample.action] ?? sample.action}
+                                                </span>
+                                                {sample.targetAmount != null && (
+                                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                        {sample.existingAmount != null ? `${formatAmount(sample.existingAmount)} → ` : ""}
+                                                        {formatAmount(sample.targetAmount)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
 
             {/* 요약 카드 (4개: 총 청구/수납/미납/수납률) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

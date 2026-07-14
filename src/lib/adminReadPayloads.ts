@@ -318,7 +318,7 @@ export function getCachedAdminStudentsPayload(limit?: number) {
 
 async function getStudentSheetImportSummary() {
     try {
-        const [rows, scheduleMismatchRows] = await Promise.all([
+        const [rows, scheduleMismatchRows, studentStatusRows] = await Promise.all([
             prisma.$queryRawUnsafe<{
             id: string;
             status: string;
@@ -400,6 +400,41 @@ async function getStudentSheetImportSummary() {
                 ORDER BY ABS(diff) DESC, "slotKey" ASC
                 LIMIT 8`
             ),
+            prisma.$queryRawUnsafe<{
+                total: number;
+                active: number;
+                paused: number;
+                withdrawn: number;
+                noEnrollment: number;
+            }[]>(
+                `WITH student_status AS (
+                    SELECT
+                        s.id,
+                        CASE
+                            WHEN EXISTS (
+                                SELECT 1
+                                FROM "Enrollment" e
+                                WHERE e."studentId" = s.id
+                                  AND e.status = 'ACTIVE'
+                            ) THEN 'ACTIVE'
+                            ELSE (
+                                SELECT e.status
+                                FROM "Enrollment" e
+                                WHERE e."studentId" = s.id
+                                ORDER BY e."createdAt" DESC
+                                LIMIT 1
+                            )
+                        END AS status
+                    FROM "Student" s
+                )
+                SELECT
+                    COUNT(*)::int AS total,
+                    COUNT(*) FILTER (WHERE status = 'ACTIVE')::int AS active,
+                    COUNT(*) FILTER (WHERE status = 'PAUSED')::int AS paused,
+                    COUNT(*) FILTER (WHERE status = 'WITHDRAWN')::int AS withdrawn,
+                    COUNT(*) FILTER (WHERE status IS NULL OR status NOT IN ('ACTIVE', 'PAUSED', 'WITHDRAWN'))::int AS "noEnrollment"
+                FROM student_status`
+            ),
         ]);
 
         const latest = rows[0];
@@ -409,6 +444,13 @@ async function getStudentSheetImportSummary() {
             ...latest,
             createdAt: latest.createdAt.toISOString(),
             completedAt: latest.completedAt?.toISOString() ?? null,
+            studentStatusCounts: studentStatusRows[0] ?? {
+                total: 0,
+                active: 0,
+                paused: 0,
+                withdrawn: 0,
+                noEnrollment: 0,
+            },
             scheduleMismatchCount: scheduleMismatchRows[0]?.totalMismatchCount ?? 0,
             topScheduleMismatches: scheduleMismatchRows.map(({ totalMismatchCount, ...row }) => row),
         };

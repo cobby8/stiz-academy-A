@@ -77,6 +77,13 @@ type SheetImportSummary = {
     completedAt: string | null;
     uniqueStudents: number;
     linkedRegistrations: number;
+    studentStatusCounts?: {
+        total: number;
+        active: number;
+        paused: number;
+        withdrawn: number;
+        noEnrollment: number;
+    };
     scheduleMismatchCount: number;
     topScheduleMismatches: ScheduleMismatch[];
 } | null;
@@ -816,6 +823,24 @@ function getLatestStatus(enrollments: Student["enrollments"]): string | null {
     return latest.status;
 }
 
+function getStatusLabel(status: string | null) {
+    if (status === "ACTIVE") return "활성";
+    if (status === "PAUSED") return "휴원";
+    if (status === "WITHDRAWN") return "퇴원";
+    return "미배정";
+}
+
+function getStatusPillClass(status: string | null) {
+    if (status === "ACTIVE") return "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-300/10 dark:text-emerald-100 dark:ring-emerald-300/20";
+    if (status === "PAUSED") return "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-300/10 dark:text-amber-100 dark:ring-amber-300/20";
+    if (status === "WITHDRAWN") return "bg-red-50 text-red-700 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20";
+    return "bg-gray-50 text-gray-500 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700";
+}
+
+function getActiveEnrollments(enrollments: Student["enrollments"]) {
+    return (enrollments ?? []).filter((enrollment) => enrollment.status === "ACTIVE");
+}
+
 export default function StudentManagementClient({
     students: initialStudents,
     classes: initialClasses,
@@ -852,6 +877,8 @@ export default function StudentManagementClient({
     const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
     const [studentOptionsLoading, setStudentOptionsLoading] = useState(false);
     const [manualRelinkSelections, setManualRelinkSelections] = useState<Record<string, string>>({});
+    const [autoLoadRequested, setAutoLoadRequested] = useState(false);
+    const [showImportTools, setShowImportTools] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -1135,6 +1162,17 @@ export default function StudentManagementClient({
             void loadData();
         }
     }, [hasInitialData, loadData]);
+
+    useEffect(() => {
+        if (!initialPartial || allStudentsLoaded || backgroundLoading || autoLoadRequested) return;
+
+        const timer = window.setTimeout(() => {
+            setAutoLoadRequested(true);
+            void loadData({ background: true });
+        }, 700);
+
+        return () => window.clearTimeout(timer);
+    }, [allStudentsLoaded, autoLoadRequested, backgroundLoading, initialPartial, loadData]);
     // 기본 필터를 "활성"으로 설정 — 대부분 수강 중인 학생을 먼저 봄
     const [filterStatus, setFilterStatus] = useState("ACTIVE");
     const [visibleLimit, setVisibleLimit] = useState(STUDENT_PAGE_SIZE);
@@ -1258,7 +1296,7 @@ export default function StudentManagementClient({
 
     // 상태별 학생 수 집계 (요약 카드용)
     // 최신 enrollment 기준으로 학생의 대표 상태를 판단
-    const statusCounts = useMemo(() => {
+    const loadedStatusCounts = useMemo(() => {
         let active = 0;
         let paused = 0;
         let withdrawn = 0;
@@ -1281,6 +1319,14 @@ export default function StudentManagementClient({
 
         return { active, paused, withdrawn, noEnrollment, total: students.length };
     }, [students, studentStatusById]);
+    const statusCounts = sheetImportSummary?.studentStatusCounts ?? loadedStatusCounts;
+
+    const applyStatusFilter = useCallback((value: string) => {
+        setFilterStatus(value);
+        if (!allStudentsLoaded && !backgroundLoading) {
+            void loadData({ background: true });
+        }
+    }, [allStudentsLoaded, backgroundLoading, loadData]);
 
     // 검색 + 필터 조합 (AND 조건): useMemo로 캐싱하여 불필요한 재계산 방지
     // 결과를 이름 가나다순으로 정렬
@@ -1384,22 +1430,40 @@ export default function StudentManagementClient({
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-full bg-lime-100 px-2 py-0.5 text-xs font-bold text-lime-800 dark:bg-lime-300/15 dark:text-lime-200">
-                                    DB 이관 {sheetImportSummary.status}
+                                <span
+                                    className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                        sheetImportSummary.status === "COMPLETED" && sheetImportSummary.errorRows === 0
+                                            ? "bg-lime-100 text-lime-800 dark:bg-lime-300/15 dark:text-lime-200"
+                                            : "bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-100"
+                                    }`}
+                                >
+                                    {sheetImportSummary.status === "COMPLETED" && sheetImportSummary.errorRows === 0
+                                        ? "DB 이관 정상"
+                                        : `DB 이관 ${sheetImportSummary.status}`}
                                 </span>
                                 <span className="text-sm font-bold text-gray-900 dark:text-white">
-                                    최신 구글시트 원본 기준
+                                    최신 운영 데이터
                                 </span>
                             </div>
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                완료 시각:{" "}
+                                최신 반영:{" "}
                                 {sheetImportSummary.completedAt
                                     ? new Date(sheetImportSummary.completedAt).toLocaleString("ko-KR")
                                     : new Date(sheetImportSummary.createdAt).toLocaleString("ko-KR")}
                             </p>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-7">
-                            <ImportSummaryMetric label="고유" value={sheetImportSummary.uniqueStudents} />
+                        <button
+                            type="button"
+                            onClick={() => setShowImportTools((current) => !current)}
+                            className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                        >
+                            {showImportTools ? "점검 도구 닫기" : "점검 도구"}
+                        </button>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4 lg:grid-cols-8">
+                            <ImportSummaryMetric label="DB 전체" value={sheetImportSummary.studentStatusCounts?.total ?? statusCounts.total} />
+                            <ImportSummaryMetric label="최신 원생" value={sheetImportSummary.uniqueStudents} />
                             <ImportSummaryMetric label="등록" value={sheetImportSummary.registrationRows} />
                             <ImportSummaryMetric label="차량" value={sheetImportSummary.vehicleRows} />
                             <ImportSummaryMetric label="변동" value={sheetImportSummary.changeRows} />
@@ -1414,123 +1478,135 @@ export default function StudentManagementClient({
                                 value={sheetImportSummary.errorRows}
                                 warning={sheetImportSummary.errorRows > 0}
                             />
-                        </div>
                     </div>
-                    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <p className="font-bold">7월 최신 원생목록 점검</p>
-                                <p className="mt-1 text-gray-500 dark:text-gray-400">
-                                    실제 변경 없이 7월 등록 행의 학생 연결, 이전 이력, 중복 의심 항목을 먼저 확인합니다.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => void loadCurrentRosterReport()}
-                                disabled={currentRosterLoading}
-                                className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
-                            >
-                                {currentRosterLoading ? "점검 중" : "7월 원생 점검"}
-                            </button>
-                        </div>
-                        {currentRosterError && (
-                            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
-                                {currentRosterError}
-                            </div>
-                        )}
-                        {currentRosterReport && <CurrentRosterReportBox report={currentRosterReport} />}
-                    </div>
-                    {sheetImportSummary.scheduleMismatchCount > 0 && (
-                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-lime-300/25 dark:bg-lime-300/10 dark:text-lime-100">
-                            <p className="font-bold">
-                                시트 등록 인원과 DB 활성 수강 인원이 다른 반이 {sheetImportSummary.scheduleMismatchCount}개 있습니다.
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                {sheetImportSummary.topScheduleMismatches.map((item) => (
-                                    <span
-                                        key={item.slotKey}
-                                        className="rounded-full bg-white px-2 py-1 font-semibold text-amber-900 ring-1 ring-amber-200 dark:bg-gray-950 dark:text-lime-100 dark:ring-lime-300/25"
+
+                    {!allStudentsLoaded && (
+                        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+                            빠른 진입을 위해 먼저 50명을 표시했습니다. 전체 원생 목록과 필터는 백그라운드에서 동기화 중입니다.
+                        </p>
+                    )}
+
+                    {showImportTools && (
+                        <div className="mt-3 space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="font-bold">최신 원생목록 점검</p>
+                                        <p className="mt-1 text-gray-500 dark:text-gray-400">
+                                            실제 변경 없이 최신 등록 행의 학생 연결, 이전 이력, 중복 의심 항목을 확인합니다.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => void loadCurrentRosterReport()}
+                                        disabled={currentRosterLoading}
+                                        className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
                                     >
-                                        {formatSlotLabel(item.slotKey)} 시트 {item.sheetCount} / DB {item.dbCount}
-                                        {" "}
-                                        ({item.diff > 0 ? `+${item.diff}` : item.diff})
-                                    </span>
-                                ))}
-                                {sheetImportSummary.scheduleMismatchCount > sheetImportSummary.topScheduleMismatches.length && (
-                                    <span className="rounded-full px-2 py-1 font-semibold text-amber-800 dark:text-lime-200">
-                                        외 {sheetImportSummary.scheduleMismatchCount - sheetImportSummary.topScheduleMismatches.length}개
-                                    </span>
+                                        {currentRosterLoading ? "점검 중" : "상세 점검"}
+                                    </button>
+                                </div>
+                                {currentRosterError && (
+                                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+                                        {currentRosterError}
+                                    </div>
                                 )}
+                                {currentRosterReport && <CurrentRosterReportBox report={currentRosterReport} />}
                             </div>
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => void loadReconcilePreview()}
-                                    disabled={reconcileLoading}
-                                    className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
-                                >
-                                    {reconcileLoading ? "점검 중" : "차이 점검"}
-                                </button>
-                                <span className="text-xs text-amber-800 dark:text-lime-200">
-                                    시트에 연결된 학생만 안전하게 맞춥니다.
-                                </span>
-                            </div>
-                            {reconcileError && (
-                                <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
-                                    {reconcileError}
+
+                            {sheetImportSummary.scheduleMismatchCount > 0 && (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-lime-300/25 dark:bg-lime-300/10 dark:text-lime-100">
+                                    <p className="font-bold">
+                                        시트 등록 인원과 DB 활성 수강 인원이 다른 반이 {sheetImportSummary.scheduleMismatchCount}개 있습니다.
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {sheetImportSummary.topScheduleMismatches.map((item) => (
+                                            <span
+                                                key={item.slotKey}
+                                                className="rounded-full bg-white px-2 py-1 font-semibold text-amber-900 ring-1 ring-amber-200 dark:bg-gray-950 dark:text-lime-100 dark:ring-lime-300/25"
+                                            >
+                                                {formatSlotLabel(item.slotKey)} 시트 {item.sheetCount} / DB {item.dbCount}
+                                                {" "}
+                                                ({item.diff > 0 ? `+${item.diff}` : item.diff})
+                                            </span>
+                                        ))}
+                                        {sheetImportSummary.scheduleMismatchCount > sheetImportSummary.topScheduleMismatches.length && (
+                                            <span className="rounded-full px-2 py-1 font-semibold text-amber-800 dark:text-lime-200">
+                                                외 {sheetImportSummary.scheduleMismatchCount - sheetImportSummary.topScheduleMismatches.length}개
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => void loadReconcilePreview()}
+                                            disabled={reconcileLoading}
+                                            className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                                        >
+                                            {reconcileLoading ? "점검 중" : "차이 점검"}
+                                        </button>
+                                        <span className="text-xs text-amber-800 dark:text-lime-200">
+                                            시트에 연결된 학생만 안전하게 맞춥니다.
+                                        </span>
+                                    </div>
+                                    {reconcileError && (
+                                        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+                                            {reconcileError}
+                                        </div>
+                                    )}
+                                    {reconcilePreview && (
+                                        <ReconcilePreviewBox
+                                            preview={reconcilePreview}
+                                            applying={reconcileApplying}
+                                            onApply={() => void applyReconcile()}
+                                        />
+                                    )}
                                 </div>
                             )}
-                            {reconcilePreview && (
-                                <ReconcilePreviewBox
-                                    preview={reconcilePreview}
-                                    applying={reconcileApplying}
-                                    onApply={() => void applyReconcile()}
-                                />
-                            )}
+
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="font-bold">차량·대표팀 원본 학생 연결 점검</p>
+                                        <p className="mt-1 text-gray-500 dark:text-gray-400">
+                                            시트 원본 중 기존 학생과 아직 연결되지 않은 행을 확인하고, 확정 후보 또는 수동 선택으로 연결합니다.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => void loadRelinkPreview()}
+                                        disabled={relinkLoading}
+                                        className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
+                                    >
+                                        {relinkLoading ? "점검 중" : "미연결 점검"}
+                                    </button>
+                                </div>
+                                {relinkError && (
+                                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+                                        {relinkError}
+                                    </div>
+                                )}
+                                {relinkPreview && (
+                                    <RelinkPreviewBox
+                                        preview={relinkPreview}
+                                        applying={relinkApplying}
+                                        manualApplyingId={manualRelinkApplyingId}
+                                        studentOptions={studentOptions}
+                                        studentOptionsLoading={studentOptionsLoading}
+                                        selections={manualRelinkSelections}
+                                        onSelectionChange={(rowKey, studentId) =>
+                                            setManualRelinkSelections((current) => ({
+                                                ...current,
+                                                [rowKey]: studentId,
+                                            }))
+                                        }
+                                        onApplyAuto={() => void applyRelink()}
+                                        onApplyManual={(row, studentId) => void applyManualRelink(row, studentId)}
+                                        onCreateTeamStudent={(row) => void createTeamStudentFromRow(row)}
+                                    />
+                                )}
+                            </div>
                         </div>
                     )}
-                    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <p className="font-bold">차량·대표팀 원본 학생 연결 점검</p>
-                                <p className="mt-1 text-gray-500 dark:text-gray-400">
-                                    시트 원본 중 기존 학생과 아직 연결되지 않은 행을 확인하고, 확정 후보 또는 수동 선택으로 연결합니다.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => void loadRelinkPreview()}
-                                disabled={relinkLoading}
-                                className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
-                            >
-                                {relinkLoading ? "점검 중" : "미연결 점검"}
-                            </button>
-                        </div>
-                        {relinkError && (
-                            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
-                                {relinkError}
-                            </div>
-                        )}
-                        {relinkPreview && (
-                            <RelinkPreviewBox
-                                preview={relinkPreview}
-                                applying={relinkApplying}
-                                manualApplyingId={manualRelinkApplyingId}
-                                studentOptions={studentOptions}
-                                studentOptionsLoading={studentOptionsLoading}
-                                selections={manualRelinkSelections}
-                                onSelectionChange={(rowKey, studentId) =>
-                                    setManualRelinkSelections((current) => ({
-                                        ...current,
-                                        [rowKey]: studentId,
-                                    }))
-                                }
-                                onApplyAuto={() => void applyRelink()}
-                                onApplyManual={(row, studentId) => void applyManualRelink(row, studentId)}
-                                onCreateTeamStudent={(row) => void createTeamStudentFromRow(row)}
-                            />
-                        )}
-                    </div>
                 </div>
             )}
 
@@ -1545,7 +1621,7 @@ export default function StudentManagementClient({
                 ].map((card) => (
                     <button
                         key={card.label}
-                        onClick={() => setFilterStatus(card.value)}
+                        onClick={() => applyStatusFilter(card.value)}
                         className={`rounded-xl border p-3 text-left transition hover:shadow-sm ${card.color} ${
                             filterStatus === card.value ? "ring-2 ring-brand-orange-500 dark:focus:ring-brand-neon-lime shadow-sm" : ""
                         }`}
@@ -1563,7 +1639,8 @@ export default function StudentManagementClient({
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">원생 관리</h1>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                        {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : filterStatus === "NONE" ? "미배정" : "전체"} 원생: {filtered.length}명
+                        {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : filterStatus === "NONE" ? "미배정" : "전체"} 표시 목록: {filtered.length}명
+                        {!allStudentsLoaded && " (전체 동기화 중)"}
                     </p>
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
@@ -1820,14 +1897,23 @@ export default function StudentManagementClient({
                                         <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {s.school || "-"}
                                         </td>
-                                        {/* 수강 반: 항상 표시, shortenClassName으로 "월6" 형태 */}
+                                        {/* 수강 반: 활성 수강반만 우선 표시 */}
                                         <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-                                            {s.enrollments && s.enrollments.length > 0
-                                                ? [...s.enrollments]
-                                                    .sort((a, b) => (DAY_ORDER[a.dayOfWeek] ?? 99) - (DAY_ORDER[b.dayOfWeek] ?? 99) || a.startTime.localeCompare(b.startTime))
-                                                    .map((e) => shortenClassName(e)).join(", ")
-                                                : <span className="text-gray-300">-</span>
-                                            }
+                                            {(() => {
+                                                const activeEnrollments = getActiveEnrollments(s.enrollments);
+                                                if (activeEnrollments.length > 0) {
+                                                    return [...activeEnrollments]
+                                                        .sort((a, b) => (DAY_ORDER[a.dayOfWeek] ?? 99) - (DAY_ORDER[b.dayOfWeek] ?? 99) || a.startTime.localeCompare(b.startTime))
+                                                        .map((e) => shortenClassName(e)).join(", ");
+                                                }
+
+                                                const status = studentStatusById.get(s.id) ?? null;
+                                                return (
+                                                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-bold ring-1 ${getStatusPillClass(status)}`}>
+                                                        {getStatusLabel(status)}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         {/* 학부모: 모바일 숨김, shortenParentName으로 간결화 */}
                                         <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">

@@ -945,19 +945,43 @@ export async function enrollStudent(studentId: string, classId: string) {
 
 export async function updateEnrollmentStatus(enrollmentId: string, status: string) {
     await requireAdmin();
+
+    const allowedStatuses = new Set(["ACTIVE", "PAUSED", "WITHDRAWN"]);
+    if (!allowedStatuses.has(status)) {
+        throw new Error("허용되지 않는 수강 상태입니다.");
+    }
+
+    let changedStudentId: string | null = null;
+    let changedClassId: string | null = null;
+
     try {
-        await prisma.$executeRawUnsafe(
-            `UPDATE "Enrollment" SET status = $1, "updatedAt" = NOW() WHERE id = $2`,
+        const rows = await prisma.$queryRawUnsafe<{ studentId?: string; studentid?: string; classId?: string; classid?: string }[]>(
+            `UPDATE "Enrollment"
+             SET status = $1, "updatedAt" = NOW()
+             WHERE id = $2
+             RETURNING "studentId", "classId"`,
             status, enrollmentId,
         );
+        if (rows.length === 0) {
+            throw new Error("수강 등록 정보를 찾을 수 없습니다.");
+        }
+
+        changedStudentId = rows[0].studentId ?? rows[0].studentid ?? null;
+        changedClassId = rows[0].classId ?? rows[0].classid ?? null;
     } catch (e) {
         console.error("Failed to update enrollment:", e);
+        if (e instanceof Error && e.message === "수강 등록 정보를 찾을 수 없습니다.") {
+            throw e;
+        }
         throw new Error("수강 상태 변경 실패");
     }
     revalidatePath("/admin/students");
+    if (changedStudentId) revalidatePath(`/admin/students/${changedStudentId}`);
     revalidatePath("/admin/classes");
+    if (changedClassId) revalidatePath(`/admin/classes/${changedClassId}`);
     revalidateStudentAdminCaches();
     revalidateClassAdminCaches();
+    revalidateFinanceCaches();
 }
 
 export async function deleteEnrollment(enrollmentId: string) {

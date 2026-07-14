@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { updateStudentMemo } from "@/app/actions/admin";
+import { updateEnrollmentStatus, updateStudentMemo } from "@/app/actions/admin";
 
 type MediaItem = { url: string; type: "image" | "video" };
 
@@ -26,6 +26,11 @@ const ENROLLMENT_STATUS: Record<string, { label: string; color: string }> = {
     WITHDRAWN: { label: "퇴원", color: "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20" },
     NONE: { label: "미배정", color: "bg-gray-50 text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700" },
 };
+const ENROLLMENT_STATUS_OPTIONS = [
+    { value: "ACTIVE", label: "수강 중" },
+    { value: "PAUSED", label: "휴원" },
+    { value: "WITHDRAWN", label: "퇴원" },
+] as const;
 
 function toDateStr(d: Date | string | null): string {
     if (!d) return "-";
@@ -42,6 +47,10 @@ function calcAge(birthDate: Date | string): number {
 }
 function formatKRW(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
 }
 
 function SymbolIcon({
@@ -121,6 +130,8 @@ export default function StudentDetailClient({
     const [memo, setMemo] = useState(initialData?.student.memo || "");
     const [isPending, startTransition] = useTransition();
     const [memoSaved, setMemoSaved] = useState(false);
+    const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+    const [statusFeedback, setStatusFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     const loadData = useCallback(async () => {
         if (!studentId) return;
@@ -251,6 +262,76 @@ export default function StudentDetailClient({
             setMemoSaved(true);
             setTimeout(() => setMemoSaved(false), 2000);
         });
+    }
+
+    async function changeEnrollmentStatus(enrollmentId: string, currentStatus: string, nextStatus: string) {
+        if (currentStatus === nextStatus || statusUpdatingId) return;
+
+        const nextInfo = getEnrollmentStatusInfo(nextStatus);
+        if (!window.confirm(`이 수강 반 상태를 '${nextInfo.label}'으로 변경할까요?`)) return;
+
+        setStatusUpdatingId(enrollmentId);
+        setStatusFeedback(null);
+
+        try {
+            await updateEnrollmentStatus(enrollmentId, nextStatus);
+            await loadData();
+            setStatusFeedback({ type: "success", message: "수강 상태를 변경했습니다." });
+            window.setTimeout(() => setStatusFeedback(null), 2500);
+        } catch (statusError) {
+            setStatusFeedback({
+                type: "error",
+                message: getErrorMessage(statusError, "수강 상태 변경에 실패했습니다."),
+            });
+        } finally {
+            setStatusUpdatingId(null);
+        }
+    }
+
+    function renderEnrollmentCard(enrollment: StudentActivityData["enrollments"][number], muted = false) {
+        const info = getEnrollmentStatusInfo(enrollment.status);
+        const isUpdating = statusUpdatingId === enrollment.id;
+
+        return (
+            <div
+                key={enrollment.id}
+                className={muted
+                    ? "rounded-xl border border-gray-100 p-3 dark:border-gray-700 dark:bg-gray-900/50"
+                    : "rounded-xl bg-gray-50 p-3 dark:bg-gray-900"}
+            >
+                <div className="flex items-start justify-between gap-2">
+                    <p className={muted ? "font-medium text-sm text-gray-800 dark:text-gray-100" : "font-bold text-sm text-gray-900 dark:text-white"}>
+                        {enrollment.className}
+                    </p>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${info.color}`}>
+                        {info.label}
+                    </span>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {enrollment.programName} · {DAY_LABELS[enrollment.dayOfWeek] || enrollment.dayOfWeek} {enrollment.startTime}~{enrollment.endTime}
+                </p>
+                <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-white p-1 dark:bg-gray-950">
+                    {ENROLLMENT_STATUS_OPTIONS.map((option) => {
+                        const selected = enrollment.status === option.value;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => void changeEnrollmentStatus(enrollment.id, enrollment.status, option.value)}
+                                disabled={Boolean(statusUpdatingId)}
+                                className={`rounded-md px-2 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    selected
+                                        ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                        : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+                                }`}
+                            >
+                                {isUpdating && selected ? "저장 중" : option.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        );
     }
 
     const sortedEnrollments = sortEnrollments(enrollments);
@@ -406,45 +487,27 @@ export default function StudentDetailClient({
                         <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                             <SymbolIcon name="menu_book" size={16} className="text-gray-400" /> 수강 정보
                         </h3>
+                        {statusFeedback && (
+                            <p className={`mb-3 rounded-lg px-3 py-2 text-xs font-bold ${
+                                statusFeedback.type === "success"
+                                    ? "bg-lime-50 text-lime-700 dark:bg-lime-300/10 dark:text-lime-100"
+                                    : "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-200"
+                            }`}>
+                                {statusFeedback.message}
+                            </p>
+                        )}
                         {activeEnrollments.length === 0 ? (
                             <p className="text-sm text-gray-400">수강 중인 반이 없습니다</p>
                         ) : (
                             <div className="space-y-2">
-                                {activeEnrollments.map(e => (
-                                    <div key={e.id} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <p className="font-bold text-sm text-gray-900 dark:text-white">{e.className}</p>
-                                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${getEnrollmentStatusInfo(e.status).color}`}>
-                                                {getEnrollmentStatusInfo(e.status).label}
-                                            </span>
-                                        </div>
-                                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                            {e.programName} · {DAY_LABELS[e.dayOfWeek] || e.dayOfWeek} {e.startTime}~{e.endTime}
-                                        </p>
-                                    </div>
-                                ))}
+                                {activeEnrollments.map(e => renderEnrollmentCard(e))}
                             </div>
                         )}
                         {inactiveEnrollments.length > 0 && (
                             <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
                                 <p className="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">이전/휴원 이력</p>
                                 <div className="space-y-2">
-                                    {inactiveEnrollments.map((e) => {
-                                        const info = getEnrollmentStatusInfo(e.status);
-                                        return (
-                                            <div key={e.id} className="rounded-xl border border-gray-100 p-3 dark:border-gray-700 dark:bg-gray-900/50">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <p className="font-medium text-sm text-gray-800 dark:text-gray-100">{e.className}</p>
-                                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${info.color}`}>
-                                                        {info.label}
-                                                    </span>
-                                                </div>
-                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                    {e.programName} · {DAY_LABELS[e.dayOfWeek] || e.dayOfWeek} {e.startTime}~{e.endTime}
-                                                </p>
-                                            </div>
-                                        );
-                                    })}
+                                    {inactiveEnrollments.map((e) => renderEnrollmentCard(e, true))}
                                 </div>
                             </div>
                         )}

@@ -90,6 +90,37 @@ type StudentActivityData = {
     payments: { id: string; amount: number; status: string; dueDate: Date | string; paidDate: Date | string | null }[];
     attendanceStats: { total: number; present: number; absent: number; late: number; excused: number; rate: number };
     galleryPosts: { id: string; title: string | null; mediaJSON: string; createdAt: Date | string }[];
+    monthlyHistory: {
+        id: string;
+        registrationMonth: string | null;
+        year: number | null;
+        month: number | null;
+        status: string;
+        rowCount: number;
+        classes: {
+            slotKey: string;
+            className: string;
+            dayOfWeek: string | null;
+            startTime: string | null;
+            endTime: string | null;
+            programName: string | null;
+        }[];
+        paymentAmount: number;
+        tuitionAmount: number;
+        shuttleFee: number;
+        carryOverAmount: number;
+        paymentMethods: string[];
+        paymentDate: Date | string | null;
+        shuttle: {
+            needed: boolean;
+            pickup: string | null;
+            preferredTime: string | null;
+            dropoff: string | null;
+        };
+        school: string | null;
+        grade: string | null;
+        changes: { summary: string | null; note: string | null; occurredAt: Date | string | null; createdAt: Date | string | null }[];
+    }[];
 };
 
 function getEnrollmentStatusInfo(status: string | null) {
@@ -115,6 +146,44 @@ function sortEnrollments(enrollments: StudentActivityData["enrollments"]) {
         if (statusDiff !== 0) return statusDiff;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
+}
+
+function formatMonthLabel(history: StudentActivityData["monthlyHistory"][number]) {
+    if (history.registrationMonth) return history.registrationMonth;
+    if (history.year && history.month) return `${history.year}년 ${history.month}월`;
+    if (history.month) return `${history.month}월`;
+    return "월 정보 없음";
+}
+
+function formatClassLabel(classItem: StudentActivityData["monthlyHistory"][number]["classes"][number]) {
+    const day = classItem.dayOfWeek ? DAY_LABELS[classItem.dayOfWeek] || classItem.dayOfWeek : "";
+    const time = classItem.startTime ? `${classItem.startTime}${classItem.endTime ? `~${classItem.endTime}` : ""}` : "";
+    const prefix = [day, time].filter(Boolean).join(" ");
+    return prefix ? `${prefix} · ${classItem.className}` : classItem.className;
+}
+
+function getMonthlyPaymentInfo(history: StudentActivityData["monthlyHistory"][number]) {
+    const hasUnpaidMethod = history.paymentMethods.some((method) => method.includes("미결제"));
+    const hasTuitionGap = history.tuitionAmount > 0 && history.paymentAmount < history.tuitionAmount;
+
+    if (hasUnpaidMethod || hasTuitionGap) {
+        return {
+            label: "미납 확인",
+            className: "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20",
+        };
+    }
+
+    if (history.paymentAmount > 0) {
+        return {
+            label: "납부 완료",
+            className: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-300/10 dark:text-emerald-100 dark:ring-emerald-300/20",
+        };
+    }
+
+    return {
+        label: "수납 정보 없음",
+        className: "bg-gray-50 text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700",
+    };
 }
 
 export default function StudentDetailClient({
@@ -254,7 +323,7 @@ export default function StudentDetailClient({
 
     if (!activityData) return null;
 
-    const { student, enrollments, attendances, payments, attendanceStats, galleryPosts } = activityData;
+    const { student, enrollments, attendances, payments, attendanceStats, galleryPosts, monthlyHistory } = activityData;
 
     function saveMemo() {
         startTransition(async () => {
@@ -516,6 +585,105 @@ export default function StudentDetailClient({
 
                 {/* Right Column: 활동 이력 */}
                 <div className="lg:col-span-2 space-y-4">
+                    {/* 월별 운영 히스토리 */}
+                    <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                        <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                            <SymbolIcon name="history" size={16} className="text-gray-400" /> 월별 운영 히스토리
+                            <span className="text-xs text-gray-400 font-normal ml-1">최신 시트 이관 기준</span>
+                        </h3>
+                        {monthlyHistory.length === 0 ? (
+                            <p className="text-sm text-gray-400">월별 이관 이력이 없습니다</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {monthlyHistory.map((history) => {
+                                    const statusInfo = getEnrollmentStatusInfo(history.status);
+                                    const paymentInfo = getMonthlyPaymentInfo(history);
+                                    const visibleClasses = history.classes.slice(0, 6);
+                                    const hiddenClassCount = Math.max(0, history.classes.length - visibleClasses.length);
+
+                                    return (
+                                        <div
+                                            key={history.id}
+                                            className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/70"
+                                        >
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                                <div>
+                                                    <p className="font-extrabold text-gray-900 dark:text-white">
+                                                        {formatMonthLabel(history)}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                        {history.classes.length}개 반 · 원장 {history.rowCount}줄
+                                                    </p>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${statusInfo.color}`}>
+                                                        {statusInfo.label}
+                                                    </span>
+                                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${paymentInfo.className}`}>
+                                                        {paymentInfo.label}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-3 flex flex-wrap gap-1.5">
+                                                {visibleClasses.map((classItem) => (
+                                                    <span
+                                                        key={classItem.slotKey}
+                                                        className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-950 dark:text-gray-200 dark:ring-gray-700"
+                                                    >
+                                                        {formatClassLabel(classItem)}
+                                                    </span>
+                                                ))}
+                                                {hiddenClassCount > 0 && (
+                                                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-500 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
+                                                        +{hiddenClassCount}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-3 grid gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-2">
+                                                <div className="rounded-lg bg-white p-2.5 ring-1 ring-gray-100 dark:bg-gray-950 dark:ring-gray-800">
+                                                    <p className="font-bold text-gray-900 dark:text-white">수납</p>
+                                                    <p className="mt-1">
+                                                        납부 {formatKRW(history.paymentAmount)} / 청구 {formatKRW(history.tuitionAmount)}
+                                                    </p>
+                                                    <p className="mt-0.5 text-gray-500 dark:text-gray-400">
+                                                        {history.paymentMethods.length > 0 ? history.paymentMethods.join(" · ") : "결제수단 없음"}
+                                                        {history.paymentDate ? ` · ${toDateStr(history.paymentDate)}` : ""}
+                                                    </p>
+                                                </div>
+                                                <div className="rounded-lg bg-white p-2.5 ring-1 ring-gray-100 dark:bg-gray-950 dark:ring-gray-800">
+                                                    <p className="font-bold text-gray-900 dark:text-white">셔틀</p>
+                                                    {history.shuttle.needed ? (
+                                                        <p className="mt-1">
+                                                            {history.shuttle.pickup || "승차지 미입력"}
+                                                            {history.shuttle.preferredTime ? ` · ${history.shuttle.preferredTime}` : ""}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="mt-1 text-gray-500 dark:text-gray-400">이용 안 함</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {history.changes.length > 0 && (
+                                                <div className="mt-3 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 ring-1 ring-amber-200 dark:bg-amber-300/10 dark:text-amber-100 dark:ring-amber-300/20">
+                                                    <p className="font-bold">변동 기록</p>
+                                                    <ul className="mt-1 space-y-1">
+                                                        {history.changes.slice(0, 3).map((change, index) => (
+                                                            <li key={`${history.id}-change-${index}`}>
+                                                                {change.summary || change.note}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
                     {/* 출결 기록 */}
                     <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                         <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">

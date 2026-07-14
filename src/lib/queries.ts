@@ -1086,6 +1086,267 @@ export const getDashboardExtendedStats = cache(async () => {
     }
 });
 
+type StudentMonthlyClass = {
+    slotKey: string;
+    className: string;
+    dayOfWeek: string | null;
+    startTime: string | null;
+    endTime: string | null;
+    programName: string | null;
+};
+
+type StudentMonthlyChange = {
+    summary: string | null;
+    note: string | null;
+    occurredAt: Date | string | null;
+    createdAt: Date | string | null;
+};
+
+type StudentMonthlyClassRaw = {
+    slotKey?: unknown;
+    slotkey?: unknown;
+    className?: unknown;
+    dayOfWeek?: unknown;
+    dayofweek?: unknown;
+    startTime?: unknown;
+    starttime?: unknown;
+    endTime?: unknown;
+    endtime?: unknown;
+    programName?: unknown;
+    programname?: unknown;
+};
+
+type StudentMonthlyChangeRaw = {
+    summary?: unknown;
+    note?: unknown;
+    occurredAt?: Date | string | null;
+    occurredat?: Date | string | null;
+    createdAt?: Date | string | null;
+    createdat?: Date | string | null;
+};
+
+type StudentMonthlyHistoryRawRow = {
+    id: string;
+    registrationMonth?: unknown;
+    registrationmonth?: unknown;
+    status?: unknown;
+    paymentAmount?: unknown;
+    paymentamount?: unknown;
+    tuitionAmount?: unknown;
+    tuitionamount?: unknown;
+    shuttleFee?: unknown;
+    shuttlefee?: unknown;
+    carryOverAmount?: unknown;
+    carryoveramount?: unknown;
+    paymentMethod?: unknown;
+    paymentmethod?: unknown;
+    paymentDate?: Date | string | null;
+    paymentdate?: Date | string | null;
+    shuttleNeeded?: unknown;
+    shuttleneeded?: unknown;
+    shuttlePickup?: unknown;
+    shuttlepickup?: unknown;
+    shuttlePreferredTime?: unknown;
+    shuttlepreferredtime?: unknown;
+    shuttleDropoff?: unknown;
+    shuttledropoff?: unknown;
+    school?: unknown;
+    grade?: unknown;
+    classes?: unknown;
+    changes?: unknown;
+};
+
+const DAY_ORDER: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+
+function parseRegistrationMonthParts(value: unknown) {
+    const numbers = String(value ?? "")
+        .match(/\d+/g)
+        ?.map(Number) ?? [];
+
+    if (numbers.length >= 2 && numbers[0] >= 2000) {
+        return { year: numbers[0], month: numbers[1] };
+    }
+
+    if (numbers.length >= 1) {
+        return { year: null, month: numbers[0] };
+    }
+
+    return { year: null, month: null };
+}
+
+function parseJsonList<T>(value: unknown): T[] {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== "string" || value.trim() === "") return [];
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function toNullableString(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function addNumber(total: number, value: unknown) {
+    const numeric = Number(value ?? 0);
+    return Number.isFinite(numeric) ? total + numeric : total;
+}
+
+function chooseLedgerStatus(current: string, next: unknown) {
+    const nextStatus = typeof next === "string" ? next : "NONE";
+    const order: Record<string, number> = { ACTIVE: 3, PAUSED: 2, WITHDRAWN: 1, NONE: 0 };
+    return (order[nextStatus] ?? 0) > (order[current] ?? 0) ? nextStatus : current;
+}
+
+function buildStudentMonthlyHistory(rows: StudentMonthlyHistoryRawRow[]) {
+    const monthMap = new Map<string, {
+        id: string;
+        registrationMonth: string | null;
+        year: number | null;
+        month: number | null;
+        status: string;
+        rowCount: number;
+        classes: StudentMonthlyClass[];
+        classKeys: Set<string>;
+        paymentAmount: number;
+        tuitionAmount: number;
+        shuttleFee: number;
+        carryOverAmount: number;
+        paymentMethods: Set<string>;
+        paymentDate: Date | string | null;
+        shuttle: {
+            needed: boolean;
+            pickup: string | null;
+            preferredTime: string | null;
+            dropoff: string | null;
+        };
+        school: string | null;
+        grade: string | null;
+        changes: StudentMonthlyChange[];
+    }>();
+
+    for (const row of rows) {
+        const registrationMonth = toNullableString(row.registrationMonth ?? row.registrationmonth);
+        const { year, month } = parseRegistrationMonthParts(registrationMonth);
+        const key = `${year ?? "unknown"}-${month ?? registrationMonth ?? row.id}`;
+
+        if (!monthMap.has(key)) {
+            monthMap.set(key, {
+                id: key,
+                registrationMonth,
+                year,
+                month,
+                status: "NONE",
+                rowCount: 0,
+                classes: [],
+                classKeys: new Set<string>(),
+                paymentAmount: 0,
+                tuitionAmount: 0,
+                shuttleFee: 0,
+                carryOverAmount: 0,
+                paymentMethods: new Set<string>(),
+                paymentDate: null,
+                shuttle: {
+                    needed: false,
+                    pickup: null,
+                    preferredTime: null,
+                    dropoff: null,
+                },
+                school: null,
+                grade: null,
+                changes: [],
+            });
+        }
+
+        const item = monthMap.get(key)!;
+        item.rowCount += 1;
+        item.status = chooseLedgerStatus(item.status, row.status);
+        item.paymentAmount = addNumber(item.paymentAmount, row.paymentAmount ?? row.paymentamount);
+        item.tuitionAmount = addNumber(item.tuitionAmount, row.tuitionAmount ?? row.tuitionamount);
+        item.shuttleFee = addNumber(item.shuttleFee, row.shuttleFee ?? row.shuttlefee);
+        item.carryOverAmount = addNumber(item.carryOverAmount, row.carryOverAmount ?? row.carryoveramount);
+
+        const paymentMethod = toNullableString(row.paymentMethod ?? row.paymentmethod);
+        if (paymentMethod) item.paymentMethods.add(paymentMethod);
+
+        const paymentDate = row.paymentDate ?? row.paymentdate ?? null;
+        if (paymentDate) item.paymentDate = paymentDate;
+
+        item.school ||= toNullableString(row.school);
+        item.grade ||= toNullableString(row.grade);
+
+        if (row.shuttleNeeded ?? row.shuttleneeded) {
+            item.shuttle.needed = true;
+        }
+        item.shuttle.pickup ||= toNullableString(row.shuttlePickup ?? row.shuttlepickup);
+        item.shuttle.preferredTime ||= toNullableString(row.shuttlePreferredTime ?? row.shuttlepreferredtime);
+        item.shuttle.dropoff ||= toNullableString(row.shuttleDropoff ?? row.shuttledropoff);
+
+        for (const classItem of parseJsonList<StudentMonthlyClassRaw>(row.classes)) {
+            const slotKey = toNullableString(classItem.slotKey) ?? toNullableString(classItem.slotkey) ?? toNullableString(classItem.className) ?? "";
+            if (!slotKey || item.classKeys.has(slotKey)) continue;
+
+            item.classKeys.add(slotKey);
+            item.classes.push({
+                slotKey,
+                className: toNullableString(classItem.className) ?? slotKey,
+                dayOfWeek: toNullableString(classItem.dayOfWeek ?? classItem.dayofweek),
+                startTime: toNullableString(classItem.startTime ?? classItem.starttime),
+                endTime: toNullableString(classItem.endTime ?? classItem.endtime),
+                programName: toNullableString(classItem.programName ?? classItem.programname),
+            });
+        }
+
+        for (const changeItem of parseJsonList<StudentMonthlyChangeRaw>(row.changes)) {
+            const summary = toNullableString(changeItem.summary);
+            const note = toNullableString(changeItem.note);
+            if (!summary && !note) continue;
+
+            item.changes.push({
+                summary,
+                note,
+                occurredAt: changeItem.occurredAt ?? changeItem.occurredat ?? null,
+                createdAt: changeItem.createdAt ?? changeItem.createdat ?? null,
+            });
+        }
+    }
+
+    return Array.from(monthMap.values())
+        .map((item) => ({
+            id: item.id,
+            registrationMonth: item.registrationMonth,
+            year: item.year,
+            month: item.month,
+            status: item.status,
+            rowCount: item.rowCount,
+            classes: item.classes.sort((a, b) => {
+                const dayDiff = (DAY_ORDER[a.dayOfWeek ?? ""] ?? 99) - (DAY_ORDER[b.dayOfWeek ?? ""] ?? 99);
+                if (dayDiff !== 0) return dayDiff;
+                return (a.startTime ?? "").localeCompare(b.startTime ?? "");
+            }),
+            paymentAmount: item.paymentAmount,
+            tuitionAmount: item.tuitionAmount,
+            shuttleFee: item.shuttleFee,
+            carryOverAmount: item.carryOverAmount,
+            paymentMethods: Array.from(item.paymentMethods),
+            paymentDate: item.paymentDate,
+            shuttle: item.shuttle,
+            school: item.school,
+            grade: item.grade,
+            changes: item.changes,
+        }))
+        .sort((a, b) => {
+            const yearDiff = (b.year ?? 0) - (a.year ?? 0);
+            if (yearDiff !== 0) return yearDiff;
+            return (b.month ?? 0) - (a.month ?? 0);
+        });
+}
+
 // ── 원생 상세 활동 현황 ─────────────────────────────────────────────────────
 export async function getStudentActivity(studentId: string) {
     try {
@@ -1103,9 +1364,9 @@ export async function getStudentActivity(studentId: string) {
         if (!sRows[0]) return null;
         const r = sRows[0];
 
-        // 2단계: 수강/출결/수납/통계/갤러리를 모두 병렬로 실행
+        // 2단계: 수강/출결/수납/통계/갤러리/월별 이력을 모두 병렬로 실행
         // classIds를 별도 쿼리로 가져와서 갤러리도 2단계에 합류 (3단계 직렬 제거)
-        const [enrollments, attendances, payments, attStats, galleryPosts] = await Promise.all([
+        const [enrollments, attendances, payments, attStats, galleryPosts, monthlyHistoryRows] = await Promise.all([
             // 수강 내역
             prisma.$queryRawUnsafe<any[]>(
                 `SELECT e.id, e."classId", e.status, e."createdAt",
@@ -1155,6 +1416,54 @@ export async function getStudentActivity(studentId: string) {
                      SELECT e."classId" FROM "Enrollment" e WHERE e."studentId" = $1
                  )
                  ORDER BY "createdAt" DESC LIMIT 6`,
+                studentId
+            ),
+            // 최신 완료 import 배치 기준 월별 원장 이력
+            prisma.$queryRawUnsafe<StudentMonthlyHistoryRawRow[]>(
+                `WITH target_batch AS (
+                    SELECT b.id
+                    FROM "StudentSheetImportBatch" b
+                    JOIN "StudentRegistrationLedger" rb ON rb."batchId" = b.id
+                    WHERE b.status = 'COMPLETED'
+                      AND rb."studentId" = $1
+                    ORDER BY b."createdAt" DESC
+                    LIMIT 1
+                 )
+                 SELECT r.id, r."registrationMonth", r.status, r."paymentAmount", r."tuitionAmount",
+                        r."shuttleFee", r."carryOverAmount", r."paymentMethod", r."paymentDate",
+                        r."shuttleNeeded", r."shuttlePickup", r."shuttlePreferredTime", r."shuttleDropoff",
+                        r.school, r.grade, r."rowNumber",
+                        (
+                            SELECT COALESCE(json_agg(json_build_object(
+                                'slotKey', slot.slot_key,
+                                'className', COALESCE(c.name, slot.slot_key),
+                                'dayOfWeek', c."dayOfWeek",
+                                'startTime', c."startTime",
+                                'endTime', c."endTime",
+                                'programName', p.name
+                            ) ORDER BY c."dayOfWeek", c."startTime", slot.slot_key), '[]'::json)
+                            FROM jsonb_array_elements_text(
+                                COALESCE(NULLIF(r."selectedSlotKeysJSON", ''), '[]')::jsonb
+                            ) AS slot(slot_key)
+                            LEFT JOIN "Class" c ON c."slotKey" = slot.slot_key
+                            LEFT JOIN "Program" p ON c."programId" = p.id
+                        ) AS classes,
+                        (
+                            SELECT COALESCE(json_agg(json_build_object(
+                                'summary', c."changeSummary",
+                                'note', c.note,
+                                'occurredAt', c."occurredAt",
+                                'createdAt', c."createdAt"
+                            ) ORDER BY COALESCE(c."occurredAt", c."createdAt") DESC), '[]'::json)
+                            FROM "StudentChangeLog" c
+                            WHERE (r."rawRowId" IS NOT NULL AND c."rawRowId" = r."rawRowId")
+                               OR (c."batchId" = r."batchId" AND c."rowNumber" = r."rowNumber")
+                        ) AS changes
+                 FROM "StudentRegistrationLedger" r
+                 JOIN target_batch tb ON tb.id = r."batchId"
+                 WHERE r."studentId" = $1
+                 ORDER BY r."rowNumber" DESC
+                 LIMIT 240`,
                 studentId
             ),
         ]);
@@ -1221,6 +1530,7 @@ export async function getStudentActivity(studentId: string) {
                 mediaJSON: g.mediaJSON ?? g.mediajson ?? "[]",
                 createdAt: g.createdAt ?? g.createdat,
             })),
+            monthlyHistory: buildStudentMonthlyHistory(monthlyHistoryRows),
         };
     } catch (e) {
         console.error("[getStudentActivity] failed:", e);

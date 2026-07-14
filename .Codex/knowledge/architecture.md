@@ -55,6 +55,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 사이트 운영 점검 봇은 `src/lib/siteOpsBot.ts`에서 DB 연결, 기본 설정, 공개 콘텐츠, 시간표, 신청 링크, 백업 저장소, 인스타 자동 게시 설정/대기열을 확인한다. 안전한 누락 항목은 자동 조치하고, 수동 확인이 필요한 항목은 `Notification`의 `SITE_OPS` 타입으로 관리자/부관리자에게 남긴다.
 - 관리자 대시보드 `/admin`은 서버 렌더에서 통계 DB 조회를 직접 기다리지 않고 `/api/admin/dashboard`와 `/api/admin/dashboard/system`을 클라이언트에서 호출해 채운다.
 - 학생 관리 `/admin/students`는 서버 렌더에서 학생/반 목록을 기다리지 않고 `/api/admin/students`를 클라이언트에서 호출해 채우며, 학생 목록 API는 Enrollment를 CTE로 한 번에 집계해 학생별 반복 subquery를 피한다. API 응답은 60초 서버 캐시를 쓰고 학생/수강 변경 시 태그를 무효화한다.
+- 학생 상세 `/admin/students/[id]`는 현재 수강/출결/수납과 별도로 최신 완료 수강생 이관 배치의 `StudentRegistrationLedger`를 월별로 집계해 개인별 수강/결제/셔틀 히스토리를 보여준다.
 - 운영 통계 `/admin/stats`도 서버 렌더에서 7개 집계를 기다리지 않고 `/api/admin/stats`를 클라이언트에서 호출해 채운다.
 - 체험수업 CRM `/admin/trial`은 서버 렌더에서 리드/통계를 기다리지 않고 `/api/admin/trial`을 클라이언트에서 호출해 채운다.
 - 스태프 관리 `/admin/staff`는 서버 렌더에서 스태프/코치/초대 목록을 기다리지 않고 `/api/admin/staff`를 클라이언트에서 호출해 채운다.

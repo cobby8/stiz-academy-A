@@ -4335,12 +4335,22 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
 학부모: ${lead.parentName ?? lead.parentname ?? ""} ${lead.parentPhone ?? lead.parentphone ?? ""}`;
 
     const sentNames: string[] = [];
+    const failedMessages: string[] = [];
     const sentPhones = new Set<string>();
     for (const coach of coachRows) {
         if (!coach.phone || sentPhones.has(coach.phone)) continue;
         sentPhones.add(coach.phone);
-        await sendSms(coach.phone, message);
-        sentNames.push(coach.name || coach.phone);
+        const result = await sendSmsDetailed(coach.phone, message);
+        const label = coach.name || coach.phone;
+        if (result.ok) {
+            sentNames.push(label);
+        } else {
+            failedMessages.push(`${label}(${result.to}): ${result.reason || "unknown error"}`);
+        }
+    }
+
+    if (failedMessages.length > 0) {
+        throw new Error(`담당쌤 알림 문자 발송에 실패했습니다.\n${failedMessages.join("\n")}`);
     }
 
     await prisma.$executeRawUnsafe(
@@ -4360,7 +4370,7 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
     return { sentTo: sentNames };
 }
 
-import { sendSms, sendSmsBulk } from "@/lib/sms";
+import { sendSms, sendSmsBulk, sendSmsDetailed } from "@/lib/sms";
 
 /**
  * getCoachPhones — SMS 발송 수신자 선택 UI용 코치 전화번호 목록 조회

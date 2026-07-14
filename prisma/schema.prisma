@@ -152,14 +152,18 @@ model Session {
 }
 
 model Attendance {
-  id        String   @id @default(uuid())
-  sessionId String
-  studentId String
-  status    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  session   Session  @relation(fields: [sessionId], references: [id])
-  student   Student  @relation(fields: [studentId], references: [id])
+  id              String    @id @default(uuid())
+  sessionId       String
+  studentId       String
+  status          String
+  note            String?
+  checkedAt       DateTime? @db.Timestamptz(6) // 출결 상태를 처음 확인한 시각
+  arrivedAt       DateTime? @db.Timestamptz(6) // 지각생이 실제로 도착한 시각
+  checkedByUserId String? // 출결을 처리한 User ID
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  session         Session   @relation(fields: [sessionId], references: [id])
+  student         Student   @relation(fields: [studentId], references: [id])
 
   @@unique([sessionId, studentId])
   @@index([studentId])
@@ -661,12 +665,15 @@ model GalleryPost {
 
 model Notice {
   id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  authorUserId    String?
   title           String
   content         String
   targetType      String   @default("ALL")
   targetClassIds  String?
   attachmentsJSON String?
   isPinned        Boolean  @default(false)
+  scheduledAt     DateTime? @db.Timestamptz(6)
+  sentAt          DateTime? @db.Timestamptz(6)
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
@@ -686,6 +693,31 @@ model Notification {
 
   @@index([userId, isRead, createdAt])
   @@index([createdAt])
+}
+
+// 알림 채널별 발송 상태와 중복 방지 키를 보관하는 발송 장부
+model NotificationDelivery {
+  id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  eventType       String // ATTENDANCE_PRESENT, ATTENDANCE_LATE, CLASS_COMPLETED, CLASS_NOTICE
+  sessionId       String?
+  attendanceId    String?
+  noticeId        String?
+  studentId       String?
+  recipientUserId String?
+  recipientPhone  String?
+  channel         String // IN_APP, PUSH, SMS
+  dedupeKey       String    @unique
+  status          String    @default("PENDING") // PENDING, SENT, FAILED, SKIPPED
+  attemptCount    Int       @default(0)
+  sentAt          DateTime? @db.Timestamptz(6)
+  failedAt        DateTime? @db.Timestamptz(6)
+  errorCode       String?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@index([sessionId, eventType])
+  @@index([recipientUserId, createdAt])
 }
 
 model PushSubscription {

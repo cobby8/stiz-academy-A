@@ -41,6 +41,9 @@ export async function createSocialPostDraft(data: {
   lessonType?: string | null;
   memo?: string | null;
   isPublic?: boolean;
+  sessionId?: string | null;
+  classId?: string | null;
+  source?: string | null;
 }) {
   const staff = await requireStaff();
   const mediaJSON = safeSocialDraftMediaJSON(data.mediaJSON);
@@ -67,6 +70,9 @@ export async function createSocialPostDraft(data: {
     hashtags: aiDraft.hashtags,
     mediaJSON,
     isPublic: data.isPublic !== false,
+    sessionId: data.sessionId,
+    classId: data.classId,
+    source: data.source,
   });
 
   revalidateSocialPostPaths();
@@ -104,7 +110,7 @@ function assertCanPublishDraft(draft: SocialPostDraft | null, staff: Awaited<Ret
 }
 
 export async function publishSocialPostDraftToGallery(id: string) {
-  const staff = await requireStaff();
+  const staff = await requireAdmin();
 
   const currentDraft = await getSocialPostDraftById(id);
   assertCanPublishDraft(currentDraft, staff);
@@ -122,7 +128,7 @@ export async function publishSocialPostDraftToGallery(id: string) {
 }
 
 export async function publishSocialPostDraftToInstagram(id: string) {
-  const staff = await requireStaff();
+  const staff = await requireAdmin();
 
   const currentDraft = await getSocialPostDraftById(id);
   if (currentDraft?.status === "PUBLISHED") {

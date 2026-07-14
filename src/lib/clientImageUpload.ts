@@ -4,18 +4,22 @@ export type UploadedImageItem = { url: string; type: "image" };
 
 type UploadImagesOptions = {
   folder: string;
+  endpoint?: string;
+  fields?: Record<string, string>;
+  compression?: Parameters<typeof compressImageForUpload>[1];
   limit?: number;
   concurrency?: number;
   onProgress?: (done: number, total: number) => void;
 };
 
-async function uploadCompressedImage(file: File, folder: string): Promise<UploadedImageItem> {
-  const compressed = await compressImageForUpload(file);
+async function uploadCompressedImage(file: File, folder: string, options: Pick<UploadImagesOptions, "endpoint" | "fields" | "compression">): Promise<UploadedImageItem> {
+  const compressed = await compressImageForUpload(file, options.compression);
   const fd = new FormData();
   fd.append("file", compressed);
   fd.append("folder", folder);
+  for (const [key, value] of Object.entries(options.fields ?? {})) fd.append(key, value);
 
-  const res = await fetch("/api/upload", { method: "POST", body: fd });
+  const res = await fetch(options.endpoint ?? "/api/upload", { method: "POST", body: fd });
   const data = await res.json();
 
   if (!res.ok || !data.url) {
@@ -31,7 +35,7 @@ export async function uploadImagesWithProgress(
     folder,
     limit,
     concurrency = 3,
-    onProgress,
+    onProgress, endpoint, fields, compression,
   }: UploadImagesOptions,
 ) {
   const allFiles = Array.from(files);
@@ -46,7 +50,7 @@ export async function uploadImagesWithProgress(
     const results = await Promise.all(
       batch.map(async (file) => {
         try {
-          const item = await uploadCompressedImage(file, folder);
+          const item = await uploadCompressedImage(file, folder, { endpoint, fields, compression });
           return { item, name: file.name };
         } catch {
           return { item: null, name: file.name };

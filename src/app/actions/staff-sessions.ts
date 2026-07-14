@@ -3,6 +3,148 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffClassAccess } from "@/lib/staff-class-access";
+import { deliverParentNotification, getClassParentRecipients } from "@/lib/staff-notifications";
+
+type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT";
+
+async function requireSessionAccess(sessionId: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; classId: string; status: string; className: string }>>(
+    `SELECT s.id, s."classId", s.status, c.name AS "className" FROM "Session" s JOIN "Class" c ON c.id = s."classId" WHERE s.id = $1 LIMIT 1`,
+    sessionId,
+  );
+  if (!rows[0]) throw new Error("수업 기록을 찾을 수 없습니다.");
+  const access = await requireStaffClassAccess(rows[0].classId);
+  return { session: rows[0], access };
+}
+
+export async function savePlannedClassContent(input: {
+  classId: string;
+  date: string;
+  plannedContent: string;
+}) {
+  const access = await requireStaffClassAccess(input.classId);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+    return { ok: false as const, message: "수업 날짜를 다시 확인해 주세요." };
+  }
+
+  const sessionKey = `${input.classId}:${input.date}`;
+  const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `INSERT INTO "Session" (
+       id, "classId", date, "sessionKey", status, "plannedContent", "coachId", "createdAt", "updatedAt"
+     ) VALUES (
+       gen_random_uuid()::text, $1, $2::date, $3, 'PLANNED', $4, $5, NOW(), NOW()
+     )
+     ON CONFLICT ("sessionKey") DO UPDATE SET
+       "plannedContent" = EXCLUDED."plannedContent",
+       "updatedAt" = NOW()
+     WHERE "Session".status = 'PLANNED'
+     RETURNING id`,
+    input.classId,
+    input.date,
+    sessionKey,
+    input.plannedContent.trim() || null,
+    access.coachId,
+  );
+
+  if (!rows[0]) {
+    return { ok: false as const, message: "진행 중이거나 종료된 수업의 예정 내용은 여기서 바꿀 수 없습니다." };
+  }
+
+  revalidatePath("/staff");
+  return { ok: true as const, sessionId: rows[0].id };
+}
+
+export async function saveSessionMemo(input: { sessionId: string; notes: string }) {
+  const { session } = await requireSessionAccess(input.sessionId);
+  if (session.status !== "IN_PROGRESS") {
+    return { ok: false as const, message: "진행 중인 수업에서만 메모할 수 있습니다." };
+  }
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "Session" SET notes = $2, "updatedAt" = NOW() WHERE id = $1`,
+    input.sessionId,
+    input.notes.trim() || null,
+  );
+  revalidatePath(`/staff/sessions/${input.sessionId}`);
+  return { ok: true as const };
+}
+
+export async function saveStaffAttendance(input: { sessionId: string; studentId: string; status: AttendanceStatus; note?: string }) {
+  const { session, access } = await requireSessionAccess(input.sessionId);
+  if (session.status !== "IN_PROGRESS") return { ok: false as const, message: "진행 중인 수업에서만 출결을 기록할 수 있습니다." };
+  if (!["PRESENT", "LATE", "ABSENT"].includes(input.status)) return { ok: false as const, message: "올바른 출결 상태가 아닙니다." };
+
+  const enrolled = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT id FROM "Enrollment" WHERE "classId" = $1 AND "studentId" = $2 AND status = 'ACTIVE' LIMIT 1`,
+    session.classId, input.studentId,
+  );
+  if (!enrolled[0]) return { ok: false as const, message: "이 수업에 등록된 학생이 아닙니다." };
+
+  const previous = await prisma.$queryRawUnsafe<{ status: string }[]>(
+    `SELECT status FROM "Attendance" WHERE "sessionId" = $1 AND "studentId" = $2 LIMIT 1`, input.sessionId, input.studentId,
+  );
+  const changed = previous[0]?.status !== input.status;
+  const saved = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `INSERT INTO "Attendance" (id, "sessionId", "studentId", status, note, "checkedAt", "arrivedAt", "checkedByUserId", "createdAt", "updatedAt")
+     VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW(), CASE WHEN $3 = 'LATE' THEN NOW() ELSE NULL END, $5, NOW(), NOW())
+     ON CONFLICT ("sessionId", "studentId") DO UPDATE SET
+       status = EXCLUDED.status, note = EXCLUDED.note,
+       "checkedAt" = COALESCE("Attendance"."checkedAt", NOW()),
+       "arrivedAt" = CASE WHEN EXCLUDED.status = 'LATE' THEN COALESCE("Attendance"."arrivedAt", NOW()) ELSE NULL END,
+       "checkedByUserId" = EXCLUDED."checkedByUserId", "updatedAt" = NOW()
+     RETURNING id`,
+    input.sessionId, input.studentId, input.status, input.note?.trim() || null, access.staff.appUserId,
+  );
+
+  if (changed && (input.status === "PRESENT" || input.status === "LATE")) {
+    const [recipient] = await getClassParentRecipients(session.classId, [input.studentId]);
+    if (recipient) await deliverParentNotification({
+      eventType: input.status === "LATE" ? "ATTENDANCE_LATE" : "ATTENDANCE_PRESENT",
+      dedupeKey: `attendance:${saved[0].id}:status:${input.status}:user:${recipient.userId}`,
+      recipient,
+      title: `${session.className} 출석 안내`,
+      message: `${recipient.studentName} 학생이 ${input.status === "LATE" ? "지각 출석" : "출석"}했습니다.`,
+      linkUrl: "/parent/attendance",
+      sessionId: input.sessionId,
+      attendanceId: saved[0].id,
+    });
+  }
+  return { ok: true as const, attendanceId: saved[0].id, changed };
+}
+
+export async function completeClassSession(input: { sessionId: string }) {
+  const { session, access } = await requireSessionAccess(input.sessionId);
+  if (session.status === "COMPLETED") return { ok: true as const, completed: true, resumed: true };
+  if (session.status !== "IN_PROGRESS") return { ok: false as const, message: "시작한 수업만 종료할 수 있습니다." };
+
+  const missing = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
+    `SELECT COUNT(*)::bigint AS count FROM "Enrollment" e
+     WHERE e."classId" = $1 AND e.status = 'ACTIVE'
+       AND NOT EXISTS (SELECT 1 FROM "Attendance" a WHERE a."sessionId" = $2 AND a."studentId" = e."studentId")`,
+    session.classId, input.sessionId,
+  );
+  if (Number(missing[0]?.count ?? 0) > 0) return { ok: false as const, message: "출결을 확인하지 않은 학생이 있습니다." };
+
+  const ended = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `UPDATE "Session" SET status = 'COMPLETED', "endedAt" = NOW(), "endedByUserId" = $2, "updatedAt" = NOW()
+     WHERE id = $1 AND status = 'IN_PROGRESS' AND "startedAt" IS NOT NULL RETURNING id`,
+    input.sessionId, access.staff.appUserId,
+  );
+  if (!ended[0]) return { ok: false as const, message: "수업 종료 상태를 다시 확인해 주세요." };
+
+  // 종료 안내는 결석 여부와 관계없이 이 수업의 전체 재원생 학부모에게 보냅니다.
+  const recipients = await getClassParentRecipients(session.classId);
+  await Promise.all(recipients.map((recipient) => deliverParentNotification({
+    eventType: "CLASS_COMPLETED",
+    dedupeKey: `session:${input.sessionId}:completed:student:${recipient.studentId}:user:${recipient.userId}`,
+    recipient,
+    title: `${session.className} 수업 종료`,
+    message: `${recipient.studentName} 학생의 수업이 종료되었습니다.`,
+    linkUrl: "/parent/sessions",
+    sessionId: input.sessionId,
+  })));
+  return { ok: true as const, completed: true, resumed: false };
+}
 
 type SessionStartRow = {
   id: string;

@@ -1,6 +1,7 @@
 "use client";
 
 export const CLIENT_IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+export const SESSION_IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const RAW_INPUT_MAX_BYTES = 25 * 1024 * 1024;
 const HARD_OUTPUT_MAX_BYTES = 4.8 * 1024 * 1024;
@@ -66,9 +67,11 @@ export async function compressImageForUpload(
   options?: {
     maxEdge?: number;
     targetBytes?: number;
+    allowedTypes?: readonly string[];
   },
 ) {
-  if (!CLIENT_IMAGE_ALLOWED_TYPES.includes(file.type)) {
+  const allowedTypes = options?.allowedTypes ?? CLIENT_IMAGE_ALLOWED_TYPES;
+  if (!allowedTypes.includes(file.type)) {
     throw new Error("이미지 파일만 올릴 수 있어요. JPG, PNG, WebP, GIF를 지원합니다.");
   }
 

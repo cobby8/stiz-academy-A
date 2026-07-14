@@ -9,6 +9,9 @@ export type SocialPostDraft = {
   authorUserId: string | null;
   authorName: string | null;
   authorRole: string | null;
+  sessionId: string | null;
+  classId: string | null;
+  source: string | null;
   status: SocialPostDraftStatus;
   lessonType: string | null;
   memo: string | null;
@@ -45,6 +48,9 @@ function mapDraft(row: any): SocialPostDraft {
     authorUserId: row.authorUserId ?? null,
     authorName: row.authorName ?? null,
     authorRole: row.authorRole ?? null,
+    sessionId: row.sessionId ?? null,
+    classId: row.classId ?? null,
+    source: row.source ?? null,
     status: row.status,
     lessonType: row.lessonType ?? null,
     memo: row.memo ?? null,
@@ -93,6 +99,9 @@ export async function ensureSocialPostDraftTable() {
       "authorUserId" TEXT,
       "authorName" TEXT,
       "authorRole" TEXT,
+      "sessionId" TEXT,
+      "classId" TEXT,
+      source TEXT,
       status TEXT NOT NULL DEFAULT 'DRAFT',
       "lessonType" TEXT,
       memo TEXT,
@@ -117,6 +126,9 @@ export async function ensureSocialPostDraftTable() {
   `);
 
   const columns: [string, string][] = [
+    ["sessionId", "TEXT"],
+    ["classId", "TEXT"],
+    ["source", "TEXT"],
     ["instagramPublishAttempts", "INTEGER NOT NULL DEFAULT 0"],
     ["instagramLastAttemptAt", "TIMESTAMPTZ"],
     ["instagramNextRetryAt", "TIMESTAMPTZ"],
@@ -155,6 +167,9 @@ export async function createSocialPostDraftRecord(data: {
   hashtags?: string | null;
   mediaJSON: string;
   isPublic?: boolean;
+  sessionId?: string | null;
+  classId?: string | null;
+  source?: string | null;
 }) {
   await ensureSocialPostDraftTable();
 
@@ -162,11 +177,11 @@ export async function createSocialPostDraftRecord(data: {
     `INSERT INTO "SocialPostDraft" (
        id, "authorUserId", "authorName", "authorRole", status,
        "lessonType", memo, title, caption, hashtags, "mediaJSON", "isPublic",
-       "submittedAt", "createdAt", "updatedAt"
+       "sessionId", "classId", source, "submittedAt", "createdAt", "updatedAt"
      )
      VALUES (
        (gen_random_uuid())::text, $1, $2, $3, 'READY',
-       $4, $5, $6, $7, $8, $9, $10,
+       $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
        NOW(), NOW(), NOW()
      )
      RETURNING *`,
@@ -180,6 +195,9 @@ export async function createSocialPostDraftRecord(data: {
     data.hashtags || null,
     safeSocialDraftMediaJSON(data.mediaJSON),
     data.isPublic !== false,
+    data.sessionId || null,
+    data.classId || null,
+    data.source || null,
   );
 
   return mapDraft(rows[0]);

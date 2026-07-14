@@ -8,6 +8,7 @@ import {
     previewMonthlyInvoices,
     generateMonthlyInvoices,
     refreshPaymentLedger,
+    sendInvoiceLinksForMonth,
     sendUnpaidReminders,
     bulkUpdatePaymentStatus,
 } from "@/app/actions/admin";
@@ -468,6 +469,20 @@ export default function FinanceClient({
         }
     }
 
+    async function handleSendInvoiceLinks() {
+        if (!confirm(`${year}년 ${month}월 미납 청구서 링크를 학부모 알림으로 발송할까요?`)) return;
+        setBusy(true);
+        try {
+            const result = await sendInvoiceLinksForMonth(year, month);
+            alert(result.message);
+            await loadMonth(year, month);
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "청구서 링크 발송 실패"));
+        } finally {
+            setBusy(false);
+        }
+    }
+
     async function loadSheetPreview() {
         setSheetPreviewLoading(true);
         setSheetError(null);
@@ -611,6 +626,14 @@ export default function FinanceClient({
                     >
                         <span className="material-symbols-outlined text-sm align-middle mr-1">sync</span>
                         청구서 정리
+                    </button>
+                    <button
+                        onClick={handleSendInvoiceLinks}
+                        disabled={busy}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 transition disabled:opacity-50 text-sm dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                    >
+                        <span className="material-symbols-outlined text-sm align-middle mr-1">send</span>
+                        청구서 링크 발송
                     </button>
                     <button
                         onClick={handleSendReminders}

@@ -46,3 +46,5 @@
 
 ## 최신 작업 로그
 - 2026-07-15: DB 기반 결제 장부(PaymentInvoice/PaymentTransaction/PaymentWebhookEvent/PaymentAuditLog)를 추가하고 기존 Payment 153건을 청구서로 백필했다.
+
+- 2026-07-15: 관리자 재무 화면에 월별 청구서 링크 일괄 발송 버튼을 추가하고 2026년 7월 기준 발송 가능 99건 SQL을 EXPLAIN으로 검증했다.

@@ -2934,6 +2934,118 @@ export async function refreshPaymentLedger(year: number, month: number) {
     };
 }
 
+export async function sendInvoiceLinksForMonth(year: number, month: number, forceResend?: boolean) {
+    await requireAdmin();
+    await ensurePaymentInfrastructure();
+    await ensureInvoicesForMonth(year, month);
+
+    const dueStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const dueEnd = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+    const sentFilter = forceResend ? "" : `AND i."sentAt" IS NULL`;
+
+    try {
+        const invoices = await prisma.$queryRawUnsafe<{ id: string }[]>(
+            `
+            SELECT i.id
+            FROM "PaymentInvoice" i
+            JOIN "Payment" p ON p.id = i."paymentId"
+            WHERE i.status NOT IN ('PAID', 'CANCELED')
+              AND i."parentId" IS NOT NULL
+              AND (
+                (p.year = $1 AND p.month = $2)
+                OR (p."dueDate" >= $3::timestamp AND p."dueDate" < $4::timestamp)
+              )
+              ${sentFilter}
+            ORDER BY i."dueDate" ASC
+            `,
+            year,
+            month,
+            dueStart,
+            dueEnd,
+        );
+
+        if (invoices.length === 0) {
+            return { sent: 0, message: "발송할 청구서 링크가 없습니다." };
+        }
+
+        const ids = invoices.map((invoice) => invoice.id);
+        const placeholders = ids.map((_, index) => `$${index + 1}`).join(",");
+
+        await prisma.$executeRawUnsafe(
+            `
+            INSERT INTO "Notification" (
+                id, "userId", type, title, message, "linkUrl", "isRead", "createdAt"
+            )
+            SELECT
+                gen_random_uuid()::text,
+                i."parentId",
+                'PAYMENT',
+                CONCAT($${ids.length + 1}::text, '월 수강료 청구서 안내'),
+                CONCAT(
+                    s.name,
+                    ' 학생 청구서가 발행되었습니다. 금액 ',
+                    TO_CHAR(i.amount, 'FM999,999,999'),
+                    '원, 납부기한 ',
+                    TO_CHAR(i."dueDate", 'YYYY-MM-DD'),
+                    '까지 확인해 주세요.'
+                ),
+                CONCAT('/payments/', i.id),
+                false,
+                NOW()
+            FROM "PaymentInvoice" i
+            JOIN "Student" s ON s.id = i."studentId"
+            WHERE i.id IN (${placeholders})
+              AND i."parentId" IS NOT NULL
+            `,
+            ...ids,
+            String(month),
+        );
+
+        await prisma.$executeRawUnsafe(
+            `
+            UPDATE "PaymentInvoice"
+            SET "sentAt" = COALESCE("sentAt", NOW()),
+                status = CASE WHEN status = 'ISSUED' THEN 'SENT' ELSE status END,
+                "updatedAt" = NOW()
+            WHERE id IN (${placeholders})
+            `,
+            ...ids,
+        );
+
+        await prisma.$executeRawUnsafe(
+            `
+            UPDATE "Payment" p
+            SET "notifiedAt" = COALESCE(p."notifiedAt", NOW()),
+                "updatedAt" = NOW()
+            FROM "PaymentInvoice" i
+            WHERE i."paymentId" = p.id
+              AND i.id IN (${placeholders})
+            `,
+            ...ids,
+        );
+
+        await recordPaymentAudit({
+            actorType: "ADMIN",
+            action: "INVOICE_LINKS_SENT",
+            message: `${ids.length} invoice links sent`,
+            metadata: { year, month, invoiceIds: ids },
+        });
+
+        revalidateFinanceCaches();
+        revalidatePath("/mypage");
+
+        return {
+            sent: ids.length,
+            message: `${ids.length}건의 청구서 링크를 학부모 알림으로 발송했습니다.`,
+        };
+    } catch (e) {
+        console.error("Failed to send invoice links:", e);
+        throw new Error("청구서 링크 발송 실패");
+    }
+}
+
 export async function sendUnpaidReminders(forceResend?: boolean) {
     await requireAdmin();
     await ensurePaymentColumns();

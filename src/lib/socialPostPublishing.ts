@@ -11,8 +11,10 @@ import {
   markSocialPostDraftPublishing,
   markSocialPostDraftRetryScheduled,
   parseSocialDraftMedia,
+  replaceSocialPostDraftMediaJSON,
   type SocialPostDraft,
 } from "@/lib/socialDrafts";
+import { materializePrivateMediaJSON } from "@/lib/sessionPhotoStorage";
 
 const MAX_QUEUE_ATTEMPTS = 3;
 const RETRY_DELAYS_MINUTES = [1, 5];
@@ -21,7 +23,19 @@ export function fullSocialCaption(caption?: string | null, hashtags?: string | n
   return [caption?.trim(), hashtags?.trim()].filter(Boolean).join("\n\n");
 }
 
+async function ensureDraftMediaIsPublic(draft: SocialPostDraft) {
+  const mediaJSON = await materializePrivateMediaJSON(draft.id, draft.mediaJSON, {
+    classId: draft.classId,
+    sessionId: draft.sessionId,
+  });
+  if (mediaJSON === draft.mediaJSON) return draft;
+  const updated = await replaceSocialPostDraftMediaJSON(draft.id, mediaJSON);
+  if (!updated) throw new Error("게시용 사진 정보를 저장하지 못했습니다.");
+  return updated;
+}
+
 export async function upsertGalleryPostFromSocialDraft(draft: SocialPostDraft) {
+  draft = await ensureDraftMediaIsPublic(draft);
   await ensureGalleryPostInstagramColumns();
 
   const caption = fullSocialCaption(draft.caption, draft.hashtags);
@@ -45,14 +59,23 @@ export async function upsertGalleryPostFromSocialDraft(draft: SocialPostDraft) {
     return draft.galleryPostId;
   }
 
+  // 초안 ID에서 결정되는 고정 Gallery ID를 사용해 중복 클릭도 한 게시물로 합칩니다.
+  const galleryPostId = `social-draft-${draft.id}`;
   const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `INSERT INTO "GalleryPost" (
        id, title, caption, "mediaJSON", "isPublic", source, "createdAt", "updatedAt"
      )
      VALUES (
-       (gen_random_uuid())::text, $1, $2, $3, $4, 'STAFF_UPLOAD', NOW(), NOW()
+       $1, $2, $3, $4, $5, 'STAFF_UPLOAD', NOW(), NOW()
      )
+     ON CONFLICT (id) DO UPDATE SET
+       title = EXCLUDED.title,
+       caption = EXCLUDED.caption,
+       "mediaJSON" = EXCLUDED."mediaJSON",
+       "isPublic" = EXCLUDED."isPublic",
+       "updatedAt" = NOW()
      RETURNING id`,
+    galleryPostId,
     draft.title || "STIZ 수업 스케치",
     caption || null,
     draft.mediaJSON,
@@ -81,7 +104,7 @@ export async function publishSocialDraftToInstagramNow(
   id: string,
   options: { queueMode?: boolean } = {},
 ) {
-  const currentDraft = await getSocialPostDraftById(id);
+  let currentDraft = await getSocialPostDraftById(id);
   if (currentDraft?.status === "PUBLISHED") {
     return { ok: true as const, draft: currentDraft, skipped: true as const };
   }
@@ -89,6 +112,8 @@ export async function publishSocialDraftToInstagramNow(
   if (!currentDraft || !["READY", "FAILED", "PUBLISHING"].includes(currentDraft.status)) {
     throw new Error("게시할 수 있는 초안을 찾지 못했습니다.");
   }
+
+  currentDraft = await ensureDraftMediaIsPublic(currentDraft);
 
   const mediaItems = parseSocialDraftMedia(currentDraft.mediaJSON).filter((item) => item.type === "image");
   if (mediaItems.length === 0) {

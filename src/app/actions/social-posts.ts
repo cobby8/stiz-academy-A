@@ -17,6 +17,7 @@ import {
   updateSocialPostDraftRecord,
   type SocialPostDraft,
 } from "@/lib/socialDrafts";
+import { removePublishedMediaCopies } from "@/lib/sessionPhotoStorage";
 
 type SaveDraftInput = {
   title?: string | null;
@@ -46,7 +47,13 @@ export async function createSocialPostDraft(data: {
   source?: string | null;
 }) {
   const staff = await requireStaff();
-  const mediaJSON = safeSocialDraftMediaJSON(data.mediaJSON);
+  // 일반 빠른 업로드에서는 클라이언트가 보낸 저장소 메타데이터를 신뢰하지 않습니다.
+  const mediaJSON = JSON.stringify(
+    parseSocialDraftMedia(safeSocialDraftMediaJSON(data.mediaJSON)).map((item) => ({
+      type: item.type,
+      url: item.url,
+    })),
+  );
   const mediaItems = parseSocialDraftMedia(mediaJSON).filter((item) => item.type === "image");
 
   if (mediaItems.length === 0) {
@@ -90,7 +97,9 @@ export async function saveSocialPostDraft(id: string, data: SaveDraftInput) {
 
 export async function rejectSocialPostDraft(id: string) {
   await requireAdmin();
+  const currentDraft = await getSocialPostDraftById(id);
   const result = await rejectSocialPostDraftRecord(id);
+  if (currentDraft) await removePublishedMediaCopies(currentDraft.id, currentDraft.mediaJSON);
   revalidateSocialPostPaths();
   return { ok: true, ...result };
 }

@@ -1,22 +1,19 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStaffClassAccess } from "@/lib/staff-class-access";
 import { createSocialPostDraftRecord } from "@/lib/socialDrafts";
+import {
+  ensurePrivateSessionPhotoBucket,
+  parseSessionPhotoEntries,
+  PRIVATE_SESSION_PHOTO_BUCKET,
+  type StoredSessionPhoto,
+} from "@/lib/sessionPhotoStorage";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 1024 * 1024;
-
-function safePhotos(value: unknown): string[] {
-  if (typeof value !== "string") return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((url): url is string => typeof url === "string" && url.length <= 2048) : [];
-  } catch {
-    return [];
-  }
-}
 
 export async function POST(req: Request, context: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -39,25 +36,41 @@ export async function POST(req: Request, context: { params: Promise<{ sessionId:
     }
     if (file.size > MAX_BYTES) return NextResponse.json({ error: "압축된 사진은 1MB 이하여야 합니다." }, { status: 400 });
 
-    const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-    const storagePath = `staff-sessions/${sessionId}/${randomUUID()}.${ext}`;
+    // API 직접 호출도 GPS/기기 EXIF를 남기지 못하도록 서버에서 다시 인코딩합니다.
+    const encoded = await sharp(Buffer.from(await file.arrayBuffer()))
+      .rotate()
+      .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer();
+    if (encoded.byteLength > MAX_BYTES) return NextResponse.json({ error: "사진 압축 결과가 1MB를 초과했습니다." }, { status: 400 });
+    const ext = "jpg";
+    const photoId = randomUUID();
+    const storagePath = `staff-sessions/${session.classId}/${sessionId}/${photoId}.${ext}`;
     const supabase = createAdminClient();
-    const bucket = "uploads";
-    await supabase.storage.createBucket(bucket, { public: true }).catch(() => undefined);
+    const bucket = PRIVATE_SESSION_PHOTO_BUCKET;
+    await ensurePrivateSessionPhotoBucket();
     const { error: uploadError } = await supabase.storage.from(bucket).upload(
-      storagePath, Buffer.from(await file.arrayBuffer()),
-      { contentType: file.type, cacheControl: "31536000", upsert: false },
+      storagePath, encoded,
+      { contentType: "image/jpeg", cacheControl: "31536000", upsert: false },
     );
     if (uploadError) throw new Error("사진 저장소 업로드에 실패했습니다.");
-    const url = supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl;
+    const url = `/api/staff/sessions/${sessionId}/photos/${photoId}`;
+    const storedPhoto: StoredSessionPhoto = {
+      id: photoId,
+      type: "image",
+      url,
+      storageBucket: bucket,
+      storagePath,
+      visibility: "PRIVATE",
+    };
 
     try {
       await prisma.$transaction(async (tx) => {
         const locked = await tx.$queryRawUnsafe<Array<{ photosJSON: string | null }>>(
           `SELECT "photosJSON" FROM "Session" WHERE id = $1 FOR UPDATE`, sessionId,
         );
-        const photos = safePhotos(locked[0]?.photosJSON);
-        if (!photos.includes(url)) photos.push(url);
+        const photos = parseSessionPhotoEntries(locked[0]?.photosJSON);
+        if (!photos.some((photo) => photo === url)) photos.push(url);
         await tx.$executeRawUnsafe(
           `UPDATE "Session" SET "photosJSON" = $1, "updatedAt" = NOW() WHERE id = $2`,
           JSON.stringify(photos), sessionId,
@@ -67,7 +80,7 @@ export async function POST(req: Request, context: { params: Promise<{ sessionId:
         authorUserId: access.staff.appUserId,
         authorName: access.staff.appUserName,
         authorRole: access.staff.appUserRole,
-        mediaJSON: JSON.stringify([{ url, type: "image" }]),
+        mediaJSON: JSON.stringify([storedPhoto]),
         isPublic: false,
         sessionId,
         classId: session.classId,
@@ -79,7 +92,7 @@ export async function POST(req: Request, context: { params: Promise<{ sessionId:
         const locked = await tx.$queryRawUnsafe<Array<{ photosJSON: string | null }>>(
           `SELECT "photosJSON" FROM "Session" WHERE id = $1 FOR UPDATE`, sessionId,
         );
-        const photos = safePhotos(locked[0]?.photosJSON).filter((photo) => photo !== url);
+        const photos = parseSessionPhotoEntries(locked[0]?.photosJSON).filter((photo) => photo !== url);
         await tx.$executeRawUnsafe(
           `UPDATE "Session" SET "photosJSON" = $1, "updatedAt" = NOW() WHERE id = $2`,
           JSON.stringify(photos), sessionId,

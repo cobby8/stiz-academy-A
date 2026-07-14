@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guard";
 
 /**
  * GET /api/admin/session-detail?sessionId=xxx
@@ -10,11 +10,10 @@ import { prisma } from "@/lib/prisma";
  * - getSessionDetail(서버 cache 함수)를 클라이언트에서 사용할 수 없으므로 API로 제공
  */
 export async function GET(request: NextRequest) {
-    // 인증 체크
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    try {
+        await requireAdmin();
+    } catch {
+        return NextResponse.json({ error: "관리자 권한 필요" }, { status: 403 });
     }
 
     const sessionId = request.nextUrl.searchParams.get("sessionId");

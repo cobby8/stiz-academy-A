@@ -90,6 +90,16 @@ export function safeSocialDraftMediaJSON(mediaJSON: string) {
   return JSON.stringify(parseSocialDraftMedia(mediaJSON));
 }
 
+export async function replaceSocialPostDraftMediaJSON(id: string, mediaJSON: string) {
+  await ensureSocialPostDraftTable();
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `UPDATE "SocialPostDraft" SET "mediaJSON" = $2, "updatedAt" = NOW() WHERE id = $1 RETURNING *`,
+    id,
+    safeSocialDraftMediaJSON(mediaJSON),
+  );
+  return rows[0] ? mapDraft(rows[0]) : null;
+}
+
 export async function ensureSocialPostDraftTable() {
   if (tableEnsured) return;
 
@@ -299,10 +309,10 @@ export async function rejectSocialPostDraftRecord(id: string) {
     const rows = await tx.$queryRawUnsafe<any[]>(
       `UPDATE "SocialPostDraft"
        SET status = 'REJECTED',
-           "rejectedAt" = NOW(),
+           "rejectedAt" = COALESCE("rejectedAt", NOW()),
            "instagramNextRetryAt" = NULL,
            "updatedAt" = NOW()
-       WHERE id = $1 AND status IN ('DRAFT', 'READY', 'FAILED', 'PUBLISHING')
+       WHERE id = $1 AND status IN ('DRAFT', 'READY', 'FAILED', 'PUBLISHING', 'REJECTED')
        RETURNING *`,
       id,
     );
@@ -368,9 +378,9 @@ export async function markSocialPostDraftPublishing(
      SET status = 'PUBLISHING',
          "galleryPostId" = $1,
          "instagramPublishError" = NULL,
-         "instagramPublishAttempts" = 0,
-         "instagramLastAttemptAt" = NULL,
-         "instagramNextRetryAt" = NOW(),
+         "instagramPublishAttempts" = CASE WHEN status = 'PUBLISHING' THEN "instagramPublishAttempts" ELSE 0 END,
+         "instagramLastAttemptAt" = CASE WHEN status = 'PUBLISHING' THEN "instagramLastAttemptAt" ELSE NULL END,
+         "instagramNextRetryAt" = CASE WHEN status = 'PUBLISHING' THEN "instagramNextRetryAt" ELSE NOW() END,
          "updatedAt" = NOW()
      WHERE id = $2
      RETURNING *`,
@@ -388,10 +398,12 @@ export async function markSocialPostDraftPublishAttempt(id: string) {
     `UPDATE "SocialPostDraft"
      SET "instagramPublishAttempts" = COALESCE("instagramPublishAttempts", 0) + 1,
          "instagramLastAttemptAt" = NOW(),
-         "instagramNextRetryAt" = NULL,
+         "instagramNextRetryAt" = NOW() + INTERVAL '5 minutes',
          "updatedAt" = NOW()
      WHERE id = $1
        AND status = 'PUBLISHING'
+       AND "instagramNextRetryAt" IS NOT NULL
+       AND "instagramNextRetryAt" <= NOW()
      RETURNING *`,
     id,
   );

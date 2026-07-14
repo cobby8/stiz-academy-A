@@ -22,6 +22,8 @@ export function SessionPhotoUploader({ sessionId, onUploaded }: { sessionId: str
       onProgress: (done, total) => setMessage(`사진 등록 중 ${done}/${total}`),
     });
     setBusy(false);
+    if (cameraRef.current) cameraRef.current.value = "";
+    if (galleryRef.current) galleryRef.current.value = "";
     setMessage(result.failedNames.length ? `${result.failedNames.length}장의 등록에 실패했습니다.` : "관리자 검토 후보로 등록했습니다.");
     onUploaded?.(result.items.map((item) => item.url));
   }

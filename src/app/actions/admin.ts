@@ -3083,6 +3083,7 @@ export async function ensureTrialLeadTable() {
             ['"preferredDay"', "TEXT"],
             ['"preferredPeriod"', "TEXT"],
             ['"trialDate"', "TIMESTAMPTZ"],
+            ['"attendedSmsSentAt"', "TIMESTAMPTZ"],
             ['"trialFeeConfirmed"', "BOOLEAN DEFAULT false"],
             ['"hopeNote"', "TEXT"],
             ['"agreedTerms"', "BOOLEAN DEFAULT false"],
@@ -3132,6 +3133,7 @@ export async function createTrialLead(data: {
         throw new Error("체험 신청 등록 실패");
     }
     revalidatePath("/admin/trial");
+    revalidatePath("/admin/apply");
     revalidateTrialAdminCaches();
 }
 
@@ -3162,6 +3164,17 @@ export async function updateTrialLead(
         .map((col) => [col, data[col]] as const);
 
     if (entries.length === 0) return;
+
+    const previousRows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT status, "attendedSmsSentAt" FROM "TrialLead" WHERE id = $1 LIMIT 1`,
+        id,
+    );
+    const previousLead = previousRows[0];
+    const shouldSendAttendedSms =
+        data.status === "ATTENDED"
+        && previousLead
+        && previousLead.status !== "ATTENDED"
+        && !(previousLead.attendedSmsSentAt ?? previousLead.attendedsmssentat);
 
     // 동적 SET절: 컬럼명은 화이트리스트에서만 허용 → SQL 인젝션 불가능, 값은 $N 바인딩
     const setClauses = entries.map(([col], i) => {
@@ -3238,11 +3251,46 @@ export async function updateTrialLead(
                 ).catch(() => {});
             }
         }
+
+        if (shouldSendAttendedSms) {
+            const leads = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT "childName", "parentName", "parentPhone"
+                 FROM "TrialLead" WHERE id = $1 LIMIT 1`,
+                id,
+            );
+            const lead = leads[0];
+            const parentPhone = lead?.parentPhone ?? lead?.parentphone;
+
+            if (lead && parentPhone) {
+                const settings = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
+                );
+                const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
+                const childName = lead.childName ?? lead.childname ?? "";
+                const parentName = lead.parentName ?? lead.parentname ?? "";
+
+                await sendParentSms(parentPhone, "TRIAL_ATTENDED_PARENT", {
+                    childName,
+                    parentName,
+                    academyPhone,
+                    enrollLink: buildEnrollLink(id),
+                });
+            }
+
+            await prisma.$executeRawUnsafe(
+                `UPDATE "TrialLead"
+                 SET "attendedSmsSentAt" = COALESCE("attendedSmsSentAt", NOW()),
+                     "updatedAt" = NOW()
+                 WHERE id = $1`,
+                id,
+            );
+        }
     } catch (e) {
         console.error("Failed to update trial lead:", e);
         throw new Error("체험 리드 수정 실패");
     }
     revalidatePath("/admin/trial");
+    revalidatePath("/admin/apply");
     revalidateTrialAdminCaches();
 }
 
@@ -3262,6 +3310,7 @@ export async function deleteTrialLead(id: string) {
         throw new Error("체험 리드 삭제 실패");
     }
     revalidatePath("/admin/trial");
+    revalidatePath("/admin/apply");
     revalidateTrialAdminCaches();
 }
 
@@ -3335,6 +3384,7 @@ export async function convertTrialToStudent(
         throw new Error("정규 등록 전환 실패");
     }
     revalidatePath("/admin/trial");
+    revalidatePath("/admin/apply");
     revalidatePath("/admin/students");
     revalidatePath("/admin");
     revalidateTrialAdminCaches();
@@ -4104,6 +4154,13 @@ export async function rejectEnrollApplication(
  * 수강 안내 링크 생성 — 체험 리드의 trialLeadId를 포함한 수강 신청 URL 반환
  * 관리자가 체험 완료된 학부모에게 보낼 링크를 복사하는 용도
  */
+function buildEnrollLink(trialLeadId: string): string {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:4000");
+
+    return `${baseUrl}/apply/enroll?trialId=${trialLeadId}`;
+}
+
 export async function generateEnrollLink(trialLeadId: string): Promise<string> {
     await requireAdmin();
 
@@ -4116,10 +4173,7 @@ export async function generateEnrollLink(trialLeadId: string): Promise<string> {
 
     // 프로토콜+호스트를 환경변수 또는 기본값에서 가져옴
     // 환경변수에서 베이스 URL 결정: 직접 설정 > Vercel 자동 > 로컬 개발
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:4000");
-
-    return `${baseUrl}/apply/enroll?trialId=${trialLeadId}`;
+    return buildEnrollLink(trialLeadId);
 }
 
 // ── SMS 수동 발송 (관리자 전용) ──────────────────────────────────────────────

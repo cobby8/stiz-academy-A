@@ -1,10 +1,5 @@
-import TrialCrmClient from "./TrialCrmClient";
-import { getCachedAdminTrialPayload } from "@/lib/adminReadPayloads";
+import { redirect } from "next/navigation";
 
-export const revalidate = 30;
-
-export default async function TrialCrmPage() {
-    const { leads, stats } = await getCachedAdminTrialPayload();
-
-    return <TrialCrmClient initialLeads={leads} initialStats={stats} />;
+export default function TrialCrmPage() {
+    redirect("/admin/apply");
 }

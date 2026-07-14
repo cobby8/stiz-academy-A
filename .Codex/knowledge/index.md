@@ -117,6 +117,9 @@
 
 # STIZ Knowledge Index
 
+## 2026-07-14
+- `/admin/apply`를 체험 CRM/수강신청/안내 설정 통합 탭으로 확장하고, 체험완료 전환 시 학부모 감사 안내 및 수강신청 링크 SMS 자동 발송을 추가했다.
+
 - 기준일: 2026-07-13
 - 문서 수: 5
 - 최근 지식: 시간표는 `ScheduleSlot`을 DB 원본으로 전환 중이다. 관리자 시간표 API와 초기 payload는 `ScheduleSlot`이 있으면 우선 읽고, 아직 없으면 기존 `SheetSlotCache`로 fallback한다. 시트 인원은 운영 원본이 아니라 참고 스냅샷이며, 실제 운영 인원은 `Class.slotKey`에 연결된 `Enrollment(ACTIVE)` 수로 계산한다. 기존 저장 액션도 `ScheduleSlot`과 `Class`에 미러링되어 DB 원본 조회 상태에서 편집 내용이 유지된다. 사용자 화면에서는 DB 인덱스/DDL/배경 카운트 자동 조회를 피하고, 인덱스 적용은 Prisma schema/SQL 운영 작업으로 분리한다.

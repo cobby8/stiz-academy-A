@@ -1,17 +1,24 @@
 import ApplyAdminClient from "./ApplyAdminClient";
-import { getCachedAdminApplyPayload } from "@/lib/adminReadPayloads";
+import {
+    getCachedAdminApplyPayload,
+    getCachedAdminTrialPayload,
+} from "@/lib/adminReadPayloads";
 
-// 30초 캐시: Server Action 호출 시 즉시 무효화
 export const revalidate = 30;
 
 export default async function AdminApplyPage() {
-    const { applications, stats, classes } = await getCachedAdminApplyPayload();
+    const [applyPayload, trialPayload] = await Promise.all([
+        getCachedAdminApplyPayload(),
+        getCachedAdminTrialPayload(),
+    ]);
 
     return (
         <ApplyAdminClient
-            initialApplications={applications}
-            initialStats={stats}
-            initialClasses={classes}
+            initialApplications={applyPayload.applications}
+            initialStats={applyPayload.stats}
+            initialClasses={applyPayload.classes}
+            initialTrialLeads={trialPayload.leads}
+            initialTrialStats={trialPayload.stats}
         />
     );
 }

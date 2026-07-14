@@ -90,6 +90,14 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
         '["childName","scheduledDate","className","academyPhone"]',
     ],
     [
+        "TRIAL_ATTENDED_PARENT",
+        "체험 완료 감사 안내 (학부모)",
+        "PARENT",
+        "[STIZ] {{childName}} 학생의 체험수업 참여 감사합니다.\n정규 수강신청을 원하시면 아래 링크에서 신청해주세요.\n{{enrollLink}}\n문의: {{academyPhone}}",
+        "관리자가 체험 리드를 체험완료로 변경하면 학부모에게 자동 발송",
+        '["childName","parentName","academyPhone","enrollLink"]',
+    ],
+    [
         "ENROLL_CONFIRM_PARENT",
         "수강 신청 확인 (학부모)",
         "PARENT",

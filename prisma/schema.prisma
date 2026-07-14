@@ -776,6 +776,7 @@ model TrialLead {
   scheduledDate      DateTime? @db.Timestamptz(6)
   scheduledClassId   String?
   attendedDate       DateTime? @db.Timestamptz(6)
+  attendedSmsSentAt  DateTime? @db.Timestamptz(6)
   convertedDate      DateTime? @db.Timestamptz(6)
   convertedStudentId String?
   lostReason         String?

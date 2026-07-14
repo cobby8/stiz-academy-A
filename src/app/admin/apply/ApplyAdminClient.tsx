@@ -7,6 +7,10 @@ const ApplyAdminModals = dynamic(() => import("./ApplyAdminModals"), {
     loading: () => null,
 });
 
+const TrialCrmClient = dynamic(() => import("../trial/TrialCrmClient"), {
+    loading: () => <ApplyLoadingFallback />,
+});
+
 const ApplySettingsTab = dynamic(() => import("./ApplySettingsTab"), {
     loading: () => (
         <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
@@ -71,10 +75,55 @@ interface ClassInfo {
     program: { id: string; name: string } | null;
 }
 
+interface TrialLead {
+    id: string;
+    childName: string;
+    childAge: string | null;
+    parentName: string;
+    parentPhone: string;
+    source: string;
+    status: string;
+    scheduledDate: string | null;
+    scheduledClassId: string | null;
+    attendedDate: string | null;
+    convertedDate: string | null;
+    convertedStudentId: string | null;
+    lostReason: string | null;
+    memo: string | null;
+    createdAt: string;
+    updatedAt: string;
+    childBirthDate: string | null;
+    childGrade: string | null;
+    childGender: string | null;
+    childSchool: string | null;
+    basketballExp: string | null;
+    preferredSlotKey: string | null;
+    preferredDay: string | null;
+    preferredPeriod: string | null;
+    trialDate: string | null;
+    trialFeeConfirmed: boolean;
+    hopeNote: string | null;
+    agreedTerms: boolean;
+    agreedPrivacy: boolean;
+}
+
+interface TrialStats {
+    NEW: number;
+    CONTACTED: number;
+    SCHEDULED: number;
+    ATTENDED: number;
+    CONVERTED: number;
+    LOST: number;
+    total: number;
+    conversionRate: number;
+}
+
 interface ApplyAdminClientProps {
     initialApplications?: EnrollApplication[];
     initialStats?: EnrollStats;
     initialClasses?: ClassInfo[];
+    initialTrialLeads?: TrialLead[];
+    initialTrialStats?: TrialStats;
 }
 
 type ApplyPayload = {
@@ -169,7 +218,7 @@ function ApplyErrorState({ onRetry }: { onRetry: () => void }) {
 
 // ── 탭 상수 ──────────────────────────────────────────────────────────────────────
 
-type TabType = "applications" | "settings";
+type TabType = "trial" | "applications" | "settings";
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
 
@@ -177,6 +226,8 @@ export default function ApplyAdminClient({
     initialApplications,
     initialStats,
     initialClasses,
+    initialTrialLeads,
+    initialTrialStats,
 }: ApplyAdminClientProps) {
     const hasInitialData = Boolean(initialApplications && initialStats && initialClasses);
     const [applications, setApplications] = useState<EnrollApplication[]>(initialApplications ?? []);
@@ -186,7 +237,7 @@ export default function ApplyAdminClient({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
     const [visibleLimit, setVisibleLimit] = useState(APPLICATION_PAGE_SIZE);
-    const [activeTab, setActiveTab] = useState<TabType>("applications");
+    const [activeTab, setActiveTab] = useState<TabType>("trial");
 
     // 모달 상태
     const [showApproveModal, setShowApproveModal] = useState<EnrollApplication | null>(null);
@@ -294,6 +345,22 @@ export default function ApplyAdminClient({
             {/* 탭 버튼 */}
             <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
                 <button
+                    onClick={() => setActiveTab("trial")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                        activeTab === "trial"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-lg">diversity_3</span>
+                    체험 CRM
+                    {(initialTrialStats?.NEW ?? 0) > 0 && (
+                        <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            {initialTrialStats?.NEW}
+                        </span>
+                    )}
+                </button>
+                <button
                     onClick={() => setActiveTab("applications")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                         activeTab === "applications"
@@ -323,7 +390,12 @@ export default function ApplyAdminClient({
             </div>
 
             {/* 탭 내용 */}
-            {activeTab === "applications" ? (
+            {activeTab === "trial" ? (
+                <TrialCrmClient
+                    initialLeads={initialTrialLeads}
+                    initialStats={initialTrialStats}
+                />
+            ) : activeTab === "applications" ? (
                 <>
                     {/* 파이프라인 요약 카드 */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

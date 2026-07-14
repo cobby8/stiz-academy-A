@@ -28,7 +28,6 @@ const OPS_PATHS = [
     "/admin/requests",
     "/admin/feedback",
     "/admin/shuttle",
-    "/admin/trial",
     "/admin/waitlist",
     "/admin/makeup",
     "/admin/skills",
@@ -179,7 +178,6 @@ export default function AdminShellClient({
                             <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
                             <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
                             <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
-                            <NavItem href="/admin/trial" active={pathname.startsWith("/admin/trial")} icon="🤝" label="체험 CRM" />
                             <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />
                             <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강 관리" />
                             <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬 트래킹" />

@@ -48,3 +48,5 @@
 - 2026-07-15: DB 기반 결제 장부(PaymentInvoice/PaymentTransaction/PaymentWebhookEvent/PaymentAuditLog)를 추가하고 기존 Payment 153건을 청구서로 백필했다.
 
 - 2026-07-15: 관리자 재무 화면에 월별 청구서 링크 일괄 발송 버튼을 추가하고 2026년 7월 기준 발송 가능 99건 SQL을 EXPLAIN으로 검증했다.
+
+- 2026-07-15: 수강생 이관 최신 월 기준을 7월로 바로잡고, 과거 ACTIVE 수강등록 77건을 PAUSED 처리해 시간표 인원을 7월 시트 기준 223건으로 정리했다.

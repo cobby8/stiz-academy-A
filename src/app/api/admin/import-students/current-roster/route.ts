@@ -96,10 +96,12 @@ const LEDGER_CTE = `
   WITH ledger AS (
     SELECT
       r.*,
-      NULLIF(
-        substring(COALESCE(r."registrationMonth", '') from '([0-9]{1,2})\\s*월'),
-        ''
-      )::int AS "monthNumber"
+      (
+        string_to_array(
+          trim(both ',' from regexp_replace(COALESCE(r."registrationMonth", ''), '[^0-9]+', ',', 'g')),
+          ','
+        )
+      )[2]::int AS "monthNumber"
     FROM "StudentRegistrationLedger" r
     WHERE r."batchId" = $1
   ),
@@ -225,10 +227,12 @@ async function getMonthDistribution(batchId: string) {
     `WITH ledger AS (
       SELECT
         r.*,
-        NULLIF(
-          substring(COALESCE(r."registrationMonth", '') from '([0-9]{1,2})\\s*월'),
-          ''
-        )::int AS "monthNumber"
+        (
+          string_to_array(
+            trim(both ',' from regexp_replace(COALESCE(r."registrationMonth", ''), '[^0-9]+', ',', 'g')),
+            ','
+          )
+        )[2]::int AS "monthNumber"
       FROM "StudentRegistrationLedger" r
       WHERE r."batchId" = $1
     )

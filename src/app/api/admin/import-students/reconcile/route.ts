@@ -39,9 +39,29 @@ const LATEST_BATCH_SQL = `
 const RECONCILE_CTE = `
   WITH latest AS (${LATEST_BATCH_SQL}),
   ledger AS (
-    SELECT r.*
+    SELECT
+      r.*,
+      (
+        string_to_array(
+          trim(both ',' from regexp_replace(COALESCE(r."registrationMonth", ''), '[^0-9]+', ',', 'g')),
+          ','
+        )
+      )[2]::int AS "monthNumber"
     FROM "StudentRegistrationLedger" r
     JOIN latest ON latest.id = r."batchId"
+  ),
+  selected_month AS (
+    SELECT l."monthNumber"
+    FROM ledger l
+    WHERE l."monthNumber" IS NOT NULL
+    GROUP BY l."monthNumber"
+    ORDER BY l."monthNumber" DESC
+    LIMIT 1
+  ),
+  target AS (
+    SELECT l.*
+    FROM ledger l
+    JOIN selected_month sm ON sm."monthNumber" = l."monthNumber"
   ),
   expected_pairs AS (
     SELECT DISTINCT
@@ -49,7 +69,7 @@ const RECONCILE_CTE = `
       r."studentName",
       slot_key AS "slotKey",
       c.id AS "classId"
-    FROM ledger r
+    FROM target r
     CROSS JOIN LATERAL jsonb_array_elements_text(
       COALESCE(NULLIF(r."selectedSlotKeysJSON", ''), '[]')::jsonb
     ) AS slot_key
@@ -66,7 +86,7 @@ const RECONCILE_CTE = `
         WHEN BOOL_OR(r.status = 'PAUSED') THEN 'PAUSED'
         ELSE 'WITHDRAWN'
       END AS "targetStatus"
-    FROM ledger r
+    FROM target r
     WHERE r."studentId" IS NOT NULL
     GROUP BY r."studentId"
   ),
@@ -108,14 +128,14 @@ const RECONCILE_CTE = `
         ELSE 'PAUSED'
       END AS "targetStatus"
     FROM active_enrollments ae
-    JOIN scoped_students ss ON ss."studentId" = ae."studentId"
+    LEFT JOIN scoped_students ss ON ss."studentId" = ae."studentId"
     LEFT JOIN expected_pairs ep ON ep."studentId" = ae."studentId" AND ep."classId" = ae."classId"
     WHERE ae.status = 'ACTIVE'
       AND ep."studentId" IS NULL
   ),
   missing_class_slots AS (
     SELECT DISTINCT slot_key AS "slotKey"
-    FROM ledger r
+    FROM target r
     CROSS JOIN LATERAL jsonb_array_elements_text(
       COALESCE(NULLIF(r."selectedSlotKeysJSON", ''), '[]')::jsonb
     ) AS slot_key
@@ -167,7 +187,7 @@ async function getPreview(): Promise<ReconcilePreview> {
         (SELECT COUNT(*)::int FROM missing) AS "missingEnrollments",
         (SELECT COUNT(*)::int FROM reactivations) AS reactivations,
         (SELECT COUNT(*)::int FROM pause_extras) AS "pauseExtras",
-        (SELECT COUNT(*)::int FROM ledger WHERE "studentId" IS NULL) AS "unresolvedLedgerRows",
+        (SELECT COUNT(*)::int FROM target WHERE "studentId" IS NULL) AS "unresolvedLedgerRows",
         (SELECT COUNT(*)::int FROM missing_class_slots) AS "missingClassSlots",
         (SELECT COUNT(*)::int FROM outside_scope) AS "outsideScopeActiveStudents"
     `),

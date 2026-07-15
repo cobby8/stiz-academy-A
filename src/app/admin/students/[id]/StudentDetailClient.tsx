@@ -20,6 +20,13 @@ const PAY_STATUS: Record<string, { label: string; color: string }> = {
     PAID: { label: "납부완료", color: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-300/10 dark:text-emerald-100 dark:ring-emerald-300/20" },
     OVERDUE: { label: "연체", color: "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20" },
 };
+const INVOICE_STATUS: Record<string, { label: string; color: string }> = {
+    ISSUED: { label: "발행", color: "bg-sky-50 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-300/10 dark:text-sky-100 dark:ring-sky-300/20" },
+    SENT: { label: "발송", color: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-300/10 dark:text-indigo-100 dark:ring-indigo-300/20" },
+    OVERDUE: { label: "연체", color: "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20" },
+    PAID: { label: "납부", color: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-300/10 dark:text-emerald-100 dark:ring-emerald-300/20" },
+    CANCELED: { label: "취소", color: "bg-gray-50 text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700" },
+};
 const ENROLLMENT_STATUS: Record<string, { label: string; color: string }> = {
     ACTIVE: { label: "수강 중", color: "bg-lime-100 text-lime-800 ring-1 ring-lime-200 dark:bg-lime-300/15 dark:text-lime-100 dark:ring-lime-300/25" },
     PAUSED: { label: "휴원", color: "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-300/10 dark:text-amber-100 dark:ring-amber-300/20" },
@@ -87,7 +94,24 @@ type StudentActivityData = {
         className: string; dayOfWeek: string; startTime: string; endTime: string; programName: string;
     }[];
     attendances: { id: string; status: string; date: Date | string; className: string }[];
-    payments: { id: string; amount: number; status: string; dueDate: Date | string; paidDate: Date | string | null }[];
+    payments: {
+        id: string;
+        amount: number;
+        status: string;
+        dueDate: Date | string;
+        paidDate: Date | string | null;
+        type?: string | null;
+        description?: string | null;
+        method?: string | null;
+        invoiceId?: string | null;
+        invoiceNo?: string | null;
+        invoiceStatus?: string | null;
+        invoiceSentAt?: Date | string | null;
+        invoiceCheckoutUrl?: string | null;
+        issuedAt?: Date | string | null;
+        payableUntil?: Date | string | null;
+        receiptUrl?: string | null;
+    }[];
     attendanceStats: { total: number; present: number; absent: number; late: number; excused: number; rate: number };
     galleryPosts: { id: string; title: string | null; mediaJSON: string; createdAt: Date | string }[];
     monthlyHistory: {
@@ -125,6 +149,10 @@ type StudentActivityData = {
 
 function getEnrollmentStatusInfo(status: string | null) {
     return ENROLLMENT_STATUS[status ?? "NONE"] ?? ENROLLMENT_STATUS.NONE;
+}
+
+function getInvoiceStatusInfo(status: string | null | undefined) {
+    return status ? INVOICE_STATUS[status] ?? INVOICE_STATUS.ISSUED : null;
 }
 
 function getRepresentativeEnrollmentStatus(enrollments: StudentActivityData["enrollments"]) {
@@ -184,6 +212,15 @@ function getMonthlyPaymentInfo(history: StudentActivityData["monthlyHistory"][nu
         label: "수납 정보 없음",
         className: "bg-gray-50 text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700",
     };
+}
+
+function getCurrentMonthHistory(monthlyHistory: StudentActivityData["monthlyHistory"]) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    return monthlyHistory.find((history) => history.year === currentYear && history.month === currentMonth)
+        ?? monthlyHistory[0]
+        ?? null;
 }
 
 export default function StudentDetailClient({
@@ -410,6 +447,15 @@ export default function StudentDetailClient({
     const representativeStatusInfo = getEnrollmentStatusInfo(representativeStatus);
     const totalPaid = payments.filter(p => p.status === "PAID").reduce((s, p) => s + p.amount, 0);
     const unpaid = payments.filter(p => p.status === "PENDING" || p.status === "OVERDUE");
+    const unpaidAmount = unpaid.reduce((sum, payment) => sum + payment.amount, 0);
+    const currentMonthHistory = getCurrentMonthHistory(monthlyHistory);
+    const currentMonthStatusInfo = getEnrollmentStatusInfo(currentMonthHistory?.status ?? representativeStatus);
+    const currentMonthPaymentInfo = currentMonthHistory ? getMonthlyPaymentInfo(currentMonthHistory) : null;
+    const nextUnpaidPayment = [...unpaid].sort(
+        (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+    )[0] ?? null;
+    const latestInvoicePayment = payments.find((payment) => payment.invoiceId) ?? null;
+    const latestInvoiceInfo = getInvoiceStatusInfo(latestInvoicePayment?.invoiceStatus);
 
     return (
         <div className="max-w-5xl mx-auto space-y-6">
@@ -463,6 +509,93 @@ export default function StudentDetailClient({
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">총 납부액</p>
                     <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{formatKRW(totalPaid)}</p>
                     {unpaid.length > 0 && <p className="text-xs text-red-500 dark:text-red-300">미납 {unpaid.length}건</p>}
+                </div>
+            </div>
+
+            <div className="rounded-2xl border border-lime-200/70 bg-white p-5 shadow-sm dark:border-lime-300/20 dark:bg-gray-800">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h2 className="text-base font-extrabold text-gray-900 dark:text-white">운영 요약</h2>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            현재 상태, 최신 월 수강, 수납/청구서를 한 번에 확인합니다.
+                        </p>
+                    </div>
+                    {currentMonthHistory && (
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                            기준 {formatMonthLabel(currentMonthHistory)}
+                        </span>
+                    )}
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">현재 상태</p>
+                        <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${currentMonthStatusInfo.color}`}>
+                            {currentMonthStatusInfo.label}
+                        </span>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            수강 중 {activeEnrollments.length}개 · 이전/휴원 {inactiveEnrollments.length}개
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">최신 월 수강</p>
+                        <p className="mt-2 text-sm font-extrabold text-gray-900 dark:text-white">
+                            {currentMonthHistory ? `${currentMonthHistory.classes.length}개 반` : "이력 없음"}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {currentMonthHistory
+                                ? `원장 ${currentMonthHistory.rowCount}줄 · ${currentMonthHistory.grade ?? "학년 미입력"}`
+                                : "최신 이관 장부에 연결된 월별 이력이 없습니다."}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">수납 상태</p>
+                        <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${currentMonthPaymentInfo?.className ?? PAY_STATUS.PENDING.color}`}>
+                            {currentMonthPaymentInfo?.label ?? (unpaid.length > 0 ? "미납 확인" : "수납 정보 없음")}
+                        </span>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            {unpaid.length > 0
+                                ? `미납 ${unpaid.length}건 · ${formatKRW(unpaidAmount)}`
+                                : `총 납부 ${formatKRW(totalPaid)}`}
+                        </p>
+                    </div>
+
+                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">청구서</p>
+                        {latestInvoicePayment ? (
+                            <>
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${latestInvoiceInfo?.color ?? INVOICE_STATUS.ISSUED.color}`}>
+                                        {latestInvoiceInfo?.label ?? "발행"}
+                                    </span>
+                                    {latestInvoicePayment.invoiceNo && (
+                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
+                                            {latestInvoicePayment.invoiceNo}
+                                        </span>
+                                    )}
+                                </div>
+                                {latestInvoicePayment.invoiceCheckoutUrl && (
+                                    <a
+                                        href={latestInvoicePayment.invoiceCheckoutUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="mt-2 inline-flex text-xs font-bold text-blue-700 hover:text-blue-900 dark:text-lime-200 dark:hover:text-lime-100"
+                                    >
+                                        납부 링크 열기
+                                    </a>
+                                )}
+                            </>
+                        ) : (
+                            <p className="mt-2 text-sm font-bold text-gray-500 dark:text-gray-300">청구서 없음</p>
+                        )}
+                        {nextUnpaidPayment && (
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                다음 기한 {toDateStr(nextUnpaidPayment.dueDate)}
+                            </p>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -736,18 +869,48 @@ export default function StudentDetailClient({
                                             <th className="text-left py-2 px-3 text-xs text-gray-500 dark:text-gray-400 font-medium">납부기한</th>
                                             <th className="text-left py-2 px-3 text-xs text-gray-500 dark:text-gray-400 font-medium">금액</th>
                                             <th className="text-left py-2 px-3 text-xs text-gray-500 dark:text-gray-400 font-medium">상태</th>
+                                            <th className="text-left py-2 px-3 text-xs text-gray-500 dark:text-gray-400 font-medium">청구서</th>
                                             <th className="text-left py-2 px-3 text-xs text-gray-500 dark:text-gray-400 font-medium">납부일</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {payments.map(p => {
                                             const info = PAY_STATUS[p.status] || PAY_STATUS.PENDING;
+                                            const invoiceInfo = getInvoiceStatusInfo(p.invoiceStatus);
                                             return (
                                                 <tr key={p.id} className="border-b border-gray-50 transition hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900/70">
                                                     <td className="py-2 px-3 text-gray-700 dark:text-gray-200">{toDateStr(p.dueDate)}</td>
                                                     <td className="py-2 px-3 font-medium text-gray-900 dark:text-white">{formatKRW(p.amount)}</td>
                                                     <td className="py-2 px-3">
                                                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${info.color}`}>{info.label}</span>
+                                                    </td>
+                                                    <td className="py-2 px-3">
+                                                        {p.invoiceId ? (
+                                                            <div className="space-y-1">
+                                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                                    {invoiceInfo && (
+                                                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${invoiceInfo.color}`}>
+                                                                            {invoiceInfo.label}
+                                                                        </span>
+                                                                    )}
+                                                                    {p.invoiceNo && (
+                                                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{p.invoiceNo}</span>
+                                                                    )}
+                                                                </div>
+                                                                {p.invoiceCheckoutUrl && (
+                                                                    <a
+                                                                        href={p.invoiceCheckoutUrl}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className="text-xs font-bold text-blue-700 hover:text-blue-900 dark:text-lime-200 dark:hover:text-lime-100"
+                                                                    >
+                                                                        납부 링크
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400">없음</span>
+                                                        )}
                                                     </td>
                                                     <td className="py-2 px-3 text-gray-500 dark:text-gray-400">{toDateStr(p.paidDate)}</td>
                                                 </tr>

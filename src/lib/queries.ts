@@ -1443,9 +1443,15 @@ export async function getStudentActivity(studentId: string) {
             ),
             // 전체 수납 기록
             prisma.$queryRawUnsafe<any[]>(
-                `SELECT id, amount, status, "dueDate", "paidDate", "createdAt"
-                 FROM "Payment" WHERE "studentId" = $1
-                 ORDER BY "dueDate" DESC`,
+                `SELECT p.id, p.amount, p.status, p."dueDate", p."paidDate", p."createdAt",
+                        p.type, p.description, p.method, p."invoiceNo", p."issuedAt",
+                        p."payableUntil", p."receiptUrl",
+                        i.id AS invoice_id, i.status AS invoice_status, i."sentAt" AS invoice_sent_at,
+                        i."checkoutUrl" AS invoice_checkout_url
+                 FROM "Payment" p
+                 LEFT JOIN "PaymentInvoice" i ON i."paymentId" = p.id
+                 WHERE p."studentId" = $1
+                 ORDER BY p."dueDate" DESC`,
                 studentId
             ),
             // 출석 통계
@@ -1564,6 +1570,17 @@ export async function getStudentActivity(studentId: string) {
                 status: p.status,
                 dueDate: p.dueDate ?? p.duedate,
                 paidDate: p.paidDate ?? p.paiddate ?? null,
+                type: p.type ?? "MONTHLY",
+                description: p.description ?? null,
+                method: p.method ?? null,
+                invoiceId: p.invoice_id ?? null,
+                invoiceNo: p.invoiceNo ?? p.invoiceno ?? null,
+                invoiceStatus: p.invoice_status ?? null,
+                invoiceSentAt: p.invoice_sent_at ?? null,
+                invoiceCheckoutUrl: p.invoice_checkout_url ?? null,
+                issuedAt: p.issuedAt ?? p.issuedat ?? null,
+                payableUntil: p.payableUntil ?? p.payableuntil ?? null,
+                receiptUrl: p.receiptUrl ?? p.receipturl ?? null,
                 createdAt: p.createdAt ?? p.createdat,
             })),
             attendanceStats: {

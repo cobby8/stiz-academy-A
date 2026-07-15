@@ -100,8 +100,6 @@ model Class {
   program      Program      @relation(fields: [programId], references: [id])
   enrollments  Enrollment[]
   sessions     Session[]
-  payments     Payment[]
-  paymentInvoices PaymentInvoice[]
 
   @@index([programId])
   @@index([instructorId])
@@ -215,7 +213,6 @@ model Payment {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   student       Student   @relation(fields: [studentId], references: [id])
-  class         Class?    @relation(fields: [classId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   invoice       PaymentInvoice?
   transactions  PaymentTransaction[]
   auditLogs     PaymentAuditLog[]
@@ -254,7 +251,6 @@ model PaymentInvoice {
   createdAt      DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   payment        Payment   @relation(fields: [paymentId], references: [id])
-  class          Class?    @relation(fields: [classId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   transactions   PaymentTransaction[]
   auditLogs      PaymentAuditLog[]
 
@@ -331,7 +327,7 @@ model PaymentAuditLog {
 model StaffPaymentConfirmationRequest {
   id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   paymentId         String
-  invoiceId         String?
+  invoiceId         String
   classId           String
   studentId         String
   requestedByUserId String
@@ -837,6 +833,9 @@ model MediaRevocationJob {
   lastError     String?
   removedAt     DateTime? @db.Timestamptz(6)
   confirmationEvidenceJSON String?
+  studentSnapshotJSON String @default("{}")
+  consentSnapshotJSON String @default("{}")
+  draftSnapshotJSON   String @default("{}")
   confirmedByUserId String?
   createdAt     DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(6)

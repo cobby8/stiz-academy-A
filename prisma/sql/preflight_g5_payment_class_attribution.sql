@@ -9,10 +9,21 @@ BEGIN
   END IF;
 
   IF EXISTS (
-    SELECT 1 FROM "Enrollment"
-    GROUP BY "studentId", "classId"
-    HAVING COUNT(*) > 1
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'PaymentInvoice' AND column_name = 'classId'
   ) THEN
-    RAISE EXCEPTION 'G5 preflight failed: duplicate student/class enrollments exist';
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'Payment' AND column_name = 'classId'
+    ) THEN
+      IF EXISTS (
+        SELECT 1
+        FROM "PaymentInvoice" i
+        JOIN "Payment" p ON p.id = i."paymentId"
+        WHERE i."classId" IS DISTINCT FROM p."classId"
+      ) THEN
+        RAISE EXCEPTION 'G5 preflight failed: invoice class attribution differs from its payment';
+      END IF;
+    END IF;
   END IF;
 END $$;

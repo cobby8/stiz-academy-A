@@ -25,7 +25,8 @@ test("manual and monthly creation require unambiguous active enrollment attribut
 });
 
 test("database enforces class and enrollment integrity without exposing billing tables", () => {
-  assert.match(migration, /FOREIGN KEY \("studentId", "classId"\) REFERENCES "Enrollment"\("studentId", "classId"\)/);
+  assert.doesNotMatch(migration, /REFERENCES "Enrollment"\("studentId", "classId"\)/);
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "Payment_classId_fkey"/);
   assert.match(migration, /FOREIGN KEY \("paymentId", "classId"\) REFERENCES "Payment"\(id, "classId"\)/);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /REVOKE ALL ON TABLE "Payment" FROM anon, authenticated/);

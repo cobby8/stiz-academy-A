@@ -14,30 +14,11 @@ CREATE INDEX IF NOT EXISTS "PaymentInvoice_classId_status_dueDate_idx"
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Payment_classId_fkey') THEN
-    ALTER TABLE "Payment"
-      ADD CONSTRAINT "Payment_classId_fkey"
-      FOREIGN KEY ("classId") REFERENCES "Class"(id)
-      ON UPDATE CASCADE ON DELETE RESTRICT NOT VALID;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Payment_studentId_classId_fkey') THEN
-    ALTER TABLE "Payment"
-      ADD CONSTRAINT "Payment_studentId_classId_fkey"
-      FOREIGN KEY ("studentId", "classId") REFERENCES "Enrollment"("studentId", "classId")
-      ON UPDATE CASCADE ON DELETE RESTRICT NOT VALID;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PaymentInvoice_classId_fkey') THEN
-    ALTER TABLE "PaymentInvoice"
-      ADD CONSTRAINT "PaymentInvoice_classId_fkey"
-      FOREIGN KEY ("classId") REFERENCES "Class"(id)
-      ON UPDATE CASCADE ON DELETE RESTRICT NOT VALID;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PaymentInvoice_studentId_classId_fkey') THEN
-    ALTER TABLE "PaymentInvoice"
-      ADD CONSTRAINT "PaymentInvoice_studentId_classId_fkey"
-      FOREIGN KEY ("studentId", "classId") REFERENCES "Enrollment"("studentId", "classId")
-      ON UPDATE CASCADE ON DELETE RESTRICT NOT VALID;
-  END IF;
+  -- Billing history must not prevent normal class or enrollment deletion.
+  ALTER TABLE "Payment" DROP CONSTRAINT IF EXISTS "Payment_studentId_classId_fkey";
+  ALTER TABLE "PaymentInvoice" DROP CONSTRAINT IF EXISTS "PaymentInvoice_studentId_classId_fkey";
+  ALTER TABLE "Payment" DROP CONSTRAINT IF EXISTS "Payment_classId_fkey";
+  ALTER TABLE "PaymentInvoice" DROP CONSTRAINT IF EXISTS "PaymentInvoice_classId_fkey";
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PaymentInvoice_paymentId_classId_fkey') THEN
     ALTER TABLE "PaymentInvoice"
       ADD CONSTRAINT "PaymentInvoice_paymentId_classId_fkey"
@@ -46,10 +27,6 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE "Payment" VALIDATE CONSTRAINT "Payment_classId_fkey";
-ALTER TABLE "Payment" VALIDATE CONSTRAINT "Payment_studentId_classId_fkey";
-ALTER TABLE "PaymentInvoice" VALIDATE CONSTRAINT "PaymentInvoice_classId_fkey";
-ALTER TABLE "PaymentInvoice" VALIDATE CONSTRAINT "PaymentInvoice_studentId_classId_fkey";
 ALTER TABLE "PaymentInvoice" VALIDATE CONSTRAINT "PaymentInvoice_paymentId_classId_fkey";
 
 ALTER TABLE "Payment" ENABLE ROW LEVEL SECURITY;

@@ -27,7 +27,9 @@ export async function sendSmsDetailed(to: string, body: string): Promise<SmsSend
 
     if (!API_KEY || !API_SECRET || !SENDER) {
         const reason = "SMS environment variables are missing.";
-        console.log(`[SMS fallback] to=${recipientNo} body="${body}"`);
+        // 인증번호·개인 초대 링크가 포함될 수 있으므로 문자 본문은 서버 로그에 남기지 않는다.
+        const maskedRecipient = recipientNo.length >= 4 ? `***${recipientNo.slice(-4)}` : "***";
+        console.log(`[SMS fallback] to=${maskedRecipient} bodyLength=${body.length}`);
         return { ok: false, to: recipientNo, reason };
     }
 

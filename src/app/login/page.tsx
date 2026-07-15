@@ -121,11 +121,23 @@ function LoginContent() {
           </div>}
 
           {isStaffMode && (
-            <div className="mb-6 flex items-start gap-3 rounded-xl border border-brand-orange-200 bg-orange-50 p-4 text-sm text-brand-navy-800 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-gray-100">
-              <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime" aria-hidden="true">
-                school
-              </span>
-              <p>가입 전이라면 관리자에게 받은 초대 링크에서 먼저 계정을 만들어 주세요.</p>
+            <div className="mb-6 rounded-xl border border-brand-orange-200 bg-orange-50 p-4 text-sm text-brand-navy-800 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-gray-100">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime" aria-hidden="true">
+                  person_add
+                </span>
+                <div>
+                  <p className="font-bold">처음 이용하시나요?</p>
+                  <p className="mt-1 leading-6">원장님이 보내드린 <strong>개인 초대 링크</strong>에서 먼저 가입해 주세요. 이 화면에서는 선생님 계정을 새로 만들 수 없습니다.</p>
+                </div>
+              </div>
+              <Link
+                href="/about"
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border border-brand-orange-200 bg-white px-3 font-bold text-brand-navy-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              >
+                <span className="material-symbols-outlined text-lg" aria-hidden="true">support_agent</span>
+                초대 링크가 없다면 학원에 문의하기
+              </Link>
             </div>
           )}
 

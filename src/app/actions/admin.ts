@@ -4772,7 +4772,7 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
     return { sentTo: sentNames };
 }
 
-import { sendSms, sendSmsBulk, sendSmsDetailed } from "@/lib/sms";
+import { sendSmsBulk, sendSmsDetailed } from "@/lib/sms";
 
 /**
  * getCoachPhones — SMS 발송 수신자 선택 UI용 코치 전화번호 목록 조회
@@ -5135,6 +5135,33 @@ export async function ensureStaffInvitationTable() {
     }
 }
 
+function getStaffInvitationBaseUrl() {
+    const configuredUrl =
+        process.env.NEXT_PUBLIC_SITE_URL?.trim()
+        || process.env.NEXT_PUBLIC_BASE_URL?.trim()
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+
+    if (!configuredUrl) return null;
+
+    try {
+        const parsedUrl = new URL(configuredUrl);
+        const isLocalHost = parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
+        if (parsedUrl.protocol !== "https:" || isLocalHost) return null;
+        return parsedUrl.origin;
+    } catch {
+        return null;
+    }
+}
+
+function getStaffInvitationUrl(token: string) {
+    const invitePath = `/invite/${encodeURIComponent(token)}`;
+    const baseUrl = getStaffInvitationBaseUrl();
+    return baseUrl ? `${baseUrl}${invitePath}` : invitePath;
+}
+
+const SMS_SITE_URL_MISSING = "운영 사이트 주소가 설정되지 않아 문자를 보내지 않았습니다.";
+const SMS_SEND_FAILED = "문자 발송에 실패했습니다. 가입 링크를 직접 전달해 주세요.";
+
 /**
  * inviteStaff — 스태프 초대 링크 생성 (requireOwner: ADMIN만)
  * 이름 + 전화번호 + 역할을 받아서 7일 유효한 초대를 생성
@@ -5148,8 +5175,18 @@ export async function inviteStaff(data: {
     const user = await requireOwner();
     await ensureStaffInvitationTable();
 
-    // 전화번호에서 하이픈 제거
-    const cleanPhone = data.phone.replace(/-/g, "");
+    if (data.role !== "INSTRUCTOR") {
+        throw new Error("선생님 초대는 코치/강사 역할만 선택할 수 있습니다.");
+    }
+
+    const cleanName = data.name.trim();
+    const cleanPhone = data.phone.replace(/\D/g, "");
+    if (!cleanName) {
+        throw new Error("선생님 이름을 입력해 주세요.");
+    }
+    if (!/^010\d{8}$/.test(cleanPhone)) {
+        throw new Error("휴대전화 번호는 010으로 시작하는 11자리 숫자로 입력해 주세요.");
+    }
 
     // 같은 번호로 PENDING 상태인 초대가 이미 있는지 확인
     const existing = await prisma.$queryRawUnsafe<any[]>(
@@ -5183,27 +5220,39 @@ export async function inviteStaff(data: {
                $4, NOW(), NOW()
              )
              RETURNING token`,
-            data.name,
+            cleanName,
             cleanPhone,
-            data.role,
+            "INSTRUCTOR",
             user.id,
         );
 
         const token = rows[0]?.token;
         if (!token) throw new Error("초대 생성 실패");
 
-        // SMS로 초대 링크 발송 (fire-and-forget)
-        const { sendSms } = await import("@/lib/sms");
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://localhost:4000";
-        const inviteUrl = `${baseUrl}/invite/${token}`;
-        sendSms(
-            cleanPhone,
-            `[STIZ 농구교실] ${data.name}님, 스태프 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
-        ).catch(() => {}); // SMS 실패해도 초대는 유효
+        // 문자 발송이 실패해도 생성된 초대와 복사용 링크는 그대로 유지한다.
+        const inviteUrl = getStaffInvitationUrl(token);
+        const baseUrl = getStaffInvitationBaseUrl();
+        const smsResult = baseUrl
+            ? await sendSmsDetailed(
+                cleanPhone,
+                `[STIZ 농구교실] ${cleanName}님, 스태프 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
+            )
+            : { ok: false, reason: SMS_SITE_URL_MISSING };
+
+        if (baseUrl && !smsResult.ok) {
+            console.error("[inviteStaff SMS] failed:", smsResult.reason);
+        }
 
         revalidateStaffAdminCaches();
         revalidatePath("/admin/staff");
-        return { token };
+        return {
+            token,
+            inviteUrl,
+            smsSent: smsResult.ok,
+            smsError: smsResult.ok
+                ? undefined
+                : baseUrl ? SMS_SEND_FAILED : SMS_SITE_URL_MISSING,
+        };
     } catch (e) {
         console.error("[inviteStaff] failed:", e);
         throw new Error((e as Error).message || "초대 생성 실패");
@@ -5259,6 +5308,10 @@ export async function resendInvitation(invitationId: string) {
         }
 
         const inv = rows[0];
+        const cleanPhone = String(inv.phone ?? "").replace(/\D/g, "");
+        if (!/^010\d{8}$/.test(cleanPhone)) {
+            throw new Error("저장된 휴대전화 번호가 올바르지 않아 문자를 보낼 수 없습니다.");
+        }
         const expiresAt = new Date(inv.expiresAt ?? inv.expiresat);
 
         // 만료되었으면 7일 연장
@@ -5271,18 +5324,30 @@ export async function resendInvitation(invitationId: string) {
             );
         }
 
-        // SMS 재발송
-        const { sendSms } = await import("@/lib/sms");
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://localhost:4000";
-        const inviteUrl = `${baseUrl}/invite/${inv.token}`;
-        await sendSms(
-            inv.phone,
-            `[STIZ 농구교실] ${inv.name}님, 스태프 초대 링크를 재발송합니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
-        );
+        // 문자 재발송 실패와 초대 링크의 유효성을 분리한다.
+        const inviteUrl = getStaffInvitationUrl(inv.token);
+        const baseUrl = getStaffInvitationBaseUrl();
+        const smsResult = baseUrl
+            ? await sendSmsDetailed(
+                cleanPhone,
+                `[STIZ 농구교실] ${inv.name}님, 스태프 초대 링크를 재발송합니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
+            )
+            : { ok: false, reason: SMS_SITE_URL_MISSING };
+
+        if (baseUrl && !smsResult.ok) {
+            console.error("[resendInvitation SMS] failed:", smsResult.reason);
+        }
 
         revalidateStaffAdminCaches();
         revalidatePath("/admin/staff");
-        return { ok: true };
+        return {
+            ok: smsResult.ok,
+            inviteUrl,
+            smsSent: smsResult.ok,
+            smsError: smsResult.ok
+                ? undefined
+                : baseUrl ? SMS_SEND_FAILED : SMS_SITE_URL_MISSING,
+        };
     } catch (e) {
         console.error("[resendInvitation] failed:", e);
         throw new Error((e as Error).message || "초대 재발송 실패");

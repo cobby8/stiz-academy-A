@@ -63,6 +63,10 @@ type StaffPayload = {
     invitations: Invitation[];
 };
 
+function errorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
+}
+
 // 역할별 한국어 라벨 + 색상
 const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
     ADMIN: { label: "원장", color: "bg-red-100 text-red-800" },
@@ -224,11 +228,11 @@ export default function StaffClient({
         if (!confirm(`역할을 "${ROLE_CONFIG[newRole]?.label || newRole}"(으)로 변경하시겠습니까?`)) return;
         startTransition(async () => {
             try {
-                await updateUserRole(userId, newRole as any);
+                await updateUserRole(userId, newRole as "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "PARENT");
                 setMessage({ text: "역할이 변경되었습니다.", ok: true });
                 await loadStaffData();
-            } catch (e: any) {
-                setMessage({ text: e.message || "역할 변경 실패", ok: false });
+            } catch (error: unknown) {
+                setMessage({ text: errorMessage(error, "역할 변경 실패"), ok: false });
             }
         });
     }
@@ -241,8 +245,8 @@ export default function StaffClient({
                 await linkCoachToUser(userId, value);
                 setMessage({ text: value ? "코치가 연결되었습니다." : "코치 연결이 해제되었습니다.", ok: true });
                 await loadStaffData();
-            } catch (e: any) {
-                setMessage({ text: e.message || "코치 연결 실패", ok: false });
+            } catch (error: unknown) {
+                setMessage({ text: errorMessage(error, "코치 연결 실패"), ok: false });
             }
         });
     }
@@ -255,8 +259,8 @@ export default function StaffClient({
                 await cancelInvitation(invId);
                 setMessage({ text: "초대가 취소되었습니다.", ok: true });
                 await loadStaffData();
-            } catch (e: any) {
-                setMessage({ text: e.message || "초대 취소 실패", ok: false });
+            } catch (error: unknown) {
+                setMessage({ text: errorMessage(error, "초대 취소 실패"), ok: false });
             }
         });
     }
@@ -266,11 +270,16 @@ export default function StaffClient({
         if (!confirm(`${name}님에게 초대 링크를 재발송하시겠습니까?`)) return;
         startTransition(async () => {
             try {
-                await resendInvitation(invId);
-                setMessage({ text: "초대가 재발송되었습니다.", ok: true });
+                const result = await resendInvitation(invId);
+                setMessage({
+                    text: result.smsSent
+                        ? "초대 문자를 다시 발송했습니다."
+                        : "문자는 발송되지 않았지만 개인 가입 링크는 계속 사용할 수 있습니다.",
+                    ok: result.smsSent,
+                });
                 await loadStaffData();
-            } catch (e: any) {
-                setMessage({ text: e.message || "재발송 실패", ok: false });
+            } catch (error: unknown) {
+                setMessage({ text: errorMessage(error, "재발송 실패"), ok: false });
             }
         });
     }
@@ -287,6 +296,18 @@ export default function StaffClient({
                 text: "자동 복사가 제한되어 전체 설치 링크를 복사창에 표시했습니다.",
                 ok: false,
             });
+        }
+    }
+
+    async function handleCopyInvitationLink(token: string, name: string) {
+        const inviteUrl = new URL(`/invite/${token}`, window.location.origin).toString();
+
+        try {
+            await navigator.clipboard.writeText(inviteUrl);
+            setMessage({ text: `${name} 선생님의 개인 가입 링크를 복사했습니다.`, ok: true });
+        } catch {
+            window.prompt("아래 개인 가입 링크를 길게 눌러 복사해 주세요.", inviteUrl);
+            setMessage({ text: "자동 복사가 제한되어 복사창에 개인 가입 링크를 표시했습니다.", ok: false });
         }
     }
 
@@ -315,7 +336,7 @@ export default function StaffClient({
                         className="flex items-center gap-2 px-4 py-2.5 border border-brand-navy-200 text-brand-navy-900 dark:border-brand-navy-600 dark:text-white rounded-lg hover:bg-brand-navy-50 dark:hover:bg-brand-navy-800 transition-colors font-medium text-sm"
                     >
                         <span className="material-symbols-outlined text-[20px]">content_copy</span>
-                        교사용 앱 링크 복사
+                        가입 완료 선생님용 앱 설치 링크
                     </button>
                     {/* 초대 링크 버튼 (메인) */}
                     <button
@@ -323,7 +344,7 @@ export default function StaffClient({
                         className="flex items-center gap-2 px-4 py-2.5 bg-brand-navy-900 text-white rounded-lg hover:bg-brand-navy-800 transition-colors font-medium text-sm"
                     >
                         <span className="material-symbols-outlined text-[20px]">send</span>
-                        초대 링크 발송
+                        새 선생님 초대·가입
                     </button>
                     {/* 직접 추가 버튼 (보조) */}
                     <button
@@ -382,6 +403,14 @@ export default function StaffClient({
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleCopyInvitationLink(inv.token, inv.name)}
+                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-navy-900 bg-brand-navy-50 rounded-lg hover:bg-brand-navy-100 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                                            가입 링크 복사
+                                        </button>
                                         {/* 재발송 버튼 */}
                                         <button
                                             onClick={() => handleResendInvitation(inv.id, inv.name)}
@@ -562,8 +591,7 @@ export default function StaffClient({
                 <InviteStaffModal
                     onClose={() => setShowModal(null)}
                     onSuccess={() => {
-                        setShowModal(null);
-                        setMessage({ text: "초대 링크가 발송되었습니다.", ok: true });
+                        setMessage({ text: "선생님 개인 가입 링크가 만들어졌습니다.", ok: true });
                         void loadStaffData();
                     }}
                     onError={(msg) => setMessage({ text: msg, ok: false })}

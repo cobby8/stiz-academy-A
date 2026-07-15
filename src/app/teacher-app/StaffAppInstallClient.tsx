@@ -92,12 +92,12 @@ export default function StaffAppInstallClient() {
             </span>
           </div>
           <div className="mt-5 text-center">
-            <p className="text-sm font-bold text-white/65">수업 관리를 더 빠르게</p>
+            <p className="text-sm font-bold text-white/65">가입을 마친 선생님 전용</p>
             <h1 className="mt-1 text-balance text-3xl font-black leading-tight">
               {isInstalled ? "선생님 앱이 준비됐어요" : "STIZ 선생님 앱 설치"}
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-balance text-sm leading-6 text-white/75">
-              출결 확인, 수업 사진, 특이사항 기록과 청구 처리를 홈 화면에서 바로 시작하세요.
+              개인 초대 링크에서 가입을 마쳤다면, 출결 확인과 수업 관리를 홈 화면에서 바로 시작하세요.
             </p>
           </div>
 
@@ -121,6 +121,36 @@ export default function StaffAppInstallClient() {
                 선생님 앱 열기
               </Link>
             )}
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-3xl border border-brand-orange-200 bg-orange-50 p-5 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10" aria-labelledby="teacher-signup-guide-title">
+          <div className="flex items-start gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white text-brand-orange-500 shadow-sm dark:bg-gray-900 dark:text-brand-neon-lime" aria-hidden="true">
+              <span className="material-symbols-outlined">person_add</span>
+            </span>
+            <div>
+              <h2 id="teacher-signup-guide-title" className="font-black text-brand-navy-900 dark:text-white">처음 이용하시나요?</h2>
+              <p className="mt-1 text-sm leading-6 text-brand-navy-700 dark:text-gray-200">
+                선생님 계정은 공개 가입이 아니라 원장님이 보내드린 <strong>개인 초대 링크</strong>에서 만듭니다.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Link
+              href="/about"
+              className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-brand-orange-200 bg-white px-3 text-sm font-bold text-brand-navy-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+            >
+              <span className="material-symbols-outlined text-lg" aria-hidden="true">support_agent</span>
+              학원에 문의하기
+            </Link>
+            <Link
+              href="/staff/login"
+              className="flex min-h-11 items-center justify-center gap-1 rounded-xl bg-brand-navy-900 px-3 text-sm font-bold text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+            >
+              <span className="material-symbols-outlined text-lg" aria-hidden="true">login</span>
+              계정이 있어요
+            </Link>
           </div>
         </section>
 

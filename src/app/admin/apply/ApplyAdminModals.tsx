@@ -58,6 +58,7 @@ interface ApplyAdminModalsProps {
     onCloseReject: () => void;
     onCloseDetail: () => void;
     onSaved: () => Promise<void> | void;
+    onFeedback: (type: "success" | "error", message: string) => void;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -153,6 +154,7 @@ export default function ApplyAdminModals({
     onCloseReject,
     onCloseDetail,
     onSaved,
+    onFeedback,
 }: ApplyAdminModalsProps) {
     const [busy, setBusy] = useState(false);
 
@@ -166,8 +168,9 @@ export default function ApplyAdminModals({
             });
             onCloseApprove();
             await onSaved();
+            onFeedback("success", `${approveApp.childName} 수강신청을 승인했습니다.`);
         } catch {
-            alert("승인 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            onFeedback("error", "승인 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -180,8 +183,9 @@ export default function ApplyAdminModals({
             await rejectEnrollApplication(rejectApp.id, reason);
             onCloseReject();
             await onSaved();
+            onFeedback("success", `${rejectApp.childName} 수강신청을 반려 처리했습니다.`);
         } catch {
-            alert("반려 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            onFeedback("error", "반려 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -240,8 +244,10 @@ function ApproveModal({
             .map((classInfo) => classInfo.id);
     });
     const [note, setNote] = useState("");
+    const [formError, setFormError] = useState("");
 
     function toggleClass(classId: string) {
+        setFormError("");
         setSelectedClassIds((prev) =>
             prev.includes(classId)
                 ? prev.filter((id) => id !== classId)
@@ -252,9 +258,10 @@ function ApproveModal({
     function handleSubmit(event: FormEvent) {
         event.preventDefault();
         if (selectedClassIds.length === 0) {
-            alert("최소 1개의 반을 선택해주세요.");
+            setFormError("배정할 반을 1개 이상 선택해주세요.");
             return;
         }
+        setFormError("");
         onSubmit(selectedClassIds, note);
     }
 
@@ -333,6 +340,12 @@ function ApproveModal({
                             ))}
                         </div>
                     </div>
+
+                    {formError && (
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                            {formError}
+                        </p>
+                    )}
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">관리자 메모</label>

@@ -138,6 +138,9 @@ type ApplyPayload = {
     classes: ClassInfo[];
 };
 
+type FeedbackState = { type: "success" | "error"; message: string } | null;
+type ApplicationWorkFilter = "ALL" | "NEEDS_ACTION" | "CLASS_ASSIGNMENT" | "SHUTTLE" | "TRIAL_LINKED" | "TIME_CHECK";
+
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -166,6 +169,15 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 const APPLICATION_PAGE_SIZE = 50;
+
+const APPLICATION_WORK_FILTERS: Array<{ value: ApplicationWorkFilter; label: string; icon: string }> = [
+    { value: "ALL", label: "운영 전체", icon: "view_list" },
+    { value: "NEEDS_ACTION", label: "처리 필요", icon: "priority_high" },
+    { value: "CLASS_ASSIGNMENT", label: "반 배정", icon: "edit_calendar" },
+    { value: "SHUTTLE", label: "셔틀 확인", icon: "directions_bus" },
+    { value: "TRIAL_LINKED", label: "체험 후 신청", icon: "link" },
+    { value: "TIME_CHECK", label: "희망시간 확인", icon: "schedule" },
+];
 
 const EMPTY_STATS: EnrollStats = {
     PENDING: 0,
@@ -218,6 +230,10 @@ function phoneHref(phone: string) {
     return digits ? `tel:${digits}` : undefined;
 }
 
+function normalizeSearchValue(value: string | null | undefined) {
+    return (value ?? "").replace(/\s+/g, "").replace(/-/g, "").toLowerCase();
+}
+
 function getApplicationFlags(app: EnrollApplication, preferredSlotLabel: string | null) {
     const flags: Array<{ icon: string; label: string; className: string }> = [];
 
@@ -258,6 +274,43 @@ function getApplicationFlags(app: EnrollApplication, preferredSlotLabel: string 
     }
 
     return flags.slice(0, 4);
+}
+
+function matchesApplicationWorkFilter(
+    app: EnrollApplication,
+    preferredSlotLabel: string | null,
+    workFilter: ApplicationWorkFilter,
+) {
+    if (workFilter === "ALL") return true;
+    if (workFilter === "NEEDS_ACTION") return app.status === "PENDING";
+    if (workFilter === "CLASS_ASSIGNMENT") return app.status === "PENDING" && !app.assignedClassId;
+    if (workFilter === "SHUTTLE") return app.shuttleNeeded;
+    if (workFilter === "TRIAL_LINKED") return Boolean(app.trialLeadId);
+    if (workFilter === "TIME_CHECK") return !preferredSlotLabel;
+    return true;
+}
+
+function applicationMatchesSearch(app: EnrollApplication, preferredSlotLabel: string | null, query: string) {
+    const normalizedQuery = normalizeSearchValue(query);
+    if (!normalizedQuery) return true;
+
+    const searchable = [
+        app.childName,
+        app.parentName,
+        app.parentPhone,
+        app.childPhone,
+        app.childSchool,
+        app.childGrade,
+        app.parentRelation,
+        app.memo,
+        app.basketballExp,
+        app.shuttlePickup,
+        app.shuttleDropoff,
+        app.referralSource ? SOURCE_LABELS[app.referralSource] || app.referralSource : null,
+        preferredSlotLabel,
+    ].map(normalizeSearchValue).join(" ");
+
+    return searchable.includes(normalizedQuery);
 }
 
 function ApplyLoadingFallback() {
@@ -327,8 +380,11 @@ export default function ApplyAdminClient({
     const [loading, setLoading] = useState(!hasInitialData);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
+    const [workFilter, setWorkFilter] = useState<ApplicationWorkFilter>("ALL");
+    const [searchQuery, setSearchQuery] = useState("");
     const [visibleLimit, setVisibleLimit] = useState(APPLICATION_PAGE_SIZE);
     const [activeTab, setActiveTab] = useState<TabType>("trial");
+    const [feedback, setFeedback] = useState<FeedbackState>(null);
 
     // 모달 상태
     const [showApproveModal, setShowApproveModal] = useState<EnrollApplication | null>(null);
@@ -362,24 +418,6 @@ export default function ApplyAdminClient({
         void loadApplyData();
     }, [hasInitialData, loadApplyData]);
 
-    // 필터링된 신청서 목록
-    const filteredApps = useMemo(() => {
-        if (filter === "ALL") return applications;
-        return applications.filter((a) => a.status === filter);
-    }, [applications, filter]);
-    const visibleApps = useMemo(
-        () => filteredApps.slice(0, visibleLimit),
-        [filteredApps, visibleLimit],
-    );
-    const hasMoreApps = visibleApps.length < filteredApps.length;
-
-    useEffect(() => {
-        setVisibleLimit(APPLICATION_PAGE_SIZE);
-    }, [filter]);
-    const hasOpenModal = Boolean(showApproveModal || showRejectModal || showDetailModal);
-    const trialNewCount = initialTrialStats?.NEW ?? 0;
-    const trialScheduledCount = initialTrialStats?.SCHEDULED ?? 0;
-    const actionTotal = trialNewCount + stats.PENDING;
     const classesBySlotKey = useMemo(() => {
         const map = new Map<string, ClassInfo>();
         classes.forEach((classInfo) => {
@@ -387,6 +425,54 @@ export default function ApplyAdminClient({
         });
         return map;
     }, [classes]);
+    const showFeedback = useCallback((type: "success" | "error", message: string) => {
+        setFeedback({ type, message });
+        window.setTimeout(() => setFeedback(null), 3500);
+    }, []);
+
+    // 필터링된 신청서 목록
+    const filteredApps = useMemo(() => {
+        return applications.filter((app) => {
+            const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
+            if (filter !== "ALL" && app.status !== filter) return false;
+            if (!matchesApplicationWorkFilter(app, preferredSlotLabel, workFilter)) return false;
+            return applicationMatchesSearch(app, preferredSlotLabel, searchQuery);
+        });
+    }, [applications, classesBySlotKey, filter, searchQuery, workFilter]);
+    const visibleApps = useMemo(
+        () => filteredApps.slice(0, visibleLimit),
+        [filteredApps, visibleLimit],
+    );
+    const hasMoreApps = visibleApps.length < filteredApps.length;
+    const workFilterCounts = useMemo(() => {
+        const counts: Record<ApplicationWorkFilter, number> = {
+            ALL: applications.length,
+            NEEDS_ACTION: 0,
+            CLASS_ASSIGNMENT: 0,
+            SHUTTLE: 0,
+            TRIAL_LINKED: 0,
+            TIME_CHECK: 0,
+        };
+
+        applications.forEach((app) => {
+            const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
+            APPLICATION_WORK_FILTERS.forEach((item) => {
+                if (item.value !== "ALL" && matchesApplicationWorkFilter(app, preferredSlotLabel, item.value)) {
+                    counts[item.value] += 1;
+                }
+            });
+        });
+
+        return counts;
+    }, [applications, classesBySlotKey]);
+
+    useEffect(() => {
+        setVisibleLimit(APPLICATION_PAGE_SIZE);
+    }, [filter, searchQuery, workFilter]);
+    const hasOpenModal = Boolean(showApproveModal || showRejectModal || showDetailModal);
+    const trialNewCount = initialTrialStats?.NEW ?? 0;
+    const trialScheduledCount = initialTrialStats?.SCHEDULED ?? 0;
+    const actionTotal = trialNewCount + stats.PENDING;
 
     // 날짜 포맷
     function formatDate(dateStr: string | null) {
@@ -527,6 +613,22 @@ export default function ApplyAdminClient({
                 </button>
             </div>
 
+            {feedback && (
+                <div
+                    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
+                        feedback.type === "success"
+                            ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200"
+                            : "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                    }`}
+                    role="status"
+                >
+                    <span className="material-symbols-outlined text-lg">
+                        {feedback.type === "success" ? "check_circle" : "error"}
+                    </span>
+                    {feedback.message}
+                </div>
+            )}
+
             {/* 탭 내용 */}
             {activeTab === "trial" ? (
                 <TrialCrmClient
@@ -604,12 +706,55 @@ export default function ApplyAdminClient({
                         })}
                     </div>
 
+                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                        <label className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
+                            <span className="material-symbols-outlined text-lg text-gray-400">search</span>
+                            <input
+                                type="search"
+                                value={searchQuery}
+                                onChange={(event) => setSearchQuery(event.target.value)}
+                                placeholder="학생, 보호자, 전화번호, 학교, 메모로 검색"
+                                className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery("")}
+                                    className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                                    title="검색어 지우기"
+                                >
+                                    <span className="material-symbols-outlined text-base">close</span>
+                                </button>
+                            )}
+                        </label>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {APPLICATION_WORK_FILTERS.map((item) => (
+                                <button
+                                    key={item.value}
+                                    type="button"
+                                    onClick={() => setWorkFilter(item.value)}
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                                        workFilter === item.value
+                                            ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-sm">{item.icon}</span>
+                                    {item.label}
+                                    <span className="font-black">{workFilterCounts[item.value]}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* 신청서 목록 */}
                     {filteredApps.length === 0 ? (
                         <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                             <span className="material-symbols-outlined text-5xl text-gray-300">inbox</span>
                             <p className="text-gray-500 dark:text-gray-400 mt-3">
-                                {filter === "ALL"
+                                {searchQuery || workFilter !== "ALL"
+                                    ? "조건에 맞는 수강신청이 없습니다"
+                                    : filter === "ALL"
                                     ? "접수된 수강 신청이 없습니다"
                                     : `"${STATUS_CONFIG[filter]?.label}" 상태의 신청이 없습니다`}
                             </p>
@@ -848,6 +993,7 @@ export default function ApplyAdminClient({
                     onCloseReject={() => setShowRejectModal(null)}
                     onCloseDetail={() => setShowDetailModal(null)}
                     onSaved={loadApplyData}
+                    onFeedback={showFeedback}
                 />
             )}
         </div>

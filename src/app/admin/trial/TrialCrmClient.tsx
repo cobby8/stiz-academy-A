@@ -70,6 +70,9 @@ type TrialCrmPayload = {
     stats: TrialStats;
 };
 
+type FeedbackState = { type: "success" | "error"; message: string } | null;
+type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "COACH_NOTICE" | "ENROLL_RECEIVED";
+
 const EMPTY_STATS: TrialStats = {
     NEW: 0,
     CONTACTED: 0,
@@ -106,9 +109,56 @@ const SOURCE_LABELS: Record<string, string> = {
 const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST"] as const;
 const TRIAL_PAGE_SIZE = 50;
 
+const TRIAL_WORK_FILTERS: Array<{ value: TrialWorkFilter; label: string; icon: string }> = [
+    { value: "ALL", label: "운영 전체", icon: "view_list" },
+    { value: "NEEDS_CONTACT", label: "연락 필요", icon: "call" },
+    { value: "SCHEDULED", label: "체험 예정", icon: "event_available" },
+    { value: "AFTER_TRIAL", label: "상담/안내 필요", icon: "sms" },
+    { value: "COACH_NOTICE", label: "쌤 알림 필요", icon: "school" },
+    { value: "ENROLL_RECEIVED", label: "수강신청 접수", icon: "assignment_turned_in" },
+];
+
 function phoneHref(phone: string) {
     const digits = phone.replace(/\D/g, "");
     return digits ? `tel:${digits}` : undefined;
+}
+
+function normalizeSearchValue(value: string | null | undefined) {
+    return (value ?? "").replace(/\s+/g, "").replace(/-/g, "").toLowerCase();
+}
+
+function matchesTrialWorkFilter(lead: TrialLead, workFilter: TrialWorkFilter) {
+    if (workFilter === "ALL") return true;
+    if (workFilter === "NEEDS_CONTACT") return lead.status === "NEW" || lead.status === "CONTACTED";
+    if (workFilter === "SCHEDULED") return lead.status === "SCHEDULED";
+    if (workFilter === "AFTER_TRIAL") return lead.status === "ATTENDED" && !lead.enrollGuideSentAt;
+    if (workFilter === "COACH_NOTICE") return lead.status !== "CONVERTED" && lead.status !== "LOST" && !lead.coachNoticeSentAt;
+    if (workFilter === "ENROLL_RECEIVED") return Boolean(lead.enrollApplicationReceivedAt);
+    return true;
+}
+
+function trialLeadMatchesSearch(lead: TrialLead, query: string) {
+    const normalizedQuery = normalizeSearchValue(query);
+    if (!normalizedQuery) return true;
+
+    const searchable = [
+        lead.childName,
+        lead.childAge,
+        lead.parentName,
+        lead.parentPhone,
+        lead.childSchool,
+        lead.childGrade,
+        lead.childGender,
+        lead.basketballExp,
+        lead.preferredDay,
+        lead.preferredPeriod,
+        lead.hopeNote,
+        lead.memo,
+        lead.lostReason,
+        SOURCE_LABELS[lead.source] || lead.source,
+    ].map(normalizeSearchValue).join(" ");
+
+    return searchable.includes(normalizedQuery);
 }
 
 function TrialCrmLoadingFallback() {
@@ -180,8 +230,11 @@ export default function TrialCrmClient({
     const [loading, setLoading] = useState(!hasInitialData);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
+    const [workFilter, setWorkFilter] = useState<TrialWorkFilter>("ALL");
+    const [searchQuery, setSearchQuery] = useState("");
     const [visibleLimit, setVisibleLimit] = useState(TRIAL_PAGE_SIZE);
     const [busy, setBusy] = useState(false);
+    const [feedback, setFeedback] = useState<FeedbackState>(null);
 
     // 모달 상태
     const [showAddModal, setShowAddModal] = useState(false);
@@ -212,20 +265,48 @@ export default function TrialCrmClient({
         void loadTrialData();
     }, [hasInitialData, loadTrialData]);
 
+    const showFeedback = useCallback((type: "success" | "error", message: string) => {
+        setFeedback({ type, message });
+        window.setTimeout(() => setFeedback(null), 3500);
+    }, []);
+
     // 필터링된 리드 목록
     const filteredLeads = useMemo(() => {
-        if (filter === "ALL") return leads;
-        return leads.filter((l) => l.status === filter);
-    }, [leads, filter]);
+        return leads.filter((lead) => {
+            if (filter !== "ALL" && lead.status !== filter) return false;
+            if (!matchesTrialWorkFilter(lead, workFilter)) return false;
+            return trialLeadMatchesSearch(lead, searchQuery);
+        });
+    }, [filter, leads, searchQuery, workFilter]);
     const visibleLeads = useMemo(
         () => filteredLeads.slice(0, visibleLimit),
         [filteredLeads, visibleLimit],
     );
     const hasMoreLeads = visibleLeads.length < filteredLeads.length;
+    const workFilterCounts = useMemo(() => {
+        const counts: Record<TrialWorkFilter, number> = {
+            ALL: leads.length,
+            NEEDS_CONTACT: 0,
+            SCHEDULED: 0,
+            AFTER_TRIAL: 0,
+            COACH_NOTICE: 0,
+            ENROLL_RECEIVED: 0,
+        };
+
+        leads.forEach((lead) => {
+            TRIAL_WORK_FILTERS.forEach((item) => {
+                if (item.value !== "ALL" && matchesTrialWorkFilter(lead, item.value)) {
+                    counts[item.value] += 1;
+                }
+            });
+        });
+
+        return counts;
+    }, [leads]);
 
     useEffect(() => {
         setVisibleLimit(TRIAL_PAGE_SIZE);
-    }, [filter]);
+    }, [filter, searchQuery, workFilter]);
 
     // 상태 변경 핸들러
     async function handleStatusChange(lead: TrialLead, newStatus: string) {
@@ -239,8 +320,9 @@ export default function TrialCrmClient({
             }
             await updateTrialLead(lead.id, updates);
             await loadTrialData();
+            showFeedback("success", `${lead.childName} 상태를 ${STATUS_CONFIG[newStatus]?.label ?? "변경"}으로 바꿨습니다.`);
         } catch {
-            alert("상태 변경 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            showFeedback("error", "상태 변경 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -253,8 +335,9 @@ export default function TrialCrmClient({
         try {
             await deleteTrialLead(lead.id);
             await loadTrialData();
+            showFeedback("success", `${lead.childName} 체험 신청을 삭제했습니다.`);
         } catch {
-            alert("삭제 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            showFeedback("error", "삭제 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -273,9 +356,9 @@ export default function TrialCrmClient({
                 // Clipboard access can fail on some mobile browsers; SMS sending is the main action.
             }
             await loadTrialData();
-            alert("수강신청/입학 안내 문자를 발송했습니다.");
+            showFeedback("success", `${lead.childName} 보호자에게 수강신청/입학 안내를 보냈습니다.`);
         } catch {
-            alert("안내 문자 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            showFeedback("error", "안내 문자 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -289,9 +372,9 @@ export default function TrialCrmClient({
         try {
             const result = await sendTrialCoachNotice(lead.id);
             await loadTrialData();
-            alert(`담당 선생님에게 체험수업 알림을 보냈습니다.\n수신: ${result.sentTo.join(", ")}`);
+            showFeedback("success", `담당 선생님에게 체험수업 알림을 보냈습니다. 수신: ${result.sentTo.join(", ")}`);
         } catch {
-            alert("담당 선생님 알림 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            showFeedback("error", "담당 선생님 알림 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -337,6 +420,22 @@ export default function TrialCrmClient({
                     체험 신청 등록
                 </button>
             </div>
+
+            {feedback && (
+                <div
+                    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
+                        feedback.type === "success"
+                            ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200"
+                            : "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                    }`}
+                    role="status"
+                >
+                    <span className="material-symbols-outlined text-lg">
+                        {feedback.type === "success" ? "check_circle" : "error"}
+                    </span>
+                    {feedback.message}
+                </div>
+            )}
 
             {/* ── 파이프라인 요약 카드 ── */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -400,12 +499,57 @@ export default function TrialCrmClient({
                 })}
             </div>
 
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <label className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
+                    <span className="material-symbols-outlined text-lg text-gray-400">search</span>
+                    <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="학생, 보호자, 전화번호, 학교, 메모로 검색"
+                        className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
+                    />
+                    {searchQuery && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchQuery("")}
+                            className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                            title="검색어 지우기"
+                        >
+                            <span className="material-symbols-outlined text-base">close</span>
+                        </button>
+                    )}
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {TRIAL_WORK_FILTERS.map((item) => (
+                        <button
+                            key={item.value}
+                            type="button"
+                            onClick={() => setWorkFilter(item.value)}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                                workFilter === item.value
+                                    ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-sm">{item.icon}</span>
+                            {item.label}
+                            <span className="font-black">{workFilterCounts[item.value]}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             {/* ── 리드 목록 ── */}
             {filteredLeads.length === 0 ? (
                 <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                     <span className="material-symbols-outlined text-5xl text-gray-300">person_search</span>
                     <p className="text-gray-500 dark:text-gray-400 mt-3">
-                        {filter === "ALL" ? "등록된 체험 신청이 없습니다" : `"${STATUS_CONFIG[filter]?.label}" 상태의 신청이 없습니다`}
+                        {searchQuery || workFilter !== "ALL"
+                            ? "조건에 맞는 체험 문의가 없습니다"
+                            : filter === "ALL"
+                            ? "등록된 체험 신청이 없습니다"
+                            : `"${STATUS_CONFIG[filter]?.label}" 상태의 신청이 없습니다`}
                     </p>
                 </div>
             ) : (
@@ -681,6 +825,7 @@ export default function TrialCrmClient({
                     onCloseLost={() => setShowLostModal(null)}
                     onCloseMemo={() => setShowMemoModal(null)}
                     onSaved={loadTrialData}
+                    onFeedback={showFeedback}
                 />
             )}
         </div>

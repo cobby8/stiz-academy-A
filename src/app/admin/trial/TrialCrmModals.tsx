@@ -14,6 +14,7 @@ interface TrialCrmModalsProps {
     onCloseLost: () => void;
     onCloseMemo: () => void;
     onSaved: () => Promise<void> | void;
+    onFeedback: (type: "success" | "error", message: string) => void;
 }
 
 export default function TrialCrmModals({
@@ -26,17 +27,19 @@ export default function TrialCrmModals({
     onCloseLost,
     onCloseMemo,
     onSaved,
+    onFeedback,
 }: TrialCrmModalsProps) {
     const [busy, setBusy] = useState(false);
 
-    async function runAction(action: () => Promise<unknown>, onDone: () => void) {
+    async function runAction(action: () => Promise<unknown>, onDone: () => void, successMessage: string) {
         setBusy(true);
         try {
             await action();
             onDone();
             await onSaved();
+            onFeedback("success", successMessage);
         } catch {
-            alert("처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            onFeedback("error", "처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -47,7 +50,7 @@ export default function TrialCrmModals({
             {addOpen && (
                 <AddLeadModal
                     onClose={onCloseAdd}
-                    onSubmit={(data) => runAction(() => createTrialLead(data), onCloseAdd)}
+                    onSubmit={(data) => runAction(() => createTrialLead(data), onCloseAdd, "체험 신청을 등록했습니다.")}
                     busy={busy}
                 />
             )}
@@ -57,7 +60,7 @@ export default function TrialCrmModals({
                     lead={convertLead}
                     onClose={onCloseConvert}
                     onSubmit={(studentData) =>
-                        runAction(() => convertTrialToStudent(convertLead.id, studentData), onCloseConvert)
+                        runAction(() => convertTrialToStudent(convertLead.id, studentData), onCloseConvert, "정규 원생으로 등록했습니다.")
                     }
                     busy={busy}
                 />
@@ -74,7 +77,8 @@ export default function TrialCrmModals({
                                     status: "LOST",
                                     lostReason: reason,
                                 }),
-                            onCloseLost
+                            onCloseLost,
+                            "이탈 처리했습니다."
                         )
                     }
                     busy={busy}
@@ -85,7 +89,7 @@ export default function TrialCrmModals({
                 <MemoModal
                     lead={memoLead}
                     onClose={onCloseMemo}
-                    onSubmit={(memo) => runAction(() => updateTrialLead(memoLead.id, { memo }), onCloseMemo)}
+                    onSubmit={(memo) => runAction(() => updateTrialLead(memoLead.id, { memo }), onCloseMemo, "메모를 저장했습니다.")}
                     busy={busy}
                 />
             )}
@@ -110,13 +114,15 @@ function AddLeadModal({
         source: "WEBSITE",
         memo: "",
     });
+    const [formError, setFormError] = useState("");
 
     function handleSubmit(e: FormEvent) {
         e.preventDefault();
         if (!form.childName.trim() || !form.parentName.trim() || !form.parentPhone.trim()) {
-            alert("아이 이름, 학부모 이름, 연락처는 필수입니다.");
+            setFormError("아이 이름, 학부모 이름, 연락처를 입력해주세요.");
             return;
         }
+        setFormError("");
         onSubmit({
             childName: form.childName,
             childAge: form.childAge || undefined,
@@ -135,6 +141,11 @@ function AddLeadModal({
                     체험 신청 등록
                 </h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {formError && (
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                            {formError}
+                        </p>
+                    )}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">아이 이름 *</label>
                         <input
@@ -255,13 +266,15 @@ function ConvertModal({
         parentEmail: "",
         memo: lead.memo || "",
     });
+    const [formError, setFormError] = useState("");
 
     function handleSubmit(e: FormEvent) {
         e.preventDefault();
         if (!form.name.trim() || !form.birthDate || !form.parentName.trim()) {
-            alert("아이 이름, 생년월일, 학부모 이름은 필수입니다.");
+            setFormError("아이 이름, 생년월일, 학부모 이름을 입력해주세요.");
             return;
         }
+        setFormError("");
         onSubmit({
             name: form.name,
             birthDate: form.birthDate,
@@ -284,6 +297,11 @@ function ConvertModal({
                     체험 학생 &quot;{lead.childName}&quot;을 정규 원생으로 등록합니다.
                 </p>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {formError && (
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                            {formError}
+                        </p>
+                    )}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">아이 이름 *</label>
                         <input

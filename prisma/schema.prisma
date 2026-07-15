@@ -789,6 +789,83 @@ model StudentMediaConsent {
   @@index([revokedAt])
 }
 
+// A consent withdrawal creates one idempotent recovery job per published draft/channel.
+model MediaRevocationJob {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId     String
+  consentId     String
+  draftId       String
+  channel       String
+  resourceId    String?
+  resourceUrl   String?
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @db.Timestamptz(6)
+  lockedAt      DateTime? @db.Timestamptz(6)
+  lastError     String?
+  removedAt     DateTime? @db.Timestamptz(6)
+  confirmationEvidenceJSON String?
+  confirmedByUserId String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([consentId, draftId, channel])
+  @@index([status, nextAttemptAt])
+  @@index([studentId, createdAt])
+}
+
+model SocialPublishAttempt {
+  id                 String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  draftId            String
+  channel            String
+  idempotencyKey     String   @unique
+  subjectSnapshotJSON String
+  subjectSnapshotHash String
+  state              String   @default("PUBLISHING")
+  providerMediaId    String?
+  providerPermalink  String?
+  providerResultJSON String?
+  lastError          String?
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  @@index([draftId, createdAt])
+  @@index([state, updatedAt])
+}
+
+model StorageDeletionJob {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  bucket        String
+  path          String
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @db.Timestamptz(6)
+  lockedAt      DateTime? @db.Timestamptz(6)
+  lastError     String?
+  deletedAt     DateTime? @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  @@unique([bucket, path])
+  @@index([status, nextAttemptAt])
+}
+
+// Private session-photo objects are removed asynchronously after DB references are committed.
+model SessionPhotoDeletionJob {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  photoId       String    @unique
+  storageBucket String
+  storagePath   String
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @db.Timestamptz(6)
+  lockedAt      DateTime? @db.Timestamptz(6)
+  lastError     String?
+  deletedAt     DateTime? @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status, nextAttemptAt])
+}
+
 model Notice {
   id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   authorUserId    String?

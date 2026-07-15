@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Raw SQL rows are normalized at the database boundary. */
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import type { SocialMediaItem } from "@/lib/socialCaptionAI";
 import { normalizeSubjectStudentIds } from "@/lib/studentMediaConsentPolicy";
+import { createHash } from "node:crypto";
+import { collectPublishedMediaCopyPaths, PUBLIC_GALLERY_BUCKET } from "@/lib/sessionPhotoStorage";
 
 export { normalizeSubjectStudentIds } from "@/lib/studentMediaConsentPolicy";
 
@@ -15,6 +18,9 @@ export type SocialPostDraft = {
   sessionId: string | null;
   classId: string | null;
   subjectStudentIds: string[];
+  publicationSubjectsJSON: string | null;
+  publicationSubjectHash: string | null;
+  publishReservationId: string | null;
   source: string | null;
   status: SocialPostDraftStatus;
   lessonType: string | null;
@@ -46,7 +52,7 @@ function toIso(value: unknown) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function mapDraft(row: any): SocialPostDraft {
+export function mapDraft(row: any): SocialPostDraft {
   return {
     id: row.id,
     authorUserId: row.authorUserId ?? null,
@@ -55,6 +61,9 @@ function mapDraft(row: any): SocialPostDraft {
     sessionId: row.sessionId ?? null,
     classId: row.classId ?? null,
     subjectStudentIds: normalizeSubjectStudentIds(row.subjectStudentIdsJSON),
+    publicationSubjectsJSON: row.publicationSubjectsJSON ?? null,
+    publicationSubjectHash: row.publicationSubjectHash ?? null,
+    publishReservationId: row.publishReservationId ?? null,
     source: row.source ?? null,
     status: row.status,
     lessonType: row.lessonType ?? null,
@@ -117,6 +126,9 @@ export async function ensureSocialPostDraftTable() {
       "sessionId" TEXT,
       "classId" TEXT,
       "subjectStudentIdsJSON" TEXT NOT NULL DEFAULT '[]',
+      "publicationSubjectsJSON" TEXT,
+      "publicationSubjectHash" TEXT,
+      "publishReservationId" TEXT,
       source TEXT,
       status TEXT NOT NULL DEFAULT 'DRAFT',
       "lessonType" TEXT,
@@ -149,6 +161,9 @@ export async function ensureSocialPostDraftTable() {
     ["instagramPublishAttempts", "INTEGER NOT NULL DEFAULT 0"],
     ["instagramLastAttemptAt", "TIMESTAMPTZ"],
     ["instagramNextRetryAt", "TIMESTAMPTZ"],
+    ["publicationSubjectsJSON", "TEXT"],
+    ["publicationSubjectHash", "TEXT"],
+    ["publishReservationId", "TEXT"],
   ];
 
   for (const [col, type] of columns) {
@@ -282,7 +297,12 @@ export async function updateSocialPostDraftRecord(
 ) {
   await ensureSocialPostDraftTable();
 
-  const rows = await prisma.$queryRawUnsafe<any[]>(
+  const rows = await prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRawUnsafe<Array<{ status: string }>>(
+      `SELECT status FROM "SocialPostDraft" WHERE id=$1 FOR UPDATE`, id,
+    );
+    if (!locked[0] || !["DRAFT", "READY", "FAILED"].includes(locked[0].status)) return [];
+    return tx.$queryRawUnsafe<any[]>(
     `UPDATE "SocialPostDraft"
      SET title = $1,
          caption = $2,
@@ -306,7 +326,8 @@ export async function updateSocialPostDraftRecord(
     JSON.stringify(normalizeSubjectStudentIds(data.subjectStudentIds)),
     id,
     options?.authorUserId || null,
-  );
+    );
+  });
 
   if (!rows[0]) {
     throw new Error("수정할 수 있는 초안을 찾지 못했습니다.");
@@ -319,6 +340,21 @@ export async function rejectSocialPostDraftRecord(id: string) {
   await ensureSocialPostDraftTable();
 
   const result = await prisma.$transaction(async (tx) => {
+    const preliminaryRows = await tx.$queryRawUnsafe<any[]>(`SELECT * FROM "SocialPostDraft" WHERE id=$1`, id);
+    const preliminary = preliminaryRows[0] ? mapDraft(preliminaryRows[0]) : null;
+    if (!preliminary) return { draft: null, removedGalleryPostId: null };
+    for (const studentId of [...new Set(preliminary.subjectStudentIds)].sort()) {
+      await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, studentId);
+    }
+    const lockedRows = await tx.$queryRawUnsafe<any[]>(`SELECT * FROM "SocialPostDraft" WHERE id=$1 FOR UPDATE`, id);
+    const lockedDraft = lockedRows[0] ? mapDraft(lockedRows[0]) : null;
+    if (!lockedDraft || JSON.stringify(lockedDraft.subjectStudentIds.slice().sort()) !== JSON.stringify(preliminary.subjectStudentIds.slice().sort())) {
+      throw new Error("게시 대상 학생이 변경되어 반려를 다시 시도해야 합니다.");
+    }
+    if (lockedDraft.status === "PUBLISHING") {
+      const hash = createHash("sha256").update(JSON.stringify(lockedDraft.subjectStudentIds.slice().sort())).digest("hex");
+      if (!lockedDraft.publishReservationId || lockedDraft.publicationSubjectHash !== hash) throw new Error("게시 예약 검증에 실패하여 반려할 수 없습니다.");
+    }
     const rows = await tx.$queryRawUnsafe<any[]>(
       `UPDATE "SocialPostDraft"
        SET status = 'REJECTED',
@@ -332,7 +368,14 @@ export async function rejectSocialPostDraftRecord(id: string) {
 
     const draft = rows[0] ? mapDraft(rows[0]) : null;
     if (draft?.galleryPostId) {
-      await tx.$executeRawUnsafe(`DELETE FROM "GalleryPost" WHERE id = $1`, draft.galleryPostId);
+      for (const path of collectPublishedMediaCopyPaths(draft.id, draft.mediaJSON)) {
+        await tx.$executeRawUnsafe(`
+          INSERT INTO "StorageDeletionJob" (id,bucket,path,status,attempts,"nextAttemptAt","createdAt","updatedAt")
+          VALUES (gen_random_uuid()::text,$1,$2,'PENDING',0,NOW(),NOW(),NOW()) ON CONFLICT (bucket,path) DO NOTHING
+        `, PUBLIC_GALLERY_BUCKET, path);
+      }
+      await tx.$executeRawUnsafe(`UPDATE "GalleryPost" SET "isPublic"=false,"mediaJSON"='[]',"updatedAt"=NOW() WHERE id=$1`, draft.galleryPostId);
+      await tx.$executeRawUnsafe(`UPDATE "SocialPostDraft" SET "isPublic"=false,"mediaJSON"='[]',"updatedAt"=NOW() WHERE id=$1`, draft.id);
     }
 
     return {

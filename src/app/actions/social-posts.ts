@@ -18,7 +18,6 @@ import {
   type SocialPostDraft,
   normalizeSubjectStudentIds,
 } from "@/lib/socialDrafts";
-import { removePublishedMediaCopies } from "@/lib/sessionPhotoStorage";
 import { assertSocialDraftMediaConsent } from "@/lib/studentMediaConsent";
 
 type SaveDraftInput = {
@@ -109,9 +108,7 @@ export async function saveSocialPostDraft(id: string, data: SaveDraftInput) {
 
 export async function rejectSocialPostDraft(id: string) {
   await requireAdmin();
-  const currentDraft = await getSocialPostDraftById(id);
   const result = await rejectSocialPostDraftRecord(id);
-  if (currentDraft) await removePublishedMediaCopies(currentDraft.id, currentDraft.mediaJSON);
   revalidateSocialPostPaths();
   return { ok: true, ...result };
 }

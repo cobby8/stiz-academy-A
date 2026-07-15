@@ -23,6 +23,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/media-revocations",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/site-ops-bot",
       "schedule": "0 17 * * *"
     }

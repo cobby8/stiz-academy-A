@@ -14,8 +14,8 @@ import {
   replaceSocialPostDraftMediaJSON,
   type SocialPostDraft,
 } from "@/lib/socialDrafts";
-import { materializePrivateMediaJSON } from "@/lib/sessionPhotoStorage";
-import { assertSocialDraftMediaConsent } from "@/lib/studentMediaConsent";
+import { materializePrivateMediaJSON, plannedPublishedMediaCopyPaths, PUBLIC_GALLERY_BUCKET } from "@/lib/sessionPhotoStorage";
+import { assertSocialDraftMediaConsent, withSocialDraftPublicationReservation } from "@/lib/studentMediaConsent";
 
 const MAX_QUEUE_ATTEMPTS = 3;
 const RETRY_DELAYS_MINUTES = [1, 5];
@@ -25,17 +25,27 @@ export function fullSocialCaption(caption?: string | null, hashtags?: string | n
 }
 
 async function ensureDraftMediaIsPublic(draft: SocialPostDraft) {
-  const mediaJSON = await materializePrivateMediaJSON(draft.id, draft.mediaJSON, {
-    classId: draft.classId,
-    sessionId: draft.sessionId,
-  });
-  if (mediaJSON === draft.mediaJSON) return draft;
-  const updated = await replaceSocialPostDraftMediaJSON(draft.id, mediaJSON);
-  if (!updated) throw new Error("게시용 사진 정보를 저장하지 못했습니다.");
-  return updated;
+  try {
+    const mediaJSON = await materializePrivateMediaJSON(draft.id, draft.mediaJSON, {
+      classId: draft.classId,
+      sessionId: draft.sessionId,
+    });
+    if (mediaJSON === draft.mediaJSON) return draft;
+    const updated = await replaceSocialPostDraftMediaJSON(draft.id, mediaJSON);
+    if (!updated) throw new Error("게시용 사진 정보를 저장하지 못했습니다.");
+    return updated;
+  } catch (error) {
+    for (const path of plannedPublishedMediaCopyPaths(draft.id, draft.mediaJSON)) {
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO "StorageDeletionJob" (id,bucket,path,status,attempts,"nextAttemptAt","createdAt","updatedAt")
+        VALUES (gen_random_uuid()::text,$1,$2,'PENDING',0,NOW(),NOW(),NOW()) ON CONFLICT (bucket,path) DO NOTHING
+      `, PUBLIC_GALLERY_BUCKET, path);
+    }
+    throw error;
+  }
 }
 
-export async function upsertGalleryPostFromSocialDraft(draft: SocialPostDraft) {
+async function upsertGalleryPostFromSocialDraftLocked(draft: SocialPostDraft) {
   await assertSocialDraftMediaConsent(draft, "GALLERY");
   draft = await ensureDraftMediaIsPublic(draft);
   await ensureGalleryPostInstagramColumns();
@@ -57,6 +67,10 @@ export async function upsertGalleryPostFromSocialDraft(draft: SocialPostDraft) {
       draft.mediaJSON,
       draft.isPublic !== false,
       draft.galleryPostId,
+    );
+    await prisma.$executeRawUnsafe(
+      `UPDATE "SocialPostDraft" SET status = 'PUBLISHING', "updatedAt" = NOW() WHERE id = $1 AND status IN ('READY', 'FAILED')`,
+      draft.id,
     );
     return draft.galleryPostId;
   }
@@ -84,7 +98,31 @@ export async function upsertGalleryPostFromSocialDraft(draft: SocialPostDraft) {
     draft.isPublic !== false,
   );
 
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SocialPostDraft" SET "galleryPostId" = $2, status = 'PUBLISHING', "updatedAt" = NOW()
+      WHERE id = $1 AND status IN ('READY', 'FAILED', 'PUBLISHING')`,
+    draft.id,
+    rows[0].id,
+  );
+
   return rows[0].id;
+}
+
+export async function upsertGalleryPostFromSocialDraft(
+  draft: SocialPostDraft,
+  options: { consentLocked?: boolean } = {},
+) {
+  if (options.consentLocked) return upsertGalleryPostFromSocialDraftLocked(draft);
+  return withSocialDraftPublicationReservation(draft.id, "GALLERY", async (snapshot, attemptId) => {
+    try {
+      const galleryPostId = await upsertGalleryPostFromSocialDraftLocked(snapshot);
+      await prisma.$executeRawUnsafe(`UPDATE "SocialPublishAttempt" SET state='PUBLISHED', "providerMediaId"=$2, "updatedAt"=NOW() WHERE id=$1`, attemptId, galleryPostId);
+      return galleryPostId;
+    } catch (error) {
+      await prisma.$executeRawUnsafe(`UPDATE "SocialPublishAttempt" SET state='FAILED', "lastError"=$2, "updatedAt"=NOW() WHERE id=$1`, attemptId, error instanceof Error ? error.message.slice(0, 1000) : "Gallery publish failed");
+      throw error;
+    }
+  });
 }
 
 function nextRetryDate(attempts: number) {
@@ -106,7 +144,36 @@ export async function publishSocialDraftToInstagramNow(
   id: string,
   options: { queueMode?: boolean } = {},
 ) {
-  let currentDraft = await getSocialPostDraftById(id);
+  return withSocialDraftPublicationReservation(id, "INSTAGRAM", async (snapshot, attemptId) => {
+    await prisma.$executeRawUnsafe(`UPDATE "SocialPublishAttempt" SET state='AMBIGUOUS', "updatedAt"=NOW() WHERE id=$1`, attemptId);
+    try {
+      return await publishSocialDraftToInstagramNowLocked(snapshot, attemptId, options);
+    } catch (error) {
+      await prisma.$executeRawUnsafe(`UPDATE "SocialPublishAttempt" SET "lastError"=$2, "updatedAt"=NOW() WHERE id=$1`, attemptId, error instanceof Error ? error.message.slice(0, 1000) : "Instagram result unknown");
+      await prisma.$executeRawUnsafe(`
+        WITH attempt AS (SELECT * FROM "SocialPublishAttempt" WHERE id=$1), subjects AS (
+          SELECT jsonb_array_elements_text(stiz_try_jsonb(a."subjectSnapshotJSON")) AS "studentId", a.* FROM attempt a
+        ), latest AS (
+          SELECT DISTINCT ON (c."studentId") c."studentId", c.id AS "consentId" FROM "StudentMediaConsent" c
+          JOIN subjects s ON s."studentId"=c."studentId" ORDER BY c."studentId", c."recordedAt" DESC, c.id DESC
+        )
+        INSERT INTO "MediaRevocationJob" (id,"studentId","consentId","draftId",channel,"resourceId","resourceUrl",status,attempts,"nextAttemptAt","lastError","createdAt","updatedAt")
+        SELECT gen_random_uuid()::text,l."studentId",l."consentId",a."draftId",'INSTAGRAM',a.id,a."providerPermalink",'MANUAL_REQUIRED',0,NOW(),
+          'Instagram 게시 결과가 불명확합니다. Meta에서 게시 여부를 직접 확인하세요. providerMediaId='||COALESCE(a."providerMediaId",'unknown'),NOW(),NOW()
+        FROM attempt a CROSS JOIN latest l
+        ON CONFLICT ("consentId","draftId",channel) DO UPDATE SET status='MANUAL_REQUIRED', "resourceId"=EXCLUDED."resourceId", "resourceUrl"=EXCLUDED."resourceUrl", "lastError"=EXCLUDED."lastError", "updatedAt"=NOW()
+      `, attemptId);
+      throw error;
+    }
+  });
+}
+
+async function publishSocialDraftToInstagramNowLocked(
+  currentDraft: SocialPostDraft,
+  attemptId: string,
+  options: { queueMode?: boolean } = {},
+) {
+  const id = currentDraft.id;
   if (currentDraft?.status === "PUBLISHED") {
     return { ok: true as const, draft: currentDraft, skipped: true as const };
   }
@@ -125,7 +192,7 @@ export async function publishSocialDraftToInstagramNow(
     throw new Error("인스타그램 자동 게시에는 사진이 최소 1장 필요합니다.");
   }
 
-  const galleryPostId = currentDraft.galleryPostId || await upsertGalleryPostFromSocialDraft(currentDraft);
+  const galleryPostId = currentDraft.galleryPostId || await upsertGalleryPostFromSocialDraft(currentDraft, { consentLocked: true });
   let workingDraft = currentDraft;
   if (!currentDraft.galleryPostId || (options.queueMode && currentDraft.status !== "PUBLISHING")) {
     workingDraft = await markSocialPostDraftPublishing(id, { galleryPostId });
@@ -149,6 +216,11 @@ export async function publishSocialDraftToInstagramNow(
   });
 
   if (result.attempted && result.ok) {
+    // Persist the provider identity before any derived DB updates; later failures remain recoverable.
+    await prisma.$executeRawUnsafe(`
+      UPDATE "SocialPublishAttempt" SET state='PUBLISHED', "providerMediaId"=$2, "providerPermalink"=$3,
+        "providerResultJSON"=$4, "updatedAt"=NOW() WHERE id=$1
+    `, attemptId, result.instagramMediaId || null, result.permalink || null, JSON.stringify(result));
     await prisma.$executeRawUnsafe(
       `UPDATE "GalleryPost"
        SET "instagramMediaId" = $1,
@@ -174,6 +246,10 @@ export async function publishSocialDraftToInstagramNow(
     ? result.error || "인스타그램 게시에 실패했습니다."
     : result.skippedReason || "인스타그램 게시 설정이 아직 준비되지 않았습니다.";
 
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SocialPublishAttempt" SET state='FAILED', "lastError"=$2, "providerResultJSON"=$3, "updatedAt"=NOW() WHERE id=$1`,
+    attemptId, error, JSON.stringify(result),
+  );
   await updateGalleryInstagramError(galleryPostId, error);
 
   const attempts = attemptDraft?.instagramPublishAttempts ?? currentDraft.instagramPublishAttempts;
@@ -207,6 +283,17 @@ export async function processSocialPostPublishQueue(limit = 1) {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "인스타그램 게시 처리 중 오류가 발생했습니다.";
+      const ambiguous = await prisma.$queryRawUnsafe<Array<{ id: string }>>(`
+        SELECT id FROM "SocialPublishAttempt" WHERE "draftId"=$1 AND channel='INSTAGRAM' AND state='AMBIGUOUS' LIMIT 1
+      `, draft.id);
+      if (ambiguous[0]) {
+        await prisma.$executeRawUnsafe(`
+          UPDATE "SocialPostDraft" SET status='FAILED', "instagramNextRetryAt"=NULL,
+            "instagramPublishError"='Instagram 게시 결과 확인 필요', "updatedAt"=NOW() WHERE id=$1
+        `, draft.id);
+        results.push({ id: draft.id, ok: false, status: "FAILED", retryScheduled: false, error: "Instagram 게시 결과가 불명확하여 자동 재발행을 중단했습니다." });
+        continue;
+      }
       const attempts = draft.instagramPublishAttempts + 1;
 
       if (draft.galleryPostId && attempts < MAX_QUEUE_ATTEMPTS) {

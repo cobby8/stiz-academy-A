@@ -1,10 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { SESSION_IMAGE_ALLOWED_TYPES } from "@/lib/clientImageCompression";
 import { uploadImagesWithProgress } from "@/lib/clientImageUpload";
 
 type PhotoSubject = { id: string; name: string };
+type ManagedPhoto = {
+  id: string;
+  url: string;
+  subjectStudentIds: string[];
+  canManage: boolean;
+  requiresDeletionQueue: boolean;
+};
 
 export function SessionPhotoUploader({
   sessionId,
@@ -20,6 +28,22 @@ export function SessionPhotoUploader({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [subjectStudentIds, setSubjectStudentIds] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<ManagedPhoto[]>([]);
+  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+
+  const loadPhotos = useCallback(async () => {
+    const response = await fetch(`/api/staff/sessions/${encodeURIComponent(sessionId)}/photos`, { cache: "no-store" });
+    const body = await response.json().catch(() => ({})) as { photos?: ManagedPhoto[]; error?: string };
+    if (!response.ok) throw new Error(body.error || "사진 목록을 불러오지 못했습니다.");
+    setPhotos(body.photos || []);
+  }, [sessionId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadPhotos().catch((error) => setMessage(error instanceof Error ? error.message : "사진 목록을 불러오지 못했습니다."));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadPhotos]);
 
   function toggleSubject(studentId: string) {
     setSubjectStudentIds((current) =>
@@ -60,10 +84,94 @@ export function SessionPhotoUploader({
         : "관리자 검토용 비공개 초안으로 등록했습니다.",
     );
     onUploaded?.(result.items.map((item) => item.url));
+    await loadPhotos().catch(() => undefined);
+  }
+
+  async function updatePhotoSubjects(photo: ManagedPhoto) {
+    if (photo.subjectStudentIds.length === 0 || busy) return;
+    setBusy(true);
+    const response = await fetch(
+      `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos/${encodeURIComponent(photo.id)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjectStudentIds: photo.subjectStudentIds }),
+      },
+    );
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(body.error || "사진의 학생 정보를 수정하지 못했습니다.");
+      return;
+    }
+    setEditingPhotoId(null);
+    setMessage("사진에 나온 학생 정보를 수정했습니다.");
+  }
+
+  async function deletePhoto(photo: ManagedPhoto) {
+    if (busy || !window.confirm("이 사진을 수업 기록과 관리자 검토 목록에서 삭제할까요?")) return;
+    setBusy(true);
+    const response = await fetch(
+      `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos/${encodeURIComponent(photo.id)}`,
+      { method: "DELETE" },
+    );
+    const body = await response.json().catch(() => ({})) as { error?: string; requiresDeletionQueue?: boolean };
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(body.error || "사진을 삭제하지 못했습니다.");
+      return;
+    }
+    setPhotos((current) => current.filter((item) => item.id !== photo.id));
+    setMessage("사진을 삭제했습니다.");
+  }
+
+  function togglePhotoSubject(photoId: string, studentId: string) {
+    setPhotos((current) => current.map((photo) => photo.id !== photoId ? photo : {
+      ...photo,
+      subjectStudentIds: photo.subjectStudentIds.includes(studentId)
+        ? photo.subjectStudentIds.filter((id) => id !== studentId)
+        : [...photo.subjectStudentIds, studentId],
+    }));
   }
 
   return (
     <div className="space-y-3">
+      {photos.length > 0 && (
+        <div className="grid grid-cols-2 gap-3" aria-label="등록한 수업 사진">
+          {photos.map((photo) => (
+            <article key={photo.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+              {/* 인증된 비공개 API 주소라서 공개 URL을 만들지 않고도 미리보기가 가능합니다. */}
+              <div className="relative aspect-square w-full">
+                <Image src={photo.url} alt="등록한 수업 사진" fill unoptimized sizes="(max-width: 640px) 50vw, 240px" className="object-cover" />
+              </div>
+              <div className="space-y-2 p-2">
+                <p className="line-clamp-2 text-xs text-gray-600 dark:text-gray-300">
+                  {photo.subjectStudentIds.map((id) => students.find((student) => student.id === id)?.name).filter(Boolean).join(", ") || "대상 학생 미지정"}
+                </p>
+                {photo.requiresDeletionQueue ? (
+                  <p className="rounded-lg bg-amber-50 p-2 text-xs font-bold text-amber-800">공개된 사진 · 관리자 회수 필요</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1">
+                    <button type="button" disabled={busy} onClick={() => setEditingPhotoId(editingPhotoId === photo.id ? null : photo.id)} className="min-h-9 rounded-lg border border-gray-200 text-xs font-bold dark:border-gray-600">학생 수정</button>
+                    <button type="button" disabled={busy} onClick={() => void deletePhoto(photo)} className="min-h-9 rounded-lg border border-red-200 text-xs font-bold text-red-600">삭제</button>
+                  </div>
+                )}
+                {editingPhotoId === photo.id && photo.canManage && (
+                  <div className="space-y-2 border-t border-gray-100 pt-2 dark:border-gray-700">
+                    <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto">
+                      {students.map((student) => {
+                        const selected = photo.subjectStudentIds.includes(student.id);
+                        return <button key={student.id} type="button" aria-pressed={selected} onClick={() => togglePhotoSubject(photo.id, student.id)} className={`min-h-8 rounded-full border px-2 text-xs font-bold ${selected ? "border-[var(--brand-accent)] bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]" : "border-gray-200 dark:border-gray-600"}`}>{student.name}</button>;
+                      })}
+                    </div>
+                    <button type="button" disabled={busy || photo.subjectStudentIds.length === 0} onClick={() => void updatePhotoSubjects(photo)} className="min-h-9 w-full rounded-lg bg-brand-navy-900 text-xs font-black text-white disabled:opacity-50">변경 저장</button>
+                  </div>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
       <fieldset disabled={busy}>
         <legend className="text-sm font-bold text-gray-700 dark:text-gray-200">
           사진에 나온 학생 <span className="text-red-600">(필수)</span>

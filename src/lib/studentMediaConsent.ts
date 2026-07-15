@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
+import { createHash, randomUUID } from "node:crypto";
+import { mapDraft } from "@/lib/socialDrafts";
 import type { SocialPostDraft } from "@/lib/socialDrafts";
 import {
   evaluateMediaConsent,
@@ -14,6 +17,7 @@ export type { MediaConsentCheck, MediaConsentScope } from "@/lib/studentMediaCon
 export async function checkSocialDraftMediaConsent(
   draft: Pick<SocialPostDraft, "sessionId" | "classId" | "subjectStudentIds">,
   scope: MediaConsentScope,
+  db: Pick<Prisma.TransactionClient, "$queryRawUnsafe"> = prisma,
 ): Promise<MediaConsentCheck> {
   if ((!draft.sessionId && !draft.classId) || draft.subjectStudentIds.length === 0) {
     return { ok: false, scope, studentCount: 0, blockedStudents: [
@@ -22,7 +26,7 @@ export async function checkSocialDraftMediaConsent(
   }
 
   try {
-    const rows = await prisma.$queryRawUnsafe<MediaConsentRow[]>(
+    const rows = await db.$queryRawUnsafe<MediaConsentRow[]>(
       `WITH requested AS (
          SELECT DISTINCT value AS id FROM jsonb_array_elements_text($3::jsonb)
        ), target_class AS (
@@ -75,6 +79,74 @@ export async function checkSocialDraftMediaConsent(
       { id: "SYSTEM", name: "동의 원장", reason: "동의 정보를 확인할 수 없음" },
     ] };
   }
+}
+
+export async function withSocialDraftMediaConsentLock<T>(
+  draft: Pick<SocialPostDraft, "sessionId" | "classId" | "subjectStudentIds">,
+  scope: MediaConsentScope,
+  work: () => Promise<T>,
+) {
+  return prisma.$transaction(async (tx) => {
+    for (const studentId of [...new Set(draft.subjectStudentIds)].sort()) {
+      await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, studentId);
+    }
+    const result = await checkSocialDraftMediaConsent(draft, scope, tx);
+    if (!result.ok) {
+      const names = result.blockedStudents.slice(0, 3).map((student) => student.name).join(", ");
+      throw new Error(`사진 공개 동의를 확인할 수 없습니다 (${names || "대상 미확인"}).`);
+    }
+    return work();
+  }, { maxWait: 10_000, timeout: 120_000 });
+}
+
+export async function withSocialDraftPublicationReservation<T>(
+  draftId: string,
+  scope: Extract<MediaConsentScope, "GALLERY" | "INSTAGRAM">,
+  work: (snapshot: SocialPostDraft, attemptId: string) => Promise<T>,
+) {
+  const reserved = await prisma.$transaction(async (tx) => {
+    const preliminaryRows = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT * FROM "SocialPostDraft" WHERE id=$1`, draftId);
+    if (!preliminaryRows[0]) throw new Error("게시할 초안을 찾지 못했습니다.");
+    const preliminary = mapDraft(preliminaryRows[0]);
+    for (const studentId of [...new Set(preliminary.subjectStudentIds)].sort()) {
+      await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, studentId);
+    }
+    const rows = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT * FROM "SocialPostDraft" WHERE id=$1 FOR UPDATE`, draftId);
+    if (!rows[0] || typeof rows[0].status !== "string" || !["READY", "FAILED", "PUBLISHING"].includes(rows[0].status)) throw new Error("게시할 수 있는 초안이 아닙니다.");
+    const snapshot = mapDraft(rows[0]);
+    const subjects = [...new Set(snapshot.subjectStudentIds)].sort();
+    if (JSON.stringify(subjects) !== JSON.stringify([...new Set(preliminary.subjectStudentIds)].sort())) {
+      throw new Error("게시 대상 학생이 변경되어 다시 시도해야 합니다.");
+    }
+    const subjectJSON = JSON.stringify(subjects);
+    const subjectHash = createHash("sha256").update(subjectJSON).digest("hex");
+    const attemptId = randomUUID();
+    const idempotencyKey = `${scope.toLowerCase()}:${draftId}:${attemptId}`;
+    await tx.$executeRawUnsafe(`
+      UPDATE "SocialPostDraft" SET status='PUBLISHING', "publicationSubjectsJSON"=$2,
+        "publicationSubjectHash"=$3, "publishReservationId"=$4, "updatedAt"=NOW() WHERE id=$1
+    `, draftId, subjectJSON, subjectHash, attemptId);
+    await tx.$executeRawUnsafe(`
+      INSERT INTO "SocialPublishAttempt" (id,"draftId",channel,"idempotencyKey","subjectSnapshotJSON","subjectSnapshotHash",state,"createdAt","updatedAt")
+      VALUES ($1,$2,$3,$4,$5,$6,'PUBLISHING',NOW(),NOW())
+    `, attemptId, draftId, scope, idempotencyKey, subjectJSON, subjectHash);
+    return { snapshot: { ...snapshot, status: "PUBLISHING" as const, subjectStudentIds: subjects }, attemptId, subjectHash };
+  });
+
+  return prisma.$transaction(async (tx) => {
+    for (const studentId of reserved.snapshot.subjectStudentIds) {
+      await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, studentId);
+    }
+    const rows = await tx.$queryRawUnsafe<Array<{ publishReservationId: string | null; publicationSubjectHash: string | null }>>(
+      `SELECT "publishReservationId", "publicationSubjectHash" FROM "SocialPostDraft" WHERE id=$1`, draftId,
+    );
+    if (rows[0]?.publishReservationId !== reserved.attemptId || rows[0]?.publicationSubjectHash !== reserved.subjectHash) {
+      throw new Error("게시 대상 학생 정보가 변경되어 게시를 중단했습니다.");
+    }
+    const consent = await checkSocialDraftMediaConsent(reserved.snapshot, scope, tx);
+    if (!consent.ok) throw new Error("게시 직전 사진 공개 동의를 확인할 수 없습니다.");
+    return work(reserved.snapshot, reserved.attemptId);
+  }, { maxWait: 10_000, timeout: 120_000 });
 }
 
 export async function assertSocialDraftMediaConsent(

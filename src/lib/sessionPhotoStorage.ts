@@ -89,8 +89,15 @@ export async function materializePrivateMediaJSON(
 }
 
 export async function removePublishedMediaCopies(draftId: string, mediaJSON: string) {
-  const raw: unknown = JSON.parse(mediaJSON);
-  if (!Array.isArray(raw)) return;
+  const paths = collectPublishedMediaCopyPaths(draftId, mediaJSON);
+  if (paths.length === 0) return;
+  await removePublishedStoragePaths(paths);
+}
+
+export function collectPublishedMediaCopyPaths(draftId: string, mediaJSON: string) {
+  let raw: unknown;
+  try { raw = JSON.parse(mediaJSON); } catch { return []; }
+  if (!Array.isArray(raw)) return [];
   const paths = raw.flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const media = item as Record<string, unknown>;
@@ -100,7 +107,25 @@ export async function removePublishedMediaCopies(draftId: string, mediaJSON: str
       ? [media.publishedStoragePath]
       : [];
   });
-  if (paths.length === 0) return;
-  const { error } = await createAdminClient().storage.from(PUBLIC_GALLERY_BUCKET).remove(paths);
+  return [...new Set(paths)];
+}
+
+export function plannedPublishedMediaCopyPaths(draftId: string, mediaJSON: string) {
+  let raw: unknown;
+  try { raw = JSON.parse(mediaJSON); } catch { return []; }
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return [];
+    const media = item as Record<string, unknown>;
+    if (media.visibility !== "PRIVATE" || typeof media.storagePath !== "string") return [];
+    const extension = media.storagePath.split(".").pop()?.toLowerCase();
+    return extension && /^(jpg|png|webp)$/.test(extension) ? [`published/social-drafts/${draftId}/${index}.${extension}`] : [];
+  });
+}
+
+export async function removePublishedStoragePaths(paths: string[]) {
+  const safePaths = paths.filter((path) => path.startsWith("published/social-drafts/") && !path.includes(".."));
+  if (safePaths.length === 0) return;
+  const { error } = await createAdminClient().storage.from(PUBLIC_GALLERY_BUCKET).remove(safePaths);
   if (error) throw new Error("반려된 게시용 사진 사본을 삭제하지 못했습니다.");
 }

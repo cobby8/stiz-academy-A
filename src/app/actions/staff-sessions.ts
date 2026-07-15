@@ -133,8 +133,13 @@ export async function completeClassSession(input: { sessionId: string }) {
   if (!ended[0]) return { ok: false as const, message: "수업 종료 상태를 다시 확인해 주세요." };
 
   // 종료 안내는 결석 여부와 관계없이 이 수업의 전체 재원생 학부모에게 보냅니다.
-  const recipients = await getClassParentRecipients(session.classId);
-  await Promise.all(recipients.map((recipient) => deliverParentNotification({
+  // 수업 종료 저장은 학부모 알림보다 우선입니다. 알림 장애가 이미 끝난 수업을 실패로 되돌리지 않게 격리합니다.
+  let notificationWarning:
+    | { code: "PARENT_NOTIFICATION_FAILED"; failedCount: number }
+    | undefined;
+  try {
+    const recipients = await getClassParentRecipients(session.classId);
+    const results = await Promise.allSettled(recipients.map((recipient) => deliverParentNotification({
     eventType: "CLASS_COMPLETED",
     dedupeKey: `session:${input.sessionId}:completed:student:${recipient.studentId}:user:${recipient.userId}`,
     recipient,
@@ -142,8 +147,31 @@ export async function completeClassSession(input: { sessionId: string }) {
     message: `${recipient.studentName} 학생의 수업이 종료되었습니다.`,
     linkUrl: "/parent/sessions",
     sessionId: input.sessionId,
-  })));
-  return { ok: true as const, completed: true, resumed: false };
+    })));
+    const failedCount = results.filter((result) => result.status === "rejected").length;
+    if (failedCount > 0) {
+      notificationWarning = { code: "PARENT_NOTIFICATION_FAILED", failedCount };
+      console.error("[completeClassSession] Parent notification delivery failed", {
+        sessionId: input.sessionId,
+        classId: session.classId,
+        failedCount,
+        recipientCount: recipients.length,
+      });
+    }
+  } catch (error) {
+    notificationWarning = { code: "PARENT_NOTIFICATION_FAILED", failedCount: 1 };
+    console.error("[completeClassSession] Parent notification lookup failed", {
+      sessionId: input.sessionId,
+      classId: session.classId,
+      error,
+    });
+  }
+  return {
+    ok: true as const,
+    completed: true,
+    resumed: false,
+    ...(notificationWarning ? { notificationWarning } : {}),
+  };
 }
 
 type SessionStartRow = {

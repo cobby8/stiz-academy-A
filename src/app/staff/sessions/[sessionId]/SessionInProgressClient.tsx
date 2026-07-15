@@ -56,6 +56,7 @@ export default function SessionInProgressClient({
   const [elapsed, setElapsed] = useState(0);
   const [memo, setMemo] = useState(session.notes || "");
   const [message, setMessage] = useState("");
+  const [finishError, setFinishError] = useState("");
   const [showPlan, setShowPlan] = useState(true);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showPeople, setShowPeople] = useState(false);
@@ -142,15 +143,21 @@ export default function SessionInProgressClient({
   }
 
   function finishSession() {
+    if (pending) return;
+    setFinishError("");
     startTransition(async () => {
-      const result = await completeClassSession({ sessionId: session.id });
-      if (!result.ok) {
-        setMessage(result.message);
-        setShowEndConfirm(false);
-        return;
+      try {
+        const result = await completeClassSession({ sessionId: session.id });
+        if (!result.ok) {
+          setFinishError(result.message);
+          return;
+        }
+        // 이미 종료된 수업도 성공으로 보고 교사용 홈으로 안전하게 복귀합니다.
+        router.replace("/staff");
+        router.refresh();
+      } catch {
+        setFinishError("수업 종료 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
       }
-      router.push("/staff");
-      router.refresh();
     });
   }
 
@@ -280,7 +287,7 @@ export default function SessionInProgressClient({
 
       <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-lg px-4">
         <div className="rounded-2xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-          <button type="button" onClick={() => setShowEndConfirm(true)} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
+          <button type="button" disabled={pending} onClick={() => { setFinishError(""); setShowEndConfirm(true); }} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 disabled:opacity-50 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
           <p className="mt-1 text-center text-[11px] font-bold text-gray-500">출결을 검토한 뒤 확인 화면에서 종료됩니다.</p>
         </div>
       </div>
@@ -296,10 +303,20 @@ export default function SessionInProgressClient({
               <div className="rounded-lg bg-red-50 p-2 text-red-700">결석 {counts.ABSENT}</div>
               <div className="rounded-lg bg-gray-100 p-2 text-gray-600">미확인 {counts.UNCHECKED}</div>
             </div>
-            {counts.UNCHECKED > 0 && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">출결을 확인하지 않은 학생이 있습니다. 출석부를 먼저 확인해 주세요.</p>}
+            {counts.UNCHECKED > 0 && (
+              <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-black">출결 미확인 학생 {counts.UNCHECKED}명이 있어 아직 종료할 수 없습니다.</p>
+                <p className="mt-1 text-xs font-medium">출석부에서 출석·지각·결석 중 하나를 선택해 주세요.</p>
+              </div>
+            )}
+            {finishError && <p role="alert" aria-live="assertive" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{finishError}</p>}
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button type="button" disabled={pending} data-dialog-initial-focus onClick={() => setShowEndConfirm(false)} className="min-h-12 rounded-xl border border-gray-200 font-bold dark:border-gray-700">돌아가기</button>
-              <button type="button" disabled={pending || counts.UNCHECKED > 0} onClick={finishSession} className="min-h-12 rounded-xl bg-red-600 font-black text-white disabled:opacity-50">종료 확인</button>
+              {counts.UNCHECKED > 0 ? (
+                <button type="button" disabled={pending} onClick={() => { setShowEndConfirm(false); setView("attendance"); }} className="min-h-12 rounded-xl bg-[var(--brand-accent)] px-3 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">출석부 확인하기</button>
+              ) : (
+                <button type="button" disabled={pending} aria-busy={pending} onClick={finishSession} className="min-h-12 rounded-xl bg-red-600 font-black text-white disabled:opacity-50">{pending ? "종료 처리 중…" : "종료 확인"}</button>
+              )}
             </div>
           </div>
         </div>

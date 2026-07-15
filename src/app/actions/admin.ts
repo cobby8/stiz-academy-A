@@ -25,6 +25,7 @@ import {
     ensurePaymentInfrastructure,
     markOverduePayments,
     markPaymentPaid,
+    recordTerminalPayment,
     recordPaymentAudit,
 } from "@/lib/payment-ledger";
 
@@ -1164,6 +1165,42 @@ export async function updatePaymentStatus(id: string, status: string) {
         throw new Error("수납 상태 변경 실패");
     }
     revalidateFinanceCaches();
+}
+
+export async function markTerminalPaymentPaid(data: {
+    paymentId: string;
+    approvalNo: string;
+    receivedAt?: string;
+    memo?: string;
+}) {
+    const admin = await requireAdmin();
+    const paymentId = data.paymentId?.trim();
+    const approvalNo = data.approvalNo?.trim();
+
+    if (!paymentId) {
+        throw new Error("수납 기록을 선택해 주세요.");
+    }
+    if (!approvalNo) {
+        throw new Error("단말기 승인번호를 입력해 주세요.");
+    }
+
+    try {
+        const result = await recordTerminalPayment({
+            paymentId,
+            approvalNo,
+            receivedAt: data.receivedAt || null,
+            memo: data.memo || null,
+            method: "CARD",
+            actorType: "ADMIN",
+            actorId: admin.appUserId,
+        });
+        revalidateFinanceCaches();
+        revalidatePath("/mypage");
+        return result;
+    } catch (e) {
+        console.error("Failed to mark terminal payment:", e);
+        throw new Error(e instanceof Error ? e.message : "현장 단말기 결제 반영 실패");
+    }
 }
 
 export async function deletePayment(id: string) {

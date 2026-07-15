@@ -60,6 +60,18 @@ type PaymentTransactionRow = {
     paymentStatus?: string;
 };
 
+type TerminalPaymentTargetRow = {
+    paymentId: string;
+    invoiceId: string;
+    studentId: string;
+    parentId: string | null;
+    amount: number;
+    status: string;
+    invoiceStatus: string;
+    type: string | null;
+    description: string | null;
+};
+
 function asRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
@@ -425,12 +437,19 @@ export async function markPaymentPaid(input: {
     method?: string | null;
     provider?: string | null;
     orderId?: string | null;
+    providerOrderId?: string | null;
     paymentKey?: string | null;
     receiptUrl?: string | null;
+    paidAt?: Date | string | null;
     rawResponse?: unknown;
 }) {
     await ensurePaymentInfrastructure();
 
+    const paidAt = input.paidAt ? new Date(input.paidAt) : null;
+    if (paidAt && Number.isNaN(paidAt.getTime())) {
+        throw new Error("Invalid paidAt date");
+    }
+    const providerOrderId = input.providerOrderId ?? input.orderId ?? null;
     const invoice = input.invoiceId
         ? { id: input.invoiceId }
         : await ensureInvoiceForPayment(input.paymentId);
@@ -438,7 +457,7 @@ export async function markPaymentPaid(input: {
     await prisma.$executeRawUnsafe(
         `UPDATE "Payment"
          SET status = 'PAID',
-             "paidDate" = COALESCE("paidDate", NOW()),
+             "paidDate" = COALESCE("paidDate", $7::timestamp, NOW()),
              method = COALESCE($2, method),
              "paidProvider" = COALESCE($3, "paidProvider"),
              "providerOrderId" = COALESCE($4, "providerOrderId"),
@@ -449,17 +468,19 @@ export async function markPaymentPaid(input: {
         input.paymentId,
         input.method ?? null,
         input.provider ?? null,
-        input.orderId ?? null,
+        providerOrderId,
         input.paymentKey ?? null,
         input.receiptUrl ?? null,
+        paidAt,
     );
 
     if (invoice?.id) {
         await prisma.$executeRawUnsafe(
             `UPDATE "PaymentInvoice"
-             SET status = 'PAID', "paidAt" = COALESCE("paidAt", NOW()), "updatedAt" = NOW()
+             SET status = 'PAID', "paidAt" = COALESCE("paidAt", $2::timestamp, NOW()), "updatedAt" = NOW()
              WHERE id = $1`,
             invoice.id,
+            paidAt,
         );
     }
 
@@ -470,14 +491,15 @@ export async function markPaymentPaid(input: {
                  "paymentKey" = COALESCE($2, "paymentKey"),
                  method = COALESCE($3, method),
                  "receiptUrl" = COALESCE($4, "receiptUrl"),
-                 "approvedAt" = COALESCE("approvedAt", NOW()),
-                 "rawResponse" = COALESCE($5::jsonb, "rawResponse"),
+                 "approvedAt" = COALESCE("approvedAt", $5::timestamp, NOW()),
+                 "rawResponse" = COALESCE($6::jsonb, "rawResponse"),
                  "updatedAt" = NOW()
-             WHERE id = $1`,
+              WHERE id = $1`,
             input.transactionId,
             input.paymentKey ?? null,
             input.method ?? null,
             input.receiptUrl ?? null,
+            paidAt,
             input.rawResponse ? JSON.stringify(input.rawResponse) : null,
         );
     }
@@ -494,11 +516,173 @@ export async function markPaymentPaid(input: {
             method: input.method,
             provider: input.provider,
             orderId: input.orderId,
+            providerOrderId,
             paymentKey: input.paymentKey ? "[saved]" : null,
+            paidAt: paidAt?.toISOString() ?? null,
         },
     });
 
     revalidatePaymentCaches();
+}
+
+function toTerminalDate(value: string | Date | null | undefined) {
+    if (!value) return new Date();
+    if (value instanceof Date) return value;
+    const trimmed = value.trim();
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? new Date(`${trimmed}T00:00:00+09:00`)
+        : new Date(trimmed);
+    if (Number.isNaN(date.getTime())) {
+        throw new Error("결제일이 올바르지 않습니다.");
+    }
+    return date;
+}
+
+function buildTerminalOrderId(paymentId: string, approvalNo: string, paidAt: Date) {
+    const datePart = paidAt.toISOString().slice(0, 10).replace(/-/g, "");
+    const approvalPart = approvalNo.replace(/[^0-9A-Za-z_-]/g, "").slice(0, 24) || "APPROVAL";
+    return `TERMINAL-${datePart}-${approvalPart}-${paymentId.replace(/-/g, "").slice(0, 8)}`.slice(0, 64);
+}
+
+export async function recordTerminalPayment(input: {
+    paymentId: string;
+    approvalNo: string;
+    receivedAt?: string | Date | null;
+    memo?: string | null;
+    receiptUrl?: string | null;
+    method?: string | null;
+    actorType: LedgerActorType;
+    actorId?: string | null;
+}) {
+    await ensurePaymentInfrastructure();
+
+    const paymentId = input.paymentId.trim();
+    const approvalNo = input.approvalNo.trim();
+    if (!paymentId) throw new Error("수납 기록 ID가 필요합니다.");
+    if (!approvalNo) throw new Error("단말기 승인번호를 입력해 주세요.");
+
+    const paidAt = toTerminalDate(input.receivedAt);
+    const method = input.method?.trim() || "CARD";
+    const receiptUrl = input.receiptUrl?.trim() || null;
+    const memo = input.memo?.trim() || null;
+    const invoice = await ensureInvoiceForPayment(paymentId);
+    if (!invoice?.id) {
+        throw new Error("청구서를 찾을 수 없습니다.");
+    }
+
+    const orderId = buildTerminalOrderId(paymentId, approvalNo, paidAt);
+    const rawResponse = {
+        provider: "TOSS_TERMINAL",
+        approvalNo,
+        memo,
+        receivedAt: paidAt.toISOString(),
+    };
+
+    return prisma.$transaction(async (db) => {
+        const targets = await db.$queryRawUnsafe<TerminalPaymentTargetRow[]>(
+            `SELECT
+                p.id AS "paymentId",
+                i.id AS "invoiceId",
+                p."studentId",
+                i."parentId",
+                p.amount,
+                p.status,
+                i.status AS "invoiceStatus",
+                p.type,
+                p.description
+             FROM "Payment" p
+             JOIN "PaymentInvoice" i ON i."paymentId" = p.id
+             WHERE p.id = $1
+             FOR UPDATE OF p, i`,
+            paymentId,
+        );
+        const target = targets[0];
+        if (!target) throw new Error("수납 기록을 찾을 수 없습니다.");
+        if (target.status === "PAID" || target.invoiceStatus === "PAID") {
+            throw new Error("이미 납부완료 처리된 청구입니다.");
+        }
+
+        const transactionRows = await db.$queryRawUnsafe<{ id: string }[]>(
+            `INSERT INTO "PaymentTransaction" (
+                id, "paymentId", "invoiceId", "studentId", "parentId", provider,
+                "orderId", "orderName", amount, status, method, "receiptUrl",
+                "requestedAt", "approvedAt", "rawResponse", "createdAt", "updatedAt"
+            )
+            VALUES (
+                gen_random_uuid()::text, $1, $2, $3, $4, 'TOSS_TERMINAL',
+                $5, $6, $7, 'DONE', $8, $9,
+                $10::timestamp, $10::timestamp, $11::jsonb, NOW(), NOW()
+            )
+            RETURNING id`,
+            target.paymentId,
+            target.invoiceId,
+            target.studentId,
+            target.parentId,
+            orderId,
+            target.description || target.type || "현장 단말기 수납",
+            Number(target.amount),
+            method,
+            receiptUrl,
+            paidAt,
+            JSON.stringify(rawResponse),
+        );
+        const transactionId = transactionRows[0]?.id;
+
+        await db.$executeRawUnsafe(
+            `UPDATE "Payment"
+             SET status = 'PAID',
+                 "paidDate" = $2::timestamp,
+                 method = $3,
+                 "paidProvider" = 'TOSS_TERMINAL',
+                 "providerOrderId" = $4,
+                 "receiptUrl" = COALESCE($5, "receiptUrl"),
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            target.paymentId,
+            paidAt,
+            method,
+            approvalNo,
+            receiptUrl,
+        );
+
+        await db.$executeRawUnsafe(
+            `UPDATE "PaymentInvoice"
+             SET status = 'PAID',
+                 "paidAt" = $2::timestamp,
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            target.invoiceId,
+            paidAt,
+        );
+
+        await db.$executeRawUnsafe(
+            `INSERT INTO "PaymentAuditLog" (
+                id, "paymentId", "invoiceId", "transactionId", "actorType", "actorId",
+                action, message, metadata, "createdAt"
+            )
+            VALUES (
+                gen_random_uuid()::text, $1, $2, $3, $4, $5,
+                'TERMINAL_PAYMENT_MARK_PAID', 'Toss terminal payment marked as paid', $6::jsonb, NOW()
+            )`,
+            target.paymentId,
+            target.invoiceId,
+            transactionId ?? null,
+            input.actorType,
+            input.actorId ?? null,
+            JSON.stringify(rawResponse),
+        );
+
+        return {
+            ok: true as const,
+            paymentId: target.paymentId,
+            invoiceId: target.invoiceId,
+            transactionId,
+            approvalNo,
+            message: "현장 단말기 결제를 납부완료로 반영했습니다.",
+        };
+    }).finally(() => {
+        revalidatePaymentCaches();
+    });
 }
 
 export function getPaymentProviderConfig() {

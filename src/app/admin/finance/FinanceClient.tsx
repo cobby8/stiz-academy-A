@@ -11,6 +11,7 @@ import {
     sendInvoiceLinksForMonth,
     sendUnpaidReminders,
     bulkUpdatePaymentStatus,
+    markTerminalPaymentPaid,
 } from "@/app/actions/admin";
 
 type Payment = {
@@ -33,7 +34,10 @@ type Payment = {
     invoiceSentAt?: Date | string | null;
     method?: string | null;
     paidProvider?: string | null;
+    providerOrderId?: string | null;
     receiptUrl?: string | null;
+    invoiceCheckoutUrl?: string | null;
+    transactionStatus?: string | null;
     reminderCount?: number;
     createdAt: Date | string;
 };
@@ -158,6 +162,12 @@ function formatAmount(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
 }
 
+function toDateInputValue(date = new Date()) {
+    const localDate = new Date(date);
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    return localDate.toISOString().slice(0, 10);
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
 }
@@ -259,6 +269,11 @@ export default function FinanceClient({
     const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
     const [invoiceGenerating, setInvoiceGenerating] = useState(false);
     const [invoiceError, setInvoiceError] = useState<string | null>(null);
+    const [terminalTarget, setTerminalTarget] = useState<Payment | null>(null);
+    const [terminalApprovalNo, setTerminalApprovalNo] = useState("");
+    const [terminalReceivedAt, setTerminalReceivedAt] = useState(toDateInputValue());
+    const [terminalMemo, setTerminalMemo] = useState("");
+    const [terminalSubmitting, setTerminalSubmitting] = useState(false);
 
     const loadStudents = useCallback(async () => {
         if (studentsLoaded || studentsLoading) return;
@@ -375,6 +390,50 @@ export default function FinanceClient({
             alert(getErrorMessage(err, "상태 변경 실패"));
         } finally {
             setBusy(false);
+        }
+    }
+
+    function openTerminalModal(payment: Payment) {
+        setTerminalTarget(payment);
+        setTerminalApprovalNo(payment.providerOrderId ?? "");
+        setTerminalReceivedAt(toDateInputValue());
+        setTerminalMemo("");
+    }
+
+    function closeTerminalModal() {
+        if (terminalSubmitting) return;
+        setTerminalTarget(null);
+        setTerminalApprovalNo("");
+        setTerminalReceivedAt(toDateInputValue());
+        setTerminalMemo("");
+    }
+
+    async function handleTerminalSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!terminalTarget) return;
+        if (!terminalApprovalNo.trim()) {
+            alert("단말기 승인번호를 입력해 주세요.");
+            return;
+        }
+
+        setTerminalSubmitting(true);
+        try {
+            const result = await markTerminalPaymentPaid({
+                paymentId: terminalTarget.id,
+                approvalNo: terminalApprovalNo.trim(),
+                receivedAt: terminalReceivedAt,
+                memo: terminalMemo.trim() || undefined,
+            });
+            alert(result.message);
+            setTerminalTarget(null);
+            setTerminalApprovalNo("");
+            setTerminalReceivedAt(toDateInputValue());
+            setTerminalMemo("");
+            await loadMonth(year, month);
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "현장 단말기 결제 반영 실패"));
+        } finally {
+            setTerminalSubmitting(false);
         }
     }
 
@@ -594,6 +653,100 @@ export default function FinanceClient({
 
     return (
         <div className="max-w-5xl mx-auto">
+            {terminalTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+                    <form
+                        onSubmit={handleTerminalSubmit}
+                        className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wide text-brand-orange-500 dark:text-brand-neon-lime">
+                                    Toss terminal
+                                </p>
+                                <h2 className="mt-1 text-lg font-extrabold text-gray-900 dark:text-white">
+                                    현장 단말기 결제 반영
+                                </h2>
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    {terminalTarget.studentName} · {formatAmount(terminalTarget.amount)}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeTerminalModal}
+                                disabled={terminalSubmitting}
+                                className="rounded-lg px-2 py-1 text-sm font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                            >
+                                닫기
+                            </button>
+                        </div>
+
+                        <div className="mt-5 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+                                    단말기 승인번호 *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={terminalApprovalNo}
+                                    onChange={(e) => setTerminalApprovalNo(e.target.value)}
+                                    required
+                                    placeholder="예: 12345678"
+                                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:ring-brand-neon-lime"
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    단말기 영수증의 승인번호를 입력해 두면 나중에 거래내역과 대조하기 쉽습니다.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+                                    결제일 *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={terminalReceivedAt}
+                                    onChange={(e) => setTerminalReceivedAt(e.target.value)}
+                                    required
+                                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:ring-brand-neon-lime"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+                                    메모
+                                </label>
+                                <textarea
+                                    value={terminalMemo}
+                                    onChange={(e) => setTerminalMemo(e.target.value)}
+                                    rows={3}
+                                    placeholder="예: 현장 카드 단말기 결제"
+                                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:ring-brand-neon-lime"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={closeTerminalModal}
+                                disabled={terminalSubmitting}
+                                className="rounded-lg px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                            >
+                                취소
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={terminalSubmitting}
+                                className="rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                            >
+                                {terminalSubmitting ? "반영 중..." : "납부완료 반영"}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
             {/* 헤더 + 액션 버튼 */}
             <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
                 <div>
@@ -1060,6 +1213,21 @@ export default function FinanceClient({
                                                         {[p.method, p.paidProvider].filter(Boolean).join(" · ")}
                                                     </p>
                                                 )}
+                                                {p.providerOrderId && (
+                                                    <p className="mt-1 text-[11px] font-bold text-gray-500 dark:text-gray-300">
+                                                        승인 {p.providerOrderId}
+                                                    </p>
+                                                )}
+                                                {p.receiptUrl && (
+                                                    <a
+                                                        href={p.receiptUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="mt-1 inline-flex text-[11px] font-bold text-blue-600 hover:text-blue-800 dark:text-brand-neon-lime"
+                                                    >
+                                                        영수증
+                                                    </a>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-200 font-mono">{formatAmount(p.amount)}</td>
                                             <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">{toDateStr(p.dueDate)}</td>
@@ -1082,16 +1250,28 @@ export default function FinanceClient({
                                             <td className="px-4 py-3.5 text-right">
                                                 <div className="flex items-center gap-2 justify-end">
                                                     {p.status !== "PAID" && (
-                                                        <button
-                                                            onClick={() => handleStatusChange(p.id, "PAID")}
-                                                            disabled={busy}
-                                                            className="text-xs text-green-600 hover:text-green-800 font-medium"
-                                                        >
-                                                            납부처리
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openTerminalModal(p)}
+                                                                disabled={busy || terminalSubmitting}
+                                                                className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50 dark:text-brand-neon-lime"
+                                                            >
+                                                                단말기
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleStatusChange(p.id, "PAID")}
+                                                                disabled={busy}
+                                                                className="text-xs text-green-600 hover:text-green-800 font-medium"
+                                                            >
+                                                                납부처리
+                                                            </button>
+                                                        </>
                                                     )}
                                                     {p.status === "PENDING" && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleStatusChange(p.id, "OVERDUE")}
                                                             disabled={busy}
                                                             className="text-xs text-yellow-600 hover:text-yellow-800 font-medium"
@@ -1101,6 +1281,7 @@ export default function FinanceClient({
                                                     )}
                                                     {p.status === "PAID" && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleStatusChange(p.id, "REFUNDED")}
                                                             disabled={busy}
                                                             className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-200 font-medium"
@@ -1110,13 +1291,13 @@ export default function FinanceClient({
                                                     )}
                                                     {deleteConfirm === p.id ? (
                                                         <div className="flex gap-1">
-                                                            <button onClick={() => handleDelete(p.id)} disabled={busy}
+                                                            <button type="button" onClick={() => handleDelete(p.id)} disabled={busy}
                                                                 className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold disabled:opacity-50">확인</button>
-                                                            <button onClick={() => setDeleteConfirm(null)}
+                                                            <button type="button" onClick={() => setDeleteConfirm(null)}
                                                                 className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">취소</button>
                                                         </div>
                                                     ) : (
-                                                        <button onClick={() => setDeleteConfirm(p.id)}
+                                                        <button type="button" onClick={() => setDeleteConfirm(p.id)}
                                                             className="text-xs text-red-500 hover:text-red-700 font-medium">삭제</button>
                                                     )}
                                                 </div>

@@ -1,9 +1,10 @@
 // STIZ PWA service worker
 // 사용자 정보가 포함될 수 있는 화면/데이터는 저장하지 않고 공개 정적 자산만 캐시한다.
-const CACHE_NAME = "stiz-public-static-v20260715-1";
+const CACHE_NAME = "stiz-public-static-v20260715-2";
 
 const PRECACHE_URLS = [
     "/manifest.json",
+    "/manifest-staff.json",
     "/icon-192.png",
     "/icon-512.png",
 ];

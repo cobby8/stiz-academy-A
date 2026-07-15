@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { login, signup } from "@/app/actions/auth";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 
-export default function LoginPage() {
+function LoginContent() {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const isStaffMode =
+    pathname === "/staff/login" || searchParams.get("mode") === "staff";
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,7 +25,9 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const requestedPath = new URLSearchParams(window.location.search).get("redirect");
+    const requestedPath =
+      new URLSearchParams(window.location.search).get("redirect") ||
+      (isStaffMode ? "/staff" : null);
     if (requestedPath?.startsWith("/") && !requestedPath.startsWith("//")) {
       formData.set("redirectTo", requestedPath);
     }
@@ -64,15 +71,19 @@ export default function LoginPage() {
             />
           </div>
           <h1 className="text-2xl font-bold text-brand-navy-900 dark:text-white">
-            STIZ 로그인
+            {isStaffMode ? "STIZ 선생님 로그인" : "STIZ 로그인"}
           </h1>
-          <p className="text-brand-navy-700 dark:text-gray-300 mt-1">계정 권한에 맞는 화면으로 이동합니다</p>
+          <p className="text-brand-navy-700 dark:text-gray-300 mt-1">
+            {isStaffMode
+              ? "초대받아 만든 선생님 계정으로 로그인해 주세요."
+              : "계정 권한에 맞는 화면으로 이동합니다"}
+          </p>
         </div>
 
         {/* 카드 — 기존 구조 유지, 디자인 토큰 적용 */}
         <div className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
           {/* 탭 — 기존 구조 유지 */}
-          <div className="flex mb-6 bg-gray-100 dark:bg-gray-900 rounded-lg p-1">
+          {!isStaffMode && <div className="flex mb-6 bg-gray-100 dark:bg-gray-900 rounded-lg p-1">
             <button
               type="button"
               onClick={() => {
@@ -107,7 +118,16 @@ export default function LoginPage() {
             >
               계정 만들기
             </button>
-          </div>
+          </div>}
+
+          {isStaffMode && (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-brand-orange-200 bg-orange-50 p-4 text-sm text-brand-navy-800 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-gray-100">
+              <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime" aria-hidden="true">
+                school
+              </span>
+              <p>가입 전이라면 관리자에게 받은 초대 링크에서 먼저 계정을 만들어 주세요.</p>
+            </div>
+          )}
 
           {/* 에러 메시지 */}
           {error && (
@@ -296,5 +316,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-surface-warm dark:bg-gray-950" />}>
+      <LoginContent />
+    </Suspense>
   );
 }

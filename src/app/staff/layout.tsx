@@ -1,8 +1,23 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { requireStaff } from "@/lib/auth-guard";
 import StaffBottomNav from "./StaffBottomNav";
 import StaffInstallPrompt from "./StaffInstallPrompt";
+
+export const metadata: Metadata = {
+  title: "STIZ 선생님",
+  description: "수업, 출결, 학생 연락과 청구를 관리하는 STIZ 교사용 앱",
+  manifest: "/manifest-staff.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "STIZ 교사용",
+  },
+  icons: {
+    apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+};
 
 export default async function StaffLayout({ children }: { children: ReactNode }) {
   const staff = await requireStaff();

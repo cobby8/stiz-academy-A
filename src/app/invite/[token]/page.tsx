@@ -52,8 +52,11 @@ export default async function InvitePage({
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                         이 초대는 이미 수락되었습니다. 로그인 페이지에서 로그인해주세요.
                     </p>
-                    <a href="/login" className="inline-block mt-4 px-6 py-2.5 bg-brand-navy-900 text-white rounded-lg text-sm font-medium hover:bg-brand-navy-800 transition-colors">
-                        로그인하기
+                    <a
+                        href={invitation.role === "INSTRUCTOR" ? "/staff/login" : "/login"}
+                        className="inline-block mt-4 px-6 py-2.5 bg-brand-navy-900 text-white rounded-lg text-sm font-medium hover:bg-brand-navy-800 transition-colors"
+                    >
+                        {invitation.role === "INSTRUCTOR" ? "선생님 앱 로그인" : "로그인하기"}
                     </a>
                 </div>
             </div>
@@ -107,7 +110,7 @@ export default async function InvitePage({
                     maskedPhone={maskedPhone}
                     role={invitation.role}
                     roleLabel={ROLE_LABELS[invitation.role] || invitation.role}
-                    expiresAt={expiresAt.toISOString()}
+                    daysLeft={Math.max(0, Math.ceil((expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))}
                 />
             </div>
         </div>

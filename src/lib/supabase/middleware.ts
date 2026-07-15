@@ -26,7 +26,7 @@ export async function updateSession(request: NextRequest) {
 
   const claimsResult = await supabase.auth.getClaims();
   let isAuthenticated = false;
-  let userMetadata: Record<string, any> | null = null;
+  let userMetadata: Record<string, unknown> | null = null;
 
   if (!claimsResult.error && claimsResult.data?.claims?.sub) {
     isAuthenticated = true;
@@ -40,19 +40,20 @@ export async function updateSession(request: NextRequest) {
   }
 
   const pathname = request.nextUrl.pathname;
+  const isStaffLogin = pathname === "/staff/login";
   const protectedPath =
     pathname.startsWith("/admin") ||
-    pathname.startsWith("/staff") ||
+    (pathname.startsWith("/staff") && !isStaffLogin) ||
     pathname.startsWith("/mypage");
 
   if (protectedPath && !isAuthenticated) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = pathname.startsWith("/staff") ? "/staff/login" : "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/login" && isAuthenticated) {
+  if ((pathname === "/login" || isStaffLogin) && isAuthenticated) {
     const role = normalizeAppRole(userMetadata?.role);
     const url = request.nextUrl.clone();
     url.pathname = defaultPathForRole(role);

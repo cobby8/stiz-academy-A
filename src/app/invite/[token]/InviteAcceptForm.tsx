@@ -21,7 +21,7 @@ interface Props {
     maskedPhone: string;    // "010-****-5678"
     role: string;
     roleLabel: string;      // "코치/강사"
-    expiresAt: string;
+    daysLeft: number;
 }
 
 // 역할별 색상
@@ -37,7 +37,7 @@ export default function InviteAcceptForm({
     maskedPhone,
     role,
     roleLabel,
-    expiresAt,
+    daysLeft,
 }: Props) {
     // 현재 단계: 1=정보확인, 2=폰인증, 3=비밀번호설정, 4=완료
     const [step, setStep] = useState(1);
@@ -56,9 +56,6 @@ export default function InviteAcceptForm({
 
     // 로딩 상태
     const [isPending, startTransition] = useTransition();
-
-    // 남은 일수
-    const daysLeft = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
     // ── Step 1 → Step 2: 인증번호 발송 ────────────────────────────
     function handleStartVerify() {
@@ -341,10 +338,10 @@ export default function InviteAcceptForm({
                     </div>
 
                     <a
-                        href="/login"
+                        href={role === "INSTRUCTOR" ? "/staff/login" : "/login"}
                         className="inline-block w-full py-3 bg-brand-navy-900 text-white rounded-lg font-medium text-sm hover:bg-brand-navy-800 transition-colors text-center"
                     >
-                        로그인하러 가기
+                        {role === "INSTRUCTOR" ? "선생님 앱 로그인" : "로그인하러 가기"}
                     </a>
                 </div>
             )}

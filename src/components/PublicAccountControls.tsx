@@ -54,31 +54,31 @@ function useAccountState() {
     appRole === "ADMIN" || appRole === "VICE_ADMIN"
       ? "관리자"
       : appRole === "INSTRUCTOR"
-        ? "사진 올리기"
+        ? "선생님 앱"
         : appRole === "PARENT"
           ? "마이페이지"
           : "로그인";
   const canAccessAdmin = appRole === "ADMIN" || appRole === "VICE_ADMIN";
-  const isQuickPostPrimary = appRole === "INSTRUCTOR";
+  const isStaffPrimary = appRole === "INSTRUCTOR";
 
-  return { accountHref, accountLabel, canAccessAdmin, isLoggedIn: appRole !== null, isQuickPostPrimary };
+  return { accountHref, accountLabel, canAccessAdmin, isLoggedIn: appRole !== null, isStaffPrimary };
 }
 
 export function DesktopAccountControls() {
-  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isQuickPostPrimary } = useAccountState();
+  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isStaffPrimary } = useAccountState();
 
   return (
     <>
       <Link
         href={accountHref}
-        aria-label={isQuickPostPrimary ? "사진 올리기" : undefined}
-        title={isQuickPostPrimary ? "사진 올리기" : undefined}
-        className={isQuickPostPrimary ? HEADER_ICON_ACTION_CLASS : DESKTOP_ACCOUNT_CLASS}
+        aria-label={isStaffPrimary ? "선생님 앱" : undefined}
+        title={isStaffPrimary ? "선생님 앱" : undefined}
+        className={DESKTOP_ACCOUNT_CLASS}
       >
-        {isQuickPostPrimary ? (
+        {isStaffPrimary ? (
           <>
-            <FontFreeIcon name="camera_alt" size={19} />
-            <span className="sr-only">사진 올리기</span>
+            <FontFreeIcon name="school" size={19} />
+            <span className="ml-1">선생님 앱</span>
           </>
         ) : (
           accountLabel
@@ -104,7 +104,7 @@ export function DesktopAccountControls() {
 }
 
 export function MobileAccountControls({ onNavigate }: { onNavigate?: () => void }) {
-  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isQuickPostPrimary } = useAccountState();
+  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isStaffPrimary } = useAccountState();
 
   return (
     <div className="grid grid-cols-2 gap-2 mb-3">
@@ -112,13 +112,13 @@ export function MobileAccountControls({ onNavigate }: { onNavigate?: () => void 
         href={accountHref}
         onClick={onNavigate}
         className="flex min-h-11 items-center justify-center rounded-xl border border-brand-orange-200 bg-white text-sm font-bold text-brand-orange-600 transition-colors hover:bg-brand-orange-50 dark:border-brand-neon-lime/30 dark:bg-gray-900 dark:text-brand-neon-lime"
-        aria-label={isQuickPostPrimary ? "사진 올리기" : undefined}
-        title={isQuickPostPrimary ? "사진 올리기" : undefined}
+        aria-label={isStaffPrimary ? "선생님 앱" : undefined}
+        title={isStaffPrimary ? "선생님 앱" : undefined}
       >
-        {isQuickPostPrimary ? (
+        {isStaffPrimary ? (
           <>
-            <FontFreeIcon name="camera_alt" size={20} />
-            <span className="sr-only">사진 올리기</span>
+            <FontFreeIcon name="school" size={20} />
+            <span className="ml-1">선생님 앱</span>
           </>
         ) : (
           accountLabel

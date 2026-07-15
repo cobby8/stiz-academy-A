@@ -13,6 +13,16 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  async rewrites() {
+    return [
+      {
+        // 설치 앱 주소는 /staff 범위에 유지하면서 공용 로그인 화면을 재사용한다.
+        source: "/staff/login",
+        destination: "/login?mode=staff",
+      },
+    ];
+  },
+
   // 보안 헤더 — 클릭재킹, MIME 스니핑, 불필요 권한 차단
   async headers() {
     return [
@@ -48,7 +58,26 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/(.*)", // 모든 경로에 적용
+        source: "/staff/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
+        ],
+      },
+      {
+        source: "/api/staff/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
+        ],
+      },
+      {
+        // 브라우저는 중복 권한 헤더를 교집합으로 적용하므로 교사용 경로와 겹치지 않게 한다.
+        source: "/((?!staff(?:/|$)|api/staff(?:/|$)).*)",
         headers: [
           { key: "X-Frame-Options", value: "DENY" }, // 클릭재킹 방지: iframe 삽입 차단
           { key: "X-Content-Type-Options", value: "nosniff" }, // MIME 스니핑 방지

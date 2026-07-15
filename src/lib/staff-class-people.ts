@@ -1,0 +1,172 @@
+import { unstable_noStore as noStore } from "next/cache";
+
+import { prisma } from "@/lib/prisma";
+import { requireStaffClassAccess } from "@/lib/staff-class-access";
+import { normalizePhoneNumber } from "@/lib/staff-contacts";
+
+export type StaffClassGuardian = {
+  id: string | null;
+  name: string;
+  relation: string;
+  phone: string | null;
+  isPrimary: boolean;
+};
+
+export type StaffClassAttendanceSummary = {
+  present: number;
+  late: number;
+  absent: number;
+  total: number;
+};
+
+export type StaffClassBillingSummary = {
+  unpaidCount: number;
+  pendingConfirmationCount: number;
+  unpaidAmount: number;
+};
+
+export type StaffClassPerson = {
+  id: string;
+  name: string;
+  school: string | null;
+  grade: string | null;
+  memo: string | null;
+  studentPhone: string | null;
+  guardians: StaffClassGuardian[];
+  recentAttendance: StaffClassAttendanceSummary;
+  todayStatus: "PRESENT" | "LATE" | "ABSENT" | null;
+  billing: StaffClassBillingSummary;
+};
+
+type StaffClassPersonRow = Omit<
+  StaffClassPerson,
+  "guardians" | "recentAttendance" | "billing"
+> & {
+  guardians: StaffClassGuardian[] | null;
+  recentAttendance: StaffClassAttendanceSummary | null;
+  billing: StaffClassBillingSummary | null;
+};
+
+/**
+ * 담당 수업의 활성 학생 정보를 한 번의 묶음 조회로 반환합니다.
+ * 연락처가 포함되므로 결과를 Next.js 데이터 캐시에 저장하지 않습니다.
+ */
+export async function getStaffClassPeople(
+  classId: string,
+  sessionId?: string | null,
+): Promise<StaffClassPerson[]> {
+  noStore();
+  await requireStaffClassAccess(classId);
+
+  const rows = await prisma.$queryRawUnsafe<StaffClassPersonRow[]>(
+    `WITH active_students AS (
+       SELECT DISTINCT s.id, s.name, s.school, s.grade, s.memo, s.phone, s."parentId"
+         FROM "Enrollment" e
+         JOIN "Student" s ON s.id = e."studentId"
+        WHERE e."classId" = $1
+          AND e.status = 'ACTIVE'
+     ), recent_attendance AS (
+       SELECT ranked."studentId",
+              COUNT(*) FILTER (WHERE ranked.status = 'PRESENT')::int AS present,
+              COUNT(*) FILTER (WHERE ranked.status = 'LATE')::int AS late,
+              COUNT(*) FILTER (WHERE ranked.status = 'ABSENT')::int AS absent,
+              COUNT(*)::int AS total
+         FROM (
+           SELECT a."studentId", a.status,
+                  ROW_NUMBER() OVER (PARTITION BY a."studentId" ORDER BY se.date DESC, a."updatedAt" DESC) AS rank
+             FROM "Attendance" a
+             JOIN "Session" se ON se.id = a."sessionId"
+            WHERE se."classId" = $1
+         ) ranked
+        WHERE ranked.rank <= 12
+        GROUP BY ranked."studentId"
+     ), billing_summary AS (
+       SELECT p."studentId",
+              COUNT(*) FILTER (WHERE p.status IN ('PENDING', 'OVERDUE'))::int AS "unpaidCount",
+              COALESCE(SUM(p.amount) FILTER (WHERE p.status IN ('PENDING', 'OVERDUE')), 0)::int AS "unpaidAmount",
+              COUNT(*) FILTER (WHERE latest.status = 'PENDING')::int AS "pendingConfirmationCount"
+         FROM "Payment" p
+         LEFT JOIN LATERAL (
+           SELECT r.status
+             FROM "StaffPaymentConfirmationRequest" r
+            WHERE r."paymentId" = p.id
+            ORDER BY r."createdAt" DESC
+            LIMIT 1
+         ) latest ON true
+        WHERE p."classId" = $1
+        GROUP BY p."studentId"
+     )
+     SELECT s.id, s.name, s.school, s.grade, s.memo, s.phone AS "studentPhone",
+            COALESCE(guardian_data.guardians, '[]'::jsonb) AS guardians,
+            jsonb_build_object(
+              'present', COALESCE(ra.present, 0),
+              'late', COALESCE(ra.late, 0),
+              'absent', COALESCE(ra.absent, 0),
+              'total', COALESCE(ra.total, 0)
+            ) AS "recentAttendance",
+            today_attendance.status AS "todayStatus",
+            jsonb_build_object(
+              'unpaidCount', COALESCE(bs."unpaidCount", 0),
+              'pendingConfirmationCount', COALESCE(bs."pendingConfirmationCount", 0),
+              'unpaidAmount', COALESCE(bs."unpaidAmount", 0)
+            ) AS billing
+       FROM active_students s
+       JOIN "User" parent ON parent.id = s."parentId"
+       LEFT JOIN LATERAL (
+         SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'id', contacts.id,
+                    'name', contacts.name,
+                    'relation', contacts.relation,
+                    'phone', contacts.phone,
+                    'isPrimary', contacts."isPrimary"
+                  )
+                  ORDER BY contacts."isPrimary" DESC, contacts.name
+                ) AS guardians
+           FROM (
+             SELECT g.id, g.name, g.relation, g.phone, g."isPrimary"
+               FROM "Guardian" g
+              WHERE g."studentId" = s.id
+             UNION ALL
+             SELECT NULL::text, parent.name, '보호자', parent.phone, true
+              WHERE NOT EXISTS (
+                SELECT 1
+                  FROM "Guardian" g
+                 WHERE g."studentId" = s.id
+                   AND NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), '')
+                       = NULLIF(regexp_replace(parent.phone, '[^0-9]', '', 'g'), '')
+              )
+           ) contacts
+       ) guardian_data ON true
+       LEFT JOIN recent_attendance ra ON ra."studentId" = s.id
+       LEFT JOIN billing_summary bs ON bs."studentId" = s.id
+       LEFT JOIN LATERAL (
+         SELECT a.status
+           FROM "Attendance" a
+           JOIN "Session" se ON se.id = a."sessionId"
+          WHERE a."studentId" = s.id
+            AND se."classId" = $1
+            AND (($2::text IS NOT NULL AND se.id = $2) OR ($2::text IS NULL AND se.date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date))
+          ORDER BY se."startedAt" DESC NULLS LAST, se."createdAt" DESC
+          LIMIT 1
+       ) today_attendance ON true
+      ORDER BY s.name`,
+    classId,
+    sessionId ?? null,
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    studentPhone: normalizePhoneNumber(row.studentPhone),
+    guardians: (row.guardians ?? []).map((guardian) => ({
+      ...guardian,
+      phone: normalizePhoneNumber(guardian.phone),
+    })),
+    recentAttendance: row.recentAttendance ?? { present: 0, late: 0, absent: 0, total: 0 },
+    billing: row.billing ?? {
+      unpaidCount: 0,
+      pendingConfirmationCount: 0,
+      unpaidAmount: 0,
+    },
+  }));
+}

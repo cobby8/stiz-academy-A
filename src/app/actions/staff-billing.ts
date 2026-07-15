@@ -3,9 +3,42 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireStaff } from "@/lib/auth-guard";
-import { requireStaffClassAccess } from "@/lib/staff-class-access";
+import { requireStaffStudentAccess } from "@/lib/staff-class-access";
+import {
+  getStaffClassBilling,
+  type StaffClassBillingItem,
+} from "@/lib/staff-class-billing";
 
 const METHODS = new Set(["CASH", "BANK_TRANSFER"]);
+
+export type SerializedStaffClassBillingItem = Omit<
+  StaffClassBillingItem,
+  "dueDate" | "paidDate"
+> & {
+  dueDate: string;
+  paidDate: string | null;
+};
+
+export async function loadStaffClassBilling(input: {
+  classId: string;
+  studentId?: string;
+}): Promise<{ ok: true; items: SerializedStaffClassBillingItem[] }> {
+  const classId = input.classId?.trim();
+  const studentId = input.studentId?.trim() || undefined;
+  if (!classId || classId.length > 128 || (studentId && studentId.length > 128)) {
+    throw new Error("수업 또는 학생 정보가 올바르지 않습니다.");
+  }
+
+  const items = await getStaffClassBilling(classId, studentId);
+  return {
+    ok: true,
+    items: items.map((item) => ({
+      ...item,
+      dueDate: item.dueDate.toISOString(),
+      paidDate: item.paidDate?.toISOString() ?? null,
+    })),
+  };
+}
 
 export async function requestStaffPaymentConfirmation(input: { paymentId: string; method: string; receivedAt: string; note?: string }) {
   const staff = await requireStaff();
@@ -15,8 +48,8 @@ export async function requestStaffPaymentConfirmation(input: { paymentId: string
   if (!paymentId || !METHODS.has(method) || Number.isNaN(receivedAt.getTime()) || receivedAt.getTime() > Date.now() + 60_000) {
     return { ok: false as const, message: "납부 확인 정보가 올바르지 않습니다." };
   }
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; classId: string | null; studentId: string; amount: number; status: string; invoiceId: string; issuedAt: Date }>>(
-    `SELECT p.id,p."classId",p."studentId",p.amount,p.status,i.id AS "invoiceId",i."issuedAt" FROM "Payment" p
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; classId: string | null; studentId: string; amount: number; status: string; invoiceId: string; invoiceStatus: string; issuedAt: Date }>>(
+    `SELECT p.id,p."classId",p."studentId",p.amount,p.status,i.id AS "invoiceId",i.status AS "invoiceStatus",i."issuedAt" FROM "Payment" p
      JOIN "PaymentInvoice" i ON i."paymentId"=p.id AND i."classId"=p."classId" AND i."studentId"=p."studentId" AND i.amount=p.amount
      WHERE p.id=$1 LIMIT 1`, paymentId,
   );
@@ -25,8 +58,9 @@ export async function requestStaffPaymentConfirmation(input: { paymentId: string
   if (receivedAt.getTime() < payment.issuedAt.getTime() - 5 * 60_000 || receivedAt.getTime() < Date.now() - 31 * 24 * 60 * 60_000) {
     return { ok: false as const, message: "수납 일시는 청구서 발행 이후 최근 31일 안에서만 입력할 수 있습니다." };
   }
-  await requireStaffClassAccess(payment.classId);
+  await requireStaffStudentAccess(payment.classId, payment.studentId);
   if (!['PENDING','OVERDUE'].includes(payment.status)) return { ok: false as const, message: "이미 처리되었거나 취소된 청구입니다." };
+  if (['PAID','CANCELED'].includes(payment.invoiceStatus)) return { ok: false as const, message: "이미 납부되었거나 취소된 청구서입니다." };
   try {
     await prisma.$executeRawUnsafe(
       `INSERT INTO "StaffPaymentConfirmationRequest" (id,"paymentId","invoiceId","classId","studentId","requestedByUserId",method,amount,"receivedAt",note,status,"createdAt","updatedAt")
@@ -37,7 +71,7 @@ export async function requestStaffPaymentConfirmation(input: { paymentId: string
     if (error instanceof Error && /unique|duplicate/i.test(error.message)) return { ok: false as const, message: "이미 확인 대기 중인 요청이 있습니다." };
     throw error;
   }
-  revalidatePath('/staff/billing'); revalidatePath('/admin/payment-confirmations');
+  revalidatePath('/staff/billing'); revalidatePath(`/staff/classes/${payment.classId}`); revalidatePath('/admin/payment-confirmations');
   return { ok: true as const, message: "관리자에게 납부 확인을 요청했습니다." };
 }
 

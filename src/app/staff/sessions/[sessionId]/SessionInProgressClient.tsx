@@ -9,6 +9,8 @@ import {
 } from "@/app/actions/staff-sessions";
 import { SessionPhotoUploader } from "@/components/staff/SessionPhotoUploader";
 import { VoiceToTextButton } from "@/components/staff/VoiceToTextButton";
+import { ClassBillingSheet } from "@/components/staff/ClassBillingSheet";
+import { ClassPeopleSheet } from "@/components/staff/ClassPeopleSheet";
 import type {
   StaffSessionDetail,
   StaffSessionStudent,
@@ -47,6 +49,8 @@ export default function SessionInProgressClient({
   const [message, setMessage] = useState("");
   const [showPlan, setShowPlan] = useState(true);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showPeople, setShowPeople] = useState(false);
+  const [billingStudent, setBillingStudent] = useState<{ id: string; name: string } | null | undefined>(undefined);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -219,6 +223,16 @@ export default function SessionInProgressClient({
           사진 등록
           <span className="mt-0.5 text-xs font-bold opacity-70">촬영 · 갤러리</span>
         </a>
+        <button type="button" onClick={() => setShowPeople(true)} className="flex min-h-20 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <span className="material-symbols-outlined mb-1 text-2xl text-[var(--brand-accent)]">contacts</span>
+          학생 정보
+          <span className="mt-0.5 text-xs font-bold text-gray-500">전화 · 문자</span>
+        </button>
+        <button type="button" onClick={() => setBillingStudent(null)} className="flex min-h-20 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <span className="material-symbols-outlined mb-1 text-2xl text-[var(--brand-accent)]">receipt_long</span>
+          청구 확인
+          <span className="mt-0.5 text-xs font-bold text-gray-500">납부 처리 요청</span>
+        </button>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
@@ -244,6 +258,9 @@ export default function SessionInProgressClient({
       </section>
 
       {message && <p aria-live="polite" className="rounded-xl bg-blue-50 p-3 text-sm font-bold text-blue-700">{message}</p>}
+
+      <ClassPeopleSheet open={showPeople} classId={session.classId} sessionId={session.id} className={session.className} onClose={() => setShowPeople(false)} onOpenBilling={(student) => { setShowPeople(false); setBillingStudent(student); }} />
+      <ClassBillingSheet key={`${session.classId}:${billingStudent?.id || "all"}`} open={billingStudent !== undefined} classId={session.classId} className={session.className} student={billingStudent} onClose={() => setBillingStudent(undefined)} />
 
       <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-lg px-4">
         <button type="button" onClick={() => setShowEndConfirm(true)} className="min-h-14 w-full rounded-2xl bg-red-600 px-4 font-black text-white shadow-lg"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료</button>

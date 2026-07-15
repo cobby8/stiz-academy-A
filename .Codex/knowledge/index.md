@@ -42,3 +42,4 @@
 - 결제 운영은 기존 Payment 153건을 PaymentInvoice와 1:1로 백필했고, PaymentTransaction/PaymentWebhookEvent/PaymentAuditLog로 온라인 납부와 추적 기록을 분리한다.
 - 학생별 2026년 월별 원장 데이터는 `Enrollment` 인원 계산과 분리해 상세 화면의 개인별 히스토리로 확인한다. 최신 완료 import 배치만 사용해 반복 import 중복을 피한다.
 - 학생 상세 운영 요약은 `PaymentInvoice.checkoutUrl`을 이용해 납부 링크를 바로 열 수 있게 하고, 청구서가 없는 과거 수납은 "없음"으로 구분한다.
+- 2026-07-15: 교사용 수업 화면의 학생 연락·청구 처리 성능 및 개인정보 캐시 금지 결정을 `decisions.md`에 기록.

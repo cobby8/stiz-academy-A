@@ -6,14 +6,11 @@ import {
   savePlannedClassContent,
   startClassSession,
 } from "@/app/actions/staff-sessions";
-import {
-  createStaffClassNotice,
-  loadStaffClassContacts,
-} from "@/app/actions/staff-notices";
+import { createStaffClassNotice } from "@/app/actions/staff-notices";
 import { VoiceToTextButton } from "@/components/staff/VoiceToTextButton";
+import { ClassBillingSheet } from "@/components/staff/ClassBillingSheet";
+import { ClassPeopleSheet } from "@/components/staff/ClassPeopleSheet";
 import type { StaffTodayClass } from "@/lib/staff-session-queries";
-
-type StaffContact = Awaited<ReturnType<typeof loadStaffClassContacts>>[number];
 
 export default function StaffHomeClient({
   dateKey,
@@ -27,11 +24,11 @@ export default function StaffHomeClient({
   const [startTarget, setStartTarget] = useState<StaffTodayClass | null>(null);
   const [contentTarget, setContentTarget] = useState<StaffTodayClass | null>(null);
   const [plannedContent, setPlannedContent] = useState("");
-  const [contactTarget, setContactTarget] = useState<StaffTodayClass | null>(null);
-  const [contacts, setContacts] = useState<StaffContact[]>([]);
   const [noticeTarget, setNoticeTarget] = useState<StaffTodayClass | null>(null);
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");
+  const [peopleTarget, setPeopleTarget] = useState<StaffTodayClass | null>(null);
+  const [billingTarget, setBillingTarget] = useState<{ lesson: StaffTodayClass; student?: { id: string; name: string } } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -76,16 +73,7 @@ export default function StaffHomeClient({
   }
 
   function openContacts(lesson: StaffTodayClass) {
-    setError(null);
-    setContactTarget(lesson);
-    setContacts([]);
-    startTransition(async () => {
-      try {
-        setContacts(await loadStaffClassContacts(lesson.id));
-      } catch {
-        setError("학생·학부모 명단을 불러오지 못했습니다.");
-      }
-    });
+    setPeopleTarget(lesson);
   }
 
   function sendNotice() {
@@ -168,9 +156,10 @@ export default function StaffHomeClient({
                     <span className="material-symbols-outlined">{focusClass.sessionStatus === "IN_PROGRESS" ? "arrow_forward" : "play_arrow"}</span>
                     {focusClass.sessionStatus === "IN_PROGRESS" ? "수업으로 돌아가기" : "수업 시작"}
                   </button>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <SecondaryButton icon="edit_note" label="수업 내용" onClick={() => openContent(focusClass)} disabled={focusClass.sessionStatus === "IN_PROGRESS"} inverted />
-                    <SecondaryButton icon="call" label="명단·전화" onClick={() => openContacts(focusClass)} inverted />
+                    <SecondaryButton icon="groups" label="학생 정보" onClick={() => setPeopleTarget(focusClass)} inverted />
+                    <SecondaryButton icon="receipt_long" label="청구 확인" onClick={() => setBillingTarget({ lesson: focusClass })} inverted />
                     <SecondaryButton icon="campaign" label="수업 공지" onClick={() => { setError(null); setNoticeTarget(focusClass); }} inverted />
                   </div>
                 </div>
@@ -194,25 +183,8 @@ export default function StaffHomeClient({
         </>
       ) : null}
 
-      {contactTarget && (
-        <Modal title="학생·학부모 명단" subtitle={contactTarget.name} onClose={() => setContactTarget(null)} labelledBy="contact-title" scrollable>
-          {pending && contacts.length === 0 ? <LoadingMessage text="명단을 불러오는 중입니다." /> : (
-            <div className="mt-4 space-y-3">
-              {contacts.map((contact) => (
-                <div key={`${contact.studentId}-${contact.guardianId || "parent"}`} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
-                  <p className="font-black dark:text-white">{contact.studentName}</p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                    {contact.parentPhone && <a href={`tel:${contact.parentPhone}`} className="rounded-lg bg-gray-100 px-3 py-2 font-bold dark:bg-gray-800">학부모 {contact.parentName} 전화</a>}
-                    {contact.guardianPhone && <a href={`tel:${contact.guardianPhone}`} className="rounded-lg bg-gray-100 px-3 py-2 font-bold dark:bg-gray-800">{contact.guardianRelation || "보호자"} {contact.guardianName} 전화</a>}
-                  </div>
-                </div>
-              ))}
-              {contacts.length === 0 && <LoadingMessage text="등록된 연락처가 없습니다." />}
-            </div>
-          )}
-          <ErrorMessage error={error} />
-        </Modal>
-      )}
+      {peopleTarget && <ClassPeopleSheet key={`${peopleTarget.id}:${peopleTarget.sessionId || "today"}`} open classId={peopleTarget.id} sessionId={peopleTarget.sessionId} className={peopleTarget.name} onClose={() => setPeopleTarget(null)} onOpenBilling={(student) => { const lesson = peopleTarget; setPeopleTarget(null); setBillingTarget({ lesson, student }); }} />}
+      {billingTarget && <ClassBillingSheet key={`${billingTarget.lesson.id}:${billingTarget.student?.id || "all"}`} open classId={billingTarget.lesson.id} className={billingTarget.lesson.name} student={billingTarget.student} onClose={() => setBillingTarget(null)} />}
 
       {noticeTarget && (
         <Modal title="수업 공지 작성" subtitle={`${noticeTarget.name} 학부모에게만 발송합니다.`} onClose={() => setNoticeTarget(null)} labelledBy="notice-title">
@@ -277,4 +249,3 @@ function Modal({ title, subtitle, onClose, labelledBy, scrollable = false, child
 
 function ModalActions({ pending, onCancel, onConfirm, confirmLabel, disabled = false }: { pending: boolean; onCancel: () => void; onConfirm: () => void; confirmLabel: string; disabled?: boolean }) { return <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={pending} onClick={onCancel} className="min-h-12 rounded-xl border border-gray-200 font-bold dark:border-gray-700">취소</button><button type="button" disabled={pending || disabled} onClick={onConfirm} className="min-h-12 rounded-xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{confirmLabel}</button></div>; }
 function ErrorMessage({ error }: { error: string | null }) { return error ? <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p> : null; }
-function LoadingMessage({ text }: { text: string }) { return <p className="py-8 text-center text-sm text-gray-500">{text}</p>; }

@@ -359,12 +359,37 @@ async function getStudentSheetImportSummary() {
                     ORDER BY "createdAt" DESC
                     LIMIT 1
                 ),
+                ledger AS (
+                    SELECT
+                        r.*,
+                        (
+                            string_to_array(
+                                trim(both ',' from regexp_replace(COALESCE(r."registrationMonth", ''), '[^0-9]+', ',', 'g')),
+                                ','
+                            )
+                        )[2]::int AS "monthNumber"
+                    FROM "StudentRegistrationLedger" r
+                    JOIN latest ON latest.id = r."batchId"
+                ),
+                selected_month AS (
+                    SELECT l."monthNumber"
+                    FROM ledger l
+                    WHERE l."monthNumber" IS NOT NULL
+                    GROUP BY l."monthNumber"
+                    ORDER BY l."monthNumber" DESC
+                    LIMIT 1
+                ),
+                target AS (
+                    SELECT l.*
+                    FROM ledger l
+                    JOIN selected_month sm ON sm."monthNumber" = l."monthNumber"
+                    WHERE l.status = 'ACTIVE'
+                ),
                 sheet_slots AS (
                     SELECT
                         slot_key AS "slotKey",
-                        COUNT(DISTINCT COALESCE(r."studentKey", r."studentId", r."studentName" || ':' || COALESCE(r."parentPhone", r."rowNumber"::text)))::int AS "sheetCount"
-                    FROM "StudentRegistrationLedger" r
-                    JOIN latest ON latest.id = r."batchId"
+                        COUNT(DISTINCT COALESCE(r."studentId", r."studentKey", r."studentName" || ':' || COALESCE(r."parentPhone", r."rowNumber"::text)))::int AS "sheetCount"
+                    FROM target r
                     CROSS JOIN LATERAL jsonb_array_elements_text(
                         COALESCE(NULLIF(r."selectedSlotKeysJSON", ''), '[]')::jsonb
                     ) AS slot_key
@@ -407,25 +432,61 @@ async function getStudentSheetImportSummary() {
                 withdrawn: number;
                 noEnrollment: number;
             }[]>(
-                `WITH student_status AS (
+                `WITH latest AS (
+                    SELECT id
+                    FROM "StudentSheetImportBatch"
+                    WHERE status = 'COMPLETED'
+                    ORDER BY "createdAt" DESC
+                    LIMIT 1
+                ),
+                ledger AS (
+                    SELECT
+                        r.*,
+                        (
+                            string_to_array(
+                                trim(both ',' from regexp_replace(COALESCE(r."registrationMonth", ''), '[^0-9]+', ',', 'g')),
+                                ','
+                            )
+                        )[2]::int AS "monthNumber"
+                    FROM "StudentRegistrationLedger" r
+                    JOIN latest ON latest.id = r."batchId"
+                    WHERE r."studentId" IS NOT NULL
+                ),
+                selected_month AS (
+                    SELECT l."monthNumber"
+                    FROM ledger l
+                    WHERE l."monthNumber" IS NOT NULL
+                    GROUP BY l."monthNumber"
+                    ORDER BY l."monthNumber" DESC
+                    LIMIT 1
+                ),
+                student_month_status AS (
+                    SELECT
+                        l."studentId",
+                        l."monthNumber",
+                        CASE
+                            WHEN BOOL_OR(l.status = 'WITHDRAWN') THEN 'WITHDRAWN'
+                            WHEN BOOL_OR(l.status = 'ACTIVE') THEN 'ACTIVE'
+                            WHEN BOOL_OR(l.status = 'PAUSED') THEN 'PAUSED'
+                            ELSE 'WITHDRAWN'
+                        END AS status
+                    FROM ledger l
+                    JOIN selected_month sm ON l."monthNumber" <= sm."monthNumber"
+                    GROUP BY l."studentId", l."monthNumber"
+                ),
+                current_student_status AS (
+                    SELECT DISTINCT ON (sms."studentId")
+                        sms."studentId",
+                        sms.status
+                    FROM student_month_status sms
+                    ORDER BY sms."studentId", sms."monthNumber" DESC
+                ),
+                student_status AS (
                     SELECT
                         s.id,
-                        CASE
-                            WHEN EXISTS (
-                                SELECT 1
-                                FROM "Enrollment" e
-                                WHERE e."studentId" = s.id
-                                  AND e.status = 'ACTIVE'
-                            ) THEN 'ACTIVE'
-                            ELSE (
-                                SELECT e.status
-                                FROM "Enrollment" e
-                                WHERE e."studentId" = s.id
-                                ORDER BY e."createdAt" DESC
-                                LIMIT 1
-                            )
-                        END AS status
+                        css.status
                     FROM "Student" s
+                    LEFT JOIN current_student_status css ON css."studentId" = s.id
                 )
                 SELECT
                     COUNT(*)::int AS total,

@@ -183,15 +183,66 @@ export const getStudents = cache(async (limit?: number) => {
                 FROM "Enrollment" e
                 JOIN "Class" c ON e."classId" = c.id
                 GROUP BY e."studentId"
+             ),
+             latest_batch AS (
+                SELECT id
+                FROM "StudentSheetImportBatch"
+                WHERE status = 'COMPLETED'
+                ORDER BY "createdAt" DESC
+                LIMIT 1
+             ),
+             ledger AS (
+                SELECT
+                    r.*,
+                    (
+                        string_to_array(
+                            trim(both ',' from regexp_replace(COALESCE(r."registrationMonth", ''), '[^0-9]+', ',', 'g')),
+                            ','
+                        )
+                    )[2]::int AS "monthNumber"
+                FROM "StudentRegistrationLedger" r
+                JOIN latest_batch lb ON lb.id = r."batchId"
+                WHERE r."studentId" IS NOT NULL
+             ),
+             selected_month AS (
+                SELECT l."monthNumber"
+                FROM ledger l
+                WHERE l."monthNumber" IS NOT NULL
+                GROUP BY l."monthNumber"
+                ORDER BY l."monthNumber" DESC
+                LIMIT 1
+             ),
+             student_month_status AS (
+                SELECT
+                    l."studentId",
+                    l."monthNumber",
+                    CASE
+                        WHEN BOOL_OR(l.status = 'WITHDRAWN') THEN 'WITHDRAWN'
+                        WHEN BOOL_OR(l.status = 'ACTIVE') THEN 'ACTIVE'
+                        WHEN BOOL_OR(l.status = 'PAUSED') THEN 'PAUSED'
+                        ELSE 'WITHDRAWN'
+                    END AS status
+                FROM ledger l
+                JOIN selected_month sm ON l."monthNumber" <= sm."monthNumber"
+                GROUP BY l."studentId", l."monthNumber"
+             ),
+             current_student_status AS (
+                SELECT DISTINCT ON (sms."studentId")
+                    sms."studentId",
+                    sms.status
+                FROM student_month_status sms
+                ORDER BY sms."studentId", sms."monthNumber" DESC
              )
              SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
                     s.phone, s.school, s.grade, s.address, s."enrollDate",
                     s."createdAt", s."updatedAt",
                     u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email,
-                    COALESCE(ej.enrollments, '[]'::json) AS enrollments
+                    COALESCE(ej.enrollments, '[]'::json) AS enrollments,
+                    css.status AS current_status
              FROM "Student" s
              LEFT JOIN "User" u ON s."parentId" = u.id
              LEFT JOIN enrollment_json ej ON ej."studentId" = s.id
+             LEFT JOIN current_student_status css ON css."studentId" = s.id
              ORDER BY s.name ASC${normalizedLimit ? ` LIMIT ${normalizedLimit}` : ""}`
         );
         return rows.map((r: any) => ({
@@ -212,6 +263,7 @@ export const getStudents = cache(async (limit?: number) => {
                 phone: r.parent_phone ?? null,
                 email: r.parent_email ?? null,
             },
+            currentStatus: r.current_status ?? null,
             // 수강 정보 배열 (없으면 빈 배열)
             enrollments: r.enrollments ?? [],
         }));
@@ -1199,7 +1251,7 @@ function addNumber(total: number, value: unknown) {
 
 function chooseLedgerStatus(current: string, next: unknown) {
     const nextStatus = typeof next === "string" ? next : "NONE";
-    const order: Record<string, number> = { ACTIVE: 3, PAUSED: 2, WITHDRAWN: 1, NONE: 0 };
+    const order: Record<string, number> = { WITHDRAWN: 3, ACTIVE: 2, PAUSED: 1, NONE: 0 };
     return (order[nextStatus] ?? 0) > (order[current] ?? 0) ? nextStatus : current;
 }
 

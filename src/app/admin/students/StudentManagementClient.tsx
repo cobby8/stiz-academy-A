@@ -29,6 +29,7 @@ type Student = {
     address: string | null;     // 주소
     enrollDate: Date | string | null;  // 입회일자
     createdAt: Date | string;
+    currentStatus?: string | null;
     parent: {
         name: string | null;
         phone: string | null;
@@ -1199,7 +1200,7 @@ export default function StudentManagementClient({
     const studentStatusById = useMemo(() => {
         const statusMap = new Map<string, string | null>();
         students.forEach((student) => {
-            statusMap.set(student.id, getLatestStatus(student.enrollments));
+            statusMap.set(student.id, student.currentStatus ?? getLatestStatus(student.enrollments));
         });
         return statusMap;
     }, [students]);
@@ -1473,7 +1474,7 @@ export default function StudentManagementClient({
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4 lg:grid-cols-8">
-                            <ImportSummaryMetric label="DB 전체" value={sheetImportSummary.studentStatusCounts?.total ?? statusCounts.total} />
+                            <ImportSummaryMetric label="현재 기준" value={sheetImportSummary.studentStatusCounts?.total ?? statusCounts.total} />
                             <ImportSummaryMetric label="최신 원생" value={sheetImportSummary.uniqueStudents} />
                             <ImportSummaryMetric label="등록" value={sheetImportSummary.registrationRows} />
                             <ImportSummaryMetric label="차량" value={sheetImportSummary.vehicleRows} />

@@ -1,5 +1,11 @@
 # Errors And Traps
 
+## 시간표 키는 항상 실제 Class 컬럼으로 확인한다
+- 현상: 확인용 raw SQL에서 `Class.timeSlotKey`를 조회하면 `column c.timeSlotKey does not exist` 오류가 난다.
+- 원인: `Mon-4` 같은 슬롯 키는 장부/코드에서 계산해 쓰는 값이고, `Class` 테이블의 실제 컬럼은 `dayOfWeek`, `startTime`, `endTime` 등으로 분리되어 있다.
+- 해결: DB 직접 검증에서는 `dayOfWeek`, `startTime`, `endTime`을 조회하거나 코드의 슬롯 키 생성 함수를 거친 값을 비교한다.
+- 예방: UI 표시용/계산용 필드와 DB 실제 컬럼을 혼동하지 않도록 raw SQL 작성 전 Prisma schema 또는 기존 쿼리를 확인한다.
+
 ## 수강생 월 표기는 숫자 추출로 파싱한다
 - 현상: `2026년 7월` 같은 값에서 월을 뽑아 최신 월을 계산해야 하는데, 정규식/인코딩/캡처 방식에 따라 `20`처럼 연도 일부를 월로 잘못 잡을 수 있다.
 - 원인: 한글 리터럴과 `substring(... from '([0-9]{1,2})월')` 조합은 운영 DB/스크립트 환경에서 기대와 다르게 동작할 수 있고, 문자열 앞의 `2026` 숫자가 먼저 잡힌다.

@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { mode, csvText, csvSheets, source, sheetUrl } = body as {
-      mode: "preview" | "execute";
+      mode: "preview" | "execute" | "refreshLedger";
       csvText?: string;
       csvSheets?: Record<string, string>;
       source?: "csv" | "googleSheet";
@@ -117,10 +117,48 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // 장부 최신화 모드: 기존 원생/결제 생성 단계는 건너뛰고 시트 원본과 월별 장부만 저장
+    if (mode === "refreshLedger") {
+      await ensureStudentSheetImportTablesAvailable();
+      const sheetImport = await storeStudentSheetImport(
+        {
+          registrationRows: registrationSheet.rows,
+          shuttleRows: auxiliarySheets.shuttleRows,
+          changeRows: auxiliarySheets.changeRows,
+          teamRows: auxiliarySheets.teamRows,
+        },
+        {
+          importedBy: adminUser.appUserId,
+          sourceUrl,
+          spreadsheetId,
+          spreadsheetTitle: source === "googleSheet" ? "수강생 운영 구글시트" : "수강생 등록 CSV",
+          summary: {
+            registration: registrationSheet.summary,
+            auxiliary: auxiliarySheets.summary,
+            source: { fetchedSheets, skippedSheets },
+          },
+          parseErrorCount: registrationSheet.errors.length + auxiliarySheets.errors.length,
+        },
+        { recordAuxiliaryUnmatchedIssues: false, updateStudents: false }
+      );
+
+      revalidateStudentImportCaches();
+
+      return NextResponse.json({
+        result: {
+          created: { users: 0, students: 0, enrollments: 0, payments: 0 },
+          skipped: { users: 0, students: 0, enrollments: 0, payments: 0 },
+          failed: [],
+        },
+        sheetImport,
+        ledgerOnly: true,
+      });
+    }
+
     // 실행 모드: DB에 삽입
     if (mode !== "execute") {
       return NextResponse.json(
-        { error: "mode는 'preview' 또는 'execute'여야 합니다." },
+        { error: "mode는 'preview', 'execute', 'refreshLedger' 중 하나여야 합니다." },
         { status: 400 }
       );
     }
@@ -225,6 +263,122 @@ interface StudentSheetImportRows {
   changeRows: StudentChangeSheetRow[];
   teamRows: StudentTeamRosterSheetRow[];
 }
+
+const IMPORT_BULK_CHUNK_SIZE = 250;
+
+type StudentSheetRawRowBulkInput = {
+  id: string;
+  batchId: string;
+  sheetName: string;
+  rowNumber: number;
+  rowHash: string | null;
+  studentKey: string | null;
+  studentId: string | null;
+  rawJSON: string;
+  normalizedJSON: string | null;
+};
+
+type StudentRegistrationLedgerBulkInput = {
+  id: string;
+  batchId: string;
+  rawRowId: string;
+  studentId: string | null;
+  rowNumber: number;
+  studentKey: string | null;
+  branch: string | null;
+  applicationAt: Date | null;
+  paymentDate: Date | null;
+  registrationMonth: string | null;
+  studentName: string;
+  studentGender: string | null;
+  grade: string | null;
+  uniformStatus: string | null;
+  paymentMethod: string | null;
+  paymentAmount: number | null;
+  tuitionAmount: number | null;
+  shuttleFee: number | null;
+  carryOverAmount: number | null;
+  shuttleNeeded: boolean;
+  shuttlePickup: string | null;
+  shuttlePreferredTime: string | null;
+  shuttleDropoff: string | null;
+  selectedSlotKeysJSON: string;
+  birthDate: Date | null;
+  parentName: string | null;
+  studentPhone: string | null;
+  parentPhone: string | null;
+  address: string | null;
+  school: string | null;
+  basketballExp: string | null;
+  hopeNote: string | null;
+  referralSource: string | null;
+  agreedPrivacy: boolean;
+  agreedTerms: boolean;
+  agreementJSON: string;
+  enrollmentPeriod: string | null;
+  status: string;
+  rawJSON: string;
+};
+
+type StudentShuttleRideBulkInput = {
+  id: string;
+  batchId: string;
+  rawRowId: string;
+  studentId: string | null;
+  monthLabel: string;
+  rowNumber: number;
+  studentName: string | null;
+  studentPhone: string | null;
+  parentPhone: string | null;
+  dayLabel: string | null;
+  classTime: string | null;
+  arrivalTime: string | null;
+  destination: string | null;
+  note: string | null;
+  memo: string | null;
+  rawJSON: string;
+};
+
+type StudentChangeLogBulkInput = {
+  id: string;
+  batchId: string;
+  rawRowId: string;
+  rowNumber: number;
+  occurredAt: Date | null;
+  changeSummary: string | null;
+  registrationReflected: boolean;
+  rallyzReflected: boolean;
+  vehicleReflected: boolean;
+  alarmStatus: string | null;
+  note: string | null;
+  rawJSON: string;
+};
+
+type StudentTeamRosterEntryBulkInput = {
+  id: string;
+  batchId: string;
+  rawRowId: string;
+  studentId: string | null;
+  rowNumber: number;
+  studentName: string;
+  birthDate: Date | null;
+  jerseyNumber: string | null;
+  phone: string | null;
+  grade: string | null;
+  branch: string | null;
+  eventColumnsJSON: string;
+  rawJSON: string;
+};
+
+type StudentSheetImportIssueBulkInput = {
+  id: string;
+  batchId: string;
+  sheetName: string;
+  rowNumber: number;
+  severity: "WARNING" | "ERROR";
+  message: string;
+  rawJSON: string;
+};
 
 function emptyImportPreview() {
   return {
@@ -522,7 +676,8 @@ async function getDefaultStudentSheetUrl() {
 
 async function storeStudentSheetImport(
   rows: StudentSheetImportRows,
-  meta: RegistrationSheetImportMeta
+  meta: RegistrationSheetImportMeta,
+  options: { recordAuxiliaryUnmatchedIssues?: boolean; updateStudents?: boolean } = {}
 ) {
   const totalRows =
     rows.registrationRows.length +
@@ -560,6 +715,7 @@ async function storeStudentSheetImport(
     throw new Error("수강생 시트 이관 배치를 생성하지 못했습니다.");
   }
 
+  try {
   let rawRows = 0;
   let ledgerRows = 0;
   let shuttleRows = 0;
@@ -567,8 +723,47 @@ async function storeStudentSheetImport(
   let teamRows = 0;
   let issues = meta.parseErrorCount;
 
+  const rawRowInputs: StudentSheetRawRowBulkInput[] = [];
+  const issueInputs: StudentSheetImportIssueBulkInput[] = [];
+  const registrationMatchCache = new Map<string, string | null>();
+  const auxiliaryMatchCache = new Map<string, string | null>();
+  const latestRegistrationUpdates = new Map<string, { rawRowId: string; row: StudentRegistrationSheetRow }>();
+  const shouldRecordAuxiliaryUnmatchedIssues = options.recordAuxiliaryUnmatchedIssues ?? true;
+  const shouldUpdateStudents = options.updateStudents ?? true;
+  const getRegistrationMatch = async (row: StudentRegistrationSheetRow) => {
+    const key = [
+      row.studentName,
+      row.parentPhone,
+      row.studentPhone,
+      row.parentName,
+      row.birthDate?.toISOString() ?? "",
+      row.grade,
+      row.school,
+    ].join("\u001f");
+
+    if (!registrationMatchCache.has(key)) {
+      registrationMatchCache.set(key, await findStudentIdForRegistration(row));
+    }
+
+    return registrationMatchCache.get(key) ?? null;
+  };
+  const getAuxiliaryMatch = async (
+    studentName: string | null,
+    parentPhone: string | null,
+    studentPhone: string | null
+  ) => {
+    const key = [studentName, parentPhone, studentPhone].join("\u001f");
+
+    if (!auxiliaryMatchCache.has(key)) {
+      auxiliaryMatchCache.set(key, await findStudentIdByNameAndPhones(studentName, parentPhone, studentPhone));
+    }
+
+    return auxiliaryMatchCache.get(key) ?? null;
+  };
+
+  const registrationLedgerInputs: StudentRegistrationLedgerBulkInput[] = [];
   for (const row of rows.registrationRows) {
-    const studentId = await findStudentIdForRegistration(row);
+    const studentId = await getRegistrationMatch(row);
     const rawJSON = JSON.stringify(row.raw);
     const normalizedJSON = JSON.stringify({
       studentKey: row.studentKey,
@@ -582,112 +777,100 @@ async function storeStudentSheetImport(
       shuttleNeeded: row.shuttleNeeded,
       status: row.status,
     });
+    const rawRowId = crypto.randomUUID();
 
-    const rawRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
-      `INSERT INTO "StudentSheetRawRow" (
-         id, "batchId", "sheetName", "rowNumber", "rowHash", "studentKey",
-         "studentId", "rawJSON", "normalizedJSON", "createdAt"
-       )
-       VALUES (gen_random_uuid()::text, $1, '등록', $2, $3, $4, $5, $6, $7, NOW())
-       RETURNING id`,
+    rawRowInputs.push({
+      id: rawRowId,
       batchId,
-      row.rowNumber,
-      row.rowHash,
-      row.studentKey,
+      sheetName: "등록",
+      rowNumber: row.rowNumber,
+      rowHash: row.rowHash,
+      studentKey: row.studentKey,
       studentId,
       rawJSON,
-      normalizedJSON
-    );
+      normalizedJSON,
+    });
     rawRows++;
 
-    const rawRowId = rawRow[0]?.id ?? null;
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "StudentRegistrationLedger" (
-         id, "batchId", "rawRowId", "studentId", "rowNumber", "studentKey",
-         branch, "applicationAt", "paymentDate", "registrationMonth",
-         "studentName", "studentGender", grade, "uniformStatus", "paymentMethod",
-         "paymentAmount", "tuitionAmount", "shuttleFee", "carryOverAmount",
-         "shuttleNeeded", "shuttlePickup", "shuttlePreferredTime", "shuttleDropoff",
-         "selectedSlotKeysJSON", "birthDate", "parentName", "studentPhone", "parentPhone",
-         address, school, "basketballExp", "hopeNote", "referralSource",
-         "agreedPrivacy", "agreedTerms", "agreementJSON", "enrollmentPeriod",
-         status, "rawJSON", "createdAt", "updatedAt"
-       )
-       VALUES (
-         gen_random_uuid()::text, $1, $2, $3, $4, $5,
-         $6, $7, $8, $9,
-         $10, $11, $12, $13, $14,
-         $15, $16, $17, $18,
-         $19, $20, $21, $22,
-         $23, $24, $25, $26, $27,
-         $28, $29, $30, $31, $32,
-         $33, $34, $35, $36,
-         $37, $38, NOW(), NOW()
-       )`,
+    registrationLedgerInputs.push({
+      id: crypto.randomUUID(),
       batchId,
       rawRowId,
       studentId,
-      row.rowNumber,
-      row.studentKey,
-      row.branch,
-      row.applicationAt,
-      row.paymentDate,
-      row.registrationMonth,
-      row.studentName,
-      row.studentGender,
-      row.grade,
-      row.uniformStatus,
-      row.paymentMethod,
-      row.paymentAmount,
-      row.tuitionAmount,
-      row.shuttleFee,
-      row.carryOverAmount,
-      row.shuttleNeeded,
-      row.shuttlePickup,
-      row.shuttlePreferredTime,
-      row.shuttleDropoff,
-      JSON.stringify(row.selectedSlotKeys),
-      row.birthDate,
-      row.parentName,
-      row.studentPhone,
-      row.parentPhone,
-      row.address,
-      row.school,
-      row.basketballExp,
-      row.hopeNote,
-      row.referralSource,
-      row.agreedPrivacy,
-      row.agreedTerms,
-      JSON.stringify(row.agreementJSON),
-      row.enrollmentPeriod,
-      row.status,
-      rawJSON
-    );
+      rowNumber: row.rowNumber,
+      studentKey: row.studentKey,
+      branch: row.branch,
+      applicationAt: toImportDate(row.applicationAt),
+      paymentDate: toImportDate(row.paymentDate),
+      registrationMonth: row.registrationMonth,
+      studentName: row.studentName,
+      studentGender: row.studentGender,
+      grade: row.grade,
+      uniformStatus: row.uniformStatus,
+      paymentMethod: row.paymentMethod,
+      paymentAmount: row.paymentAmount,
+      tuitionAmount: row.tuitionAmount,
+      shuttleFee: row.shuttleFee,
+      carryOverAmount: row.carryOverAmount,
+      shuttleNeeded: row.shuttleNeeded,
+      shuttlePickup: row.shuttlePickup,
+      shuttlePreferredTime: row.shuttlePreferredTime,
+      shuttleDropoff: row.shuttleDropoff,
+      selectedSlotKeysJSON: JSON.stringify(row.selectedSlotKeys),
+      birthDate: toImportDate(row.birthDate),
+      parentName: row.parentName,
+      studentPhone: row.studentPhone,
+      parentPhone: row.parentPhone,
+      address: row.address,
+      school: row.school,
+      basketballExp: row.basketballExp,
+      hopeNote: row.hopeNote,
+      referralSource: row.referralSource,
+      agreedPrivacy: row.agreedPrivacy,
+      agreedTerms: row.agreedTerms,
+      agreementJSON: JSON.stringify(row.agreementJSON),
+      enrollmentPeriod: row.enrollmentPeriod,
+      status: row.status,
+      rawJSON,
+    });
     ledgerRows++;
 
     if (studentId) {
-      await updateStudentFromRegistrationRow(studentId, rawRowId, row);
+      const previous = latestRegistrationUpdates.get(studentId);
+      if (!previous || row.rowNumber > previous.row.rowNumber) {
+        latestRegistrationUpdates.set(studentId, { rawRowId, row });
+      }
     } else {
-      await createImportIssue(
+      issueInputs.push({
+        id: crypto.randomUUID(),
         batchId,
-        "등록",
-        row.rowNumber,
-        "WARNING",
-        row.studentKey
+        sheetName: "등록",
+        rowNumber: row.rowNumber,
+        severity: "WARNING",
+        message: row.studentKey
           ? "원본 등록 행은 저장했지만 기존/신규 Student와 연결하지 못했습니다."
           : "원본 등록 행은 저장했지만 학생 이름 또는 학부모 전화번호가 부족해 Student 연결키를 만들지 못했습니다.",
-        rawJSON
-      );
+        rawJSON,
+      });
       issues++;
     }
   }
 
+  await insertStudentSheetRawRowsBulk(rawRowInputs);
+  await insertStudentRegistrationLedgersBulk(registrationLedgerInputs);
+  if (shouldUpdateStudents) {
+    for (const { rawRowId, row } of latestRegistrationUpdates.values()) {
+      const studentId = await getRegistrationMatch(row);
+      if (studentId) {
+        await updateStudentFromRegistrationRow(studentId, rawRowId, row);
+      }
+    }
+  }
+
+  rawRowInputs.length = 0;
+  const shuttleRideInputs: StudentShuttleRideBulkInput[] = [];
   for (const row of rows.shuttleRows) {
-    const studentId = await findStudentIdByNameAndPhones(
-      row.studentName,
-      row.parentPhone,
-      row.studentPhone
-    );
+    const studentId = await getAuxiliaryMatch(row.studentName, row.parentPhone, row.studentPhone);
     const rawJSON = JSON.stringify(row.raw);
     const normalizedJSON = JSON.stringify({
       studentKey: row.studentKey,
@@ -697,7 +880,9 @@ async function storeStudentSheetImport(
       arrivalTime: row.arrivalTime,
       destination: row.destination,
     });
-    const rawRowId = await insertStudentSheetRawRow({
+    const rawRowId = crypto.randomUUID();
+    rawRowInputs.push({
+      id: rawRowId,
       batchId,
       sheetName: row.sheetName,
       rowNumber: row.rowNumber,
@@ -709,58 +894,57 @@ async function storeStudentSheetImport(
     });
     rawRows++;
 
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "StudentShuttleRide" (
-         id, "batchId", "rawRowId", "studentId", "monthLabel", "rowNumber",
-         "studentName", "studentPhone", "parentPhone", "dayLabel", "classTime",
-         "arrivalTime", destination, note, memo, "rawJSON", "createdAt", "updatedAt"
-       )
-       VALUES (
-         gen_random_uuid()::text, $1, $2, $3, $4, $5,
-         $6, $7, $8, $9, $10,
-         $11, $12, $13, $14, $15, NOW(), NOW()
-       )`,
+    shuttleRideInputs.push({
+      id: crypto.randomUUID(),
       batchId,
       rawRowId,
       studentId,
-      row.monthLabel,
-      row.rowNumber,
-      row.studentName,
-      row.studentPhone,
-      row.parentPhone,
-      row.dayLabel,
-      row.classTime,
-      row.arrivalTime,
-      row.destination,
-      row.note,
-      row.memo,
-      rawJSON
-    );
+      monthLabel: row.monthLabel,
+      rowNumber: row.rowNumber,
+      studentName: row.studentName,
+      studentPhone: row.studentPhone,
+      parentPhone: row.parentPhone,
+      dayLabel: row.dayLabel,
+      classTime: row.classTime,
+      arrivalTime: row.arrivalTime,
+      destination: row.destination,
+      note: row.note,
+      memo: row.memo,
+      rawJSON,
+    });
     shuttleRows++;
 
-    if (!studentId) {
-      await createImportIssue(
+    if (!studentId && shouldRecordAuxiliaryUnmatchedIssues) {
+      issueInputs.push({
+        id: crypto.randomUUID(),
         batchId,
-        row.sheetName,
-        row.rowNumber,
-        "WARNING",
-        "차량 행은 저장했지만 Student와 연결하지 못했습니다.",
-        rawJSON
-      );
+        sheetName: row.sheetName,
+        rowNumber: row.rowNumber,
+        severity: "WARNING",
+        message: "차량 행은 저장했지만 Student와 연결하지 못했습니다.",
+        rawJSON,
+      });
       issues++;
     }
   }
 
+  await insertStudentSheetRawRowsBulk(rawRowInputs);
+  await insertStudentShuttleRidesBulk(shuttleRideInputs);
+
+  rawRowInputs.length = 0;
+  const changeLogInputs: StudentChangeLogBulkInput[] = [];
   for (const row of rows.changeRows) {
     const rawJSON = JSON.stringify(row.raw);
     const normalizedJSON = JSON.stringify({
-      occurredAt: row.occurredAt,
+      occurredAt: toImportDate(row.occurredAt),
       changeSummary: row.changeSummary,
       registrationReflected: row.registrationReflected,
       rallyzReflected: row.rallyzReflected,
       vehicleReflected: row.vehicleReflected,
     });
-    const rawRowId = await insertStudentSheetRawRow({
+    const rawRowId = crypto.randomUUID();
+    rawRowInputs.push({
+      id: rawRowId,
       batchId,
       sheetName: row.sheetName,
       rowNumber: row.rowNumber,
@@ -772,38 +956,34 @@ async function storeStudentSheetImport(
     });
     rawRows++;
 
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "StudentChangeLog" (
-         id, "batchId", "rawRowId", "rowNumber", "occurredAt", "changeSummary",
-         "registrationReflected", "rallyzReflected", "vehicleReflected",
-         "alarmStatus", note, "rawJSON", "createdAt"
-       )
-       VALUES (
-         gen_random_uuid()::text, $1, $2, $3, $4, $5,
-         $6, $7, $8,
-         $9, $10, $11, NOW()
-       )`,
+    changeLogInputs.push({
+      id: crypto.randomUUID(),
       batchId,
       rawRowId,
-      row.rowNumber,
-      row.occurredAt,
-      row.changeSummary,
-      row.registrationReflected,
-      row.rallyzReflected,
-      row.vehicleReflected,
-      row.alarmStatus,
-      row.note,
-      rawJSON
-    );
+      rowNumber: row.rowNumber,
+      occurredAt: row.occurredAt,
+      changeSummary: row.changeSummary,
+      registrationReflected: row.registrationReflected,
+      rallyzReflected: row.rallyzReflected,
+      vehicleReflected: row.vehicleReflected,
+      alarmStatus: row.alarmStatus,
+      note: row.note,
+      rawJSON,
+    });
     changeRows++;
   }
 
+  await insertStudentSheetRawRowsBulk(rawRowInputs);
+  await insertStudentChangeLogsBulk(changeLogInputs);
+
+  rawRowInputs.length = 0;
+  const teamRosterInputs: StudentTeamRosterEntryBulkInput[] = [];
   for (const row of rows.teamRows) {
     const teamMatch = await findStudentIdentityMatch(prisma, {
       studentName: row.studentName,
       parentPhone: row.phone,
       studentPhone: row.phone,
-      birthDate: row.birthDate,
+      birthDate: toImportDate(row.birthDate),
       grade: row.grade,
     });
     const studentId = teamMatch?.studentId ?? null;
@@ -815,7 +995,9 @@ async function storeStudentSheetImport(
       branch: row.branch,
       eventColumnsJSON: row.eventColumnsJSON,
     });
-    const rawRowId = await insertStudentSheetRawRow({
+    const rawRowId = crypto.randomUUID();
+    rawRowInputs.push({
+      id: rawRowId,
       batchId,
       sheetName: row.sheetName,
       rowNumber: row.rowNumber,
@@ -827,44 +1009,40 @@ async function storeStudentSheetImport(
     });
     rawRows++;
 
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "StudentTeamRosterEntry" (
-         id, "batchId", "rawRowId", "studentId", "rowNumber", "studentName",
-         "birthDate", "jerseyNumber", phone, grade, branch, "eventColumnsJSON",
-         "rawJSON", "createdAt", "updatedAt"
-       )
-       VALUES (
-         gen_random_uuid()::text, $1, $2, $3, $4, $5,
-         $6, $7, $8, $9, $10, $11,
-         $12, NOW(), NOW()
-       )`,
+    teamRosterInputs.push({
+      id: crypto.randomUUID(),
       batchId,
       rawRowId,
       studentId,
-      row.rowNumber,
-      row.studentName,
-      row.birthDate,
-      row.jerseyNumber,
-      row.phone,
-      row.grade,
-      row.branch,
-      JSON.stringify(row.eventColumnsJSON),
-      rawJSON
-    );
+      rowNumber: row.rowNumber,
+      studentName: row.studentName,
+      birthDate: toImportDate(row.birthDate),
+      jerseyNumber: row.jerseyNumber,
+      phone: row.phone,
+      grade: row.grade,
+      branch: row.branch,
+      eventColumnsJSON: JSON.stringify(row.eventColumnsJSON),
+      rawJSON,
+    });
     teamRows++;
 
-    if (!studentId) {
-      await createImportIssue(
+    if (!studentId && shouldRecordAuxiliaryUnmatchedIssues) {
+      issueInputs.push({
+        id: crypto.randomUUID(),
         batchId,
-        row.sheetName,
-        row.rowNumber,
-        "WARNING",
-        "대표팀 명단 행은 저장했지만 Student와 연결하지 못했습니다.",
-        rawJSON
-      );
+        sheetName: row.sheetName,
+        rowNumber: row.rowNumber,
+        severity: "WARNING",
+        message: "대표팀 명단 행은 저장했지만 Student와 연결하지 못했습니다.",
+        rawJSON,
+      });
       issues++;
     }
   }
+
+  await insertStudentSheetRawRowsBulk(rawRowInputs);
+  await insertStudentTeamRosterEntriesBulk(teamRosterInputs);
+  await insertStudentSheetImportIssuesBulk(issueInputs);
 
   await prisma.$executeRawUnsafe(
     `UPDATE "StudentSheetImportBatch"
@@ -897,6 +1075,23 @@ async function storeStudentSheetImport(
     teamRows,
     issues,
   };
+  } catch (error) {
+    try {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "StudentSheetImportBatch"
+         SET status = 'FAILED',
+             message = $2,
+             "completedAt" = NOW()
+         WHERE id = $1`,
+        batchId,
+        error instanceof Error ? error.message : "수강생 시트 이관 중 오류가 발생했습니다."
+      );
+    } catch (markFailedError) {
+      console.error("[import-students] failed to mark batch as failed:", markFailedError);
+    }
+
+    throw error;
+  }
 }
 
 async function findStudentIdForRegistration(row: StudentRegistrationSheetRow) {
@@ -952,6 +1147,161 @@ async function insertStudentSheetRawRow(input: {
     input.normalizedJSON
   );
   return rawRow[0]?.id ?? null;
+}
+
+function chunkArray<T>(items: T[], size = IMPORT_BULK_CHUNK_SIZE) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function toImportDate(value: Date | null) {
+  if (!value || Number.isNaN(value.getTime())) return null;
+  const year = value.getUTCFullYear();
+  return year >= 1900 && year <= 2100 ? value : null;
+}
+
+async function insertStudentSheetRawRowsBulk(rows: StudentSheetRawRowBulkInput[]) {
+  for (const chunk of chunkArray(rows)) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentSheetRawRow" (
+         id, "batchId", "sheetName", "rowNumber", "rowHash", "studentKey",
+         "studentId", "rawJSON", "normalizedJSON", "createdAt"
+       )
+       SELECT
+         x.id, x."batchId", x."sheetName", x."rowNumber", x."rowHash", x."studentKey",
+         x."studentId", x."rawJSON", x."normalizedJSON", NOW()
+       FROM jsonb_to_recordset($1::jsonb) AS x(
+         id text, "batchId" text, "sheetName" text, "rowNumber" int, "rowHash" text,
+         "studentKey" text, "studentId" text, "rawJSON" text, "normalizedJSON" text
+       )`,
+      JSON.stringify(chunk)
+    );
+  }
+}
+
+async function insertStudentRegistrationLedgersBulk(rows: StudentRegistrationLedgerBulkInput[]) {
+  for (const chunk of chunkArray(rows)) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentRegistrationLedger" (
+         id, "batchId", "rawRowId", "studentId", "rowNumber", "studentKey",
+         branch, "applicationAt", "paymentDate", "registrationMonth",
+         "studentName", "studentGender", grade, "uniformStatus", "paymentMethod",
+         "paymentAmount", "tuitionAmount", "shuttleFee", "carryOverAmount",
+         "shuttleNeeded", "shuttlePickup", "shuttlePreferredTime", "shuttleDropoff",
+         "selectedSlotKeysJSON", "birthDate", "parentName", "studentPhone", "parentPhone",
+         address, school, "basketballExp", "hopeNote", "referralSource",
+         "agreedPrivacy", "agreedTerms", "agreementJSON", "enrollmentPeriod",
+         status, "rawJSON", "createdAt", "updatedAt"
+       )
+       SELECT
+         x.id, x."batchId", x."rawRowId", x."studentId", x."rowNumber", x."studentKey",
+         x.branch, x."applicationAt", x."paymentDate", x."registrationMonth",
+         x."studentName", x."studentGender", x.grade, x."uniformStatus", x."paymentMethod",
+         x."paymentAmount", x."tuitionAmount", x."shuttleFee", x."carryOverAmount",
+         COALESCE(x."shuttleNeeded", false), x."shuttlePickup", x."shuttlePreferredTime", x."shuttleDropoff",
+         COALESCE(x."selectedSlotKeysJSON", '[]'), x."birthDate", x."parentName", x."studentPhone", x."parentPhone",
+         x.address, x.school, x."basketballExp", x."hopeNote", x."referralSource",
+         COALESCE(x."agreedPrivacy", false), COALESCE(x."agreedTerms", false), COALESCE(x."agreementJSON", '{}'), x."enrollmentPeriod",
+         COALESCE(x.status, 'ACTIVE'), x."rawJSON", NOW(), NOW()
+       FROM jsonb_to_recordset($1::jsonb) AS x(
+         id text, "batchId" text, "rawRowId" text, "studentId" text, "rowNumber" int, "studentKey" text,
+         branch text, "applicationAt" timestamptz, "paymentDate" timestamptz, "registrationMonth" text,
+         "studentName" text, "studentGender" text, grade text, "uniformStatus" text, "paymentMethod" text,
+         "paymentAmount" int, "tuitionAmount" int, "shuttleFee" int, "carryOverAmount" int,
+         "shuttleNeeded" boolean, "shuttlePickup" text, "shuttlePreferredTime" text, "shuttleDropoff" text,
+         "selectedSlotKeysJSON" text, "birthDate" timestamptz, "parentName" text, "studentPhone" text, "parentPhone" text,
+         address text, school text, "basketballExp" text, "hopeNote" text, "referralSource" text,
+         "agreedPrivacy" boolean, "agreedTerms" boolean, "agreementJSON" text, "enrollmentPeriod" text,
+         status text, "rawJSON" text
+       )`,
+      JSON.stringify(chunk)
+    );
+  }
+}
+
+async function insertStudentShuttleRidesBulk(rows: StudentShuttleRideBulkInput[]) {
+  for (const chunk of chunkArray(rows)) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentShuttleRide" (
+         id, "batchId", "rawRowId", "studentId", "monthLabel", "rowNumber",
+         "studentName", "studentPhone", "parentPhone", "dayLabel", "classTime",
+         "arrivalTime", destination, note, memo, "rawJSON", "createdAt", "updatedAt"
+       )
+       SELECT
+         x.id, x."batchId", x."rawRowId", x."studentId", x."monthLabel", x."rowNumber",
+         x."studentName", x."studentPhone", x."parentPhone", x."dayLabel", x."classTime",
+         x."arrivalTime", x.destination, x.note, x.memo, x."rawJSON", NOW(), NOW()
+       FROM jsonb_to_recordset($1::jsonb) AS x(
+         id text, "batchId" text, "rawRowId" text, "studentId" text, "monthLabel" text, "rowNumber" int,
+         "studentName" text, "studentPhone" text, "parentPhone" text, "dayLabel" text, "classTime" text,
+         "arrivalTime" text, destination text, note text, memo text, "rawJSON" text
+       )`,
+      JSON.stringify(chunk)
+    );
+  }
+}
+
+async function insertStudentChangeLogsBulk(rows: StudentChangeLogBulkInput[]) {
+  for (const chunk of chunkArray(rows)) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentChangeLog" (
+         id, "batchId", "rawRowId", "rowNumber", "occurredAt", "changeSummary",
+         "registrationReflected", "rallyzReflected", "vehicleReflected",
+         "alarmStatus", note, "rawJSON", "createdAt"
+       )
+       SELECT
+         x.id, x."batchId", x."rawRowId", x."rowNumber", x."occurredAt", x."changeSummary",
+         COALESCE(x."registrationReflected", false), COALESCE(x."rallyzReflected", false), COALESCE(x."vehicleReflected", false),
+         x."alarmStatus", x.note, x."rawJSON", NOW()
+       FROM jsonb_to_recordset($1::jsonb) AS x(
+         id text, "batchId" text, "rawRowId" text, "rowNumber" int, "occurredAt" timestamptz, "changeSummary" text,
+         "registrationReflected" boolean, "rallyzReflected" boolean, "vehicleReflected" boolean,
+         "alarmStatus" text, note text, "rawJSON" text
+       )`,
+      JSON.stringify(chunk)
+    );
+  }
+}
+
+async function insertStudentTeamRosterEntriesBulk(rows: StudentTeamRosterEntryBulkInput[]) {
+  for (const chunk of chunkArray(rows)) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentTeamRosterEntry" (
+         id, "batchId", "rawRowId", "studentId", "rowNumber", "studentName",
+         "birthDate", "jerseyNumber", phone, grade, branch, "eventColumnsJSON",
+         "rawJSON", "createdAt", "updatedAt"
+       )
+       SELECT
+         x.id, x."batchId", x."rawRowId", x."studentId", x."rowNumber", x."studentName",
+         x."birthDate", x."jerseyNumber", x.phone, x.grade, x.branch, COALESCE(x."eventColumnsJSON", '{}'),
+         x."rawJSON", NOW(), NOW()
+       FROM jsonb_to_recordset($1::jsonb) AS x(
+         id text, "batchId" text, "rawRowId" text, "studentId" text, "rowNumber" int, "studentName" text,
+         "birthDate" timestamptz, "jerseyNumber" text, phone text, grade text, branch text, "eventColumnsJSON" text,
+         "rawJSON" text
+       )`,
+      JSON.stringify(chunk)
+    );
+  }
+}
+
+async function insertStudentSheetImportIssuesBulk(rows: StudentSheetImportIssueBulkInput[]) {
+  for (const chunk of chunkArray(rows)) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StudentSheetImportIssue" (
+         id, "batchId", "sheetName", "rowNumber", severity, message, "rawJSON", "createdAt"
+       )
+       SELECT
+         x.id, x."batchId", x."sheetName", x."rowNumber", x.severity, x.message, x."rawJSON", NOW()
+       FROM jsonb_to_recordset($1::jsonb) AS x(
+         id text, "batchId" text, "sheetName" text, "rowNumber" int, severity text, message text, "rawJSON" text
+       )`,
+      JSON.stringify(chunk)
+    );
+  }
 }
 
 async function updateStudentFromRegistrationRow(

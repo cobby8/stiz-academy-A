@@ -63,6 +63,33 @@ const RECONCILE_CTE = `
     FROM ledger l
     JOIN selected_month sm ON sm."monthNumber" = l."monthNumber"
   ),
+  student_month_status AS (
+    SELECT
+      r."studentId",
+      MAX(r."studentName") AS "studentName",
+      r."monthNumber",
+      MAX(r."registrationMonth") AS "registrationMonth",
+      CASE
+        WHEN BOOL_OR(r.status = 'WITHDRAWN') THEN 'WITHDRAWN'
+        WHEN BOOL_OR(r.status = 'ACTIVE') THEN 'ACTIVE'
+        WHEN BOOL_OR(r.status = 'PAUSED') THEN 'PAUSED'
+        ELSE 'WITHDRAWN'
+      END AS "targetStatus"
+    FROM ledger r
+    JOIN selected_month sm ON r."monthNumber" <= sm."monthNumber"
+    WHERE r."studentId" IS NOT NULL
+      AND r."monthNumber" IS NOT NULL
+    GROUP BY r."studentId", r."monthNumber"
+  ),
+  latest_student_status AS (
+    SELECT DISTINCT ON (sms."studentId")
+      sms."studentId",
+      sms."studentName",
+      sms."registrationMonth",
+      sms."targetStatus"
+    FROM student_month_status sms
+    ORDER BY sms."studentId", sms."monthNumber" DESC
+  ),
   expected_pairs AS (
     SELECT DISTINCT
       r."studentId",
@@ -76,19 +103,6 @@ const RECONCILE_CTE = `
     JOIN "Class" c ON c."slotKey" = slot_key
     WHERE r."studentId" IS NOT NULL
       AND r.status = 'ACTIVE'
-  ),
-  scoped_students AS (
-    SELECT
-      r."studentId",
-      MAX(r."studentName") AS "studentName",
-      CASE
-        WHEN BOOL_OR(r.status = 'ACTIVE') THEN 'ACTIVE'
-        WHEN BOOL_OR(r.status = 'PAUSED') THEN 'PAUSED'
-        ELSE 'WITHDRAWN'
-      END AS "targetStatus"
-    FROM target r
-    WHERE r."studentId" IS NOT NULL
-    GROUP BY r."studentId"
   ),
   active_enrollments AS (
     SELECT
@@ -128,7 +142,7 @@ const RECONCILE_CTE = `
         ELSE 'PAUSED'
       END AS "targetStatus"
     FROM active_enrollments ae
-    LEFT JOIN scoped_students ss ON ss."studentId" = ae."studentId"
+    LEFT JOIN latest_student_status ss ON ss."studentId" = ae."studentId"
     LEFT JOIN expected_pairs ep ON ep."studentId" = ae."studentId" AND ep."classId" = ae."classId"
     WHERE ae.status = 'ACTIVE'
       AND ep."studentId" IS NULL
@@ -147,7 +161,7 @@ const RECONCILE_CTE = `
   outside_scope AS (
     SELECT DISTINCT ae."studentId"
     FROM active_enrollments ae
-    LEFT JOIN scoped_students ss ON ss."studentId" = ae."studentId"
+    LEFT JOIN latest_student_status ss ON ss."studentId" = ae."studentId"
     WHERE ae.status = 'ACTIVE'
       AND ss."studentId" IS NULL
   )

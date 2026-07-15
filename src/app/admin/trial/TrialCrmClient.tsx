@@ -241,6 +241,47 @@ function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
     return badges.slice(0, 4);
 }
 
+function joinSummaryLines(lines: Array<string | null | undefined | false>) {
+    return lines.filter(Boolean).join("\n");
+}
+
+async function copyTextToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+}
+
+function formatTrialCopySummary(lead: TrialLead) {
+    const childInfo = [lead.childAge, lead.childGrade, lead.childSchool, lead.childGender].filter(Boolean).join(" / ");
+    const preferredSchedule = [lead.preferredDay ? `${lead.preferredDay}요일` : null, lead.preferredPeriod ? `${lead.preferredPeriod}교시` : null]
+        .filter(Boolean)
+        .join(" ");
+
+    return joinSummaryLines([
+        `[체험 문의] ${lead.childName}`,
+        childInfo ? `학생: ${childInfo}` : null,
+        `보호자: ${lead.parentName}`,
+        `연락처: ${lead.parentPhone}`,
+        lead.trialDate ? `희망 체험일: ${lead.trialDate}` : null,
+        preferredSchedule ? `희망 시간: ${preferredSchedule}` : null,
+        lead.basketballExp ? `농구 경험: ${lead.basketballExp}` : null,
+        lead.trialFeeConfirmed ? "체험비: 확인" : null,
+        lead.hopeNote ? `바라는 점: ${lead.hopeNote}` : null,
+        lead.memo ? `메모: ${lead.memo}` : null,
+    ]);
+}
+
 function TrialCrmLoadingFallback() {
     return (
         <div className="space-y-6">
@@ -356,6 +397,14 @@ export default function TrialCrmClient({
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
     }, []);
+    const handleCopyText = useCallback(async (text: string, successMessage: string) => {
+        try {
+            await copyTextToClipboard(text);
+            showFeedback("success", successMessage);
+        } catch {
+            showFeedback("error", "복사 중 문제가 생겼습니다. 직접 선택해서 복사해주세요.");
+        }
+    }, [showFeedback]);
 
     // 필터링된 리드 목록
     const filteredLeads = useMemo(() => {
@@ -811,6 +860,37 @@ export default function TrialCrmClient({
 
                                     {/* 오른쪽: 액션 버튼 */}
                                     <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                                        <a
+                                            href={parentPhoneHref}
+                                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            title="보호자에게 전화"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">call</span>
+                                            전화
+                                        </a>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCopyText(lead.parentPhone, `${lead.childName} 보호자 연락처를 복사했습니다.`)}
+                                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            title="보호자 연락처 복사"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">content_copy</span>
+                                            번호 복사
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                handleCopyText(
+                                                    formatTrialCopySummary(lead),
+                                                    `${lead.childName} 체험 요약을 복사했습니다.`,
+                                                )
+                                            }
+                                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            title="상담용 체험 요약 복사"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">assignment</span>
+                                            요약 복사
+                                        </button>
                                         {/* 상태 변경 드롭다운 — CONVERTED/LOST가 아닌 경우만 */}
                                         {lead.status !== "CONVERTED" && lead.status !== "LOST" && (
                                             <select

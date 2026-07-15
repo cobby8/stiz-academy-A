@@ -439,6 +439,47 @@ function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
     return badges.slice(0, 4);
 }
 
+function joinSummaryLines(lines: Array<string | null | undefined | false>) {
+    return lines.filter(Boolean).join("\n");
+}
+
+async function copyTextToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+}
+
+function formatApplicationCopySummary(app: EnrollApplication, preferredSlotLabel: string | null) {
+    const childInfo = [app.childGrade, app.childSchool, app.childGender].filter(Boolean).join(" / ");
+    const parentInfo = `${app.parentName}${app.parentRelation ? ` (${app.parentRelation})` : ""}`;
+    const shuttleInfo = app.shuttleNeeded
+        ? [app.shuttlePickup, app.shuttleDropoff, app.shuttleTime].filter(Boolean).join(" / ") || "필요"
+        : null;
+
+    return joinSummaryLines([
+        `[수강신청] ${app.childName}`,
+        childInfo ? `학생: ${childInfo}` : null,
+        `보호자: ${parentInfo}`,
+        `연락처: ${app.parentPhone}`,
+        app.enrollmentMonths ? `수강 월: ${app.enrollmentMonths}` : null,
+        preferredSlotLabel ? `희망 시간: ${preferredSlotLabel}` : null,
+        app.basketballExp ? `농구 경험: ${app.basketballExp}` : null,
+        shuttleInfo ? `셔틀: ${shuttleInfo}` : null,
+        app.memo ? `메모: ${app.memo}` : null,
+    ]);
+}
+
 function ApplyLoadingFallback() {
     return (
         <div className="space-y-6">
@@ -569,6 +610,14 @@ export default function ApplyAdminClient({
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
     }, []);
+    const handleCopyText = useCallback(async (text: string, successMessage: string) => {
+        try {
+            await copyTextToClipboard(text);
+            showFeedback("success", successMessage);
+        } catch {
+            showFeedback("error", "복사 중 문제가 생겼습니다. 직접 선택해서 복사해주세요.");
+        }
+    }, [showFeedback]);
 
     // 필터링된 신청서 목록
     const filteredApps = useMemo(() => {
@@ -1109,6 +1158,37 @@ export default function ApplyAdminClient({
 
                                             {/* 오른쪽: 액션 버튼 */}
                                             <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                                                <a
+                                                    href={parentPhoneHref}
+                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    title="보호자에게 전화"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">call</span>
+                                                    전화
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleCopyText(app.parentPhone, `${app.childName} 보호자 연락처를 복사했습니다.`)}
+                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    title="보호자 연락처 복사"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">content_copy</span>
+                                                    번호 복사
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        handleCopyText(
+                                                            formatApplicationCopySummary(app, preferredSlotLabel),
+                                                            `${app.childName} 신청 요약을 복사했습니다.`,
+                                                        )
+                                                    }
+                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    title="상담용 신청 요약 복사"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">assignment</span>
+                                                    요약 복사
+                                                </button>
                                                 {/* 상세보기 */}
                                                 <button
                                                     onClick={() => setShowDetailModal(app)}

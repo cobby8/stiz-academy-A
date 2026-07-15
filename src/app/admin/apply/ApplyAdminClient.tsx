@@ -141,9 +141,9 @@ type ApplyPayload = {
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-800", icon: "hourglass_top" },
-    APPROVED: { label: "승인완료", color: "bg-green-100 text-green-800", icon: "check_circle" },
-    REJECTED: { label: "반려", color: "bg-red-100 text-red-800", icon: "cancel" },
+    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-200", icon: "hourglass_top" },
+    APPROVED: { label: "승인완료", color: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200", icon: "check_circle" },
+    REJECTED: { label: "반려", color: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200", icon: "cancel" },
     CANCELLED: { label: "취소", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "block" },
 };
 
@@ -174,6 +174,91 @@ const EMPTY_STATS: EnrollStats = {
     CANCELLED: 0,
     total: 0,
 };
+
+const DAY_LABELS: Record<string, string> = {
+    Mon: "월",
+    Tue: "화",
+    Wed: "수",
+    Thu: "목",
+    Fri: "금",
+    Sat: "토",
+    Sun: "일",
+};
+
+function formatClassLabel(classInfo: ClassInfo) {
+    const dayLabel = DAY_LABELS[classInfo.dayOfWeek] || classInfo.dayOfWeek;
+    const programName = classInfo.program?.name ? ` · ${classInfo.program.name}` : "";
+    return `${dayLabel} ${classInfo.startTime}~${classInfo.endTime} · ${classInfo.name}${programName}`;
+}
+
+function formatPreferredSlots(slotKeys: string | null, classesBySlotKey: Map<string, ClassInfo>) {
+    if (!slotKeys) return null;
+    const keys = slotKeys.split(",").map((key) => key.trim()).filter(Boolean);
+    if (keys.length === 0) return null;
+
+    const labels: string[] = [];
+    let unknownCount = 0;
+
+    keys.forEach((key) => {
+        const classInfo = classesBySlotKey.get(key);
+        if (classInfo) {
+            labels.push(formatClassLabel(classInfo));
+        } else {
+            unknownCount += 1;
+        }
+    });
+
+    if (labels.length === 0) return "희망 시간 확인 필요";
+    if (unknownCount > 0) return `${labels.join(" / ")} 외 ${unknownCount}개 시간 확인 필요`;
+    return labels.join(" / ");
+}
+
+function phoneHref(phone: string) {
+    const digits = phone.replace(/\D/g, "");
+    return digits ? `tel:${digits}` : undefined;
+}
+
+function getApplicationFlags(app: EnrollApplication, preferredSlotLabel: string | null) {
+    const flags: Array<{ icon: string; label: string; className: string }> = [];
+
+    if (app.status === "PENDING") {
+        flags.push({
+            icon: "priority_high",
+            label: "처리 대기",
+            className: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200",
+        });
+    }
+    if (app.status === "PENDING" && !app.assignedClassId) {
+        flags.push({
+            icon: "edit_calendar",
+            label: "반 배정 필요",
+            className: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200",
+        });
+    }
+    if (!preferredSlotLabel) {
+        flags.push({
+            icon: "schedule",
+            label: "희망 시간 확인",
+            className: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200",
+        });
+    }
+    if (app.shuttleNeeded) {
+        flags.push({
+            icon: "directions_bus",
+            label: "셔틀 확인",
+            className: "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200",
+        });
+    }
+    if (app.trialLeadId) {
+        flags.push({
+            icon: "link",
+            label: "체험 후 신청",
+            className: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200",
+        });
+    }
+
+    return flags.slice(0, 4);
+}
 
 function ApplyLoadingFallback() {
     return (
@@ -259,14 +344,13 @@ export default function ApplyAdminClient({
         try {
             const response = await fetch("/api/admin/apply", { cache: "no-store" });
             if (!response.ok) {
-                throw new Error("Failed to load applications.");
+                throw new Error("request failed");
             }
             const data = (await response.json()) as ApplyPayload;
             setApplications(data.applications);
             setStats(data.stats);
             setClasses(data.classes);
-        } catch (error) {
-            console.error("Failed to load applications:", error);
+        } catch {
             setLoadError("failed");
         } finally {
             setLoading(false);
@@ -293,6 +377,16 @@ export default function ApplyAdminClient({
         setVisibleLimit(APPLICATION_PAGE_SIZE);
     }, [filter]);
     const hasOpenModal = Boolean(showApproveModal || showRejectModal || showDetailModal);
+    const trialNewCount = initialTrialStats?.NEW ?? 0;
+    const trialScheduledCount = initialTrialStats?.SCHEDULED ?? 0;
+    const actionTotal = trialNewCount + stats.PENDING;
+    const classesBySlotKey = useMemo(() => {
+        const map = new Map<string, ClassInfo>();
+        classes.forEach((classInfo) => {
+            if (classInfo.slotKey) map.set(classInfo.slotKey, classInfo);
+        });
+        return map;
+    }, [classes]);
 
     // 날짜 포맷
     function formatDate(dateStr: string | null) {
@@ -327,15 +421,14 @@ export default function ApplyAdminClient({
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">how_to_reg</span>
-                        수강 신청 관리
-                        {/* PENDING 건수 배지 */}
-                        {stats.PENDING > 0 && (
+                        체험/수강신청 관리
+                        {actionTotal > 0 && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
-                                {stats.PENDING}건 대기
+                                확인 필요 {actionTotal}건
                             </span>
                         )}
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">수강 신청서를 확인하고 승인/반려 처리합니다</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험 문의부터 정규 등록까지 한 화면에서 확인하고 처리합니다</p>
                 </div>
                 <a
                     href="/apply"
@@ -348,18 +441,57 @@ export default function ApplyAdminClient({
                 </a>
             </div>
 
+            <div className="grid gap-3 md:grid-cols-3">
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("trial")}
+                    className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-neon-lime"
+                >
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-bold text-gray-500 dark:text-gray-400">새 체험 문의</span>
+                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">diversity_3</span>
+                    </div>
+                    <p className="mt-2 text-3xl font-black text-gray-900 dark:text-white">{trialNewCount}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">먼저 연락하고 체험 일정을 잡아주세요</p>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("trial")}
+                    className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-neon-lime"
+                >
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-bold text-gray-500 dark:text-gray-400">예정된 체험</span>
+                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">event_available</span>
+                    </div>
+                    <p className="mt-2 text-3xl font-black text-gray-900 dark:text-white">{trialScheduledCount}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">수업 전 안내와 담당 선생님 공유를 확인하세요</p>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("applications")}
+                    className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-neon-lime"
+                >
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-bold text-gray-500 dark:text-gray-400">수강신청 대기</span>
+                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
+                    </div>
+                    <p className="mt-2 text-3xl font-black text-gray-900 dark:text-white">{stats.PENDING}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">반 배정, 셔틀, 보호자 메모를 확인하세요</p>
+                </button>
+            </div>
+
             {/* 탭 버튼 */}
             <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
                 <button
                     onClick={() => setActiveTab("trial")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                         activeTab === "trial"
-                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
                             : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-lg">diversity_3</span>
-                    체험 CRM
+                    체험 문의
                     {(initialTrialStats?.NEW ?? 0) > 0 && (
                         <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                             {initialTrialStats?.NEW}
@@ -370,12 +502,12 @@ export default function ApplyAdminClient({
                     onClick={() => setActiveTab("applications")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                         activeTab === "applications"
-                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
                             : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
                     <span className="material-symbols-outlined text-lg">assignment</span>
-                    신청서 관리
+                    수강신청
                     {stats.PENDING > 0 && (
                         <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                             {stats.PENDING}
@@ -386,7 +518,7 @@ export default function ApplyAdminClient({
                     onClick={() => setActiveTab("settings")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                         activeTab === "settings"
-                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
                             : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
                     }`}
                 >
@@ -447,7 +579,7 @@ export default function ApplyAdminClient({
                             onClick={() => setFilter("ALL")}
                             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                                 filter === "ALL"
-                                    ? "bg-gray-900 text-white"
+                                    ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                                     : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                             }`}
                         >
@@ -462,7 +594,7 @@ export default function ApplyAdminClient({
                                     onClick={() => setFilter(filter === s ? "ALL" : s)}
                                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                                         filter === s
-                                            ? "bg-gray-900 text-white"
+                                            ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                                             : `${cfg.color} hover:opacity-80`
                                     }`}
                                 >
@@ -487,6 +619,9 @@ export default function ApplyAdminClient({
                             {visibleApps.map((app) => {
                                 const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
                                 const age = calcAge(app.childBirthDate);
+                                const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
+                                const workFlags = getApplicationFlags(app, preferredSlotLabel);
+                                const parentPhoneHref = phoneHref(app.parentPhone);
                                 return (
                                     <div
                                         key={app.id}
@@ -502,17 +637,25 @@ export default function ApplyAdminClient({
                                                         {cfg.label}
                                                     </span>
                                                     {app.referralSource && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200">
                                                             {SOURCE_LABELS[app.referralSource] || app.referralSource}
                                                         </span>
                                                     )}
-                                                    {app.trialLeadId && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700">
-                                                            <span className="material-symbols-outlined text-xs">link</span>
-                                                            체험 연결
-                                                        </span>
-                                                    )}
                                                 </div>
+
+                                                {workFlags.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 mb-2">
+                                                        {workFlags.map((flag) => (
+                                                            <span
+                                                                key={`${app.id}-${flag.label}`}
+                                                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold ${flag.className}`}
+                                                            >
+                                                                <span className="material-symbols-outlined text-xs">{flag.icon}</span>
+                                                                {flag.label}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
 
                                                 {/* 아이 이름 + 나이/학년 */}
                                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -531,10 +674,13 @@ export default function ApplyAdminClient({
                                                         {app.parentName}
                                                         {app.parentRelation && ` (${app.parentRelation})`}
                                                     </span>
-                                                    <span className="flex items-center gap-1">
+                                                    <a
+                                                        href={parentPhoneHref}
+                                                        className="flex items-center gap-1 font-semibold text-gray-700 hover:text-brand-orange-600 dark:text-gray-200 dark:hover:text-brand-neon-lime"
+                                                    >
                                                         <span className="material-symbols-outlined text-base">phone</span>
                                                         {app.parentPhone}
-                                                    </span>
+                                                    </a>
                                                     <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-base">calendar_today</span>
                                                         {formatDate(app.createdAt)}
@@ -545,19 +691,19 @@ export default function ApplyAdminClient({
                                                 {(app.childGrade || app.childSchool || app.childGender) && (
                                                     <div className="flex flex-wrap gap-2 mt-2">
                                                         {app.childGrade && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
                                                                 <span className="material-symbols-outlined text-xs">school</span>
                                                                 {app.childGrade}
                                                             </span>
                                                         )}
                                                         {app.childSchool && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200">
                                                                 <span className="material-symbols-outlined text-xs">apartment</span>
                                                                 {app.childSchool}
                                                             </span>
                                                         )}
                                                         {app.childGender && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-pink-50 text-pink-700">
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-pink-50 text-pink-700 dark:bg-pink-950/40 dark:text-pink-200">
                                                                 {app.childGender}
                                                             </span>
                                                         )}
@@ -566,7 +712,7 @@ export default function ApplyAdminClient({
 
                                                 {/* 희망 시간대 */}
                                                 {app.enrollmentMonths && (
-                                                    <div className="flex items-center gap-1 mt-2 text-xs text-lime-700 bg-lime-50 rounded-lg px-3 py-1.5">
+                                                    <div className="flex items-center gap-1 mt-2 text-xs text-lime-700 bg-lime-50 rounded-lg px-3 py-1.5 dark:bg-lime-950/40 dark:text-lime-200">
                                                         <span className="material-symbols-outlined text-sm">calendar_month</span>
                                                         <span className="font-medium">수강 월:</span>
                                                         {app.enrollmentMonths}
@@ -574,18 +720,18 @@ export default function ApplyAdminClient({
                                                 )}
 
                                                 {/* 희망 시간대 */}
-                                                {app.preferredSlotKeys && (
-                                                    <div className="flex items-center gap-1 mt-2 text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-1.5">
+                                                {preferredSlotLabel && (
+                                                    <div className="flex items-center gap-1 mt-2 text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-1.5 dark:bg-purple-950/40 dark:text-purple-200">
                                                         <span className="material-symbols-outlined text-sm">schedule</span>
                                                         <span className="font-medium">희망 시간:</span>
-                                                        {app.preferredSlotKeys}
+                                                        {preferredSlotLabel}
                                                     </div>
                                                 )}
 
                                                 {/* 농구 경험 태그 */}
                                                 {app.basketballExp && (
                                                     <div className="flex flex-wrap gap-2 mt-2">
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200">
                                                             <span className="material-symbols-outlined text-xs">sports_basketball</span>
                                                             농구 {app.basketballExp}
                                                         </span>
@@ -595,18 +741,18 @@ export default function ApplyAdminClient({
                                                 {/* 셔틀 정보 */}
                                                 {app.shuttleNeeded && (
                                                     <div className="flex flex-wrap gap-2 mt-2">
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200">
                                                             <span className="material-symbols-outlined text-xs">directions_bus</span>
                                                             셔틀 탑승{app.shuttlePickup ? `: ${app.shuttlePickup}` : ""}
                                                         </span>
                                                         {app.shuttleDropoff && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200">
                                                                 <span className="material-symbols-outlined text-xs">pin_drop</span>
                                                                 하차: {app.shuttleDropoff}
                                                             </span>
                                                         )}
                                                         {app.shuttleTime && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700">
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200">
                                                                 <span className="material-symbols-outlined text-xs">schedule</span>
                                                                 {app.shuttleTime}
                                                             </span>
@@ -625,8 +771,8 @@ export default function ApplyAdminClient({
                                                 {app.processedNote && (
                                                     <p className={`mt-2 text-sm rounded-lg px-3 py-2 ${
                                                         app.status === "APPROVED"
-                                                            ? "text-green-700 bg-green-50"
-                                                            : "text-red-700 bg-red-50"
+                                                            ? "text-green-700 bg-green-50 dark:bg-green-950/40 dark:text-green-200"
+                                                            : "text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-200"
                                                     }`}>
                                                         <span className="font-medium">처리 메모:</span> {app.processedNote}
                                                     </p>

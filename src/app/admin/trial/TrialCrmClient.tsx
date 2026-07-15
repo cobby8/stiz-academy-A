@@ -84,11 +84,11 @@ const EMPTY_STATS: TrialStats = {
 // ── 상태별 라벨/색상/아이콘 매핑 ──────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-    NEW: { label: "신규", color: "bg-blue-100 text-blue-800", icon: "fiber_new" },
-    CONTACTED: { label: "연락완료", color: "bg-yellow-100 text-yellow-800", icon: "call" },
-    SCHEDULED: { label: "체험예정", color: "bg-purple-100 text-purple-800", icon: "event" },
-    ATTENDED: { label: "체험완료", color: "bg-green-100 text-green-800", icon: "check_circle" },
-    CONVERTED: { label: "등록전환", color: "bg-emerald-100 text-emerald-800", icon: "how_to_reg" },
+    NEW: { label: "신규", color: "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200", icon: "fiber_new" },
+    CONTACTED: { label: "연락완료", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-200", icon: "call" },
+    SCHEDULED: { label: "체험예정", color: "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-200", icon: "event" },
+    ATTENDED: { label: "체험완료", color: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200", icon: "check_circle" },
+    CONVERTED: { label: "등록전환", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200", icon: "how_to_reg" },
     LOST: { label: "이탈", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "person_off" },
 };
 
@@ -105,6 +105,11 @@ const SOURCE_LABELS: Record<string, string> = {
 // 상태 순서 (파이프라인 흐름)
 const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST"] as const;
 const TRIAL_PAGE_SIZE = 50;
+
+function phoneHref(phone: string) {
+    const digits = phone.replace(/\D/g, "");
+    return digits ? `tel:${digits}` : undefined;
+}
 
 function TrialCrmLoadingFallback() {
     return (
@@ -148,7 +153,7 @@ function TrialCrmErrorState({ onRetry }: { onRetry: () => void }) {
     return (
         <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
             <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
-            <p className="font-bold text-gray-900 dark:text-white">체험수업 CRM 데이터를 불러오지 못했습니다.</p>
+            <p className="font-bold text-gray-900 dark:text-white">체험 문의 정보를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
@@ -191,7 +196,7 @@ export default function TrialCrmClient({
 
         try {
             const res = await fetch("/api/admin/trial", { cache: "no-store" });
-            if (!res.ok) throw new Error("Trial CRM request failed");
+            if (!res.ok) throw new Error("request failed");
             const data = (await res.json()) as TrialCrmPayload;
             setLeads(data.leads);
             setStats(data.stats);
@@ -234,8 +239,8 @@ export default function TrialCrmClient({
             }
             await updateTrialLead(lead.id, updates);
             await loadTrialData();
-        } catch (e) {
-            alert((e as Error).message);
+        } catch {
+            alert("상태 변경 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -248,8 +253,8 @@ export default function TrialCrmClient({
         try {
             await deleteTrialLead(lead.id);
             await loadTrialData();
-        } catch (e) {
-            alert((e as Error).message);
+        } catch {
+            alert("삭제 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -269,8 +274,8 @@ export default function TrialCrmClient({
             }
             await loadTrialData();
             alert("수강신청/입학 안내 문자를 발송했습니다.");
-        } catch (e) {
-            alert((e as Error).message);
+        } catch {
+            alert("안내 문자 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -285,8 +290,8 @@ export default function TrialCrmClient({
             const result = await sendTrialCoachNotice(lead.id);
             await loadTrialData();
             alert(`담당 선생님에게 체험수업 알림을 보냈습니다.\n수신: ${result.sentTo.join(", ")}`);
-        } catch (e) {
-            alert((e as Error).message);
+        } catch {
+            alert("담당 선생님 알림 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -314,7 +319,7 @@ export default function TrialCrmClient({
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">handshake</span>
-                        체험수업 CRM
+                        체험 문의 관리
                         {/* 새 신청 건수 배지 — NEW 상태가 있을 때만 표시 */}
                         {stats.NEW > 0 && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
@@ -322,7 +327,7 @@ export default function TrialCrmClient({
                             </span>
                         )}
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험 신청부터 정규 등록까지 전환 과정을 추적합니다</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험 신청, 연락, 수업 일정, 정규 등록까지 한 번에 확인합니다</p>
                 </div>
                 <button
                     onClick={() => setShowAddModal(true)}
@@ -370,7 +375,7 @@ export default function TrialCrmClient({
                     onClick={() => setFilter("ALL")}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                         filter === "ALL"
-                            ? "bg-gray-900 text-white"
+                            ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                             : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
                     }`}
                 >
@@ -385,7 +390,7 @@ export default function TrialCrmClient({
                             onClick={() => setFilter(filter === s ? "ALL" : s)}
                             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                                 filter === s
-                                    ? "bg-gray-900 text-white"
+                                    ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                                     : `${cfg.color} hover:opacity-80`
                             }`}
                         >
@@ -407,6 +412,7 @@ export default function TrialCrmClient({
                 <div className="grid gap-4">
                     {visibleLeads.map((lead) => {
                         const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
+                        const parentPhoneHref = phoneHref(lead.parentPhone);
                         return (
                             <div
                                 key={lead.id}
@@ -420,7 +426,7 @@ export default function TrialCrmClient({
                                                 <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                                 {cfg.label}
                                             </span>
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300`}>
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200">
                                                 {SOURCE_LABELS[lead.source] || lead.source}
                                             </span>
                                         </div>
@@ -435,10 +441,13 @@ export default function TrialCrmClient({
                                                 <span className="material-symbols-outlined text-base">person</span>
                                                 {lead.parentName}
                                             </span>
-                                            <span className="flex items-center gap-1">
+                                            <a
+                                                href={parentPhoneHref}
+                                                className="flex items-center gap-1 font-semibold text-gray-700 hover:text-brand-orange-600 dark:text-gray-200 dark:hover:text-brand-neon-lime"
+                                            >
                                                 <span className="material-symbols-outlined text-base">phone</span>
                                                 {lead.parentPhone}
-                                            </span>
+                                            </a>
                                             <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-base">calendar_today</span>
                                                 {formatDate(lead.createdAt)}
@@ -461,26 +470,26 @@ export default function TrialCrmClient({
                                         {(lead.postTrialConsultedAt || lead.enrollGuideSentAt || lead.enrollApplicationReceivedAt || lead.coachNoticeSentAt) && (
                                             <div className="flex flex-wrap gap-2 mt-2">
                                                 {lead.coachNoticeSentAt && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-violet-50 text-violet-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200">
                                                         <span className="material-symbols-outlined text-xs">school</span>
                                                         담당쌤 알림 {formatDate(lead.coachNoticeSentAt)}
                                                         {lead.coachNoticeSentTo ? ` · ${lead.coachNoticeSentTo}` : ""}
                                                     </span>
                                                 )}
                                                 {lead.postTrialConsultedAt && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sky-50 text-sky-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200">
                                                         <span className="material-symbols-outlined text-xs">call</span>
                                                         상담완료 {formatDate(lead.postTrialConsultedAt)}
                                                     </span>
                                                 )}
                                                 {lead.enrollGuideSentAt && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
                                                         <span className="material-symbols-outlined text-xs">sms</span>
                                                         안내발송 {formatDate(lead.enrollGuideSentAt)}
                                                     </span>
                                                 )}
                                                 {lead.enrollApplicationReceivedAt && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
                                                         <span className="material-symbols-outlined text-xs">assignment_turned_in</span>
                                                         수강신청 접수 {formatDate(lead.enrollApplicationReceivedAt)}
                                                     </span>
@@ -491,43 +500,43 @@ export default function TrialCrmClient({
                                         {(lead.childGrade || lead.childSchool || lead.basketballExp || lead.preferredSlotKey || lead.trialDate || lead.preferredDay || lead.preferredPeriod) && (
                                             <div className="flex flex-wrap gap-2 mt-2">
                                                 {lead.childGrade && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
                                                         <span className="material-symbols-outlined text-xs">school</span>
                                                         {lead.childGrade}
                                                     </span>
                                                 )}
                                                 {lead.childSchool && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200">
                                                         <span className="material-symbols-outlined text-xs">apartment</span>
                                                         {lead.childSchool}
                                                     </span>
                                                 )}
                                                 {lead.basketballExp && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200">
                                                         <span className="material-symbols-outlined text-xs">sports_basketball</span>
                                                         {lead.basketballExp}
                                                     </span>
                                                 )}
                                                 {lead.trialDate && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
                                                         <span className="material-symbols-outlined text-xs">event</span>
                                                         희망일: {formatDate(lead.trialDate)}
                                                     </span>
                                                 )}
                                                 {(lead.preferredDay || lead.preferredPeriod) && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
                                                         <span className="material-symbols-outlined text-xs">schedule</span>
                                                         {lead.preferredDay ? `${lead.preferredDay}요일` : "요일 미입력"} {lead.preferredPeriod ? `${lead.preferredPeriod}교시` : ""}
                                                     </span>
                                                 )}
-                                                {lead.preferredSlotKey && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700">
+                                                {lead.preferredSlotKey && !lead.preferredDay && !lead.preferredPeriod && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
                                                         <span className="material-symbols-outlined text-xs">schedule</span>
-                                                        희망: {lead.preferredSlotKey}
+                                                        희망 시간 확인 필요
                                                     </span>
                                                 )}
                                                 {lead.trialFeeConfirmed && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-lime-50 text-lime-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-lime-50 text-lime-700 dark:bg-lime-950/40 dark:text-lime-200">
                                                         <span className="material-symbols-outlined text-xs">paid</span>
                                                         체험비 확인
                                                     </span>
@@ -536,7 +545,7 @@ export default function TrialCrmClient({
                                         )}
                                         {/* 바라는 점 표시 */}
                                         {lead.hopeNote && (
-                                            <p className="mt-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+                                            <p className="mt-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-3 py-2 dark:bg-blue-950/40 dark:text-blue-200">
                                                 <span className="font-medium">바라는 점:</span> {lead.hopeNote}
                                             </p>
                                         )}
@@ -548,7 +557,7 @@ export default function TrialCrmClient({
                                         )}
                                         {/* 이탈 사유 표시 */}
                                         {lead.lostReason && (
-                                            <p className="mt-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                                            <p className="mt-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 dark:bg-red-950/40 dark:text-red-200">
                                                 이탈 사유: {lead.lostReason}
                                             </p>
                                         )}

@@ -61,9 +61,9 @@ interface ApplyAdminModalsProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-800", icon: "hourglass_top" },
-    APPROVED: { label: "승인완료", color: "bg-green-100 text-green-800", icon: "check_circle" },
-    REJECTED: { label: "반려", color: "bg-red-100 text-red-800", icon: "cancel" },
+    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-200", icon: "hourglass_top" },
+    APPROVED: { label: "승인완료", color: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200", icon: "check_circle" },
+    REJECTED: { label: "반려", color: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200", icon: "cancel" },
     CANCELLED: { label: "취소", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "block" },
 };
 
@@ -92,6 +92,8 @@ const DAY_LABELS: Record<string, string> = {
     Sun: "일",
 };
 
+const REJECT_REASON_OPTIONS = ["정원 마감", "희망 시간대 불일치", "연락 불가", "셔틀 동선 확인 필요"];
+
 function formatDetailDate(dateStr: string | null) {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
@@ -107,6 +109,39 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
             <span className="text-gray-900 dark:text-white font-medium">{displayValue}</span>
         </div>
     );
+}
+
+function formatClassLabel(classInfo: ClassInfo) {
+    const dayLabel = DAY_LABELS[classInfo.dayOfWeek] || classInfo.dayOfWeek;
+    const programName = classInfo.program?.name ? ` · ${classInfo.program.name}` : "";
+    return `${dayLabel} ${classInfo.startTime}~${classInfo.endTime} · ${classInfo.name}${programName}`;
+}
+
+function formatPreferredSlots(slotKeys: string | null, classes: ClassInfo[]) {
+    if (!slotKeys) return null;
+    const keys = slotKeys.split(",").map((key) => key.trim()).filter(Boolean);
+    if (keys.length === 0) return null;
+
+    const classesBySlotKey = new Map<string, ClassInfo>();
+    classes.forEach((classInfo) => {
+        if (classInfo.slotKey) classesBySlotKey.set(classInfo.slotKey, classInfo);
+    });
+
+    const labels: string[] = [];
+    let unknownCount = 0;
+
+    keys.forEach((key) => {
+        const classInfo = classesBySlotKey.get(key);
+        if (classInfo) {
+            labels.push(formatClassLabel(classInfo));
+        } else {
+            unknownCount += 1;
+        }
+    });
+
+    if (labels.length === 0) return "희망 시간 확인 필요";
+    if (unknownCount > 0) return `${labels.join(" / ")} 외 ${unknownCount}개 시간 확인 필요`;
+    return labels.join(" / ");
 }
 
 export default function ApplyAdminModals({
@@ -131,8 +166,8 @@ export default function ApplyAdminModals({
             });
             onCloseApprove();
             await onSaved();
-        } catch (error) {
-            alert((error as Error).message);
+        } catch {
+            alert("승인 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -145,8 +180,8 @@ export default function ApplyAdminModals({
             await rejectEnrollApplication(rejectApp.id, reason);
             onCloseReject();
             await onSaved();
-        } catch (error) {
-            alert((error as Error).message);
+        } catch {
+            alert("반려 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -176,6 +211,7 @@ export default function ApplyAdminModals({
             {detailApp && (
                 <DetailModal
                     app={detailApp}
+                    classes={classes}
                     onClose={onCloseDetail}
                 />
             )}
@@ -197,6 +233,7 @@ function ApproveModal({
     busy: boolean;
 }) {
     const preferredKeys = app.preferredSlotKeys?.split(",").map((key) => key.trim()) ?? [];
+    const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classes);
     const [selectedClassIds, setSelectedClassIds] = useState<string[]>(() => {
         return classes
             .filter((classInfo) => classInfo.slotKey && preferredKeys.includes(classInfo.slotKey))
@@ -242,10 +279,10 @@ function ApproveModal({
                     <span className="font-medium text-gray-900 dark:text-white">{app.childName}</span>을(를) 어떤 반에 배정하시겠습니까?
                 </p>
 
-                {app.preferredSlotKeys && (
-                    <div className="bg-purple-50 text-purple-700 text-sm rounded-lg px-3 py-2 mb-4 flex items-center gap-2">
+                {preferredSlotLabel && (
+                    <div className="bg-purple-50 text-purple-700 text-sm rounded-lg px-3 py-2 mb-4 flex items-center gap-2 dark:bg-purple-950/40 dark:text-purple-200">
                         <span className="material-symbols-outlined text-base">info</span>
-                        <span>희망 시간대: <span className="font-medium">{app.preferredSlotKeys}</span></span>
+                        <span>희망 시간대: <span className="font-medium">{preferredSlotLabel}</span></span>
                     </div>
                 )}
 
@@ -270,7 +307,7 @@ function ApproveModal({
                                                     onClick={() => toggleClass(classInfo.id)}
                                                     className={`w-full text-left px-3 py-2 rounded-lg text-sm transition border ${
                                                         selected
-                                                            ? "border-green-500 bg-green-50 text-green-800"
+                                                            ? "border-green-500 bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-200"
                                                             : "border-gray-200 dark:border-gray-700 hover:border-gray-300 text-gray-700 dark:text-gray-200"
                                                     }`}
                                                 >
@@ -362,6 +399,22 @@ function RejectModal({
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">반려 사유</label>
+                        <div className="mb-2 flex flex-wrap gap-2">
+                            {REJECT_REASON_OPTIONS.map((option) => (
+                                <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => setReason(option)}
+                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                        reason === option
+                                            ? "border-red-400 bg-red-50 text-red-700 dark:border-red-500 dark:bg-red-950/40 dark:text-red-200"
+                                            : "border-gray-200 text-gray-600 hover:border-red-200 hover:text-red-600 dark:border-gray-700 dark:text-gray-300 dark:hover:border-red-500 dark:hover:text-red-200"
+                                    }`}
+                                >
+                                    {option}
+                                </button>
+                            ))}
+                        </div>
                         <textarea
                             value={reason}
                             onChange={(event) => setReason(event.target.value)}
@@ -400,12 +453,15 @@ function RejectModal({
 
 function DetailModal({
     app,
+    classes,
     onClose,
 }: {
     app: EnrollApplication;
+    classes: ClassInfo[];
     onClose: () => void;
 }) {
     const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
+    const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classes);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -460,8 +516,10 @@ function DetailModal({
                         </h3>
                         <div className="space-y-1.5 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
                             <InfoRow label="수강 월" value={app.enrollmentMonths} />
-                            <InfoRow label="희망 시간" value={app.preferredSlotKeys} />
+                            <InfoRow label="희망 시간" value={preferredSlotLabel} />
                             <InfoRow label="농구 경험" value={app.basketballExp} />
+                            <InfoRow label="유니폼" value={app.uniformSize} />
+                            <InfoRow label="납부 방식" value={app.paymentMethod} />
                             <InfoRow label="셔틀" value={app.shuttleNeeded} />
                             <InfoRow label="탑승지" value={app.shuttlePickup} />
                             <InfoRow label="하차지" value={app.shuttleDropoff} />

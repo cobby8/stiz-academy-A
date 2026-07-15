@@ -35,8 +35,8 @@ export default function TrialCrmModals({
             await action();
             onDone();
             await onSaved();
-        } catch (error) {
-            alert((error as Error).message);
+        } catch {
+            alert("처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }

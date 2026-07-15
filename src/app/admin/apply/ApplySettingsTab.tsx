@@ -70,12 +70,11 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
         try {
             const response = await fetch("/api/admin/apply/settings", { cache: "no-store" });
             if (!response.ok) {
-                throw new Error("Failed to load apply settings.");
+                throw new Error("request failed");
             }
             const data = (await response.json()) as { settings: ApplySettings };
             applySettings(data.settings);
-        } catch (loadSettingsError) {
-            console.error("Failed to load apply settings:", loadSettingsError);
+        } catch {
             setLoadError("신청 안내 설정을 불러오지 못했습니다.");
         } finally {
             setLoading(false);
@@ -143,7 +142,7 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
             )}
 
-            <SettingsCard badge="체험수업" badgeColor="bg-orange-100 text-brand-orange-600 dark:text-brand-neon-lime border border-orange-200" title="체험수업 안내 설정">
+            <SettingsCard badge="체험수업" badgeColor="bg-orange-100 text-brand-orange-600 border border-orange-200 dark:bg-lime-950/40 dark:text-brand-neon-lime dark:border-brand-neon-lime/40" title="체험수업 안내 설정">
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">섹션 제목</label>
                     <input
@@ -168,19 +167,19 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
-                        구글폼 URL <span className="text-gray-400 font-normal ml-1">(기존 구글폼 백업용, 현재는 자체 폼 사용)</span>
+                        외부 신청 링크 <span className="text-gray-400 font-normal ml-1">(필요할 때만 입력)</span>
                     </label>
                     <input
                         type="url"
                         value={trialFormUrl}
                         onChange={(event) => setTrialFormUrl(event.target.value)}
                         className={INPUT}
-                        placeholder="https://docs.google.com/forms/d/e/..."
+                        placeholder="https://..."
                     />
                 </div>
             </SettingsCard>
 
-            <SettingsCard badge="수강신청" badgeColor="bg-blue-50 text-blue-700 border border-blue-200" title="수강신청 안내 설정">
+            <SettingsCard badge="수강신청" badgeColor="bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-700" title="수강신청 안내 설정">
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">섹션 제목</label>
                     <input
@@ -205,29 +204,29 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
-                        구글폼 URL <span className="text-gray-400 font-normal ml-1">(기존 구글폼 백업용, 현재는 자체 폼 사용)</span>
+                        외부 신청 링크 <span className="text-gray-400 font-normal ml-1">(필요할 때만 입력)</span>
                     </label>
                     <input
                         type="url"
                         value={enrollFormUrl}
                         onChange={(event) => setEnrollFormUrl(event.target.value)}
                         className={INPUT}
-                        placeholder="https://docs.google.com/forms/d/e/..."
+                        placeholder="https://..."
                     />
                 </div>
             </SettingsCard>
 
-            <SettingsCard badge="유니폼" badgeColor="bg-green-50 text-green-700 border border-green-200" title="유니폼 신청 설정">
+            <SettingsCard badge="유니폼" badgeColor="bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/40 dark:text-green-200 dark:border-green-700" title="유니폼 신청 설정">
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
-                        구글폼 URL <span className="text-gray-400 font-normal ml-1">(유니폼 신청용 구글폼)</span>
+                        유니폼 신청 링크
                     </label>
                     <input
                         type="url"
                         value={uniformFormUrl}
                         onChange={(event) => setUniformFormUrl(event.target.value)}
                         className={INPUT}
-                        placeholder="https://docs.google.com/forms/d/e/..."
+                        placeholder="https://..."
                     />
                 </div>
             </SettingsCard>

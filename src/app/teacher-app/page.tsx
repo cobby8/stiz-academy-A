@@ -1,0 +1,20 @@
+import type { Metadata } from "next";
+import StaffAppInstallClient from "./StaffAppInstallClient";
+
+export const metadata: Metadata = {
+  title: "STIZ 선생님 앱 설치",
+  description: "수업과 학생 관리를 위한 STIZ 선생님 앱을 홈 화면에 설치하세요.",
+  manifest: "/manifest-staff.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "STIZ 선생님",
+  },
+  icons: {
+    apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+};
+
+export default function TeacherAppInstallPage() {
+  return <StaffAppInstallClient />;
+}

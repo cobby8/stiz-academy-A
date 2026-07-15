@@ -50,13 +50,15 @@ export default async function InvitePage({
                     <span className="material-symbols-outlined text-[48px] text-green-400">check_circle</span>
                     <h1 className="text-xl font-bold text-gray-900 dark:text-white mt-4">이미 수락된 초대</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                        이 초대는 이미 수락되었습니다. 로그인 페이지에서 로그인해주세요.
+                        {invitation.role === "INSTRUCTOR"
+                            ? "이 초대는 이미 수락되었습니다. 선생님 앱을 설치하거나 열어주세요."
+                            : "이 초대는 이미 수락되었습니다. 로그인 페이지에서 로그인해주세요."}
                     </p>
                     <a
-                        href={invitation.role === "INSTRUCTOR" ? "/staff/login" : "/login"}
+                        href={invitation.role === "INSTRUCTOR" ? "/staff/install" : "/login"}
                         className="inline-block mt-4 px-6 py-2.5 bg-brand-navy-900 text-white rounded-lg text-sm font-medium hover:bg-brand-navy-800 transition-colors"
                     >
-                        {invitation.role === "INSTRUCTOR" ? "선생님 앱 로그인" : "로그인하기"}
+                        {invitation.role === "INSTRUCTOR" ? "선생님 앱 설치하기" : "로그인하기"}
                     </a>
                 </div>
             </div>

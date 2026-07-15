@@ -41,9 +41,10 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isStaffLogin = pathname === "/staff/login";
+  const isStaffInstall = pathname === "/staff/install";
   const protectedPath =
     pathname.startsWith("/admin") ||
-    (pathname.startsWith("/staff") && !isStaffLogin) ||
+    (pathname.startsWith("/staff") && !isStaffLogin && !isStaffInstall) ||
     pathname.startsWith("/mypage");
 
   if (protectedPath && !isAuthenticated) {

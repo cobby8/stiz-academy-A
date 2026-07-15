@@ -16,6 +16,11 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
+        // 선생님에게 공유하는 주소는 기억하기 쉬운 /staff/install로 유지한다.
+        source: "/staff/install",
+        destination: "/teacher-app",
+      },
+      {
         // 설치 앱 주소는 /staff 범위에 유지하면서 공용 로그인 화면을 재사용한다.
         source: "/staff/login",
         destination: "/login?mode=staff",
@@ -49,6 +54,27 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: "/manifest-staff.json",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+        ],
+      },
+      {
+        // rewrite의 내부 구현 주소로 직접 접근해도 같은 공개·최소권한 정책을 적용한다.
+        source: "/teacher-app",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+      {
         source: "/uploads/:path*",
         headers: [
           {
@@ -64,6 +90,18 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
+        ],
+      },
+      {
+        // 일반 staff 권한 규칙 뒤에서 설치 화면의 카메라·마이크 권한을 다시 최소화한다.
+        source: "/staff/install",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
       {

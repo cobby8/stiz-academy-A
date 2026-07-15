@@ -275,6 +275,21 @@ export default function StaffClient({
         });
     }
 
+    async function handleCopyStaffInstallLink() {
+        const installUrl = new URL("/staff/install", window.location.origin).toString();
+
+        try {
+            await navigator.clipboard.writeText(installUrl);
+            setMessage({ text: "교사용 앱 설치 링크를 복사했습니다.", ok: true });
+        } catch {
+            window.prompt("아래 교사용 앱 설치 링크를 길게 눌러 복사해주세요.", installUrl);
+            setMessage({
+                text: "자동 복사가 제한되어 전체 설치 링크를 복사창에 표시했습니다.",
+                ok: false,
+            });
+        }
+    }
+
     if (loading && !hasAnyData) {
         return <StaffLoadingFallback />;
     }
@@ -286,14 +301,22 @@ export default function StaffClient({
     return (
         <div className="space-y-6">
             {/* 페이지 헤더 */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">스태프 관리</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         관리자, 부원장, 코치/강사 계정을 관리합니다. (원장만 변경 가능)
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={() => void handleCopyStaffInstallLink()}
+                        className="flex items-center gap-2 px-4 py-2.5 border border-brand-navy-200 text-brand-navy-900 dark:border-brand-navy-600 dark:text-white rounded-lg hover:bg-brand-navy-50 dark:hover:bg-brand-navy-800 transition-colors font-medium text-sm"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">content_copy</span>
+                        교사용 앱 링크 복사
+                    </button>
                     {/* 초대 링크 버튼 (메인) */}
                     <button
                         onClick={() => setShowModal("invite")}
@@ -315,7 +338,11 @@ export default function StaffClient({
 
             {/* 상태 메시지 */}
             {message && (
-                <div className={`px-4 py-3 rounded-lg text-sm font-medium ${message.ok ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className={`px-4 py-3 rounded-lg text-sm font-medium ${message.ok ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}
+                >
                     {message.text}
                 </div>
             )}

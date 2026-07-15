@@ -26,6 +26,13 @@
 
 # Architecture
 
+## 교사용 앱 배포 링크 (2026-07-15)
+- 선생님에게 공유하는 공용 주소는 `/staff/install`이며 공개 설치 화면 `/teacher-app`을 rewrite로 렌더링한다.
+- Android는 `beforeinstallprompt`가 제공될 때 사용자 버튼 한 번으로 시스템 설치창을 열고, iPhone/iPad는 Safari의 홈 화면 추가 절차를 안내한다.
+- 신규 선생님의 개인 초대 링크는 가입만 담당하고, 가입 완료 뒤 토큰 없는 공용 설치 링크로 이동한다.
+- 설치 후 시작 주소는 `/staff`이고 미인증 사용자는 PWA 범위 안의 `/staff/login`을 거친다.
+- 설치 안내와 내부 구현 주소는 no-store·noindex이며 카메라와 마이크 권한을 허용하지 않는다.
+
 ## 교사용 설치 앱 진입 구조 (2026-07-15)
 - 공식 진입점은 `/staff`, 전용 로그인 주소는 `/staff/login`이다.
 - `/staff/login`은 공용 로그인 구현을 재사용하되 주소는 PWA 범위 안에 유지한다.

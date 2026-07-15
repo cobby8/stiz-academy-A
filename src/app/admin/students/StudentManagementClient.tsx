@@ -167,6 +167,25 @@ type CurrentRosterReport = {
         slotKey: string;
         rowCount: number;
     }[];
+    statusBreakdown?: {
+        status: string;
+        rowCount: number;
+        studentCount: number;
+    }[];
+    statusSamples?: {
+        status: string;
+        studentId: string | null;
+        studentName: string;
+        parentName: string | null;
+        parentPhone: string | null;
+        studentPhone: string | null;
+        school: string | null;
+        grade: string | null;
+        registrationMonth: string | null;
+        firstRowNumber: number;
+        rowCount: number;
+        slotKeys: string[] | null;
+    }[];
 };
 
 type ReconcileSample = {
@@ -341,6 +360,51 @@ function formatReportList(values: string[] | null | undefined) {
     return values.slice(0, 4).join(", ");
 }
 
+const ROSTER_STATUS_META: Record<string, { label: string; tone: string; note: string }> = {
+    ACTIVE: {
+        label: "재원",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-300/10 dark:text-emerald-100",
+        note: "7월 기준 실제 수업 인원",
+    },
+    PAUSED: {
+        label: "휴원",
+        tone: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-100",
+        note: "모든 7월 등록 행이 휴원인 학생",
+    },
+    WITHDRAWN: {
+        label: "퇴원",
+        tone: "border-red-200 bg-red-50 text-red-900 dark:border-red-300/20 dark:bg-red-300/10 dark:text-red-100",
+        note: "최신 상태가 퇴원인 학생",
+    },
+    UNKNOWN: {
+        label: "확인 필요",
+        tone: "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
+        note: "상태를 계산하지 못한 행",
+    },
+};
+
+function getRosterStatusMeta(status: string) {
+    return ROSTER_STATUS_META[status] ?? ROSTER_STATUS_META.UNKNOWN;
+}
+
+function formatSlotList(slotKeys: string[] | string | null | undefined) {
+    if (!slotKeys) return "반 정보 없음";
+
+    const parsed = typeof slotKeys === "string"
+        ? (() => {
+            try {
+                const value = JSON.parse(slotKeys);
+                return Array.isArray(value) ? value : [];
+            } catch {
+                return [];
+            }
+        })()
+        : slotKeys;
+
+    if (parsed.length === 0) return "반 정보 없음";
+    return parsed.slice(0, 4).map((slotKey) => formatSlotLabel(String(slotKey))).join(", ");
+}
+
 function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
     if (!report.batch || !report.summary) {
         return (
@@ -356,6 +420,15 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
         summary.missingClassSlots +
         summary.duplicateStudentGroups +
         summary.nameConflictGroups;
+    const statusBreakdown = report.statusBreakdown ?? [];
+    const statusByCode = new Map(statusBreakdown.map((item) => [item.status, item]));
+    const operationalStudentCount = statusBreakdown.reduce((total, item) => total + item.studentCount, 0);
+    const activeCount = statusByCode.get("ACTIVE")?.studentCount ?? 0;
+    const pausedCount = statusByCode.get("PAUSED")?.studentCount ?? 0;
+    const withdrawnCount = statusByCode.get("WITHDRAWN")?.studentCount ?? 0;
+    const statusSamples = report.statusSamples ?? [];
+    const pausedSamples = statusSamples.filter((sample) => sample.status === "PAUSED");
+    const withdrawnSamples = statusSamples.filter((sample) => sample.status === "WITHDRAWN");
 
     return (
         <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
@@ -383,6 +456,38 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                     {riskCount > 0 ? `확인 필요 ${riskCount.toLocaleString()}건` : "자동 정리 가능"}
                 </span>
             </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
+                    <p className="text-gray-500 dark:text-gray-400">현재 운영 학생</p>
+                    <p className="mt-1 text-2xl font-black text-gray-950 dark:text-white">
+                        {operationalStudentCount.toLocaleString()}명
+                    </p>
+                    <p className="mt-1 text-gray-500 dark:text-gray-400">
+                        7월 장부의 같은 학생을 하나로 합산
+                    </p>
+                </div>
+                {["ACTIVE", "PAUSED", "WITHDRAWN"].map((status) => {
+                    const item = statusByCode.get(status);
+                    const meta = getRosterStatusMeta(status);
+                    return (
+                        <div key={status} className={`rounded-lg border p-3 text-xs ${meta.tone}`}>
+                            <p className="font-bold">{meta.label}</p>
+                            <p className="mt-1 text-2xl font-black">
+                                {(item?.studentCount ?? 0).toLocaleString()}명
+                            </p>
+                            <p className="mt-1 opacity-80">
+                                행 {(item?.rowCount ?? 0).toLocaleString()}줄 · {meta.note}
+                            </p>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                현재 7월 기준은 재원 {activeCount.toLocaleString()}명, 휴원 {pausedCount.toLocaleString()}명,
+                퇴원 {withdrawnCount.toLocaleString()}명으로 계산됩니다. 한 학생이 여러 반을 들어도 학생 수는 1명으로 봅니다.
+            </p>
 
             <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4 lg:grid-cols-8">
                 <ImportSummaryMetric label="대상 행" value={summary.targetRows} />
@@ -413,6 +518,34 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
             )}
 
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {(pausedSamples.length > 0 || withdrawnSamples.length > 0) && (
+                    <div className="rounded-lg bg-gray-50 p-3 text-xs dark:bg-gray-900">
+                        <p className="font-bold text-gray-900 dark:text-white">휴원/퇴원 확인 샘플</p>
+                        <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            {[
+                                { title: "휴원", rows: pausedSamples },
+                                { title: "퇴원", rows: withdrawnSamples },
+                            ].map((group) => (
+                                <div key={group.title} className="space-y-1">
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{group.title}</p>
+                                    {group.rows.length === 0 ? (
+                                        <p className="text-gray-500 dark:text-gray-400">대상 없음</p>
+                                    ) : (
+                                        group.rows.map((row) => (
+                                            <p
+                                                key={`${group.title}-${row.studentId ?? row.studentName}-${row.firstRowNumber}`}
+                                                className="text-gray-600 dark:text-gray-300"
+                                            >
+                                                #{row.firstRowNumber} {row.studentName} · {formatReportPhone(row.parentPhone)} · {formatSlotList(row.slotKeys)}
+                                            </p>
+                                        ))
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {report.historySamples.length > 0 && (
                     <div className="rounded-lg bg-gray-50 p-3 text-xs dark:bg-gray-900">
                         <p className="font-bold text-gray-900 dark:text-white">이전 월 이력 연결 샘플</p>

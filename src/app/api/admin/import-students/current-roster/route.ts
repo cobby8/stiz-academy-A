@@ -85,6 +85,27 @@ type MissingSlotRow = {
   rowCount: number;
 };
 
+type StatusBreakdownRow = {
+  status: string;
+  rowCount: number;
+  studentCount: number;
+};
+
+type StatusSampleRow = {
+  status: string;
+  studentId: string | null;
+  studentName: string;
+  parentName: string | null;
+  parentPhone: string | null;
+  studentPhone: string | null;
+  school: string | null;
+  grade: string | null;
+  registrationMonth: string | null;
+  firstRowNumber: number;
+  rowCount: number;
+  slotKeys: string[] | null;
+};
+
 function parseMonth(value: string | null) {
   if (!value) return null;
   const parsed = Number(value);
@@ -363,6 +384,134 @@ async function getMissingClassSlots(batchId: string, requestedMonth: number | nu
   );
 }
 
+async function getStatusBreakdown(batchId: string, requestedMonth: number | null) {
+  return prisma.$queryRawUnsafe<StatusBreakdownRow[]>(
+    `${LEDGER_CTE},
+    target_with_key AS (
+      SELECT
+        t.*,
+        COALESCE(
+          t."studentId",
+          t."studentKey",
+          lower(trim(t."studentName")) || ':' || regexp_replace(COALESCE(t."parentPhone", ''), '[^0-9]', '', 'g'),
+          t.id
+        ) AS "rosterKey"
+      FROM target t
+    ),
+    student_status AS (
+      SELECT
+        twk."rosterKey",
+        COUNT(*)::int AS "rowCount",
+        CASE
+          WHEN BOOL_OR(twk.status = 'WITHDRAWN') THEN 'WITHDRAWN'
+          WHEN BOOL_OR(twk.status = 'ACTIVE') THEN 'ACTIVE'
+          WHEN BOOL_OR(twk.status = 'PAUSED') THEN 'PAUSED'
+          ELSE 'UNKNOWN'
+        END AS status
+      FROM target_with_key twk
+      GROUP BY twk."rosterKey"
+    )
+    SELECT
+      status,
+      SUM("rowCount")::int AS "rowCount",
+      COUNT(*)::int AS "studentCount"
+    FROM student_status
+    GROUP BY status
+    ORDER BY CASE status
+      WHEN 'ACTIVE' THEN 1
+      WHEN 'PAUSED' THEN 2
+      WHEN 'WITHDRAWN' THEN 3
+      ELSE 4
+    END`,
+    batchId,
+    requestedMonth
+  );
+}
+
+async function getStatusSamples(batchId: string, requestedMonth: number | null) {
+  return prisma.$queryRawUnsafe<StatusSampleRow[]>(
+    `${LEDGER_CTE},
+    target_with_key AS (
+      SELECT
+        t.*,
+        COALESCE(
+          t."studentId",
+          t."studentKey",
+          lower(trim(t."studentName")) || ':' || regexp_replace(COALESCE(t."parentPhone", ''), '[^0-9]', '', 'g'),
+          t.id
+        ) AS "rosterKey"
+      FROM target t
+    ),
+    target_slots AS (
+      SELECT twk."rosterKey", slot_key AS "slotKey"
+      FROM target_with_key twk
+      LEFT JOIN LATERAL jsonb_array_elements_text(
+        COALESCE(NULLIF(twk."selectedSlotKeysJSON", ''), '[]')::jsonb
+      ) AS slot_key ON true
+    ),
+    student_status AS (
+      SELECT
+        twk."rosterKey",
+        MAX(twk."studentId") AS "studentId",
+        MAX(twk."studentName") AS "studentName",
+        MAX(twk."parentName") AS "parentName",
+        MAX(twk."parentPhone") AS "parentPhone",
+        MAX(twk."studentPhone") AS "studentPhone",
+        MAX(twk.school) AS school,
+        MAX(twk.grade) AS grade,
+        MAX(twk."registrationMonth") AS "registrationMonth",
+        MIN(twk."rowNumber")::int AS "firstRowNumber",
+        COUNT(*)::int AS "rowCount",
+        CASE
+          WHEN BOOL_OR(twk.status = 'WITHDRAWN') THEN 'WITHDRAWN'
+          WHEN BOOL_OR(twk.status = 'ACTIVE') THEN 'ACTIVE'
+          WHEN BOOL_OR(twk.status = 'PAUSED') THEN 'PAUSED'
+          ELSE 'UNKNOWN'
+        END AS status
+      FROM target_with_key twk
+      GROUP BY twk."rosterKey"
+    ),
+    slot_groups AS (
+      SELECT
+        ts."rosterKey",
+        COALESCE(json_agg(DISTINCT ts."slotKey") FILTER (WHERE ts."slotKey" IS NOT NULL), '[]'::json) AS "slotKeys"
+      FROM target_slots ts
+      GROUP BY ts."rosterKey"
+    ),
+    ranked AS (
+      SELECT
+        ss.*,
+        COALESCE(sg."slotKeys", '[]'::json) AS "slotKeys",
+        ROW_NUMBER() OVER (
+          PARTITION BY ss.status
+          ORDER BY ss."firstRowNumber" ASC, ss."studentName" ASC
+        ) AS rn
+      FROM student_status ss
+      LEFT JOIN slot_groups sg ON sg."rosterKey" = ss."rosterKey"
+      WHERE ss.status IN ('PAUSED', 'WITHDRAWN')
+    )
+    SELECT
+      status,
+      "studentId",
+      "studentName",
+      "parentName",
+      "parentPhone",
+      "studentPhone",
+      school,
+      grade,
+      "registrationMonth",
+      "firstRowNumber",
+      "rowCount",
+      "slotKeys"
+    FROM ranked
+    WHERE rn <= 8
+    ORDER BY CASE status WHEN 'PAUSED' THEN 1 WHEN 'WITHDRAWN' THEN 2 ELSE 3 END,
+             "firstRowNumber" ASC`,
+    batchId,
+    requestedMonth
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin();
@@ -389,6 +538,8 @@ export async function GET(request: NextRequest) {
         nameConflictGroups: [],
         historySamples: [],
         missingClassSlots: [],
+        statusBreakdown: [],
+        statusSamples: [],
       });
     }
 
@@ -400,6 +551,8 @@ export async function GET(request: NextRequest) {
       nameConflictGroups,
       historySamples,
       missingClassSlots,
+      statusBreakdown,
+      statusSamples,
     ] = await Promise.all([
       getSummary(batch.id, requestedMonth),
       getMonthDistribution(batch.id),
@@ -408,6 +561,8 @@ export async function GET(request: NextRequest) {
       getNameConflicts(batch.id, requestedMonth),
       getHistorySamples(batch.id, requestedMonth),
       getMissingClassSlots(batch.id, requestedMonth),
+      getStatusBreakdown(batch.id, requestedMonth),
+      getStatusSamples(batch.id, requestedMonth),
     ]);
 
     const targetMonthNumber = summary?.targetMonthNumber ?? requestedMonth;
@@ -426,6 +581,8 @@ export async function GET(request: NextRequest) {
       nameConflictGroups,
       historySamples,
       missingClassSlots,
+      statusBreakdown,
+      statusSamples,
     });
   } catch (error) {
     console.error("[api/admin/import-students/current-roster] failed:", error);

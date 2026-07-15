@@ -1,23 +1,50 @@
-# 교사용 앱 운영 기준
+# 교사 앱 운영 가이드
 
-## 데이터 보존
+## 배포 전 환경변수 게이트
 
-- 음성 원본은 서버에 저장하지 않고 텍스트 변환 요청 후 폐기한다.
-- 수업 사진은 비공개가 기본이며 교사 삭제·관리자 게시·동의 철회 정책을 따른다.
-- 완료된 알림 전달 로그는 180일, 완료된 파일 삭제 작업은 90일 뒤 작업 기록만 삭제한다.
-- 결제 거래·감사 로그, 출결·수업 일지, 사진 회수 완료·수동 확인 증거, `MANUAL_REQUIRED`와 미완료 작업은 자동 삭제하지 않는다. 회수 완료 기록은 같은 사진이 다시 공개·회수되는 일을 막는 삭제 영수증이다.
+`npm run release:preflight`는 현재 프로세스에 주입된 환경변수의 **존재 여부만** 확인합니다. 비밀값 자체는 출력하지 않습니다.
+
+- Production 확인: `RELEASE_ENV_SCOPE=production` 또는 Vercel의 `VERCEL_ENV=production` 환경에서 실행
+- Preview 확인: `RELEASE_ENV_SCOPE=preview` 또는 Vercel의 `VERCEL_ENV=preview` 환경에서 실행
+- Instagram 게시를 운영할 때는 `RELEASE_REQUIRE_INSTAGRAM=true`도 지정
+- 로컬 코드 검사만 필요하면 `npm run release:code-check`를 사용합니다. 이 명령은 배포 환경 확인을 대신하지 않습니다.
+
+필수 변수:
+
+- DB/Supabase: `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- 앱/cron: `CRON_SECRET`, `NEXT_PUBLIC_SITE_URL`
+- 푸시: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+- 음성 메모: `GEMINI_API_KEY`
+- 교사 초대: `INVITE_OTP_SECRET`, `SOLAPI_API_KEY`, `SOLAPI_API_SECRET`, `SOLAPI_SENDER`
+- 결제: `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY` 또는 `TOSS_PAYMENTS_CLIENT_KEY`, `TOSS_PAYMENTS_SECRET_KEY`
+- Instagram 사용 시: `INSTAGRAM_ACCESS_TOKEN` 또는 `META_ACCESS_TOKEN`, `INSTAGRAM_BUSINESS_ACCOUNT_ID`
+
+Vercel에서는 같은 이름의 값이라도 Production과 Preview 범위가 별도입니다. 두 범위를 각각 확인하고, Production의 `NEXT_PUBLIC_SITE_URL`은 실제 서비스의 HTTPS 주소여야 합니다.
+
+## 백업과 복구 게이트
+
+`/api/cron/backup`은 전체 DB 백업이 아닙니다. 학원 설정, 프로그램, 코치, 시간표 예외, 차량 경로 등 일부 운영 설정만 JSON으로 보관합니다. 학생, 수강, 출결, 수업, 결제, 동의, 감사 로그와 작업 큐를 복구하는 용도로 사용할 수 없습니다.
+
+운영 SQL 적용 전 다음 중 하나를 준비해야 합니다.
+
+1. Supabase의 전체 데이터베이스 백업/PITR을 활성화하고 복원 가능한 시점을 확인합니다.
+2. 또는 `pg_dump`로 전체 DB를 백업하고 별도 테스트 DB에 복원하는 리허설을 완료합니다.
+
+백업 파일이 존재하는지만 확인하면 부족합니다. 복원 후 핵심 테이블 수, 최근 결제·출결·수업 데이터, FK와 인덱스를 확인한 기록이 있어야 합니다. 전체 백업과 복구 확인 없이 운영 SQL을 적용하지 않습니다.
 
 ## 운영 적용 순서
 
-1. DB 백업과 복구 가능 여부를 확인한다.
-2. 각 `preflight_*.sql`을 실행한다.
-3. G1 → Push Outbox → Media Revocation → Session Photo Deletion → G5 Class Attribution → Staff Payment Confirmation 순서로 SQL을 적용한다.
-4. 단계마다 `verify_*.sql`을 실행하고 실패하면 앱 배포를 중단한다.
-5. `CRON_SECRET`, VAPID, Gemini, Toss 환경변수를 확인한 뒤 앱을 배포한다.
-6. 푸시·회수·보존 cron을 수동 1회 호출해 처리 건수와 오류 로그를 확인한다.
+1. 전체 DB 백업과 복구 리허설 증거를 확인합니다.
+2. `npm run release:preflight`를 Production 환경에서 통과시킵니다.
+3. 각 `preflight_*.sql`을 실행합니다.
+4. G1 → Push Outbox → Media Revocation → Session Photo Deletion → G5 Class Attribution → Staff Payment Confirmation 순서로 적용합니다.
+5. 각 단계 직후 대응하는 `verify_*.sql`을 실행하고, 실패하면 다음 단계와 앱 배포를 중단합니다.
+6. 배포 후 cron을 인증된 요청으로 한 번씩 호출하여 처리 건수와 오류 로그를 확인합니다.
 
-## 롤백
+## 보존과 롤백 원칙
 
-- 앱 실패 시 이전 버전으로 되돌리되 추가된 nullable 컬럼과 대기열 표를 즉시 삭제하지 않는다.
-- 외부 게시·결제 결과는 DB를 강제로 과거로 돌리지 않고 감사 로그와 수동 확인 대기열로 복구한다.
-- 운영 SQL, 외부 발송, 배포는 별도 승인 없이 실행하지 않는다.
+- 원본 음성은 서버에 저장하지 않고 텍스트 변환 요청 중에만 사용합니다.
+- 수업 사진은 비공개가 기본이며 교사 삭제, 관리자 게시, 동의 철회 정책을 따릅니다.
+- 결제 거래·감사 로그, 출결·수업 일지, 사진 회수 완료 및 수동 확인 증거는 자동 삭제 대상이 아닙니다.
+- 내부 게시와 결제 결과를 과거 상태로 강제로 되돌리지 않습니다. 감사 로그와 대기열을 이용해 복구합니다.
+- 운영 SQL, 외부 발송, 배포는 각각 별도 승인 후 수행합니다.

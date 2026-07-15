@@ -81,6 +81,7 @@ export async function releaseSessionPhotoCleanup(photoId: string) {
 export async function processSessionPhotoDeletionQueue(limit = 5) {
   await ensureSessionPhotoDeletionQueue();
   let processed = 0;
+  let failed = 0;
   for (let index = 0; index < Math.max(1, Math.min(limit, 20)); index += 1) {
     const rows = await prisma.$queryRawUnsafe<Array<{
       id: string; storageBucket: string; storagePath: string; attempts: number; lockedAt: Date;
@@ -102,6 +103,7 @@ export async function processSessionPhotoDeletionQueue(limit = 5) {
     if (!job) break;
     processed += 1;
     if (!isValidQueuedSessionPhotoRef(job.storageBucket, job.storagePath)) {
+      failed += 1;
       await prisma.$executeRawUnsafe(`
         UPDATE "SessionPhotoDeletionJob" SET status = 'FAILED', "lockedAt" = NULL,
           "lastError" = 'INVALID_REFERENCE: bucket or storage path rejected',
@@ -120,11 +122,12 @@ export async function processSessionPhotoDeletionQueue(limit = 5) {
       continue;
     }
     const delaySeconds = sessionPhotoDeletionRetrySeconds(job.attempts);
+    failed += 1;
     await prisma.$executeRawUnsafe(`
       UPDATE "SessionPhotoDeletionJob" SET status = 'FAILED', "lockedAt" = NULL,
         "lastError" = $2, "nextAttemptAt" = NOW() + ($3 * INTERVAL '1 second'), "updatedAt" = NOW()
        WHERE id = $1 AND status = 'PROCESSING' AND "lockedAt" = $4
     `, job.id, error.message.slice(0, 1000), delaySeconds, job.lockedAt);
   }
-  return { processed };
+  return { processed, failed };
 }

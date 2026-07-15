@@ -16,6 +16,17 @@ BEGIN
     IF duplicate_count > 0 THEN
       RAISE EXCEPTION 'MediaRevocationJob has % duplicate consent/draft/channel groups', duplicate_count;
     END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public'
+      AND table_name = 'MediaRevocationJob' AND column_name = 'draftSnapshotJSON') THEN
+      EXECUTE 'SELECT COUNT(*) FROM "MediaRevocationJob" j LEFT JOIN "SocialPostDraft" d ON d.id=j."draftId" WHERE d.id IS NULL AND (j."draftSnapshotJSON" IS NULL OR position(''"mediaJSON"'' in j."draftSnapshotJSON")=0)'
+        INTO duplicate_count;
+    ELSE
+      SELECT COUNT(*) INTO duplicate_count FROM "MediaRevocationJob" j
+       LEFT JOIN "SocialPostDraft" d ON d.id = j."draftId" WHERE d.id IS NULL;
+    END IF;
+    IF duplicate_count > 0 THEN
+      RAISE EXCEPTION '% existing revocation jobs have neither a source draft nor a media snapshot', duplicate_count;
+    END IF;
   END IF;
 
   IF to_regclass('public."SocialPublishAttempt"') IS NOT NULL THEN

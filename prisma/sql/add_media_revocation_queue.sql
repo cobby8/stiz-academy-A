@@ -49,7 +49,7 @@ BEGIN
   END IF;
   IF NEW."draftSnapshotJSON" IS NULL OR NEW."draftSnapshotJSON" = '{}' THEN
     NEW."draftSnapshotJSON" := COALESCE(
-      (SELECT jsonb_build_object('id', d.id, 'status', d.status, 'subjects', d."subjectStudentIdsJSON",
+      (SELECT jsonb_build_object('id', d.id, 'status', d.status, 'subjects', d."subjectStudentIdsJSON", 'mediaJSON', d."mediaJSON",
         'galleryPostId', d."galleryPostId", 'instagramMediaId', d."instagramMediaId", 'instagramPermalink', d."instagramPermalink")::text
          FROM "SocialPostDraft" d WHERE d.id = NEW."draftId"),
       jsonb_build_object('id', NEW."draftId")::text
@@ -66,8 +66,9 @@ REVOKE ALL ON FUNCTION stiz_fill_media_revocation_snapshot() FROM PUBLIC;
 UPDATE "MediaRevocationJob" j SET
   "studentSnapshotJSON" = COALESCE((SELECT jsonb_build_object('id', s.id, 'name', s.name)::text FROM "Student" s WHERE s.id = j."studentId"), jsonb_build_object('id', j."studentId")::text),
   "consentSnapshotJSON" = COALESCE((SELECT jsonb_build_object('id', c.id, 'policyVersion', c."policyVersion", 'recordedAt', c."recordedAt", 'revokedAt', c."revokedAt")::text FROM "StudentMediaConsent" c WHERE c.id = j."consentId"), jsonb_build_object('id', j."consentId")::text),
-  "draftSnapshotJSON" = COALESCE((SELECT jsonb_build_object('id', d.id, 'status', d.status, 'subjects', d."subjectStudentIdsJSON", 'galleryPostId', d."galleryPostId", 'instagramMediaId', d."instagramMediaId", 'instagramPermalink', d."instagramPermalink")::text FROM "SocialPostDraft" d WHERE d.id = j."draftId"), jsonb_build_object('id', j."draftId")::text)
-WHERE "studentSnapshotJSON" = '{}' OR "consentSnapshotJSON" = '{}' OR "draftSnapshotJSON" = '{}';
+  "draftSnapshotJSON" = COALESCE((SELECT jsonb_build_object('id', d.id, 'status', d.status, 'subjects', d."subjectStudentIdsJSON", 'mediaJSON', d."mediaJSON", 'galleryPostId', d."galleryPostId", 'instagramMediaId', d."instagramMediaId", 'instagramPermalink', d."instagramPermalink")::text FROM "SocialPostDraft" d WHERE d.id = j."draftId"), jsonb_build_object('id', j."draftId")::text)
+WHERE "studentSnapshotJSON" = '{}' OR "consentSnapshotJSON" = '{}' OR "draftSnapshotJSON" = '{}'
+   OR position('"mediaJSON"' in "draftSnapshotJSON") = 0;
 
 CREATE OR REPLACE FUNCTION stiz_guard_media_revocation_snapshot() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$

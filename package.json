@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev -p 4000",
     "build": "prisma generate && next build",
+    "release:preflight": "node scripts/release-preflight.mjs",
+    "release:code-check": "node scripts/release-preflight.mjs --skip-env",
     "db:push": "prisma db push",
     "start": "next start",
     "lint": "eslint",

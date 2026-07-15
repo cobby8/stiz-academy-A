@@ -13,6 +13,12 @@ BEGIN
   IF issue_count > 0 THEN
     RAISE EXCEPTION 'media audit tables still contain % source foreign keys', issue_count;
   END IF;
+  SELECT COUNT(*) INTO issue_count FROM "MediaRevocationJob"
+   WHERE jsonb_typeof(stiz_try_jsonb("draftSnapshotJSON") -> 'mediaJSON') IS DISTINCT FROM 'string'
+      OR NOT COALESCE(stiz_try_jsonb("consentSnapshotJSON") ? 'revokedAt', false);
+  IF issue_count > 0 THEN
+    RAISE EXCEPTION '% revocation jobs lack durable consent/media processing evidence', issue_count;
+  END IF;
 
   SELECT COUNT(*) INTO issue_count FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'MediaRevocationJob'

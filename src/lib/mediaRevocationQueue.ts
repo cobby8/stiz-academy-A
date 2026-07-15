@@ -7,8 +7,23 @@ export type MediaRevocationStatus = "PENDING" | "PROCESSING" | "REMOVED" | "FAIL
 export type MediaRevocationJob = {
   id: string; studentId: string; draftId: string; channel: "GALLERY" | "INSTAGRAM";
   resourceId: string | null; resourceUrl: string | null; status: MediaRevocationStatus; attempts: number;
-  lastError: string | null; lockedAt: Date | null; createdAt: Date; updatedAt: Date;
+  lastError: string | null; lockedAt: Date | null; consentSnapshotJSON: string; draftSnapshotJSON: string;
+  createdAt: Date; updatedAt: Date;
 };
+
+function snapshotConsentIsRevoked(snapshotJSON: string) {
+  try {
+    const snapshot = JSON.parse(snapshotJSON) as { revokedAt?: unknown };
+    return typeof snapshot.revokedAt === "string" && snapshot.revokedAt.length > 0;
+  } catch { return false; }
+}
+
+function snapshotDraftMediaJSON(snapshotJSON: string) {
+  try {
+    const snapshot = JSON.parse(snapshotJSON) as { mediaJSON?: unknown };
+    return typeof snapshot.mediaJSON === "string" ? snapshot.mediaJSON : null;
+  } catch { return null; }
+}
 
 export async function enqueueMediaRevocationsForStudent(
   tx: Prisma.TransactionClient,
@@ -102,7 +117,7 @@ async function claimJob() {
            SELECT c."revokedAt" IS NOT NULL FROM "StudentMediaConsent" c
             WHERE c."studentId" = "MediaRevocationJob"."studentId"
             ORDER BY c."recordedAt" DESC, c.id DESC LIMIT 1
-         ), false)
+         ), (stiz_try_jsonb("MediaRevocationJob"."consentSnapshotJSON") ->> 'revokedAt') IS NOT NULL, false)
        ORDER BY "nextAttemptAt", "createdAt"
        FOR UPDATE SKIP LOCKED LIMIT 1
     )
@@ -136,14 +151,19 @@ export async function processMediaRevocationQueue(limit = 10) {
           SELECT ("revokedAt" IS NOT NULL) AS revoked FROM "StudentMediaConsent"
            WHERE "studentId" = $1 ORDER BY "recordedAt" DESC, id DESC LIMIT 1
         `, job.studentId);
-        if (!latest[0]?.revoked) {
+        const consentStillRevoked = latest[0]
+          ? latest[0].revoked
+          : snapshotConsentIsRevoked(job.consentSnapshotJSON);
+        if (!consentStillRevoked) {
           await tx.$executeRawUnsafe(`DELETE FROM "MediaRevocationJob" WHERE id = $1`, job.id);
           return false;
         }
         const draftRows = await tx.$queryRawUnsafe<Array<{ mediaJSON: string }>>(
           `SELECT "mediaJSON" FROM "SocialPostDraft" WHERE id = $1 LIMIT 1`, job.draftId,
         );
-        const publicPaths = draftRows[0] ? collectPublishedMediaCopyPaths(job.draftId, draftRows[0].mediaJSON) : [];
+        const durableMediaJSON = draftRows[0]?.mediaJSON ?? snapshotDraftMediaJSON(job.draftSnapshotJSON);
+        if (!durableMediaJSON) throw new Error("회수 작업에 공개 미디어 스냅샷이 없습니다.");
+        const publicPaths = collectPublishedMediaCopyPaths(job.draftId, durableMediaJSON);
         for (const path of publicPaths) {
           await tx.$executeRawUnsafe(`
             INSERT INTO "StorageDeletionJob" (id, bucket, path, status, attempts, "nextAttemptAt", "createdAt", "updatedAt")

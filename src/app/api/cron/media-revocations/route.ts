@@ -20,5 +20,6 @@ export async function GET(req: NextRequest) {
     revalidatePath("/gallery");
     revalidatePath("/");
   }
-  return NextResponse.json({ success: result.failed === 0, ...result, photoDeletion });
+  const success = result.failed === 0 && photoDeletion.failed === 0;
+  return NextResponse.json({ success, ...result, photoDeletion });
 }

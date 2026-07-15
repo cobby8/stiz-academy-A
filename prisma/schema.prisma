@@ -835,6 +835,10 @@ model NotificationDelivery {
   dedupeKey       String    @unique
   status          String    @default("PENDING") // PENDING, SENT, PARTIAL, FAILED, SKIPPED
   attemptCount    Int       @default(0)
+  payloadJSON     Json?
+  nextAttemptAt   DateTime? @db.Timestamptz(6)
+  lockedAt        DateTime? @db.Timestamptz(6)
+  lockToken       String?
   sentAt          DateTime? @db.Timestamptz(6)
   failedAt        DateTime? @db.Timestamptz(6)
   errorCode       String?
@@ -842,6 +846,7 @@ model NotificationDelivery {
   updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([status, createdAt])
+  @@index([status, nextAttemptAt, createdAt])
   @@index([sessionId, eventType])
   @@index([recipientUserId, createdAt])
 }

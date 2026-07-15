@@ -244,7 +244,10 @@ export default function SessionInProgressClient({
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <h2 className="mb-3 flex items-center gap-2 font-black"><span className="material-symbols-outlined text-[var(--brand-accent)]">photo_camera</span>수업 사진</h2>
-        <SessionPhotoUploader sessionId={session.id} />
+        <SessionPhotoUploader
+          sessionId={session.id}
+          students={students.map(({ id, name }) => ({ id, name }))}
+        />
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">

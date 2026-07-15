@@ -21,6 +21,7 @@ export type PushDeliveryResult = {
   sentCount: number;
   failedCount: number;
   removedCount: number;
+  failedSubscriptionIds?: string[];
   errorCode?: string;
 };
 
@@ -51,6 +52,7 @@ function errorMessageOf(error: unknown) {
 export async function sendPushToUser(
   userId: string,
   payload: PushPayload,
+  options?: { subscriptionIds?: string[] },
 ): Promise<PushDeliveryResult> {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     return {
@@ -66,8 +68,10 @@ export async function sendPushToUser(
   let subscriptions: PushSubscriptionRow[];
   try {
     subscriptions = await prisma.$queryRawUnsafe<PushSubscriptionRow[]>(
-      `SELECT id, endpoint, p256dh, auth FROM "PushSubscription" WHERE "userId" = $1`,
+      `SELECT id, endpoint, p256dh, auth FROM "PushSubscription"
+       WHERE "userId" = $1 AND ($2::text[] IS NULL OR id = ANY($2::text[]))`,
       userId,
+      options?.subscriptionIds?.length ? options.subscriptionIds : null,
     );
   } catch (error) {
     console.error("Push subscription lookup failed:", errorMessageOf(error));
@@ -95,6 +99,7 @@ export async function sendPushToUser(
   let sentCount = 0;
   let failedCount = 0;
   let removedCount = 0;
+  const failedSubscriptionIds: string[] = [];
 
   await Promise.all(
     subscriptions.map(async (subscription) => {
@@ -122,6 +127,7 @@ export async function sendPushToUser(
           }
           return;
         }
+        failedSubscriptionIds.push(subscription.id);
         console.error("Push delivery failed:", errorMessageOf(error));
       }
     }),
@@ -136,6 +142,7 @@ export async function sendPushToUser(
     sentCount,
     failedCount,
     removedCount,
+    ...(failedSubscriptionIds.length ? { failedSubscriptionIds } : {}),
     ...(status === "PARTIAL" ? { errorCode: "PARTIAL_DELIVERY" } : {}),
     ...(status === "FAILED" ? { errorCode: "PUSH_DELIVERY_FAILED" } : {}),
   };

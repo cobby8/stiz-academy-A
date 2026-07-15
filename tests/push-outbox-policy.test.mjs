@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+const policy = readFileSync(new URL("../src/lib/push-outbox-policy.ts", import.meta.url), "utf8");
+const worker = readFileSync(new URL("../src/lib/push-outbox.ts", import.meta.url), "utf8");
+test("backoff is bounded exponential", () => { assert.match(policy, /30 \* 2 \*\*/); assert.match(policy, /Math\.min\(60 \* 60/); });
+test("claim is atomic, leased and skip-locked", () => { assert.match(worker, /FOR UPDATE SKIP LOCKED/); assert.match(worker, /"lockedAt" < NOW\(\) -/); assert.match(worker, /"lockToken" = \$5/); });
+test("completion, partial retry and failure update only their own claim", () => { assert.equal((worker.match(/WHERE id = \$1 AND "lockToken" = \$2/g) ?? []).length, 3); });
+test("partial delivery retries only failed subscriptions", () => { assert.match(worker, /failedSubscriptionIds/); assert.match(worker, /retrySubscriptionIds/); });
+test("an expired final lease is failed instead of remaining pending forever", () => { assert.match(worker, /PUSH_MAX_ATTEMPTS_EXHAUSTED/); assert.match(worker, /"attemptCount" >= \$1/); });

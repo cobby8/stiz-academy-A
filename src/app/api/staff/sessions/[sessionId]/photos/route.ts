@@ -14,6 +14,23 @@ import {
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 1024 * 1024;
+const MAX_SUBJECTS = 100;
+
+function parseSubjectStudentIds(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(
+      parsed
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    )].slice(0, MAX_SUBJECTS);
+  } catch {
+    return [];
+  }
+}
 
 export async function POST(req: Request, context: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -30,14 +47,30 @@ export async function POST(req: Request, context: { params: Promise<{ sessionId:
 
     const form = await req.formData();
     const file = form.get("file");
+    const subjectStudentIds = parseSubjectStudentIds(form.get("subjectStudentIds"));
     if (!(file instanceof File)) return NextResponse.json({ error: "사진을 선택해 주세요." }, { status: 400 });
+    if (subjectStudentIds.length === 0) {
+      return NextResponse.json({ error: "사진에 나온 학생을 한 명 이상 선택해 주세요." }, { status: 400 });
+    }
+
+    const eligibleSubjects = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT DISTINCT st.id
+       FROM "Student" st
+       JOIN "Enrollment" e ON e."studentId" = st.id
+       WHERE e."classId" = $1 AND e.status = 'ACTIVE' AND st.id = ANY($2::text[])`,
+      session.classId,
+      subjectStudentIds,
+    );
+    if (eligibleSubjects.length !== subjectStudentIds.length) {
+      return NextResponse.json({ error: "현재 수업 학생만 사진 대상으로 선택할 수 있습니다." }, { status: 400 });
+    }
     if (!ALLOWED_TYPES.has(file.type) || file.type === "image/gif") {
       return NextResponse.json({ error: "수업 사진은 JPEG, PNG, WebP만 사용할 수 있습니다." }, { status: 400 });
     }
     if (file.size > MAX_BYTES) return NextResponse.json({ error: "압축된 사진은 1MB 이하여야 합니다." }, { status: 400 });
 
     // API 직접 호출도 GPS/기기 EXIF를 남기지 못하도록 서버에서 다시 인코딩합니다.
-    const encoded = await sharp(Buffer.from(await file.arrayBuffer()))
+    const encoded = await sharp(Buffer.from(await file.arrayBuffer()), { limitInputPixels: 40_000_000 })
       .rotate()
       .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 82, mozjpeg: true })
@@ -84,6 +117,7 @@ export async function POST(req: Request, context: { params: Promise<{ sessionId:
         isPublic: false,
         sessionId,
         classId: session.classId,
+        subjectStudentIds,
         source: "SESSION_PHOTO",
       });
     } catch (error) {

@@ -19,6 +19,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/push-outbox",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/site-ops-bot",
       "schedule": "0 17 * * *"
     }

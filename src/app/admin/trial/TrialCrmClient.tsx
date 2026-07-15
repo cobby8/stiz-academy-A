@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import dynamic from "next/dynamic";
 import {
     updateTrialLead,
     deleteTrialLead,
     sendPostTrialEnrollGuide,
     sendTrialCoachNotice,
+    recordApplicationContact,
 } from "@/app/actions/admin";
 
 const TrialCrmModals = dynamic(() => import("./TrialCrmModals"), {
@@ -52,6 +53,12 @@ export interface TrialLead {
     hopeNote: string | null;
     agreedTerms: boolean;
     agreedPrivacy: boolean;
+    latestContactAction: string | null;
+    latestContactNote: string | null;
+    latestContactAt: string | null;
+    latestContactBy: string | null;
+    openFollowUpAt: string | null;
+    openFollowUpNote: string | null;
 }
 
 interface TrialStats {
@@ -74,6 +81,8 @@ type FeedbackState = { type: "success" | "error"; message: string } | null;
 type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "COACH_NOTICE" | "ENROLL_RECEIVED";
 type ContactSummary = { parentPhone: string; childName: string; status: string };
 type PriorityBadge = { icon: string; label: string; className: string };
+type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
+type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
 
 const EMPTY_STATS: TrialStats = {
     NEW: 0,
@@ -121,6 +130,13 @@ const TRIAL_WORK_FILTERS: Array<{ value: TrialWorkFilter; label: string; icon: s
     { value: "ENROLL_RECEIVED", label: "수강신청 접수", icon: "assignment_turned_in" },
 ];
 
+const CONTACT_ACTION_LABELS: Record<string, string> = {
+    CONTACTED: "연락 완료",
+    NO_ANSWER: "부재",
+    FOLLOW_UP: "재연락 예약",
+    MEMO: "상담 메모",
+};
+
 function phoneHref(phone: string) {
     const digits = phone.replace(/\D/g, "");
     return digits ? `tel:${digits}` : undefined;
@@ -147,6 +163,22 @@ function formatWaitLabel(dateStr: string | null) {
     if (hours >= 24) return "24시간 이상 대기";
     if (hours >= 1) return `${hours}시간 대기`;
     return "방금 접수";
+}
+
+function isFollowUpDueToday(dateStr: string | null) {
+    if (!dateStr) return false;
+    const timestamp = new Date(dateStr).getTime();
+    if (!Number.isFinite(timestamp)) return false;
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    return timestamp <= todayEnd.getTime();
+}
+
+function formatContactDateTime(dateStr: string | null) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "-";
+    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function matchesTrialWorkFilter(lead: TrialLead, workFilter: TrialWorkFilter) {
@@ -235,6 +267,13 @@ function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
             icon: "school",
             label: "쌤 알림 필요",
             className: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200",
+        });
+    }
+    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && isFollowUpDueToday(lead.openFollowUpAt)) {
+        badges.push({
+            icon: "phone_callback",
+            label: "오늘 재연락",
+            className: "bg-lime-100 text-lime-800 dark:bg-lime-950/50 dark:text-lime-200",
         });
     }
 
@@ -364,7 +403,9 @@ export default function TrialCrmClient({
     const [showConvertModal, setShowConvertModal] = useState<TrialLead | null>(null);
     const [showLostModal, setShowLostModal] = useState<TrialLead | null>(null);
     const [showMemoModal, setShowMemoModal] = useState<TrialLead | null>(null);
-    const hasOpenModal = Boolean(showAddModal || showConvertModal || showLostModal || showMemoModal);
+    const [contactModal, setContactModal] = useState<ContactModalState>(null);
+    const [contactBusyId, setContactBusyId] = useState<string | null>(null);
+    const hasTrialModal = Boolean(showAddModal || showConvertModal || showLostModal || showMemoModal);
 
     const loadTrialData = useCallback(async () => {
         setLoading(true);
@@ -405,6 +446,29 @@ export default function TrialCrmClient({
             showFeedback("error", "복사 중 문제가 생겼습니다. 직접 선택해서 복사해주세요.");
         }
     }, [showFeedback]);
+    const handleRecordContact = useCallback(async (
+        lead: TrialLead,
+        action: ContactActionType,
+        note?: string | null,
+        nextFollowUpAt?: string | null,
+    ) => {
+        setContactBusyId(lead.id);
+        try {
+            await recordApplicationContact({
+                targetType: "TRIAL",
+                targetId: lead.id,
+                action,
+                note,
+                nextFollowUpAt,
+            });
+            await loadTrialData();
+            showFeedback("success", `${lead.childName} ${CONTACT_ACTION_LABELS[action]} 기록을 저장했습니다.`);
+        } catch {
+            showFeedback("error", "연락 기록 저장 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+        } finally {
+            setContactBusyId(null);
+        }
+    }, [loadTrialData, showFeedback]);
 
     // 필터링된 리드 목록
     const filteredLeads = useMemo(() => {
@@ -856,6 +920,24 @@ export default function TrialCrmClient({
                                                 이탈 사유: {lead.lostReason}
                                             </p>
                                         )}
+                                        {(lead.openFollowUpAt || lead.latestContactAction) && (
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {lead.openFollowUpAt && (
+                                                    <span className="inline-flex items-center gap-1 rounded-lg bg-lime-50 px-2.5 py-1 text-xs font-bold text-lime-700 dark:bg-lime-950/40 dark:text-lime-200">
+                                                        <span className="material-symbols-outlined text-sm">phone_callback</span>
+                                                        다음 연락 {formatContactDateTime(lead.openFollowUpAt)}
+                                                        {lead.openFollowUpNote ? ` · ${lead.openFollowUpNote}` : ""}
+                                                    </span>
+                                                )}
+                                                {lead.latestContactAction && (
+                                                    <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                                        <span className="material-symbols-outlined text-sm">history</span>
+                                                        최근 {CONTACT_ACTION_LABELS[lead.latestContactAction] ?? lead.latestContactAction}
+                                                        {lead.latestContactAt ? ` · ${formatContactDateTime(lead.latestContactAt)}` : ""}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* 오른쪽: 액션 버튼 */}
@@ -890,6 +972,35 @@ export default function TrialCrmClient({
                                         >
                                             <span className="material-symbols-outlined text-lg">assignment</span>
                                             요약 복사
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRecordContact(lead, "CONTACTED")}
+                                            disabled={contactBusyId === lead.id}
+                                            className="flex items-center gap-1.5 rounded-lg bg-lime-500 px-3 py-2 text-sm font-bold text-brand-navy-900 transition hover:bg-lime-400 disabled:opacity-50"
+                                            title="보호자 연락 완료 기록"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">done_all</span>
+                                            연락 완료
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRecordContact(lead, "NO_ANSWER")}
+                                            disabled={contactBusyId === lead.id}
+                                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:border-amber-400 dark:hover:bg-amber-950/30 dark:hover:text-amber-200"
+                                            title="부재 기록"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">phone_disabled</span>
+                                            부재
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setContactModal({ lead, defaultAction: "FOLLOW_UP" })}
+                                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            title="재연락 예약 또는 상담 메모"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">event_repeat</span>
+                                            재연락
                                         </button>
                                         {/* 상태 변경 드롭다운 — CONVERTED/LOST가 아닌 경우만 */}
                                         {lead.status !== "CONVERTED" && lead.status !== "LOST" && (
@@ -996,7 +1107,7 @@ export default function TrialCrmClient({
                 </div>
             )}
 
-            {hasOpenModal && (
+            {hasTrialModal && (
                 <TrialCrmModals
                     addOpen={showAddModal}
                     convertLead={showConvertModal}
@@ -1010,6 +1121,133 @@ export default function TrialCrmClient({
                     onFeedback={showFeedback}
                 />
             )}
+
+            {contactModal && (
+                <TrialContactModal
+                    lead={contactModal.lead}
+                    defaultAction={contactModal.defaultAction}
+                    busy={contactBusyId === contactModal.lead.id}
+                    onClose={() => setContactModal(null)}
+                    onSubmit={async ({ action, note, nextFollowUpAt }) => {
+                        await handleRecordContact(contactModal.lead, action, note, nextFollowUpAt);
+                        setContactModal(null);
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+function TrialContactModal({
+    lead,
+    defaultAction,
+    busy,
+    onClose,
+    onSubmit,
+}: {
+    lead: TrialLead;
+    defaultAction: ContactActionType;
+    busy: boolean;
+    onClose: () => void;
+    onSubmit: (input: { action: ContactActionType; note: string | null; nextFollowUpAt: string | null }) => Promise<void> | void;
+}) {
+    const [action, setAction] = useState<ContactActionType>(defaultAction);
+    const [note, setNote] = useState("");
+    const [nextFollowUpAt, setNextFollowUpAt] = useState("");
+    const [formError, setFormError] = useState("");
+
+    function handleSubmit(event: FormEvent) {
+        event.preventDefault();
+        if (action === "FOLLOW_UP" && !nextFollowUpAt) {
+            setFormError("다음 연락 예정일을 선택해 주세요.");
+            return;
+        }
+        setFormError("");
+        void onSubmit({
+            action,
+            note: note.trim() || null,
+            nextFollowUpAt: nextFollowUpAt ? new Date(nextFollowUpAt).toISOString() : null,
+        });
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+            <form
+                onSubmit={handleSubmit}
+                className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <h2 className="flex items-center gap-2 text-lg font-black text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">phone_callback</span>
+                    후속 연락 기록
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {lead.childName} · {lead.parentName} {lead.parentPhone}
+                </p>
+
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                    {(["FOLLOW_UP", "MEMO"] as ContactActionType[]).map((option) => (
+                        <button
+                            key={option}
+                            type="button"
+                            onClick={() => setAction(option)}
+                            className={`rounded-xl border px-3 py-2 text-sm font-black transition ${
+                                action === option
+                                    ? "border-brand-orange-500 bg-brand-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
+                                    : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900"
+                            }`}
+                        >
+                            {CONTACT_ACTION_LABELS[option]}
+                        </button>
+                    ))}
+                </div>
+
+                {action === "FOLLOW_UP" && (
+                    <label className="mt-4 block text-sm font-bold text-gray-700 dark:text-gray-200">
+                        다음 연락 예정
+                        <input
+                            type="datetime-local"
+                            value={nextFollowUpAt}
+                            onChange={(event) => setNextFollowUpAt(event.target.value)}
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-neon-lime"
+                        />
+                    </label>
+                )}
+
+                <label className="mt-4 block text-sm font-bold text-gray-700 dark:text-gray-200">
+                    상담 메모
+                    <textarea
+                        value={note}
+                        onChange={(event) => setNote(event.target.value)}
+                        rows={4}
+                        className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-neon-lime"
+                        placeholder="상담 내용이나 다음에 확인할 내용을 적어주세요"
+                    />
+                </label>
+
+                {formError && (
+                    <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                        {formError}
+                    </p>
+                )}
+
+                <div className="mt-5 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-xl px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-900"
+                    >
+                        닫기
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={busy}
+                        className="rounded-xl bg-brand-orange-500 px-5 py-2 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
+                    >
+                        {busy ? "저장 중..." : "저장"}
+                    </button>
+                </div>
+            </form>
         </div>
     );
 }

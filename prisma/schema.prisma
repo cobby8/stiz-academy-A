@@ -1204,6 +1204,27 @@ model EnrollmentApplication {
   @@index([status, createdAt])
 }
 
+// 체험/수강신청 상담·연락 기록 — 한 신청 건에 여러 연락 이력을 남긴다
+model ApplicationContactLog {
+  id                      String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  targetType              String // TRIAL, ENROLL
+  trialLeadId             String?
+  enrollmentApplicationId String?
+  action                  String // CONTACTED, NO_ANSWER, FOLLOW_UP, MEMO
+  note                    String?
+  nextFollowUpAt          DateTime? @db.Timestamptz(6)
+  followUpCompletedAt     DateTime? @db.Timestamptz(6)
+  createdByUserId         String?
+  createdByName           String?
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([trialLeadId, createdAt])
+  @@index([enrollmentApplicationId, createdAt])
+  @@index([trialLeadId, nextFollowUpAt])
+  @@index([enrollmentApplicationId, nextFollowUpAt])
+}
+
 // SMS 템플릿 — 상황별 자동 발송 메시지를 관리자가 편집/ON-OFF할 수 있는 시스템
 model SmsTemplate {
   id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))

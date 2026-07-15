@@ -16,6 +16,11 @@ const toBool = (v: any, fallback: boolean): boolean => {
     return fallback;
 };
 
+function isMissingApplicationContactLogError(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes("ApplicationContactLog") && message.includes("does not exist");
+}
+
 export const ACADEMY_SETTINGS_CACHE_TAG = "academy-settings";
 
 async function fetchAcademySettings() {
@@ -2306,14 +2311,80 @@ export const getSessionsForReportList = cache(async (limit = 50) => {
  */
 export const getTrialLeads = cache(async (status?: string) => {
     try {
-        const rows = status
-            ? await prisma.$queryRawUnsafe<any[]>(
-                  `SELECT * FROM "TrialLead" WHERE status = $1 ORDER BY "createdAt" DESC`,
+        let rows: any[];
+        try {
+            rows = status
+                ? await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT tl.*,
+                          latest_log.action AS latest_contact_action,
+                          latest_log.note AS latest_contact_note,
+                          latest_log."createdAt" AS latest_contact_at,
+                          latest_log."createdByName" AS latest_contact_by,
+                          open_followup."nextFollowUpAt" AS open_followup_at,
+                          open_followup.note AS open_followup_note
+                   FROM "TrialLead" tl
+                   LEFT JOIN LATERAL (
+                       SELECT action, note, "createdAt", "createdByName"
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'TRIAL'
+                         AND acl."trialLeadId" = tl.id
+                       ORDER BY acl."createdAt" DESC
+                       LIMIT 1
+                   ) latest_log ON true
+                   LEFT JOIN LATERAL (
+                       SELECT "nextFollowUpAt", note
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'TRIAL'
+                         AND acl."trialLeadId" = tl.id
+                         AND acl."nextFollowUpAt" IS NOT NULL
+                         AND acl."followUpCompletedAt" IS NULL
+                       ORDER BY acl."nextFollowUpAt" ASC
+                       LIMIT 1
+                   ) open_followup ON true
+                   WHERE tl.status = $1
+                   ORDER BY tl."createdAt" DESC`,
                   status
               )
-            : await prisma.$queryRawUnsafe<any[]>(
-                  `SELECT * FROM "TrialLead" ORDER BY "createdAt" DESC`
+                : await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT tl.*,
+                          latest_log.action AS latest_contact_action,
+                          latest_log.note AS latest_contact_note,
+                          latest_log."createdAt" AS latest_contact_at,
+                          latest_log."createdByName" AS latest_contact_by,
+                          open_followup."nextFollowUpAt" AS open_followup_at,
+                          open_followup.note AS open_followup_note
+                   FROM "TrialLead" tl
+                   LEFT JOIN LATERAL (
+                       SELECT action, note, "createdAt", "createdByName"
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'TRIAL'
+                         AND acl."trialLeadId" = tl.id
+                       ORDER BY acl."createdAt" DESC
+                       LIMIT 1
+                   ) latest_log ON true
+                   LEFT JOIN LATERAL (
+                       SELECT "nextFollowUpAt", note
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'TRIAL'
+                         AND acl."trialLeadId" = tl.id
+                         AND acl."nextFollowUpAt" IS NOT NULL
+                         AND acl."followUpCompletedAt" IS NULL
+                       ORDER BY acl."nextFollowUpAt" ASC
+                       LIMIT 1
+                   ) open_followup ON true
+                   ORDER BY tl."createdAt" DESC`
               );
+        } catch (error) {
+            if (!isMissingApplicationContactLogError(error)) throw error;
+            rows = status
+                ? await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT * FROM "TrialLead" WHERE status = $1 ORDER BY "createdAt" DESC`,
+                    status,
+                )
+                : await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT * FROM "TrialLead" ORDER BY "createdAt" DESC`,
+                );
+        }
 
         return rows.map((r: any) => ({
             id: r.id,
@@ -2352,6 +2423,12 @@ export const getTrialLeads = cache(async (status?: string) => {
             hopeNote: r.hopeNote ?? r.hopenote ?? null,
             agreedTerms: r.agreedTerms ?? r.agreedterms ?? false,
             agreedPrivacy: r.agreedPrivacy ?? r.agreedprivacy ?? false,
+            latestContactAction: r.latest_contact_action ?? null,
+            latestContactNote: r.latest_contact_note ?? null,
+            latestContactAt: r.latest_contact_at ?? null,
+            latestContactBy: r.latest_contact_by ?? null,
+            openFollowUpAt: r.open_followup_at ?? null,
+            openFollowUpNote: r.open_followup_note ?? null,
         }));
     } catch (e) {
         console.error("[getTrialLeads] failed:", e);
@@ -2930,14 +3007,80 @@ export const getPaymentCollectionRate = cache(async () => {
  */
 export const getEnrollApplications = cache(async (status?: string) => {
     try {
-        const rows = status
-            ? await prisma.$queryRawUnsafe<any[]>(
-                  `SELECT * FROM "EnrollmentApplication" WHERE status = $1 ORDER BY "createdAt" DESC`,
+        let rows: any[];
+        try {
+            rows = status
+                ? await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT ea.*,
+                          latest_log.action AS latest_contact_action,
+                          latest_log.note AS latest_contact_note,
+                          latest_log."createdAt" AS latest_contact_at,
+                          latest_log."createdByName" AS latest_contact_by,
+                          open_followup."nextFollowUpAt" AS open_followup_at,
+                          open_followup.note AS open_followup_note
+                   FROM "EnrollmentApplication" ea
+                   LEFT JOIN LATERAL (
+                       SELECT action, note, "createdAt", "createdByName"
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'ENROLL'
+                         AND acl."enrollmentApplicationId" = ea.id
+                       ORDER BY acl."createdAt" DESC
+                       LIMIT 1
+                   ) latest_log ON true
+                   LEFT JOIN LATERAL (
+                       SELECT "nextFollowUpAt", note
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'ENROLL'
+                         AND acl."enrollmentApplicationId" = ea.id
+                         AND acl."nextFollowUpAt" IS NOT NULL
+                         AND acl."followUpCompletedAt" IS NULL
+                       ORDER BY acl."nextFollowUpAt" ASC
+                       LIMIT 1
+                   ) open_followup ON true
+                   WHERE ea.status = $1
+                   ORDER BY ea."createdAt" DESC`,
                   status
               )
-            : await prisma.$queryRawUnsafe<any[]>(
-                  `SELECT * FROM "EnrollmentApplication" ORDER BY "createdAt" DESC`
+                : await prisma.$queryRawUnsafe<any[]>(
+                  `SELECT ea.*,
+                          latest_log.action AS latest_contact_action,
+                          latest_log.note AS latest_contact_note,
+                          latest_log."createdAt" AS latest_contact_at,
+                          latest_log."createdByName" AS latest_contact_by,
+                          open_followup."nextFollowUpAt" AS open_followup_at,
+                          open_followup.note AS open_followup_note
+                   FROM "EnrollmentApplication" ea
+                   LEFT JOIN LATERAL (
+                       SELECT action, note, "createdAt", "createdByName"
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'ENROLL'
+                         AND acl."enrollmentApplicationId" = ea.id
+                       ORDER BY acl."createdAt" DESC
+                       LIMIT 1
+                   ) latest_log ON true
+                   LEFT JOIN LATERAL (
+                       SELECT "nextFollowUpAt", note
+                       FROM "ApplicationContactLog" acl
+                       WHERE acl."targetType" = 'ENROLL'
+                         AND acl."enrollmentApplicationId" = ea.id
+                         AND acl."nextFollowUpAt" IS NOT NULL
+                         AND acl."followUpCompletedAt" IS NULL
+                       ORDER BY acl."nextFollowUpAt" ASC
+                       LIMIT 1
+                   ) open_followup ON true
+                   ORDER BY ea."createdAt" DESC`
               );
+        } catch (error) {
+            if (!isMissingApplicationContactLogError(error)) throw error;
+            rows = status
+                ? await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT * FROM "EnrollmentApplication" WHERE status = $1 ORDER BY "createdAt" DESC`,
+                    status,
+                )
+                : await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT * FROM "EnrollmentApplication" ORDER BY "createdAt" DESC`,
+                );
+        }
 
         // camelCase 우선, 소문자 fallback (PgBouncer 반환 형식 대응)
         return rows.map((r: any) => ({
@@ -2975,6 +3118,12 @@ export const getEnrollApplications = cache(async (status?: string) => {
             convertedStudentId: r.convertedStudentId ?? r.convertedstudentid ?? null,
             createdAt: r.createdAt ?? r.createdat,
             updatedAt: r.updatedAt ?? r.updatedat,
+            latestContactAction: r.latest_contact_action ?? null,
+            latestContactNote: r.latest_contact_note ?? null,
+            latestContactAt: r.latest_contact_at ?? null,
+            latestContactBy: r.latest_contact_by ?? null,
+            openFollowUpAt: r.open_followup_at ?? null,
+            openFollowUpNote: r.open_followup_note ?? null,
         }));
     } catch (e) {
         console.error("[getEnrollApplications] failed:", e);

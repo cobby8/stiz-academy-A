@@ -28,6 +28,12 @@ import {
     recordTerminalPayment,
     recordPaymentAudit,
 } from "@/lib/payment-ledger";
+import {
+    APPLICATION_CONTACT_ACTIONS,
+    ensureApplicationContactLogInfrastructure,
+    type ApplicationContactAction,
+    type ApplicationContactTargetType,
+} from "@/lib/application-contact-logs";
 
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
@@ -4556,6 +4562,117 @@ export async function rejectEnrollApplication(
     revalidatePath("/admin/apply");
     revalidatePath("/admin");
     revalidateApplyAdminCaches();
+}
+
+export async function recordApplicationContact(input: {
+    targetType: ApplicationContactTargetType;
+    targetId: string;
+    action: ApplicationContactAction;
+    note?: string | null;
+    nextFollowUpAt?: string | null;
+}) {
+    const admin = await requireAdmin();
+    await ensureApplicationContactLogInfrastructure();
+
+    const targetType = input.targetType;
+    const action = input.action;
+    const targetId = input.targetId?.trim();
+    const note = input.note?.trim() || null;
+    const nextFollowUpAt = input.nextFollowUpAt?.trim() || null;
+
+    if (!targetId) {
+        throw new Error("기록할 신청 건을 찾을 수 없습니다.");
+    }
+    if (targetType !== "TRIAL" && targetType !== "ENROLL") {
+        throw new Error("지원하지 않는 신청 유형입니다.");
+    }
+    if (!APPLICATION_CONTACT_ACTIONS.includes(action)) {
+        throw new Error("지원하지 않는 연락 기록입니다.");
+    }
+    if (action === "FOLLOW_UP" && !nextFollowUpAt) {
+        throw new Error("다음 연락 예정일을 입력해 주세요.");
+    }
+    if (nextFollowUpAt && Number.isNaN(new Date(nextFollowUpAt).getTime())) {
+        throw new Error("다음 연락 예정일 형식이 올바르지 않습니다.");
+    }
+
+    const exists = targetType === "TRIAL"
+        ? await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "TrialLead" WHERE id = $1 LIMIT 1`,
+            targetId,
+        )
+        : await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+            targetId,
+        );
+
+    if (exists.length === 0) {
+        throw new Error("신청 건을 찾을 수 없습니다.");
+    }
+
+    if (action === "CONTACTED") {
+        if (targetType === "TRIAL") {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "ApplicationContactLog"
+                 SET "followUpCompletedAt" = COALESCE("followUpCompletedAt", NOW()),
+                     "updatedAt" = NOW()
+                 WHERE "targetType" = 'TRIAL'
+                   AND "trialLeadId" = $1
+                   AND "nextFollowUpAt" IS NOT NULL
+                   AND "followUpCompletedAt" IS NULL`,
+                targetId,
+            );
+        } else {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "ApplicationContactLog"
+                 SET "followUpCompletedAt" = COALESCE("followUpCompletedAt", NOW()),
+                     "updatedAt" = NOW()
+                 WHERE "targetType" = 'ENROLL'
+                   AND "enrollmentApplicationId" = $1
+                   AND "nextFollowUpAt" IS NOT NULL
+                   AND "followUpCompletedAt" IS NULL`,
+                targetId,
+            );
+        }
+    }
+
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "ApplicationContactLog" (
+            id, "targetType", "trialLeadId", "enrollmentApplicationId", action, note,
+            "nextFollowUpAt", "createdByUserId", "createdByName", "createdAt", "updatedAt"
+        )
+        VALUES (
+            gen_random_uuid()::text,
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6::timestamptz,
+            $7,
+            $8,
+            NOW(),
+            NOW()
+        )`,
+        targetType,
+        targetType === "TRIAL" ? targetId : null,
+        targetType === "ENROLL" ? targetId : null,
+        action,
+        note,
+        nextFollowUpAt,
+        admin.appUserId,
+        admin.appUserName,
+    );
+
+    revalidatePath("/admin/apply");
+    revalidatePath("/admin/trial");
+    if (targetType === "TRIAL") {
+        revalidateTrialAdminCaches();
+    } else {
+        revalidateApplyAdminCaches();
+    }
+
+    return { ok: true };
 }
 
 /**

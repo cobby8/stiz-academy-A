@@ -137,18 +137,31 @@ interface TrialStats {
     conversionRate: number;
 }
 
+type ListPagination = {
+    limit: number;
+    offset: number;
+    returned: number;
+    total: number;
+    hasMore: boolean;
+    nextOffset: number | null;
+    partial: boolean;
+};
+
 interface ApplyAdminClientProps {
     initialApplications?: EnrollApplication[];
     initialStats?: EnrollStats;
     initialClasses?: ClassInfo[];
+    initialApplyPagination?: ListPagination;
     initialTrialLeads?: TrialLead[];
     initialTrialStats?: TrialStats;
+    initialTrialPagination?: ListPagination;
 }
 
 type ApplyPayload = {
     applications: EnrollApplication[];
     stats: EnrollStats;
     classes: ClassInfo[];
+    pagination?: ListPagination;
 };
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
@@ -589,14 +602,19 @@ export default function ApplyAdminClient({
     initialApplications,
     initialStats,
     initialClasses,
+    initialApplyPagination,
     initialTrialLeads,
     initialTrialStats,
+    initialTrialPagination,
 }: ApplyAdminClientProps) {
-    const hasInitialData = Boolean(initialApplications && initialStats && initialClasses);
+    const hasInitialApplyData = Boolean(initialApplications && initialClasses);
     const [applications, setApplications] = useState<EnrollApplication[]>(initialApplications ?? []);
     const [stats, setStats] = useState<EnrollStats>(initialStats ?? EMPTY_STATS);
     const [classes, setClasses] = useState<ClassInfo[]>(initialClasses ?? []);
-    const [loading, setLoading] = useState(!hasInitialData);
+    const [applyLoaded, setApplyLoaded] = useState(hasInitialApplyData);
+    const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [applyPagination, setApplyPagination] = useState<ListPagination | null>(initialApplyPagination ?? null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
     const [workFilter, setWorkFilter] = useState<ApplicationWorkFilter>("ALL");
@@ -614,30 +632,41 @@ export default function ApplyAdminClient({
 
     const hasAnyData = applications.length > 0 || classes.length > 0 || stats.total > 0;
 
-    const loadApplyData = useCallback(async () => {
-        setLoading(true);
+    const loadApplyData = useCallback(async (options?: { append?: boolean; offset?: number }) => {
+        const append = Boolean(options?.append);
+        const offset = options?.offset ?? 0;
+
+        if (append) setLoadingMore(true);
+        else setLoading(true);
         setLoadError(null);
 
         try {
-            const response = await fetch("/api/admin/apply", { cache: "no-store" });
+            const params = new URLSearchParams({
+                limit: String(APPLICATION_PAGE_SIZE),
+                offset: String(offset),
+            });
+            const response = await fetch(`/api/admin/apply?${params.toString()}`, { cache: "no-store" });
             if (!response.ok) {
                 throw new Error("request failed");
             }
             const data = (await response.json()) as ApplyPayload;
-            setApplications(data.applications);
+            setApplications((current) => (append ? [...current, ...data.applications] : data.applications));
             setStats(data.stats);
             setClasses(data.classes);
+            setApplyPagination(data.pagination ?? null);
+            setApplyLoaded(true);
         } catch {
             setLoadError("failed");
         } finally {
-            setLoading(false);
+            if (append) setLoadingMore(false);
+            else setLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        if (hasInitialData) return;
+        if (activeTab !== "applications" || applyLoaded || loading) return;
         void loadApplyData();
-    }, [hasInitialData, loadApplyData]);
+    }, [activeTab, applyLoaded, loading, loadApplyData]);
 
     const classesBySlotKey = useMemo(() => {
         const map = new Map<string, ClassInfo>();
@@ -709,7 +738,23 @@ export default function ApplyAdminClient({
         () => filteredApps.slice(0, visibleLimit),
         [filteredApps, visibleLimit],
     );
-    const hasMoreApps = visibleApps.length < filteredApps.length;
+    const hasMoreLoadedApps = visibleApps.length < filteredApps.length;
+    const hasMoreServerApps = Boolean(applyPagination?.hasMore);
+    const hasMoreApps = hasMoreLoadedApps || hasMoreServerApps;
+    const handleShowMoreApps = useCallback(() => {
+        if (hasMoreLoadedApps) {
+            setVisibleLimit((current) => current + APPLICATION_PAGE_SIZE);
+            return;
+        }
+
+        if (!hasMoreServerApps || loadingMore) return;
+
+        setVisibleLimit((current) => current + APPLICATION_PAGE_SIZE);
+        void loadApplyData({
+            append: true,
+            offset: applyPagination?.nextOffset ?? applications.length,
+        });
+    }, [applications.length, applyPagination?.nextOffset, hasMoreLoadedApps, hasMoreServerApps, loadApplyData, loadingMore]);
     const workFilterCounts = useMemo(() => {
         const counts: Record<ApplicationWorkFilter, number> = {
             ALL: applications.length,
@@ -732,12 +777,14 @@ export default function ApplyAdminClient({
         return counts;
     }, [applications, classesBySlotKey]);
     const priorityAppCount = useMemo(() => {
+        if (!applyLoaded) return stats.PENDING;
+
         return applications.filter((app) => {
             const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
             const contactCount = getContactCount(app.parentPhone, openContactCounts);
             return getApplicationPriorityBadges(app, preferredSlotLabel, contactCount).length > 0;
         }).length;
-    }, [applications, classesBySlotKey, openContactCounts]);
+    }, [applications, applyLoaded, classesBySlotKey, openContactCounts, stats.PENDING]);
     const priorityTrialCount = useMemo(() => {
         return trialLeadsForSummary.filter((lead) => {
             const contactCount = getContactCount(lead.parentPhone, openContactCounts);
@@ -926,9 +973,13 @@ export default function ApplyAdminClient({
                 <TrialCrmClient
                     initialLeads={initialTrialLeads}
                     initialStats={initialTrialStats}
+                    initialPagination={initialTrialPagination}
                     applicationContacts={applicationContacts}
                 />
             ) : activeTab === "applications" ? (
+                !applyLoaded ? (
+                    loadError ? <ApplyErrorState onRetry={loadApplyData} /> : <ApplyLoadingFallback />
+                ) : (
                 <>
                     {/* 파이프라인 요약 카드 */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -1051,6 +1102,16 @@ export default function ApplyAdminClient({
                                     ? "접수된 수강 신청이 없습니다"
                                     : `"${STATUS_CONFIG[filter]?.label}" 상태의 신청이 없습니다`}
                             </p>
+                            {hasMoreServerApps && (
+                                <button
+                                    type="button"
+                                    onClick={handleShowMoreApps}
+                                    disabled={loadingMore}
+                                    className="mt-4 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                >
+                                    {loadingMore ? "불러오는 중..." : "다음 50건에서 더 찾아보기"}
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="grid gap-4">
@@ -1356,16 +1417,18 @@ export default function ApplyAdminClient({
                                 {hasMoreApps && (
                                     <button
                                         type="button"
-                                        onClick={() => setVisibleLimit((current) => current + APPLICATION_PAGE_SIZE)}
+                                        onClick={handleShowMoreApps}
+                                        disabled={loadingMore}
                                         className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                                     >
-                                        50건 더 보기
+                                        {loadingMore ? "불러오는 중..." : "50건 더 보기"}
                                     </button>
                                 )}
                             </div>
                         </div>
                     )}
                 </>
+                )
             ) : (
                 /* 설정 탭 — 기존 안내 설정 UI */
                 <ApplySettingsTab />

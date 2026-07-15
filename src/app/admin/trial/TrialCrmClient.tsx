@@ -75,6 +75,17 @@ interface TrialStats {
 type TrialCrmPayload = {
     leads: TrialLead[];
     stats: TrialStats;
+    pagination?: ListPagination;
+};
+
+type ListPagination = {
+    limit: number;
+    offset: number;
+    returned: number;
+    total: number;
+    hasMore: boolean;
+    nextOffset: number | null;
+    partial: boolean;
 };
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
@@ -380,16 +391,20 @@ function TrialCrmErrorState({ onRetry }: { onRetry: () => void }) {
 export default function TrialCrmClient({
     initialLeads,
     initialStats,
+    initialPagination,
     applicationContacts,
 }: {
     initialLeads?: TrialLead[];
     initialStats?: TrialStats;
+    initialPagination?: ListPagination;
     applicationContacts?: ContactSummary[];
 }) {
     const hasInitialData = Boolean(initialLeads && initialStats);
     const [leads, setLeads] = useState<TrialLead[]>(initialLeads ?? []);
     const [stats, setStats] = useState<TrialStats>(initialStats ?? EMPTY_STATS);
     const [loading, setLoading] = useState(!hasInitialData);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [pagination, setPagination] = useState<ListPagination | null>(initialPagination ?? null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
     const [workFilter, setWorkFilter] = useState<TrialWorkFilter>("ALL");
@@ -407,20 +422,30 @@ export default function TrialCrmClient({
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
     const hasTrialModal = Boolean(showAddModal || showConvertModal || showLostModal || showMemoModal);
 
-    const loadTrialData = useCallback(async () => {
-        setLoading(true);
+    const loadTrialData = useCallback(async (options?: { append?: boolean; offset?: number }) => {
+        const append = Boolean(options?.append);
+        const offset = options?.offset ?? 0;
+
+        if (append) setLoadingMore(true);
+        else setLoading(true);
         setLoadError(null);
 
         try {
-            const res = await fetch("/api/admin/trial", { cache: "no-store" });
+            const params = new URLSearchParams({
+                limit: String(TRIAL_PAGE_SIZE),
+                offset: String(offset),
+            });
+            const res = await fetch(`/api/admin/trial?${params.toString()}`, { cache: "no-store" });
             if (!res.ok) throw new Error("request failed");
             const data = (await res.json()) as TrialCrmPayload;
-            setLeads(data.leads);
+            setLeads((current) => (append ? [...current, ...data.leads] : data.leads));
             setStats(data.stats);
+            setPagination(data.pagination ?? null);
         } catch {
             setLoadError("failed");
         } finally {
-            setLoading(false);
+            if (append) setLoadingMore(false);
+            else setLoading(false);
         }
     }, []);
 
@@ -482,7 +507,23 @@ export default function TrialCrmClient({
         () => filteredLeads.slice(0, visibleLimit),
         [filteredLeads, visibleLimit],
     );
-    const hasMoreLeads = visibleLeads.length < filteredLeads.length;
+    const hasMoreLoadedLeads = visibleLeads.length < filteredLeads.length;
+    const hasMoreServerLeads = Boolean(pagination?.hasMore);
+    const hasMoreLeads = hasMoreLoadedLeads || hasMoreServerLeads;
+    const handleShowMoreLeads = useCallback(() => {
+        if (hasMoreLoadedLeads) {
+            setVisibleLimit((current) => current + TRIAL_PAGE_SIZE);
+            return;
+        }
+
+        if (!hasMoreServerLeads || loadingMore) return;
+
+        setVisibleLimit((current) => current + TRIAL_PAGE_SIZE);
+        void loadTrialData({
+            append: true,
+            offset: pagination?.nextOffset ?? leads.length,
+        });
+    }, [hasMoreLoadedLeads, hasMoreServerLeads, leads.length, loadTrialData, loadingMore, pagination?.nextOffset]);
     const workFilterCounts = useMemo(() => {
         const counts: Record<TrialWorkFilter, number> = {
             ALL: leads.length,
@@ -751,6 +792,16 @@ export default function TrialCrmClient({
                             ? "등록된 체험 신청이 없습니다"
                             : `"${STATUS_CONFIG[filter]?.label}" 상태의 신청이 없습니다`}
                     </p>
+                    {hasMoreServerLeads && (
+                        <button
+                            type="button"
+                            onClick={handleShowMoreLeads}
+                            disabled={loadingMore}
+                            className="mt-4 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                        >
+                            {loadingMore ? "불러오는 중..." : "다음 50건에서 더 찾아보기"}
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div className="grid gap-4">
@@ -1097,10 +1148,11 @@ export default function TrialCrmClient({
                         {hasMoreLeads && (
                             <button
                                 type="button"
-                                onClick={() => setVisibleLimit((current) => current + TRIAL_PAGE_SIZE)}
+                                onClick={handleShowMoreLeads}
+                                disabled={loadingMore}
                                 className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                             >
-                                50건 더 보기
+                                {loadingMore ? "불러오는 중..." : "50건 더 보기"}
                             </button>
                         )}
                     </div>

@@ -21,6 +21,37 @@ function isMissingApplicationContactLogError(error: unknown) {
     return message.includes("ApplicationContactLog") && message.includes("does not exist");
 }
 
+type AdminListQueryOptions = {
+    status?: string;
+    limit?: number;
+    offset?: number;
+};
+
+function normalizeAdminListQueryOptions(input?: string | AdminListQueryOptions): AdminListQueryOptions {
+    if (typeof input === "string") return { status: input };
+    if (!input) return {};
+
+    const limit =
+        typeof input.limit === "number" && Number.isFinite(input.limit) && input.limit > 0
+            ? Math.min(Math.floor(input.limit), 201)
+            : undefined;
+    const offset =
+        typeof input.offset === "number" && Number.isFinite(input.offset) && input.offset > 0
+            ? Math.floor(input.offset)
+            : 0;
+
+    return {
+        status: input.status,
+        limit,
+        offset,
+    };
+}
+
+function adminListLimitClause(options: AdminListQueryOptions) {
+    if (!options.limit) return "";
+    return ` LIMIT ${options.limit} OFFSET ${options.offset ?? 0}`;
+}
+
 export const ACADEMY_SETTINGS_CACHE_TAG = "academy-settings";
 
 async function fetchAcademySettings() {
@@ -2309,8 +2340,11 @@ export const getSessionsForReportList = cache(async (limit = 50) => {
  * - status 파라미터가 없으면 전체 조회
  * - status가 있으면 해당 상태만 필터
  */
-export const getTrialLeads = cache(async (status?: string) => {
+export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQueryOptions) => {
     try {
+        const options = normalizeAdminListQueryOptions(statusOrOptions);
+        const status = options.status;
+        const limitClause = adminListLimitClause(options);
         let rows: any[];
         try {
             rows = status
@@ -2342,7 +2376,7 @@ export const getTrialLeads = cache(async (status?: string) => {
                        LIMIT 1
                    ) open_followup ON true
                    WHERE tl.status = $1
-                   ORDER BY tl."createdAt" DESC`,
+                   ORDER BY tl."createdAt" DESC${limitClause}`,
                   status
               )
                 : await prisma.$queryRawUnsafe<any[]>(
@@ -2372,17 +2406,17 @@ export const getTrialLeads = cache(async (status?: string) => {
                        ORDER BY acl."nextFollowUpAt" ASC
                        LIMIT 1
                    ) open_followup ON true
-                   ORDER BY tl."createdAt" DESC`
+                   ORDER BY tl."createdAt" DESC${limitClause}`
               );
         } catch (error) {
             if (!isMissingApplicationContactLogError(error)) throw error;
             rows = status
                 ? await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT * FROM "TrialLead" WHERE status = $1 ORDER BY "createdAt" DESC`,
+                    `SELECT * FROM "TrialLead" WHERE status = $1 ORDER BY "createdAt" DESC${limitClause}`,
                     status,
                 )
                 : await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT * FROM "TrialLead" ORDER BY "createdAt" DESC`,
+                    `SELECT * FROM "TrialLead" ORDER BY "createdAt" DESC${limitClause}`,
                 );
         }
 
@@ -3005,8 +3039,11 @@ export const getPaymentCollectionRate = cache(async () => {
  * - status가 있으면 해당 상태만, 없으면 전체
  * - 최신순 정렬
  */
-export const getEnrollApplications = cache(async (status?: string) => {
+export const getEnrollApplications = cache(async (statusOrOptions?: string | AdminListQueryOptions) => {
     try {
+        const options = normalizeAdminListQueryOptions(statusOrOptions);
+        const status = options.status;
+        const limitClause = adminListLimitClause(options);
         let rows: any[];
         try {
             rows = status
@@ -3038,7 +3075,7 @@ export const getEnrollApplications = cache(async (status?: string) => {
                        LIMIT 1
                    ) open_followup ON true
                    WHERE ea.status = $1
-                   ORDER BY ea."createdAt" DESC`,
+                   ORDER BY ea."createdAt" DESC${limitClause}`,
                   status
               )
                 : await prisma.$queryRawUnsafe<any[]>(
@@ -3068,17 +3105,17 @@ export const getEnrollApplications = cache(async (status?: string) => {
                        ORDER BY acl."nextFollowUpAt" ASC
                        LIMIT 1
                    ) open_followup ON true
-                   ORDER BY ea."createdAt" DESC`
+                   ORDER BY ea."createdAt" DESC${limitClause}`
               );
         } catch (error) {
             if (!isMissingApplicationContactLogError(error)) throw error;
             rows = status
                 ? await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT * FROM "EnrollmentApplication" WHERE status = $1 ORDER BY "createdAt" DESC`,
+                    `SELECT * FROM "EnrollmentApplication" WHERE status = $1 ORDER BY "createdAt" DESC${limitClause}`,
                     status,
                 )
                 : await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT * FROM "EnrollmentApplication" ORDER BY "createdAt" DESC`,
+                    `SELECT * FROM "EnrollmentApplication" ORDER BY "createdAt" DESC${limitClause}`,
                 );
         }
 

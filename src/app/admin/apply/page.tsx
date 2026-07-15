@@ -1,24 +1,23 @@
 import ApplyAdminClient from "./ApplyAdminClient";
 import {
-    getCachedAdminApplyPayload,
+    getCachedAdminApplySummaryPayload,
     getCachedAdminTrialPayload,
 } from "@/lib/adminReadPayloads";
 
 export const revalidate = 30;
 
 export default async function AdminApplyPage() {
-    const [applyPayload, trialPayload] = await Promise.all([
-        getCachedAdminApplyPayload(),
-        getCachedAdminTrialPayload(),
+    const [applySummary, trialPayload] = await Promise.all([
+        getCachedAdminApplySummaryPayload(),
+        getCachedAdminTrialPayload({ limit: 50, offset: 0 }),
     ]);
 
     return (
         <ApplyAdminClient
-            initialApplications={applyPayload.applications}
-            initialStats={applyPayload.stats}
-            initialClasses={applyPayload.classes}
+            initialStats={applySummary.stats}
             initialTrialLeads={trialPayload.leads}
             initialTrialStats={trialPayload.stats}
+            initialTrialPagination={trialPayload.pagination}
         />
     );
 }

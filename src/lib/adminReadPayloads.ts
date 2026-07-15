@@ -47,6 +47,50 @@ import { prisma } from "@/lib/prisma";
 import { readPendingSocialPostDrafts } from "@/lib/socialDrafts";
 
 const DASHBOARD_MONTHS = 6;
+const ADMIN_LIST_PAGE_SIZE = 50;
+const ADMIN_LIST_MAX_PAGE_SIZE = 100;
+
+type AdminListPayloadOptions = {
+    limit?: number;
+    offset?: number;
+};
+
+function normalizeAdminListPayloadOptions(options?: AdminListPayloadOptions) {
+    const limit =
+        typeof options?.limit === "number" && Number.isFinite(options.limit) && options.limit > 0
+            ? Math.min(Math.floor(options.limit), ADMIN_LIST_MAX_PAGE_SIZE)
+            : ADMIN_LIST_PAGE_SIZE;
+    const offset =
+        typeof options?.offset === "number" && Number.isFinite(options.offset) && options.offset > 0
+            ? Math.floor(options.offset)
+            : 0;
+
+    return { limit, offset };
+}
+
+function buildListPagination({
+    limit,
+    offset,
+    returned,
+    hasMore,
+    total,
+}: {
+    limit: number;
+    offset: number;
+    returned: number;
+    hasMore: boolean;
+    total: number;
+}) {
+    return {
+        limit,
+        offset,
+        returned,
+        total,
+        hasMore,
+        nextOffset: hasMore ? offset + returned : null,
+        partial: hasMore || offset > 0 || returned < total,
+    };
+}
 
 type AdminScheduleSettingsPayload = {
     googleSheetsScheduleUrl?: string | null;
@@ -665,19 +709,46 @@ export const getCachedAdminAttendancePayload = unstable_cache(
     { revalidate: 60, tags: ["admin-classes"] },
 );
 
-export const getCachedAdminApplyPayload = unstable_cache(
+export const getCachedAdminApplySummaryPayload = unstable_cache(
     async () => {
-        const [applications, stats, classes] = await Promise.all([
-            getEnrollApplications(),
-            getEnrollApplicationStats(),
-            getClasses(),
-        ]);
+        const stats = await getEnrollApplicationStats();
 
-        return { applications, stats, classes };
+        return { stats };
     },
-    ["admin-apply-v1"],
-    { revalidate: 30, tags: ["admin-apply", "admin-classes"] },
+    ["admin-apply-summary-v1"],
+    { revalidate: 30, tags: ["admin-apply"] },
 );
+
+export function getCachedAdminApplyPayload(options?: AdminListPayloadOptions) {
+    const page = normalizeAdminListPayloadOptions(options);
+
+    return unstable_cache(
+        async () => {
+            const [applicationRows, stats, classes] = await Promise.all([
+                getEnrollApplications({ limit: page.limit + 1, offset: page.offset }),
+                getEnrollApplicationStats(),
+                getClasses(),
+            ]);
+            const hasMore = applicationRows.length > page.limit;
+            const applications = hasMore ? applicationRows.slice(0, page.limit) : applicationRows;
+
+            return {
+                applications,
+                stats,
+                classes,
+                pagination: buildListPagination({
+                    limit: page.limit,
+                    offset: page.offset,
+                    returned: applications.length,
+                    hasMore,
+                    total: stats.total,
+                }),
+            };
+        },
+        ["admin-apply-v2", String(page.limit), String(page.offset)],
+        { revalidate: 30, tags: ["admin-apply", "admin-classes"] },
+    )();
+}
 
 export const getCachedAdminWaitlistPayload = unstable_cache(
     async () => {
@@ -886,15 +957,31 @@ export const getCachedAdminSchedulePayload = unstable_cache(
     { revalidate: 60, tags: ["admin-schedule", "admin-programs"] },
 );
 
-export const getCachedAdminTrialPayload = unstable_cache(
-    async () => {
-        const [leads, stats] = await Promise.all([
-            getTrialLeads(),
-            getTrialStats(),
-        ]);
+export function getCachedAdminTrialPayload(options?: AdminListPayloadOptions) {
+    const page = normalizeAdminListPayloadOptions(options);
 
-        return { leads, stats };
-    },
-    ["admin-trial-v1"],
-    { revalidate: 30, tags: ["admin-trial"] },
-);
+    return unstable_cache(
+        async () => {
+            const [leadRows, stats] = await Promise.all([
+                getTrialLeads({ limit: page.limit + 1, offset: page.offset }),
+                getTrialStats(),
+            ]);
+            const hasMore = leadRows.length > page.limit;
+            const leads = hasMore ? leadRows.slice(0, page.limit) : leadRows;
+
+            return {
+                leads,
+                stats,
+                pagination: buildListPagination({
+                    limit: page.limit,
+                    offset: page.offset,
+                    returned: leads.length,
+                    hasMore,
+                    total: stats.total,
+                }),
+            };
+        },
+        ["admin-trial-v2", String(page.limit), String(page.offset)],
+        { revalidate: 30, tags: ["admin-trial"] },
+    )();
+}

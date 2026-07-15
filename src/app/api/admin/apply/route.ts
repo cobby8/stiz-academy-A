@@ -1,9 +1,10 @@
 import { getCachedAdminApplyPayload } from "@/lib/adminReadPayloads";
 import { createAdminTiming, requireTimedAdmin, timedJson } from "@/lib/adminTiming";
+import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     const timing = createAdminTiming("admin-apply");
 
     try {
@@ -13,7 +14,9 @@ export async function GET() {
     }
 
     try {
-        const payload = await timing.measure("data", () => getCachedAdminApplyPayload());
+        const limit = Number(request.nextUrl.searchParams.get("limit") || 50);
+        const offset = Number(request.nextUrl.searchParams.get("offset") || 0);
+        const payload = await timing.measure("data", () => getCachedAdminApplyPayload({ limit, offset }));
 
         return timedJson(
             timing,

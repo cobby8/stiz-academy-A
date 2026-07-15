@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getCachedAdminTrialPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         await requireAdmin();
     } catch {
@@ -12,7 +12,9 @@ export async function GET() {
     }
 
     try {
-        const payload = await getCachedAdminTrialPayload();
+        const limit = Number(request.nextUrl.searchParams.get("limit") || 50);
+        const offset = Number(request.nextUrl.searchParams.get("offset") || 0);
+        const payload = await getCachedAdminTrialPayload({ limit, offset });
 
         return NextResponse.json(
             payload,

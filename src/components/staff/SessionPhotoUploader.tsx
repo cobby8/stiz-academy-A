@@ -30,6 +30,7 @@ export function SessionPhotoUploader({
   const [subjectStudentIds, setSubjectStudentIds] = useState<string[]>([]);
   const [photos, setPhotos] = useState<ManagedPhoto[]>([]);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [retryAction, setRetryAction] = useState<(() => Promise<void>) | null>(null);
 
   const loadPhotos = useCallback(async () => {
     const response = await fetch(`/api/staff/sessions/${encodeURIComponent(sessionId)}/photos`, { cache: "no-store" });
@@ -62,67 +63,79 @@ export function SessionPhotoUploader({
 
     setBusy(true);
     setMessage("사진을 압축하고 있습니다.");
-    const result = await uploadImagesWithProgress(files, {
-      folder: "staff-sessions",
-      endpoint: `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos`,
-      fields: { subjectStudentIds: JSON.stringify(subjectStudentIds) },
-      limit: 10,
-      compression: {
-        maxEdge: 1600,
-        targetBytes: 700 * 1024,
-        allowedTypes: SESSION_IMAGE_ALLOWED_TYPES,
-      },
-      onProgress: (done, total) => setMessage(`사진 등록 중 ${done}/${total}`),
-    });
-
-    setBusy(false);
-    if (cameraRef.current) cameraRef.current.value = "";
-    if (galleryRef.current) galleryRef.current.value = "";
-    setMessage(
-      result.failedNames.length
-        ? `${result.failedNames.length}장의 등록에 실패했습니다.`
-        : "관리자 검토용 비공개 초안으로 등록했습니다.",
-    );
-    onUploaded?.(result.items.map((item) => item.url));
-    await loadPhotos().catch(() => undefined);
+    try {
+      const result = await uploadImagesWithProgress(files, {
+        folder: "staff-sessions",
+        endpoint: `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos`,
+        fields: { subjectStudentIds: JSON.stringify(subjectStudentIds) },
+        limit: 10,
+        compression: {
+          maxEdge: 1600,
+          targetBytes: 700 * 1024,
+          allowedTypes: SESSION_IMAGE_ALLOWED_TYPES,
+        },
+        onProgress: (done, total) => setMessage(`사진 등록 중 ${done}/${total}`),
+      });
+      setMessage(
+        result.failedNames.length
+          ? `${result.failedNames.length}장의 등록에 실패했습니다.`
+          : "관리자 검토용 비공개 초안으로 등록했습니다.",
+      );
+      onUploaded?.(result.items.map((item) => item.url));
+      await loadPhotos().catch(() => undefined);
+    } catch {
+      setMessage("사진을 등록하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 선택해 주세요.");
+    } finally {
+      setBusy(false);
+      if (cameraRef.current) cameraRef.current.value = "";
+      if (galleryRef.current) galleryRef.current.value = "";
+    }
   }
 
   async function updatePhotoSubjects(photo: ManagedPhoto) {
     if (photo.subjectStudentIds.length === 0 || busy) return;
     setBusy(true);
-    const response = await fetch(
-      `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos/${encodeURIComponent(photo.id)}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subjectStudentIds: photo.subjectStudentIds }),
-      },
-    );
-    const body = await response.json().catch(() => ({})) as { error?: string };
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(body.error || "사진의 학생 정보를 수정하지 못했습니다.");
-      return;
+    setRetryAction(null);
+    try {
+      const response = await fetch(
+        `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos/${encodeURIComponent(photo.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subjectStudentIds: photo.subjectStudentIds }),
+        },
+      );
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "사진의 학생 정보를 수정하지 못했습니다.");
+      setEditingPhotoId(null);
+      setMessage("사진에 나온 학생 정보를 수정했습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
+      setRetryAction(() => () => updatePhotoSubjects(photo));
+    } finally {
+      setBusy(false);
     }
-    setEditingPhotoId(null);
-    setMessage("사진에 나온 학생 정보를 수정했습니다.");
   }
 
-  async function deletePhoto(photo: ManagedPhoto) {
-    if (busy || !window.confirm("이 사진을 수업 기록과 관리자 검토 목록에서 삭제할까요?")) return;
+  async function deletePhoto(photo: ManagedPhoto, confirmed = false) {
+    if (busy || (!confirmed && !window.confirm("이 사진을 수업 기록과 관리자 검토 목록에서 삭제할까요?"))) return;
     setBusy(true);
-    const response = await fetch(
-      `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos/${encodeURIComponent(photo.id)}`,
-      { method: "DELETE" },
-    );
-    const body = await response.json().catch(() => ({})) as { error?: string; requiresDeletionQueue?: boolean };
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(body.error || "사진을 삭제하지 못했습니다.");
-      return;
+    setRetryAction(null);
+    try {
+      const response = await fetch(
+        `/api/staff/sessions/${encodeURIComponent(sessionId)}/photos/${encodeURIComponent(photo.id)}`,
+        { method: "DELETE" },
+      );
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "사진을 삭제하지 못했습니다.");
+      setPhotos((current) => current.filter((item) => item.id !== photo.id));
+      setMessage("사진을 삭제했습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
+      setRetryAction(() => () => deletePhoto(photo, true));
+    } finally {
+      setBusy(false);
     }
-    setPhotos((current) => current.filter((item) => item.id !== photo.id));
-    setMessage("사진을 삭제했습니다.");
   }
 
   function togglePhotoSubject(photoId: string, studentId: string) {
@@ -211,7 +224,16 @@ export function SessionPhotoUploader({
           갤러리 선택
         </button>
       </div>
-      {message && <p aria-live="polite" className="text-sm font-bold text-gray-600 dark:text-gray-300">{message}</p>}
+      {message && (
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-100 p-3 dark:bg-gray-800">
+          <p aria-live="polite" className="text-sm font-bold text-gray-600 dark:text-gray-300">{message}</p>
+          {retryAction && (
+            <button type="button" disabled={busy} onClick={() => void retryAction()} className="min-h-11 shrink-0 rounded-xl border border-gray-300 px-3 text-sm font-black dark:border-gray-600">
+              다시 시도
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

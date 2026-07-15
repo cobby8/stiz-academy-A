@@ -2,12 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export function VoiceToTextButton({ onText }: { onText: (text: string) => void }) {
+export function VoiceToTextButton({
+  onText,
+  onBusyChange,
+}: {
+  onText: (text: string) => void;
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const recorder = useRef<MediaRecorder | null>(null);
   const startedAt = useRef(0);
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -30,13 +37,16 @@ export function VoiceToTextButton({ onText }: { onText: (text: string) => void }
       next.onstop = () => { stream.getTracks().forEach((track) => track.stop()); void transcribe(next.mimeType); };
       recorder.current = next;
       // 녹음 버튼 이벤트 안에서만 시작 시각을 기록합니다.
-      // eslint-disable-next-line react-hooks/purity
       startedAt.current = Date.now();
       next.start();
       setRecording(true);
+      onBusyChange?.(true);
       setMessage("녹음 중… 최대 60초");
       timer.current = setTimeout(stop, 60_000);
-    } catch { setMessage("마이크 권한을 허용해 주세요."); }
+    } catch {
+      onBusyChange?.(false);
+      setMessage("마이크 권한을 허용해 주세요.");
+    }
   }
 
   function stop() {
@@ -46,10 +56,16 @@ export function VoiceToTextButton({ onText }: { onText: (text: string) => void }
   }
 
   async function transcribe(mimeType: string) {
+    setTranscribing(true);
     setMessage("음성을 글로 바꾸는 중입니다.");
     const blob = new Blob(chunks.current, { type: mimeType.split(";")[0] });
     chunks.current = [];
-    if (blob.size > 10 * 1024 * 1024) { setMessage("녹음 용량이 너무 큽니다."); return; }
+    if (blob.size > 10 * 1024 * 1024) {
+      setMessage("녹음 용량이 너무 큽니다.");
+      setTranscribing(false);
+      onBusyChange?.(false);
+      return;
+    }
     const form = new FormData();
     form.append("audio", blob, "voice-recording");
     form.append("durationMs", String(Math.min(Date.now() - startedAt.current, 60_000)));
@@ -58,14 +74,29 @@ export function VoiceToTextButton({ onText }: { onText: (text: string) => void }
       const data = await response.json();
       if (!response.ok) { setMessage(data.error || "음성 인식에 실패했습니다."); return; }
       onText(data.text);
-      setMessage("인식된 글을 확인하고 저장해 주세요.");
+      setMessage("음성을 메모로 변환했습니다.");
     } catch {
       setMessage("네트워크 연결을 확인하고 다시 시도해 주세요.");
+    } finally {
+      setTranscribing(false);
+      onBusyChange?.(false);
     }
   }
 
-  return <div>
-    <button type="button" onClick={recording ? stop : () => void start()}>{recording ? "녹음 종료" : "음성으로 기록"}</button>
-    {message && <span aria-live="polite">{message}</span>}
+  return <div className="flex flex-col items-end gap-1">
+    <button
+      type="button"
+      disabled={transcribing}
+      aria-pressed={recording}
+      aria-label={recording ? "음성 녹음 종료" : "특이사항 음성 녹음 시작"}
+      onClick={recording ? stop : () => void start()}
+      className="min-h-12 rounded-xl bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] disabled:opacity-50"
+    >
+      <span className="material-symbols-outlined mr-1 align-middle" aria-hidden="true">
+        {recording ? "stop_circle" : transcribing ? "progress_activity" : "mic"}
+      </span>
+      {recording ? "녹음 종료" : transcribing ? "메모 변환 중" : "음성으로 기록"}
+    </button>
+    {message && <span aria-live="polite" className="max-w-48 text-right text-xs font-bold text-gray-500">{message}</span>}
   </div>;
 }

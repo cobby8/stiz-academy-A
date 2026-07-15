@@ -97,17 +97,31 @@ export async function saveStaffAttendance(input: { sessionId: string; studentId:
   );
 
   if (changed && (input.status === "PRESENT" || input.status === "LATE")) {
-    const [recipient] = await getClassParentRecipients(session.classId, [input.studentId]);
-    if (recipient) await deliverParentNotification({
-      eventType: input.status === "LATE" ? "ATTENDANCE_LATE" : "ATTENDANCE_PRESENT",
-      dedupeKey: `attendance:${saved[0].id}:status:${input.status}:user:${recipient.userId}`,
-      recipient,
-      title: `${session.className} 출석 안내`,
-      message: `${recipient.studentName} 학생이 ${input.status === "LATE" ? "지각 출석" : "출석"}했습니다.`,
-      linkUrl: "/parent/attendance",
-      sessionId: input.sessionId,
-      attendanceId: saved[0].id,
-    });
+    try {
+      const [recipient] = await getClassParentRecipients(session.classId, [input.studentId]);
+      if (recipient) {
+        const delivery = await deliverParentNotification({
+          eventType: input.status === "LATE" ? "ATTENDANCE_LATE" : "ATTENDANCE_PRESENT",
+          dedupeKey: `attendance:${saved[0].id}:status:${input.status}:user:${recipient.userId}`,
+          recipient,
+          title: `${session.className} 출석 안내`,
+          message: `${recipient.studentName} 학생이 ${input.status === "LATE" ? "지각 출석" : "출석"}했습니다.`,
+          linkUrl: "/parent/attendance",
+          sessionId: input.sessionId,
+          attendanceId: saved[0].id,
+        });
+        if (!delivery.duplicate && delivery.push?.status === "FAILED") {
+          return { ok: true as const, attendanceId: saved[0].id, changed, notificationWarning: true as const };
+        }
+      }
+    } catch (error) {
+      console.error("[saveStaffAttendance] Parent notification failed", {
+        sessionId: input.sessionId,
+        studentId: input.studentId,
+        error,
+      });
+      return { ok: true as const, attendanceId: saved[0].id, changed, notificationWarning: true as const };
+    }
   }
   return { ok: true as const, attendanceId: saved[0].id, changed };
 }
@@ -148,7 +162,11 @@ export async function completeClassSession(input: { sessionId: string }) {
     linkUrl: "/parent/sessions",
     sessionId: input.sessionId,
     })));
-    const failedCount = results.filter((result) => result.status === "rejected").length;
+    const failedCount = results.reduce((count, result) => {
+      if (result.status === "rejected") return count + 1;
+      if (result.value.duplicate || !result.value.push) return count;
+      return count + (result.value.push.failedCount || (result.value.push.status === "FAILED" ? 1 : 0));
+    }, 0);
     if (failedCount > 0) {
       notificationWarning = { code: "PARENT_NOTIFICATION_FAILED", failedCount };
       console.error("[completeClassSession] Parent notification delivery failed", {
@@ -192,8 +210,9 @@ export type StartClassSessionResult =
     }
   | {
       ok: false;
-      code: "INVALID_INPUT" | "FORBIDDEN" | "COMPLETED" | "DB_NOT_READY" | "UNKNOWN";
+      code: "INVALID_INPUT" | "FORBIDDEN" | "COMPLETED" | "ACTIVE_SESSION" | "DB_NOT_READY" | "UNKNOWN";
       message: string;
+      activeSessionId?: string;
     };
 
 function isValidDateKey(value: string) {
@@ -247,9 +266,82 @@ export async function startClassSession(input: {
     // 화면에서 다른 수업 ID를 보내더라도 서버에서 담당 수업인지 다시 검사합니다.
     const access = await requireStaffClassAccess(classId);
     const sessionKey = `${classId}:${date}`;
+    const result = await prisma.$transaction(async (tx) => {
+      // 교사별 잠금은 두 휴대폰에서 동시에 눌러도 한 수업만 열리게 하는 안전장치입니다.
+      await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, access.staff.appUserId);
 
-    // 첫 요청만 새 Session을 만듭니다. 같은 키의 재요청은 아무것도 생성하지 않습니다.
-    const inserted = await prisma.$queryRawUnsafe<SessionStartRow[]>(
+      // 같은 수업의 빠른 중복 클릭은 새 장부를 만들지 않고 기존 장부로 복귀합니다.
+      const existing = await tx.$queryRawUnsafe<SessionStartRow[]>(
+        `SELECT id, "classId", status, "startedAt"
+         FROM "Session"
+         WHERE "sessionKey" = $1
+         LIMIT 1`,
+        sessionKey,
+      );
+
+      if (existing[0]?.status === "IN_PROGRESS") {
+        return {
+          ok: true as const,
+          sessionId: existing[0].id,
+          classId: existing[0].classId,
+          status: "IN_PROGRESS" as const,
+          startedAt: toIsoString(existing[0].startedAt),
+          resumed: true,
+        };
+      }
+
+      if (existing[0]?.status === "COMPLETED") {
+        return { ok: false as const, code: "COMPLETED" as const, message: "이미 종료된 수업입니다." };
+      }
+
+      const active = await tx.$queryRawUnsafe<SessionStartRow[]>(
+        `SELECT id, "classId", status, "startedAt"
+         FROM "Session"
+         WHERE status = 'IN_PROGRESS'
+           AND "startedByUserId" = $1
+         ORDER BY "startedAt" DESC
+         LIMIT 1`,
+        access.staff.appUserId,
+      );
+
+      if (active[0]) {
+        return {
+          ok: false as const,
+          code: "ACTIVE_SESSION" as const,
+          message: "진행 중인 수업을 먼저 종료해 주세요.",
+          activeSessionId: active[0].id,
+        };
+      }
+
+      // 사전에 작성된 PLANNED Session이 있으면 시작 상태로 한 번만 변경합니다.
+      const started = await tx.$queryRawUnsafe<SessionStartRow[]>(
+        `UPDATE "Session"
+         SET status = 'IN_PROGRESS',
+             "startedAt" = COALESCE("startedAt", NOW()),
+             "startedByUserId" = COALESCE("startedByUserId", $2),
+             "coachId" = COALESCE("coachId", $3),
+             "updatedAt" = NOW()
+         WHERE "sessionKey" = $1
+           AND status = 'PLANNED'
+         RETURNING id, "classId", status, "startedAt"`,
+        sessionKey,
+        access.staff.appUserId,
+        access.coachId,
+      );
+
+      if (started[0]) {
+        return {
+          ok: true as const,
+          sessionId: started[0].id,
+          classId: started[0].classId,
+          status: "IN_PROGRESS" as const,
+          startedAt: toIsoString(started[0].startedAt),
+          resumed: false,
+        };
+      }
+
+      // 첫 요청만 새 Session을 만듭니다. 같은 키의 재요청은 아무것도 생성하지 않습니다.
+      const inserted = await tx.$queryRawUnsafe<SessionStartRow[]>(
       `INSERT INTO "Session" (
          id, "classId", date, "sessionKey", status, "coachId",
          "startedAt", "startedByUserId", "createdAt", "updatedAt"
@@ -265,81 +357,24 @@ export async function startClassSession(input: {
       sessionKey,
       access.coachId,
       access.staff.appUserId,
-    );
+      );
 
-    if (inserted[0]) {
-      revalidatePath("/staff");
-      return {
-        ok: true,
-        sessionId: inserted[0].id,
-        classId: inserted[0].classId,
-        status: "IN_PROGRESS",
-        startedAt: toIsoString(inserted[0].startedAt),
-        resumed: false,
-      };
-    }
+      if (inserted[0]) {
+        return {
+          ok: true as const,
+          sessionId: inserted[0].id,
+          classId: inserted[0].classId,
+          status: "IN_PROGRESS" as const,
+          startedAt: toIsoString(inserted[0].startedAt),
+          resumed: false,
+        };
+      }
 
-    // 사전에 작성된 PLANNED Session이 있으면 시작 상태로 한 번만 변경합니다.
-    const started = await prisma.$queryRawUnsafe<SessionStartRow[]>(
-      `UPDATE "Session"
-       SET status = 'IN_PROGRESS',
-           "startedAt" = COALESCE("startedAt", NOW()),
-           "startedByUserId" = COALESCE("startedByUserId", $2),
-           "coachId" = COALESCE("coachId", $3),
-           "updatedAt" = NOW()
-       WHERE "sessionKey" = $1
-         AND status = 'PLANNED'
-       RETURNING id, "classId", status, "startedAt"`,
-      sessionKey,
-      access.staff.appUserId,
-      access.coachId,
-    );
+      return { ok: false as const, code: "UNKNOWN" as const, message: "수업을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    });
 
-    if (started[0]) {
-      revalidatePath("/staff");
-      return {
-        ok: true,
-        sessionId: started[0].id,
-        classId: started[0].classId,
-        status: "IN_PROGRESS",
-        startedAt: toIsoString(started[0].startedAt),
-        resumed: false,
-      };
-    }
-
-    // 빠른 중복 클릭이면 최초 시작 시각을 유지한 채 기존 수업으로 복귀합니다.
-    const existing = await prisma.$queryRawUnsafe<SessionStartRow[]>(
-      `SELECT id, "classId", status, "startedAt"
-       FROM "Session"
-       WHERE "sessionKey" = $1
-       LIMIT 1`,
-      sessionKey,
-    );
-
-    if (existing[0]?.status === "IN_PROGRESS") {
-      return {
-        ok: true,
-        sessionId: existing[0].id,
-        classId: existing[0].classId,
-        status: "IN_PROGRESS",
-        startedAt: toIsoString(existing[0].startedAt),
-        resumed: true,
-      };
-    }
-
-    if (existing[0]?.status === "COMPLETED") {
-      return {
-        ok: false,
-        code: "COMPLETED",
-        message: "이미 종료된 수업입니다.",
-      };
-    }
-
-    return {
-      ok: false,
-      code: "UNKNOWN",
-      message: "수업을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-    };
+    if (result.ok) revalidatePath("/staff");
+    return result;
   } catch (error) {
     if (isLifecycleSchemaMissing(error)) {
       return {

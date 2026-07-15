@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import SessionInProgressClient from "./SessionInProgressClient";
 import { getStaffSessionDetail, getStaffSessionStudents } from "@/lib/staff-session-queries";
 
@@ -14,6 +14,7 @@ export default async function StaffSessionPage({
   const { sessionId } = await params;
   const session = await getStaffSessionDetail(sessionId);
   if (!session) notFound();
+  if (session.status !== "IN_PROGRESS") redirect("/staff");
   const [students, query] = await Promise.all([
     getStaffSessionStudents(sessionId, session.classId),
     searchParams,

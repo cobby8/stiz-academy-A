@@ -57,14 +57,84 @@ export default function SessionInProgressClient({
   const [memo, setMemo] = useState(session.notes || "");
   const [message, setMessage] = useState("");
   const [finishError, setFinishError] = useState("");
+  const [memoStatus, setMemoStatus] = useState<"saved" | "dirty" | "saving" | "error">("saved");
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [online, setOnline] = useState(true);
   const [showPlan, setShowPlan] = useState(true);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showPeople, setShowPeople] = useState(false);
   const [billingStudent, setBillingStudent] = useState<{ id: string; name: string } | null | undefined>(undefined);
   const [pending, startTransition] = useTransition();
   const endDialogRef = useRef<HTMLDivElement>(null);
+  const memoRef = useRef(memo);
+  const lastSavedMemoRef = useRef(memo);
+  const memoSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const wasOnlineRef = useRef(true);
   const closeEndDialog = useCallback(() => setShowEndConfirm(false), []);
   useStaffDialog(showEndConfirm, endDialogRef, closeEndDialog, !pending);
+
+  useEffect(() => {
+    memoRef.current = memo;
+  }, [memo]);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  const persistMemo = useCallback(async (notes: string, announce = false) => {
+    if (notes === lastSavedMemoRef.current) return true;
+    setMemoStatus("saving");
+    const save = async () => {
+      try {
+        const result = await saveSessionMemo({ sessionId: session.id, notes });
+        if (!result.ok) {
+          setMemoStatus("error");
+          setMessage(result.message);
+          return false;
+        }
+        lastSavedMemoRef.current = notes;
+        setMemoStatus(memoRef.current === notes ? "saved" : "dirty");
+        if (announce) setMessage("특이사항을 저장했습니다.");
+        return true;
+      } catch {
+        setMemoStatus("error");
+        setMessage("특이사항을 저장하지 못했습니다. 네트워크 연결을 확인해 주세요.");
+        return false;
+      }
+    };
+    memoSaveQueueRef.current = memoSaveQueueRef.current.then(save, save);
+    return memoSaveQueueRef.current;
+  }, [session.id]);
+
+  useEffect(() => {
+    if (memo === lastSavedMemoRef.current) return;
+    const timer = window.setTimeout(() => void persistMemo(memo), 900);
+    return () => window.clearTimeout(timer);
+  }, [memo, persistMemo]);
+
+  useEffect(() => {
+    const reconnected = online && !wasOnlineRef.current;
+    wasOnlineRef.current = online;
+    if (reconnected && memoRef.current !== lastSavedMemoRef.current) {
+      void persistMemo(memoRef.current);
+    }
+  }, [online, persistMemo]);
+
+  useEffect(() => {
+    const warnBeforeLeave = (event: BeforeUnloadEvent) => {
+      if (memoStatus === "saved" && !voiceBusy) return;
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warnBeforeLeave);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeave);
+  }, [memoStatus, voiceBusy]);
 
   useEffect(() => {
     if (!session.startedAt) return;
@@ -112,6 +182,9 @@ export default function SessionInProgressClient({
             : student,
         ),
       );
+      if (result.notificationWarning) {
+        setMessage("출결은 저장됐지만 학부모 알림은 재전송이 필요합니다.");
+      }
     });
   }
 
@@ -132,29 +205,43 @@ export default function SessionInProgressClient({
       setStudents((current) =>
         current.map((student) => student.status ? student : { ...student, status: "PRESENT" }),
       );
+      if (unchecked.length > 0) {
+        setMessage("전체 출석을 저장했습니다. 알림 전달 상태는 관리자 장부에서 재확인할 수 있습니다.");
+      }
     });
   }
 
   function saveMemo() {
-    startTransition(async () => {
-      const result = await saveSessionMemo({ sessionId: session.id, notes: memo });
-      setMessage(result.ok ? "특이사항을 저장했습니다." : result.message);
-    });
+    void persistMemo(memo, true);
   }
 
   function finishSession() {
-    if (pending) return;
+    if (pending || voiceBusy || memoStatus === "saving") return;
     setFinishError("");
     startTransition(async () => {
       try {
+        const memoSaved = await persistMemo(memoRef.current);
+        if (!memoSaved) {
+          setFinishError("특이사항 메모를 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
+          return;
+        }
         const result = await completeClassSession({ sessionId: session.id });
         if (!result.ok) {
           setFinishError(result.message);
           return;
         }
         // 이미 종료된 수업도 성공으로 보고 교사용 홈으로 안전하게 복귀합니다.
-        router.replace("/staff");
-        router.refresh();
+        if (result.notificationWarning) {
+          setShowEndConfirm(false);
+          setMessage(`수업은 종료됐지만 학부모 알림 ${result.notificationWarning.failedCount}건이 전달되지 않았습니다. 관리자가 재전송 상태를 확인해 주세요.`);
+          window.setTimeout(() => {
+            router.replace("/staff");
+            router.refresh();
+          }, 2500);
+        } else {
+          router.replace("/staff");
+          router.refresh();
+        }
       } catch {
         setFinishError("수업 종료 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
       }
@@ -231,6 +318,13 @@ export default function SessionInProgressClient({
         </div>
       )}
 
+      {!online && (
+        <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">wifi_off</span>
+          오프라인입니다. 작성한 메모는 연결이 복구되면 자동으로 다시 저장됩니다.
+        </div>
+      )}
+
       <section className="grid grid-cols-2 gap-3" aria-label="수업 중 빠른 메뉴">
         <button type="button" onClick={() => setView("attendance")} className="flex min-h-20 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <span className="material-symbols-outlined mb-1 text-2xl text-[var(--brand-accent)]">fact_check</span>
@@ -274,10 +368,22 @@ export default function SessionInProgressClient({
       <section id="session-memo" className="scroll-mt-40 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex items-start justify-between gap-3">
           <div><h2 className="flex items-center gap-2 font-black"><span className="material-symbols-outlined text-[var(--brand-accent)]">mic</span>수업 중 특이사항</h2><p className="mt-1 text-xs text-gray-500">말로 남기면 텍스트 메모로 바뀝니다.</p></div>
-          <VoiceToTextButton onText={(text) => setMemo((current) => current ? `${current}\n${text}` : text)} />
+          <VoiceToTextButton
+            onBusyChange={setVoiceBusy}
+            onText={(text) => {
+              setMemoStatus("dirty");
+              setMemo((current) => current ? `${current}\n${text}` : text);
+            }}
+          />
         </div>
-        <textarea value={memo} onChange={(event) => setMemo(event.target.value)} rows={5} placeholder="음성으로 기록하거나 직접 입력하세요." className="mt-4 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm leading-6 outline-none focus:border-[var(--brand-accent)] dark:border-gray-700 dark:bg-gray-800" />
-        <button type="button" disabled={pending} onClick={saveMemo} className="mt-3 min-h-11 w-full rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white disabled:opacity-50">메모 저장</button>
+        <textarea value={memo} onChange={(event) => { setMemoStatus("dirty"); setMemo(event.target.value); }} onBlur={() => void persistMemo(memoRef.current)} rows={5} placeholder="음성으로 기록하거나 직접 입력하세요." className="mt-4 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm leading-6 outline-none focus:border-[var(--brand-accent)] dark:border-gray-700 dark:bg-gray-800" />
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold" aria-live="polite">
+          <span className={memoStatus === "error" ? "text-red-600" : "text-gray-500"}>
+            {memoStatus === "saving" ? "저장 중…" : memoStatus === "dirty" ? "변경사항 자동 저장 대기 중" : memoStatus === "error" ? "저장 실패 · 다시 시도해 주세요" : "저장됨"}
+          </span>
+          <span className="text-gray-400">입력 후 자동 저장</span>
+        </div>
+        <button type="button" disabled={pending || memoStatus === "saving" || !online} onClick={saveMemo} className="mt-3 min-h-12 w-full rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white disabled:opacity-50">메모 지금 저장</button>
       </section>
 
       {message && <p aria-live="polite" className="rounded-xl bg-blue-50 p-3 text-sm font-bold text-blue-700">{message}</p>}
@@ -287,7 +393,8 @@ export default function SessionInProgressClient({
 
       <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-lg px-4">
         <div className="rounded-2xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-          <button type="button" disabled={pending} onClick={() => { setFinishError(""); setShowEndConfirm(true); }} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 disabled:opacity-50 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
+          <button type="button" disabled={pending || voiceBusy || memoStatus === "saving" || !online} onClick={() => { setFinishError(""); setShowEndConfirm(true); }} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 disabled:opacity-50 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
+          {(voiceBusy || memoStatus === "saving" || !online) && <p className="mt-1 text-center text-[11px] font-bold text-amber-700">{voiceBusy ? "음성 메모 처리 후 종료할 수 있습니다." : memoStatus === "saving" ? "메모 저장 후 종료할 수 있습니다." : "온라인 연결 후 종료할 수 있습니다."}</p>}
           <p className="mt-1 text-center text-[11px] font-bold text-gray-500">출결을 검토한 뒤 확인 화면에서 종료됩니다.</p>
         </div>
       </div>
@@ -315,7 +422,7 @@ export default function SessionInProgressClient({
               {counts.UNCHECKED > 0 ? (
                 <button type="button" disabled={pending} onClick={() => { setShowEndConfirm(false); setView("attendance"); }} className="min-h-12 rounded-xl bg-[var(--brand-accent)] px-3 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">출석부 확인하기</button>
               ) : (
-                <button type="button" disabled={pending} aria-busy={pending} onClick={finishSession} className="min-h-12 rounded-xl bg-red-600 font-black text-white disabled:opacity-50">{pending ? "종료 처리 중…" : "종료 확인"}</button>
+                <button type="button" disabled={pending || voiceBusy || memoStatus === "saving" || !online} aria-busy={pending || memoStatus === "saving"} onClick={finishSession} className="min-h-12 rounded-xl bg-red-600 font-black text-white disabled:opacity-50">{pending ? "종료 처리 중…" : memoStatus === "saving" ? "메모 저장 중…" : "종료 확인"}</button>
               )}
             </div>
           </div>

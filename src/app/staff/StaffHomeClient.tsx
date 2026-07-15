@@ -74,6 +74,10 @@ export default function StaffHomeClient({
     startTransition(async () => {
       const result = await startClassSession({ classId: startTarget.id, date: dateKey });
       if (!result.ok) {
+        if (result.code === "ACTIVE_SESSION" && result.activeSessionId) {
+          router.push(`/staff/sessions/${result.activeSessionId}`);
+          return;
+        }
         setError(result.message);
         return;
       }
@@ -105,6 +109,10 @@ export default function StaffHomeClient({
   function openPrimaryAction(lesson: StaffTodayClass) {
     if (lesson.sessionStatus === "IN_PROGRESS" && lesson.sessionId) {
       router.push(`/staff/sessions/${lesson.sessionId}`);
+      return;
+    }
+    if (runningClass) {
+      setError(`${runningClass.name} 수업을 먼저 종료해 주세요.`);
       return;
     }
     setStartTarget(lesson);
@@ -139,6 +147,11 @@ export default function StaffHomeClient({
         </div>
       ) : focusClass ? (
         <>
+          {runningClass && (
+            <p role="status" className="rounded-2xl bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              현재 수업을 종료하기 전에는 다른 수업을 시작할 수 없습니다.
+            </p>
+          )}
           <section>
             <p className="mb-2 text-sm font-black text-gray-500">{focusClass.sessionStatus === "IN_PROGRESS" ? "현재 수업" : "다음 수업"}</p>
             <article className="overflow-hidden rounded-3xl bg-brand-navy-900 text-white shadow-lg dark:border dark:border-gray-700">
@@ -184,7 +197,7 @@ export default function StaffHomeClient({
               </div>
               <div className="space-y-3">
                 {otherClasses.map((lesson) => (
-                  <CompactClassCard key={lesson.id} lesson={lesson} onStart={openPrimaryAction} onContent={openContent} onContacts={openContacts} onBilling={(target) => setBillingTarget({ lesson: target })} onNotice={(target) => { setError(null); setNoticeTarget(target); }} />
+                  <CompactClassCard key={lesson.id} lesson={lesson} startLocked={Boolean(runningClass && lesson.sessionStatus !== "IN_PROGRESS")} onStart={openPrimaryAction} onContent={openContent} onContacts={openContacts} onBilling={(target) => setBillingTarget({ lesson: target })} onNotice={(target) => { setError(null); setNoticeTarget(target); }} />
                 ))}
               </div>
             </section>
@@ -242,11 +255,11 @@ function SecondaryButton({ icon, label, onClick, disabled = false, inverted = fa
   return <button type="button" disabled={disabled} onClick={onClick} className={`flex min-h-16 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold disabled:opacity-40 ${inverted ? "bg-white/10 text-white" : "border border-gray-200 dark:border-gray-700"}`}><span className="material-symbols-outlined text-xl">{icon}</span>{label}</button>;
 }
 
-function CompactClassCard({ lesson, onStart, onContent, onContacts, onBilling, onNotice }: { lesson: StaffTodayClass; onStart: (lesson: StaffTodayClass) => void; onContent: (lesson: StaffTodayClass) => void; onContacts: (lesson: StaffTodayClass) => void; onBilling: (lesson: StaffTodayClass) => void; onNotice: (lesson: StaffTodayClass) => void }) {
+function CompactClassCard({ lesson, startLocked, onStart, onContent, onContacts, onBilling, onNotice }: { lesson: StaffTodayClass; startLocked: boolean; onStart: (lesson: StaffTodayClass) => void; onContent: (lesson: StaffTodayClass) => void; onContacts: (lesson: StaffTodayClass) => void; onBilling: (lesson: StaffTodayClass) => void; onNotice: (lesson: StaffTodayClass) => void }) {
   const completed = lesson.sessionStatus === "COMPLETED";
   return <article className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
     <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-[var(--brand-accent)]">{lesson.startTime}–{lesson.endTime}</p><h3 className="mt-0.5 text-lg font-black dark:text-white">{lesson.name}</h3><p className="mt-1 text-xs text-gray-500">학생 {lesson.studentCount}명 · {lesson.location || "장소 미정"}</p></div><StatusBadge status={lesson.sessionStatus} /></div>
-    {!completed && <div className="mt-3 space-y-2"><button type="button" onClick={() => onStart(lesson)} className="min-h-12 w-full rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]">{lesson.sessionStatus === "IN_PROGRESS" ? "수업으로 돌아가기" : "수업 시작"}</button><div className="grid grid-cols-4 gap-2" aria-label="수업 빠른 메뉴"><CompactAction icon="edit_note" label="내용" onClick={() => onContent(lesson)} /><CompactAction icon="groups" label="학생" onClick={() => onContacts(lesson)} /><CompactAction icon="receipt_long" label="청구" onClick={() => onBilling(lesson)} /><CompactAction icon="campaign" label="공지" onClick={() => onNotice(lesson)} /></div></div>}
+    {!completed && <div className="mt-3 space-y-2"><button type="button" disabled={startLocked} title={startLocked ? "진행 중인 수업을 먼저 종료해 주세요." : undefined} onClick={() => onStart(lesson)} className="min-h-12 w-full rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)] disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 dark:disabled:bg-gray-800">{lesson.sessionStatus === "IN_PROGRESS" ? "수업으로 돌아가기" : startLocked ? "현재 수업 종료 후 시작" : "수업 시작"}</button><div className="grid grid-cols-4 gap-2" aria-label="수업 빠른 메뉴"><CompactAction icon="edit_note" label="내용" onClick={() => onContent(lesson)} /><CompactAction icon="groups" label="학생" onClick={() => onContacts(lesson)} /><CompactAction icon="receipt_long" label="청구" onClick={() => onBilling(lesson)} /><CompactAction icon="campaign" label="공지" onClick={() => onNotice(lesson)} /></div></div>}
   </article>;
 }
 

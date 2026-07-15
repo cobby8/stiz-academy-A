@@ -72,6 +72,8 @@ type TrialCrmPayload = {
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
 type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "COACH_NOTICE" | "ENROLL_RECEIVED";
+type ContactSummary = { parentPhone: string; childName: string; status: string };
+type PriorityBadge = { icon: string; label: string; className: string };
 
 const EMPTY_STATS: TrialStats = {
     NEW: 0,
@@ -108,6 +110,7 @@ const SOURCE_LABELS: Record<string, string> = {
 // 상태 순서 (파이프라인 흐름)
 const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST"] as const;
 const TRIAL_PAGE_SIZE = 50;
+const LONG_WAIT_HOURS = 24;
 
 const TRIAL_WORK_FILTERS: Array<{ value: TrialWorkFilter; label: string; icon: string }> = [
     { value: "ALL", label: "운영 전체", icon: "view_list" },
@@ -123,8 +126,27 @@ function phoneHref(phone: string) {
     return digits ? `tel:${digits}` : undefined;
 }
 
+function normalizePhone(phone: string | null | undefined) {
+    return (phone ?? "").replace(/\D/g, "");
+}
+
 function normalizeSearchValue(value: string | null | undefined) {
     return (value ?? "").replace(/\s+/g, "").replace(/-/g, "").toLowerCase();
+}
+
+function hoursSince(dateStr: string | null) {
+    if (!dateStr) return 0;
+    const timestamp = new Date(dateStr).getTime();
+    if (!Number.isFinite(timestamp)) return 0;
+    return Math.max(0, Math.floor((Date.now() - timestamp) / 36e5));
+}
+
+function formatWaitLabel(dateStr: string | null) {
+    const hours = hoursSince(dateStr);
+    if (hours >= 48) return `${Math.floor(hours / 24)}일 대기`;
+    if (hours >= 24) return "24시간 이상 대기";
+    if (hours >= 1) return `${hours}시간 대기`;
+    return "방금 접수";
 }
 
 function matchesTrialWorkFilter(lead: TrialLead, workFilter: TrialWorkFilter) {
@@ -159,6 +181,64 @@ function trialLeadMatchesSearch(lead: TrialLead, query: string) {
     ].map(normalizeSearchValue).join(" ");
 
     return searchable.includes(normalizedQuery);
+}
+
+function buildOpenContactCounts(leads: TrialLead[], applicationContacts: ContactSummary[]) {
+    const counts = new Map<string, number>();
+    const add = (phone: string | null | undefined) => {
+        const normalized = normalizePhone(phone);
+        if (normalized.length < 8) return;
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+    };
+
+    leads.forEach((lead) => {
+        if (lead.status !== "CONVERTED" && lead.status !== "LOST") add(lead.parentPhone);
+    });
+    applicationContacts.forEach((contact) => {
+        if (contact.status === "PENDING") add(contact.parentPhone);
+    });
+
+    return counts;
+}
+
+function getContactCount(phone: string | null | undefined, counts: Map<string, number>) {
+    const normalized = normalizePhone(phone);
+    return normalized ? counts.get(normalized) ?? 0 : 0;
+}
+
+function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
+    const badges: PriorityBadge[] = [];
+
+    if ((lead.status === "NEW" || lead.status === "CONTACTED") && hoursSince(lead.createdAt) >= LONG_WAIT_HOURS) {
+        badges.push({
+            icon: "timer",
+            label: formatWaitLabel(lead.createdAt),
+            className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
+        });
+    }
+    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && contactCount > 1) {
+        badges.push({
+            icon: "content_copy",
+            label: `중복 연락처 ${contactCount}건`,
+            className: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
+        });
+    }
+    if (lead.status === "ATTENDED" && !lead.enrollGuideSentAt) {
+        badges.push({
+            icon: "sms",
+            label: "상담 후 안내 필요",
+            className: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200",
+        });
+    }
+    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && !lead.coachNoticeSentAt) {
+        badges.push({
+            icon: "school",
+            label: "쌤 알림 필요",
+            className: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200",
+        });
+    }
+
+    return badges.slice(0, 4);
 }
 
 function TrialCrmLoadingFallback() {
@@ -220,9 +300,11 @@ function TrialCrmErrorState({ onRetry }: { onRetry: () => void }) {
 export default function TrialCrmClient({
     initialLeads,
     initialStats,
+    applicationContacts,
 }: {
     initialLeads?: TrialLead[];
     initialStats?: TrialStats;
+    applicationContacts?: ContactSummary[];
 }) {
     const hasInitialData = Boolean(initialLeads && initialStats);
     const [leads, setLeads] = useState<TrialLead[]>(initialLeads ?? []);
@@ -265,6 +347,11 @@ export default function TrialCrmClient({
         void loadTrialData();
     }, [hasInitialData, loadTrialData]);
 
+    const relatedApplicationContacts = useMemo(() => applicationContacts ?? [], [applicationContacts]);
+    const openContactCounts = useMemo(
+        () => buildOpenContactCounts(leads, relatedApplicationContacts),
+        [leads, relatedApplicationContacts],
+    );
     const showFeedback = useCallback((type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
@@ -556,6 +643,8 @@ export default function TrialCrmClient({
                 <div className="grid gap-4">
                     {visibleLeads.map((lead) => {
                         const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
+                        const contactCount = getContactCount(lead.parentPhone, openContactCounts);
+                        const priorityBadges = getTrialPriorityBadges(lead, contactCount);
                         const parentPhoneHref = phoneHref(lead.parentPhone);
                         return (
                             <div
@@ -574,6 +663,19 @@ export default function TrialCrmClient({
                                                 {SOURCE_LABELS[lead.source] || lead.source}
                                             </span>
                                         </div>
+                                        {priorityBadges.length > 0 && (
+                                            <div className="mb-2 flex flex-wrap gap-2">
+                                                {priorityBadges.map((badge) => (
+                                                    <span
+                                                        key={`${lead.id}-priority-${badge.label}`}
+                                                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${badge.className}`}
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">{badge.icon}</span>
+                                                        {badge.label}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                             {lead.childName}
                                             {lead.childAge && (

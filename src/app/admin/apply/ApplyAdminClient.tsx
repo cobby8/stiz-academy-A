@@ -140,6 +140,8 @@ type ApplyPayload = {
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
 type ApplicationWorkFilter = "ALL" | "NEEDS_ACTION" | "CLASS_ASSIGNMENT" | "SHUTTLE" | "TRIAL_LINKED" | "TIME_CHECK";
+type ContactSummary = { parentPhone: string; childName: string; status: string };
+type PriorityBadge = { icon: string; label: string; className: string };
 
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
 
@@ -169,6 +171,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 const APPLICATION_PAGE_SIZE = 50;
+const LONG_WAIT_HOURS = 24;
 
 const APPLICATION_WORK_FILTERS: Array<{ value: ApplicationWorkFilter; label: string; icon: string }> = [
     { value: "ALL", label: "운영 전체", icon: "view_list" },
@@ -230,12 +233,31 @@ function phoneHref(phone: string) {
     return digits ? `tel:${digits}` : undefined;
 }
 
+function normalizePhone(phone: string | null | undefined) {
+    return (phone ?? "").replace(/\D/g, "");
+}
+
 function normalizeSearchValue(value: string | null | undefined) {
     return (value ?? "").replace(/\s+/g, "").replace(/-/g, "").toLowerCase();
 }
 
+function hoursSince(dateStr: string | null) {
+    if (!dateStr) return 0;
+    const timestamp = new Date(dateStr).getTime();
+    if (!Number.isFinite(timestamp)) return 0;
+    return Math.max(0, Math.floor((Date.now() - timestamp) / 36e5));
+}
+
+function formatWaitLabel(dateStr: string | null) {
+    const hours = hoursSince(dateStr);
+    if (hours >= 48) return `${Math.floor(hours / 24)}일 대기`;
+    if (hours >= 24) return "24시간 이상 대기";
+    if (hours >= 1) return `${hours}시간 대기`;
+    return "방금 접수";
+}
+
 function getApplicationFlags(app: EnrollApplication, preferredSlotLabel: string | null) {
-    const flags: Array<{ icon: string; label: string; className: string }> = [];
+    const flags: PriorityBadge[] = [];
 
     if (app.status === "PENDING") {
         flags.push({
@@ -276,6 +298,52 @@ function getApplicationFlags(app: EnrollApplication, preferredSlotLabel: string 
     return flags.slice(0, 4);
 }
 
+function getApplicationPriorityBadges(
+    app: EnrollApplication,
+    preferredSlotLabel: string | null,
+    contactCount: number,
+) {
+    const badges: PriorityBadge[] = [];
+
+    if (app.status === "PENDING" && hoursSince(app.createdAt) >= LONG_WAIT_HOURS) {
+        badges.push({
+            icon: "timer",
+            label: formatWaitLabel(app.createdAt),
+            className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
+        });
+    }
+    if (app.status === "PENDING" && contactCount > 1) {
+        badges.push({
+            icon: "content_copy",
+            label: `중복 연락처 ${contactCount}건`,
+            className: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
+        });
+    }
+    if (app.status === "PENDING" && !app.assignedClassId) {
+        badges.push({
+            icon: "edit_calendar",
+            label: "반 배정 필요",
+            className: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200",
+        });
+    }
+    if (app.status === "PENDING" && app.shuttleNeeded) {
+        badges.push({
+            icon: "directions_bus",
+            label: "셔틀 먼저 확인",
+            className: "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200",
+        });
+    }
+    if (app.status === "PENDING" && !preferredSlotLabel) {
+        badges.push({
+            icon: "schedule",
+            label: "희망시간 확인",
+            className: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200",
+        });
+    }
+
+    return badges.slice(0, 4);
+}
+
 function matchesApplicationWorkFilter(
     app: EnrollApplication,
     preferredSlotLabel: string | null,
@@ -311,6 +379,64 @@ function applicationMatchesSearch(app: EnrollApplication, preferredSlotLabel: st
     ].map(normalizeSearchValue).join(" ");
 
     return searchable.includes(normalizedQuery);
+}
+
+function buildOpenContactCounts(applications: EnrollApplication[], trialLeads: TrialLead[]) {
+    const counts = new Map<string, number>();
+    const add = (phone: string | null | undefined) => {
+        const normalized = normalizePhone(phone);
+        if (normalized.length < 8) return;
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+    };
+
+    applications.forEach((app) => {
+        if (app.status === "PENDING") add(app.parentPhone);
+    });
+    trialLeads.forEach((lead) => {
+        if (lead.status !== "CONVERTED" && lead.status !== "LOST") add(lead.parentPhone);
+    });
+
+    return counts;
+}
+
+function getContactCount(phone: string | null | undefined, counts: Map<string, number>) {
+    const normalized = normalizePhone(phone);
+    return normalized ? counts.get(normalized) ?? 0 : 0;
+}
+
+function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
+    const badges: PriorityBadge[] = [];
+
+    if ((lead.status === "NEW" || lead.status === "CONTACTED") && hoursSince(lead.createdAt) >= LONG_WAIT_HOURS) {
+        badges.push({
+            icon: "timer",
+            label: formatWaitLabel(lead.createdAt),
+            className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
+        });
+    }
+    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && contactCount > 1) {
+        badges.push({
+            icon: "content_copy",
+            label: `중복 연락처 ${contactCount}건`,
+            className: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
+        });
+    }
+    if (lead.status === "ATTENDED" && !lead.enrollGuideSentAt) {
+        badges.push({
+            icon: "sms",
+            label: "상담 후 안내 필요",
+            className: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200",
+        });
+    }
+    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && !lead.coachNoticeSentAt) {
+        badges.push({
+            icon: "school",
+            label: "쌤 알림 필요",
+            className: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200",
+        });
+    }
+
+    return badges.slice(0, 4);
 }
 
 function ApplyLoadingFallback() {
@@ -425,6 +551,20 @@ export default function ApplyAdminClient({
         });
         return map;
     }, [classes]);
+    const trialLeadsForSummary = useMemo(() => initialTrialLeads ?? [], [initialTrialLeads]);
+    const openContactCounts = useMemo(
+        () => buildOpenContactCounts(applications, trialLeadsForSummary),
+        [applications, trialLeadsForSummary],
+    );
+    const applicationContacts = useMemo<ContactSummary[]>(
+        () =>
+            applications.map((app) => ({
+                parentPhone: app.parentPhone,
+                childName: app.childName,
+                status: app.status,
+            })),
+        [applications],
+    );
     const showFeedback = useCallback((type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
@@ -465,6 +605,19 @@ export default function ApplyAdminClient({
 
         return counts;
     }, [applications, classesBySlotKey]);
+    const priorityAppCount = useMemo(() => {
+        return applications.filter((app) => {
+            const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
+            const contactCount = getContactCount(app.parentPhone, openContactCounts);
+            return getApplicationPriorityBadges(app, preferredSlotLabel, contactCount).length > 0;
+        }).length;
+    }, [applications, classesBySlotKey, openContactCounts]);
+    const priorityTrialCount = useMemo(() => {
+        return trialLeadsForSummary.filter((lead) => {
+            const contactCount = getContactCount(lead.parentPhone, openContactCounts);
+            return getTrialPriorityBadges(lead, contactCount).length > 0;
+        }).length;
+    }, [openContactCounts, trialLeadsForSummary]);
 
     useEffect(() => {
         setVisibleLimit(APPLICATION_PAGE_SIZE);
@@ -473,6 +626,7 @@ export default function ApplyAdminClient({
     const trialNewCount = initialTrialStats?.NEW ?? 0;
     const trialScheduledCount = initialTrialStats?.SCHEDULED ?? 0;
     const actionTotal = trialNewCount + stats.PENDING;
+    const firstLookCount = priorityAppCount + priorityTrialCount;
 
     // 날짜 포맷
     function formatDate(dateStr: string | null) {
@@ -527,7 +681,19 @@ export default function ApplyAdminClient({
                 </a>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
+                <button
+                    type="button"
+                    onClick={() => setActiveTab(priorityTrialCount >= priorityAppCount ? "trial" : "applications")}
+                    className="rounded-xl border border-red-100 bg-red-50 p-4 text-left shadow-sm transition hover:border-red-300 hover:shadow-md dark:border-red-900/40 dark:bg-red-950/30"
+                >
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-bold text-red-700 dark:text-red-200">오늘 먼저 볼 건</span>
+                        <span className="material-symbols-outlined text-red-500 dark:text-red-200">priority_high</span>
+                    </div>
+                    <p className="mt-2 text-3xl font-black text-red-700 dark:text-red-100">{firstLookCount}</p>
+                    <p className="mt-1 text-xs text-red-700/80 dark:text-red-200/80">체험 {priorityTrialCount} · 신청 {priorityAppCount}</p>
+                </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab("trial")}
@@ -634,6 +800,7 @@ export default function ApplyAdminClient({
                 <TrialCrmClient
                     initialLeads={initialTrialLeads}
                     initialStats={initialTrialStats}
+                    applicationContacts={applicationContacts}
                 />
             ) : activeTab === "applications" ? (
                 <>
@@ -766,6 +933,8 @@ export default function ApplyAdminClient({
                                 const age = calcAge(app.childBirthDate);
                                 const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
                                 const workFlags = getApplicationFlags(app, preferredSlotLabel);
+                                const contactCount = getContactCount(app.parentPhone, openContactCounts);
+                                const priorityBadges = getApplicationPriorityBadges(app, preferredSlotLabel, contactCount);
                                 const parentPhoneHref = phoneHref(app.parentPhone);
                                 return (
                                     <div
@@ -787,6 +956,20 @@ export default function ApplyAdminClient({
                                                         </span>
                                                     )}
                                                 </div>
+
+                                                {priorityBadges.length > 0 && (
+                                                    <div className="mb-2 flex flex-wrap gap-2">
+                                                        {priorityBadges.map((badge) => (
+                                                            <span
+                                                                key={`${app.id}-priority-${badge.label}`}
+                                                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${badge.className}`}
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">{badge.icon}</span>
+                                                                {badge.label}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
 
                                                 {workFlags.length > 0 && (
                                                     <div className="flex flex-wrap gap-2 mb-2">

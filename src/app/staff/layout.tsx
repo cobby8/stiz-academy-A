@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireStaff } from "@/lib/auth-guard";
 import StaffBottomNav from "./StaffBottomNav";
+import StaffInstallPrompt from "./StaffInstallPrompt";
 
 export default async function StaffLayout({ children }: { children: ReactNode }) {
   const staff = await requireStaff();
@@ -14,6 +15,7 @@ export default async function StaffLayout({ children }: { children: ReactNode })
           <span className="text-sm font-bold text-gray-500 dark:text-gray-300">{staff.appUserName} 선생님</span>
         </div>
       </header>
+      <StaffInstallPrompt />
       {children}
       <StaffBottomNav />
     </div>

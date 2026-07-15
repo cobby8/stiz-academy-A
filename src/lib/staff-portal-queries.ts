@@ -3,7 +3,7 @@ import { getAccessibleClassIds, getStaffClassAccessContext } from "@/lib/staff-c
 import { normalizePhoneNumber } from "@/lib/staff-contacts";
 
 export type StaffStudentListItem = { id: string; name: string; school: string | null; grade: string | null; studentPhone: string | null; parentName: string; parentPhone: string | null; classNames: string[] };
-export type StaffBillingListItem = { id: string; studentName: string; title: string; amount: number; status: string; dueDate: Date; paidDate: Date | null; invoiceNo: string | null };
+export type StaffBillingListItem = { id: string; studentName: string; className: string; title: string; amount: number; status: string; dueDate: Date; paidDate: Date | null; invoiceNo: string | null; confirmationStatus: string | null };
 type StudentRow = Omit<StaffStudentListItem, "classNames"> & { classNames: string[] | null };
 
 /** 담당 수업을 먼저 확정한 뒤 그 수업의 활성 수강생만 조회합니다. */
@@ -32,5 +32,17 @@ export async function getStaffBilling(): Promise<StaffBillingListItem[]> {
   // 현재 Payment와 PaymentInvoice에는 classId/enrollmentId가 없습니다.
   // 학생의 Enrollment로 우회 연결하면 다른 수업료·셔틀·유니폼 청구까지 노출될 수 있어
   // 수업 귀속 컬럼이 추가되기 전에는 안전하게 아무 청구도 반환하지 않습니다.
-  return [];
+  return prisma.$queryRawUnsafe<StaffBillingListItem[]>(
+    `SELECT p.id,s.name AS "studentName",c.name AS "className",
+            COALESCE(NULLIF(p.description,''),'수강료') AS title,p.amount,p.status,p."dueDate",p."paidDate",p."invoiceNo",
+            r.status AS "confirmationStatus"
+       FROM "Payment" p
+       JOIN "Student" s ON s.id=p."studentId"
+       JOIN "Class" c ON c.id=p."classId"
+       JOIN "PaymentInvoice" i ON i."paymentId"=p.id AND i."classId"=p."classId"
+       LEFT JOIN LATERAL (SELECT status FROM "StaffPaymentConfirmationRequest" r WHERE r."paymentId"=p.id ORDER BY r."createdAt" DESC LIMIT 1) r ON true
+      WHERE p."classId"=ANY($1::text[])
+        AND EXISTS (SELECT 1 FROM "Enrollment" e WHERE e."studentId"=p."studentId" AND e."classId"=p."classId" AND e.status='ACTIVE')
+      ORDER BY CASE WHEN p.status IN ('OVERDUE','PENDING') THEN 0 ELSE 1 END,p."dueDate" DESC,s.name`, classIds,
+  );
 }

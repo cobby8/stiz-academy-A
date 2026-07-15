@@ -100,6 +100,8 @@ model Class {
   program      Program      @relation(fields: [programId], references: [id])
   enrollments  Enrollment[]
   sessions     Session[]
+  payments     Payment[]
+  paymentInvoices PaymentInvoice[]
 
   @@index([programId])
   @@index([instructorId])
@@ -188,6 +190,7 @@ model StudentSessionNote {
 model Payment {
   id            String    @id @default(uuid())
   studentId     String
+  classId       String?
   amount        Int
   status        String
   dueDate       DateTime
@@ -212,6 +215,7 @@ model Payment {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   student       Student   @relation(fields: [studentId], references: [id])
+  class         Class?    @relation(fields: [classId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   invoice       PaymentInvoice?
   transactions  PaymentTransaction[]
   auditLogs     PaymentAuditLog[]
@@ -220,16 +224,19 @@ model Payment {
   @@index([status])
   @@index([studentId, year, month])
   @@index([studentId, dueDate])
+  @@index([classId, status, dueDate])
   @@index([dueDate])
   @@index([status, dueDate])
   @@index([providerOrderId])
   @@index([providerPaymentKey])
+  @@unique([id, classId])
 }
 
 model PaymentInvoice {
   id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   paymentId      String    @unique
   studentId      String
+  classId        String?
   parentId       String?
   invoiceNo      String    @unique
   status         String    @default("ISSUED")
@@ -247,11 +254,13 @@ model PaymentInvoice {
   createdAt      DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   payment        Payment   @relation(fields: [paymentId], references: [id])
+  class          Class?    @relation(fields: [classId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   transactions   PaymentTransaction[]
   auditLogs      PaymentAuditLog[]
 
   @@index([parentId, status])
   @@index([studentId, dueDate])
+  @@index([classId, status, dueDate])
 }
 
 model PaymentTransaction {
@@ -317,6 +326,29 @@ model PaymentAuditLog {
   transaction   PaymentTransaction? @relation(fields: [transactionId], references: [id])
 
   @@index([paymentId, createdAt])
+}
+
+model StaffPaymentConfirmationRequest {
+  id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  paymentId         String
+  invoiceId         String?
+  classId           String
+  studentId         String
+  requestedByUserId String
+  method            String
+  amount            Int
+  receivedAt        DateTime  @db.Timestamptz(6)
+  note              String?
+  status            String    @default("PENDING")
+  reviewedByUserId  String?
+  reviewedAt        DateTime? @db.Timestamptz(6)
+  reviewNote        String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@index([paymentId, createdAt])
+  @@index([classId, status])
 }
 
 // 청구 템플릿 — 매월 자동 청구서 생성의 기준 데이터

@@ -86,6 +86,7 @@ export async function ensurePaymentInfrastructure() {
     if (_paymentInfrastructureEnsured) return;
 
     const paymentColumns: [string, string][] = [
+        ["classId", "TEXT"],
         ["type", "TEXT DEFAULT 'MONTHLY'"],
         ["method", "TEXT"],
         ["description", "TEXT"],
@@ -116,6 +117,7 @@ export async function ensurePaymentInfrastructure() {
             id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
             "paymentId" TEXT NOT NULL UNIQUE,
             "studentId" TEXT NOT NULL,
+            "classId" TEXT,
             "parentId" TEXT,
             "invoiceNo" TEXT NOT NULL UNIQUE,
             status TEXT NOT NULL DEFAULT 'ISSUED',
@@ -134,6 +136,10 @@ export async function ensurePaymentInfrastructure() {
             "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `);
+
+    await prisma.$executeRawUnsafe(
+        `ALTER TABLE "PaymentInvoice" ADD COLUMN IF NOT EXISTS "classId" TEXT`
+    );
 
     await prisma.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "PaymentTransaction" (
@@ -195,10 +201,13 @@ export async function ensurePaymentInfrastructure() {
         `CREATE INDEX IF NOT EXISTS "Payment_year_month_idx" ON "Payment" (year, month)`,
         `CREATE INDEX IF NOT EXISTS "Payment_status_idx" ON "Payment" (status)`,
         `CREATE INDEX IF NOT EXISTS "Payment_status_dueDate_idx" ON "Payment" (status, "dueDate")`,
+        `CREATE INDEX IF NOT EXISTS "Payment_classId_status_dueDate_idx" ON "Payment" ("classId", status, "dueDate")`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS "Payment_id_classId_key" ON "Payment" (id, "classId")`,
         `CREATE INDEX IF NOT EXISTS "Payment_providerOrderId_idx" ON "Payment" ("providerOrderId")`,
         `CREATE INDEX IF NOT EXISTS "Payment_providerPaymentKey_idx" ON "Payment" ("providerPaymentKey")`,
         `CREATE INDEX IF NOT EXISTS "PaymentInvoice_parent_status_idx" ON "PaymentInvoice" ("parentId", status)`,
         `CREATE INDEX IF NOT EXISTS "PaymentInvoice_student_due_idx" ON "PaymentInvoice" ("studentId", "dueDate")`,
+        `CREATE INDEX IF NOT EXISTS "PaymentInvoice_classId_status_dueDate_idx" ON "PaymentInvoice" ("classId", status, "dueDate")`,
         `CREATE INDEX IF NOT EXISTS "PaymentTransaction_invoice_status_idx" ON "PaymentTransaction" ("invoiceId", status)`,
         `CREATE INDEX IF NOT EXISTS "PaymentTransaction_payment_status_idx" ON "PaymentTransaction" ("paymentId", status)`,
         `CREATE INDEX IF NOT EXISTS "PaymentWebhookEvent_order_idx" ON "PaymentWebhookEvent" ("orderId")`,
@@ -254,7 +263,7 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
     await prisma.$executeRawUnsafe(
         `
         INSERT INTO "PaymentInvoice" (
-            id, "paymentId", "studentId", "parentId", "invoiceNo", status,
+            id, "paymentId", "studentId", "classId", "parentId", "invoiceNo", status,
             amount, title, description, "dueDate", "issuedAt", "paidAt",
             "createdAt", "updatedAt"
         )
@@ -262,6 +271,7 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
             gen_random_uuid()::text,
             p.id,
             p."studentId",
+            p."classId",
             s."parentId",
             CONCAT(
                 'STIZ-',
@@ -292,6 +302,7 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
         )
         ON CONFLICT ("paymentId") DO UPDATE SET
             "studentId" = EXCLUDED."studentId",
+            "classId" = EXCLUDED."classId",
             "parentId" = EXCLUDED."parentId",
             amount = EXCLUDED.amount,
             title = EXCLUDED.title,

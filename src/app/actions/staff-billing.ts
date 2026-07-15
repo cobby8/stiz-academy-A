@@ -1,0 +1,80 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin, requireStaff } from "@/lib/auth-guard";
+import { requireStaffClassAccess } from "@/lib/staff-class-access";
+
+const METHODS = new Set(["CASH", "BANK_TRANSFER"]);
+
+export async function requestStaffPaymentConfirmation(input: { paymentId: string; method: string; receivedAt: string; note?: string }) {
+  const staff = await requireStaff();
+  const paymentId = input.paymentId.trim();
+  const method = input.method.trim();
+  const receivedAt = new Date(input.receivedAt);
+  if (!paymentId || !METHODS.has(method) || Number.isNaN(receivedAt.getTime()) || receivedAt.getTime() > Date.now() + 60_000) {
+    return { ok: false as const, message: "납부 확인 정보가 올바르지 않습니다." };
+  }
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; classId: string | null; studentId: string; amount: number; status: string; invoiceId: string; issuedAt: Date }>>(
+    `SELECT p.id,p."classId",p."studentId",p.amount,p.status,i.id AS "invoiceId",i."issuedAt" FROM "Payment" p
+     JOIN "PaymentInvoice" i ON i."paymentId"=p.id AND i."classId"=p."classId" AND i."studentId"=p."studentId" AND i.amount=p.amount
+     WHERE p.id=$1 LIMIT 1`, paymentId,
+  );
+  const payment = rows[0];
+  if (!payment?.classId || !payment.invoiceId) return { ok: false as const, message: "수업과 청구서가 모두 연결된 항목만 처리할 수 있습니다." };
+  if (receivedAt.getTime() < payment.issuedAt.getTime() - 5 * 60_000 || receivedAt.getTime() < Date.now() - 31 * 24 * 60 * 60_000) {
+    return { ok: false as const, message: "수납 일시는 청구서 발행 이후 최근 31일 안에서만 입력할 수 있습니다." };
+  }
+  await requireStaffClassAccess(payment.classId);
+  if (!['PENDING','OVERDUE'].includes(payment.status)) return { ok: false as const, message: "이미 처리되었거나 취소된 청구입니다." };
+  try {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "StaffPaymentConfirmationRequest" (id,"paymentId","invoiceId","classId","studentId","requestedByUserId",method,amount,"receivedAt",note,status,"createdAt","updatedAt")
+       VALUES (gen_random_uuid()::text,$1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING',NOW(),NOW())`,
+      payment.id,payment.invoiceId,payment.classId,payment.studentId,staff.appUserId,method,payment.amount,receivedAt,input.note?.trim().slice(0,500)||null,
+    );
+  } catch (error) {
+    if (error instanceof Error && /unique|duplicate/i.test(error.message)) return { ok: false as const, message: "이미 확인 대기 중인 요청이 있습니다." };
+    throw error;
+  }
+  revalidatePath('/staff/billing'); revalidatePath('/admin/payment-confirmations');
+  return { ok: true as const, message: "관리자에게 납부 확인을 요청했습니다." };
+}
+
+export async function reviewStaffPaymentConfirmation(input: { requestId: string; decision: 'APPROVED'|'REJECTED'; note?: string }) {
+  const admin = await requireAdmin();
+  const requestId = input.requestId.trim();
+  if (!requestId || !['APPROVED','REJECTED'].includes(input.decision)) throw new Error("검토 정보가 올바르지 않습니다.");
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRawUnsafe<Array<{ id:string; paymentId:string; invoiceId:string|null; classId:string; studentId:string; requestedByUserId:string; method:string; amount:number; receivedAt:Date; status:string }>>(
+      `SELECT * FROM "StaffPaymentConfirmationRequest" WHERE id=$1 FOR UPDATE`, requestId,
+    );
+    const request = rows[0];
+    if (!request || request.status !== 'PENDING') throw new Error("이미 검토된 요청입니다.");
+    if (input.decision === 'REJECTED') {
+      await tx.$executeRawUnsafe(`UPDATE "StaffPaymentConfirmationRequest" SET status='REJECTED',"reviewedByUserId"=$2,"reviewedAt"=NOW(),"reviewNote"=$3,"updatedAt"=NOW() WHERE id=$1`,request.id,admin.appUserId,input.note?.trim().slice(0,500)||null);
+      return;
+    }
+    const payments = await tx.$queryRawUnsafe<Array<{ id:string; classId:string|null; studentId:string; amount:number; status:string }>>(`SELECT id,"classId","studentId",amount,status FROM "Payment" WHERE id=$1 FOR UPDATE`,request.paymentId);
+    const payment = payments[0];
+    if (!payment || payment.classId!==request.classId || payment.studentId!==request.studentId || payment.amount!==request.amount || !['PENDING','OVERDUE'].includes(payment.status)) throw new Error("청구 상태가 요청 당시와 달라 승인할 수 없습니다.");
+    if (!request.invoiceId) throw new Error("연결된 청구서가 없어 승인할 수 없습니다.");
+    const invoices = await tx.$queryRawUnsafe<Array<{ id:string; paymentId:string; classId:string|null; studentId:string; amount:number; status:string; issuedAt:Date }>>(
+      `SELECT id,"paymentId","classId","studentId",amount,status,"issuedAt" FROM "PaymentInvoice" WHERE id=$1 FOR UPDATE`, request.invoiceId,
+    );
+    const invoice = invoices[0];
+    if (!invoice || invoice.paymentId!==payment.id || invoice.classId!==payment.classId || invoice.studentId!==payment.studentId || invoice.amount!==payment.amount || ['PAID','CANCELED'].includes(invoice.status)
+      || request.receivedAt.getTime() < invoice.issuedAt.getTime() - 5 * 60_000 || request.receivedAt.getTime() > Date.now() + 60_000) {
+      throw new Error("청구서 상태가 요청 당시와 달라 승인할 수 없습니다.");
+    }
+    const transactionId = crypto.randomUUID();
+    const paymentUpdated = await tx.$executeRawUnsafe(`UPDATE "Payment" SET status='PAID',method=$2,"paidDate"=$3,"paidProvider"='MANUAL',"updatedAt"=NOW() WHERE id=$1 AND status IN ('PENDING','OVERDUE')`,payment.id,request.method,request.receivedAt);
+    const invoiceUpdated = await tx.$executeRawUnsafe(`UPDATE "PaymentInvoice" SET status='PAID',"paidAt"=$2,"updatedAt"=NOW() WHERE id=$1 AND "paymentId"=$3 AND status NOT IN ('PAID','CANCELED')`,request.invoiceId,request.receivedAt,payment.id);
+    if (paymentUpdated !== 1 || invoiceUpdated !== 1) throw new Error("결제 원장을 함께 갱신하지 못했습니다.");
+    await tx.$executeRawUnsafe(`INSERT INTO "PaymentTransaction" (id,"paymentId","invoiceId","studentId",provider,"orderId","orderName",amount,status,method,"approvedAt","createdAt","updatedAt") VALUES ($1,$2,$3,$4,'MANUAL',$5,'교사 수납 확인',$6,'DONE',$7,$8,NOW(),NOW())`,transactionId,payment.id,request.invoiceId,request.studentId,`MANUAL-${request.id}`,request.amount,request.method,request.receivedAt);
+    await tx.$executeRawUnsafe(`INSERT INTO "PaymentAuditLog" (id,"paymentId","invoiceId","transactionId","actorType","actorId",action,message,metadata,"createdAt") VALUES (gen_random_uuid()::text,$1,$2,$3,'ADMIN',$4,'STAFF_PAYMENT_CONFIRMED','교사 수납 확인 요청 승인',$5::jsonb,NOW())`,payment.id,request.invoiceId,transactionId,admin.appUserId,JSON.stringify({requestId:request.id,requestedByUserId:request.requestedByUserId}));
+    await tx.$executeRawUnsafe(`UPDATE "StaffPaymentConfirmationRequest" SET status='APPROVED',"reviewedByUserId"=$2,"reviewedAt"=NOW(),"reviewNote"=$3,"updatedAt"=NOW() WHERE id=$1`,request.id,admin.appUserId,input.note?.trim().slice(0,500)||null);
+  });
+  revalidatePath('/staff/billing'); revalidatePath('/admin/payment-confirmations');
+  return { ok:true as const };
+}

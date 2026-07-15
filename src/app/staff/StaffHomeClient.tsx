@@ -1,16 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   savePlannedClassContent,
   startClassSession,
 } from "@/app/actions/staff-sessions";
 import { createStaffClassNotice } from "@/app/actions/staff-notices";
 import { VoiceToTextButton } from "@/components/staff/VoiceToTextButton";
-import { ClassBillingSheet } from "@/components/staff/ClassBillingSheet";
-import { ClassPeopleSheet } from "@/components/staff/ClassPeopleSheet";
+import { useStaffDialog } from "@/components/staff/useStaffDialog";
 import type { StaffTodayClass } from "@/lib/staff-session-queries";
+
+const ClassPeopleSheet = dynamic(
+  () => import("@/components/staff/ClassPeopleSheet").then((module) => module.ClassPeopleSheet),
+  { ssr: false },
+);
+const ClassBillingSheet = dynamic(
+  () => import("@/components/staff/ClassBillingSheet").then((module) => module.ClassBillingSheet),
+  { ssr: false },
+);
 
 export default function StaffHomeClient({
   dateKey,
@@ -156,7 +165,7 @@ export default function StaffHomeClient({
                     <span className="material-symbols-outlined">{focusClass.sessionStatus === "IN_PROGRESS" ? "arrow_forward" : "play_arrow"}</span>
                     {focusClass.sessionStatus === "IN_PROGRESS" ? "수업으로 돌아가기" : "수업 시작"}
                   </button>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 gap-2" aria-label="수업 빠른 메뉴">
                     <SecondaryButton icon="edit_note" label="수업 내용" onClick={() => openContent(focusClass)} disabled={focusClass.sessionStatus === "IN_PROGRESS"} inverted />
                     <SecondaryButton icon="groups" label="학생 정보" onClick={() => setPeopleTarget(focusClass)} inverted />
                     <SecondaryButton icon="receipt_long" label="청구 확인" onClick={() => setBillingTarget({ lesson: focusClass })} inverted />
@@ -175,7 +184,7 @@ export default function StaffHomeClient({
               </div>
               <div className="space-y-3">
                 {otherClasses.map((lesson) => (
-                  <CompactClassCard key={lesson.id} lesson={lesson} onStart={openPrimaryAction} onContent={openContent} onContacts={openContacts} onNotice={(target) => { setError(null); setNoticeTarget(target); }} />
+                  <CompactClassCard key={lesson.id} lesson={lesson} onStart={openPrimaryAction} onContent={openContent} onContacts={openContacts} onBilling={(target) => setBillingTarget({ lesson: target })} onNotice={(target) => { setError(null); setNoticeTarget(target); }} />
                 ))}
               </div>
             </section>
@@ -230,21 +239,28 @@ function StatusBadge({ status, inverted = false }: { status: StaffTodayClass["se
 }
 
 function SecondaryButton({ icon, label, onClick, disabled = false, inverted = false }: { icon: string; label: string; onClick: () => void; disabled?: boolean; inverted?: boolean }) {
-  return <button type="button" disabled={disabled} onClick={onClick} className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-bold disabled:opacity-40 ${inverted ? "bg-white/10 text-white" : "border border-gray-200 dark:border-gray-700"}`}><span className="material-symbols-outlined text-xl">{icon}</span>{label}</button>;
+  return <button type="button" disabled={disabled} onClick={onClick} className={`flex min-h-16 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold disabled:opacity-40 ${inverted ? "bg-white/10 text-white" : "border border-gray-200 dark:border-gray-700"}`}><span className="material-symbols-outlined text-xl">{icon}</span>{label}</button>;
 }
 
-function CompactClassCard({ lesson, onStart, onContent, onContacts, onNotice }: { lesson: StaffTodayClass; onStart: (lesson: StaffTodayClass) => void; onContent: (lesson: StaffTodayClass) => void; onContacts: (lesson: StaffTodayClass) => void; onNotice: (lesson: StaffTodayClass) => void }) {
+function CompactClassCard({ lesson, onStart, onContent, onContacts, onBilling, onNotice }: { lesson: StaffTodayClass; onStart: (lesson: StaffTodayClass) => void; onContent: (lesson: StaffTodayClass) => void; onContacts: (lesson: StaffTodayClass) => void; onBilling: (lesson: StaffTodayClass) => void; onNotice: (lesson: StaffTodayClass) => void }) {
   const completed = lesson.sessionStatus === "COMPLETED";
   return <article className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
     <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-[var(--brand-accent)]">{lesson.startTime}–{lesson.endTime}</p><h3 className="mt-0.5 text-lg font-black dark:text-white">{lesson.name}</h3><p className="mt-1 text-xs text-gray-500">학생 {lesson.studentCount}명 · {lesson.location || "장소 미정"}</p></div><StatusBadge status={lesson.sessionStatus} /></div>
-    {!completed && <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><button type="button" onClick={() => onStart(lesson)} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]">{lesson.sessionStatus === "IN_PROGRESS" ? "수업으로 돌아가기" : "수업 시작"}</button><details className="relative"><summary aria-label="보조 기능 열기" className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700"><span className="material-symbols-outlined">more_horiz</span></summary><div className="absolute bottom-12 right-0 z-10 w-40 space-y-1 rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900"><MenuButton label="수업 내용" onClick={() => onContent(lesson)} /><MenuButton label="명단·전화" onClick={() => onContacts(lesson)} /><MenuButton label="수업 공지" onClick={() => onNotice(lesson)} /></div></details></div>}
+    {!completed && <div className="mt-3 space-y-2"><button type="button" onClick={() => onStart(lesson)} className="min-h-12 w-full rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]">{lesson.sessionStatus === "IN_PROGRESS" ? "수업으로 돌아가기" : "수업 시작"}</button><div className="grid grid-cols-4 gap-2" aria-label="수업 빠른 메뉴"><CompactAction icon="edit_note" label="내용" onClick={() => onContent(lesson)} /><CompactAction icon="groups" label="학생" onClick={() => onContacts(lesson)} /><CompactAction icon="receipt_long" label="청구" onClick={() => onBilling(lesson)} /><CompactAction icon="campaign" label="공지" onClick={() => onNotice(lesson)} /></div></div>}
   </article>;
 }
 
-function MenuButton({ label, onClick }: { label: string; onClick: () => void }) { return <button type="button" onClick={onClick} className="min-h-10 w-full rounded-lg px-3 text-left text-sm font-bold hover:bg-gray-100 dark:hover:bg-gray-800">{label}</button>; }
+function CompactAction({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) { return <button type="button" onClick={onClick} className="flex min-h-12 flex-col items-center justify-center rounded-xl border border-gray-200 text-xs font-bold dark:border-gray-700"><span className="material-symbols-outlined text-lg text-[var(--brand-accent)]">{icon}</span>{label}</button>; }
 
 function Modal({ title, subtitle, onClose, labelledBy, scrollable = false, children }: { title: string; subtitle: string; onClose: () => void; labelledBy: string; scrollable?: boolean; children: React.ReactNode }) {
-  return <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy}><div className={`w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900 ${scrollable ? "max-h-[85vh] overflow-y-auto" : ""}`}><div className="flex items-start justify-between gap-3"><div><h2 id={labelledBy} className="text-xl font-black dark:text-white">{title}</h2><p className="mt-1 text-sm text-gray-500">{subtitle}</p></div><button type="button" aria-label="닫기" onClick={onClose} className="rounded-full p-2"><span className="material-symbols-outlined">close</span></button></div>{children}</div></div>;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  const closeDialog = useCallback(() => onCloseRef.current(), []);
+  useStaffDialog(true, dialogRef, closeDialog);
+  return <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy}><div ref={dialogRef} className={`w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900 ${scrollable ? "max-h-[85vh] overflow-y-auto" : ""}`}><div className="flex items-start justify-between gap-3"><div><h2 id={labelledBy} className="text-xl font-black dark:text-white">{title}</h2><p className="mt-1 text-sm text-gray-500">{subtitle}</p></div><button type="button" aria-label="닫기" data-dialog-initial-focus onClick={onClose} className="min-h-11 min-w-11 rounded-full p-2"><span className="material-symbols-outlined">close</span></button></div>{children}</div></div>;
 }
 
 function ModalActions({ pending, onCancel, onConfirm, confirmLabel, disabled = false }: { pending: boolean; onCancel: () => void; onConfirm: () => void; confirmLabel: string; disabled?: boolean }) { return <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={pending} onClick={onCancel} className="min-h-12 rounded-xl border border-gray-200 font-bold dark:border-gray-700">취소</button><button type="button" disabled={pending || disabled} onClick={onConfirm} className="min-h-12 rounded-xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{confirmLabel}</button></div>; }

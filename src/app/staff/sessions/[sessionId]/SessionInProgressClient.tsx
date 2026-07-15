@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   completeClassSession,
   saveSessionMemo,
@@ -9,12 +10,20 @@ import {
 } from "@/app/actions/staff-sessions";
 import { SessionPhotoUploader } from "@/components/staff/SessionPhotoUploader";
 import { VoiceToTextButton } from "@/components/staff/VoiceToTextButton";
-import { ClassBillingSheet } from "@/components/staff/ClassBillingSheet";
-import { ClassPeopleSheet } from "@/components/staff/ClassPeopleSheet";
+import { useStaffDialog } from "@/components/staff/useStaffDialog";
 import type {
   StaffSessionDetail,
   StaffSessionStudent,
 } from "@/lib/staff-session-queries";
+
+const ClassPeopleSheet = dynamic(
+  () => import("@/components/staff/ClassPeopleSheet").then((module) => module.ClassPeopleSheet),
+  { ssr: false },
+);
+const ClassBillingSheet = dynamic(
+  () => import("@/components/staff/ClassBillingSheet").then((module) => module.ClassBillingSheet),
+  { ssr: false },
+);
 
 type View = "main" | "attendance";
 type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT";
@@ -52,6 +61,9 @@ export default function SessionInProgressClient({
   const [showPeople, setShowPeople] = useState(false);
   const [billingStudent, setBillingStudent] = useState<{ id: string; name: string } | null | undefined>(undefined);
   const [pending, startTransition] = useTransition();
+  const endDialogRef = useRef<HTMLDivElement>(null);
+  const closeEndDialog = useCallback(() => setShowEndConfirm(false), []);
+  useStaffDialog(showEndConfirm, endDialogRef, closeEndDialog, !pending);
 
   useEffect(() => {
     if (!session.startedAt) return;
@@ -200,7 +212,7 @@ export default function SessionInProgressClient({
           <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">수업 중</span>
         </div>
         <div className="mt-3 flex items-end justify-between border-t border-white/10 pt-3">
-          <p className="text-xs font-bold text-gray-300">수업 경과 시간</p>
+          <div><p className="text-xs font-bold text-gray-300">수업 경과 시간</p><p className={`mt-1 text-xs font-black ${counts.UNCHECKED > 0 ? "text-amber-300" : "text-green-300"}`}>{counts.UNCHECKED > 0 ? `출석 미확인 ${counts.UNCHECKED}명` : "출석 확인 완료"}</p></div>
           <p className="font-mono text-3xl font-black tabular-nums" aria-label={`수업 경과 ${formatElapsed(elapsed)}`}>{formatElapsed(elapsed)}</p>
         </div>
       </section>
@@ -212,7 +224,7 @@ export default function SessionInProgressClient({
         </div>
       )}
 
-      <section className="grid grid-cols-2 gap-3">
+      <section className="grid grid-cols-2 gap-3" aria-label="수업 중 빠른 메뉴">
         <button type="button" onClick={() => setView("attendance")} className="flex min-h-20 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <span className="material-symbols-outlined mb-1 text-2xl text-[var(--brand-accent)]">fact_check</span>
           출석부
@@ -233,6 +245,10 @@ export default function SessionInProgressClient({
           청구 확인
           <span className="mt-0.5 text-xs font-bold text-gray-500">납부 처리 요청</span>
         </button>
+        <a href="#session-memo" className="col-span-2 flex min-h-16 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <span className="material-symbols-outlined text-2xl text-[var(--brand-accent)]">mic</span>
+          특이사항 메모
+        </a>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
@@ -248,7 +264,7 @@ export default function SessionInProgressClient({
         <SessionPhotoUploader sessionId={session.id} students={students.map(({ id, name }) => ({ id, name }))} />
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+      <section id="session-memo" className="scroll-mt-40 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex items-start justify-between gap-3">
           <div><h2 className="flex items-center gap-2 font-black"><span className="material-symbols-outlined text-[var(--brand-accent)]">mic</span>수업 중 특이사항</h2><p className="mt-1 text-xs text-gray-500">말로 남기면 텍스트 메모로 바뀝니다.</p></div>
           <VoiceToTextButton onText={(text) => setMemo((current) => current ? `${current}\n${text}` : text)} />
@@ -259,16 +275,19 @@ export default function SessionInProgressClient({
 
       {message && <p aria-live="polite" className="rounded-xl bg-blue-50 p-3 text-sm font-bold text-blue-700">{message}</p>}
 
-      <ClassPeopleSheet open={showPeople} classId={session.classId} sessionId={session.id} className={session.className} onClose={() => setShowPeople(false)} onOpenBilling={(student) => { setShowPeople(false); setBillingStudent(student); }} />
-      <ClassBillingSheet key={`${session.classId}:${billingStudent?.id || "all"}`} open={billingStudent !== undefined} classId={session.classId} className={session.className} student={billingStudent} onClose={() => setBillingStudent(undefined)} />
+      {showPeople && <ClassPeopleSheet open classId={session.classId} sessionId={session.id} className={session.className} onClose={() => setShowPeople(false)} onOpenBilling={(student) => { setShowPeople(false); setBillingStudent(student); }} />}
+      {billingStudent !== undefined && <ClassBillingSheet key={`${session.classId}:${billingStudent?.id || "all"}`} open classId={session.classId} className={session.className} student={billingStudent} onClose={() => setBillingStudent(undefined)} />}
 
       <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-lg px-4">
-        <button type="button" onClick={() => setShowEndConfirm(true)} className="min-h-14 w-full rounded-2xl bg-red-600 px-4 font-black text-white shadow-lg"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료</button>
+        <div className="rounded-2xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+          <button type="button" onClick={() => setShowEndConfirm(true)} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
+          <p className="mt-1 text-center text-[11px] font-bold text-gray-500">출결을 검토한 뒤 확인 화면에서 종료됩니다.</p>
+        </div>
       </div>
 
       {showEndConfirm && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby="end-session-title">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900">
+          <div ref={endDialogRef} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900">
             <h2 id="end-session-title" className="text-xl font-black dark:text-white">수업을 종료하시겠습니까?</h2>
             <p className="mt-1 text-sm text-gray-500">종료하면 학부모에게 수업 종료 알림이 전송됩니다.</p>
             <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs font-bold">
@@ -279,7 +298,7 @@ export default function SessionInProgressClient({
             </div>
             {counts.UNCHECKED > 0 && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">출결을 확인하지 않은 학생이 있습니다. 출석부를 먼저 확인해 주세요.</p>}
             <div className="mt-5 grid grid-cols-2 gap-2">
-              <button type="button" disabled={pending} onClick={() => setShowEndConfirm(false)} className="min-h-12 rounded-xl border border-gray-200 font-bold dark:border-gray-700">돌아가기</button>
+              <button type="button" disabled={pending} data-dialog-initial-focus onClick={() => setShowEndConfirm(false)} className="min-h-12 rounded-xl border border-gray-200 font-bold dark:border-gray-700">돌아가기</button>
               <button type="button" disabled={pending || counts.UNCHECKED > 0} onClick={finishSession} className="min-h-12 rounded-xl bg-red-600 font-black text-white disabled:opacity-50">종료 확인</button>
             </div>
           </div>

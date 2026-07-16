@@ -9,6 +9,7 @@
 - 수업 보호: 실제 메모 저장 완료 후 이동, 실패·음성 처리 중 이동 차단
 
 ## 작업 로그
+- 2026-07-16: 관리자 청구 콘솔에 이번 달 자동 생성/정리와 발행 전 검수 필터를 추가하고 임시 학부모 테스트 데이터 정리를 준비했다.
 - 2026-07-16: 학부모 마이페이지 미납 카드와 청구서 상세 화면을 개선하고 임시 계정으로 납부 흐름을 대조했다.
 - 2026-07-16: 관리자 수납/결제 화면에 청구서 발행 콘솔과 발행 전 전체 검수표를 추가했다.
 - 2026-07-16: 관리자 신청/체험 목록을 서버 페이지 단위 로딩으로 전환하고 `/admin/apply` 첫 진입 payload를 축소했다.
@@ -20,32 +21,31 @@
 - 2026-07-15: 관리자 수납/결제에 청구서, Toss 온라인 결제 기록, 미납 확인, 현장 결제 반영 흐름을 추가했다.
 
 ## 현재 작업
-- 작업명: 학부모 청구/납부 UX 대조 개선
+- 작업명: 관리자 청구 자동 생성/묶음 처리 편의 개선
 - 상태: 구현 및 검증 완료, 커밋 대기
-- 범위: 마이페이지 미납 CTA, 최근 수납 내역, 청구서 상세 화면, 임시 학부모 대조 테스트
+- 범위: 청구 콘솔 자동 생성/정리, 검수표 필터, 임시 학부모 테스트 데이터 정리
 - 기준일: 2026-07-16
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 마이페이지 | 완료 | 미납 카드의 납부 CTA 확대, 최근 수납 내역에서 납부/청구서/영수증 동선 추가 |
-| 청구서 상세 | 완료 | 금액, 기한, 자녀, 청구서 번호, 발행일, 납부 상태를 한 화면에서 확인 |
-| 결제 버튼 | 완료 | 온라인 결제 미설정 시 버튼 비활성화와 수동 납부 안내 표시 |
-| 임시 계정 대조 | 완료 | `Codex 테스트` 학부모/학생/청구서로 로그인부터 청구서 상세까지 확인 |
-| 검증 | 완료 | `tsc --noEmit`, 대상 파일 lint, Playwright 대조 통과 |
+| 청구 콘솔 | 완료 | 자동 생성/정리 버튼과 다음 할 일 안내 추가 |
+| 검수표 | 완료 | 전체/생성 예정/기존 유지/확인 필요 필터 추가 |
+| 임시 데이터 정리 | 완료 | 지난 Codex 테스트 계정/학생/청구서/Auth 계정 삭제 완료 |
+| 검증 | 완료 | 타입검사, 대상 파일 lint, diff check 통과 |
 
 ## 구현 기록
-- `src/app/mypage/MyPageClient.tsx`: 미납 카드와 최근 수납 내역의 납부/청구서/영수증 흐름 개선.
-- `src/app/payments/[invoiceId]/page.tsx`: 청구서 상세 화면을 결제 전 확인용 레이아웃으로 정리.
-- `src/app/payments/[invoiceId]/PaymentCheckoutClient.tsx`: 온라인 결제 미설정 상태 안내와 버튼 비활성화 보강.
+- `src/app/admin/finance/FinanceClient.tsx`: 이번 달 자동 생성/정리 버튼, 다음 할 일 안내, 발행 전 검수 필터 추가.
+- `.tmp/cleanup-billing-test-account.js`: 커밋 제외 임시 스크립트로 Codex 테스트 데이터 삭제 준비.
 
 ## 테스트 결과
 - `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 통과
-- `cmd /c npm run lint -- src/app/mypage/MyPageClient.tsx src/app/payments/[invoiceId]/page.tsx src/app/payments/[invoiceId]/PaymentCheckoutClient.tsx`: 경고 1개, 오류 없음
-- `node .tmp\verify-billing-parent-flow.js`: 통과
-- `git diff --check`: 통과
+- `cmd /c npm run lint -- src/app/admin/finance/FinanceClient.tsx`: 통과
+- `node --check .tmp\cleanup-billing-test-account.js`: 통과
+- `node .tmp\cleanup-billing-test-account.js`: 통과, 테스트 청구/학생/사용자/Auth 삭제 완료
+- `git diff --check -- src\app\admin\finance\FinanceClient.tsx .Codex\scratchpad.md`: 통과
 
 ## PM 체크
 - 작업 로그 최근 10건 이내 유지.
 - scratchpad 100줄 이내 유지.
-- 원격 DB에 임시 `Codex 테스트` 데이터가 남아 있으며 삭제는 별도 승인 필요.
+- 임시 정리 스크립트는 커밋하지 않음.

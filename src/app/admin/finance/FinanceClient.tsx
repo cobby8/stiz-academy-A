@@ -146,6 +146,8 @@ type MonthlyInvoicePreview = {
     }[];
 };
 
+type MonthlyInvoicePreviewItem = MonthlyInvoicePreview["items"][number];
+
 const EMPTY_SUMMARY: Summary = {
     totalCount: 0,
     totalAmount: 0,
@@ -159,6 +161,8 @@ const MONTHLY_INVOICE_ACTION_LABELS: Record<string, string> = {
     CREATE: "생성 예정",
     SKIP: "기존 청구 유지",
 };
+
+type InvoicePreviewFilter = "ALL" | "CREATE" | "SKIP" | "ATTENTION";
 
 // 상태 라벨 + 색상 매핑
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -207,6 +211,12 @@ function toDateInputValue(date = new Date()) {
 
 function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
+}
+
+function needsInvoiceAttention(item: MonthlyInvoicePreviewItem) {
+    if (item.existingAmount != null && item.existingAmount !== item.amount) return true;
+    if (!item.issueReason) return false;
+    return !item.issueReason.includes("이미 같은 유형");
 }
 
 function FinanceLoadingFallback({ year, month }: { year: number; month: number }) {
@@ -305,6 +315,8 @@ export default function FinanceClient({
     const [invoicePreview, setInvoicePreview] = useState<MonthlyInvoicePreview | null>(null);
     const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
     const [invoiceGenerating, setInvoiceGenerating] = useState(false);
+    const [billingRunLoading, setBillingRunLoading] = useState(false);
+    const [invoiceFilter, setInvoiceFilter] = useState<InvoicePreviewFilter>("ALL");
     const [invoiceError, setInvoiceError] = useState<string | null>(null);
     const [financeNotice, setFinanceNotice] = useState<string | null>(null);
     const [terminalTarget, setTerminalTarget] = useState<Payment | null>(null);
@@ -361,6 +373,7 @@ export default function FinanceClient({
         setInvoicePreview(null);
         setInvoiceError(null);
         setFinanceNotice(null);
+        setInvoiceFilter("ALL");
         setSelectedIds(new Set()); // 선택 초기화
         try {
             const res = await fetch(`/api/admin/finance?year=${y}&month=${m}`);
@@ -499,6 +512,8 @@ export default function FinanceClient({
         try {
             const preview = await previewMonthlyInvoices(year, month);
             setInvoicePreview(preview);
+            const attentionCount = preview.items.filter(needsInvoiceAttention).length;
+            setInvoiceFilter(attentionCount > 0 ? "ATTENTION" : preview.createCount > 0 ? "CREATE" : "ALL");
             setFinanceNotice(`${year}년 ${month}월 청구 대상 ${preview.targetStudentCount}명, 생성 예정 ${preview.createCount}건을 확인했습니다.`);
         } catch (err: unknown) {
             setInvoiceError(getErrorMessage(err, "청구 대상 확인 실패"));
@@ -540,6 +555,49 @@ export default function FinanceClient({
             setInvoiceError(getErrorMessage(err, "청구서 생성 실패"));
         } finally {
             setInvoiceGenerating(false);
+        }
+    }
+
+    async function handleSmartBillingRun() {
+        const confirmMessage =
+            `${year}년 ${month}월 청구서를 자동으로 확인하고 정리할까요?\n` +
+            "새 청구서는 생성하고, 이미 생성된 청구서는 그대로 유지합니다.\n" +
+            "학부모 알림 발송은 완료 후 별도로 진행합니다.";
+
+        if (!confirm(confirmMessage)) return;
+
+        setBillingRunLoading(true);
+        setInvoiceError(null);
+        setFinanceNotice(`${year}년 ${month}월 청구 대상을 확인하고 있습니다...`);
+
+        try {
+            const preview = await previewMonthlyInvoices(year, month);
+            setInvoicePreview(preview);
+
+            let creationMessage = "새로 생성할 청구서가 없습니다.";
+            if (preview.activeTemplateCount === 0) {
+                setInvoiceFilter("ALL");
+                setFinanceNotice("활성 청구 템플릿이 없어 자동 생성할 수 없습니다. 먼저 템플릿을 확인해 주세요.");
+                return;
+            }
+
+            if (preview.createCount > 0) {
+                const generated = await generateMonthlyInvoices(year, month);
+                creationMessage = generated.message;
+            }
+
+            const ledger = await refreshPaymentLedger(year, month);
+            await loadMonth(year, month);
+
+            const updatedPreview = await previewMonthlyInvoices(year, month);
+            const attentionCount = updatedPreview.items.filter(needsInvoiceAttention).length;
+            setInvoicePreview(updatedPreview);
+            setInvoiceFilter(attentionCount > 0 ? "ATTENTION" : "ALL");
+            setFinanceNotice(`${creationMessage}. 청구서 ${ledger.invoices}건과 연체 ${ledger.overdue}건을 정리했습니다. 링크 발송 대상이 있으면 다음 단계에서 발송하세요.`);
+        } catch (err: unknown) {
+            setInvoiceError(getErrorMessage(err, "청구서 자동 생성/정리 실패"));
+        } finally {
+            setBillingRunLoading(false);
         }
     }
 
@@ -686,7 +744,18 @@ export default function FinanceClient({
         : 0;
     const invoiceCreateCount = invoicePreview?.createCount ?? 0;
     const invoiceItems = invoicePreview?.items ?? invoicePreview?.samples ?? [];
-    const invoiceAttentionCount = invoiceItems.filter((item) => Boolean(item.issueReason)).length;
+    const invoiceAttentionCount = invoiceItems.filter(needsInvoiceAttention).length;
+    const invoiceFilterOptions: { value: InvoicePreviewFilter; label: string; count: number }[] = [
+        { value: "ALL", label: "전체", count: invoiceItems.length },
+        { value: "CREATE", label: "생성 예정", count: invoiceItems.filter((item) => item.action === "CREATE").length },
+        { value: "SKIP", label: "기존 유지", count: invoiceItems.filter((item) => item.action === "SKIP").length },
+        { value: "ATTENTION", label: "확인 필요", count: invoiceAttentionCount },
+    ];
+    const filteredInvoiceItems = invoiceItems.filter((item) => {
+        if (invoiceFilter === "ALL") return true;
+        if (invoiceFilter === "ATTENTION") return needsInvoiceAttention(item);
+        return item.action === invoiceFilter;
+    });
     const invoiceGeneratedCount = payments.filter((payment) => Boolean(payment.invoiceId)).length;
     const invoiceOpenCount = payments.filter((payment) => ["PENDING", "OVERDUE"].includes(payment.status)).length;
     const invoiceUnsentCount = payments.filter((payment) =>
@@ -703,6 +772,17 @@ export default function FinanceClient({
                 : invoiceOpenCount > 0
                     ? 4
                     : 5;
+    const invoiceNextAction = !invoicePreview
+        ? "먼저 청구 대상 확인 또는 자동 생성/정리를 실행하세요."
+        : invoicePreview.activeTemplateCount === 0
+            ? "활성 청구 템플릿을 등록해야 청구서를 만들 수 있습니다."
+            : invoiceCreateCount > 0
+                ? `${invoiceCreateCount}건은 발행 전 검수 후 생성할 수 있습니다.`
+                : invoiceUnsentCount > 0
+                    ? `${invoiceUnsentCount}건은 학부모에게 청구서 링크를 발송할 수 있습니다.`
+                    : invoiceOpenCount > 0
+                        ? `${invoiceOpenCount}건은 납부 전 상태입니다. 기한이 지난 건은 알림을 보낼 수 있습니다.`
+                        : "이번 달 청구 흐름이 모두 정리되었습니다.";
 
     if (loading && !hasAnyData) {
         return <FinanceLoadingFallback year={year} month={month} />;
@@ -860,15 +940,26 @@ export default function FinanceClient({
                             대상 확인부터 발송, 미납 관리까지 이번 달 청구 흐름을 순서대로 처리합니다.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleRefreshPaymentLedger}
-                        disabled={busy}
-                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                    >
-                        <span className="material-symbols-outlined mr-1 align-middle text-sm">sync</span>
-                        상태 새로고침
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={handleSmartBillingRun}
+                            disabled={busy || invoicePreviewLoading || invoiceGenerating || billingRunLoading}
+                            className="rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                        >
+                            <span className="material-symbols-outlined mr-1 align-middle text-sm">auto_mode</span>
+                            {billingRunLoading ? "자동 처리 중..." : "이번 달 자동 생성/정리"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleRefreshPaymentLedger}
+                            disabled={busy || billingRunLoading}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                        >
+                            <span className="material-symbols-outlined mr-1 align-middle text-sm">sync</span>
+                            상태 새로고침
+                        </button>
+                    </div>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-4">
@@ -883,7 +974,7 @@ export default function FinanceClient({
                         <button
                             type="button"
                             onClick={handlePreviewInvoices}
-                            disabled={busy || invoicePreviewLoading || invoiceGenerating}
+                            disabled={busy || invoicePreviewLoading || invoiceGenerating || billingRunLoading}
                             className="mt-3 w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-bold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                         >
                             {invoicePreviewLoading ? "확인 중..." : "대상 다시 확인"}
@@ -899,7 +990,7 @@ export default function FinanceClient({
                         <button
                             type="button"
                             onClick={handleGenerateInvoices}
-                            disabled={!invoicePreview || invoiceGenerating || invoiceCreateCount === 0}
+                            disabled={!invoicePreview || invoiceGenerating || billingRunLoading || invoiceCreateCount === 0}
                             className="mt-3 w-full rounded-lg bg-brand-orange-500 px-3 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                         >
                             {invoiceGenerating ? "발행 중..." : invoiceCreateCount === 0 ? "발행할 청구 없음" : "검수 후 발행"}
@@ -915,7 +1006,7 @@ export default function FinanceClient({
                         <button
                             type="button"
                             onClick={handleSendInvoiceLinks}
-                            disabled={busy || invoiceGeneratedCount === 0 || invoiceUnsentCount === 0}
+                            disabled={busy || billingRunLoading || invoiceGeneratedCount === 0 || invoiceUnsentCount === 0}
                             className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                         >
                             링크 발송
@@ -931,12 +1022,24 @@ export default function FinanceClient({
                         <button
                             type="button"
                             onClick={handleSendReminders}
-                            disabled={busy || invoiceOpenCount === 0}
+                            disabled={busy || billingRunLoading || invoiceOpenCount === 0}
                             className="mt-3 w-full rounded-lg bg-yellow-500 px-3 py-2 text-sm font-bold text-white transition hover:bg-yellow-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                         >
                             미납 알림 발송
                         </button>
                     </article>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">다음 할 일</p>
+                            <p className="mt-1 text-sm font-bold text-gray-900 dark:text-white">{invoiceNextAction}</p>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">
+                            {billingRunLoading ? "자동 처리 중" : invoiceStep >= 5 ? "완료" : `${invoiceStep}단계`}
+                        </span>
+                    </div>
                 </div>
 
                 {invoiceError && (
@@ -992,75 +1095,93 @@ export default function FinanceClient({
                                         <h3 className="font-extrabold text-gray-900 dark:text-white">발행 전 전체 검수표</h3>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">학생별 청구 항목, 금액, 학부모 연결 상태를 확인합니다.</p>
                                     </div>
-                                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                                        총 {invoiceItems.length}건
-                                    </span>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {invoiceFilterOptions.map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => setInvoiceFilter(option.value)}
+                                                className={`rounded-full px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
+                                                    ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
+                                                    }`}
+                                            >
+                                                {option.label} {option.count}건
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="max-h-[460px] overflow-auto">
-                                    <table className="min-w-[920px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-700">
-                                        <thead className="sticky top-0 bg-gray-50 dark:bg-gray-900">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학생</th>
-                                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">청구 항목</th>
-                                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">금액</th>
-                                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">기한</th>
-                                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학부모</th>
-                                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">상태</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                            {invoiceItems.map((item) => {
-                                                const statusInfo = item.existingStatus ? STATUS_LABELS[item.existingStatus] : null;
-                                                return (
-                                                    <tr key={`${item.action}-${item.studentId}-${item.templateName}-${item.type}`} className="hover:bg-gray-50 dark:hover:bg-gray-900/60">
-                                                        <td className="px-4 py-3 align-top">
-                                                            <p className="font-bold text-gray-900 dark:text-white">{item.studentName}</p>
-                                                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.className ?? "수업 미지정"}</p>
-                                                        </td>
-                                                        <td className="px-4 py-3 align-top">
-                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{item.templateName}</p>
-                                                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{TYPE_LABELS[item.type] ?? item.type}</p>
-                                                        </td>
-                                                        <td className="px-4 py-3 align-top font-mono text-gray-800 dark:text-gray-100">
-                                                            {formatAmount(item.amount)}
-                                                            {item.existingAmount != null && item.existingAmount !== item.amount && (
-                                                                <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-200">
-                                                                    기존 {formatAmount(item.existingAmount)}
-                                                                </p>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3 align-top text-gray-600 dark:text-gray-300">매월 {item.dueDay}일</td>
-                                                        <td className="px-4 py-3 align-top">
-                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{item.parentName ?? "학부모 미지정"}</p>
-                                                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.parentPhone || item.parentEmail || "연락처 확인 필요"}</p>
-                                                        </td>
-                                                        <td className="px-4 py-3 align-top">
-                                                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${item.action === "CREATE"
-                                                                ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200"
-                                                                : "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                                                                }`}>
-                                                                {MONTHLY_INVOICE_ACTION_LABELS[item.action] ?? item.action}
-                                                            </span>
-                                                            {statusInfo && (
-                                                                <span className={`ml-1 inline-flex rounded-full px-2 py-1 text-xs font-bold ${statusInfo.color}`}>
-                                                                    {statusInfo.label}
+                                {filteredInvoiceItems.length === 0 ? (
+                                    <div className="px-4 py-8 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                        선택한 조건에 해당하는 청구 대상이 없습니다.
+                                    </div>
+                                ) : (
+                                    <div className="max-h-[460px] overflow-auto">
+                                        <table className="min-w-[920px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-700">
+                                            <thead className="sticky top-0 bg-gray-50 dark:bg-gray-900">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학생</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">청구 항목</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">금액</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">기한</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학부모</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">상태</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                {filteredInvoiceItems.map((item) => {
+                                                    const statusInfo = item.existingStatus ? STATUS_LABELS[item.existingStatus] : null;
+                                                    return (
+                                                        <tr key={`${item.action}-${item.studentId}-${item.templateName}-${item.type}`} className="hover:bg-gray-50 dark:hover:bg-gray-900/60">
+                                                            <td className="px-4 py-3 align-top">
+                                                                <p className="font-bold text-gray-900 dark:text-white">{item.studentName}</p>
+                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.className ?? "수업 미지정"}</p>
+                                                            </td>
+                                                            <td className="px-4 py-3 align-top">
+                                                                <p className="font-semibold text-gray-800 dark:text-gray-100">{item.templateName}</p>
+                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{TYPE_LABELS[item.type] ?? item.type}</p>
+                                                            </td>
+                                                            <td className="px-4 py-3 align-top font-mono text-gray-800 dark:text-gray-100">
+                                                                {formatAmount(item.amount)}
+                                                                {item.existingAmount != null && item.existingAmount !== item.amount && (
+                                                                    <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-200">
+                                                                        기존 {formatAmount(item.existingAmount)}
+                                                                    </p>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-3 align-top text-gray-600 dark:text-gray-300">매월 {item.dueDay}일</td>
+                                                            <td className="px-4 py-3 align-top">
+                                                                <p className="font-semibold text-gray-800 dark:text-gray-100">{item.parentName ?? "학부모 미지정"}</p>
+                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.parentPhone || item.parentEmail || "연락처 확인 필요"}</p>
+                                                            </td>
+                                                            <td className="px-4 py-3 align-top">
+                                                                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${item.action === "CREATE"
+                                                                    ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200"
+                                                                    : "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                                                                    }`}>
+                                                                    {MONTHLY_INVOICE_ACTION_LABELS[item.action] ?? item.action}
                                                                 </span>
-                                                            )}
-                                                            {item.existingInvoiceNo && (
-                                                                <p className="mt-1 text-[11px] font-bold text-brand-orange-500 dark:text-brand-neon-lime">
-                                                                    {item.existingInvoiceNo}
-                                                                </p>
-                                                            )}
-                                                            {item.issueReason && (
-                                                                <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">{item.issueReason}</p>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                                {statusInfo && (
+                                                                    <span className={`ml-1 inline-flex rounded-full px-2 py-1 text-xs font-bold ${statusInfo.color}`}>
+                                                                        {statusInfo.label}
+                                                                    </span>
+                                                                )}
+                                                                {item.existingInvoiceNo && (
+                                                                    <p className="mt-1 text-[11px] font-bold text-brand-orange-500 dark:text-brand-neon-lime">
+                                                                        {item.existingInvoiceNo}
+                                                                    </p>
+                                                                )}
+                                                                {item.issueReason && (
+                                                                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">{item.issueReason}</p>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </>

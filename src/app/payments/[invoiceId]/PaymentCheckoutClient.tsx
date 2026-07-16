@@ -73,6 +73,11 @@ export default function PaymentCheckoutClient({
     const [error, setError] = useState<string | null>(null);
 
     async function startPayment() {
+        if (!providerReady) {
+            setError("온라인 결제 설정이 아직 완료되지 않았습니다. 학원으로 문의해 주세요.");
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
@@ -118,7 +123,7 @@ export default function PaymentCheckoutClient({
         <div className="mt-6">
             {!providerReady && (
                 <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime">
-                    온라인 결제 키가 아직 설정되지 않았습니다. 설정 전까지는 학원에서 수동 납부 확인으로 처리할 수 있습니다.
+                    지금은 온라인 납부 준비 중입니다. 학원에서 계좌이체, 현장 결제, 수동 납부 확인으로 처리할 수 있습니다.
                 </div>
             )}
 
@@ -131,10 +136,10 @@ export default function PaymentCheckoutClient({
             <button
                 type="button"
                 onClick={startPayment}
-                disabled={loading || amount <= 0}
+                disabled={loading || amount <= 0 || !providerReady}
                 className="flex w-full items-center justify-center rounded-xl bg-brand-orange-500 px-5 py-4 text-base font-extrabold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
-                {loading ? "결제창 준비 중..." : `${amount.toLocaleString("ko-KR")}원 납부하기`}
+                {loading ? "결제창 준비 중..." : providerReady ? `${amount.toLocaleString("ko-KR")}원 납부하기` : "온라인 납부 준비 중"}
             </button>
 
             <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">

@@ -9,10 +9,17 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 const PAYMENT_STATUS: Record<string, { label: string; color: string }> = {
-    PENDING: { label: "미납", color: "text-yellow-600 bg-yellow-50" },
-    PAID: { label: "납부완료", color: "text-green-600 bg-green-50" },
-    OVERDUE: { label: "연체", color: "text-red-600 bg-red-50" },
+    PENDING: { label: "미납", color: "text-yellow-700 bg-yellow-100 dark:bg-yellow-950/40 dark:text-yellow-200" },
+    PAID: { label: "납부완료", color: "text-green-700 bg-green-100 dark:bg-green-950/40 dark:text-green-200" },
+    OVERDUE: { label: "연체", color: "text-red-700 bg-red-100 dark:bg-red-950/40 dark:text-red-200" },
     REFUNDED: { label: "환불", color: "text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900" },
+};
+
+const TYPE_LABELS: Record<string, string> = {
+    MONTHLY: "수강료",
+    SHUTTLE: "셔틀",
+    UNIFORM: "유니폼",
+    OTHER: "기타",
 };
 
 function toDateStr(d: Date | string | null): string {
@@ -572,27 +579,39 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {pendingPayments.length > 0 && (
                 <div className="space-y-3">
                     {pendingPayments.map((p) => (
-                        <div key={p.id} className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-                            <div className="flex items-center gap-3 text-red-700">
-                                <div className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm text-red-500">
-                                    <SymbolIcon name="credit_card" size={20} />
+                        <div key={p.id} className="rounded-2xl border border-red-100 bg-red-50 p-4 shadow-sm dark:border-red-500/30 dark:bg-red-500/10">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3 text-red-700 dark:text-red-100">
+                                    <div className="mt-0.5 rounded-full bg-white p-2 text-red-500 shadow-sm dark:bg-gray-900 dark:text-red-200">
+                                        <SymbolIcon name="credit_card" size={20} />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold uppercase tracking-wide text-red-500 dark:text-red-200">
+                                            납부가 필요합니다
+                                        </p>
+                                        <p className="mt-1 text-lg font-black text-gray-900 dark:text-white">
+                                            {formatAmount(p.amount)}
+                                        </p>
+                                        <p className="mt-1 text-xs text-red-600 dark:text-red-200">
+                                            {p.description || "수강료"} · 납부 기한 {toDateStr(p.dueDate)}
+                                        </p>
+                                        {p.invoiceNo && (
+                                            <p className="mt-1 text-[11px] font-bold text-gray-500 dark:text-gray-300">
+                                                청구서 {p.invoiceNo}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="font-bold text-sm">{formatAmount(p.amount)} {p.status === "OVERDUE" ? "연체" : "미납"}</p>
-                                    <p className="text-xs text-red-600 opacity-80 mt-0.5">
-                                        납부 기한: {toDateStr(p.dueDate)}
-                                    </p>
-                                </div>
+                                <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${PAYMENT_STATUS[p.status]?.color || ""}`}>
+                                    {PAYMENT_STATUS[p.status]?.label || p.status}
+                                </span>
                             </div>
-                            <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${PAYMENT_STATUS[p.status]?.color || ""}`}>
-                                {PAYMENT_STATUS[p.status]?.label || p.status}
-                            </span>
                             {p.invoiceId && (
                                 <Link
                                     href={`/payments/${p.invoiceId}`}
-                                    className="ml-3 rounded-full bg-brand-orange-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                    className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-brand-orange-500 px-4 text-sm font-black text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                                 >
-                                    납부하기
+                                    청구서 확인하고 납부하기
                                 </Link>
                             )}
                         </div>
@@ -651,30 +670,57 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {/* 최근 수납 내역 — 섹션 타이틀 색상 통일 */}
             {child.payments.length > 0 && (
                 <div>
-                    <h2 className="font-bold text-brand-navy-900 mb-3 px-1">최근 수납 내역</h2>
+                    <h2 className="font-bold text-brand-navy-900 dark:text-white mb-3 px-1">최근 수납 내역</h2>
                     <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         <div className="divide-y divide-gray-50">
                             {child.payments.map((p) => {
                                 const statusInfo = PAYMENT_STATUS[p.status] || PAYMENT_STATUS.PENDING;
+                                const canPay = Boolean(p.invoiceId) && (p.status === "PENDING" || p.status === "OVERDUE");
                                 return (
-                                    <div key={p.id} className="flex items-center justify-between px-4 py-3">
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white">{formatAmount(p.amount)}</p>
-                                            <p className="text-xs text-gray-400">기한: {toDateStr(p.dueDate)}</p>
+                                    <div key={p.id} className="px-4 py-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-bold text-gray-900 dark:text-white">{p.description || (p.type ? TYPE_LABELS[p.type] : null) || "수강료"}</p>
+                                                <p className="mt-0.5 text-sm font-medium text-gray-900 dark:text-white">{formatAmount(p.amount)}</p>
+                                                <p className="text-xs text-gray-400">기한: {toDateStr(p.dueDate)}</p>
+                                                {p.invoiceNo && (
+                                                    <p className="mt-1 text-[11px] font-bold text-brand-orange-500 dark:text-brand-neon-lime">
+                                                        {p.invoiceNo}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <span className={`whitespace-nowrap text-xs font-bold px-2.5 py-1 rounded-full ${statusInfo.color}`}>
+                                                    {statusInfo.label}
+                                                </span>
+                                                {p.paidDate && (
+                                                    <p className="text-xs text-gray-400 mt-1">{toDateStr(p.paidDate)} 납부</p>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusInfo.color}`}>
-                                                {statusInfo.label}
-                                            </span>
-                                            {p.paidDate && (
-                                                <p className="text-xs text-gray-400 mt-1">{toDateStr(p.paidDate)} 납부</p>
+                                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                                            {canPay && (
+                                                <Link
+                                                    href={`/payments/${p.invoiceId}`}
+                                                    className="rounded-full bg-brand-orange-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                                >
+                                                    납부하기
+                                                </Link>
+                                            )}
+                                            {p.invoiceId && !canPay && (
+                                                <Link
+                                                    href={`/payments/${p.invoiceId}`}
+                                                    className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                                >
+                                                    청구서 보기
+                                                </Link>
                                             )}
                                             {p.receiptUrl && (
                                                 <a
                                                     href={p.receiptUrl}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    className="mt-1 block text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime"
+                                                    className="rounded-full border border-green-200 px-3 py-1.5 text-xs font-bold text-green-700 transition hover:bg-green-50 dark:border-green-500/30 dark:text-green-200 dark:hover:bg-green-500/10"
                                                 >
                                                     영수증
                                                 </a>

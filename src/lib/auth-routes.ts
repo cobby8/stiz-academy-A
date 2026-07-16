@@ -1,10 +1,14 @@
 export type AppRole = "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "PARENT";
 
-export function normalizeAppRole(value: unknown): AppRole {
+export function parseAppRole(value: unknown): AppRole | null {
   if (value === "ADMIN" || value === "VICE_ADMIN" || value === "INSTRUCTOR" || value === "PARENT") {
     return value;
   }
-  return "PARENT";
+  return null;
+}
+
+export function normalizeAppRole(value: unknown): AppRole {
+  return parseAppRole(value) ?? "PARENT";
 }
 
 export function defaultPathForRole(role: AppRole) {
@@ -29,22 +33,27 @@ export function isSafeInternalPath(path?: string | null) {
 
 export function canRoleAccessPath(role: AppRole, path?: string | null) {
   if (!isSafeInternalPath(path)) return false;
-  const target = path || "/";
+  const target = new URL(path as string, "https://stiz.internal").pathname;
 
-  if (target.startsWith("/admin")) {
+  if (target === "/admin" || target.startsWith("/admin/")) {
     return role === "ADMIN" || role === "VICE_ADMIN";
   }
-  if (target.startsWith("/staff")) {
+  if (target === "/staff" || target.startsWith("/staff/")) {
     return role === "ADMIN" || role === "VICE_ADMIN" || role === "INSTRUCTOR";
   }
-  if (target.startsWith("/mypage")) {
+  if (target === "/mypage" || target.startsWith("/mypage/")) {
     return role === "PARENT";
   }
 
   return true;
 }
 
-export function resolveRedirectForRole(role: AppRole, requestedPath?: string | null) {
+export function resolveRedirectForRole(
+  role: AppRole,
+  requestedPath?: string | null,
+  options?: { preferRoleHome?: boolean },
+) {
+  if (options?.preferRoleHome) return defaultPathForRole(role);
   if (canRoleAccessPath(role, requestedPath)) return requestedPath as string;
   return defaultPathForRole(role);
 }

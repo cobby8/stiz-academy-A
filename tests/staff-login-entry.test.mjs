@@ -10,7 +10,7 @@ test("교사용 로그인은 설치 앱의 /staff 범위 안에서 공용 로그
   assert.match(configSource, /source:\s*["']\/staff\/login["']/);
   assert.match(configSource, /destination:\s*["']\/login\?mode=staff["']/);
   assert.match(middlewareSource, /pathname === ["']\/staff\/login["']/);
-  assert.match(middlewareSource, /pathname\.startsWith\(["']\/staff["']\) && !isStaffLogin/);
+  assert.match(middlewareSource, /isStaffPath && !isStaffLogin/);
   assert.match(loginSource, /pathname === ["']\/staff\/login["']/);
 });
 

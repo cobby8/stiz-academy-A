@@ -150,6 +150,7 @@ function LoginContent() {
 
           {/* 폼 — 기존 구조 100% 유지, 포커스 색상만 브랜드 오렌지로 통일 */}
           <form action={handleSubmit} className="space-y-4">
+            {isStaffMode && <input type="hidden" name="loginContext" value="staff" />}
             {mode === "signup" && (
               <>
                 <div>

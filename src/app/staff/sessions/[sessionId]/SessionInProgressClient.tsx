@@ -70,12 +70,17 @@ export default function SessionInProgressClient({
   const lastSavedMemoRef = useRef(memo);
   const memoSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const wasOnlineRef = useRef(true);
+  const voiceBusyRef = useRef(voiceBusy);
   const closeEndDialog = useCallback(() => setShowEndConfirm(false), []);
   useStaffDialog(showEndConfirm, endDialogRef, closeEndDialog, !pending);
 
   useEffect(() => {
     memoRef.current = memo;
   }, [memo]);
+
+  useEffect(() => {
+    voiceBusyRef.current = voiceBusy;
+  }, [voiceBusy]);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -112,6 +117,94 @@ export default function SessionInProgressClient({
     memoSaveQueueRef.current = memoSaveQueueRef.current.then(save, save);
     return memoSaveQueueRef.current;
   }, [session.id]);
+
+  useEffect(() => {
+    const prepareToLeave = (event: Event) => {
+      const navigationEvent = event as CustomEvent<{
+        handled: boolean;
+        complete: (result: { ok: boolean; message?: string }) => void;
+      }>;
+      if (!navigationEvent.detail) return;
+      navigationEvent.detail.handled = true;
+
+      void (async () => {
+        if (voiceBusy) {
+          const message = "음성 메모 처리가 끝난 뒤 이동해 주세요.";
+          setMessage(message);
+          navigationEvent.detail.complete({ ok: false, message });
+          return;
+        }
+
+        const saved = await persistMemo(memoRef.current);
+        if (!saved) {
+          const message = "특이사항을 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.";
+          setMessage(message);
+          navigationEvent.detail.complete({ ok: false, message });
+          return;
+        }
+        navigationEvent.detail.complete({ ok: true });
+      })();
+    };
+
+    window.addEventListener("staff:prepare-navigation", prepareToLeave);
+    return () => window.removeEventListener("staff:prepare-navigation", prepareToLeave);
+  }, [persistMemo, voiceBusy]);
+
+  useEffect(() => {
+    const guardKey = `staff-session-${session.id}`;
+    const currentState = typeof history.state === "object" && history.state ? history.state : {};
+    const alreadyGuarded = currentState.staffSessionGuard === guardKey;
+    const hasPreviousEntry = alreadyGuarded ? currentState.staffSessionHadPrevious === true : history.length > 1;
+    const sentinelState = { ...currentState, staffSessionGuard: guardKey, staffSessionHadPrevious: hasPreviousEntry };
+    if (!alreadyGuarded) {
+      history.replaceState({ ...currentState, staffSessionGuardBase: guardKey }, "", window.location.href);
+      history.pushState(sentinelState, "", window.location.href);
+    }
+
+    let preparingToLeave = false;
+    let allowNavigation = false;
+
+    const handlePopState = () => {
+      if (allowNavigation) return;
+
+      // 먼저 동일 주소의 보호 이력을 복원해 iOS 스와이프 중에도 수업 화면을 유지합니다.
+      history.pushState(sentinelState, "", window.location.href);
+      if (preparingToLeave) return;
+
+      const confirmed = window.confirm("수업이 진행 중입니다. 수업 기록을 저장하고 이전 화면으로 이동할까요?");
+      if (!confirmed) return;
+
+      preparingToLeave = true;
+      void (async () => {
+        if (voiceBusyRef.current) {
+          setMessage("음성 메모 처리가 끝난 뒤 이동해 주세요.");
+          window.alert("음성 메모 처리가 끝난 뒤 다시 시도해 주세요.");
+          preparingToLeave = false;
+          return;
+        }
+
+        const saved = await persistMemo(memoRef.current);
+        if (!saved) {
+          setMessage("특이사항을 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
+          window.alert("수업 기록을 저장하지 못해 현재 화면을 유지합니다.");
+          preparingToLeave = false;
+          return;
+        }
+
+        allowNavigation = true;
+        window.removeEventListener("popstate", handlePopState);
+        // 감지 직후 복구한 sentinel과 원래 세션 이력 두 칸을 함께 건너뜁니다.
+        if (hasPreviousEntry) history.go(-2);
+        else window.location.assign("/staff");
+      })();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      allowNavigation = true;
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [persistMemo, session.id]);
 
   useEffect(() => {
     if (memo === lastSavedMemoRef.current) return;

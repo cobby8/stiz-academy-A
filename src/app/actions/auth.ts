@@ -11,12 +11,16 @@ import {
   type AppRole,
 } from "@/lib/auth-routes";
 
-async function getRoleByEmail(email?: string | null): Promise<AppRole | null> {
-  if (!email) return null;
+async function getRoleForAuthUser(user?: { id?: string | null; email?: string | null }): Promise<AppRole | null> {
+  if (!user?.id && !user?.email) return null;
 
   const rows = await prisma.$queryRawUnsafe<Array<{ role: string }>>(
-    `SELECT role FROM "User" WHERE email = $1 LIMIT 1`,
-    email,
+    `SELECT role FROM "User"
+     WHERE id = $1 OR LOWER(email) = LOWER($2)
+     ORDER BY CASE WHEN id = $1 THEN 0 ELSE 1 END
+     LIMIT 1`,
+    user.id || "",
+    user.email || "",
   );
 
   return rows[0] ? normalizeAppRole(rows[0].role) : null;
@@ -45,6 +49,7 @@ export async function login(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
   const redirectTo = formData.get("redirectTo") as string | null;
+  const loginContext = formData.get("loginContext");
 
   if (!email || !password) {
     return { error: "이메일과 비밀번호를 입력해주세요." };
@@ -66,18 +71,19 @@ export async function login(formData: FormData) {
   }
 
   // 실제 권한은 DB 역할만 신뢰합니다. DB에 없는 계정은 안전한 학부모로 제한합니다.
-  const role = (await getRoleByEmail(data.user?.email)) || "PARENT";
-  const destination =
-    role === "INSTRUCTOR" && !redirectTo
-      ? "/staff"
-      : resolveRedirectForRole(role, redirectTo);
+  const role = (await getRoleForAuthUser(data.user)) || "PARENT";
+  const destination = resolveRedirectForRole(role, redirectTo, {
+    preferRoleHome: loginContext === "staff" && redirectTo === "/staff",
+  });
 
+  // Metadata is only a UI/navigation hint. DB remains the permission source,
+  // so a metadata sync failure must not turn a successful login into a failure.
   await supabase.auth.updateUser({
     data: {
       ...data.user?.user_metadata,
       role,
     },
-  });
+  }).catch(() => undefined);
 
   revalidatePath("/", "layout");
   redirect(destination);
@@ -138,6 +144,13 @@ export async function logout() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/login");
+}
+
+export async function logoutStaff() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect("/staff/login");
 }
 
 export async function getUser() {

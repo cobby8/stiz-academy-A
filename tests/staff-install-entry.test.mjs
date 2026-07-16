@@ -13,7 +13,7 @@ test("공유용 /staff/install 주소는 공개 설치 페이지로 연결된다
   assert.match(middlewareSource, /isStaffInstall\s*=\s*pathname === ["']\/staff\/install["']/);
   assert.match(
     middlewareSource,
-    /pathname\.startsWith\(["']\/staff["']\) && !isStaffLogin && !isStaffInstall/,
+    /isStaffPath && !isStaffLogin && !isStaffInstall/,
   );
 });
 

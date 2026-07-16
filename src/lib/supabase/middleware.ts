@@ -1,6 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { defaultPathForRole, normalizeAppRole } from "@/lib/auth-routes";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -26,26 +25,24 @@ export async function updateSession(request: NextRequest) {
 
   const claimsResult = await supabase.auth.getClaims();
   let isAuthenticated = false;
-  let userMetadata: Record<string, unknown> | null = null;
 
   if (!claimsResult.error && claimsResult.data?.claims?.sub) {
     isAuthenticated = true;
-    userMetadata = claimsResult.data.claims.user_metadata ?? null;
   } else {
     const {
       data: { user },
     } = await supabase.auth.getUser();
     isAuthenticated = Boolean(user);
-    userMetadata = user?.user_metadata ?? null;
   }
 
   const pathname = request.nextUrl.pathname;
   const isStaffLogin = pathname === "/staff/login";
   const isStaffInstall = pathname === "/staff/install";
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isStaffPath = pathname === "/staff" || pathname.startsWith("/staff/");
+  const isMyPagePath = pathname === "/mypage" || pathname.startsWith("/mypage/");
   const protectedPath =
-    pathname.startsWith("/admin") ||
-    (pathname.startsWith("/staff") && !isStaffLogin && !isStaffInstall) ||
-    pathname.startsWith("/mypage");
+    isAdminPath || (isStaffPath && !isStaffLogin && !isStaffInstall) || isMyPagePath;
 
   if (protectedPath && !isAuthenticated) {
     const url = request.nextUrl.clone();
@@ -55,10 +52,18 @@ export async function updateSession(request: NextRequest) {
   }
 
   if ((pathname === "/login" || isStaffLogin) && isAuthenticated) {
-    const role = normalizeAppRole(userMetadata?.role);
+    // Middleware cannot safely query the application DB. Route through a server
+    // page that resolves the current DB role instead of trusting stale metadata.
     const url = request.nextUrl.clone();
-    url.pathname = defaultPathForRole(role);
+    const requestedPath = request.nextUrl.searchParams.get("redirect");
+    url.pathname = "/auth/continue";
     url.search = "";
+    if (isStaffLogin) {
+      url.searchParams.set("context", "staff");
+    }
+    if (requestedPath) {
+      url.searchParams.set("redirect", requestedPath);
+    }
     return NextResponse.redirect(url);
   }
 

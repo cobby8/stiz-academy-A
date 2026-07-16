@@ -2769,10 +2769,21 @@ export async function deleteBillingTemplate(id: string) {
 type MonthlyInvoicePreviewSample = {
     studentId: string;
     studentName: string;
+    className: string | null;
+    parentName: string | null;
+    parentPhone: string | null;
+    parentEmail: string | null;
     templateName: string;
     type: string;
     amount: number;
     dueDay: number;
+    existingPaymentId: string | null;
+    existingStatus: string | null;
+    existingAmount: number | null;
+    existingInvoiceNo: string | null;
+    existingInvoiceStatus: string | null;
+    existingSentAt: string | null;
+    issueReason: string | null;
     action: "CREATE" | "SKIP";
 };
 
@@ -2786,6 +2797,7 @@ type MonthlyInvoicePreview = {
     createAmount: number;
     skipAmount: number;
     samples: MonthlyInvoicePreviewSample[];
+    items: MonthlyInvoicePreviewSample[];
 };
 
 const MONTHLY_INVOICE_TARGETS_SQL = `
@@ -2798,9 +2810,14 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
         SELECT DISTINCT
             s.id AS "studentId",
             s.name AS "studentName",
+            u.name AS "parentName",
+            u.phone AS "parentPhone",
+            u.email AS "parentEmail",
             c.id AS "classId",
+            c.name AS "className",
             c."programId"
         FROM "Student" s
+        JOIN "User" u ON u.id = s."parentId"
         JOIN "Enrollment" e ON e."studentId" = s.id
         JOIN "Class" c ON c.id = e."classId"
         WHERE e.status = 'ACTIVE'
@@ -2815,20 +2832,35 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
             LEAST(GREATEST(COALESCE(t."dueDay", 10), 1), 28) AS "dueDay",
             a."studentId",
             a."studentName",
+            a."parentName",
+            a."parentPhone",
+            a."parentEmail",
             MIN(a."classId") AS "classId",
+            MIN(a."className") AS "className",
             COUNT(DISTINCT a."classId")::int AS "classCount"
         FROM templates t
         JOIN active_enrollments a
           ON t."programId" IS NULL OR t."programId" = a."programId"
         GROUP BY
             t.id, t.name, t.amount, t.type, t.description, t."dueDay",
-            a."studentId", a."studentName"
+            a."studentId", a."studentName", a."parentName", a."parentPhone", a."parentEmail"
         HAVING COUNT(DISTINCT a."classId") = 1
     ),
     actions AS (
         SELECT
             tp.*,
             p.id AS "existingPaymentId",
+            p.status AS "existingStatus",
+            p.amount::int AS "existingAmount",
+            i."invoiceNo" AS "existingInvoiceNo",
+            i.status AS "existingInvoiceStatus",
+            TO_CHAR(i."sentAt", 'YYYY-MM-DD') AS "existingSentAt",
+            CASE
+                WHEN NULLIF(tp."parentEmail", '') IS NULL THEN '학부모 이메일 확인 필요'
+                WHEN NULLIF(tp."parentPhone", '') IS NULL THEN '학부모 연락처 확인 권장'
+                WHEN p.id IS NOT NULL THEN '이미 같은 유형의 청구가 있어 유지'
+                ELSE NULL
+            END AS "issueReason",
             CASE WHEN p.id IS NULL THEN 'CREATE' ELSE 'SKIP' END AS action
         FROM target_pairs tp
         LEFT JOIN "Payment" p
@@ -2836,6 +2868,7 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
          AND p.year = $1
          AND p.month = $2
          AND p.type = tp.type
+        LEFT JOIN "PaymentInvoice" i ON i."paymentId" = p.id
     )
 `;
 
@@ -2845,7 +2878,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
     await ensureBillingTemplateTable();
 
     try {
-        const [summaryRows, samples] = await Promise.all([
+        const [summaryRows, items] = await Promise.all([
             prisma.$queryRawUnsafe<{
                 activeTemplateCount: number;
                 targetStudentCount: number;
@@ -2874,17 +2907,27 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
                 SELECT
                     "studentId",
                     "studentName",
+                    "className",
+                    "parentName",
+                    "parentPhone",
+                    "parentEmail",
                     "templateName",
                     type,
                     amount::int AS amount,
                     "dueDay"::int AS "dueDay",
+                    "existingPaymentId",
+                    "existingStatus",
+                    "existingAmount",
+                    "existingInvoiceNo",
+                    "existingInvoiceStatus",
+                    "existingSentAt",
+                    "issueReason",
                     action
                 FROM actions
                 ORDER BY
                     CASE action WHEN 'CREATE' THEN 1 ELSE 2 END,
                     "studentName",
                     "templateName"
-                LIMIT 20
                 `,
                 year,
                 month,
@@ -2909,10 +2952,18 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
             skipCount: Number(summary.skipCount ?? 0),
             createAmount: Number(summary.createAmount ?? 0),
             skipAmount: Number(summary.skipAmount ?? 0),
-            samples: samples.map((sample) => ({
+            samples: items.slice(0, 20).map((sample) => ({
                 ...sample,
                 amount: Number(sample.amount ?? 0),
                 dueDay: Number(sample.dueDay ?? 10),
+                existingAmount: sample.existingAmount == null ? null : Number(sample.existingAmount),
+                action: sample.action,
+            })),
+            items: items.map((sample) => ({
+                ...sample,
+                amount: Number(sample.amount ?? 0),
+                dueDay: Number(sample.dueDay ?? 10),
+                existingAmount: sample.existingAmount == null ? null : Number(sample.existingAmount),
                 action: sample.action,
             })),
         };

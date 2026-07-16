@@ -170,6 +170,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     PAID: { label: "납부완료", color: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200" },
     OVERDUE: { label: "연체", color: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200" },
     REFUNDED: { label: "환불", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
+    CANCELED: { label: "취소/이월", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
 };
 
 // 청구 유형 라벨

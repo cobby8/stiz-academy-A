@@ -1,7 +1,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
-export type LedgerPaymentStatus = "PENDING" | "OVERDUE" | "PAID" | "REFUNDED";
+export type LedgerPaymentStatus = "PENDING" | "OVERDUE" | "PAID" | "REFUNDED" | "CANCELED";
 export type LedgerInvoiceStatus = "ISSUED" | "SENT" | "OVERDUE" | "PAID" | "CANCELED";
 export type LedgerActorType = "ADMIN" | "PARENT" | "SYSTEM" | "WEBHOOK";
 
@@ -294,7 +294,7 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
             ),
             CASE
                 WHEN p.status = 'PAID' THEN 'PAID'
-                WHEN p.status = 'REFUNDED' THEN 'CANCELED'
+                WHEN p.status IN ('REFUNDED', 'CANCELED') THEN 'CANCELED'
                 WHEN p.status = 'OVERDUE' THEN 'OVERDUE'
                 ELSE 'ISSUED'
             END,

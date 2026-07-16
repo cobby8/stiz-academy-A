@@ -371,7 +371,7 @@ function extractStatus(paymentMethod: string | null): "ACTIVE" | "PAUSED" | "WIT
  * - "랠리즈" → RALLYZ
  * - "카드결제" → CARD
  * - "현금영수증" → CASH
- * - "미결제" → UNPAID
+ * - "미납", "미결제" → UNPAID
  * - "휴원", "퇴원", "추가수강", "이월" 등 → null (결제수단 아님)
  */
 function extractPaymentMethod(
@@ -382,7 +382,7 @@ function extractPaymentMethod(
   if (trimmed === "랠리즈") return "RALLYZ";
   if (trimmed === "카드결제" || trimmed === "카드") return "CARD";
   if (trimmed === "현금영수증" || trimmed === "현금") return "CASH";
-  if (trimmed === "미결제") return "UNPAID";
+  if (trimmed === "미납" || trimmed === "미결제") return "UNPAID";
   // 휴원, 퇴원, 추가수강, 이월 등은 결제수단이 아님
   return null;
 }

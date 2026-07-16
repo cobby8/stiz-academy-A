@@ -13,6 +13,7 @@ const PAYMENT_STATUS: Record<string, { label: string; color: string }> = {
     PAID: { label: "납부완료", color: "text-green-700 bg-green-100 dark:bg-green-950/40 dark:text-green-200" },
     OVERDUE: { label: "연체", color: "text-red-700 bg-red-100 dark:bg-red-950/40 dark:text-red-200" },
     REFUNDED: { label: "환불", color: "text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900" },
+    CANCELED: { label: "취소/이월", color: "text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900" },
 };
 
 const TYPE_LABELS: Record<string, string> = {

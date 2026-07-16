@@ -1144,7 +1144,7 @@ export async function updatePaymentStatus(id: string, status: string) {
         const invoice = await ensureInvoiceForPayment(id);
         const invoiceStatus = status === "OVERDUE"
             ? "OVERDUE"
-            : status === "REFUNDED"
+            : ["REFUNDED", "CANCELED"].includes(status)
                 ? "CANCELED"
                 : "ISSUED";
 
@@ -3287,7 +3287,7 @@ export async function bulkUpdatePaymentStatus(ids: string[], newStatus: string) 
         );
         const invoiceStatus = newStatus === "OVERDUE"
             ? "OVERDUE"
-            : newStatus === "REFUNDED"
+            : ["REFUNDED", "CANCELED"].includes(newStatus)
                 ? "CANCELED"
                 : "ISSUED";
         const invoicePlaceholders = ids.map((_, i) => `$${i + 2}`).join(",");

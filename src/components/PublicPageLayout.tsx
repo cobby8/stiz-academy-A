@@ -19,6 +19,7 @@ import PublicFooter from "./PublicFooter";
 import ChatBotButton from "./chat/ChatBotButton";
 // 가이드 투어: 버튼은 가볍게, 실제 투어 로직은 필요할 때 로드
 import GuideTourLazyTrigger from "./guide-tour/GuideTourLazyTrigger";
+import { getPublicAccountRole } from "@/lib/public-account";
 
 export default async function PublicPageLayout({
   children,
@@ -26,7 +27,10 @@ export default async function PublicPageLayout({
   children: React.ReactNode;
 }) {
   // 서버에서 학원 설정 데이터를 가져온다 (전화번호, 주소 등)
-  const settings = await getAcademySettings();
+  const [settings, accountRole] = await Promise.all([
+    getAcademySettings(),
+    getPublicAccountRole(),
+  ]);
   const phone = (settings as any).contactPhone || "010-0000-0000";
   const address = (settings as any).address || "";
   const operatingHours = (settings as any).operatingHours || "";
@@ -40,7 +44,12 @@ export default async function PublicPageLayout({
   return (
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-gray-100 flex flex-col transition-colors duration-300">
       {/* 통합 헤더 — Client Component (모바일 햄버거 메뉴 때문) */}
-      <PublicHeader phone={phone} address={address} operatingHours={operatingHours} />
+      <PublicHeader
+        phone={phone}
+        address={address}
+        operatingHours={operatingHours}
+        accountRole={accountRole}
+      />
 
       {/* 페이지 콘텐츠 영역 — 서브페이지의 children이 여기에 들어감 */}
       <main className="flex-1">{children}</main>

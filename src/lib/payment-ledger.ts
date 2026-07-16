@@ -428,6 +428,60 @@ export async function markOverduePayments() {
     return { updated: ids.length };
 }
 
+export async function syncInvoiceStatusesForMonth(year: number, month: number) {
+    await ensurePaymentInfrastructure();
+
+    const updated = await prisma.$executeRawUnsafe(
+        `
+        UPDATE "PaymentInvoice" i
+        SET
+            status = CASE
+                WHEN p.status = 'PAID' THEN 'PAID'
+                WHEN p.status IN ('REFUNDED', 'CANCELED') THEN 'CANCELED'
+                WHEN p.status = 'OVERDUE' THEN 'OVERDUE'
+                WHEN p.status = 'PENDING' THEN CASE WHEN i."sentAt" IS NOT NULL THEN 'SENT' ELSE 'ISSUED' END
+                ELSE i.status
+            END,
+            amount = p.amount,
+            "paidAt" = CASE
+                WHEN p.status = 'PAID' THEN COALESCE(i."paidAt", p."paidDate", NOW())
+                WHEN i.status = 'PAID' THEN NULL
+                ELSE i."paidAt"
+            END,
+            "canceledAt" = CASE
+                WHEN p.status IN ('REFUNDED', 'CANCELED') THEN COALESCE(i."canceledAt", NOW())
+                WHEN i.status = 'CANCELED' THEN NULL
+                ELSE i."canceledAt"
+            END,
+            "updatedAt" = NOW()
+        FROM "Payment" p
+        WHERE i."paymentId" = p.id
+          AND p.year = $1
+          AND p.month = $2
+          AND p.type = 'MONTHLY'
+          AND (
+            i.status IS DISTINCT FROM CASE
+                WHEN p.status = 'PAID' THEN 'PAID'
+                WHEN p.status IN ('REFUNDED', 'CANCELED') THEN 'CANCELED'
+                WHEN p.status = 'OVERDUE' THEN 'OVERDUE'
+                WHEN p.status = 'PENDING' THEN CASE WHEN i."sentAt" IS NOT NULL THEN 'SENT' ELSE 'ISSUED' END
+                ELSE i.status
+            END
+            OR i.amount IS DISTINCT FROM p.amount
+            OR (p.status = 'PAID' AND i."paidAt" IS NULL)
+            OR (p.status IN ('REFUNDED', 'CANCELED') AND i."canceledAt" IS NULL)
+            OR (p.status <> 'PAID' AND i.status = 'PAID')
+            OR (p.status NOT IN ('REFUNDED', 'CANCELED') AND i.status = 'CANCELED')
+          )
+        `,
+        year,
+        month,
+    );
+
+    revalidatePaymentCaches();
+    return { updated: Number(updated ?? 0) };
+}
+
 export async function markPaymentPaid(input: {
     paymentId: string;
     invoiceId?: string | null;

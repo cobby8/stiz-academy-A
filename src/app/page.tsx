@@ -15,6 +15,7 @@ import LandingPageClient from "./LandingPageClient";
 import ChatBotButton from "@/components/chat/ChatBotButton";
 // 가이드 투어: 메인 페이지에서도 플로팅 버튼 표시
 import GuideTourLazyTrigger from "@/components/guide-tour/GuideTourLazyTrigger";
+import { getPublicAccountRole } from "@/lib/public-account";
 
 export const revalidate = 60;
 
@@ -29,6 +30,7 @@ export default async function Home() {
   let testimonials: any[] = [];
   let galleryPosts: any[] = [];
   let notices: any[] = [];
+  const accountRolePromise = getPublicAccountRole();
   try {
     // 학원 설정 + 공개 후기 + 갤러리 + 공지를 병렬로 조회 (성능 최적화)
     [settings, testimonials, galleryPosts, notices] = await Promise.all([
@@ -40,6 +42,7 @@ export default async function Home() {
   } catch (e) {
     console.error("Failed to load data for landing page:", e);
   }
+  const accountRole = await accountRolePromise;
 
   // 헤더/푸터에 전달할 데이터 추출
   const phone = settings?.contactPhone || "010-0000-0000";
@@ -55,7 +58,12 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-white dark:bg-black text-gray-900 dark:text-white flex flex-col">
       {/* 통합 헤더 */}
-      <PublicHeader phone={phone} address={address} operatingHours={operatingHours} />
+      <PublicHeader
+        phone={phone}
+        address={address}
+        operatingHours={operatingHours}
+        accountRole={accountRole}
+      />
 
       {/* 메인 콘텐츠 — LandingPageClient는 히어로~CTA까지만 담당 */}
       <main className="flex-1">

@@ -27,6 +27,7 @@ import {
     markPaymentPaid,
     recordTerminalPayment,
     recordPaymentAudit,
+    syncInvoiceStatusesForMonth,
 } from "@/lib/payment-ledger";
 import {
     APPLICATION_CONTACT_ACTIONS,
@@ -3037,15 +3038,15 @@ export async function generateMonthlyInvoices(year: number, month: number) {
 export async function refreshPaymentLedger(year: number, month: number) {
     await requireAdmin();
     await ensurePaymentInfrastructure();
-    const [invoiceResult, overdueResult] = await Promise.all([
-        ensureInvoicesForMonth(year, month),
-        markOverduePayments(),
-    ]);
+    const invoiceResult = await ensureInvoicesForMonth(year, month);
+    const overdueResult = await markOverduePayments();
+    const invoiceSyncResult = await syncInvoiceStatusesForMonth(year, month);
     revalidateFinanceCaches();
     return {
         invoices: invoiceResult.invoiceCount,
         overdue: overdueResult.updated,
-        message: `${invoiceResult.invoiceCount} invoices checked, ${overdueResult.updated} overdue payments updated`,
+        synced: invoiceSyncResult.updated,
+        message: `${invoiceResult.invoiceCount} invoices checked, ${overdueResult.updated} overdue payments updated, ${invoiceSyncResult.updated} invoice statuses synced`,
     };
 }
 

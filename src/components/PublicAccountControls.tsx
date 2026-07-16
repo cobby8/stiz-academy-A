@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
-import { defaultPathForRole, normalizeAppRole, type AppRole } from "@/lib/auth-routes";
+import { defaultPathForRole, type AppRole } from "@/lib/auth-routes";
 import { createClient } from "@/lib/supabase/client";
 import FontFreeIcon from "./ui/FontFreeIcon";
 
@@ -30,24 +31,38 @@ const HEADER_ICON_ACTION_CLASS = [
   "dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-white",
 ].join(" ");
 
-function useAccountState() {
-  const [appRole, setAppRole] = useState<AppRole | null>(null);
+type AccountControlsProps = {
+  initialRole?: AppRole | null;
+};
+
+function useAccountState(initialRole: AppRole | null = null) {
+  const router = useRouter();
+  const [appRole, setAppRole] = useState<AppRole | null>(initialRole);
+
+  useEffect(() => {
+    setAppRole(initialRole);
+  }, [initialRole]);
 
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setAppRole(user ? normalizeAppRole(user.user_metadata?.role) : null);
-    });
-
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAppRole(session?.user ? normalizeAppRole(session.user.user_metadata?.role) : null);
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setAppRole(null);
+        return;
+      }
+
+      // 로그인 또는 계정 갱신 시 metadata를 쓰지 않고 Server Component를
+      // 새로 고쳐 DB에서 확인한 역할을 다시 전달받는다.
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        router.refresh();
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
   const accountHref = appRole ? defaultPathForRole(appRole) : "/login";
   const accountLabel =
@@ -64,8 +79,9 @@ function useAccountState() {
   return { accountHref, accountLabel, canAccessAdmin, isLoggedIn: appRole !== null, isStaffPrimary };
 }
 
-export function DesktopAccountControls() {
-  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isStaffPrimary } = useAccountState();
+export function DesktopAccountControls({ initialRole = null }: AccountControlsProps) {
+  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isStaffPrimary } =
+    useAccountState(initialRole);
 
   return (
     <>
@@ -103,8 +119,12 @@ export function DesktopAccountControls() {
   );
 }
 
-export function MobileAccountControls({ onNavigate }: { onNavigate?: () => void }) {
-  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isStaffPrimary } = useAccountState();
+export function MobileAccountControls({
+  onNavigate,
+  initialRole = null,
+}: AccountControlsProps & { onNavigate?: () => void }) {
+  const { accountHref, accountLabel, canAccessAdmin, isLoggedIn, isStaffPrimary } =
+    useAccountState(initialRole);
 
   return (
     <div className="grid grid-cols-2 gap-2 mb-3">

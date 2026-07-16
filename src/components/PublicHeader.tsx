@@ -18,13 +18,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "./ThemeToggle";
 import FontFreeIcon from "./ui/FontFreeIcon";
+import type { AppRole } from "@/lib/auth-routes";
 
 const MOBILE_ACCOUNT_FALLBACK_ACTION_CLASS = [
   "flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold",
   "text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
 ].join(" ");
 
-const DesktopAccountControls = dynamic(
+const DesktopAccountControls = dynamic<{ initialRole?: AppRole | null }>(
   () => import("./PublicAccountControls").then((mod) => mod.DesktopAccountControls),
   {
     ssr: false,
@@ -32,7 +33,7 @@ const DesktopAccountControls = dynamic(
   }
 );
 
-const MobileAccountControls = dynamic<{ onNavigate?: () => void }>(
+const MobileAccountControls = dynamic<{ onNavigate?: () => void; initialRole?: AppRole | null }>(
   () => import("./PublicAccountControls").then((mod) => mod.MobileAccountControls),
   {
     ssr: false,
@@ -45,6 +46,7 @@ interface PublicHeaderProps {
   phone: string;
   address: string;
   operatingHours?: string;
+  accountRole?: AppRole | null;
 }
 
 // ---------- 메뉴 데이터 구조 ----------
@@ -115,7 +117,12 @@ function MobileAccountFallback() {
   );
 }
 
-export default function PublicHeader({ phone, address, operatingHours }: PublicHeaderProps) {
+export default function PublicHeader({
+  phone,
+  address,
+  operatingHours,
+  accountRole = null,
+}: PublicHeaderProps) {
   // 모바일 사이드바 열림/닫힘 상태
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -292,7 +299,7 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
               <span className="text-sm font-black leading-none">가</span>
             </button>
 
-            <DesktopAccountControls />
+            <DesktopAccountControls initialRole={accountRole} />
 
             {/* CTA 버튼 — "신청하기"로 변경 */}
             <Link
@@ -405,7 +412,10 @@ export default function PublicHeader({ phone, address, operatingHours }: PublicH
 
         {/* 사이드바 하단 — 연락처 + CTA */}
         <div className="shrink-0 p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
-          <MobileAccountControls onNavigate={() => setIsMobileMenuOpen(false)} />
+          <MobileAccountControls
+            initialRole={accountRole}
+            onNavigate={() => setIsMobileMenuOpen(false)}
+          />
           <Link
             href="/apply"
             onClick={() => setIsMobileMenuOpen(false)}

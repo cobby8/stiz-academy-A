@@ -26,6 +26,10 @@ test("staff-login context sends every role to its own primary workspace", () => 
 
 test("an explicit permitted deep link is preserved", () => {
   assert.equal(resolveRedirectForRole("ADMIN", "/staff/students?tab=active"), "/staff/students?tab=active");
+  assert.equal(
+    resolveRedirectForRole("INSTRUCTOR", "/staff/billing?student=student-1&status=unpaid"),
+    "/staff/billing?student=student-1&status=unpaid",
+  );
   assert.equal(resolveRedirectForRole("INSTRUCTOR", "/staff/sessions/lesson-1"), "/staff/sessions/lesson-1");
   assert.equal(resolveRedirectForRole("PARENT", "/mypage/reports"), "/mypage/reports");
 });
@@ -41,6 +45,7 @@ test("unsafe redirects and invalid role metadata are rejected", () => {
   assert.equal(isSafeInternalPath("//evil.example"), false);
   assert.equal(isSafeInternalPath("/%2f%2fevil.example"), false);
   assert.equal(isSafeInternalPath("/login?next=/admin"), false);
+  assert.equal(isSafeInternalPath("/staff/billing?next=https://evil.example"), true);
   assert.equal(parseAppRole("OWNER"), null);
   assert.equal(resolveRedirectForRole("INSTRUCTOR", "https://evil.example"), "/staff");
 });

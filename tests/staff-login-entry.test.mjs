@@ -19,6 +19,22 @@ test("미인증 staff 요청은 /staff/login으로 보내고 로그인 후 원�
     middlewareSource,
     /pathname\.startsWith\(["']\/staff["']\) \? ["']\/staff\/login["'] : ["']\/login["']/,
   );
-  assert.match(middlewareSource, /url\.searchParams\.set\(["']redirect["'], pathname\)/);
+  assert.match(
+    middlewareSource,
+    /const requestedPath = `\$\{pathname\}\$\{request\.nextUrl\.search\}`/,
+  );
+  assert.match(middlewareSource, /url\.search = ["']["']/);
+  assert.match(middlewareSource, /url\.searchParams\.set\(["']redirect["'], requestedPath\)/);
   assert.match(loginSource, /\(isStaffMode \? ["']\/staff["'] : null\)/);
+});
+
+test("보호 경로의 검색 조건을 로그인 후에도 보존하고 로그인 URL에는 중복하지 않는다", () => {
+  assert.match(
+    middlewareSource,
+    /const requestedPath = `\$\{pathname\}\$\{request\.nextUrl\.search\}`/,
+  );
+  assert.match(
+    middlewareSource,
+    /url\.pathname = pathname\.startsWith\(["']\/staff["']\) \? ["']\/staff\/login["'] : ["']\/login["'];\s*url\.search = ["']["'];\s*url\.searchParams\.set\(["']redirect["'], requestedPath\)/s,
+  );
 });

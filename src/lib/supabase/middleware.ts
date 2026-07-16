@@ -46,8 +46,10 @@ export async function updateSession(request: NextRequest) {
 
   if (protectedPath && !isAuthenticated) {
     const url = request.nextUrl.clone();
+    const requestedPath = `${pathname}${request.nextUrl.search}`;
     url.pathname = pathname.startsWith("/staff") ? "/staff/login" : "/login";
-    url.searchParams.set("redirect", pathname);
+    url.search = "";
+    url.searchParams.set("redirect", requestedPath);
     return NextResponse.redirect(url);
   }
 

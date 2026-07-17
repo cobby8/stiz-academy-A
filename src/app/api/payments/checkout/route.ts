@@ -28,7 +28,12 @@ export async function POST(req: NextRequest) {
         });
 
         if (!result.ok) {
-            return NextResponse.json(result, { status: result.alreadyPaid ? 409 : 400 });
+            const status = result.alreadyPaid
+                ? 409
+                : "configurationMissing" in result && result.configurationMissing
+                    ? 503
+                    : 400;
+            return NextResponse.json(result, { status });
         }
 
         return NextResponse.json(result);

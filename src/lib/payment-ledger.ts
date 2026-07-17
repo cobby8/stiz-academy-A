@@ -1,4 +1,5 @@
 import { revalidatePath, revalidateTag } from "next/cache";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
 export type LedgerPaymentStatus = "PENDING" | "OVERDUE" | "PAID" | "REFUNDED" | "CANCELED";
@@ -82,6 +83,23 @@ function readString(value: unknown): string | null {
 
 function readNumber(value: unknown): number | null {
     return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function makeTossCustomerKey(invoice: Pick<ParentInvoiceRow, "parentId" | "parentEmail">) {
+    return createHash("sha256")
+        .update(`stiz-parent:${invoice.parentId || invoice.parentEmail}`)
+        .digest("hex")
+        .slice(0, 40);
+}
+
+function makeTossIdempotencyKey(orderId: string) {
+    return createHash("sha256").update(`stiz-toss-confirm:${orderId}`).digest("hex");
+}
+
+function makePaymentReturnUrl(origin: string, path: string, invoiceId: string) {
+    const url = new URL(path, origin);
+    url.searchParams.set("invoiceId", invoiceId);
+    return url.toString();
 }
 
 let _paymentInfrastructureEnsured = false;
@@ -752,6 +770,18 @@ export function getPaymentProviderConfig() {
     };
 }
 
+export function getPaymentProviderPublicStatus() {
+    const config = getPaymentProviderConfig();
+
+    return {
+        provider: "TOSS" as const,
+        providerReady: config.providerReady,
+        clientKeyConfigured: Boolean(config.clientKey),
+        secretKeyConfigured: Boolean(config.secretKey),
+        siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim()),
+    };
+}
+
 export async function getInvoiceForParent(invoiceId: string, parentEmail: string) {
     await ensurePaymentInfrastructure();
 
@@ -821,16 +851,35 @@ export async function createCheckoutSession(input: {
         return { ok: false as const, error: "이미 납부가 완료된 청구서입니다.", alreadyPaid: true };
     }
 
+    if (["REFUNDED", "CANCELED"].includes(invoice.paymentStatus) || invoice.invoiceStatus === "CANCELED") {
+        return { ok: false as const, error: "취소되었거나 결제할 수 없는 청구서입니다.", closed: true };
+    }
+
+    if (Number(invoice.amount) <= 0) {
+        return { ok: false as const, error: "결제 금액이 없어 온라인 결제를 시작할 수 없습니다.", closed: true };
+    }
+
     const config = getPaymentProviderConfig();
+    if (!config.providerReady) {
+        return {
+            ok: false as const,
+            error: "온라인 결제 설정이 아직 완료되지 않았습니다.",
+            providerReady: false,
+            configurationMissing: true,
+        };
+    }
+
     const recentRows = await prisma.$queryRawUnsafe<CheckoutTransactionRow[]>(
         `SELECT id, "orderId", "orderName", amount
          FROM "PaymentTransaction"
          WHERE "invoiceId" = $1
+           AND amount = $2
            AND status IN ('READY', 'IN_PROGRESS')
            AND "requestedAt" > NOW() - INTERVAL '30 minutes'
          ORDER BY "createdAt" DESC
          LIMIT 1`,
         input.invoiceId,
+        Number(invoice.amount),
     );
 
     const orderName = String(invoice.title || "STIZ 수강료").slice(0, 80);
@@ -865,19 +914,14 @@ export async function createCheckoutSession(input: {
     );
 
     const cleanOrigin = input.origin.replace(/\/$/, "");
-    const successUrl = `${cleanOrigin}/payments/success`;
-    const failUrl = `${cleanOrigin}/payments/fail`;
+    const successUrl = makePaymentReturnUrl(cleanOrigin, "/payments/success", invoice.invoiceId);
+    const failUrl = makePaymentReturnUrl(cleanOrigin, "/payments/fail", invoice.invoiceId);
 
     return {
         ok: true as const,
         providerReady: config.providerReady,
         clientKey: config.clientKey,
-        customerKey: Buffer.from(String(invoice.parentId || invoice.parentEmail || "stiz-parent"))
-            .toString("base64")
-            .replace(/\+/g, "-")
-            .replace(/\//g, "_")
-            .replace(/=+$/g, "")
-            .slice(0, 50),
+        customerKey: makeTossCustomerKey(invoice),
         orderId,
         amount: Number(invoice.amount),
         orderName,
@@ -1044,11 +1088,19 @@ export async function confirmTossPayment(input: {
         return { ok: false as const, error: "Toss Payments 서버 키가 설정되어 있지 않습니다." };
     }
 
+    await prisma.$executeRawUnsafe(
+        `UPDATE "PaymentTransaction"
+         SET status = 'IN_PROGRESS', "updatedAt" = NOW()
+         WHERE id = $1 AND status = 'READY'`,
+        tx.id,
+    );
+
     const response = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
         method: "POST",
         headers: {
             Authorization: `Basic ${encodeTossSecret(secretKey)}`,
             "Content-Type": "application/json",
+            "Idempotency-Key": makeTossIdempotencyKey(input.orderId),
         },
         body: JSON.stringify({
             paymentKey: input.paymentKey,
@@ -1078,6 +1130,7 @@ export async function confirmTossPayment(input: {
         await prisma.$executeRawUnsafe(
             `UPDATE "PaymentTransaction"
              SET "paymentKey" = $2,
+                 status = CASE WHEN $6::boolean THEN status ELSE 'FAILED' END,
                  "failureCode" = $3,
                  "failureMessage" = $4,
                  "rawResponse" = $5::jsonb,
@@ -1088,6 +1141,7 @@ export async function confirmTossPayment(input: {
             result.code ?? "TOSS_CONFIRM_FAILED",
             result.message ?? "Toss payment confirm failed",
             JSON.stringify(result),
+            retryable,
         );
         return {
             ok: false as const,

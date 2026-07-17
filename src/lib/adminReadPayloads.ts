@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { getInstagramRuntimeStatus } from "@/lib/instagram";
+import { getPaymentProviderPublicStatus } from "@/lib/payment-ledger";
 import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
 import {
     getAcademySettings,
@@ -97,6 +98,42 @@ type AdminScheduleSettingsPayload = {
     googlesheetsscheduleurl?: string | null;
 } | null;
 
+type AdminTodayClassRow = {
+    id: string;
+    name: string;
+    startTime?: string | null;
+    starttime?: string | null;
+    endTime?: string | null;
+    endtime?: string | null;
+    capacity?: number | string | null;
+    program_name?: string | null;
+    enrolled?: number | string | null;
+};
+
+type DashboardTodayClassItem = {
+    id?: string;
+    name?: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    capacity?: number | string | null;
+    programName?: string | null;
+    enrolled?: number | string | null;
+};
+
+type RecentStudentRow = {
+    id: string;
+    name: string;
+    createdAt?: Date | string | null;
+    createdat?: Date | string | null;
+    parent_name?: string | null;
+};
+
+type GallerySettingsPayload = {
+    instagramUrl?: string | null;
+    instagramBusinessAccountId?: string | null;
+    instagramAutoPublishEnabled?: boolean | null;
+};
+
 function getMonthLabels(date = new Date()) {
     return Array.from({ length: DASHBOARD_MONTHS }, (_, index) => {
         const month = new Date(date.getFullYear(), date.getMonth() - (DASHBOARD_MONTHS - 1 - index), 1);
@@ -130,7 +167,7 @@ async function getTodayClasses() {
     const today = days[new Date().getDay()];
 
     try {
-        const rows = await prisma.$queryRawUnsafe<any[]>(
+        const rows = await prisma.$queryRawUnsafe<AdminTodayClassRow[]>(
             `SELECT c.id, c.name, c."startTime", c."endTime", c.capacity,
                     p.name AS program_name,
                     (SELECT COUNT(*)::int FROM "Enrollment" e WHERE e."classId" = c.id AND e.status = 'ACTIVE') AS enrolled
@@ -141,7 +178,7 @@ async function getTodayClasses() {
             today,
         );
 
-        return rows.map((row: any) => ({
+        return rows.map((row) => ({
             id: row.id,
             name: row.name,
             startTime: row.startTime ?? row.starttime,
@@ -167,6 +204,7 @@ type DashboardPrimaryRow = {
     enrollCancelled: number | null;
     enrollTotal: number | null;
     todayClasses: unknown;
+    todayclasses?: unknown;
 };
 
 function readJsonArray<T>(value: unknown): T[] {
@@ -234,9 +272,9 @@ async function loadDashboardPrimaryPayload() {
         const row = rows[0];
         if (!row) throw new Error("No dashboard primary row returned");
 
-        const todayClasses = readJsonArray<any>((row as any).todayClasses ?? (row as any).todayclasses).map((item) => ({
-            id: item.id,
-            name: item.name,
+        const todayClasses = readJsonArray<DashboardTodayClassItem>(row.todayClasses ?? row.todayclasses).map((item) => ({
+            id: String(item.id ?? ""),
+            name: String(item.name ?? ""),
             startTime: item.startTime ?? null,
             endTime: item.endTime ?? null,
             capacity: Number(item.capacity ?? 0),
@@ -282,7 +320,7 @@ async function loadDashboardPrimaryPayload() {
 
 async function getRecentStudents() {
     try {
-        const rows = await prisma.$queryRawUnsafe<any[]>(
+        const rows = await prisma.$queryRawUnsafe<RecentStudentRow[]>(
             `SELECT s.id, s.name, s."createdAt", u.name AS parent_name
              FROM "Student" s
              LEFT JOIN "User" u ON s."parentId" = u.id
@@ -291,7 +329,7 @@ async function getRecentStudents() {
              LIMIT 5`,
         );
 
-        return rows.map((row: any) => ({
+        return rows.map((row) => ({
             id: row.id,
             name: row.name,
             createdAt: row.createdAt ?? row.createdat,
@@ -557,7 +595,12 @@ async function getStudentSheetImportSummary() {
                 noEnrollment: 0,
             },
             scheduleMismatchCount: scheduleMismatchRows[0]?.totalMismatchCount ?? 0,
-            topScheduleMismatches: scheduleMismatchRows.map(({ totalMismatchCount, ...row }) => row),
+            topScheduleMismatches: scheduleMismatchRows.map((row) => ({
+                slotKey: row.slotKey,
+                sheetCount: row.sheetCount,
+                dbCount: row.dbCount,
+                diff: row.diff,
+            })),
         };
     } catch (error) {
         console.error("[admin-students] import summary failed:", error);
@@ -657,7 +700,7 @@ export const getCachedAdminGalleryPayload = unstable_cache(
             getAcademySettings(),
             readPendingSocialPostDrafts(30),
         ]);
-        const settingsData = settings as any;
+        const settingsData = settings as GallerySettingsPayload | null;
         const instagramStatus = {
             profileUrl: settingsData?.instagramUrl ?? "",
             businessAccountId: settingsData?.instagramBusinessAccountId ?? "",
@@ -679,7 +722,7 @@ export function getCachedAdminFinancePayload(year: number, month: number) {
                 getPaymentSummary(year, month),
             ]);
 
-            return { payments, summary };
+            return { payments, summary, paymentProvider: getPaymentProviderPublicStatus() };
         },
         ["admin-finance", String(year), String(month)],
         { revalidate: 30, tags: ["admin-finance", "admin-stats"] },

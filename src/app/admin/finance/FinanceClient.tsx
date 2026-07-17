@@ -56,9 +56,18 @@ type Summary = {
     unpaidCount: number;
 };
 
+type PaymentProviderStatus = {
+    provider: "TOSS";
+    providerReady: boolean;
+    clientKeyConfigured: boolean;
+    secretKeyConfigured: boolean;
+    siteUrlConfigured: boolean;
+};
+
 type FinancePayload = {
     payments: Payment[];
     summary: Summary;
+    paymentProvider: PaymentProviderStatus;
 };
 
 type PaymentReconcilePreview = {
@@ -286,11 +295,13 @@ export default function FinanceClient({
     initialYear,
     initialMonth,
     initialSummary,
+    initialPaymentProvider,
 }: {
     initialPayments?: Payment[];
     initialYear?: number;
     initialMonth?: number;
     initialSummary?: Summary;
+    initialPaymentProvider?: PaymentProviderStatus;
 }) {
     const now = new Date();
     const fallbackYear = now.getFullYear();
@@ -301,6 +312,15 @@ export default function FinanceClient({
     const [month, setMonth] = useState(initialMonth ?? fallbackMonth);
     const [loading, setLoading] = useState(!hasInitialData);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [paymentProvider, setPaymentProvider] = useState<PaymentProviderStatus>(
+        initialPaymentProvider ?? {
+            provider: "TOSS",
+            providerReady: false,
+            clientKeyConfigured: false,
+            secretKeyConfigured: false,
+            siteUrlConfigured: false,
+        },
+    );
     const [showForm, setShowForm] = useState(false);
     const [busy, setBusy] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -384,6 +404,7 @@ export default function FinanceClient({
             const data = (await res.json()) as FinancePayload;
             setPayments(data.payments);
             setSummary(data.summary);
+            setPaymentProvider(data.paymentProvider);
         } catch (err) {
             // 조회 실패 시 사용자에게 피드백 제공
             console.error("수납 데이터 조회 실패:", err);
@@ -785,6 +806,12 @@ export default function FinanceClient({
                         ? `${invoiceOpenCount}건은 납부 전 상태입니다. 기한이 지난 건은 알림을 보낼 수 있습니다.`
                         : "이번 달 청구 흐름이 모두 정리되었습니다.";
 
+    const paymentProviderMissing = [
+        !paymentProvider.clientKeyConfigured ? "토스 공개키" : null,
+        !paymentProvider.secretKeyConfigured ? "토스 서버키" : null,
+        !paymentProvider.siteUrlConfigured ? "사이트 주소" : null,
+    ].filter(Boolean);
+
     if (loading && !hasAnyData) {
         return <FinanceLoadingFallback year={year} month={month} />;
     }
@@ -932,6 +959,26 @@ export default function FinanceClient({
                     {financeNotice}
                 </p>
             )}
+
+            <section className={`mb-6 rounded-xl border px-4 py-3 ${
+                paymentProvider.providerReady
+                    ? "border-green-200 bg-green-50 text-green-900 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100"
+                    : "border-yellow-200 bg-yellow-50 text-yellow-900 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
+            }`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p className="text-sm font-extrabold">온라인 결제 상태</p>
+                        <p className="mt-1 text-xs font-semibold opacity-80">
+                            {paymentProvider.providerReady
+                                ? "토스페이먼츠 온라인 결제를 사용할 수 있습니다."
+                                : `온라인 결제 준비가 필요합니다${paymentProviderMissing.length > 0 ? `: ${paymentProviderMissing.join(", ")}` : "."}`}
+                        </p>
+                    </div>
+                    <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-extrabold text-gray-800 ring-1 ring-black/5 dark:bg-gray-950/40 dark:text-white">
+                        {paymentProvider.providerReady ? "사용 가능" : "준비 필요"}
+                    </span>
+                </div>
+            </section>
 
             <section className="mb-6 space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">

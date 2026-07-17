@@ -40,20 +40,23 @@ export default async function PaymentPage({ params }: { params: Promise<{ invoic
     }
 
     const isPaid = invoice.paymentStatus === "PAID" || invoice.invoiceStatus === "PAID";
+    const isClosed = ["REFUNDED", "CANCELED"].includes(invoice.paymentStatus) || invoice.invoiceStatus === "CANCELED";
     const receiptHref = invoice.receiptUrl || invoice.transactionReceiptUrl || undefined;
-    const isOverdue = !isPaid && invoice.paymentStatus === "OVERDUE";
-    const statusLabel = isPaid ? "납부완료" : isOverdue ? "연체" : "미납";
+    const isOverdue = !isPaid && !isClosed && invoice.paymentStatus === "OVERDUE";
+    const statusLabel = isPaid ? "납부 완료" : isClosed ? "청구 취소" : isOverdue ? "연체" : "미납";
     const statusClass = isPaid
         ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-200"
-        : isOverdue
-            ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-200"
-            : "bg-yellow-100 text-yellow-800 dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime";
+        : isClosed
+            ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+            : isOverdue
+                ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-200"
+                : "bg-yellow-100 text-yellow-800 dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime";
 
     return (
         <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-900 dark:bg-gray-950 dark:text-white">
             <div className="mx-auto max-w-2xl">
                 <Link href="/mypage" className="mb-5 inline-flex text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime">
-                    ← 마이페이지
+                    마이페이지
                 </Link>
 
                 <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -87,7 +90,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ invoic
 
                         <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                             <div className="rounded-xl border border-gray-100 p-4 dark:border-gray-800">
-                                <dt className="text-gray-500 dark:text-gray-400">자녀</dt>
+                                <dt className="text-gray-500 dark:text-gray-400">학생</dt>
                                 <dd className="mt-1 font-bold text-gray-900 dark:text-white">{invoice.studentName}</dd>
                             </div>
                             <div className="rounded-xl border border-gray-100 p-4 dark:border-gray-800">
@@ -114,7 +117,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ invoic
                         {isPaid ? (
                             <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100">
                                 <p className="font-bold">납부가 완료되었습니다.</p>
-                                <p className="mt-1">납부일: {formatDate(invoice.paidDate || invoice.paidAt)}</p>
+                                <p className="mt-1">납부일 {formatDate(invoice.paidDate || invoice.paidAt)}</p>
                                 {receiptHref && (
                                     <a
                                         href={receiptHref}
@@ -126,12 +129,17 @@ export default async function PaymentPage({ params }: { params: Promise<{ invoic
                                     </a>
                                 )}
                             </div>
+                        ) : isClosed ? (
+                            <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                                <p className="font-bold">결제할 수 없는 청구서입니다.</p>
+                                <p className="mt-1">휴원, 퇴원, 이월 등으로 청구가 취소된 항목입니다.</p>
+                            </div>
                         ) : (
                             <div className="mt-6 rounded-2xl border border-gray-100 p-4 dark:border-gray-800">
                                 <div className="mb-4">
                                     <p className="font-extrabold text-gray-900 dark:text-white">온라인 납부</p>
                                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                        결제 완료 후 자동으로 납부완료 상태로 반영됩니다.
+                                        결제 완료 후 자동으로 납부 완료 상태로 반영됩니다.
                                     </p>
                                 </div>
                                 <PaymentCheckoutClient

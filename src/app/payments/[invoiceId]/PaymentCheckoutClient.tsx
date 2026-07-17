@@ -23,16 +23,16 @@ declare global {
 
 type CheckoutResponse = {
     ok: boolean;
-    providerReady: boolean;
-    clientKey: string;
-    customerKey: string;
-    orderId: string;
-    amount: number;
-    orderName: string;
+    providerReady?: boolean;
+    clientKey?: string;
+    customerKey?: string;
+    orderId?: string;
+    amount?: number;
+    orderName?: string;
     customerName?: string;
     customerEmail?: string;
-    successUrl: string;
-    failUrl: string;
+    successUrl?: string;
+    failUrl?: string;
     error?: string;
 };
 
@@ -46,7 +46,7 @@ function loadTossScript() {
         const existing = document.querySelector<HTMLScriptElement>("script[data-toss-payments]");
         if (existing) {
             existing.addEventListener("load", () => resolve(), { once: true });
-            existing.addEventListener("error", () => reject(new Error("Toss Payments SDK 로드 실패")), { once: true });
+            existing.addEventListener("error", () => reject(new Error("토스페이먼츠 결제창을 불러오지 못했습니다.")), { once: true });
             return;
         }
 
@@ -55,7 +55,7 @@ function loadTossScript() {
         script.async = true;
         script.dataset.tossPayments = "true";
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Toss Payments SDK 로드 실패"));
+        script.onerror = () => reject(new Error("토스페이먼츠 결제창을 불러오지 못했습니다."));
         document.head.appendChild(script);
     });
 }
@@ -92,8 +92,8 @@ export default function PaymentCheckoutClient({
             if (!response.ok || !data.ok) {
                 throw new Error(data.error || "결제 준비에 실패했습니다.");
             }
-            if (!data.providerReady) {
-                throw new Error("온라인 결제 설정이 아직 완료되지 않았습니다. 학원으로 문의해 주세요.");
+            if (!data.providerReady || !data.clientKey || !data.customerKey || !data.orderId || !data.amount || !data.orderName || !data.successUrl || !data.failUrl) {
+                throw new Error("결제 정보가 부족합니다. 학원으로 문의해 주세요.");
             }
 
             await loadTossScript();
@@ -143,7 +143,7 @@ export default function PaymentCheckoutClient({
             </button>
 
             <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">
-                결제 완료 후 자동으로 납부완료 처리됩니다.
+                결제 완료 후 자동으로 납부 완료 처리됩니다.
             </p>
         </div>
     );

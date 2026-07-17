@@ -8,7 +8,7 @@ export default async function AdminFinancePage() {
     const now = new Date();
     const initialYear = now.getFullYear();
     const initialMonth = now.getMonth() + 1;
-    const { payments, summary } = await getCachedAdminFinancePayload(initialYear, initialMonth);
+    const { payments, summary, paymentProvider } = await getCachedAdminFinancePayload(initialYear, initialMonth);
 
     return (
         <FinanceClient
@@ -16,6 +16,7 @@ export default async function AdminFinancePage() {
             initialYear={initialYear}
             initialMonth={initialMonth}
             initialSummary={summary}
+            initialPaymentProvider={paymentProvider}
         />
     );
 }

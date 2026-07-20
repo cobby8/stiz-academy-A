@@ -73,6 +73,9 @@ type TerminalPaymentTargetRow = {
     description: string | null;
 };
 
+type TossKeyMode = "test" | "live" | "unknown";
+type TossProviderKeyMode = TossKeyMode | "mixed";
+
 function asRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
@@ -86,14 +89,33 @@ function readNumber(value: unknown): number | null {
 }
 
 function makeTossCustomerKey(invoice: Pick<ParentInvoiceRow, "parentId" | "parentEmail">) {
-    return createHash("sha256")
-        .update(`stiz-parent:${invoice.parentId || invoice.parentEmail}`)
-        .digest("hex")
-        .slice(0, 40);
+    const digest = createHash("sha256")
+        .update(`stiz-parent:v2:${invoice.parentId || invoice.parentEmail}`)
+        .digest("base64url")
+        .slice(0, 36);
+    return `stiz_${digest}`;
 }
 
-function makeTossIdempotencyKey(orderId: string) {
-    return createHash("sha256").update(`stiz-toss-confirm:${orderId}`).digest("hex");
+function isUuidLike(value: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function makeUuidFromSeed(seed: string) {
+    const hex = createHash("sha256").update(seed).digest("hex");
+    const variant = ((parseInt(hex[16] || "8", 16) & 0x3) | 0x8).toString(16);
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function makeTossIdempotencyKey(transactionId: string, orderId: string) {
+    return isUuidLike(transactionId)
+        ? transactionId
+        : makeUuidFromSeed(`stiz-toss-confirm:${transactionId}:${orderId}`);
+}
+
+function inferTossKeyMode(key: string): TossKeyMode {
+    if (key.startsWith("test_")) return "test";
+    if (key.startsWith("live_")) return "live";
+    return "unknown";
 }
 
 function makePaymentReturnUrl(origin: string, path: string, invoiceId: string) {
@@ -762,23 +784,57 @@ export function getPaymentProviderConfig() {
         || process.env.TOSS_PAYMENTS_CLIENT_KEY
         || "";
     const secretKey = process.env.TOSS_PAYMENTS_SECRET_KEY || "";
+    const clientKeyMode = inferTossKeyMode(clientKey);
+    const secretKeyMode = inferTossKeyMode(secretKey);
+    const keyPairReady = Boolean(
+        clientKey
+        && secretKey
+        && clientKeyMode !== "unknown"
+        && secretKeyMode !== "unknown"
+        && clientKeyMode === secretKeyMode,
+    );
 
     return {
         clientKey,
         secretKey,
-        providerReady: Boolean(clientKey && secretKey),
+        clientKeyMode,
+        secretKeyMode,
+        keyPairReady,
+        providerReady: keyPairReady,
     };
 }
 
 export function getPaymentProviderPublicStatus() {
     const config = getPaymentProviderConfig();
+    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "";
+    const siteOrigin = (() => {
+        if (!configuredSiteUrl || !/^https?:\/\//i.test(configuredSiteUrl)) return null;
+        try {
+            return new URL(configuredSiteUrl).origin;
+        } catch {
+            return null;
+        }
+    })();
+    const keyMode: TossProviderKeyMode = config.keyPairReady
+        ? config.clientKeyMode
+        : config.clientKey || config.secretKey
+            ? "mixed"
+            : "unknown";
 
     return {
         provider: "TOSS" as const,
         providerReady: config.providerReady,
         clientKeyConfigured: Boolean(config.clientKey),
         secretKeyConfigured: Boolean(config.secretKey),
-        siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL?.trim()),
+        clientKeyMode: config.clientKeyMode,
+        secretKeyMode: config.secretKeyMode,
+        keyMode,
+        keyPairReady: config.keyPairReady,
+        siteUrlConfigured: Boolean(configuredSiteUrl),
+        siteUrlValid: Boolean(siteOrigin),
+        successUrlPreview: siteOrigin ? makePaymentReturnUrl(siteOrigin, "/payments/success", "invoice-id") : null,
+        failUrlPreview: siteOrigin ? makePaymentReturnUrl(siteOrigin, "/payments/fail", "invoice-id") : null,
+        webhookUrl: siteOrigin ? new URL("/api/payments/toss/webhook", siteOrigin).toString() : null,
     };
 }
 
@@ -1100,7 +1156,7 @@ export async function confirmTossPayment(input: {
         headers: {
             Authorization: `Basic ${encodeTossSecret(secretKey)}`,
             "Content-Type": "application/json",
-            "Idempotency-Key": makeTossIdempotencyKey(input.orderId),
+            "Idempotency-Key": makeTossIdempotencyKey(tx.id, input.orderId),
         },
         body: JSON.stringify({
             paymentKey: input.paymentKey,

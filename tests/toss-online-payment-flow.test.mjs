@@ -16,12 +16,17 @@ const successClient = readFileSync(
 const failPage = readFileSync(new URL("../src/app/payments/fail/page.tsx", import.meta.url), "utf8");
 const financeClient = readFileSync(new URL("../src/app/admin/finance/FinanceClient.tsx", import.meta.url), "utf8");
 const adminPayload = readFileSync(new URL("../src/lib/adminReadPayloads.ts", import.meta.url), "utf8");
+const paymentPreflight = readFileSync(new URL("../scripts/payment-preflight.mjs", import.meta.url), "utf8");
+const packageJson = readFileSync(new URL("../package.json", import.meta.url), "utf8");
 
 test("토스 결제 세션은 운영 준비와 결제 가능 상태를 먼저 확인한다", () => {
   assert.match(ledger, /getPaymentProviderPublicStatus/);
   assert.match(ledger, /clientKeyConfigured/);
   assert.match(ledger, /secretKeyConfigured/);
+  assert.match(ledger, /inferTossKeyMode/);
+  assert.match(ledger, /keyPairReady/);
   assert.match(ledger, /siteUrlConfigured/);
+  assert.match(ledger, /webhookUrl/);
   assert.match(ledger, /\["REFUNDED", "CANCELED"\]\.includes\(invoice\.paymentStatus\)/);
   assert.match(ledger, /Number\(invoice\.amount\) <= 0/);
   assert.match(ledger, /configurationMissing: true/);
@@ -32,6 +37,8 @@ test("토스 결제 세션은 운영 준비와 결제 가능 상태를 먼저 �
 test("토스 결제 요청 URL과 고객키는 재사용 가능하고 개인정보를 직접 노출하지 않는다", () => {
   assert.match(ledger, /createHash/);
   assert.match(ledger, /makeTossCustomerKey/);
+  assert.match(ledger, /digest\("base64url"\)/);
+  assert.match(ledger, /return `stiz_\$\{digest\}`/);
   assert.match(ledger, /makePaymentReturnUrl\(cleanOrigin, "\/payments\/success", invoice\.invoiceId\)/);
   assert.match(ledger, /makePaymentReturnUrl\(cleanOrigin, "\/payments\/fail", invoice\.invoiceId\)/);
   assert.match(ledger, /searchParams\.set\("invoiceId", invoiceId\)/);
@@ -40,7 +47,9 @@ test("토스 결제 요청 URL과 고객키는 재사용 가능하고 개인정�
 
 test("토스 승인 처리에는 멱등키와 재시도 보호가 있다", () => {
   assert.match(ledger, /Idempotency-Key/);
-  assert.match(ledger, /makeTossIdempotencyKey\(input\.orderId\)/);
+  assert.match(ledger, /isUuidLike/);
+  assert.match(ledger, /makeUuidFromSeed/);
+  assert.match(ledger, /makeTossIdempotencyKey\(tx\.id, input\.orderId\)/);
   assert.match(ledger, /SET status = 'IN_PROGRESS'/);
   assert.match(ledger, /status = CASE WHEN \$6::boolean THEN status ELSE 'FAILED' END/);
   assert.match(ledger, /retryable/);
@@ -69,6 +78,19 @@ test("관리자는 온라인 결제 운영 준비 상태를 개발 메시지 없
   assert.match(financeClient, /토스 공개키/);
   assert.match(financeClient, /토스 서버키/);
   assert.match(financeClient, /사이트 주소/);
+  assert.match(financeClient, /결제 모드/);
+  assert.match(financeClient, /토스 관리자 웹훅 등록 주소/);
   assert.match(financeClient, /사용 가능/);
   assert.match(financeClient, /준비 필요/);
+});
+
+test("결제 전용 프리플라이트는 비밀값 없이 키 종류와 URL만 점검한다", () => {
+  assert.match(packageJson, /"payments:preflight"/);
+  assert.match(paymentPreflight, /inferTossKeyMode/);
+  assert.match(paymentPreflight, /NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY/);
+  assert.match(paymentPreflight, /TOSS_PAYMENTS_SECRET_KEY/);
+  assert.match(paymentPreflight, /NEXT_PUBLIC_SITE_URL/);
+  assert.match(paymentPreflight, /토스 관리자 웹훅 등록 주소/);
+  assert.match(paymentPreflight, /운영 배포에는 토스 실거래 키가 필요합니다/);
+  assert.doesNotMatch(paymentPreflight, /console\.log\(`- 서버키: \$\{secretKey\}`/);
 });

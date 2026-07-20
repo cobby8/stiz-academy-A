@@ -61,7 +61,15 @@ type PaymentProviderStatus = {
     providerReady: boolean;
     clientKeyConfigured: boolean;
     secretKeyConfigured: boolean;
+    clientKeyMode: "test" | "live" | "unknown";
+    secretKeyMode: "test" | "live" | "unknown";
+    keyMode: "test" | "live" | "mixed" | "unknown";
+    keyPairReady: boolean;
     siteUrlConfigured: boolean;
+    siteUrlValid: boolean;
+    successUrlPreview: string | null;
+    failUrlPreview: string | null;
+    webhookUrl: string | null;
 };
 
 type FinancePayload = {
@@ -223,6 +231,13 @@ function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
 }
 
+function getPaymentModeLabel(status: PaymentProviderStatus) {
+    if (status.keyMode === "test") return "테스트 결제";
+    if (status.keyMode === "live") return "실거래 결제";
+    if (status.keyMode === "mixed") return "키 종류 불일치";
+    return "키 준비 필요";
+}
+
 function needsInvoiceAttention(item: MonthlyInvoicePreviewItem) {
     if (item.existingAmount != null && item.existingAmount !== item.amount) return true;
     if (!item.issueReason) return false;
@@ -318,7 +333,15 @@ export default function FinanceClient({
             providerReady: false,
             clientKeyConfigured: false,
             secretKeyConfigured: false,
+            clientKeyMode: "unknown",
+            secretKeyMode: "unknown",
+            keyMode: "unknown",
+            keyPairReady: false,
             siteUrlConfigured: false,
+            siteUrlValid: false,
+            successUrlPreview: null,
+            failUrlPreview: null,
+            webhookUrl: null,
         },
     );
     const [showForm, setShowForm] = useState(false);
@@ -809,8 +832,16 @@ export default function FinanceClient({
     const paymentProviderMissing = [
         !paymentProvider.clientKeyConfigured ? "토스 공개키" : null,
         !paymentProvider.secretKeyConfigured ? "토스 서버키" : null,
-        !paymentProvider.siteUrlConfigured ? "사이트 주소" : null,
-    ].filter(Boolean);
+        paymentProvider.clientKeyConfigured && paymentProvider.secretKeyConfigured && !paymentProvider.keyPairReady
+            ? "테스트/실거래 키 종류 확인"
+            : null,
+        !paymentProvider.siteUrlConfigured
+            ? "사이트 주소"
+            : !paymentProvider.siteUrlValid
+                ? "사이트 주소 형식 확인"
+                : null,
+    ].filter((item): item is string => Boolean(item));
+    const paymentModeLabel = getPaymentModeLabel(paymentProvider);
 
     if (loading && !hasAnyData) {
         return <FinanceLoadingFallback year={year} month={month} />;
@@ -960,7 +991,7 @@ export default function FinanceClient({
                 </p>
             )}
 
-            <section className={`mb-6 rounded-xl border px-4 py-3 ${
+            <section className={`mb-6 rounded-xl border px-4 py-4 ${
                 paymentProvider.providerReady
                     ? "border-green-200 bg-green-50 text-green-900 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100"
                     : "border-yellow-200 bg-yellow-50 text-yellow-900 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
@@ -970,7 +1001,7 @@ export default function FinanceClient({
                         <p className="text-sm font-extrabold">온라인 결제 상태</p>
                         <p className="mt-1 text-xs font-semibold opacity-80">
                             {paymentProvider.providerReady
-                                ? "토스페이먼츠 온라인 결제를 사용할 수 있습니다."
+                                ? "토스페이먼츠 온라인 결제를 사용할 수 있습니다. 테스트 결제 1건으로 최종 확인해 주세요."
                                 : `온라인 결제 준비가 필요합니다${paymentProviderMissing.length > 0 ? `: ${paymentProviderMissing.join(", ")}` : "."}`}
                         </p>
                     </div>
@@ -978,6 +1009,26 @@ export default function FinanceClient({
                         {paymentProvider.providerReady ? "사용 가능" : "준비 필요"}
                     </span>
                 </div>
+                <div className="mt-4 grid gap-2 text-xs font-bold sm:grid-cols-3">
+                    <div className="rounded-lg bg-white/70 px-3 py-2 text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-100">
+                        <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">결제 모드</span>
+                        {paymentModeLabel}
+                    </div>
+                    <div className="rounded-lg bg-white/70 px-3 py-2 text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-100">
+                        <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">복귀 주소</span>
+                        {paymentProvider.siteUrlValid ? "준비됨" : "확인 필요"}
+                    </div>
+                    <div className="rounded-lg bg-white/70 px-3 py-2 text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-100">
+                        <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">웹훅 주소</span>
+                        {paymentProvider.webhookUrl ? "등록 가능" : "사이트 주소 필요"}
+                    </div>
+                </div>
+                {paymentProvider.webhookUrl && (
+                    <div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-xs text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-200">
+                        <span className="font-bold">토스 관리자 웹훅 등록 주소</span>
+                        <span className="mt-1 block break-all font-mono text-[11px]">{paymentProvider.webhookUrl}</span>
+                    </div>
+                )}
             </section>
 
             <section className="mb-6 space-y-4">

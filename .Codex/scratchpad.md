@@ -17,6 +17,7 @@
 - 수업 보호: 실제 메모 저장 완료 후 이동, 실패·음성 처리 중 이동 차단
 
 ## 작업 로그
+- 2026-07-20: 토스 결제 customerKey/멱등키 규격을 보정하고 관리자 결제 점검 카드와 결제 전용 프리플라이트를 추가했다.
 - 2026-07-17: 토스 온라인 결제 시작/승인/실패 흐름에 운영 준비 상태, 멱등 승인, 학부모 복귀 UX, 관리자 준비 표시를 추가했다.
 - 2026-07-16: 최신 수강생 시트를 다시 가져와 7월 수강/수납 상태를 반영하고, 이월 청구를 미납이 아닌 취소/이월로 닫는 규칙을 추가했다.
 - 2026-07-16: 관리자 청구 콘솔에 이번 달 자동 생성/정리와 발행 전 검수 필터를 추가하고 임시 학부모 테스트 데이터 정리를 준비했다.
@@ -26,33 +27,34 @@
 - 2026-07-16: 체험/수강신청 관리자에 상담, 부재, 재연락 기록 기능을 추가하고 최신 연락 요약만 목록에 붙였다.
 - 2026-07-16: 교사용 수업 종료 메모 자동 저장, 사진/청구 역할 복구, 연락 동의, 로딩/오류 화면을 개선했다.
 - 2026-07-16: 체험 문의/수강신청 목록에 전화, 연락처 복사, 상담문 복사 액션을 추가했다.
-- 2026-07-16: 교사용 공식 진입점, 개인 초대 링크, PWA 설치, SMS 실패 시 링크 복사 흐름을 보강했다.
 
 ## 현재 작업
-- 작업명: 토스 온라인 결제 실제 사용 준비
+- 작업명: 토스 온라인 결제 운영 전 점검 강화
 - 상태: 구현 및 검증 완료, 커밋 대기
-- 범위: 결제 세션 생성, 토스 승인 처리, 학부모 결제 화면, 관리자 결제 준비 상태
-- 기준일: 2026-07-17
+- 범위: 토스 식별자 규격, 키 모드 점검, 웹훅 주소 안내, 결제 프리플라이트
+- 기준일: 2026-07-20
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 결제 시작 | 완료 | 결제 불가/설정 누락 청구서 차단, invoiceId 포함 복귀 URL 생성 |
-| 토스 승인 | 완료 | 멱등키 추가, 재시도 가능 실패는 FAILED로 닫지 않도록 보강 |
-| 학부모 화면 | 완료 | 성공/실패 후 청구서 복귀와 안내 문구 정리 |
-| 관리자 표시 | 완료 | 수납 화면에서 토스 공개키/서버키/사이트 주소 준비 상태 표시 |
-| 검증 | 완료 | 타입검사, 대상 파일 lint, 결제 회귀 테스트 통과 |
+| 토스 식별자 | 완료 | customerKey 특수문자 포함, 멱등키 UUID 형식 보정 |
+| 관리자 표시 | 완료 | 결제 모드, 복귀 주소, 토스 관리자 웹훅 등록 주소 표시 |
+| 프리플라이트 | 완료 | 실제 결제 요청 없이 키 종류와 URL 형식 점검 |
+| 로컬 환경 확인 | 완료 | 현재 토스 키와 사이트 주소 미설정으로 준비 필요 안내 확인 |
+| 검증 | 완료 | release:code-check 포함 통과 |
 
 ## 구현 기록
-- `src/lib/payment-ledger.ts`: 토스 고객키 해시화, 멱등 승인키, 결제 불가/설정 누락 차단, 성공/실패 복귀 URL 보강.
-- `src/app/payments/**`: 학부모 청구서, 결제 시작, 성공/실패 화면의 안내와 복귀 동선 정리.
-- `src/app/admin/finance/**`, `src/lib/adminReadPayloads.ts`: 관리자 수납 화면에 온라인 결제 준비 상태 표시.
-- `tests/toss-online-payment-flow.test.mjs`: 토스 결제 흐름 안전장치 회귀 테스트 추가.
+- `src/lib/payment-ledger.ts`: 토스 키 모드 감지, customerKey/멱등키 규격 보정, 관리자용 결제 준비 상태 확장.
+- `src/app/admin/finance/FinanceClient.tsx`: 온라인 결제 상태 카드에 결제 모드, 복귀 주소, 웹훅 주소 표시 추가.
+- `scripts/payment-preflight.mjs`, `package.json`: 결제 전용 프리플라이트 명령 추가.
+- `tests/toss-online-payment-flow.test.mjs`: 토스 규격과 프리플라이트 회귀 테스트 추가.
 
 ## 테스트 결과
 - `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 통과
-- `cmd /c npm run lint -- src/lib/payment-ledger.ts src/app/api/payments/checkout/route.ts "src/app/payments/[invoiceId]/PaymentCheckoutClient.tsx" "src/app/payments/[invoiceId]/page.tsx" src/app/payments/fail/page.tsx src/app/payments/success/PaymentSuccessClient.tsx src/app/payments/success/page.tsx src/app/admin/finance/FinanceClient.tsx src/app/admin/finance/page.tsx src/lib/adminReadPayloads.ts`: 통과
+- `cmd /c npm run lint -- src/lib/payment-ledger.ts src/app/admin/finance/FinanceClient.tsx src/app/admin/finance/page.tsx src/lib/adminReadPayloads.ts scripts/payment-preflight.mjs tests/toss-online-payment-flow.test.mjs`: 통과
 - `node --test tests\toss-online-payment-flow.test.mjs`: 통과
+- `cmd /c npm run payments:preflight`: 예상 실패, 토스 공개키/서버키/사이트 주소 미설정 안내 확인
+- `cmd /c npm run release:code-check`: 통과
 
 ## PM 체크
 - 작업 로그 최근 10건 이내 유지.

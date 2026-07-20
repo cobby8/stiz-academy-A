@@ -27,3 +27,13 @@ test("방학특강 신청 상세는 관리자 빠른 처리 버튼과 필수 신
   assert.match(adminClient, /application\.processedNote/);
   assert.match(adminClient, /대기 \{item\.waitlistOrder\}번/);
 });
+
+test("방학특강 신청 상세는 수강·청구 전환 준비 상태를 확인할 수 있다", () => {
+  assert.match(adminRoute, /linkedProgramId:\s*true/);
+  assert.match(adminRoute, /linkedClassId:\s*true/);
+  assert.match(adminClient, /linkedClassId:\s*item\.linkedClassId \?\? offering\?\.linkedClassId \?\? null/);
+  assert.match(adminClient, /function ConversionReadinessBox/);
+  assert.match(adminClient, /정규 반 연결 필요/);
+  assert.match(adminClient, /전환 준비됨/);
+  assert.match(adminClient, /수강·청구 연결 완료/);
+});

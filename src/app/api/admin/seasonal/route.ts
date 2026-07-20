@@ -51,7 +51,17 @@ export async function GET(request: NextRequest) {
       orderBy: { startsAt: "desc" },
       include: {
         offerings: { orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }], include: { sessionDates: { orderBy: { startsAt: "asc" } }, _count: { select: { applicationItems: true } } } },
-        applications: includeApplications ? { orderBy: { createdAt: "desc" }, include: { items: { include: { offering: { select: { title: true, code: true } }, shuttleRequest: true } } } } : false,
+        applications: includeApplications ? {
+          orderBy: { createdAt: "desc" },
+          include: {
+            items: {
+              include: {
+                offering: { select: { title: true, code: true, linkedProgramId: true, linkedClassId: true } },
+                shuttleRequest: true,
+              },
+            },
+          },
+        } : false,
       },
     });
     return NextResponse.json({

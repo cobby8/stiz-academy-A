@@ -51,6 +51,10 @@ type ApplicationItem = {
   status: ItemStatus;
   amount?: number;
   waitlistOrder?: number | null;
+  linkedProgramId?: string | null;
+  linkedClassId?: string | null;
+  enrollmentId?: string | null;
+  paymentId?: string | null;
   shuttleRequest?: ShuttleRequest | null;
 };
 
@@ -165,14 +169,21 @@ export default function SeasonalAdminClient() {
         }),
       })) as Season[];
       const applications: Application[] = (body.applications ?? []).map((application: Record<string, unknown>) => {
-        const items = ((application.items ?? []) as Array<Record<string, unknown>>).map((item) => ({
-          ...item,
-          classId: item.classId ?? item.offeringId,
-          className: item.className ?? item.titleSnapshot ?? (item.offering as Record<string, unknown> | undefined)?.title ?? "특강 반",
-          amount: item.amount ?? item.priceSnapshot,
-          waitlistOrder: item.waitlistOrder ?? null,
-          shuttleRequest: (item.shuttleRequest ?? null) as ShuttleRequest | null,
-        } as ApplicationItem));
+        const items = ((application.items ?? []) as Array<Record<string, unknown>>).map((item) => {
+          const offering = item.offering as Record<string, unknown> | undefined;
+          return {
+            ...item,
+            classId: item.classId ?? item.offeringId,
+            className: item.className ?? item.titleSnapshot ?? offering?.title ?? "특강 반",
+            amount: item.amount ?? item.priceSnapshot,
+            waitlistOrder: item.waitlistOrder ?? null,
+            linkedProgramId: item.linkedProgramId ?? offering?.linkedProgramId ?? null,
+            linkedClassId: item.linkedClassId ?? offering?.linkedClassId ?? null,
+            enrollmentId: item.enrollmentId ?? null,
+            paymentId: item.paymentId ?? null,
+            shuttleRequest: (item.shuttleRequest ?? null) as ShuttleRequest | null,
+          } as ApplicationItem;
+        });
         const shuttleRequests = [
           ...(((application.shuttleRequests as unknown[] | undefined) ?? []) as ShuttleRequest[]),
           ...items.map((item) => item.shuttleRequest).filter(Boolean) as ShuttleRequest[],
@@ -351,8 +362,58 @@ function ApplicationItemCard({ item, onUpdateItem }: { item: ApplicationItem; on
         {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
       </select>
     </label>
+    <ConversionReadinessBox item={item} />
     {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} />}
   </article>;
+}
+
+function ConversionReadinessBox({ item }: { item: ApplicationItem }) {
+  const approved = item.status === "APPROVED";
+  const hasClass = Boolean(item.linkedClassId);
+  const hasEnrollment = Boolean(item.enrollmentId);
+  const hasPayment = Boolean(item.paymentId);
+  let title = "전환 준비됨";
+  let helper = "다음 단계에서 수강 등록과 청구 생성을 실행할 수 있습니다.";
+  let tone = "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100";
+
+  if (hasEnrollment && hasPayment) {
+    title = "수강·청구 연결 완료";
+    helper = "수강 이력과 청구가 모두 이 신청 항목에 연결되어 있습니다.";
+  } else if (!approved) {
+    title = "승인 후 전환 가능";
+    helper = "먼저 신청 항목을 승인하면 수강 등록과 청구 생성 대상으로 검토할 수 있습니다.";
+    tone = "border-gray-200 bg-gray-50 text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
+  } else if (!hasClass) {
+    title = "정규 반 연결 필요";
+    helper = "시즌·반 설정에서 이 특강 반을 기존 반과 연결해야 자동 전환할 수 있습니다.";
+    tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
+  } else if (!hasEnrollment && hasPayment) {
+    title = "수강 등록 연결 필요";
+    helper = "청구는 연결되어 있지만 수강 이력이 아직 연결되지 않았습니다.";
+    tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
+  } else if (hasEnrollment && !hasPayment) {
+    title = "청구 생성 필요";
+    helper = "수강 이력은 연결되어 있고 청구 생성만 남았습니다.";
+    tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
+  }
+
+  return <div className={`mt-4 rounded-xl border p-3 text-sm ${tone}`}>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <p className="font-black">{title}</p>
+        <p className="mt-1 text-xs opacity-80">{helper}</p>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-1">
+        <MiniState active={hasClass} label="반 연결" />
+        <MiniState active={hasEnrollment} label="수강" />
+        <MiniState active={hasPayment} label="청구" />
+      </div>
+    </div>
+  </div>;
+}
+
+function MiniState({ active, label }: { active: boolean; label: string }) {
+  return <span className={`rounded-full px-2 py-1 text-[11px] font-black ${active ? "bg-white text-emerald-700 dark:bg-emerald-100 dark:text-emerald-900" : "bg-white/60 text-gray-500 dark:bg-gray-900/50 dark:text-gray-300"}`}>{label}</span>;
 }
 
 function ShuttleRequestBox({ request }: { request: ShuttleRequest }) {

@@ -156,3 +156,21 @@ ALTER TABLE "SpecialProgramAuditLog" ADD CONSTRAINT "SpecialProgramAuditLog_seas
 ALTER TABLE "SpecialProgramAuditLog" ADD CONSTRAINT "SpecialProgramAuditLog_offeringId_fkey" FOREIGN KEY ("offeringId") REFERENCES "SpecialProgramOffering"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "SpecialProgramAuditLog" ADD CONSTRAINT "SpecialProgramAuditLog_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "SpecialProgramApplication"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "SpecialProgramAuditLog" ADD CONSTRAINT "SpecialProgramAuditLog_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "SpecialProgramApplicationItem"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- 개인정보와 운영 장부는 Next.js 서버의 직접 DB 연결로만 사용한다.
+-- Supabase Data API의 anon/authenticated 역할에는 정책을 열지 않는다.
+ALTER TABLE "SpecialProgramSeason" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SpecialProgramOffering" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SpecialProgramSessionDate" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SpecialProgramApplication" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SpecialProgramApplicationItem" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SpecialProgramShuttleRequest" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SpecialProgramAuditLog" ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE "SpecialProgramSeason" FROM anon, authenticated;
+REVOKE ALL ON TABLE "SpecialProgramOffering" FROM anon, authenticated;
+REVOKE ALL ON TABLE "SpecialProgramSessionDate" FROM anon, authenticated;
+REVOKE ALL ON TABLE "SpecialProgramApplication" FROM anon, authenticated;
+REVOKE ALL ON TABLE "SpecialProgramApplicationItem" FROM anon, authenticated;
+REVOKE ALL ON TABLE "SpecialProgramShuttleRequest" FROM anon, authenticated;
+REVOKE ALL ON TABLE "SpecialProgramAuditLog" FROM anon, authenticated;

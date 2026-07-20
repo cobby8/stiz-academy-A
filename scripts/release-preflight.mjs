@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const skipEnv = process.argv.includes("--skip-env");
+const skipDb = process.argv.includes("--skip-db");
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const scope = (process.env.RELEASE_ENV_SCOPE || process.env.VERCEL_ENV || "").toLowerCase();
 
@@ -88,6 +89,7 @@ if (skipEnv) console.log("[환경] --skip-env로 환경변수 검사를 생략�
 
 const prisma = resolve(root, "node_modules", "prisma", "build", "index.js");
 const tsc = resolve(root, "node_modules", "typescript", "bin", "tsc");
+const seasonalDbPreflight = resolve(root, "scripts", "seasonal-db-preflight.mjs");
 
 if (!existsSync(prisma) || !existsSync(tsc)) {
   console.error("[실패] node_modules가 없습니다. npm ci 후 다시 실행하세요.");
@@ -104,6 +106,12 @@ const checks = [
   ["TypeScript", process.execPath, [tsc, "--noEmit"]],
   ["정책 및 계약 테스트", process.execPath, ["--test", ...testFiles]],
 ];
+
+if (!skipEnv) {
+  checks.unshift(["방학특강 DB 준비 상태", process.execPath, [seasonalDbPreflight, ...(skipDb ? ["--skip-db"] : [])]]);
+} else {
+  console.log("[건너뜀] --skip-env 코드 검사에서는 방학특강 DB 연결 검사를 실행하지 않습니다.");
+}
 
 for (const [label, command, args] of checks) {
   if (!run(label, command, args)) process.exit(1);

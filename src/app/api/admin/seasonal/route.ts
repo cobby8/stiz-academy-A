@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { cleanText, SeasonalError } from "@/lib/seasonal/contracts";
 import { Prisma } from "@prisma/client";
+import { classifyAdminAuthError } from "./auth-error";
 
 const SEASON_STATUSES = new Set(["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"]);
 const OFFERING_STATUSES = new Set(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]);
@@ -11,7 +12,15 @@ const ITEM_STATUSES = new Set(["PENDING", "WAITLISTED", "APPROVED", "REJECTED", 
 type SessionDateInput = { startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
 
 async function admin() {
-  try { return await requireAdmin(); } catch { throw new SeasonalError("관리자 권한이 필요합니다.", 401, "UNAUTHORIZED"); }
+  try {
+    return await requireAdmin();
+  } catch (error) {
+    const authFailure = classifyAdminAuthError(error);
+    if (authFailure) {
+      throw new SeasonalError(authFailure.message, authFailure.status, authFailure.code);
+    }
+    throw error;
+  }
 }
 
 function date(value: unknown, label: string) {

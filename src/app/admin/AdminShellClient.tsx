@@ -178,6 +178,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
                             <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
                             <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
+                            <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal")} icon="🏀" label="방학특강 운영" />
                             <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />
                             <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강 관리" />
                             <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬 트래킹" />

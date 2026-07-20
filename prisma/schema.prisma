@@ -1239,6 +1239,168 @@ model SmsTemplate {
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 }
 
+// 방학특강 모집 단위. 한 시즌 안에 여러 특강 상품을 운영한다.
+model SpecialProgramSeason {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slug String @unique
+  title String
+  description String?
+  applicationOpensAt DateTime @db.Timestamptz(6)
+  applicationClosesAt DateTime @db.Timestamptz(6)
+  startsAt DateTime @db.Timestamptz(6)
+  endsAt DateTime @db.Timestamptz(6)
+  status String @default("DRAFT")
+  termsText String?
+  cancellationPolicy String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  offerings SpecialProgramOffering[]
+  applications SpecialProgramApplication[]
+  auditLogs SpecialProgramAuditLog[]
+
+  @@index([status, applicationOpensAt, applicationClosesAt])
+}
+
+model SpecialProgramOffering {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  seasonId String
+  code String
+  title String
+  description String?
+  targetGrades String?
+  instructorId String?
+  instructorName String?
+  location String?
+  capacity Int
+  price Int
+  shuttleAvailable Boolean @default(false)
+  status String @default("DRAFT")
+  displayOrder Int @default(0)
+  linkedProgramId String?
+  linkedClassId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  season SpecialProgramSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  sessionDates SpecialProgramSessionDate[]
+  applicationItems SpecialProgramApplicationItem[]
+  auditLogs SpecialProgramAuditLog[]
+
+  @@unique([seasonId, code])
+  @@index([seasonId, status, displayOrder])
+}
+
+model SpecialProgramSessionDate {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  offeringId String
+  startsAt DateTime @db.Timestamptz(6)
+  endsAt DateTime @db.Timestamptz(6)
+  location String?
+  note String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  offering SpecialProgramOffering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+
+  @@unique([offeringId, startsAt])
+  @@index([startsAt])
+}
+
+model SpecialProgramApplication {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  seasonId String
+  idempotencyKey String
+  childName String
+  childBirthDate DateTime @db.Timestamptz(6)
+  childGender String?
+  childGrade String?
+  childSchool String?
+  childPhone String?
+  parentName String
+  parentPhone String
+  parentRelation String?
+  address String?
+  memo String?
+  agreedTerms Boolean @default(false)
+  agreedPrivacy Boolean @default(false)
+  status String @default("PENDING")
+  totalPriceSnapshot Int
+  convertedStudentId String?
+  processedAt DateTime? @db.Timestamptz(6)
+  processedByUserId String?
+  processedNote String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  season SpecialProgramSeason @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  items SpecialProgramApplicationItem[]
+  shuttleRequests SpecialProgramShuttleRequest[]
+  auditLogs SpecialProgramAuditLog[]
+
+  @@unique([seasonId, idempotencyKey])
+  @@index([seasonId, status, createdAt])
+  @@index([parentPhone, createdAt])
+}
+
+model SpecialProgramApplicationItem {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  applicationId String
+  offeringId String
+  priceSnapshot Int
+  titleSnapshot String
+  status String @default("PENDING")
+  waitlistOrder Int?
+  enrollmentId String?
+  paymentId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  application SpecialProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  offering SpecialProgramOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  shuttleRequest SpecialProgramShuttleRequest?
+  auditLogs SpecialProgramAuditLog[]
+
+  @@unique([applicationId, offeringId])
+  @@index([offeringId, status])
+  @@index([offeringId, waitlistOrder])
+}
+
+model SpecialProgramShuttleRequest {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  applicationId String
+  applicationItemId String @unique
+  pickupLocation String?
+  pickupTime String?
+  dropoffLocation String?
+  note String?
+  status String @default("REQUESTED")
+  assignedRouteId String?
+  assignedStopId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  application SpecialProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationItem SpecialProgramApplicationItem @relation(fields: [applicationItemId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, status])
+}
+
+model SpecialProgramAuditLog {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  seasonId String?
+  offeringId String?
+  applicationId String?
+  itemId String?
+  actorType String
+  actorId String?
+  action String
+  beforeJSON Json?
+  afterJSON Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  season SpecialProgramSeason? @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  offering SpecialProgramOffering? @relation(fields: [offeringId], references: [id], onDelete: SetNull)
+  application SpecialProgramApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  item SpecialProgramApplicationItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@index([seasonId, createdAt])
+}
+
 // 스태프 초대 링크 — 원장이 생성한 초대를 통해 스태프가 직접 가입
 model StaffInvitation {
   id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))

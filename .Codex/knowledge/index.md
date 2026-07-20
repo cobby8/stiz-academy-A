@@ -67,6 +67,7 @@
 - [lessons.md](lessons.md): 작업 중 배운 교훈
 
 ## 현재 요약
+- 2026-07-20: 방학특강 공개 신청·관리자 운영·정원/대기 데이터 구조 추가.
 - DB는 Supabase PostgreSQL이고 Prisma를 사용한다.
 - Supabase PgBouncer 호환 때문에 DB 구조 보강은 raw SQL 보장 패턴을 자주 사용한다.
 - 공개 홈페이지와 관리자 페이지가 같은 Next.js 앱 안에 있다.

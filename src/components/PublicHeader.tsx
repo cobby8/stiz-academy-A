@@ -57,6 +57,8 @@ const NAV_GROUPS = [
     label: "수업 안내",
     items: [
       { href: "/programs", label: "프로그램안내" },
+      { href: "/seasonal", label: "방학특강" },
+      { href: "/seasonal", label: "방학특강" },
       { href: "/schedule", label: "수업시간표" },
       { href: "/annual", label: "연간일정표" },
     ],

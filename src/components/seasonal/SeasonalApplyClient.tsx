@@ -1,95 +1,422 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { formatWon, normalizeProgram, programClasses, type SeasonalProgram } from "./types";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { formatWon, normalizeProgram, programClasses, type SeasonalClass, type SeasonalProgram } from "./types";
 
-type Form = {
-  childName: string; birthDate: string; gender: string; grade: string; school: string; childPhone: string;
-  parentName: string; parentPhone: string; relation: string; address: string; memo: string;
-  selected: string[]; shuttle: boolean; pickupLocation: string; pickupTime: string; dropoffLocation: string; shuttleNote: string;
-  agreedTerms: boolean; agreedPrivacy: boolean;
+type LoadState = "loading" | "ready" | "error";
+type SubmitState = "idle" | "submitting" | "done" | "error";
+
+type FormState = {
+  childName: string;
+  childBirthDate: string;
+  childGender: string;
+  childGrade: string;
+  childSchool: string;
+  childPhone: string;
+  parentName: string;
+  parentPhone: string;
+  parentRelation: string;
+  address: string;
+  memo: string;
+  agreedTerms: boolean;
+  agreedPrivacy: boolean;
 };
 
-const EMPTY: Form = { childName: "", birthDate: "", gender: "", grade: "", school: "", childPhone: "", parentName: "", parentPhone: "", relation: "", address: "", memo: "", selected: [], shuttle: false, pickupLocation: "", pickupTime: "", dropoffLocation: "", shuttleNote: "", agreedTerms: false, agreedPrivacy: false };
-const STEP_NAMES = ["신청 방법", "학생·보호자", "수업 선택", "셔틀·금액", "확인·동의"];
+type ShuttleDraft = {
+  pickupLocation: string;
+  pickupTime: string;
+  dropoffLocation: string;
+  note: string;
+};
+
+type SubmitResult = {
+  applicationId?: string;
+  duplicate?: boolean;
+  items?: Array<{ offeringId: string; status: string; waitlistOrder?: number | null }>;
+};
+
+const EMPTY_FORM: FormState = {
+  childName: "",
+  childBirthDate: "",
+  childGender: "",
+  childGrade: "",
+  childSchool: "",
+  childPhone: "",
+  parentName: "",
+  parentPhone: "",
+  parentRelation: "보호자",
+  address: "",
+  memo: "",
+  agreedTerms: false,
+  agreedPrivacy: false,
+};
+
+function makeIdempotencyKey() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `seasonal-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function hasShuttle(draft?: ShuttleDraft) {
+  return Boolean(draft && Object.values(draft).some((value) => value.trim().length > 0));
+}
+
+function emptyShuttle(): ShuttleDraft {
+  return { pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "" };
+}
+
+function statusText(status: string) {
+  if (status === "WAITLISTED") return "대기 접수";
+  if (status === "APPROVED") return "승인";
+  if (status === "PENDING") return "접수";
+  return status;
+}
 
 export default function SeasonalApplyClient({ slug }: { slug: string }) {
-  const storageKey = `seasonal-application:${slug}`;
-  const idempotencyStorageKey = `seasonal-application-key:${slug}`;
+  const [state, setState] = useState<LoadState>("loading");
   const [program, setProgram] = useState<SeasonalProgram | null>(null);
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState<Form>(EMPTY);
-  const [error, setError] = useState("");
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [result, setResult] = useState<{ applicationId: string; status: string; totalPriceSnapshot: number; duplicate?: boolean } | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [shuttle, setShuttle] = useState<Record<string, ShuttleDraft>>({});
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<SubmitResult | null>(null);
+  const idempotencyKeyRef = useRef(makeIdempotencyKey());
 
   useEffect(() => {
-    try { const saved = localStorage.getItem(storageKey); if (saved) setForm({ ...EMPTY, ...JSON.parse(saved) }); } catch { /* 손상된 임시 데이터는 무시 */ }
-    fetch(`/api/seasonal/${encodeURIComponent(slug)}`).then(async (response) => { if (!response.ok) throw new Error(); const data = await response.json(); return normalizeProgram(data.program ?? data.season ?? data); }).then(setProgram).catch(() => setLoadFailed(true));
-  }, [slug, storageKey]);
-  useEffect(() => { if (form !== EMPTY) localStorage.setItem(storageKey, JSON.stringify(form)); }, [form, storageKey]);
+    const controller = new AbortController();
+    fetch(`/api/seasonal/${encodeURIComponent(slug)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || "특강 정보를 불러오지 못했습니다.");
+        return normalizeProgram(body);
+      })
+      .then((data) => {
+        setProgram(data);
+        setState("ready");
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setMessage(error instanceof Error ? error.message : "특강 정보를 불러오지 못했습니다.");
+        setState("error");
+      });
+    return () => controller.abort();
+  }, [slug]);
 
   const offerings = useMemo(() => program ? programClasses(program) : [], [program]);
-  const selected = offerings.filter((item) => form.selected.includes(item.id));
-  const total = selected.reduce((sum, item) => sum + item.price, 0);
-  const update = <K extends keyof Form>(key: K, value: Form[K]) => { setForm((current) => ({ ...current, [key]: value })); setError(""); };
+  const selectedOfferings = offerings.filter((item) => selectedIds.includes(item.id));
+  const totalPrice = selectedOfferings.reduce((sum, item) => sum + item.price, 0);
+  const canSubmit = selectedIds.length > 0 && form.childName && form.childBirthDate && form.parentName
+    && form.parentPhone && form.agreedTerms && form.agreedPrivacy && submitState !== "submitting";
 
-  const next = () => {
-    const message = validate(step, form);
-    if (message) { setError(message); return; }
-    setStep((value) => Math.min(5, value + 1)); window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  const submit = () => {
-    const message = validate(5, form); if (message) { setError(message); return; }
-    let idempotencyKey = localStorage.getItem(idempotencyStorageKey);
-    if (!idempotencyKey) {
-      idempotencyKey = crypto.randomUUID();
-      localStorage.setItem(idempotencyStorageKey, idempotencyKey);
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleOffering(item: SeasonalClass) {
+    if (item.remaining <= 0 && !item.waitlistEnabled) return;
+    setSelectedIds((current) => current.includes(item.id)
+      ? current.filter((id) => id !== item.id)
+      : [...current, item.id]);
+  }
+
+  function updateShuttle(offeringId: string, key: keyof ShuttleDraft, value: string) {
+    setShuttle((current) => ({
+      ...current,
+      [offeringId]: { ...(current[offeringId] ?? emptyShuttle()), [key]: value },
+    }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) {
+      setMessage("필수 정보와 신청할 수업, 동의 항목을 확인해 주세요.");
+      setSubmitState("error");
+      return;
     }
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/seasonal/${encodeURIComponent(slug)}/applications`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey, child: { name: form.childName.trim(), birthDate: form.birthDate, gender: form.gender || undefined, grade: form.grade || undefined, school: form.school.trim() || undefined, phone: form.childPhone || undefined }, parent: { name: form.parentName.trim(), phone: form.parentPhone, relation: form.relation || undefined }, address: form.address.trim() || undefined, memo: form.memo.trim() || undefined, agreedTerms: form.agreedTerms, agreedPrivacy: form.agreedPrivacy, items: form.selected.map((offeringId) => ({ offeringId, shuttle: form.shuttle ? { pickupLocation: form.pickupLocation.trim(), pickupTime: form.pickupTime, dropoffLocation: form.dropoffLocation.trim(), note: form.shuttleNote.trim() || undefined } : undefined })) }) });
-        const data = await response.json(); if (!response.ok) throw new Error(data.message || data.error || "신청을 완료하지 못했습니다.");
-        setResult(data); localStorage.removeItem(storageKey); localStorage.removeItem(idempotencyStorageKey);
-      } catch (reason) { setError(reason instanceof Error ? reason.message : "신청 중 오류가 발생했습니다."); }
-    });
-  };
 
-  if (loadFailed) return <Center text="특강 정보를 불러오지 못했습니다." />;
-  if (!program) return <Center text="신청 정보를 준비하고 있어요." />;
-  if (result) return <Complete result={result} slug={slug} />;
+    setSubmitState("submitting");
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/seasonal/${encodeURIComponent(slug)}/applications`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idempotencyKey: idempotencyKeyRef.current,
+          child: {
+            name: form.childName,
+            birthDate: form.childBirthDate,
+            gender: form.childGender,
+            grade: form.childGrade,
+            school: form.childSchool,
+            phone: form.childPhone,
+          },
+          parent: {
+            name: form.parentName,
+            phone: form.parentPhone,
+            relation: form.parentRelation,
+          },
+          address: form.address,
+          memo: form.memo,
+          agreedTerms: form.agreedTerms,
+          agreedPrivacy: form.agreedPrivacy,
+          items: selectedIds.map((offeringId) => ({
+            offeringId,
+            shuttle: hasShuttle(shuttle[offeringId]) ? shuttle[offeringId] : undefined,
+          })),
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "신청을 저장하지 못했습니다.");
+      setResult(body as SubmitResult);
+      setSubmitState("done");
+      setMessage("신청이 접수되었습니다. 학원에서 확인 후 안내드릴게요.");
+    } catch (error) {
+      setSubmitState("error");
+      setMessage(error instanceof Error ? error.message : "신청을 저장하지 못했습니다.");
+    }
+  }
+
+  if (state === "loading") return <StatusBox icon="progress_activity" text="신청 정보를 불러오고 있어요." />;
+  if (state === "error" || !program) return <StatusBox icon="error" text={message || "신청 정보를 불러오지 못했습니다."} retry />;
+  if (submitState === "done") return <DoneView slug={slug} result={result} offerings={offerings} message={message} />;
 
   return (
-    <section className="bg-gray-50 px-4 py-6 dark:bg-gray-900 md:py-10">
-      <div className="mx-auto max-w-2xl">
-        <Link href={`/seasonal/${slug}`} className="inline-flex min-h-11 items-center gap-1 text-sm font-bold text-gray-600 dark:text-gray-300"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>특강 안내</Link>
-        <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <header className="border-b border-gray-100 p-5 dark:border-gray-700"><p className="text-sm font-bold text-brand-orange-500">{program.title}</p><h1 className="mt-1 text-2xl font-black">방학특강 신청</h1><ol className="mt-5 grid grid-cols-5 gap-1" aria-label="신청 단계">{STEP_NAMES.map((name, index) => <li key={name} aria-current={step === index + 1 ? "step" : undefined}><div className={`h-1.5 rounded-full ${step >= index + 1 ? "bg-brand-orange-500" : "bg-gray-200 dark:bg-gray-700"}`} /><span className={`mt-1 hidden text-center text-[10px] sm:block ${step === index + 1 ? "font-bold" : "text-gray-400"}`}>{name}</span></li>)}</ol><p className="mt-2 text-sm font-bold">{step}단계 · {STEP_NAMES[step - 1]}</p></header>
-          <div className="p-5 md:p-7">{step === 1 && <MethodStep slug={slug} onContinue={next} />}{step === 2 && <PeopleStep form={form} update={update} />}{step === 3 && <OfferingStep offerings={offerings} form={form} update={update} />}{step === 4 && <ShuttleStep form={form} total={total} update={update} />}{step === 5 && <ConfirmStep form={form} selected={selected} total={total} update={update} />}{error && <div role="alert" className="mt-5 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}{step > 1 && <div className="mt-7 flex gap-2"><button type="button" onClick={() => { setError(""); setStep((value) => value - 1); }} className="min-h-12 rounded-xl border border-gray-300 px-5 font-bold">이전</button><button type="button" disabled={pending} onClick={step === 5 ? submit : next} className="min-h-12 flex-1 rounded-xl bg-brand-orange-500 px-5 font-black text-white disabled:opacity-60">{pending ? "신청 중…" : step === 5 ? "신청서 제출" : "다음"}</button></div>}</div>
+    <form onSubmit={handleSubmit} className="bg-gray-50 px-4 py-8 pb-28 dark:bg-gray-900">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <header>
+          <Link href={`/seasonal/${slug}`} className="text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime">특강 상세로 돌아가기</Link>
+          <p className="mt-5 text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime">방학특강 신청</p>
+          <h1 className="mt-2 text-3xl font-black text-gray-900 dark:text-white">{program.title}</h1>
+          {program.summary && <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-300">{program.summary}</p>}
+        </header>
+
+        {message && (
+          <p role="status" className={`rounded-xl border px-4 py-3 text-sm font-bold ${submitState === "error" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" : "border-green-200 bg-green-50 text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100"}`}>
+            {message}
+          </p>
+        )}
+
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-xl font-black text-gray-900 dark:text-white">수업 선택</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">신청할 수업을 한 개 이상 선택해 주세요.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {offerings.map((item) => {
+              const selected = selectedIds.includes(item.id);
+              const disabled = item.remaining <= 0 && !item.waitlistEnabled;
+              return (
+                <article key={item.id} className={`rounded-2xl border bg-white p-5 shadow-sm dark:bg-gray-800 ${selected ? "border-brand-orange-500 ring-2 ring-brand-orange-100 dark:border-brand-neon-lime dark:ring-brand-neon-lime/20" : "border-gray-200 dark:border-gray-700"} ${disabled ? "opacity-60" : ""}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime">{item.dayLabel} {item.dateLabel}</p>
+                      <h3 className="mt-1 text-lg font-black text-gray-900 dark:text-white">{item.name}</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleOffering(item)}
+                      disabled={disabled}
+                      className={`min-h-10 rounded-xl px-4 text-sm font-black transition ${selected ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "border border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-200"} disabled:cursor-not-allowed`}
+                    >
+                      {selected ? "선택됨" : disabled ? "마감" : "선택"}
+                    </button>
+                  </div>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <Pair label="시간" value={`${item.startTime}~${item.endTime}`} />
+                    <Pair label="대상" value={item.targetGrade || "전체"} />
+                    <Pair label="잔여" value={item.remaining > 0 ? `${item.remaining}석` : item.waitlistEnabled ? "대기 가능" : "마감"} />
+                    <Pair label="수강료" value={formatWon(item.price)} />
+                  </dl>
+                  {selected && (
+                    <div className="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
+                      <p className="text-xs font-bold text-gray-600 dark:text-gray-300">셔틀 요청이 있으면 적어주세요</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <TextInput label="탑승 위치" value={shuttle[item.id]?.pickupLocation ?? ""} onChange={(value) => updateShuttle(item.id, "pickupLocation", value)} />
+                        <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
+                        <TextInput label="하차 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} onChange={(value) => updateShuttle(item.id, "dropoffLocation", value)} />
+                        <TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} />
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+          <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="text-xl font-black text-gray-900 dark:text-white">신청 정보</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextInput label="학생 이름 *" value={form.childName} onChange={(value) => update("childName", value)} required />
+              <DateInput label="학생 생년월일 *" value={form.childBirthDate} onChange={(value) => update("childBirthDate", value)} required />
+              <TextInput label="학생 성별" value={form.childGender} onChange={(value) => update("childGender", value)} placeholder="예: 남 / 여" />
+              <TextInput label="학년" value={form.childGrade} onChange={(value) => update("childGrade", value)} placeholder="예: 초4" />
+              <TextInput label="학교" value={form.childSchool} onChange={(value) => update("childSchool", value)} />
+              <TextInput label="학생 연락처" value={form.childPhone} onChange={(value) => update("childPhone", value)} inputMode="tel" />
+              <TextInput label="보호자 이름 *" value={form.parentName} onChange={(value) => update("parentName", value)} required />
+              <TextInput label="보호자 연락처 *" value={form.parentPhone} onChange={(value) => update("parentPhone", value)} inputMode="tel" required />
+              <TextInput label="보호자 관계" value={form.parentRelation} onChange={(value) => update("parentRelation", value)} />
+              <TextInput label="주소" value={form.address} onChange={(value) => update("address", value)} />
+            </div>
+            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+              요청 사항
+              <textarea
+                value={form.memo}
+                onChange={(event) => update("memo", event.target.value)}
+                rows={4}
+                className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+                placeholder="상담 시 참고할 내용을 적어주세요"
+              />
+            </label>
+          </div>
+
+          <aside className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="text-xl font-black text-gray-900 dark:text-white">신청 요약</h2>
+            <div className="space-y-2">
+              {selectedOfferings.length === 0 ? (
+                <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-gray-900 dark:text-gray-400">선택한 수업이 없습니다.</p>
+              ) : selectedOfferings.map((item) => (
+                <div key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
+                  <p className="font-bold text-gray-900 dark:text-white">{item.name}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.dayLabel} {item.startTime}~{item.endTime} · {formatWon(item.price)}</p>
+                  {item.remaining <= 0 && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400">예상 합계</p>
+              <p className="mt-1 text-2xl font-black text-brand-navy-900 dark:text-white">{formatWon(totalPrice)}</p>
+            </div>
+            <CheckBox label="방학특강 운영 안내와 환불 규정을 확인했습니다." checked={form.agreedTerms} onChange={(checked) => update("agreedTerms", checked)} />
+            <CheckBox label="신청과 상담을 위한 개인정보 수집·이용에 동의합니다." checked={form.agreedPrivacy} onChange={(checked) => update("agreedPrivacy", checked)} />
+          </aside>
+        </section>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+        <div className="mx-auto flex max-w-5xl items-center gap-3">
+          <div className="hidden min-w-0 flex-1 sm:block">
+            <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{selectedOfferings.length}개 수업 선택 · {formatWon(totalPrice)}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">제출 후 학원에서 확인 연락을 드립니다.</p>
+          </div>
+          <Link href={`/seasonal/${slug}`} className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 px-4 font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200">취소</Link>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-brand-orange-500 px-5 font-black text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 sm:flex-none"
+          >
+            {submitState === "submitting" ? "접수 중..." : "신청 접수"}
+          </button>
         </div>
       </div>
-    </section>
+    </form>
   );
 }
 
-function MethodStep({ slug, onContinue }: { slug: string; onContinue: () => void }) { return <div className="space-y-3"><h2 className="text-xl font-black">어떻게 신청하시겠어요?</h2><p className="text-sm text-gray-500">학부모 회원은 로그인하면 기존 자녀 정보를 확인할 수 있습니다.</p><Link href={`/login?next=/seasonal/${slug}/apply`} className="flex min-h-14 items-center justify-between rounded-xl border border-brand-orange-500 p-4 font-bold"><span><span className="block">로그인하고 신청</span><span className="text-xs font-normal text-gray-500">기존 회원에게 편리해요</span></span><span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span></Link><button type="button" onClick={onContinue} className="flex min-h-14 w-full items-center justify-between rounded-xl border border-gray-300 p-4 text-left font-bold"><span><span className="block">비회원으로 신청</span><span className="text-xs font-normal text-gray-500">가입 없이 바로 입력해요</span></span><span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button></div>; }
+function DoneView({ slug, result, offerings, message }: { slug: string; result: SubmitResult | null; offerings: SeasonalClass[]; message: string }) {
+  const byId = new Map(offerings.map((item) => [item.id, item]));
+  return (
+    <main className="bg-gray-50 px-4 py-12 dark:bg-gray-900">
+      <section className="mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-sm font-black text-green-700 dark:bg-green-500/15 dark:text-green-200">완료</div>
+        <h1 className="mt-5 text-2xl font-black text-gray-900 dark:text-white">신청이 접수되었습니다</h1>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{message}</p>
+        {result?.items && result.items.length > 0 && (
+          <div className="mt-6 space-y-2 text-left">
+            {result.items.map((item) => (
+              <div key={item.offeringId} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
+                <p className="font-bold text-gray-900 dark:text-white">{byId.get(item.offeringId)?.name ?? "선택 수업"}</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {statusText(item.status)}{item.waitlistOrder ? ` · 대기 ${item.waitlistOrder}번` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-6 flex justify-center gap-2">
+          <Link href={`/seasonal/${slug}`} className="inline-flex min-h-11 items-center rounded-xl border border-gray-300 px-5 font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200">상세 보기</Link>
+          <Link href="/" className="inline-flex min-h-11 items-center rounded-xl bg-brand-orange-500 px-5 font-bold text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">홈으로</Link>
+        </div>
+      </section>
+    </main>
+  );
+}
 
-function PeopleStep({ form, update }: StepProps) { return <div className="space-y-5"><h2 className="text-xl font-black">학생과 보호자 정보</h2><div className="grid gap-4 sm:grid-cols-2"><Field label="학생 이름" required value={form.childName} onChange={(v) => update("childName", v)} /><Field label="생년월일" required type="date" value={form.birthDate} onChange={(v) => update("birthDate", v)} /><Field label="성별" value={form.gender} onChange={(v) => update("gender", v)} /><Field label="현재 학년" value={form.grade} onChange={(v) => update("grade", v)} /><Field label="학교" value={form.school} onChange={(v) => update("school", v)} /><Field label="학생 연락처" type="tel" value={form.childPhone} onChange={(v) => update("childPhone", phone(v))} /><Field label="보호자 이름" required value={form.parentName} onChange={(v) => update("parentName", v)} /><Field label="보호자 연락처" required type="tel" value={form.parentPhone} onChange={(v) => update("parentPhone", phone(v))} /><Field label="관계" value={form.relation} onChange={(v) => update("relation", v)} /><Field label="주소" value={form.address} onChange={(v) => update("address", v)} /></div><Field label="요청사항" value={form.memo} onChange={(v) => update("memo", v)} /></div>; }
+function TextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required,
+  inputMode,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  inputMode?: "text" | "tel";
+}) {
+  return (
+    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+      {label}
+      <input
+        type="text"
+        inputMode={inputMode}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        required={required}
+        className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+      />
+    </label>
+  );
+}
 
-function OfferingStep({ offerings, form, update }: { offerings: ReturnType<typeof programClasses>; form: Form; update: Update }) { const toggle = (id: string) => update("selected", form.selected.includes(id) ? form.selected.filter((key) => key !== id) : [...form.selected, id]); return <div><h2 className="text-xl font-black">수업 선택</h2><p className="mt-1 text-sm text-gray-500">여러 수업을 선택할 수 있으며, 마감 반은 대기로 접수됩니다.</p><div className="mt-5 space-y-3">{offerings.map((item) => { const selected = form.selected.includes(item.id); const closed = item.remaining <= 0 && !item.waitlistEnabled; return <button key={item.id} type="button" disabled={closed} aria-pressed={selected} onClick={() => toggle(item.id)} className={`w-full rounded-xl border p-4 text-left ${closed ? "cursor-not-allowed opacity-50" : selected ? "border-brand-orange-500 bg-orange-50 dark:bg-gray-900" : "border-gray-300"}`}><div className="flex justify-between gap-3"><span className="font-black">{item.dayLabel} {item.startTime} · {item.name}</span><span className="text-xs font-bold">{closed ? "마감" : item.remaining <= 0 ? "대기" : `잔여 ${item.remaining}석`}</span></div><p className="mt-1 text-sm text-gray-500">{item.targetGrade || "전체"} · {formatWon(item.price)}</p></button>; })}</div></div>; }
+function DateInput({ label, value, onChange, required }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
+  return (
+    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+      {label}
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required={required}
+        className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+      />
+    </label>
+  );
+}
 
-function ShuttleStep({ form, total, update }: StepProps & { total: number }) { return <div className="space-y-5"><h2 className="text-xl font-black">셔틀과 예상 금액</h2><label className="flex min-h-12 items-center gap-3 rounded-xl border border-gray-300 p-4"><input type="checkbox" checked={form.shuttle} onChange={(e) => update("shuttle", e.target.checked)} className="h-5 w-5" />셔틀을 이용합니다</label>{form.shuttle && <div className="space-y-4 rounded-xl bg-gray-50 p-4 dark:bg-gray-900"><Field label="승차 장소" required value={form.pickupLocation} onChange={(v) => update("pickupLocation", v)} /><Field label="희망 시간" required type="time" value={form.pickupTime} onChange={(v) => update("pickupTime", v)} /><Field label="하차 장소" required value={form.dropoffLocation} onChange={(v) => update("dropoffLocation", v)} /><Field label="셔틀 메모" value={form.shuttleNote} onChange={(v) => update("shuttleNote", v)} /></div>}<Price total={total} /><p className="text-xs leading-5 text-gray-500">표시 금액은 예상 금액이며, 셔틀 배차와 관리자 확인 후 발행되는 청구서에서 최종 금액을 확인할 수 있습니다.</p></div>; }
+function CheckBox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2 text-sm font-bold text-gray-700 dark:text-gray-200">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-1 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500 dark:border-gray-600"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
 
-function ConfirmStep({ form, selected, total, update }: StepProps & { selected: ReturnType<typeof programClasses>; total: number }) { return <div className="space-y-5"><h2 className="text-xl font-black">신청 내용을 확인해주세요</h2><div className="rounded-xl bg-gray-50 p-4 text-sm dark:bg-gray-900"><p className="font-black">{form.childName} · 보호자 {form.parentName}</p>{selected.map((item) => <p key={item.id} className="mt-2">{item.dayLabel} {item.startTime} · {item.name}{item.remaining <= 0 ? " (대기)" : ""}</p>)}<Price total={total} /></div><Check label="이용약관에 동의합니다." checked={form.agreedTerms} onChange={(v) => update("agreedTerms", v)} /><Check label="개인정보 수집·이용에 동의합니다." checked={form.agreedPrivacy} onChange={(v) => update("agreedPrivacy", v)} /><p className="text-xs leading-5 text-gray-500">제출 시 서버가 잔여석과 금액을 다시 확인합니다. 마감된 반은 대기 상태로 접수될 수 있습니다.</p></div>; }
+function Pair({ label, value }: { label: string; value: string }) {
+  return <div><dt className="text-xs text-gray-500 dark:text-gray-400">{label}</dt><dd className="mt-0.5 font-bold text-gray-900 dark:text-white">{value}</dd></div>;
+}
 
-type Update = <K extends keyof Form>(key: K, value: Form[K]) => void;
-type StepProps = { form: Form; update: Update };
-function Field({ label, value, onChange, type = "text", required }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) { return <label className="block text-sm font-bold">{label}{required && <span className="text-red-500"> *</span>}<input type={type} required={required} value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 min-h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-normal outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 dark:bg-gray-900" /></label>; }
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="flex min-h-12 items-center gap-3 rounded-xl border border-gray-300 p-4 text-sm font-bold"><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-5 w-5" />{label}<span className="text-red-500">*</span></label>; }
-function Price({ total }: { total: number }) { return <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-4 dark:border-gray-700"><span className="font-bold">예상 수강료</span><strong className="text-xl text-brand-orange-500">{formatWon(total)}</strong></div>; }
-function Complete({ result, slug }: { result: { applicationId: string; status: string; totalPriceSnapshot: number; duplicate?: boolean }; slug: string }) { return <section className="bg-gray-50 px-4 py-12 dark:bg-gray-900"><div className="mx-auto max-w-lg rounded-2xl bg-white p-8 text-center shadow-sm dark:bg-gray-800"><span className="material-symbols-outlined text-5xl text-emerald-600" aria-hidden="true">check_circle</span><h1 className="mt-4 text-2xl font-black">{result.duplicate ? "이미 접수된 신청입니다" : "신청이 접수되었습니다"}</h1><p className="mt-2 text-sm text-gray-500">접수번호 {result.applicationId}</p><p className="mt-5 text-lg font-black">{formatWon(result.totalPriceSnapshot)}</p><p className="mt-2 text-sm text-gray-500">관리자 확인 후 확정 및 결제 안내를 보내드립니다.</p><Link href={`/seasonal/${slug}`} className="mt-7 flex min-h-12 items-center justify-center rounded-xl bg-brand-navy-900 px-5 font-bold text-white">특강 안내로 돌아가기</Link></div></section>; }
-function Center({ text }: { text: string }) { return <div className="p-16 text-center text-gray-500">{text}</div>; }
-function phone(value: string) { const d = value.replace(/\D/g, "").slice(0, 11); return d.length <= 3 ? d : d.length <= 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : `${d.slice(0, 3)}-${d.slice(3, d.length - 4)}-${d.slice(-4)}`; }
-function validate(step: number, form: Form) { if (step === 2 && (!form.childName.trim() || !form.birthDate || !form.parentName.trim() || form.parentPhone.replace(/\D/g, "").length < 10)) return "필수 학생·보호자 정보를 확인해주세요."; if (step === 3 && form.selected.length === 0) return "수업을 하나 이상 선택해주세요."; if (step === 4 && form.shuttle && (!form.pickupLocation.trim() || !form.pickupTime || !form.dropoffLocation.trim())) return "셔틀 승차·시간·하차 정보를 입력해주세요."; if (step === 5 && (!form.agreedTerms || !form.agreedPrivacy)) return "필수 약관에 모두 동의해주세요."; return ""; }
+function StatusBox({ icon, text, retry }: { icon: string; text: string; retry?: boolean }) {
+  return (
+    <div className="bg-gray-50 px-4 py-12 dark:bg-gray-900">
+      <div className="mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white p-10 text-center dark:border-gray-700 dark:bg-gray-800">
+        <span className="material-symbols-outlined text-4xl text-gray-400" aria-hidden="true">{icon}</span>
+        <p className="mt-3 text-gray-600 dark:text-gray-300">{text}</p>
+        {retry && <button type="button" onClick={() => location.reload()} className="mt-4 min-h-11 rounded-xl border border-gray-300 px-5 font-bold">다시 시도</button>}
+      </div>
+    </div>
+  );
+}

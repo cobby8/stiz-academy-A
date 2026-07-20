@@ -21,6 +21,16 @@ type SeasonalClass = {
   shuttleAvailable?: boolean;
 };
 
+type ShuttleRequest = {
+  pickupLocation?: string | null;
+  pickupTime?: string | null;
+  dropoffLocation?: string | null;
+  note?: string | null;
+  status?: string | null;
+  assignedRouteId?: string | null;
+  assignedStopId?: string | null;
+};
+
 type Season = {
   id: string;
   name: string;
@@ -40,17 +50,25 @@ type ApplicationItem = {
   scheduleLabel?: string | null;
   status: ItemStatus;
   amount?: number;
+  waitlistOrder?: number | null;
+  shuttleRequest?: ShuttleRequest | null;
 };
 
 type Application = {
   id: string;
   childName: string;
+  childBirthDate?: string | null;
+  childGender?: string | null;
   childGrade?: string | null;
   childSchool?: string | null;
+  childPhone?: string | null;
   parentName: string;
   parentPhone: string;
+  parentRelation?: string | null;
+  address?: string | null;
   status: string;
   createdAt: string;
+  processedNote?: string | null;
   shuttleNeeded?: boolean;
   shuttleStatus?: string | null;
   paymentStatus?: string | null;
@@ -70,7 +88,7 @@ type Tab = "overview" | "seasons" | "applications";
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "작성 중", PUBLISHED: "모집 중", OPEN: "모집 중", CLOSED: "모집 마감", ARCHIVED: "보관",
   PENDING: "승인 대기", APPROVED: "승인", PAYMENT_PENDING: "결제 대기", CONFIRMED: "최종 확정", WAITLISTED: "대기", REJECTED: "반려", CANCELLED: "취소",
-  PAID: "결제 완료", UNPAID: "미결제", ASSIGNED: "배정 완료", UNASSIGNED: "미배정",
+  PAID: "결제 완료", UNPAID: "미결제", REQUESTED: "요청", ASSIGNED: "배정 완료", UNASSIGNED: "미배정",
 };
 
 const TABS: Array<{ key: Tab; label: string; icon: string }> = [
@@ -87,6 +105,12 @@ function formatDate(value?: string | null) {
   if (!value) return "미정";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(date);
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "미정";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function badge(status?: string | null) {
@@ -140,20 +164,28 @@ export default function SeasonalAdminClient() {
           } as SeasonalClass;
         }),
       })) as Season[];
-      const applications: Application[] = (body.applications ?? []).map((application: Record<string, unknown>) => ({
-        ...application,
-        totalAmount: application.totalAmount ?? application.totalPriceSnapshot,
-        shuttleNeeded: application.shuttleNeeded !== undefined ? Boolean(application.shuttleNeeded) : (
-          ((application.shuttleRequests as unknown[] | undefined)?.length ?? 0) > 0
-          || ((application.items as Array<Record<string, unknown>> | undefined) ?? []).some((item) => Boolean(item.shuttleRequest))
-        ),
-        items: ((application.items ?? []) as Array<Record<string, unknown>>).map((item) => ({
+      const applications: Application[] = (body.applications ?? []).map((application: Record<string, unknown>) => {
+        const items = ((application.items ?? []) as Array<Record<string, unknown>>).map((item) => ({
           ...item,
           classId: item.classId ?? item.offeringId,
           className: item.className ?? item.titleSnapshot ?? (item.offering as Record<string, unknown> | undefined)?.title ?? "특강 반",
           amount: item.amount ?? item.priceSnapshot,
-        } as ApplicationItem)),
-      })) as Application[];
+          waitlistOrder: item.waitlistOrder ?? null,
+          shuttleRequest: (item.shuttleRequest ?? null) as ShuttleRequest | null,
+        } as ApplicationItem));
+        const shuttleRequests = [
+          ...(((application.shuttleRequests as unknown[] | undefined) ?? []) as ShuttleRequest[]),
+          ...items.map((item) => item.shuttleRequest).filter(Boolean) as ShuttleRequest[],
+        ];
+        const firstShuttle = shuttleRequests[0];
+        return {
+          ...application,
+          totalAmount: application.totalAmount ?? application.totalPriceSnapshot,
+          shuttleNeeded: application.shuttleNeeded !== undefined ? Boolean(application.shuttleNeeded) : shuttleRequests.length > 0,
+          shuttleStatus: application.shuttleStatus ?? firstShuttle?.status ?? null,
+          items,
+        } as Application;
+      });
       const payload: Payload = { seasons, applications, stats: body.stats };
       setData(payload);
       setSelectedSeasonId((current) => current || payload.seasons[0]?.id || "");
@@ -246,12 +278,101 @@ function ApplicationsView({ applications, search, status, onSearch, onStatus, on
 }
 
 function ApplicationDrawer({ application, onClose, onUpdateItem }: { application: Application; onClose: () => void; onUpdateItem: (id: string, status: ItemStatus) => Promise<void> }) {
-  return <div className="fixed inset-0 z-50 flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-labelledby="application-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside className="h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-2xl dark:bg-gray-900 sm:p-7"><header className="flex items-start justify-between"><div><p className="text-sm font-bold text-[var(--brand-accent)]">신청 상세</p><h2 id="application-title" className="mt-1 text-2xl font-black">{application.childName} <span className="text-base text-gray-400">{application.childGrade}</span></h2></div><button type="button" onClick={onClose} aria-label="닫기" className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800"><Icon name="close" /></button></header>
-    <section className="mt-6 grid grid-cols-2 gap-3 rounded-2xl bg-gray-50 p-4 text-sm dark:bg-gray-800"><p><span className="block text-xs text-gray-500">학부모</span><b>{application.parentName}</b></p><p><span className="block text-xs text-gray-500">연락처</span><b>{application.parentPhone}</b></p><p><span className="block text-xs text-gray-500">학교</span>{application.childSchool || "미입력"}</p><p><span className="block text-xs text-gray-500">접수일</span>{formatDate(application.createdAt)}</p></section>
-    <div className="mt-3 grid grid-cols-2 gap-2"><a href={`tel:${application.parentPhone}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold dark:border-gray-700"><Icon name="call" />전화</a><a href={`sms:${application.parentPhone}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold dark:border-gray-700"><Icon name="sms" />문자</a></div>
-    <section className="mt-7"><h3 className="font-black">신청 항목별 처리</h3><p className="mt-1 text-xs text-gray-500">요일별로 승인·대기·반려·취소를 따로 처리할 수 있습니다.</p><div className="mt-3 space-y-3">{application.items.map((item) => <article key={item.id} className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><div className="flex items-start justify-between gap-3"><div><p className="font-black">{item.className}</p><p className="text-xs text-gray-500">{item.scheduleLabel || "일정 미정"} · {(item.amount ?? 0).toLocaleString()}원</p></div><span className={badge(item.status)}>{STATUS_LABEL[item.status]}</span></div><label className="mt-4 block text-xs font-bold text-gray-500">상태 변경<select value={item.status} onChange={(event) => void onUpdateItem(item.id, event.target.value as ItemStatus)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white">{["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}</select></label></article>)}</div></section>
-    {application.memo && <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black">요청사항</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.memo}</p></section>}
-  </aside></div>;
+  const totalAmount = application.totalAmount ?? application.items.reduce((sum, item) => sum + (item.amount ?? 0), 0);
+  const parentPhoneHref = application.parentPhone ? `tel:${application.parentPhone}` : undefined;
+  const parentSmsHref = application.parentPhone ? `sms:${application.parentPhone}` : undefined;
+
+  return <div className="fixed inset-0 z-50 flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-labelledby="application-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <aside className="h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-2xl dark:bg-gray-900 sm:p-7">
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-[var(--brand-accent)]">신청 상세</p>
+          <h2 id="application-title" className="mt-1 text-2xl font-black text-gray-950 dark:text-white">{application.childName} <span className="text-base text-gray-400">{application.childGrade || "학년 미입력"}</span></h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className={badge(application.status)}>{STATUS_LABEL[application.status] ?? application.status}</span>
+            <span className={badge(application.paymentStatus)}>{STATUS_LABEL[application.paymentStatus || ""] ?? application.paymentStatus ?? "청구 전"}</span>
+            {application.shuttleNeeded && <span className={badge(application.shuttleStatus || "REQUESTED")}>셔틀 {STATUS_LABEL[application.shuttleStatus || "REQUESTED"]}</span>}
+          </div>
+        </div>
+        <button type="button" onClick={onClose} aria-label="닫기" className="rounded-full p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"><Icon name="close" /></button>
+      </header>
+
+      <section className="mt-6 grid gap-3 rounded-2xl bg-gray-50 p-4 text-sm dark:bg-gray-800 sm:grid-cols-2">
+        <Info label="학부모">{application.parentName}{application.parentRelation ? ` · ${application.parentRelation}` : ""}</Info>
+        <Info label="학부모 연락처">{application.parentPhone || "미입력"}</Info>
+        <Info label="학생 정보">{[formatDate(application.childBirthDate), application.childGender, application.childPhone].filter(Boolean).join(" · ") || "미입력"}</Info>
+        <Info label="학교">{[application.childSchool, application.childGrade].filter(Boolean).join(" · ") || "미입력"}</Info>
+        <Info label="접수일">{formatDateTime(application.createdAt)}</Info>
+        <Info label="예상 금액">{totalAmount.toLocaleString()}원</Info>
+        {application.address && <div className="sm:col-span-2"><Info label="주소">{application.address}</Info></div>}
+      </section>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <a href={parentPhoneHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="call" />전화</a>
+        <a href={parentSmsHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="sms" />문자</a>
+      </div>
+
+      <section className="mt-7">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h3 className="font-black text-gray-950 dark:text-white">신청 항목별 처리</h3>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">요일별로 승인·대기·반려·취소를 따로 처리할 수 있습니다.</p>
+          </div>
+          <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
+        </div>
+        <div className="mt-3 space-y-3">
+          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} />)}
+        </div>
+      </section>
+
+      {application.memo && <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black text-gray-950 dark:text-white">요청사항</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.memo}</p></section>}
+      {application.processedNote && <section className="mt-3 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black text-gray-950 dark:text-white">처리 메모</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.processedNote}</p></section>}
+    </aside>
+  </div>;
+}
+
+function ApplicationItemCard({ item, onUpdateItem }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void> }) {
+  const quickStatuses: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
+  return <article className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="font-black text-gray-950 dark:text-white">{item.className}</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.scheduleLabel || "일정 미정"} · {(item.amount ?? 0).toLocaleString()}원</p>
+        {item.waitlistOrder && <p className="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">대기 {item.waitlistOrder}번</p>}
+      </div>
+      <span className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>
+    </div>
+    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {quickStatuses.map((status) => <button key={status} type="button" disabled={item.status === status} onClick={() => void onUpdateItem(item.id, status)} className={`min-h-10 rounded-xl border px-3 text-sm font-black ${item.status === status ? "border-transparent bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]" : "border-gray-200 text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200"}`}>{STATUS_LABEL[status]}</button>)}
+    </div>
+    <label className="mt-4 block text-xs font-bold text-gray-500 dark:text-gray-400">
+      상태 직접 변경
+      <select value={item.status} onChange={(event) => void onUpdateItem(item.id, event.target.value as ItemStatus)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+        {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
+      </select>
+    </label>
+    {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} />}
+  </article>;
+}
+
+function ShuttleRequestBox({ request }: { request: ShuttleRequest }) {
+  return <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm dark:bg-blue-950/30">
+    <div className="flex items-center justify-between gap-2">
+      <h4 className="font-black text-blue-900 dark:text-blue-100">셔틀 요청</h4>
+      <span className={badge(request.status || "REQUESTED")}>{STATUS_LABEL[request.status || "REQUESTED"]}</span>
+    </div>
+    <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+      <Info label="탑승 위치">{request.pickupLocation || "미입력"}</Info>
+      <Info label="희망 시간">{request.pickupTime || "미입력"}</Info>
+      <Info label="하차 위치">{request.dropoffLocation || "미입력"}</Info>
+      <Info label="배정">{request.assignedRouteId || request.assignedStopId ? [request.assignedRouteId, request.assignedStopId].filter(Boolean).join(" · ") : "미배정"}</Info>
+    </dl>
+    {request.note && <p className="mt-3 whitespace-pre-wrap text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
+  </div>;
+}
+
+function Info({ label, children }: { label: string; children: React.ReactNode }) {
+  return <p><span className="block text-xs font-bold text-gray-500 dark:text-gray-400">{label}</span><b className="font-bold text-gray-900 dark:text-white">{children}</b></p>;
 }
 
 function SeasonForm({ initial: _initial, onClose, onSubmit }: { initial?: Season | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {

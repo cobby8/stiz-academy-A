@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { cleanText, SeasonalError } from "@/lib/seasonal/contracts";
+import { ensureInvoiceForPayment, ensurePaymentInfrastructure } from "@/lib/payment-ledger";
 import { Prisma } from "@prisma/client";
 import { classifyAdminAuthError } from "./auth-error";
 
@@ -10,6 +11,7 @@ const OFFERING_STATUSES = new Set(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]);
 const APPLICATION_STATUSES = new Set(["PENDING", "PARTIALLY_WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 const ITEM_STATUSES = new Set(["PENDING", "WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 type SessionDateInput = { startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
+type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null };
 
 async function admin() {
   try {
@@ -33,6 +35,16 @@ function nonNegativeInt(value: unknown, label: string) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) throw new SeasonalError(`${label}은 0 이상의 정수여야 합니다.`);
   return parsed;
+}
+
+function normalizeDigits(value: string) {
+  return value.replace(/[^0-9]/g, "");
+}
+
+function defaultPaymentDueDate() {
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + 7);
+  return dueDate;
 }
 
 function respondError(error: unknown) {
@@ -213,8 +225,163 @@ export async function PATCH(request: NextRequest) {
       await prisma.specialProgramAuditLog.create({ data: { seasonId: before.application.seasonId, offeringId: item.offeringId, applicationId: item.applicationId, itemId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "ITEM_STATUS_UPDATED", beforeJSON: before, afterJSON: item } });
       return NextResponse.json({ item });
     }
+
+    if (body.resource === "conversion") {
+      const result = await convertApprovedItemToEnrollmentAndInvoice(id, actor.appUserId);
+      return NextResponse.json({ success: true, ...result });
+    }
     throw new SeasonalError("지원하지 않는 수정 대상입니다.");
   } catch (error) { return respondError(error); }
+}
+
+async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId: string): Promise<ConversionResult> {
+  await ensurePaymentInfrastructure();
+
+  const converted = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "SpecialProgramApplicationItem" WHERE id = ${itemId} FOR UPDATE`;
+    const item = await tx.specialProgramApplicationItem.findUnique({
+      where: { id: itemId },
+      include: {
+        application: true,
+        offering: { include: { season: true } },
+      },
+    });
+    if (!item) throw new SeasonalError("신청 항목을 찾을 수 없습니다.", 404);
+    if (item.status !== "APPROVED") throw new SeasonalError("승인된 신청 항목만 수강·청구로 전환할 수 있습니다.", 409, "ITEM_NOT_APPROVED");
+    if (!item.offering.linkedClassId) throw new SeasonalError("먼저 특강 반을 기존 정규 반과 연결해 주세요.", 409, "CLASS_NOT_LINKED");
+
+    const parentPhone = normalizeDigits(item.application.parentPhone);
+    if (parentPhone.length < 10) throw new SeasonalError("보호자 연락처를 확인해 주세요.");
+    const parentName = item.application.parentName || "학부모";
+    const parentEmail = `parent_${parentPhone}@stiz.local`;
+
+    const existingParents = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "User"
+       WHERE role = 'PARENT'
+         AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = ${parentPhone}
+       LIMIT 1
+    `;
+    let parentId = existingParents[0]?.id;
+    if (!parentId) {
+      const parents = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+        VALUES (gen_random_uuid()::text, ${parentEmail}, ${parentName}, ${parentPhone}, 'PARENT', NOW(), NOW())
+        ON CONFLICT (email) DO UPDATE SET
+          name = COALESCE("User".name, EXCLUDED.name),
+          phone = COALESCE("User".phone, EXCLUDED.phone),
+          "updatedAt" = NOW()
+        RETURNING id
+      `;
+      parentId = parents[0]?.id;
+    }
+    if (!parentId) throw new SeasonalError("학부모 계정을 준비하지 못했습니다.", 500, "PARENT_SAVE_FAILED");
+
+    const existingStudents = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Student" WHERE name = ${item.application.childName} AND "parentId" = ${parentId} LIMIT 1
+    `;
+    let studentId = existingStudents[0]?.id;
+    if (studentId) {
+      await tx.$executeRaw`
+        UPDATE "Student" SET
+          gender = COALESCE(${item.application.childGender}, gender),
+          grade = COALESCE(${item.application.childGrade}, grade),
+          school = COALESCE(${item.application.childSchool}, school),
+          phone = COALESCE(${item.application.childPhone}, phone),
+          address = COALESCE(${item.application.address}, address),
+          "updatedAt" = NOW()
+        WHERE id = ${studentId}
+      `;
+    } else {
+      const students = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "Student" (
+          id, name, "birthDate", gender, grade, school, phone, address,
+          "parentId", "enrollDate", "createdAt", "updatedAt"
+        )
+        VALUES (
+          gen_random_uuid()::text, ${item.application.childName}, ${item.application.childBirthDate},
+          ${item.application.childGender}, ${item.application.childGrade}, ${item.application.childSchool},
+          ${item.application.childPhone}, ${item.application.address}, ${parentId}, NOW(), NOW(), NOW()
+        )
+        RETURNING id
+      `;
+      studentId = students[0]?.id;
+    }
+    if (!studentId) throw new SeasonalError("학생 정보를 준비하지 못했습니다.", 500, "STUDENT_SAVE_FAILED");
+
+    const relation = item.application.parentRelation || "보호자";
+    const guardianRows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Guardian"
+       WHERE "studentId" = ${studentId}
+         AND COALESCE(phone, '') = ${parentPhone}
+       LIMIT 1
+    `;
+    if (guardianRows.length === 0) {
+      await tx.$executeRaw`
+        INSERT INTO "Guardian" (id, "studentId", relation, name, phone, "isPrimary", "createdAt", "updatedAt")
+        VALUES (gen_random_uuid()::text, ${studentId}, ${relation}, ${parentName}, ${parentPhone}, true, NOW(), NOW())
+      `;
+    }
+
+    const enrollments = await tx.$queryRaw<{ id: string }[]>`
+      INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, ${studentId}, ${item.offering.linkedClassId}, 'ACTIVE', NOW(), NOW())
+      ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()
+      RETURNING id
+    `;
+    const enrollmentId = item.enrollmentId || enrollments[0]?.id;
+    if (!enrollmentId) throw new SeasonalError("수강 등록을 준비하지 못했습니다.", 500, "ENROLLMENT_SAVE_FAILED");
+
+    let paymentId = item.paymentId || null;
+    if (paymentId) {
+      const payments = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Payment" WHERE id = ${paymentId} LIMIT 1`;
+      if (payments.length === 0) paymentId = null;
+    }
+    if (!paymentId) {
+      const dueDate = defaultPaymentDueDate();
+      const year = dueDate.getFullYear();
+      const month = dueDate.getMonth() + 1;
+      const description = `${item.offering.season.title} · ${item.titleSnapshot}`;
+      const payments = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "Payment" (
+          id, "studentId", "classId", amount, status, "dueDate",
+          type, method, description, month, year, "autoGenerated", "createdAt", "updatedAt"
+        )
+        VALUES (
+          gen_random_uuid()::text, ${studentId}, ${item.offering.linkedClassId}, ${item.priceSnapshot}, 'PENDING', ${dueDate},
+          'SPECIAL', 'UNPAID', ${description}, ${month}, ${year}, false, NOW(), NOW()
+        )
+        RETURNING id
+      `;
+      paymentId = payments[0]?.id || null;
+    }
+    if (!paymentId) throw new SeasonalError("청구 정보를 준비하지 못했습니다.", 500, "PAYMENT_SAVE_FAILED");
+
+    const updated = await tx.specialProgramApplicationItem.update({
+      where: { id: item.id },
+      data: { enrollmentId, paymentId },
+    });
+    await tx.specialProgramApplication.update({
+      where: { id: item.applicationId },
+      data: { convertedStudentId: studentId, processedAt: new Date(), processedByUserId: actorId },
+    });
+    await tx.specialProgramAuditLog.create({
+      data: {
+        seasonId: item.application.seasonId,
+        offeringId: item.offeringId,
+        applicationId: item.applicationId,
+        itemId: item.id,
+        actorType: "ADMIN",
+        actorId,
+        action: "ITEM_CONVERTED_TO_ENROLLMENT_PAYMENT",
+        afterJSON: { studentId, enrollmentId, paymentId, linkedClassId: item.offering.linkedClassId },
+      },
+    });
+
+    return { itemId: updated.id, studentId, enrollmentId, paymentId };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  const invoice = await ensureInvoiceForPayment(converted.paymentId);
+  return { ...converted, invoiceId: invoice?.id ?? null };
 }
 
 export async function DELETE(request: NextRequest) {

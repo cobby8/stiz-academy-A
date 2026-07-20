@@ -141,6 +141,7 @@ export default function SeasonalAdminClient() {
   const [modal, setModal] = useState<"season" | "class" | null>(null);
   const [editingSeason, setEditingSeason] = useState<Season | null>(null);
   const [editingClass, setEditingClass] = useState<SeasonalClass | null>(null);
+  const [convertingItemId, setConvertingItemId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -240,6 +241,18 @@ export default function SeasonalAdminClient() {
     } catch (caught) { setError(caught instanceof Error ? caught.message : "상태를 변경하지 못했습니다."); }
   }
 
+  async function convertItem(itemId: string) {
+    setConvertingItemId(itemId);
+    try {
+      await mutate("PATCH", { resource: "conversion", id: itemId, data: {} }, "수강 등록과 청구서를 생성했습니다.");
+      setSelectedApplication(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "수강·청구 생성에 실패했습니다.");
+    } finally {
+      setConvertingItemId("");
+    }
+  }
+
   return (
     <main className="mx-auto max-w-7xl space-y-6 pb-20">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -257,7 +270,7 @@ export default function SeasonalAdminClient() {
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} />}
 
-      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} />}
+      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
       {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
@@ -288,7 +301,19 @@ function ApplicationsView({ applications, search, status, onSearch, onStatus, on
   </Panel>;
 }
 
-function ApplicationDrawer({ application, onClose, onUpdateItem }: { application: Application; onClose: () => void; onUpdateItem: (id: string, status: ItemStatus) => Promise<void> }) {
+function ApplicationDrawer({
+  application,
+  onClose,
+  onUpdateItem,
+  onConvertItem,
+  convertingItemId,
+}: {
+  application: Application;
+  onClose: () => void;
+  onUpdateItem: (id: string, status: ItemStatus) => Promise<void>;
+  onConvertItem: (id: string) => Promise<void>;
+  convertingItemId: string;
+}) {
   const totalAmount = application.totalAmount ?? application.items.reduce((sum, item) => sum + (item.amount ?? 0), 0);
   const parentPhoneHref = application.parentPhone ? `tel:${application.parentPhone}` : undefined;
   const parentSmsHref = application.parentPhone ? `sms:${application.parentPhone}` : undefined;
@@ -332,7 +357,7 @@ function ApplicationDrawer({ application, onClose, onUpdateItem }: { application
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
         </div>
         <div className="mt-3 space-y-3">
-          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} />)}
+          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} onConvertItem={onConvertItem} converting={convertingItemId === item.id} />)}
         </div>
       </section>
 
@@ -342,7 +367,7 @@ function ApplicationDrawer({ application, onClose, onUpdateItem }: { application
   </div>;
 }
 
-function ApplicationItemCard({ item, onUpdateItem }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void> }) {
+function ApplicationItemCard({ item, onUpdateItem, onConvertItem, converting }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void>; onConvertItem: (id: string) => Promise<void>; converting: boolean }) {
   const quickStatuses: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
   return <article className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
     <div className="flex items-start justify-between gap-3">
@@ -362,16 +387,17 @@ function ApplicationItemCard({ item, onUpdateItem }: { item: ApplicationItem; on
         {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
       </select>
     </label>
-    <ConversionReadinessBox item={item} />
+    <ConversionReadinessBox item={item} onConvertItem={onConvertItem} converting={converting} />
     {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} />}
   </article>;
 }
 
-function ConversionReadinessBox({ item }: { item: ApplicationItem }) {
+function ConversionReadinessBox({ item, onConvertItem, converting }: { item: ApplicationItem; onConvertItem: (id: string) => Promise<void>; converting: boolean }) {
   const approved = item.status === "APPROVED";
   const hasClass = Boolean(item.linkedClassId);
   const hasEnrollment = Boolean(item.enrollmentId);
   const hasPayment = Boolean(item.paymentId);
+  const readyToConvert = approved && hasClass && (!hasEnrollment || !hasPayment);
   let title = "전환 준비됨";
   let helper = "다음 단계에서 수강 등록과 청구 생성을 실행할 수 있습니다.";
   let tone = "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100";
@@ -403,10 +429,20 @@ function ConversionReadinessBox({ item }: { item: ApplicationItem }) {
         <p className="font-black">{title}</p>
         <p className="mt-1 text-xs opacity-80">{helper}</p>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-1">
+      <div className="flex shrink-0 flex-wrap justify-start gap-1 sm:justify-end">
         <MiniState active={hasClass} label="반 연결" />
         <MiniState active={hasEnrollment} label="수강" />
         <MiniState active={hasPayment} label="청구" />
+        {readyToConvert && (
+          <button
+            type="button"
+            disabled={converting}
+            onClick={() => void onConvertItem(item.id)}
+            className="ml-0 min-h-8 rounded-full bg-[var(--brand-accent)] px-3 text-[11px] font-black text-[var(--brand-accent-contrast)] disabled:opacity-60 sm:ml-2"
+          >
+            {converting ? "생성 중" : "수강·청구 생성"}
+          </button>
+        )}
       </div>
     </div>
   </div>;

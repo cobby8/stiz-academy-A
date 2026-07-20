@@ -238,6 +238,18 @@ function getPaymentModeLabel(status: PaymentProviderStatus) {
     return "키 준비 필요";
 }
 
+function getInvoiceHref(payment: Pick<Payment, "invoiceId" | "invoiceCheckoutUrl">) {
+    if (payment.invoiceCheckoutUrl) return payment.invoiceCheckoutUrl;
+    if (!payment.invoiceId) return null;
+    return `/payments/${encodeURIComponent(payment.invoiceId)}`;
+}
+
+function toAbsoluteHref(href: string) {
+    if (/^https?:\/\//i.test(href)) return href;
+    const normalizedHref = href.startsWith("/") ? href : `/${href}`;
+    return `${window.location.origin}${normalizedHref}`;
+}
+
 function needsInvoiceAttention(item: MonthlyInvoicePreviewItem) {
     if (item.existingAmount != null && item.existingAmount !== item.amount) return true;
     if (!item.issueReason) return false;
@@ -685,6 +697,23 @@ export default function FinanceClient({
             alert(getErrorMessage(err, "청구서 링크 발송 실패"));
         } finally {
             setBusy(false);
+        }
+    }
+
+    async function handleCopyInvoiceLink(payment: Payment) {
+        const href = getInvoiceHref(payment);
+        if (!href) {
+            setFinanceNotice("먼저 청구서를 발행해야 링크를 복사할 수 있습니다.");
+            return;
+        }
+
+        const absoluteHref = toAbsoluteHref(href);
+        try {
+            await navigator.clipboard.writeText(absoluteHref);
+            setFinanceNotice(`${payment.studentName} 청구서 링크를 복사했습니다.`);
+        } catch {
+            window.open(absoluteHref, "_blank", "noopener,noreferrer");
+            setFinanceNotice("브라우저가 복사를 막아 청구서를 새 창으로 열었습니다.");
         }
     }
 
@@ -1562,6 +1591,7 @@ export default function FinanceClient({
                             <tbody className="divide-y divide-gray-100">
                                 {payments.map((p) => {
                                     const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.PENDING;
+                                    const invoiceHref = getInvoiceHref(p);
                                     return (
                                         <tr key={p.id} className={`hover:bg-gray-50 dark:bg-gray-900 transition-colors ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
                                             {/* 개별 체크박스 */}
@@ -1630,6 +1660,25 @@ export default function FinanceClient({
                                             </td>
                                             <td className="px-4 py-3.5 text-right">
                                                 <div className="flex items-center gap-2 justify-end">
+                                                    {invoiceHref && (
+                                                        <>
+                                                            <a
+                                                                href={invoiceHref}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="text-xs font-medium text-gray-600 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
+                                                            >
+                                                                청구서
+                                                            </a>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void handleCopyInvoiceLink(p)}
+                                                                className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-brand-neon-lime"
+                                                            >
+                                                                링크복사
+                                                            </button>
+                                                        </>
+                                                    )}
                                                     {p.status !== "PAID" && (
                                                         <>
                                                             <button

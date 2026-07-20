@@ -84,6 +84,16 @@ test("관리자는 온라인 결제 운영 준비 상태를 개발 메시지 없
   assert.match(financeClient, /준비 필요/);
 });
 
+test("관리자는 수납 목록에서 청구서 링크를 바로 열고 복사할 수 있다", () => {
+  assert.match(financeClient, /getInvoiceHref/);
+  assert.match(financeClient, /toAbsoluteHref/);
+  assert.match(financeClient, /navigator\.clipboard\.writeText/);
+  assert.match(financeClient, /청구서 링크를 복사했습니다/);
+  assert.match(financeClient, /브라우저가 복사를 막아 청구서를 새 창으로 열었습니다/);
+  assert.match(financeClient, /청구서/);
+  assert.match(financeClient, /링크복사/);
+});
+
 test("결제 전용 프리플라이트는 비밀값 없이 키 종류와 URL만 점검한다", () => {
   assert.match(packageJson, /"payments:preflight"/);
   assert.match(paymentPreflight, /inferTossKeyMode/);

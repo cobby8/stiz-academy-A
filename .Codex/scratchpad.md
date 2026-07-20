@@ -17,6 +17,7 @@
 - 수업 보호: 실제 메모 저장 완료 후 이동, 실패·음성 처리 중 이동 차단
 
 ## 작업 로그
+- 2026-07-20: 관리자 수납 목록에서 청구서 링크를 바로 열고 복사할 수 있게 해 결제 테스트 동선을 줄였다.
 - 2026-07-20: 토스 결제 customerKey/멱등키 규격을 보정하고 관리자 결제 점검 카드와 결제 전용 프리플라이트를 추가했다.
 - 2026-07-17: 토스 온라인 결제 시작/승인/실패 흐름에 운영 준비 상태, 멱등 승인, 학부모 복귀 UX, 관리자 준비 표시를 추가했다.
 - 2026-07-16: 최신 수강생 시트를 다시 가져와 7월 수강/수납 상태를 반영하고, 이월 청구를 미납이 아닌 취소/이월로 닫는 규칙을 추가했다.
@@ -26,35 +27,30 @@
 - 2026-07-16: 관리자 신청/체험 목록을 서버 페이지 단위 로딩으로 전환하고 `/admin/apply` 첫 진입 payload를 축소했다.
 - 2026-07-16: 체험/수강신청 관리자에 상담, 부재, 재연락 기록 기능을 추가하고 최신 연락 요약만 목록에 붙였다.
 - 2026-07-16: 교사용 수업 종료 메모 자동 저장, 사진/청구 역할 복구, 연락 동의, 로딩/오류 화면을 개선했다.
-- 2026-07-16: 체험 문의/수강신청 목록에 전화, 연락처 복사, 상담문 복사 액션을 추가했다.
 
 ## 현재 작업
-- 작업명: 토스 온라인 결제 운영 전 점검 강화
+- 작업명: 관리자 결제 링크 운영 동선 보강
 - 상태: 구현 및 검증 완료, 커밋 대기
-- 범위: 토스 식별자 규격, 키 모드 점검, 웹훅 주소 안내, 결제 프리플라이트
+- 범위: 관리자 수납 목록 청구서 열기, 결제 링크 복사, 복사 실패 fallback
 - 기준일: 2026-07-20
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 토스 식별자 | 완료 | customerKey 특수문자 포함, 멱등키 UUID 형식 보정 |
-| 관리자 표시 | 완료 | 결제 모드, 복귀 주소, 토스 관리자 웹훅 등록 주소 표시 |
-| 프리플라이트 | 완료 | 실제 결제 요청 없이 키 종류와 URL 형식 점검 |
-| 로컬 환경 확인 | 완료 | 현재 토스 키와 사이트 주소 미설정으로 준비 필요 안내 확인 |
-| 검증 | 완료 | release:code-check 포함 통과 |
+| 링크 생성 | 완료 | invoiceCheckoutUrl 우선, 없으면 /payments/{invoiceId} 생성 |
+| 링크 열기 | 완료 | 관리자 수납 행에서 청구서 새 창 열기 |
+| 링크 복사 | 완료 | 전체 URL 복사, 차단 시 새 창으로 열기 |
+| 회귀 테스트 | 완료 | 결제 흐름 테스트에 관리자 링크 액션 추가 |
+| 전체 타입검사 | 참고 | 계절특강 미완성 파일의 SeasonalApplyClient 누락으로 실패, 이번 변경 파일 대상 검증은 통과 |
 
 ## 구현 기록
-- `src/lib/payment-ledger.ts`: 토스 키 모드 감지, customerKey/멱등키 규격 보정, 관리자용 결제 준비 상태 확장.
-- `src/app/admin/finance/FinanceClient.tsx`: 온라인 결제 상태 카드에 결제 모드, 복귀 주소, 웹훅 주소 표시 추가.
-- `scripts/payment-preflight.mjs`, `package.json`: 결제 전용 프리플라이트 명령 추가.
-- `tests/toss-online-payment-flow.test.mjs`: 토스 규격과 프리플라이트 회귀 테스트 추가.
+- `src/app/admin/finance/FinanceClient.tsx`: 청구서 링크 열기/복사 버튼과 복사 실패 fallback 추가.
+- `tests/toss-online-payment-flow.test.mjs`: 관리자 청구서 링크 액션 회귀 테스트 추가.
 
 ## 테스트 결과
-- `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 통과
-- `cmd /c npm run lint -- src/lib/payment-ledger.ts src/app/admin/finance/FinanceClient.tsx src/app/admin/finance/page.tsx src/lib/adminReadPayloads.ts scripts/payment-preflight.mjs tests/toss-online-payment-flow.test.mjs`: 통과
 - `node --test tests\toss-online-payment-flow.test.mjs`: 통과
-- `cmd /c npm run payments:preflight`: 예상 실패, 토스 공개키/서버키/사이트 주소 미설정 안내 확인
-- `cmd /c npm run release:code-check`: 통과
+- `cmd /c npm run lint -- src/app/admin/finance/FinanceClient.tsx tests/toss-online-payment-flow.test.mjs`: 통과
+- `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 실패, 별도 계절특강 작업의 `SeasonalApplyClient` 누락
 
 ## PM 체크
 - 작업 로그 최근 10건 이내 유지.

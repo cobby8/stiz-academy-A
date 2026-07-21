@@ -1010,54 +1010,39 @@ export default function ApplyAdminClient({
                 </a>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <button
                     type="button"
                     onClick={() => setActiveTab(priorityTrialCount >= priorityAppCount ? "trial" : "applications")}
-                    className="rounded-xl border border-red-100 bg-red-50 p-4 text-left shadow-sm transition hover:border-red-300 hover:shadow-md dark:border-red-900/40 dark:bg-red-950/30"
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-red-50 px-3 text-sm font-black text-red-700 transition hover:bg-red-100 dark:bg-red-950/30 dark:text-red-200"
                 >
-                    <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-bold text-red-700 dark:text-red-200">오늘 먼저 볼 건</span>
-                        <span className="material-symbols-outlined text-red-500 dark:text-red-200">priority_high</span>
-                    </div>
-                    <p className="mt-2 text-3xl font-black text-red-700 dark:text-red-100">{firstLookCount}</p>
-                    <p className="mt-1 text-xs text-red-700/80 dark:text-red-200/80">체험 {priorityTrialCount} · 신청 {priorityAppCount}</p>
+                    <span className="material-symbols-outlined text-base">priority_high</span>
+                    오늘 먼저 {firstLookCount}
+                    <span className="text-xs font-bold opacity-80">체험 {priorityTrialCount} · 신청 {priorityAppCount}</span>
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab("trial")}
-                    className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-neon-lime"
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
-                    <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-bold text-gray-500 dark:text-gray-400">새 체험 문의</span>
-                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">diversity_3</span>
-                    </div>
-                    <p className="mt-2 text-3xl font-black text-gray-900 dark:text-white">{trialNewCount}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">먼저 연락하고 체험 일정을 잡아주세요</p>
+                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">diversity_3</span>
+                    새 체험 {trialNewCount}
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab("trial")}
-                    className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-neon-lime"
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
-                    <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-bold text-gray-500 dark:text-gray-400">예정된 체험</span>
-                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">event_available</span>
-                    </div>
-                    <p className="mt-2 text-3xl font-black text-gray-900 dark:text-white">{trialScheduledCount}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">수업 전 안내와 담당 선생님 공유를 확인하세요</p>
+                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">event_available</span>
+                    체험 예정 {trialScheduledCount}
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab("applications")}
-                    className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-neon-lime"
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
                 >
-                    <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-bold text-gray-500 dark:text-gray-400">수강신청 대기</span>
-                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
-                    </div>
-                    <p className="mt-2 text-3xl font-black text-gray-900 dark:text-white">{stats.PENDING}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">반 배정, 셔틀, 보호자 메모를 확인하세요</p>
+                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
+                    수강 대기 {stats.PENDING}
                 </button>
             </div>
 

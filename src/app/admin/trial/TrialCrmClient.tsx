@@ -1067,28 +1067,24 @@ export default function TrialCrmClient({
     function renderTrialList() {
         return (
             <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[840px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
-                        <col className="w-[7%]" />
+                        <col className="w-[18%]" />
+                        <col className="w-[15%]" />
                         <col className="w-[13%]" />
-                        <col className="w-[13%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[8%]" />
                         <col className="w-[10%]" />
-                        <col className="w-[8%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[8%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[10%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
-                            <th className="px-3 py-3">상태</th>
                             <th className="px-3 py-3">학생</th>
                             <th className="px-3 py-3">보호자</th>
                             <th className="px-3 py-3">접수일</th>
                             <th className="px-3 py-3">희망일</th>
                             <th className="px-3 py-3">수업교시</th>
-                            <th className="px-3 py-3">확정일정</th>
                             <th className="px-3 py-3">쌤알림</th>
                             <th className="px-3 py-3">상태변경</th>
                             <th className="px-3 py-3">액션</th>
@@ -1102,28 +1098,26 @@ export default function TrialCrmClient({
                             const getScheduleValue = (label: string) => scheduleItems.find((item) => item.label === label)?.value || "-";
                             const parentPhoneHref = phoneHref(lead.parentPhone);
                             return (
-                                <tr key={`${lead.id}-list`} className="divide-x divide-gray-100 hover:bg-gray-50/80 dark:divide-gray-700 dark:hover:bg-gray-900/50">
+                                <tr
+                                    key={`${lead.id}-list`}
+                                    onClick={() => setShowEditModal(lead)}
+                                    className="cursor-pointer divide-x divide-gray-100 hover:bg-gray-50/80 dark:divide-gray-700 dark:hover:bg-gray-900/50"
+                                >
                                     <td className="px-3 py-2 align-top">
-                                        <div className="flex flex-col items-start gap-1">
-                                            <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full ${cfg.color}`} title={cfg.label}>
                                                 <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                                {cfg.label}
                                             </span>
-                                            <span className="whitespace-nowrap rounded bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                                                {SOURCE_LABELS[lead.source] || lead.source}
-                                            </span>
+                                            <p className="min-w-0 truncate font-black text-gray-900 dark:text-white">
+                                                {lead.childName}
+                                                {lead.childAge ? <span className="ml-1 text-xs font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
+                                            </p>
                                         </div>
-                                    </td>
-                                    <td className="px-3 py-2 align-top">
-                                        <p className="whitespace-nowrap font-black text-gray-900 dark:text-white">
-                                            {lead.childName}
-                                            {lead.childAge ? <span className="ml-1 text-xs font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
-                                        </p>
                                         <p className="mt-0.5 max-w-44 truncate text-xs text-gray-500 dark:text-gray-400">
                                             {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
                                         </p>
                                     </td>
-                                    <td className="px-3 py-2 align-top">
+                                    <td className="px-3 py-2 align-top" onClick={(event) => event.stopPropagation()}>
                                         <p className="whitespace-nowrap font-bold text-gray-800 dark:text-gray-100">{lead.parentName || "미입력"}</p>
                                         <a href={parentPhoneHref} className="mt-0.5 inline-flex items-center gap-1 whitespace-nowrap text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
                                             <span className="material-symbols-outlined text-sm">phone</span>
@@ -1139,13 +1133,10 @@ export default function TrialCrmClient({
                                     <td className="max-w-52 px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
                                         <span className="line-clamp-2">{getScheduleValue("수업교시")}</span>
                                     </td>
-                                    <td className="max-w-52 px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
-                                        <span className="line-clamp-2">{getScheduleValue("확정일정")}</span>
-                                    </td>
                                     <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-bold text-gray-600 dark:text-gray-300">
                                         {lead.coachNoticeSentAt ? formatDate(lead.coachNoticeSentAt) : "미발송"}
                                     </td>
-                                    <td className="px-3 py-2 align-top">
+                                    <td className="px-3 py-2 align-top" onClick={(event) => event.stopPropagation()}>
                                         {isClosed ? (
                                             <span className="whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400">종료 상태</span>
                                         ) : (
@@ -1163,7 +1154,7 @@ export default function TrialCrmClient({
                                             </select>
                                         )}
                                     </td>
-                                    <td className="px-3 py-2 align-top">
+                                    <td className="px-3 py-2 align-top" onClick={(event) => event.stopPropagation()}>
                                         {renderActionMenu(lead, isClosed, parentPhoneHref)}
                                         <div className="hidden">
                                             <a
@@ -1272,42 +1263,11 @@ export default function TrialCrmClient({
                 </div>
             )}
 
-            {/* ── 파이프라인 요약 카드 ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                {STATUS_ORDER.map((s) => {
-                    const cfg = STATUS_CONFIG[s];
-                    const count = stats[s as keyof TrialStats] as number;
-                    return (
-                        <button
-                            key={s}
-                            onClick={() => setFilter(filter === s ? "ALL" : s)}
-                            className={`rounded-xl p-4 text-center transition-all border-2 ${
-                                filter === s
-                                    ? "border-brand-orange-500 dark:border-brand-neon-lime shadow-md"
-                                    : "border-transparent hover:border-gray-200 dark:border-gray-700"
-                            } bg-white dark:bg-gray-800`}
-                        >
-                            <span className={`material-symbols-outlined text-2xl ${cfg.color.split(" ")[1]}`}>
-                                {cfg.icon}
-                            </span>
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{count}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</p>
-                        </button>
-                    );
-                })}
-                {/* 전환율 카드 */}
-                <div className="rounded-xl p-4 text-center bg-white dark:bg-gray-800 border-2 border-transparent">
-                    <span className="material-symbols-outlined text-2xl text-emerald-600">trending_up</span>
-                    <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.conversionRate}%</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">전환율</p>
-                </div>
-            </div>
-
-            {/* ── 필터 탭 ── */}
-            <div className="flex gap-2 flex-wrap">
+            {/* ── 한 줄 파이프라인 필터 ── */}
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <button
                     onClick={() => setFilter("ALL")}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    className={`inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-sm font-bold transition-colors ${
                         filter === "ALL"
                             ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                             : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
@@ -1322,16 +1282,21 @@ export default function TrialCrmClient({
                         <button
                             key={s}
                             onClick={() => setFilter(filter === s ? "ALL" : s)}
-                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                            className={`inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-sm font-bold transition-colors ${
                                 filter === s
                                     ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                                     : `${cfg.color} hover:opacity-80`
                             }`}
                         >
+                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                             {cfg.label} ({count})
                         </button>
                     );
                 })}
+                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-emerald-50 px-3 text-sm font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
+                    <span className="material-symbols-outlined text-sm">trending_up</span>
+                    전환율 {stats.conversionRate}%
+                </span>
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -1441,7 +1406,8 @@ export default function TrialCrmClient({
                         return (
                             <div
                                 key={lead.id}
-                                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
+                                onClick={() => setShowEditModal(lead)}
+                                className="cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
                             >
                                 <div className="space-y-4">
                                     <section className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1450,9 +1416,6 @@ export default function TrialCrmClient({
                                                 <span className={`inline-flex whitespace-nowrap items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
                                                     <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                                     {cfg.label}
-                                                </span>
-                                                <span className="whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                                                    {SOURCE_LABELS[lead.source] || lead.source}
                                                 </span>
                                                 {visibleBadges.map((badge) => (
                                                     <span
@@ -1473,7 +1436,7 @@ export default function TrialCrmClient({
                                             </p>
                                         </div>
 
-                                        <div className="min-w-0 rounded-xl bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900/70 lg:min-w-48">
+                                        <div className="min-w-0 rounded-xl bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900/70 lg:min-w-48" onClick={(event) => event.stopPropagation()}>
                                             <p className="break-keep font-bold text-gray-800 dark:text-gray-100">{lead.parentName || "보호자 미입력"}</p>
                                             <a href={parentPhoneHref} className="mt-1 inline-flex items-center gap-1 whitespace-nowrap font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
                                                 <span className="material-symbols-outlined text-base">phone</span>
@@ -1494,7 +1457,7 @@ export default function TrialCrmClient({
                                         ))}
                                     </section>
 
-                                    <section className="flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-gray-700 lg:flex-row lg:items-center lg:justify-between">
+                                    <section className="flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-gray-700 lg:flex-row lg:items-center lg:justify-between" onClick={(event) => event.stopPropagation()}>
                                         {isClosed ? (
                                             <span className="inline-flex min-h-10 w-fit items-center whitespace-nowrap rounded-lg bg-gray-100 px-3 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                                                 종료 상태

@@ -1,5 +1,6 @@
 import ReportEditClient from "./ReportEditClient";
 import { getCoaches, getSessionReport } from "@/lib/queries";
+import { notFound } from "next/navigation";
 
 // 관리자 리포트 편집은 30초 캐시
 export const revalidate = 30;
@@ -14,6 +15,8 @@ export default async function AdminReportEditPage({
         getSessionReport(sessionId),
         getCoaches(),
     ]);
+
+    if (!report) notFound();
 
     return <ReportEditClient sessionId={sessionId} report={report} coaches={coaches} />;
 }

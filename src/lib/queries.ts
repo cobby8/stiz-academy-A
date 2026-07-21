@@ -1639,7 +1639,7 @@ export async function getStudentActivity(studentId: string) {
         };
     } catch (e) {
         console.error("[getStudentActivity] failed:", e);
-        return null;
+        throw e;
     }
 }
 
@@ -2073,7 +2073,7 @@ export const getClassWithStudents = cache(async (classId: string) => {
         };
     } catch (e) {
         console.error("[getClassWithStudents] failed:", e);
-        return null;
+        throw e;
     }
 });
 
@@ -2223,7 +2223,7 @@ export const getSessionReport = cache(async (sessionId: string) => {
         };
     } catch (e) {
         console.error("[getSessionReport] failed:", e);
-        return null;
+        throw e;
     }
 });
 

@@ -14,6 +14,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { saveSessionLog } from "@/app/actions/admin";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
+import AdminModal from "@/components/admin/AdminModal";
 
 // ── 출석 상태 옵션 (AttendanceClient와 동일 패턴) ──
 const STATUS_OPTIONS = [
@@ -263,15 +264,20 @@ export default function SessionLogModal({
 
     return (
         // 모달 배경 오버레이 — ExcelUploadModal과 동일한 패턴
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <AdminModal
+            titleId="session-log-title"
+            onClose={() => { if (!saving && !uploading) handleClose(); }}
+            closeOnBackdrop={false}
+            panelClassName="max-w-3xl"
+        >
             {/* 모달 본체 */}
             <div
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+                className="flex w-full flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* ── 헤더 ── */}
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                    <h2 id="session-log-title" className="text-lg font-bold text-gray-900 dark:text-white">
                         {isEditMode ? "수업 기록 수정" : "수업 기록 추가"}
                     </h2>
                     {/* 닫기 버튼 */}
@@ -536,6 +542,6 @@ export default function SessionLogModal({
                     </button>
                 </div>
             </div>
-        </div>
+        </AdminModal>
     );
 }

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { createGalleryPost, updateGalleryPost } from "@/app/actions/admin";
 import { uploadImagesWithProgress } from "@/lib/clientImageUpload";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+import AdminModal from "@/components/admin/AdminModal";
 
 type MediaItem = { url: string; type: "image" | "video" };
 type UploadProgress = { done: number; total: number };
@@ -117,13 +118,9 @@ export default function GalleryPostFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-2xl dark:bg-gray-800"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <AdminModal onClose={onClose} titleId="gallery-post-form-modal-title" panelClassName="max-w-2xl rounded-lg">
         <div className="flex items-center justify-between border-b border-gray-100 p-6 dark:border-gray-800">
-          <h2 className="text-lg font-bold">{post ? "게시물 수정" : "새 게시물"}</h2>
+          <h2 id="gallery-post-form-modal-title" className="text-lg font-bold">{post ? "게시물 수정" : "새 게시물"}</h2>
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
             <FontFreeIcon name="close" size={20} />
           </button>
@@ -255,7 +252,6 @@ export default function GalleryPostFormModal({
             {isPending ? "저장 중..." : post ? "수정" : "등록"}
           </button>
         </div>
-      </div>
-    </div>
+    </AdminModal>
   );
 }

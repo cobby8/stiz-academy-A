@@ -157,6 +157,9 @@ const CONTACT_ACTION_LABELS: Record<string, string> = {
     NO_ANSWER: "부재",
     FOLLOW_UP: "재연락 예약",
     MEMO: "상담 메모",
+    UPDATED: "내용 수정",
+    SCHEDULED: "일정 변경",
+    CANCELLED: "취소 처리",
 };
 
 function phoneHref(phone: string) {

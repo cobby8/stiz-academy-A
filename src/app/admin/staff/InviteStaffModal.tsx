@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import { inviteStaff } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 function formatPhone(raw: string): string {
     const digits = raw.replace(/\D/g, "").slice(0, 11);
@@ -34,48 +35,7 @@ export default function InviteStaffModal({
     const [result, setResult] = useState<InvitationResult | null>(null);
     const [copyMessage, setCopyMessage] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
-    const dialogRef = useRef<HTMLDivElement>(null);
-    const nameInputRef = useRef<HTMLInputElement>(null);
     const phoneComplete = form.phone.replace(/-/g, "").length >= 10;
-
-    useEffect(() => {
-        const previousActiveElement = document.activeElement as HTMLElement | null;
-        nameInputRef.current?.focus();
-        return () => previousActiveElement?.focus();
-    }, []);
-
-    useEffect(() => {
-        if (result) dialogRef.current?.focus();
-    }, [result]);
-
-    function handleDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-        if (event.key === "Escape") {
-            event.preventDefault();
-            onClose();
-            return;
-        }
-        if (event.key !== "Tab") return;
-
-        const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-        );
-        if (!focusableElements?.length) return;
-
-        const first = focusableElements[0];
-        const last = focusableElements[focusableElements.length - 1];
-        if (!dialogRef.current?.contains(document.activeElement)) {
-            event.preventDefault();
-            (event.shiftKey ? last : first).focus();
-            return;
-        }
-        if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-        }
-    }
 
     function handleSubmit(event: FormEvent) {
         event.preventDefault();
@@ -122,19 +82,9 @@ export default function InviteStaffModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { if (!result) onClose(); }}>
-            <div
-                ref={dialogRef}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="invite-staff-title"
-                tabIndex={-1}
-                className="w-full max-w-md rounded-2xl bg-white shadow-xl dark:bg-gray-800"
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={handleDialogKeyDown}
-            >
+        <AdminModal onClose={onClose} titleId="invite-staff-modal-title" panelClassName="max-w-md" closeOnBackdrop={!result}>
                 <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-                    <h2 id="invite-staff-title" className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                    <h2 id="invite-staff-modal-title" className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                         <span className="material-symbols-outlined text-[20px]">person_add</span>
                         새 선생님 초대·가입
                     </h2>
@@ -186,7 +136,7 @@ export default function InviteStaffModal({
                         </div>
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">선생님 이름 *</label>
-                            <input ref={nameInputRef} type="text" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required placeholder="홍길동" className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-brand-navy-500 focus:ring-2 focus:ring-brand-navy-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+                            <input data-admin-modal-initial-focus type="text" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required placeholder="홍길동" className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-brand-navy-500 focus:ring-2 focus:ring-brand-navy-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
                         </div>
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">전화번호 *</label>
@@ -204,7 +154,6 @@ export default function InviteStaffModal({
                         </div>
                     </form>
                 )}
-            </div>
-        </div>
+        </AdminModal>
     );
 }

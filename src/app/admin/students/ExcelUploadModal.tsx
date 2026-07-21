@@ -11,6 +11,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { bulkCreateStudents } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 // parse-excel API에서 반환하는 파싱된 학생 데이터 타입
 // route.ts에서 export한 ParsedStudent와 동일한 구조
@@ -274,15 +275,20 @@ export default function ExcelUploadModal({
 
     return (
         // 모달 배경 오버레이
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <AdminModal
+            titleId="excel-upload-title"
+            onClose={handleClose}
+            closeOnBackdrop={false}
+            panelClassName="max-w-4xl"
+        >
             {/* 모달 본체 */}
             <div
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+                className="flex w-full flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* ── 헤더 ── */}
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                    <h2 id="excel-upload-title" className="text-lg font-bold text-gray-900 dark:text-white">
                         {step === "upload" && "엑셀 파일 업로드"}
                         {step === "preview" && "업로드 미리보기"}
                         {step === "result" && "등록 결과"}
@@ -644,6 +650,6 @@ export default function ExcelUploadModal({
                     )}
                 </div>
             </div>
-        </div>
+        </AdminModal>
     );
 }

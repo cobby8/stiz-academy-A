@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { createTrialLead, convertTrialToStudent, updateTrialLead } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 import type { TrialLead } from "./TrialCrmClient";
 
 interface TrialCrmModalsProps {
@@ -71,7 +72,16 @@ export default function TrialCrmModals({
                 <TrialEditModal
                     lead={editLead}
                     onClose={onCloseEdit}
-                    onSubmit={(data) => runAction(() => updateTrialLead(editLead.id, data), onCloseEdit, "체험 신청 내용을 수정했습니다.")}
+                    onSubmit={(data) =>
+                        runAction(
+                            () => updateTrialLead(editLead.id, data, {
+                                action: "UPDATED",
+                                note: "체험 신청 내용을 수정했습니다.",
+                            }),
+                            onCloseEdit,
+                            "체험 신청 내용을 수정했습니다.",
+                        )
+                    }
                     busy={busy}
                 />
             )}
@@ -80,7 +90,16 @@ export default function TrialCrmModals({
                 <TrialScheduleModal
                     lead={scheduleLead}
                     onClose={onCloseSchedule}
-                    onSubmit={(data) => runAction(() => updateTrialLead(scheduleLead.id, data), onCloseSchedule, "체험 일정을 저장했습니다.")}
+                    onSubmit={(data) =>
+                        runAction(
+                            () => updateTrialLead(scheduleLead.id, data, {
+                                action: "SCHEDULED",
+                                note: "체험 일정을 저장했습니다.",
+                            }),
+                            onCloseSchedule,
+                            "체험 일정을 저장했습니다.",
+                        )
+                    }
                     busy={busy}
                 />
             )}
@@ -95,6 +114,9 @@ export default function TrialCrmModals({
                                 updateTrialLead(cancelLead.id, {
                                     status: "CANCELLED",
                                     lostReason: reason,
+                                }, {
+                                    action: "CANCELLED",
+                                    note: `취소: ${reason}`,
                                 }),
                             onCloseCancel,
                             "체험 신청을 취소 처리했습니다.",
@@ -228,7 +250,7 @@ function TrialEditModal({
 }: {
     lead: TrialLead;
     onClose: () => void;
-    onSubmit: (data: Record<string, any>) => void;
+    onSubmit: (data: Record<string, unknown>) => void;
     busy: boolean;
 }) {
     const [form, setForm] = useState({
@@ -277,9 +299,8 @@ function TrialEditModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="mx-4 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
-                <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+        <AdminModal onClose={onClose} titleId="trial-edit-title" panelClassName="max-w-2xl p-6">
+                <h2 id="trial-edit-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit</span>
                     체험 신청 수정
                 </h2>
@@ -355,8 +376,7 @@ function TrialEditModal({
                     </FormField>
                     <ModalActions onClose={onClose} busy={busy} submitLabel="수정 저장" busyLabel="저장 중..." />
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -368,7 +388,7 @@ function TrialScheduleModal({
 }: {
     lead: TrialLead;
     onClose: () => void;
-    onSubmit: (data: Record<string, any>) => void;
+    onSubmit: (data: Record<string, unknown>) => void;
     busy: boolean;
 }) {
     const [scheduledDate, setScheduledDate] = useState(datetimeLocalValue(lead.scheduledDate || lead.trialDate));
@@ -390,9 +410,8 @@ function TrialScheduleModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
-                <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+        <AdminModal onClose={onClose} titleId="trial-schedule-title" panelClassName="max-w-md p-6">
+                <h2 id="trial-schedule-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-sky-500">event_available</span>
                     체험 일정 확정/변경
                 </h2>
@@ -413,8 +432,7 @@ function TrialScheduleModal({
                     </FormField>
                     <ModalActions onClose={onClose} busy={busy} submitLabel="일정 저장" busyLabel="저장 중..." accent="sky" />
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -433,9 +451,8 @@ function TrialCancelModal({
     const options = ["학부모 요청", "일정 불일치", "연락 불가", "중복 신청", "기타"];
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(e) => e.stopPropagation()}>
-                <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+        <AdminModal onClose={onClose} titleId="trial-cancel-title" panelClassName="max-w-md p-6">
+                <h2 id="trial-cancel-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-gray-500">block</span>
                     체험 신청 취소
                 </h2>
@@ -470,8 +487,7 @@ function TrialCancelModal({
                     </FormField>
                     <ModalActions onClose={onClose} busy={busy} submitLabel="취소 처리" busyLabel="처리 중..." muted />
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -512,9 +528,8 @@ function AddLeadModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+        <AdminModal onClose={onClose} titleId="trial-add-title" panelClassName="max-w-md p-6">
+                <h2 id="trial-add-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                     <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person_add</span>
                     체험 신청 등록
                 </h2>
@@ -611,8 +626,7 @@ function AddLeadModal({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -665,9 +679,8 @@ function ConvertModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+        <AdminModal onClose={onClose} titleId="trial-convert-title" panelClassName="max-w-md p-6">
+                <h2 id="trial-convert-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                     <span className="material-symbols-outlined text-emerald-500">how_to_reg</span>
                     정규 등록 전환
                 </h2>
@@ -774,8 +787,7 @@ function ConvertModal({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -793,9 +805,8 @@ function LostModal({
     const [reason, setReason] = useState("");
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+        <AdminModal onClose={onClose} titleId="trial-lost-title" panelClassName="max-w-md p-6">
+                <h2 id="trial-lost-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                     <span className="material-symbols-outlined text-red-500">person_off</span>
                     이탈 처리
                 </h2>
@@ -827,8 +838,7 @@ function LostModal({
                         {busy ? "처리 중..." : "이탈 처리"}
                     </button>
                 </div>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -846,9 +856,8 @@ function MemoModal({
     const [memo, setMemo] = useState(lead.memo || "");
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+        <AdminModal onClose={onClose} titleId="trial-memo-title" panelClassName="max-w-md p-6">
+                <h2 id="trial-memo-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
                     <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit_note</span>
                     메모 편집
                 </h2>
@@ -877,7 +886,6 @@ function MemoModal({
                         {busy ? "저장 중..." : "저장"}
                     </button>
                 </div>
-            </div>
-        </div>
+        </AdminModal>
     );
 }

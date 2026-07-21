@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { createFaq, updateFaq, deleteFaq } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 // FAQ 데이터 타입
 type FaqData = {
@@ -201,10 +202,9 @@ export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[]
 
             {/* 생성/수정 모달 */}
             {showForm && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={resetForm}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+                <AdminModal onClose={resetForm} titleId="faq-form-modal-title" panelClassName="max-w-2xl">
                         <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                            <h2 className="text-lg font-bold">{editId ? "FAQ 수정" : "새 FAQ"}</h2>
+                            <h2 id="faq-form-modal-title" className="text-lg font-bold">{editId ? "FAQ 수정" : "새 FAQ"}</h2>
                             <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg">
                                 <SymbolIcon name="close" size={20} />
                             </button>
@@ -246,8 +246,7 @@ export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[]
                                 {isPending ? "저장 중..." : editId ? "수정" : "등록"}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
 
             {/* FAQ 목록 */}

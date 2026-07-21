@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import { createStaffUser } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 function formatPhone(raw: string): string {
     const digits = raw.replace(/\D/g, "");
@@ -115,8 +116,8 @@ export default function AddStaffModal({
     const phoneComplete = form.phone.replace(/-/g, "").length >= 10;
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <AdminModal onClose={onClose} titleId="add-staff-title" panelClassName="max-w-md">
+                <span id="add-staff-title" className="sr-only">직접 스태프 추가</span>
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white">직접 스태프 추가</h2>
                     <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:bg-gray-800">
@@ -176,7 +177,6 @@ export default function AddStaffModal({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }

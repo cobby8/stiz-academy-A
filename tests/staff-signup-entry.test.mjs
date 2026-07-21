@@ -27,9 +27,8 @@ test("관리자는 신규 초대와 대기 중 초대의 개인 가입 링크를
   assert.match(inviteModalSource, /새 선생님 초대·가입/);
   assert.match(inviteModalSource, /개인 가입 링크/);
   assert.match(inviteModalSource, /navigator\.clipboard\.writeText\(absoluteInviteUrl\(result\.inviteUrl\)\)/);
-  assert.match(inviteModalSource, /role="dialog"/);
-  assert.match(inviteModalSource, /aria-modal="true"/);
-  assert.match(inviteModalSource, /event\.key === "Escape"/);
+  assert.match(inviteModalSource, /<AdminModal/);
+  assert.match(inviteModalSource, /titleId="invite-staff-modal-title"/);
   assert.match(staffClientSource, /handleCopyInvitationLink\(inv\.token, inv\.name\)/);
   assert.match(staffClientSource, /가입 완료 선생님용 앱 설치 링크/);
 });

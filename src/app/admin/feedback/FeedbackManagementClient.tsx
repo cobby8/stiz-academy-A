@@ -572,7 +572,7 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                                 <button
                                     type="button"
                                     onClick={() => setExpandedId(isExpanded ? null : fb.id)}
-                                    className="w-full px-6 py-4 flex items-center gap-4 text-left hover:bg-gray-50 dark:bg-gray-900 transition-colors"
+                                    className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-4 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 sm:flex sm:gap-4 sm:px-6"
                                 >
                                     {/* 카테고리 뱃지 */}
                                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${cat.color}`}>
@@ -580,23 +580,23 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                                     </span>
 
                                     {/* 학생 이름 */}
-                                    <span className="font-bold text-gray-800 dark:text-gray-100 min-w-[60px]">
+                                    <span className="min-w-0 truncate font-bold text-gray-800 dark:text-gray-100" title={fb.studentName}>
                                         {fb.studentName}
                                     </span>
 
                                     {/* 제목 */}
-                                    <span className="text-gray-700 dark:text-gray-200 flex-1 truncate">{fb.title}</span>
+                                    <span className="col-span-2 min-w-0 truncate text-gray-700 dark:text-gray-200 sm:col-span-1 sm:flex-1" title={fb.title}>{fb.title}</span>
 
                                     {/* 코치 이름 */}
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">{fb.coachName} 코치</span>
+                                    <span className="hidden max-w-32 truncate text-sm text-gray-500 dark:text-gray-400 md:inline" title={`${fb.coachName} 코치`}>{fb.coachName} 코치</span>
 
                                     {/* 날짜 */}
-                                    <span className="text-sm text-gray-400 min-w-[80px] text-right">
+                                    <span className="hidden min-w-[80px] text-right text-sm text-gray-400 sm:inline">
                                         {dateStr || createdStr}
                                     </span>
 
                                     {/* 별점 */}
-                                    <span className="min-w-[80px] text-right">{renderStars(fb.rating)}</span>
+                                    <span className="hidden min-w-[80px] text-right lg:inline">{renderStars(fb.rating)}</span>
 
                                     {/* 공개/비공개 */}
                                     {!fb.isPublic && (

@@ -10,6 +10,7 @@ import {
     enrollStudent,
     deleteEnrollment,
 } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 const ExcelUploadModal = dynamic(() => import("./ExcelUploadModal"), {
     ssr: false,
@@ -2163,9 +2164,8 @@ export default function StudentManagementClient({
 
             {/* 수강 등록 모달 — 프로그램별 그룹화 + 요일/시간 표시 */}
             {enrollModal && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4">
+                <AdminModal onClose={() => setEnrollModal(null)} titleId="student-enroll-title" panelClassName="max-w-lg p-6">
+                        <h3 id="student-enroll-title" className="font-bold text-lg text-gray-900 dark:text-white mb-4">
                             수강 등록 — {students.find(s => s.id === enrollModal)?.name}
                         </h3>
                         {classes.length === 0 ? (
@@ -2217,8 +2217,7 @@ export default function StudentManagementClient({
                                 닫기
                             </button>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
         </div>
     );

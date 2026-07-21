@@ -37,6 +37,48 @@ import {
     type ApplicationContactTargetType,
 } from "@/lib/application-contact-logs";
 
+type AdminActor = Awaited<ReturnType<typeof requireAdmin>>;
+type ApplicationHistoryAction = Extract<ApplicationContactAction, "UPDATED" | "SCHEDULED" | "CANCELLED">;
+
+async function recordApplicationHistoryLog(input: {
+    targetType: ApplicationContactTargetType;
+    targetId: string;
+    action: ApplicationHistoryAction;
+    note?: string | null;
+    admin: AdminActor;
+}) {
+    try {
+        await ensureApplicationContactLogInfrastructure();
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "ApplicationContactLog" (
+                id, "targetType", "trialLeadId", "enrollmentApplicationId", action, note,
+                "createdByUserId", "createdByName", "createdAt", "updatedAt"
+            )
+            VALUES (
+                gen_random_uuid()::text,
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                NOW(),
+                NOW()
+            )`,
+            input.targetType,
+            input.targetType === "TRIAL" ? input.targetId : null,
+            input.targetType === "ENROLL" ? input.targetId : null,
+            input.action,
+            input.note?.trim() || null,
+            input.admin.appUserId,
+            input.admin.appUserName,
+        );
+    } catch (error) {
+        console.warn("[application-history] failed to write log:", (error as Error).message);
+    }
+}
+
 // ── AcademySettings 누락 컬럼 자동 추가 (idempotent) ──────────────────────────
 // $executeRawUnsafe 사용: simple query protocol → PgBouncer transaction mode 호환
 // $executeRaw 태그드 템플릿은 prepared statement(extended protocol)를 사용해 PgBouncer가 차단
@@ -3621,9 +3663,13 @@ const TRIAL_LEAD_COLUMNS = [
 
 export async function updateTrialLead(
     id: string,
-    data: Partial<Record<(typeof TRIAL_LEAD_COLUMNS)[number], any>>
+    data: Partial<Record<(typeof TRIAL_LEAD_COLUMNS)[number], any>>,
+    history?: {
+        action?: ApplicationHistoryAction;
+        note?: string | null;
+    },
 ) {
-    await requireAdmin();
+    const admin = await requireAdmin();
     await ensureTrialLeadTable();
 
     // 화이트리스트에 있는 필드만 추출
@@ -3658,6 +3704,16 @@ export async function updateTrialLead(
             ...values,
             id,
         );
+
+        if (history?.action) {
+            await recordApplicationHistoryLog({
+                targetType: "TRIAL",
+                targetId: id,
+                action: history.action,
+                note: history.note,
+                admin,
+            });
+        }
 
         // SCHEDULED로 변경되면 학부모에게 체험 일정 확정 SMS 발송
         if (data.status === "SCHEDULED") {
@@ -4629,6 +4685,57 @@ const ENROLL_APPLICATION_COLUMNS = [
     "applicationNoticeConfirmed", "shuttleNoticeConfirmed", "processedNote",
 ] as const;
 
+type EnrollApplicationColumn = (typeof ENROLL_APPLICATION_COLUMNS)[number];
+
+const ENROLL_APPLICATION_FIELD_LABELS: Partial<Record<EnrollApplicationColumn, string>> = {
+    childName: "아이 이름",
+    childBirthDate: "생년월일",
+    childGender: "성별",
+    childGrade: "학년",
+    childSchool: "학교",
+    childPhone: "아이 연락처",
+    parentName: "보호자 이름",
+    parentPhone: "보호자 연락처",
+    parentRelation: "보호자 관계",
+    address: "주소",
+    enrollmentMonths: "수강 월",
+    preferredSlotKeys: "희망 시간",
+    assignedClassId: "배정 반",
+    basketballExp: "농구 경험",
+    uniformSize: "유니폼",
+    shuttleNeeded: "셔틀 신청",
+    shuttlePickup: "탑승지",
+    shuttleTime: "셔틀 시간",
+    shuttleDropoff: "하차지",
+    paymentMethod: "납부 방식",
+    referralSource: "유입 경로",
+    memo: "메모",
+    applicationNoticeConfirmed: "확정 안내 확인",
+    shuttleNoticeConfirmed: "셔틀 주의 확인",
+    processedNote: "처리 메모",
+};
+
+function normalizeHistoryValue(value: unknown) {
+    if (value instanceof Date) return value.toISOString();
+    if (value === null || value === undefined) return "";
+    if (typeof value === "boolean") return value ? "true" : "false";
+    return String(value).trim();
+}
+
+function buildEnrollApplicationUpdateNote(
+    previous: Record<string, unknown>,
+    entries: Array<readonly [EnrollApplicationColumn, unknown]>,
+) {
+    const changedLabels = entries
+        .filter(([column, value]) => normalizeHistoryValue(previous[column]) !== normalizeHistoryValue(value))
+        .map(([column]) => ENROLL_APPLICATION_FIELD_LABELS[column] ?? column);
+
+    if (changedLabels.length === 0) return "수강신청 내용을 다시 저장했습니다.";
+    const visibleLabels = changedLabels.slice(0, 6).join(", ");
+    const suffix = changedLabels.length > 6 ? ` 외 ${changedLabels.length - 6}개` : "";
+    return `수정: ${visibleLabels}${suffix}`;
+}
+
 /**
  * 수강 신청서 수정 — 승인 전 신청 내용을 관리자 화면에서 정리
  * 승인 후에는 원생/수강 등록 데이터가 이미 만들어지므로 별도 메뉴에서 수정해야 한다.
@@ -4637,11 +4744,11 @@ export async function updateEnrollApplication(
     applicationId: string,
     data: Partial<Record<(typeof ENROLL_APPLICATION_COLUMNS)[number], any>>
 ) {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     try {
         const apps = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT status FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+            `SELECT * FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
             applicationId,
         );
         if (apps.length === 0) throw new Error("신청서를 찾을 수 없습니다.");
@@ -4653,6 +4760,8 @@ export async function updateEnrollApplication(
             .filter((col) => data[col] !== undefined)
             .map((col) => [col, data[col]] as const);
         if (entries.length === 0) return;
+
+        const historyNote = buildEnrollApplicationUpdateNote(apps[0], entries);
 
         const setClauses = entries.map(([col], index) => {
             const isDate = ["childBirthDate"].includes(col);
@@ -4667,6 +4776,14 @@ export async function updateEnrollApplication(
             ...values,
             applicationId,
         );
+
+        await recordApplicationHistoryLog({
+            targetType: "ENROLL",
+            targetId: applicationId,
+            action: "UPDATED",
+            note: historyNote,
+            admin,
+        });
     } catch (e) {
         console.error("Failed to update enrollment application:", e);
         throw new Error((e as Error).message || "수강 신청 수정 실패");
@@ -4684,7 +4801,7 @@ export async function cancelEnrollApplication(
     applicationId: string,
     reason?: string
 ) {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     try {
         const apps = await prisma.$queryRawUnsafe<any[]>(
@@ -4696,6 +4813,8 @@ export async function cancelEnrollApplication(
             throw new Error("이미 승인된 신청은 원생/수강 등록에서 취소해주세요.");
         }
 
+        const cancelReason = reason?.trim() || "관리자 취소";
+
         await prisma.$executeRawUnsafe(
             `UPDATE "EnrollmentApplication"
              SET status = 'CANCELLED',
@@ -4703,9 +4822,17 @@ export async function cancelEnrollApplication(
                  "processedNote" = $1,
                  "updatedAt" = NOW()
              WHERE id = $2`,
-            reason?.trim() || "관리자 취소",
+            cancelReason,
             applicationId,
         );
+
+        await recordApplicationHistoryLog({
+            targetType: "ENROLL",
+            targetId: applicationId,
+            action: "CANCELLED",
+            note: `취소: ${cancelReason}`,
+            admin,
+        });
     } catch (e) {
         console.error("Failed to cancel enrollment application:", e);
         throw new Error((e as Error).message || "수강 신청 취소 실패");

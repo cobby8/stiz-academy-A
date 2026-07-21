@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { prepareNoticeSocialCampaign, publishNoticeSocialCampaign } from "@/app/actions/social-campaigns";
 import type { NoticeData } from "./NoticesAdminClient";
+import AdminModal from "@/components/admin/AdminModal";
 
 type SocialPreview = Awaited<ReturnType<typeof prepareNoticeSocialCampaign>>;
 type SocialPublishResult = Awaited<ReturnType<typeof publishNoticeSocialCampaign>>;
@@ -109,11 +110,10 @@ export default function NoticeSocialModal({
     }
 
     return (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <AdminModal onClose={onClose} titleId="notice-social-modal-title" panelClassName="max-w-3xl">
                 <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">소셜 발행</h2>
+                        <h2 id="notice-social-modal-title" className="text-lg font-bold text-gray-900 dark:text-white">소셜 발행</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{notice.title}</p>
                     </div>
                     <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg">
@@ -244,7 +244,6 @@ export default function NoticeSocialModal({
                         </div>
                     </div>
                 ) : null}
-            </div>
-        </div>
+        </AdminModal>
     );
 }

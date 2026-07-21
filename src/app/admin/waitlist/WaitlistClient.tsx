@@ -7,6 +7,7 @@ import {
     offerWaitlistSpot,
     processWaitlistResponse,
 } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 // ── 타입 정의 ──────────────────────────────────────────────────────────────
 type WaitlistItem = {
@@ -542,10 +543,15 @@ function AddWaitlistModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+        <AdminModal
+            titleId="add-waitlist-title"
+            onClose={onClose}
+            closeOnBackdrop={false}
+            panelClassName="max-w-md"
+        >
+            <div className="w-full p-6">
                 <div className="flex items-center justify-between mb-5">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <h3 id="add-waitlist-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person_add</span>
                         대기 등록
                     </h3>
@@ -647,6 +653,6 @@ function AddWaitlistModal({
                     </div>
                 </form>
             </div>
-        </div>
+        </AdminModal>
     );
 }

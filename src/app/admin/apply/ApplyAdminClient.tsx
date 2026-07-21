@@ -222,6 +222,9 @@ const CONTACT_ACTION_LABELS: Record<string, string> = {
     NO_ANSWER: "부재",
     FOLLOW_UP: "재연락 예약",
     MEMO: "상담 메모",
+    UPDATED: "내용 수정",
+    SCHEDULED: "일정 변경",
+    CANCELLED: "취소 처리",
 };
 
 const EMPTY_STATS: EnrollStats = {
@@ -1132,6 +1135,25 @@ export default function ApplyAdminClient({
                                 const contactCount = getContactCount(app.parentPhone, openContactCounts);
                                 const priorityBadges = getApplicationPriorityBadges(app, preferredSlotLabel, contactCount);
                                 const parentPhoneHref = phoneHref(app.parentPhone);
+                                const operationItems = [
+                                    { label: "접수", value: formatDate(app.createdAt), icon: "inbox" },
+                                    app.enrollmentMonths
+                                        ? { label: "수강월", value: app.enrollmentMonths, icon: "calendar_month" }
+                                        : null,
+                                    preferredSlotLabel
+                                        ? { label: "희망시간", value: preferredSlotLabel, icon: "schedule" }
+                                        : null,
+                                    app.assignedClassId
+                                        ? { label: "배정", value: "배정 완료", icon: "check_circle" }
+                                        : null,
+                                    app.shuttleNeeded
+                                        ? {
+                                            label: "셔틀",
+                                            value: [app.shuttlePickup, app.shuttleDropoff, app.shuttleTime].filter(Boolean).join(" / ") || "신청",
+                                            icon: "directions_bus",
+                                        }
+                                        : null,
+                                ].filter(Boolean) as Array<{ label: string; value: string; icon: string }>;
                                 return (
                                     <div
                                         key={app.id}
@@ -1211,6 +1233,23 @@ export default function ApplyAdminClient({
                                                     </span>
                                                 </div>
 
+                                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                                    {operationItems.map((item) => (
+                                                        <div
+                                                            key={`${app.id}-summary-${item.label}`}
+                                                            className="flex min-w-0 items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-200"
+                                                        >
+                                                            <span className="material-symbols-outlined mt-0.5 text-sm text-brand-orange-500 dark:text-brand-neon-lime">
+                                                                {item.icon}
+                                                            </span>
+                                                            <span className="min-w-0">
+                                                                <span className="mr-1 font-black text-gray-900 dark:text-white">{item.label}</span>
+                                                                <span className="break-words">{item.value}</span>
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
                                                 {/* 학년/학교/성별 태그 */}
                                                 {(app.childGrade || app.childSchool || app.childGender) && (
                                                     <div className="flex flex-wrap gap-2 mt-2">
@@ -1234,24 +1273,6 @@ export default function ApplyAdminClient({
                                                     </div>
                                                 )}
 
-                                                {/* 희망 시간대 */}
-                                                {app.enrollmentMonths && (
-                                                    <div className="flex items-center gap-1 mt-2 text-xs text-lime-700 bg-lime-50 rounded-lg px-3 py-1.5 dark:bg-lime-950/40 dark:text-lime-200">
-                                                        <span className="material-symbols-outlined text-sm">calendar_month</span>
-                                                        <span className="font-medium">수강 월:</span>
-                                                        {app.enrollmentMonths}
-                                                    </div>
-                                                )}
-
-                                                {/* 희망 시간대 */}
-                                                {preferredSlotLabel && (
-                                                    <div className="flex items-center gap-1 mt-2 text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-1.5 dark:bg-purple-950/40 dark:text-purple-200">
-                                                        <span className="material-symbols-outlined text-sm">schedule</span>
-                                                        <span className="font-medium">희망 시간:</span>
-                                                        {preferredSlotLabel}
-                                                    </div>
-                                                )}
-
                                                 {/* 농구 경험 태그 */}
                                                 {app.basketballExp && (
                                                     <div className="flex flex-wrap gap-2 mt-2">
@@ -1259,28 +1280,6 @@ export default function ApplyAdminClient({
                                                             <span className="material-symbols-outlined text-xs">sports_basketball</span>
                                                             농구 {app.basketballExp}
                                                         </span>
-                                                    </div>
-                                                )}
-
-                                                {/* 셔틀 정보 */}
-                                                {app.shuttleNeeded && (
-                                                    <div className="flex flex-wrap gap-2 mt-2">
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200">
-                                                            <span className="material-symbols-outlined text-xs">directions_bus</span>
-                                                            셔틀 탑승{app.shuttlePickup ? `: ${app.shuttlePickup}` : ""}
-                                                        </span>
-                                                        {app.shuttleDropoff && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200">
-                                                                <span className="material-symbols-outlined text-xs">pin_drop</span>
-                                                                하차: {app.shuttleDropoff}
-                                                            </span>
-                                                        )}
-                                                        {app.shuttleTime && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200">
-                                                                <span className="material-symbols-outlined text-xs">schedule</span>
-                                                                {app.shuttleTime}
-                                                            </span>
-                                                        )}
                                                     </div>
                                                 )}
 

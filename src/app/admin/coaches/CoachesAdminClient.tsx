@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createCoach, updateCoach, deleteCoach, reorderCoaches } from "@/app/actions/admin";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
+import AdminModal from "@/components/admin/AdminModal";
 
 interface Coach {
     id: string;
@@ -380,10 +381,9 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
 
             {/* 강사 추가 모달 */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAddModal(false)}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <AdminModal onClose={() => setShowAddModal(false)} titleId="add-coach-modal-title" panelClassName="max-w-xl">
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                            <span className="font-bold text-gray-800 dark:text-gray-100 text-base">강사 추가</span>
+                            <span id="add-coach-modal-title" className="font-bold text-gray-800 dark:text-gray-100 text-base">강사 추가</span>
                             <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600 dark:text-gray-300 text-xl leading-none">✕</button>
                         </div>
                         <div className="p-6 space-y-4">
@@ -465,8 +465,7 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
 
             {/* ── 코치 목록 ────────────────────────────────────────────────── */}

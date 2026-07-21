@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { createNotice, updateNotice, deleteNotice } from "@/app/actions/admin";
 import { isImageAttachment, isHtmlContent, plainToEditorHtml, stripHtmlForPreview } from "@/lib/noticeContent";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
+import AdminModal from "@/components/admin/AdminModal";
 
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
     ssr: false,
@@ -290,10 +291,9 @@ export default function NoticesAdminClient({
 
             {/* Form Modal */}
             {showForm && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={resetForm}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+                <AdminModal onClose={resetForm} titleId="notice-form-modal-title" panelClassName="max-w-2xl">
                         <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                            <h2 className="text-lg font-bold">{editId ? "공지 수정" : "새 공지"}</h2>
+                            <h2 id="notice-form-modal-title" className="text-lg font-bold">{editId ? "공지 수정" : "새 공지"}</h2>
                             <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg"><SymbolIcon name="close" size={20} /></button>
                         </div>
                         <div className="p-6 space-y-4">
@@ -383,8 +383,7 @@ export default function NoticesAdminClient({
                                 {isPending ? "저장 중..." : editorUploading ? "이미지 업로드 중..." : editId ? "수정" : "등록"}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
 
             {socialNotice && <NoticeSocialModal notice={socialNotice} onClose={() => setSocialNotice(null)} />}

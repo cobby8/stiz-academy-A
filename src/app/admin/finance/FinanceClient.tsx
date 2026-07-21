@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import AdminModal from "@/components/admin/AdminModal";
 import {
     createPayment,
     updatePaymentStatus,
@@ -883,17 +884,22 @@ export default function FinanceClient({
     return (
         <div className="max-w-5xl mx-auto">
             {terminalTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+                <AdminModal
+                    titleId="terminal-payment-title"
+                    onClose={() => { if (!terminalSubmitting) closeTerminalModal(); }}
+                    closeOnBackdrop={false}
+                    panelClassName="max-w-md border border-gray-200 dark:border-gray-700 dark:bg-gray-900"
+                >
                     <form
                         onSubmit={handleTerminalSubmit}
-                        className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+                        className="w-full p-5"
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-xs font-bold uppercase tracking-wide text-brand-orange-500 dark:text-brand-neon-lime">
                                     Toss terminal
                                 </p>
-                                <h2 className="mt-1 text-lg font-extrabold text-gray-900 dark:text-white">
+                                <h2 id="terminal-payment-title" className="mt-1 text-lg font-extrabold text-gray-900 dark:text-white">
                                     현장 단말기 결제 반영
                                 </h2>
                                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -973,7 +979,7 @@ export default function FinanceClient({
                             </button>
                         </div>
                     </form>
-                </div>
+                </AdminModal>
             )}
 
             {/* 헤더 + 액션 버튼 */}

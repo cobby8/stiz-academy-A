@@ -27,7 +27,7 @@ const OPS_PATHS = [
     "/admin/finance",
     "/admin/requests",
     "/admin/feedback",
-    "/admin/shuttle",
+    "/admin/seasonal",
     "/admin/waitlist",
     "/admin/makeup",
     "/admin/skills",
@@ -176,7 +176,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/finance/billing" active={pathname.startsWith("/admin/finance/billing")} icon="📋" label="청구 설정" />
                             <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" />
                             <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
-                            <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="셔틀버스 관제" />
+                            <NavItem href="/admin/seasonal?tab=applications" active={false} icon="🚌" label="특강 차량 신청" />
                             <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
                             <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal")} icon="🏀" label="방학특강 운영" />
                             <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />

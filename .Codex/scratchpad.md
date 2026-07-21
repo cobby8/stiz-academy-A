@@ -2,8 +2,8 @@
 
 ## 현재 작업
 - 작업명: 체험/수강신청 관리 기능 강화
-- 상태: 구현 및 검증 완료, 커밋 대기
-- 범위: 체험 카드 날짜 가독성, 체험 수정/일정/취소, 수강신청 수정/취소, 서버 액션, 회귀 테스트
+- 상태: 구현 및 검증 완료, 커밋 준비
+- 범위: 체험/수강신청 수정·일정·취소 이력, 수강신청 카드 요약, 상세 동선, 공통 관리자 모달 검증
 - 기준일: 2026-07-21
 
 ## 진행 현황표
@@ -12,24 +12,25 @@
 | 체험 카드 날짜 표시 | 완료 | 접수/희망일/희망시간/확정일을 분리 표시 |
 | 체험 관리 모달 | 완료 | 수정, 일정 확정/변경, 취소 상태 처리 |
 | 수강신청 관리 모달 | 완료 | 승인 전 수정, 대기 상태 취소 처리 |
-| 서버 액션 | 완료 | 신청 수정 화이트리스트와 취소 상태 업데이트 추가 |
-| 검증 | 완료 | TypeScript, 관련 테스트, release:code-check 통과 |
+| 서버 액션 | 완료 | 신청 수정/일정/취소를 ApplicationContactLog 이력으로 기록 |
+| 검증 | 완료 | TypeScript, 신청/모달/관리자 오류 관련 회귀 테스트 통과 |
 
 ## 구현 기록
 - `src/app/admin/trial/TrialCrmClient.tsx`: 체험 카드 일정 블록, 취소 상태, 수정/일정/취소 버튼 추가.
 - `src/app/admin/trial/TrialCrmModals.tsx`: 체험 신청 수정, 일정 확정/변경, 취소 모달 추가.
-- `src/app/admin/apply/ApplyAdminClient.tsx`: 수강신청 목록에 수정/취소 액션과 모달 연결 추가.
-- `src/app/admin/apply/ApplyAdminModals.tsx`: 수강신청 수정/취소 모달과 관리자용 입력 항목 구성.
-- `src/app/actions/admin.ts`: 체험 수정 허용 필드 보강, 수강신청 수정/취소 서버 액션 추가.
+- `src/app/admin/apply/ApplyAdminClient.tsx`: 수강신청 목록에 운영 요약 카드, 수정/취소 이력 라벨, 모달 연결 추가.
+- `src/app/admin/apply/ApplyAdminModals.tsx`: 수강신청 상세의 최근 운영 이력과 원생/청구서 이동 동선 보강.
+- `src/app/actions/admin.ts`: 체험/수강신청 수정·일정·취소를 ApplicationContactLog에 남기는 서버 이력 기록 추가.
 - `src/lib/queries.ts`, `prisma/schema.prisma`: 체험 `CANCELLED` 상태 통계와 문서화 반영.
 - `tests/application-management-ux.test.mjs`: 체험/수강신청 관리 UX 회귀 테스트 추가.
 
 ## 테스트 결과
-- `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 통과
-- `node --test tests\application-management-ux.test.mjs tests\trial-application-sms.test.mjs`: 통과
-- `npm run release:code-check`: 통과
+- `npx tsc --noEmit`: 통과
+- `node --test tests\admin-modal-accessibility.test.mjs tests\staff-signup-entry.test.mjs tests\admin-detail-query-errors.test.mjs tests\application-management-ux.test.mjs src\lib\adminLayoutAuth.test.ts`: 통과
+- `npm run lint`: 기존 `.tmp` 스크립트와 오래된 `any` 규칙 위반 605건 때문에 실패, 이번 변경 검증 기준에서는 제외
 
 ## 작업 로그
+- 2026-07-21: 체험/수강신청 수정·일정·취소를 운영 이력으로 남기고 수강신청 카드와 상세 모달의 다음 행동 동선을 보강했다.
 - 2026-07-21: 체험/수강신청 관리자가 신청 내용을 수정하고 취소 상태로 보존할 수 있게 했으며, 체험 카드 날짜 정보를 분리 표시했다.
 - 2026-07-21: 체험 신청 문자 실패 시 관리자 화면에서 실패 대상만 재발송하고, 문자 상태를 최신 시도 기준으로 집계하도록 보강했다.
 - 2026-07-21: 체험 신청 문자 알림의 슬롯 매칭, 발송 대기, 발송 장부, 관리자 상태 표시를 보강했다.

@@ -2,6 +2,7 @@
 
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import type { ScheduleSlotImportIssue, ScheduleSlotImportPlan } from "@/lib/scheduleSlotImport";
+import AdminModal from "@/components/admin/AdminModal";
 
 interface Coach {
     id: string;
@@ -194,8 +195,8 @@ export default function ScheduleAdminModals({
     return (
         <>
             {editingSheetSlot && editingSheetState && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onCloseSheetSlot}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+                <AdminModal onClose={onCloseSheetSlot} titleId="sheet-slot-title" panelClassName="max-w-2xl">
+                    <span id="sheet-slot-title" className="sr-only">시트 수업 수정</span>
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                             <div className="flex items-center gap-3">
                                 <span className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs font-bold px-2.5 py-1 rounded-full">
@@ -366,13 +367,12 @@ export default function ScheduleAdminModals({
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
 
             {editingCustomSlot && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onCloseCustomEdit}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+                <AdminModal onClose={onCloseCustomEdit} titleId="custom-slot-edit-title" panelClassName="max-w-2xl">
+                    <span id="custom-slot-edit-title" className="sr-only">커스텀 수업 수정</span>
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                             <div className="flex items-center gap-3">
                                 <span className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-xs font-bold px-2.5 py-1 rounded-full">커스텀</span>
@@ -417,13 +417,12 @@ export default function ScheduleAdminModals({
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
 
             {showSheetModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onCloseSheetUrl}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xl" onClick={(event) => event.stopPropagation()}>
+                <AdminModal onClose={onCloseSheetUrl} titleId="sheet-url-title" panelClassName="max-w-xl">
+                    <span id="sheet-url-title" className="sr-only">구글 시트 연동 관리</span>
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                             <span className="font-bold text-gray-800 dark:text-gray-100 text-base flex items-center gap-2">
                                 <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>link</span>
@@ -607,13 +606,12 @@ export default function ScheduleAdminModals({
                                 )}
                             </div>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
 
             {isAddingCustom && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onCloseAddCustom}>
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+                <AdminModal onClose={onCloseAddCustom} titleId="custom-slot-add-title" panelClassName="max-w-2xl">
+                    <span id="custom-slot-add-title" className="sr-only">커스텀 수업 추가</span>
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                             <span className="font-bold text-gray-800 dark:text-gray-100 text-base flex items-center gap-2">
                                 <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime" style={{ fontSize: "20px" }}>add_circle</span>
@@ -639,8 +637,7 @@ export default function ScheduleAdminModals({
                                 {customPending ? "저장 중..." : "저장"}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </AdminModal>
             )}
         </>
     );

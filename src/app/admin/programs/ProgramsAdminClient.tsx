@@ -3,6 +3,7 @@
 import { useCallback, useState, useTransition, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { deleteProgram, reorderPrograms } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 const ProgramFormPanel = dynamic(() => import("./ProgramFormPanel"), {
     loading: () => null,
@@ -279,16 +280,16 @@ export default function ProgramsAdminClient({
 
             {/* Add Program Modal */}
             {showAddModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    {/* Backdrop */}
-                    <div
-                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                        onClick={() => !formPending && setShowAddModal(false)}
-                    />
+                <AdminModal
+                    titleId="add-program-title"
+                    onClose={() => { if (!formPending) setShowAddModal(false); }}
+                    closeOnBackdrop={!formPending}
+                    panelClassName="max-w-2xl"
+                >
                     {/* Dialog */}
-                    <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <div className="w-full">
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-800 z-10 rounded-t-2xl">
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">새 프로그램 등록</h2>
+                            <h2 id="add-program-title" className="text-lg font-bold text-gray-900 dark:text-white">새 프로그램 등록</h2>
                             <button
                                 type="button"
                                 onClick={() => setShowAddModal(false)}
@@ -310,7 +311,7 @@ export default function ProgramsAdminClient({
                             />
                         </div>
                     </div>
-                </div>
+                </AdminModal>
             )}
 
             {/* Shuttle fee reference */}

@@ -257,6 +257,20 @@ function CategoryTab({
         description: "",
     });
 
+    useEffect(() => {
+        if (!showForm) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape" && !isPending) setShowForm(false);
+        };
+        document.addEventListener("keydown", closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [isPending, showForm]);
+
     // 카테고리 등록/수정 폼 열기
     const openCreate = () => {
         setEditId(null);
@@ -339,7 +353,8 @@ function CategoryTab({
                         </p>
                     </div>
                 ) : (
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-sm">
                         <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 text-xs">
                             <tr>
                                 <th className="text-left px-6 py-3">순서</th>
@@ -352,7 +367,7 @@ function CategoryTab({
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {categories.map((cat) => (
-                                <tr key={cat.id} className="hover:bg-gray-50 dark:bg-gray-900">
+                                <tr key={cat.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
                                     <td className="px-6 py-3 text-gray-500 dark:text-gray-400">{cat.order}</td>
                                     <td className="px-6 py-3">
                                         {cat.icon ? (
@@ -389,14 +404,15 @@ function CategoryTab({
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 )}
             </div>
 
             {/* 등록/수정 모달 */}
             {showForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/40 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="skill-category-dialog-title" onMouseDown={(event) => { if (event.target === event.currentTarget && !isPending) setShowForm(false); }}>
+                    <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-xl dark:bg-gray-800">
+                        <h3 id="skill-category-dialog-title" className="mb-4 text-lg font-bold text-gray-900 dark:text-white">
                             {editId ? "카테고리 수정" : "카테고리 추가"}
                         </h3>
                         <div className="space-y-4">

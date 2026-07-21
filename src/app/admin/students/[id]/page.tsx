@@ -1,12 +1,14 @@
 import StudentDetailClient from "./StudentDetailClient";
 import { getStudentActivity } from "@/lib/queries";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 export const revalidate = 30;
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const data = await getStudentActivity(id);
+    if (!data) notFound();
 
     return <>
         <div className="mx-auto mb-4 flex max-w-5xl justify-end">
@@ -14,6 +16,6 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                 사진 사용 동의 관리
             </Link>
         </div>
-        <StudentDetailClient studentId={id} data={data ?? undefined} />
+        <StudentDetailClient studentId={id} data={data} />
     </>;
 }

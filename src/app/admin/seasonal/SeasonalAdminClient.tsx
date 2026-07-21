@@ -189,6 +189,11 @@ export default function SeasonalAdminClient() {
   const [convertingItemId, setConvertingItemId] = useState("");
   const [resolvingReview, setResolvingReview] = useState(false);
 
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    if (requestedTab && TABS.some((item) => item.key === requestedTab)) setTab(requestedTab as Tab);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
@@ -338,7 +343,7 @@ export default function SeasonalAdminClient() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 pb-20">
+    <main className="mx-auto min-w-0 max-w-7xl space-y-6 overflow-x-clip pb-20">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><p className="text-sm font-bold text-[var(--brand-accent)]">SEASONAL PROGRAM</p><h1 className="mt-1 text-3xl font-black text-gray-950 dark:text-white">방학특강 운영</h1><p className="mt-2 text-sm text-gray-500 dark:text-gray-400">모집부터 반 편성, 결제와 차량 현황까지 한곳에서 확인합니다.</p></div>
         <button type="button" onClick={() => { setEditingSeason(null); setModal("season"); }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]"><Icon name="add" />새 시즌 만들기</button>
@@ -368,7 +373,7 @@ function Overview({ stats, seasons, applications, onNavigate }: { stats: Record<
   return <div className="space-y-6"><section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label, count, icon, helper]) => <button type="button" key={label} onClick={() => onNavigate(label === "승인 대기" || label === "대기자" ? "applications" : "overview")} className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 dark:border-gray-700 dark:bg-gray-900"><div className="flex items-center justify-between"><Icon name={icon} className="text-2xl text-[var(--brand-accent)]" /><span className="text-xs font-bold text-gray-400">{helper}</span></div><p className="mt-4 text-3xl font-black">{count}</p><p className="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{label}</p></button>)}</section>
     <section className="grid gap-4 lg:grid-cols-2"><Panel title="운영 중인 시즌" icon="calendar_month">{seasons.length ? seasons.slice(0, 4).map((season) => <div key={season.id} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"><div><p className="font-bold">{season.name}</p><p className="text-xs text-gray-500">{formatDate(season.startsAt)} ~ {formatDate(season.endsAt)} · {season.classes.length}개 반</p></div><span className={badge(season.status)}>{STATUS_LABEL[season.status] ?? season.status}</span></div>) : <Empty text="아직 개설된 시즌이 없습니다." />}</Panel>
     <Panel title="최근 신청" icon="person_add">{applications.length ? applications.slice(0, 5).map((application) => <div key={application.id} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"><div><p className="font-bold">{application.childName} <span className="text-xs text-gray-400">{application.childGrade}</span></p><p className="text-xs text-gray-500">{application.parentName} · {application.items.length}개 반</p></div><span className={badge(application.items[0]?.status)}>{STATUS_LABEL[application.items[0]?.status] ?? "접수"}</span></div>) : <Empty text="접수된 신청이 없습니다." />}</Panel></section>
-    <section className="grid gap-3 sm:grid-cols-3"><NextCard icon="payments" title="결제 관리" text="청구·미납·환불 화면은 다음 그룹에서 연결합니다." /><NextCard icon="directions_bus" title="차량 배차" text="승하차 요청과 노선 배정 화면을 연결할 예정입니다." /><NextCard icon="analytics" title="운영 통계" text="매출·출석·취소 지표를 시즌별로 제공합니다." /></section></div>;
+    <section className="grid gap-3 sm:grid-cols-3"><NextCard icon="payments" title="결제 관리" text="신청 상세에서 청구서 생성과 결제 링크 복사를 확인합니다." /><NextCard icon="directions_bus" title="차량 배차" text="셔틀 신청 여부와 승하차 위치를 신청 상세에서 확인합니다." /><NextCard icon="analytics" title="운영 통계" text="모집·승인·미납·대기 요약을 상단 카드로 확인합니다." /></section></div>;
 }
 
 function SeasonsView({ seasons, selected, onSelect, onAddClass, onEditSeason, onEditClass, onStatus }: { seasons: Season[]; selected?: Season; onSelect: (id: string) => void; onAddClass: () => void; onEditSeason: (season: Season) => void; onEditClass: (klass: SeasonalClass) => void; onStatus: (id: string, status: SeasonStatus) => Promise<void> }) {
@@ -408,8 +413,19 @@ function ApplicationDrawer({
   const parentPhoneHref = application.parentPhone ? `tel:${application.parentPhone}` : undefined;
   const parentSmsHref = application.parentPhone ? `sms:${application.parentPhone}` : undefined;
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose]);
+
   return <div className="fixed inset-0 z-50 flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-labelledby="application-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <aside className="h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-2xl dark:bg-gray-900 sm:p-7">
+    <aside className="h-full w-full max-w-2xl overflow-y-auto overscroll-contain bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl dark:bg-gray-900 sm:p-7">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-[var(--brand-accent)]">신청 상세</p>
@@ -615,11 +631,21 @@ function ClassForm({ seasonId, initial: _initial, onClose, onSubmit }: { seasonI
 type Field = { name: string; label: string; type?: string; placeholder?: string; required?: boolean };
 function FormModal({ title, helper, fields, onClose, onSubmit }: { title: string; helper?: string; fields: Field[]; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
   const [pending, setPending] = useState(false); const [error, setError] = useState("");
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape" && !pending) onClose(); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose, pending]);
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setPending(true); setError(""); const form = new FormData(event.currentTarget); const payload = Object.fromEntries(form.entries()); try { await onSubmit(payload); } catch (caught) { setError(caught instanceof Error ? caught.message : "저장하지 못했습니다."); setPending(false); } }
   return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/45 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900"><header className="flex items-center justify-between"><h2 className="text-xl font-black">{title}</h2><button type="button" onClick={onClose} aria-label="닫기"><Icon name="close" /></button></header>{helper && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{helper}</p>}{error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}<div className="mt-5 grid gap-4 sm:grid-cols-2">{fields.map((field) => <label key={field.name} className="text-sm font-bold text-gray-700 dark:text-gray-200">{field.label}{field.required && <span className="text-red-500"> *</span>}<input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} min={field.type === "number" ? 0 : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>)}</div><footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer></form></div>;
 }
 
-function Panel({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"><header className="flex flex-col justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center dark:border-gray-800"><h2 className="flex items-center gap-2 font-black"><Icon name={icon} className="text-[var(--brand-accent)]" />{title}</h2>{action}</header><div className="p-5">{children}</div></section>; }
+function Panel({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="min-w-0 max-w-full rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"><header className="flex min-w-0 flex-col justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center dark:border-gray-800"><h2 className="flex min-w-0 items-center gap-2 break-words font-black"><Icon name={icon} className="text-[var(--brand-accent)]" />{title}</h2>{action}</header><div className="min-w-0 max-w-full p-5">{children}</div></section>; }
 function Empty({ text }: { text: string }) { return <div className="py-10 text-center"><Icon name="inbox" className="text-4xl text-gray-300" /><p className="mt-2 text-sm text-gray-500">{text}</p></div>; }
-function NextCard({ icon, title, text }: { icon: string; title: string; text: string }) { return <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900"><Icon name={icon} className="text-2xl text-gray-400" /><h3 className="mt-3 font-black">{title}</h3><p className="mt-1 text-sm text-gray-500">{text}</p><span className="mt-3 inline-block text-xs font-bold text-[var(--brand-accent)]">다음 단계에서 연결</span></div>; }
+function NextCard({ icon, title, text }: { icon: string; title: string; text: string }) { return <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900"><Icon name={icon} className="text-2xl text-gray-400" /><h3 className="mt-3 font-black">{title}</h3><p className="mt-1 text-sm text-gray-500">{text}</p><span className="mt-3 inline-block text-xs font-bold text-[var(--brand-accent)]">운영 상태 확인</span></div>; }
 function Loading() { return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-36 animate-pulse rounded-2xl bg-gray-100 dark:bg-gray-800" />)}</div>; }

@@ -1,13 +1,23 @@
 import { prisma } from "@/lib/prisma";
 
 export type ApplicationContactTargetType = "TRIAL" | "ENROLL";
-export type ApplicationContactAction = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
+export type ApplicationContactAction =
+    | "CONTACTED"
+    | "NO_ANSWER"
+    | "FOLLOW_UP"
+    | "MEMO"
+    | "UPDATED"
+    | "SCHEDULED"
+    | "CANCELLED";
 
 export const APPLICATION_CONTACT_ACTIONS: ApplicationContactAction[] = [
     "CONTACTED",
     "NO_ANSWER",
     "FOLLOW_UP",
     "MEMO",
+    "UPDATED",
+    "SCHEDULED",
+    "CANCELLED",
 ];
 
 let _applicationContactLogEnsured = false;

@@ -7,6 +7,7 @@ import {
     rejectEnrollApplication,
     updateEnrollApplication,
 } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 interface EnrollApplication {
     id: string;
@@ -41,6 +42,12 @@ interface EnrollApplication {
     convertedStudentId: string | null;
     createdAt: string;
     updatedAt: string;
+    latestContactAction: string | null;
+    latestContactNote: string | null;
+    latestContactAt: string | null;
+    latestContactBy: string | null;
+    openFollowUpAt: string | null;
+    openFollowUpNote: string | null;
 }
 
 interface ClassInfo {
@@ -75,6 +82,16 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     APPROVED: { label: "승인완료", color: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200", icon: "check_circle" },
     REJECTED: { label: "반려", color: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200", icon: "cancel" },
     CANCELLED: { label: "취소", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "block" },
+};
+
+const CONTACT_ACTION_LABELS: Record<string, string> = {
+    CONTACTED: "연락 완료",
+    NO_ANSWER: "부재",
+    FOLLOW_UP: "재연락 예약",
+    MEMO: "상담 메모",
+    UPDATED: "내용 수정",
+    SCHEDULED: "일정 변경",
+    CANCELLED: "취소 처리",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -136,6 +153,13 @@ function formatDetailDate(dateStr: string | null) {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatDetailDateTime(dateStr: string | null) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "-";
+    return `${formatDetailDate(dateStr)} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function dateInputValue(dateStr: string | null) {
@@ -275,7 +299,7 @@ export default function ApplyAdminModals({
         }
     }
 
-    async function handleEdit(data: Record<string, any>) {
+    async function handleEdit(data: Record<string, unknown>) {
         if (!editApp) return;
         setBusy(true);
         try {
@@ -407,12 +431,8 @@ function ApproveModal({
     }, {});
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto"
-                onClick={(event) => event.stopPropagation()}
-            >
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
+        <AdminModal onClose={onClose} titleId="approve-application-title" panelClassName="max-w-lg p-6">
+                <h2 id="approve-application-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
                     <span className="material-symbols-outlined text-green-500">check_circle</span>
                     수강 신청 승인
                 </h2>
@@ -514,8 +534,7 @@ function ApproveModal({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -529,7 +548,7 @@ function EditApplicationModal({
     app: EnrollApplication;
     classes: ClassInfo[];
     onClose: () => void;
-    onSubmit: (data: Record<string, any>) => void;
+    onSubmit: (data: Record<string, unknown>) => void;
     busy: boolean;
 }) {
     const initialSlotKeys = app.preferredSlotKeys?.split(",").map((key) => key.trim()).filter(Boolean) ?? [];
@@ -612,12 +631,8 @@ function EditApplicationModal({
     }, {});
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div
-                className="mx-4 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800"
-                onClick={(event) => event.stopPropagation()}
-            >
-                <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+        <AdminModal onClose={onClose} titleId="edit-application-title" panelClassName="max-w-3xl p-6">
+                <h2 id="edit-application-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit</span>
                     수강신청 수정
                 </h2>
@@ -808,8 +823,7 @@ function EditApplicationModal({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -827,9 +841,8 @@ function CancelApplicationModal({
     const [reason, setReason] = useState("학부모 요청");
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
-                <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+        <AdminModal onClose={onClose} titleId="cancel-application-title" panelClassName="max-w-md p-6">
+                <h2 id="cancel-application-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-gray-500">block</span>
                     수강신청 취소
                 </h2>
@@ -879,8 +892,7 @@ function CancelApplicationModal({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -898,9 +910,8 @@ function RejectModal({
     const [reason, setReason] = useState("");
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(event) => event.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
+        <AdminModal onClose={onClose} titleId="reject-application-title" panelClassName="max-w-md p-6">
+                <h2 id="reject-application-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
                     <span className="material-symbols-outlined text-red-500">cancel</span>
                     수강 신청 반려
                 </h2>
@@ -958,8 +969,7 @@ function RejectModal({
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>
+        </AdminModal>
     );
 }
 
@@ -988,13 +998,9 @@ function DetailModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-            <div
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto"
-                onClick={(event) => event.stopPropagation()}
-            >
+        <AdminModal onClose={onClose} titleId="application-detail-title" panelClassName="max-w-lg p-6">
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <h2 id="application-detail-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
                         수강 신청 상세
                     </h2>
@@ -1034,6 +1040,25 @@ function DetailModal({
                         요약 복사
                     </button>
                 </div>
+
+                {app.convertedStudentId && (
+                    <div className="mb-5 grid gap-2 rounded-xl border border-green-100 bg-green-50 p-3 dark:border-green-900/50 dark:bg-green-950/20 sm:grid-cols-2">
+                        <a
+                            href={`/admin/students/${app.convertedStudentId}`}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-black text-white transition hover:bg-green-700"
+                        >
+                            <span className="material-symbols-outlined text-lg">person_search</span>
+                            원생 상세 열기
+                        </a>
+                        <a
+                            href="/admin/finance/billing"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-bold text-green-800 transition hover:bg-green-100 dark:border-green-800 dark:bg-gray-900 dark:text-green-200 dark:hover:bg-green-950/40"
+                        >
+                            <span className="material-symbols-outlined text-lg">receipt_long</span>
+                            청구서 관리
+                        </a>
+                    </div>
+                )}
 
                 <div className="space-y-5">
                     <div>
@@ -1101,6 +1126,31 @@ function DetailModal({
                             </div>
                         </div>
                     )}
+
+                    {(app.latestContactAction || app.openFollowUpAt) && (
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">최근 운영 이력</h3>
+                            <div className="space-y-1.5 rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                {app.latestContactAction && (
+                                    <>
+                                        <InfoRow
+                                            label="최근 처리"
+                                            value={CONTACT_ACTION_LABELS[app.latestContactAction] ?? app.latestContactAction}
+                                        />
+                                        <InfoRow label="처리 시간" value={formatDetailDateTime(app.latestContactAt)} />
+                                        <InfoRow label="담당자" value={app.latestContactBy} />
+                                        <InfoRow label="내용" value={app.latestContactNote} />
+                                    </>
+                                )}
+                                {app.openFollowUpAt && (
+                                    <>
+                                        <InfoRow label="다음 연락" value={formatDetailDateTime(app.openFollowUpAt)} />
+                                        <InfoRow label="연락 메모" value={app.openFollowUpNote} />
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex justify-end mt-5">
@@ -1111,7 +1161,6 @@ function DetailModal({
                         닫기
                     </button>
                 </div>
-            </div>
-        </div>
+        </AdminModal>
     );
 }

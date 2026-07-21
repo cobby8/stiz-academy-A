@@ -237,8 +237,8 @@ function ProgramFormFields({
                     수강료 (수업 빈도별)
                     <span className="text-gray-400 font-normal ml-2 text-xs">(해당하는 빈도에만 입력)</span>
                 </label>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                    <table className="w-full min-w-[560px] text-sm">
                         <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                             <tr>
                                 <th className="px-4 py-2.5 text-left font-semibold text-gray-700 dark:text-gray-200 w-28">수업 빈도</th>
@@ -366,7 +366,7 @@ function ProgramFormFields({
             <div className="flex justify-end gap-2 pt-2">
                 {onCancel && (
                     <button type="button" onClick={onCancel}
-                        className="border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition">
+                        className="border border-gray-300 text-gray-600 dark:text-gray-300 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition">
                         취소
                     </button>
                 )}

@@ -346,7 +346,7 @@ export default function StatsClient({
                     </h3>
                     <LineChart
                         data={attendanceData.map((d) => ({ label: d.label, value: d.rate }))}
-                        color="#10b981"
+                        color="var(--color-emerald-500)"
                         height={220}
                         unit="%"
                     />
@@ -370,7 +370,7 @@ export default function StatsClient({
                             </div>
                             <LineChart
                                 data={enrollData.map((d) => ({ label: d.label, value: d.newCount }))}
-                                color="#3b82f6"
+                                color="var(--color-blue-500)"
                                 height={100}
                                 unit="명"
                             />
@@ -383,7 +383,7 @@ export default function StatsClient({
                             </div>
                             <LineChart
                                 data={enrollData.map((d) => ({ label: d.label, value: d.dropCount }))}
-                                color="#f87171"
+                                color="var(--color-red-400)"
                                 height={100}
                                 unit="명"
                             />
@@ -406,7 +406,7 @@ export default function StatsClient({
                                 value: c.enrolled,
                                 max: c.capacity,
                             }))}
-                            color="#8b5cf6"
+                            color="var(--color-violet-500)"
                             height={220}
                             unit="명"
                             showMax={true}
@@ -454,7 +454,7 @@ export default function StatsClient({
                             value={collectionRate.paid}
                             max={collectionRate.total}
                             label="납부 완료 비율"
-                            color="#10b981"
+                            color="var(--color-emerald-500)"
                             size={160}
                         />
                     </div>
@@ -541,7 +541,7 @@ export default function StatsClient({
                                     label: c.name,
                                     value: c.classCount,
                                 }))}
-                                color="#6366f1"
+                                color="var(--color-indigo-500)"
                                 height={180}
                                 unit="개"
                             />
@@ -554,7 +554,7 @@ export default function StatsClient({
                                     label: c.name,
                                     value: c.studentCount,
                                 }))}
-                                color="#8b5cf6"
+                                color="var(--color-violet-500)"
                                 height={180}
                                 unit="명"
                             />

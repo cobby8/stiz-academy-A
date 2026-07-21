@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth-guard";
+import { classifyAdminLayoutAuthFailure } from "@/lib/adminLayoutAuth";
 import AdminShellClient from "./AdminShellClient";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +14,14 @@ export default async function AdminLayout({
 
     try {
         adminUser = await requireAdmin();
-    } catch {
-        redirect("/login?redirect=/admin");
+    } catch (error) {
+        if (classifyAdminLayoutAuthFailure(error) === "LOGIN_REQUIRED") {
+            redirect("/login?redirect=/admin");
+        }
+
+        // 권한 부족 또는 DB·인증 서비스 장애는 로그인 문제로 숨기지 않습니다.
+        // 이 오류는 Next.js 오류 처리 계층에서 복구 방법과 함께 보여줍니다.
+        throw error;
     }
 
     return (

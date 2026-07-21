@@ -438,8 +438,8 @@ export default function StaffClient({
             )}
 
             {/* 스태프 목록 테이블 */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <table className="w-full">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                <table className="w-full min-w-[720px]">
                     <thead>
                         <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                             <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">이름</th>
@@ -460,13 +460,13 @@ export default function StaffClient({
                                 const rc = ROLE_CONFIG[user.role] || ROLE_CONFIG.PARENT;
                                 const isInstructor = user.role === "INSTRUCTOR";
                                 return (
-                                    <tr key={user.id} className="hover:bg-gray-50 dark:bg-gray-900 transition-colors">
+                                    <tr key={user.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-900">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm ${user.role === "ADMIN" ? "bg-red-500" : user.role === "VICE_ADMIN" ? "bg-orange-500" : "bg-blue-500"}`}>
                                                     {user.name.charAt(0)}
                                                 </div>
-                                                <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
+                                                <span className="max-w-40 truncate font-medium text-gray-900 dark:text-white" title={user.name}>{user.name}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">

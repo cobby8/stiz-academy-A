@@ -6,6 +6,7 @@ import {
     cancelMakeupSession,
     updateMakeupStatus,
 } from "@/app/actions/admin";
+import AdminModal from "@/components/admin/AdminModal";
 
 // ── 타입 정의 ──────────────────────────────────────────────────────────────
 type MakeupItem = {
@@ -527,11 +528,16 @@ function BookMakeupModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+        <AdminModal
+            titleId="book-makeup-title"
+            onClose={onClose}
+            closeOnBackdrop={false}
+            panelClassName="max-w-lg"
+        >
+            <div className="w-full">
                 {/* 모달 헤더 */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                    <h2 id="book-makeup-title" className="text-lg font-bold text-gray-900 dark:text-white">
                         {step === 1 ? "보강 예약 - 원생/결석 정보" : "보강 예약 - 보강 반 선택"}
                     </h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
@@ -721,6 +727,6 @@ function BookMakeupModal({
                     )}
                 </div>
             </div>
-        </div>
+        </AdminModal>
     );
 }

@@ -1,5 +1,6 @@
 import ClassDetailClient from "./ClassDetailClient";
 import { getClassWithStudents, getCoaches, getSessionsByClass } from "@/lib/queries";
+import { notFound } from "next/navigation";
 
 // 30초 캐시: Server Action 호출 시 즉시 무효화됨
 export const revalidate = 30;
@@ -13,10 +14,12 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
         getCoaches(),
     ]);
 
+    if (!classData) notFound();
+
     return (
         <ClassDetailClient
             classId={id}
-            classData={classData ?? undefined}
+            classData={classData}
             sessions={sessions}
             coaches={coaches}
         />

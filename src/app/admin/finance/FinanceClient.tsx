@@ -207,12 +207,6 @@ const SHEET_RECONCILE_ACTION_LABELS: Record<string, string> = {
     UNCHANGED: "동일",
 };
 
-const INVOICE_STEP_BASE =
-    "rounded-xl border p-4 transition bg-white dark:bg-gray-800";
-const INVOICE_STEP_READY =
-    "border-brand-orange-200 ring-1 ring-brand-orange-200 dark:border-brand-neon-lime/60 dark:ring-brand-neon-lime/30";
-const INVOICE_STEP_IDLE = "border-gray-200 dark:border-gray-700";
-
 function toDateStr(d: Date | string | null): string {
     if (!d) return "-";
     const date = typeof d === "string" ? new Date(d) : d;
@@ -260,7 +254,7 @@ function needsInvoiceAttention(item: MonthlyInvoicePreviewItem) {
 
 function FinanceLoadingFallback({ year, month }: { year: number; month: number }) {
     return (
-        <div className="max-w-5xl mx-auto">
+        <div className="mx-auto max-w-6xl">
             <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
                 <div>
                     <div className="h-8 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
@@ -835,29 +829,6 @@ export default function FinanceClient({
     const invoiceUnsentCount = payments.filter((payment) =>
         Boolean(payment.invoiceId) && !payment.invoiceSentAt && ["PENDING", "OVERDUE"].includes(payment.status)
     ).length;
-    const invoiceSentCount = payments.filter((payment) => Boolean(payment.invoiceSentAt)).length;
-    const invoicePaidCount = payments.filter((payment) => payment.status === "PAID").length;
-    const invoiceStep = !invoicePreview
-        ? 1
-        : invoiceCreateCount > 0
-            ? 2
-            : invoiceUnsentCount > 0
-                ? 3
-                : invoiceOpenCount > 0
-                    ? 4
-                    : 5;
-    const invoiceNextAction = !invoicePreview
-        ? "먼저 청구 대상 확인 또는 자동 생성/정리를 실행하세요."
-        : invoicePreview.activeTemplateCount === 0
-            ? "활성 청구 템플릿을 등록해야 청구서를 만들 수 있습니다."
-            : invoiceCreateCount > 0
-                ? `${invoiceCreateCount}건은 발행 전 검수 후 생성할 수 있습니다.`
-                : invoiceUnsentCount > 0
-                    ? `${invoiceUnsentCount}건은 학부모에게 청구서 링크를 발송할 수 있습니다.`
-                    : invoiceOpenCount > 0
-                        ? `${invoiceOpenCount}건은 납부 전 상태입니다. 기한이 지난 건은 알림을 보낼 수 있습니다.`
-                        : "이번 달 청구 흐름이 모두 정리되었습니다.";
-
     const paymentProviderMissing = [
         !paymentProvider.clientKeyConfigured ? "토스 공개키" : null,
         !paymentProvider.secretKeyConfigured ? "토스 서버키" : null,
@@ -981,42 +952,32 @@ export default function FinanceClient({
                 </AdminModal>
             )}
 
-            {/* 헤더 + 액션 버튼 */}
-            <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">수납/결제 관리</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">원생별 수납 현황을 관리합니다.</p>
+                    <h1 className="text-xl font-extrabold text-gray-900 dark:text-white">수납/결제 관리</h1>
+                    <p className="mt-0.5 text-sm font-semibold text-gray-500 dark:text-gray-400">
+                        {year}년 {month}월 수납 현황
+                    </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1 text-sm font-extrabold text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
                     <button
-                        onClick={loadSheetPreview}
-                        disabled={busy || sheetPreviewLoading || sheetApplying}
-                        className="bg-gray-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-800 transition disabled:opacity-50 text-sm dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                        type="button"
+                        onClick={prevMonth}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                        aria-label="이전 달"
                     >
-                        <span className="material-symbols-outlined text-sm align-middle mr-1">fact_check</span>
-                        {sheetPreviewLoading ? "점검 중..." : "시트 기준 점검"}
+                        <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                     </button>
-                    {/* 수동 추가 버튼 */}
+                    <span className="min-w-24 text-center">{year}.{String(month).padStart(2, "0")}</span>
                     <button
-                        onClick={() => {
-                            const nextShowForm = !showForm;
-                            setShowForm(nextShowForm);
-                            if (nextShowForm) {
-                                void loadStudents();
-                            }
-                        }}
-                        className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition text-sm"
+                        type="button"
+                        onClick={nextMonth}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                        aria-label="다음 달"
                     >
-                        + 수납 기록 추가
+                        <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                     </button>
                 </div>
-            </div>
-
-            {/* 월 네비게이션 */}
-            <div className="flex items-center gap-4 mb-6">
-                <button onClick={prevMonth} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-300 font-bold">&larr;</button>
-                <span className="text-lg font-bold text-gray-900 dark:text-white">{year}년 {month}월</span>
-                <button onClick={nextMonth} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-600 dark:text-gray-300 font-bold">&rarr;</button>
             </div>
 
             {financeNotice && (
@@ -1025,301 +986,235 @@ export default function FinanceClient({
                 </p>
             )}
 
-            <section className={`mb-6 rounded-xl border px-4 py-4 ${
-                paymentProvider.providerReady
-                    ? "border-green-200 bg-green-50 text-green-900 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100"
-                    : "border-yellow-200 bg-yellow-50 text-yellow-900 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
-            }`}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <p className="text-sm font-extrabold">온라인 결제 상태</p>
-                        <p className="mt-1 text-xs font-semibold opacity-80">
-                            {paymentProvider.providerReady
-                                ? "토스페이먼츠 온라인 결제를 사용할 수 있습니다. 테스트 결제 1건으로 최종 확인해 주세요."
-                                : `온라인 결제 준비가 필요합니다${paymentProviderMissing.length > 0 ? `: ${paymentProviderMissing.join(", ")}` : "."}`}
-                        </p>
-                    </div>
-                    <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-extrabold text-gray-800 ring-1 ring-black/5 dark:bg-gray-950/40 dark:text-white">
-                        {paymentProvider.providerReady ? "사용 가능" : "준비 필요"}
+            <section className="mb-4 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-black ${
+                        paymentProvider.providerReady
+                            ? "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-100"
+                            : "bg-yellow-100 text-yellow-900 dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime"
+                    }`}>
+                        <span className="material-symbols-outlined text-[17px]">payments</span>
+                        온라인 결제 {paymentProvider.providerReady ? "사용 가능" : "준비 필요"}
                     </span>
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                        결제 모드 {paymentModeLabel}
+                    </span>
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                        청구 대상 {invoicePreview ? `${invoicePreview.targetStudentCount}명` : "미확인"}
+                    </span>
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                        생성 {invoiceCreateCount}건
+                    </span>
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                        발송대기 {invoiceUnsentCount}건
+                    </span>
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                        미납 {invoiceOpenCount}건
+                    </span>
+
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={loadSheetPreview}
+                            disabled={busy || sheetPreviewLoading || sheetApplying}
+                            className="inline-flex h-9 items-center gap-1 rounded-full bg-gray-900 px-3 text-xs font-black text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-800 dark:text-white"
+                        >
+                            <span className="material-symbols-outlined text-[17px]">fact_check</span>
+                            {sheetPreviewLoading ? "점검 중" : "시트 점검"}
+                        </button>
+                        <div className="inline-flex h-9 items-center gap-2 rounded-full bg-gray-100 pl-3 pr-1 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
+                            청구 작업
+                            <AdminQuickActionMenu
+                                label="청구 빠른 작업"
+                                actions={[
+                                    {
+                                        key: "smart-billing",
+                                        label: billingRunLoading ? "처리 중" : "자동 생성/정리",
+                                        icon: "auto_mode",
+                                        tone: "primary",
+                                        disabled: busy || invoicePreviewLoading || invoiceGenerating || billingRunLoading,
+                                        onSelect: handleSmartBillingRun,
+                                    },
+                                    {
+                                        key: "preview-invoices",
+                                        label: invoicePreviewLoading ? "확인 중" : "대상 확인",
+                                        icon: "fact_check",
+                                        disabled: busy || invoicePreviewLoading || invoiceGenerating || billingRunLoading,
+                                        onSelect: handlePreviewInvoices,
+                                    },
+                                    {
+                                        key: "generate-invoices",
+                                        label: invoiceGenerating ? "생성 중" : "청구서 생성",
+                                        icon: "receipt_long",
+                                        disabled: !invoicePreview || invoiceGenerating || billingRunLoading || invoiceCreateCount === 0,
+                                        onSelect: handleGenerateInvoices,
+                                    },
+                                    {
+                                        key: "send-links",
+                                        label: "링크 발송",
+                                        icon: "send",
+                                        disabled: busy || billingRunLoading || invoiceGeneratedCount === 0 || invoiceUnsentCount === 0,
+                                        onSelect: handleSendInvoiceLinks,
+                                    },
+                                    {
+                                        key: "send-reminders",
+                                        label: "미납 알림",
+                                        icon: "notifications_active",
+                                        disabled: busy || billingRunLoading || invoiceOpenCount === 0,
+                                        onSelect: handleSendReminders,
+                                    },
+                                    {
+                                        key: "refresh-ledger",
+                                        label: "상태 새로고침",
+                                        icon: "sync",
+                                        disabled: busy || billingRunLoading,
+                                        onSelect: handleRefreshPaymentLedger,
+                                    },
+                                ]}
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const nextShowForm = !showForm;
+                                setShowForm(nextShowForm);
+                                if (nextShowForm) {
+                                    void loadStudents();
+                                }
+                            }}
+                            className="inline-flex h-9 items-center gap-1 rounded-full bg-brand-orange-500 px-3 text-xs font-black text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                        >
+                            <span className="material-symbols-outlined text-[17px]">add</span>
+                            수납 추가
+                        </button>
+                    </div>
                 </div>
-                <div className="mt-4 grid gap-2 text-xs font-bold sm:grid-cols-3">
-                    <div className="rounded-lg bg-white/70 px-3 py-2 text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-100">
-                        <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">결제 모드</span>
-                        {paymentModeLabel}
+
+                <details className="mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                    <summary className="cursor-pointer font-extrabold text-gray-800 dark:text-gray-100">결제 설정 보기</summary>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                        <p>온라인 결제 상태: {paymentProvider.providerReady ? "토스페이먼츠 온라인 결제를 사용할 수 있습니다." : `준비 필요${paymentProviderMissing.length > 0 ? `: ${paymentProviderMissing.join(", ")}` : ""}`}</p>
+                        <p>복귀 주소: {paymentProvider.siteUrlValid ? "준비됨" : "확인 필요"}</p>
+                        <p>웹훅 주소: {paymentProvider.webhookUrl ? "등록 가능" : "사이트 주소 필요"}</p>
                     </div>
-                    <div className="rounded-lg bg-white/70 px-3 py-2 text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-100">
-                        <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">복귀 주소</span>
-                        {paymentProvider.siteUrlValid ? "준비됨" : "확인 필요"}
-                    </div>
-                    <div className="rounded-lg bg-white/70 px-3 py-2 text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-100">
-                        <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">웹훅 주소</span>
-                        {paymentProvider.webhookUrl ? "등록 가능" : "사이트 주소 필요"}
-                    </div>
-                </div>
-                {paymentProvider.webhookUrl && (
-                    <div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-xs text-gray-700 ring-1 ring-black/5 dark:bg-gray-950/30 dark:text-gray-200">
-                        <span className="font-bold">토스 관리자 웹훅 등록 주소</span>
-                        <span className="mt-1 block break-all font-mono text-[11px]">{paymentProvider.webhookUrl}</span>
-                    </div>
-                )}
+                    {paymentProvider.webhookUrl && (
+                        <p className="mt-2 break-all font-mono text-[11px]">
+                            토스 관리자 웹훅 등록 주소: {paymentProvider.webhookUrl}
+                        </p>
+                    )}
+                </details>
             </section>
 
-            <section className="mb-6 space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h2 className="text-lg font-extrabold text-gray-900 dark:text-white">청구서 발행 콘솔</h2>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            대상 확인부터 발송, 미납 관리까지 이번 달 청구 흐름을 순서대로 처리합니다.
+            {invoiceError && (
+                <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                    {invoiceError}
+                </p>
+            )}
+
+            {invoicePreview && (
+                <details className="mb-4 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                    <summary className="cursor-pointer text-sm font-extrabold text-gray-900 dark:text-white">
+                        청구 검수표 · 대상 {invoicePreview.targetStudentCount}명 · 생성 {invoicePreview.createCount}건 · 기존 {invoicePreview.skipCount}건 · 확인 {invoiceAttentionCount}건
+                    </summary>
+
+                    {invoicePreview.activeTemplateCount === 0 && (
+                        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+                            활성 청구 템플릿이 없습니다. 먼저 청구 템플릿을 등록해야 월별 청구서를 만들 수 있습니다.
                         </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            onClick={handleSmartBillingRun}
-                            disabled={busy || invoicePreviewLoading || invoiceGenerating || billingRunLoading}
-                            className="rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                        >
-                            <span className="material-symbols-outlined mr-1 align-middle text-sm">auto_mode</span>
-                            {billingRunLoading ? "자동 처리 중..." : "이번 달 자동 생성/정리"}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleRefreshPaymentLedger}
-                            disabled={busy || billingRunLoading}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                        >
-                            <span className="material-symbols-outlined mr-1 align-middle text-sm">sync</span>
-                            상태 새로고침
-                        </button>
-                    </div>
-                </div>
+                    )}
 
-                <div className="grid gap-3 md:grid-cols-4">
-                    <article className={`${INVOICE_STEP_BASE} ${invoiceStep === 1 ? INVOICE_STEP_READY : INVOICE_STEP_IDLE}`}>
-                        <p className="text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime">1. 대상 확인</p>
-                        <p className="mt-2 text-2xl font-extrabold text-gray-900 dark:text-white">
-                            {invoicePreview ? `${invoicePreview.targetStudentCount}명` : "대기"}
-                        </p>
-                        <p className="mt-1 min-h-10 text-xs text-gray-500 dark:text-gray-400">
-                            현재 수강 중인 학생과 활성 템플릿을 기준으로 계산합니다.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={handlePreviewInvoices}
-                            disabled={busy || invoicePreviewLoading || invoiceGenerating || billingRunLoading}
-                            className="mt-3 w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-bold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                        >
-                            {invoicePreviewLoading ? "확인 중..." : "대상 다시 확인"}
-                        </button>
-                    </article>
-
-                    <article className={`${INVOICE_STEP_BASE} ${invoiceStep === 2 ? INVOICE_STEP_READY : INVOICE_STEP_IDLE}`}>
-                        <p className="text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime">2. 검수 후 발행</p>
-                        <p className="mt-2 text-2xl font-extrabold text-gray-900 dark:text-white">{invoiceCreateCount}건</p>
-                        <p className="mt-1 min-h-10 text-xs text-gray-500 dark:text-gray-400">
-                            생성 예정 금액 {formatAmount(invoicePreview?.createAmount ?? 0)}
-                        </p>
-                        <button
-                            type="button"
-                            onClick={handleGenerateInvoices}
-                            disabled={!invoicePreview || invoiceGenerating || billingRunLoading || invoiceCreateCount === 0}
-                            className="mt-3 w-full rounded-lg bg-brand-orange-500 px-3 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                        >
-                            {invoiceGenerating ? "발행 중..." : invoiceCreateCount === 0 ? "발행할 청구 없음" : "검수 후 발행"}
-                        </button>
-                    </article>
-
-                    <article className={`${INVOICE_STEP_BASE} ${invoiceStep === 3 ? INVOICE_STEP_READY : INVOICE_STEP_IDLE}`}>
-                        <p className="text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime">3. 링크 발송</p>
-                        <p className="mt-2 text-2xl font-extrabold text-gray-900 dark:text-white">{invoiceUnsentCount}건</p>
-                        <p className="mt-1 min-h-10 text-xs text-gray-500 dark:text-gray-400">
-                            전체 청구서 {invoiceGeneratedCount}건 · 발송 완료 {invoiceSentCount}건
-                        </p>
-                        <button
-                            type="button"
-                            onClick={handleSendInvoiceLinks}
-                            disabled={busy || billingRunLoading || invoiceGeneratedCount === 0 || invoiceUnsentCount === 0}
-                            className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                        >
-                            링크 발송
-                        </button>
-                    </article>
-
-                    <article className={`${INVOICE_STEP_BASE} ${invoiceStep === 4 ? INVOICE_STEP_READY : INVOICE_STEP_IDLE}`}>
-                        <p className="text-xs font-bold text-brand-orange-500 dark:text-brand-neon-lime">4. 미납 관리</p>
-                        <p className="mt-2 text-2xl font-extrabold text-gray-900 dark:text-white">{invoiceOpenCount}건</p>
-                        <p className="mt-1 min-h-10 text-xs text-gray-500 dark:text-gray-400">
-                            납부 완료 {invoicePaidCount}건 · 미납/연체 확인
-                        </p>
-                        <button
-                            type="button"
-                            onClick={handleSendReminders}
-                            disabled={busy || billingRunLoading || invoiceOpenCount === 0}
-                            className="mt-3 w-full rounded-lg bg-yellow-500 px-3 py-2 text-sm font-bold text-white transition hover:bg-yellow-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                        >
-                            미납 알림 발송
-                        </button>
-                    </article>
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                            <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">다음 할 일</p>
-                            <p className="mt-1 text-sm font-bold text-gray-900 dark:text-white">{invoiceNextAction}</p>
-                        </div>
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">
-                            {billingRunLoading ? "자동 처리 중" : invoiceStep >= 5 ? "완료" : `${invoiceStep}단계`}
-                        </span>
-                    </div>
-                </div>
-
-                {invoiceError && (
-                    <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">
-                        {invoiceError}
-                    </p>
-                )}
-
-                {!invoicePreview ? (
-                    <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                        청구 대상 확인을 누르면 발행 전 전체 검수표가 표시됩니다.
-                    </div>
-                ) : (
-                    <>
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                            <div className="rounded-lg bg-white p-3 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                                <p className="text-xs font-bold text-gray-600 dark:text-gray-300">활성 템플릿</p>
-                                <p className="mt-1 text-xl font-extrabold text-gray-900 dark:text-white">{invoicePreview.activeTemplateCount}개</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">청구 기준</p>
+                    {invoiceItems.length > 0 && (
+                        <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-3 py-2 dark:border-gray-700">
+                                {invoiceFilterOptions.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => setInvoiceFilter(option.value)}
+                                        className={`rounded-full px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
+                                            ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                            : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                                            }`}
+                                    >
+                                        {option.label} {option.count}건
+                                    </button>
+                                ))}
                             </div>
-                            <div className="rounded-lg bg-white p-3 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                                <p className="text-xs font-bold text-blue-700 dark:text-blue-200">대상 학생</p>
-                                <p className="mt-1 text-xl font-extrabold text-blue-800 dark:text-blue-100">{invoicePreview.targetStudentCount}명</p>
-                                <p className="text-xs text-blue-600 dark:text-blue-300">현재 수강 중</p>
-                            </div>
-                            <div className="rounded-lg bg-white p-3 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                                <p className="text-xs font-bold text-green-700 dark:text-green-200">생성 예정</p>
-                                <p className="mt-1 text-xl font-extrabold text-green-800 dark:text-green-100">{invoicePreview.createCount}건</p>
-                                <p className="text-xs text-green-600 dark:text-green-300">{formatAmount(invoicePreview.createAmount)}</p>
-                            </div>
-                            <div className="rounded-lg bg-white p-3 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                                <p className="text-xs font-bold text-amber-700 dark:text-amber-200">기존 유지</p>
-                                <p className="mt-1 text-xl font-extrabold text-amber-800 dark:text-amber-100">{invoicePreview.skipCount}건</p>
-                                <p className="text-xs text-amber-600 dark:text-amber-300">중복 방지</p>
-                            </div>
-                            <div className="rounded-lg bg-white p-3 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                                <p className="text-xs font-bold text-gray-600 dark:text-gray-300">확인 필요</p>
-                                <p className="mt-1 text-xl font-extrabold text-gray-900 dark:text-white">{invoiceAttentionCount}건</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">연락처/기존 청구</p>
-                            </div>
-                        </div>
-
-                        {invoicePreview.activeTemplateCount === 0 && (
-                            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
-                                활성 청구 템플릿이 없습니다. 먼저 청구 템플릿을 등록해야 월별 청구서를 만들 수 있습니다.
-                            </p>
-                        )}
-
-                        {invoiceItems.length > 0 && (
-                            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-700">
-                                    <div>
-                                        <h3 className="font-extrabold text-gray-900 dark:text-white">발행 전 전체 검수표</h3>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">학생별 청구 항목, 금액, 학부모 연결 상태를 확인합니다.</p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {invoiceFilterOptions.map((option) => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => setInvoiceFilter(option.value)}
-                                                className={`rounded-full px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
-                                                    ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
-                                                    }`}
-                                            >
-                                                {option.label} {option.count}건
-                                            </button>
-                                        ))}
-                                    </div>
+                            {filteredInvoiceItems.length === 0 ? (
+                                <div className="px-4 py-6 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                    선택한 조건에 해당하는 청구 대상이 없습니다.
                                 </div>
-                                {filteredInvoiceItems.length === 0 ? (
-                                    <div className="px-4 py-8 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">
-                                        선택한 조건에 해당하는 청구 대상이 없습니다.
-                                    </div>
-                                ) : (
-                                    <div className="max-h-[460px] overflow-auto">
-                                        <table className="min-w-[920px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-700">
-                                            <thead className="sticky top-0 bg-gray-50 dark:bg-gray-900">
-                                                <tr>
-                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학생</th>
-                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">청구 항목</th>
-                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">금액</th>
-                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">기한</th>
-                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학부모</th>
-                                                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400">상태</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                {filteredInvoiceItems.map((item) => {
-                                                    const statusInfo = item.existingStatus ? STATUS_LABELS[item.existingStatus] : null;
-                                                    return (
-                                                        <tr key={`${item.action}-${item.studentId}-${item.templateName}-${item.type}`} className="hover:bg-gray-50 dark:hover:bg-gray-900/60">
-                                                            <td className="px-4 py-3 align-top">
-                                                                <p className="font-bold text-gray-900 dark:text-white">{item.studentName}</p>
-                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.className ?? "수업 미지정"}</p>
-                                                            </td>
-                                                            <td className="px-4 py-3 align-top">
-                                                                <p className="font-semibold text-gray-800 dark:text-gray-100">{item.templateName}</p>
-                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{TYPE_LABELS[item.type] ?? item.type}</p>
-                                                            </td>
-                                                            <td className="px-4 py-3 align-top font-mono text-gray-800 dark:text-gray-100">
-                                                                {formatAmount(item.amount)}
-                                                                {item.existingAmount != null && item.existingAmount !== item.amount && (
-                                                                    <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-200">
-                                                                        기존 {formatAmount(item.existingAmount)}
-                                                                    </p>
-                                                                )}
-                                                            </td>
-                                                            <td className="px-4 py-3 align-top text-gray-600 dark:text-gray-300">매월 {item.dueDay}일</td>
-                                                            <td className="px-4 py-3 align-top">
-                                                                <p className="font-semibold text-gray-800 dark:text-gray-100">{item.parentName ?? "학부모 미지정"}</p>
-                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.parentPhone || item.parentEmail || "연락처 확인 필요"}</p>
-                                                            </td>
-                                                            <td className="px-4 py-3 align-top">
-                                                                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${item.action === "CREATE"
-                                                                    ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200"
-                                                                    : "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                                                                    }`}>
-                                                                    {MONTHLY_INVOICE_ACTION_LABELS[item.action] ?? item.action}
+                            ) : (
+                                <div className="max-h-[360px] overflow-auto">
+                                    <table className="min-w-[820px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-700">
+                                        <thead className="sticky top-0 bg-gray-50 dark:bg-gray-950">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학생</th>
+                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">청구 항목</th>
+                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">금액</th>
+                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">기한</th>
+                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학부모</th>
+                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">상태</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                            {filteredInvoiceItems.map((item) => {
+                                                const statusInfo = item.existingStatus ? STATUS_LABELS[item.existingStatus] : null;
+                                                return (
+                                                    <tr key={`${item.action}-${item.studentId}-${item.templateName}-${item.type}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/70">
+                                                        <td className="px-3 py-2 align-middle">
+                                                            <p className="font-bold text-gray-900 dark:text-white">{item.studentName}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{item.className ?? "수업 미지정"}</p>
+                                                        </td>
+                                                        <td className="px-3 py-2 align-middle">
+                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{item.templateName}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{TYPE_LABELS[item.type] ?? item.type}</p>
+                                                        </td>
+                                                        <td className="px-3 py-2 align-middle font-mono text-gray-800 dark:text-gray-100">
+                                                            {formatAmount(item.amount)}
+                                                            {item.existingAmount != null && item.existingAmount !== item.amount && (
+                                                                <p className="text-xs text-amber-600 dark:text-amber-200">
+                                                                    기존 {formatAmount(item.existingAmount)}
+                                                                </p>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-2 align-middle text-gray-600 dark:text-gray-300">매월 {item.dueDay}일</td>
+                                                        <td className="px-3 py-2 align-middle">
+                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{item.parentName ?? "학부모 미지정"}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{item.parentPhone || item.parentEmail || "연락처 확인 필요"}</p>
+                                                        </td>
+                                                        <td className="px-3 py-2 align-middle">
+                                                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${item.action === "CREATE"
+                                                                ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200"
+                                                                : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                                                                }`}>
+                                                                {MONTHLY_INVOICE_ACTION_LABELS[item.action] ?? item.action}
+                                                            </span>
+                                                            {statusInfo && (
+                                                                <span className={`ml-1 inline-flex rounded-full px-2 py-1 text-xs font-bold ${statusInfo.color}`}>
+                                                                    {statusInfo.label}
                                                                 </span>
-                                                                {statusInfo && (
-                                                                    <span className={`ml-1 inline-flex rounded-full px-2 py-1 text-xs font-bold ${statusInfo.color}`}>
-                                                                        {statusInfo.label}
-                                                                    </span>
-                                                                )}
-                                                                {item.existingInvoiceNo && (
-                                                                    <p className="mt-1 text-[11px] font-bold text-brand-orange-500 dark:text-brand-neon-lime">
-                                                                        {item.existingInvoiceNo}
-                                                                    </p>
-                                                                )}
-                                                                {item.issueReason && (
-                                                                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">{item.issueReason}</p>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </>
-                )}
-            </section>
+                                                            )}
+                                                            {item.existingInvoiceNo && (
+                                                                <p className="mt-1 text-[11px] font-bold text-brand-orange-500 dark:text-brand-neon-lime">
+                                                                    {item.existingInvoiceNo}
+                                                                </p>
+                                                            )}
+                                                            {item.issueReason && (
+                                                                <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">{item.issueReason}</p>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </details>
+            )}
 
             {(sheetError || sheetPreview) && (
                 <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -1416,31 +1311,23 @@ export default function FinanceClient({
                 </div>
             )}
 
-            {/* 요약 카드 (4개: 총 청구/수납/미납/수납률) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 청구</p>
-                    <p className="text-xl font-extrabold text-gray-900 dark:text-white mt-1">{formatAmount(summary.totalAmount)}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{summary.totalCount}건</p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 border border-green-200 rounded-xl p-4">
-                    <p className="text-xs text-green-600 font-medium">납부완료</p>
-                    <p className="text-xl font-extrabold text-green-700 mt-1">{formatAmount(summary.paidAmount)}</p>
-                    <p className="text-xs text-green-500 mt-0.5">{summary.paidCount}건</p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 border border-yellow-200 rounded-xl p-4">
-                    <p className="text-xs text-yellow-600 font-medium">미납/연체</p>
-                    <p className="text-xl font-extrabold text-yellow-700 mt-1">{formatAmount(summary.unpaidAmount)}</p>
-                    <p className="text-xs text-yellow-500 mt-0.5">{summary.unpaidCount}건</p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 border border-blue-200 rounded-xl p-4">
-                    <p className="text-xs text-blue-600 font-medium">수납률</p>
-                    <p className="text-xl font-extrabold text-blue-700 mt-1">{payRate}%</p>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                        <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${payRate}%` }} />
-                    </div>
-                </div>
-            </div>
+            <section className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 text-xs font-black shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <span className="inline-flex h-8 items-center rounded-full bg-gray-100 px-3 text-gray-800 dark:bg-gray-800 dark:text-gray-100">
+                    총 청구 {formatAmount(summary.totalAmount)} · {summary.totalCount}건
+                </span>
+                <span className="inline-flex h-8 items-center rounded-full bg-green-100 px-3 text-green-800 dark:bg-green-500/15 dark:text-green-100">
+                    납부완료 {formatAmount(summary.paidAmount)} · {summary.paidCount}건
+                </span>
+                <span className="inline-flex h-8 items-center rounded-full bg-yellow-100 px-3 text-yellow-900 dark:bg-yellow-500/15 dark:text-yellow-100">
+                    미납/연체 {formatAmount(summary.unpaidAmount)} · {summary.unpaidCount}건
+                </span>
+                <span className="inline-flex h-8 items-center gap-2 rounded-full bg-blue-100 px-3 text-blue-800 dark:bg-blue-500/15 dark:text-blue-100">
+                    수납률 {payRate}%
+                    <span className="h-1.5 w-16 overflow-hidden rounded-full bg-white/70 dark:bg-gray-950">
+                        <span className="block h-full rounded-full bg-blue-500 transition-all" style={{ width: `${payRate}%` }} />
+                    </span>
+                </span>
+            </section>
 
             {/* 일괄 처리 바 — 선택된 항목이 있을 때만 표시 */}
             {selectedIds.size > 0 && (

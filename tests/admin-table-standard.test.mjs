@@ -9,6 +9,7 @@ function read(path) {
 const adminShell = read("../src/app/admin/AdminShellClient.tsx");
 const globalsCss = read("../src/app/globals.css");
 const quickActionMenu = read("../src/components/admin/AdminQuickActionMenu.tsx");
+const financeClient = read("../src/app/admin/finance/FinanceClient.tsx");
 
 const quickActionClients = [
   "../src/app/admin/annual/AnnualAdminClient.tsx",
@@ -46,4 +47,13 @@ test("반복 관리 액션은 퀵액션 메뉴로 묶고 행별 삭제 확인 �
     assert.match(source, /AdminQuickActionMenu/);
     assert.doesNotMatch(source, /deleteConfirm|setDeleteConfirm/);
   }
+});
+
+test("수납 결제 관리는 큰 안내 콘솔 대신 한 줄 작업바와 퀵액션을 쓴다", () => {
+  assert.match(financeClient, /청구 작업/);
+  assert.match(financeClient, /결제 설정 보기/);
+  assert.match(financeClient, /청구 빠른 작업/);
+  assert.doesNotMatch(financeClient, /청구서 발행 콘솔/);
+  assert.doesNotMatch(financeClient, /다음 할 일/);
+  assert.doesNotMatch(financeClient, /1\. 대상 확인/);
 });

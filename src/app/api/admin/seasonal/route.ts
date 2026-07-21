@@ -20,6 +20,7 @@ type BulkItemResult = {
   ok: boolean;
   status?: string;
   applicationId?: string;
+  invoiceId?: string | null;
   message?: string;
   code?: string;
 };
@@ -277,6 +278,29 @@ export async function PATCH(request: NextRequest) {
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           );
           results.push({ itemId, ok: true, status: item.status, applicationId: item.applicationId });
+        } catch (error) {
+          results.push(bulkErrorResult(itemId, error));
+        }
+      }
+
+      const summary = {
+        total: results.length,
+        succeeded: results.filter((result) => result.ok).length,
+        failed: results.filter((result) => !result.ok).length,
+      };
+      return NextResponse.json({ success: summary.failed === 0, summary, results });
+    }
+
+    if (body.resource === "bulkConversion") {
+      const itemIds = parseBulkItemIds(data.itemIds);
+      if (itemIds.length === 0) throw new SeasonalError("선택된 신청 항목이 없습니다.");
+      if (itemIds.length > 50) throw new SeasonalError("수강·청구 생성은 한 번에 50개까지만 처리할 수 있습니다.", 413, "BULK_CONVERSION_LIMIT_EXCEEDED");
+
+      const results: BulkItemResult[] = [];
+      for (const itemId of itemIds) {
+        try {
+          const result = await convertApprovedItemToEnrollmentAndInvoice(itemId, actor.appUserId);
+          results.push({ itemId, ok: true, invoiceId: result.invoiceId });
         } catch (error) {
           results.push(bulkErrorResult(itemId, error));
         }

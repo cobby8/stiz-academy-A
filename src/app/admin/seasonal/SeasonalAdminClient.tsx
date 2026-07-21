@@ -234,6 +234,7 @@ export default function SeasonalAdminClient() {
   const [resolvingReview, setResolvingReview] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [bulkProcessingStatus, setBulkProcessingStatus] = useState<ItemStatus | "">("");
+  const [bulkConverting, setBulkConverting] = useState(false);
 
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get("tab");
@@ -431,6 +432,37 @@ export default function SeasonalAdminClient() {
     }
   }
 
+  async function handleBulkConversion() {
+    if (selectedItemIds.length === 0) return;
+    const confirmed = window.confirm(`${selectedApplicationCount}명, 신청 반 ${selectedItemIds.length}개의 수강 등록과 청구서를 생성할까요? 승인되지 않은 항목은 실패 사유로 남습니다.`);
+    if (!confirmed) return;
+
+    setBulkConverting(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/seasonal", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource: "bulkConversion", data: { itemIds: selectedItemIds } }),
+      });
+      const body = (await response.json().catch(() => ({}))) as BulkItemResponse;
+      if (!response.ok) throw new Error(body.error || "수강·청구 생성을 완료하지 못했습니다.");
+
+      const results = body.results ?? [];
+      const failed = results.filter((result) => !result.ok);
+      const succeeded = body.summary?.succeeded ?? results.filter((result) => result.ok).length;
+      const failureMessage = failed[0]?.message ? ` 첫 실패 사유: ${failed[0].message}` : "";
+      setSelectedItemIds(failed.map((result) => result.itemId));
+      setNotice(`수강·청구 생성: ${succeeded}개 완료, ${failed.length}개 실패.${failureMessage}`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "수강·청구 생성을 완료하지 못했습니다.");
+    } finally {
+      setBulkConverting(false);
+    }
+  }
+
   async function copyInvoiceLink(item: ApplicationItem) {
     const href = getItemInvoiceHref(item);
     if (!href) {
@@ -474,7 +506,7 @@ export default function SeasonalAdminClient() {
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
-      ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} />}
+      ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
@@ -510,12 +542,14 @@ function ApplicationsView({
   selectedApplicationCount,
   allVisibleSelected,
   bulkProcessingStatus,
+  bulkConverting,
   onSearch,
   onStatus,
   onSelect,
   onToggleApplication,
   onToggleAll,
   onBulkStatus,
+  onBulkConversion,
 }: {
   applications: Application[];
   search: string;
@@ -525,12 +559,14 @@ function ApplicationsView({
   selectedApplicationCount: number;
   allVisibleSelected: boolean;
   bulkProcessingStatus: ItemStatus | "";
+  bulkConverting: boolean;
   onSearch: (value: string) => void;
   onStatus: (value: string) => void;
   onSelect: (application: Application) => void;
   onToggleApplication: (application: Application, checked: boolean) => void;
   onToggleAll: (checked: boolean) => void;
   onBulkStatus: (status: ItemStatus) => Promise<void>;
+  onBulkConversion: () => Promise<void>;
 }) {
   const visibleItemCount = applications.reduce((sum, application) => sum + application.items.length, 0);
 
@@ -557,13 +593,22 @@ function ApplicationsView({
             <button
               key={nextStatus}
               type="button"
-              disabled={Boolean(bulkProcessingStatus)}
+              disabled={Boolean(bulkProcessingStatus) || bulkConverting}
               onClick={() => void onBulkStatus(nextStatus)}
               className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-900 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
             >
               {bulkProcessingStatus === nextStatus ? "처리 중" : STATUS_LABEL[nextStatus]}
             </button>
           ))}
+          <button
+            type="button"
+            disabled={Boolean(bulkProcessingStatus) || bulkConverting}
+            onClick={() => void onBulkConversion()}
+            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)] disabled:cursor-wait disabled:opacity-60"
+          >
+            <Icon name="receipt_long" className="text-lg" />
+            {bulkConverting ? "생성 중" : "수강·청구 생성"}
+          </button>
         </div>
       </div>
     )}

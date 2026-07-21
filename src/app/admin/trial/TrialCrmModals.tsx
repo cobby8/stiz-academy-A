@@ -193,6 +193,13 @@ function timeInputValue(dateStr: string | null) {
     return offsetDate.toISOString().slice(11, 16);
 }
 
+function isLikelyDefaultScheduleTime(dateStr: string | null) {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return false;
+    return date.getHours() === 9 && date.getMinutes() === 0;
+}
+
 const MODAL_INPUT_CLASS = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime";
 
 const DAY_LABELS: Record<string, string> = {
@@ -205,6 +212,65 @@ const DAY_LABELS: Record<string, string> = {
     Sun: "일",
 };
 
+const DAY_CODE_BY_LABEL: Record<string, string> = {
+    월: "Mon",
+    월요일: "Mon",
+    화: "Tue",
+    화요일: "Tue",
+    수: "Wed",
+    수요일: "Wed",
+    목: "Thu",
+    목요일: "Thu",
+    금: "Fri",
+    금요일: "Fri",
+    토: "Sat",
+    토요일: "Sat",
+    일: "Sun",
+    일요일: "Sun",
+};
+
+function normalizePreferredDayCode(day: string | null) {
+    if (!day) return null;
+    const trimmed = day.trim();
+    return DAY_LABELS[trimmed] ? trimmed : DAY_CODE_BY_LABEL[trimmed] ?? null;
+}
+
+function normalizePreferredPeriod(period: string | null) {
+    if (!period) return null;
+    const matched = period.match(/\d+/);
+    return matched?.[0] ?? null;
+}
+
+function normalizeSlotKey(slotKey: string | null) {
+    if (!slotKey) return null;
+    const [dayPart, periodPart] = slotKey.trim().split("-");
+    const dayCode = normalizePreferredDayCode(dayPart);
+    const period = normalizePreferredPeriod(periodPart ?? "");
+    return dayCode && period ? `${dayCode}-${period}` : slotKey.trim();
+}
+
+function getPreferredSlotKeyCandidates(lead: TrialLead) {
+    const candidates: string[] = [];
+    const directSlotKey = normalizeSlotKey(lead.preferredSlotKey);
+    const dayCode = normalizePreferredDayCode(lead.preferredDay);
+    const period = normalizePreferredPeriod(lead.preferredPeriod);
+    const derivedSlotKey = dayCode && period ? `${dayCode}-${period}` : null;
+
+    [directSlotKey, derivedSlotKey].forEach((slotKey) => {
+        if (slotKey && !candidates.includes(slotKey)) candidates.push(slotKey);
+    });
+
+    return candidates;
+}
+
+function getPreferredClass(lead: TrialLead, classes: ClassInfo[]) {
+    for (const slotKey of getPreferredSlotKeyCandidates(lead)) {
+        const classInfo = classes.find((item) => item.slotKey === slotKey);
+        if (classInfo) return classInfo;
+    }
+    return null;
+}
+
 function formatClassLabel(classInfo: ClassInfo) {
     const dayLabel = DAY_LABELS[classInfo.dayOfWeek] || classInfo.dayOfWeek;
     const timeLabel = [classInfo.startTime, classInfo.endTime].filter(Boolean).join("~");
@@ -213,9 +279,7 @@ function formatClassLabel(classInfo: ClassInfo) {
 }
 
 function formatPreferredSchedule(lead: TrialLead, classes: ClassInfo[]) {
-    const preferredClass = lead.preferredSlotKey
-        ? classes.find((classInfo) => classInfo.slotKey === lead.preferredSlotKey)
-        : null;
+    const preferredClass = getPreferredClass(lead, classes);
     if (preferredClass) return formatClassLabel(preferredClass);
 
     const rawDay = lead.preferredDay?.replace(/요일$/, "");
@@ -431,11 +495,16 @@ function TrialScheduleModal({
 }) {
     const initialClass =
         (lead.scheduledClassId ? classes.find((classInfo) => classInfo.id === lead.scheduledClassId) : null) ||
-        (lead.preferredSlotKey ? classes.find((classInfo) => classInfo.slotKey === lead.preferredSlotKey) : null) ||
+        getPreferredClass(lead, classes) ||
         null;
     const [scheduledClassId, setScheduledClassId] = useState(initialClass?.id ?? "");
     const [scheduledDate, setScheduledDate] = useState(dateInputValue(lead.scheduledDate || lead.trialDate));
-    const [scheduledTime, setScheduledTime] = useState(initialClass?.startTime || timeInputValue(lead.scheduledDate));
+    const [scheduledTime, setScheduledTime] = useState(
+        initialClass?.startTime ||
+        (isLikelyDefaultScheduleTime(lead.scheduledDate) && getPreferredSlotKeyCandidates(lead).length > 0
+            ? ""
+            : timeInputValue(lead.scheduledDate)),
+    );
     const [memo, setMemo] = useState(lead.memo ?? "");
     const [formError, setFormError] = useState("");
     const preferredSchedule = formatPreferredSchedule(lead, classes);

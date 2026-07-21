@@ -55,6 +55,24 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
   assert.match(trialClient, /function formatClassLabel/);
   assert.match(trialClient, /function formatConfirmedSchedule/);
   assert.match(trialClient, /formatCompactDate\(lead\.scheduledDate\).*formatClassLabel\(matchedClass\)/s);
+  assert.match(trialClient, /function isLikelyDefaultScheduleTime/);
+  assert.match(trialClient, /시간 확인 필요/);
+  assert.match(trialClient, /const DAY_CODE_BY_LABEL/);
+  assert.match(trialClient, /function normalizeSlotKey/);
+  assert.match(trialClient, /function getPreferredSlotKeyCandidates/);
+  assert.match(trialClient, /function getPreferredClass/);
+  assert.match(trialModals, /function isLikelyDefaultScheduleTime/);
+  assert.match(trialModals, /function normalizeSlotKey/);
+  assert.match(trialModals, /function getPreferredSlotKeyCandidates/);
+  assert.match(trialModals, /getPreferredClass\(lead, classes\)/);
+});
+
+test("체험 신청 카드형은 목록형과 같은 핵심 항목만 단순하게 배치한다", () => {
+  assert.match(trialClient, /xl:grid-cols-\[1\.1fr_0\.9fr_2\.1fr_0\.9fr_1\.3fr\]/);
+  assert.match(trialClient, /신청\/희망\/수업 일정/);
+  assert.match(trialClient, /setShowScheduleModal\(lead\)/);
+  assert.match(trialClient, /handleRecordContact\(lead, "CONTACTED"\)/);
+  assert.doesNotMatch(trialClient, /md:flex-row md:items-center/);
 });
 
 test("수강신청은 승인 전 내용 수정과 취소 이력 처리를 지원한다", () => {

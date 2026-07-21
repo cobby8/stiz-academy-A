@@ -12,6 +12,10 @@ import { VoiceToTextButton } from "@/components/staff/VoiceToTextButton";
 import { useStaffDialog } from "@/components/staff/useStaffDialog";
 import type { StaffTodayClass } from "@/lib/staff-session-queries";
 
+function isSeasonalLesson(lesson: StaffTodayClass) {
+  return lesson.kind === "SEASONAL";
+}
+
 const ClassPeopleSheet = dynamic(
   () => import("@/components/staff/ClassPeopleSheet").then((module) => module.ClassPeopleSheet),
   { ssr: false },
@@ -43,7 +47,7 @@ export default function StaffHomeClient({
 
   const runningClass = classes.find((lesson) => lesson.sessionStatus === "IN_PROGRESS");
   const focusClass = runningClass || classes.find((lesson) => lesson.sessionStatus !== "COMPLETED") || classes[0];
-  const otherClasses = classes.filter((lesson) => lesson.id !== focusClass?.id);
+  const otherClasses = classes.filter((lesson) => lesson.scheduleKey !== focusClass?.scheduleKey);
   const completedCount = classes.filter((lesson) => lesson.sessionStatus === "COMPLETED").length;
 
   function openContent(lesson: StaffTodayClass) {
@@ -72,7 +76,11 @@ export default function StaffHomeClient({
     if (!startTarget) return;
     setError(null);
     startTransition(async () => {
-      const result = await startClassSession({ classId: startTarget.id, date: dateKey });
+      const result = await startClassSession({
+        classId: startTarget.id,
+        date: dateKey,
+        ...(startTarget.sessionDateId ? { sessionDateId: startTarget.sessionDateId } : {}),
+      });
       if (!result.ok) {
         if (result.code === "ACTIVE_SESSION" && result.activeSessionId) {
           router.push(`/staff/sessions/${result.activeSessionId}`);
@@ -159,7 +167,10 @@ export default function StaffHomeClient({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-black text-[var(--brand-accent)]">{focusClass.startTime}–{focusClass.endTime}</p>
-                    <h2 className="mt-1 text-2xl font-black">{focusClass.name}</h2>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-black">{focusClass.name}</h2>
+                      {isSeasonalLesson(focusClass) && <SeasonalBadge inverted />}
+                    </div>
                   </div>
                   <StatusBadge status={focusClass.sessionStatus} inverted />
                 </div>
@@ -197,7 +208,7 @@ export default function StaffHomeClient({
               </div>
               <div className="space-y-3">
                 {otherClasses.map((lesson) => (
-                  <CompactClassCard key={lesson.id} lesson={lesson} startLocked={Boolean(runningClass && lesson.sessionStatus !== "IN_PROGRESS")} onStart={openPrimaryAction} onContent={openContent} onContacts={openContacts} onBilling={(target) => setBillingTarget({ lesson: target })} onNotice={(target) => { setError(null); setNoticeTarget(target); }} />
+                  <CompactClassCard key={lesson.scheduleKey} lesson={lesson} startLocked={Boolean(runningClass && lesson.sessionStatus !== "IN_PROGRESS")} onStart={openPrimaryAction} onContent={openContent} onContacts={openContacts} onBilling={(target) => setBillingTarget({ lesson: target })} onNotice={(target) => { setError(null); setNoticeTarget(target); }} />
                 ))}
               </div>
             </section>
@@ -251,6 +262,10 @@ function StatusBadge({ status, inverted = false }: { status: StaffTodayClass["se
   return <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${status === "IN_PROGRESS" ? "bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]" : inverted ? "bg-white/10 text-gray-200" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"}`}>{text}</span>;
 }
 
+function SeasonalBadge({ inverted = false }: { inverted?: boolean }) {
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-black ${inverted ? "bg-sky-400/20 text-sky-100" : "bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200"}`}>특강</span>;
+}
+
 function SecondaryButton({ icon, label, onClick, disabled = false, inverted = false }: { icon: string; label: string; onClick: () => void; disabled?: boolean; inverted?: boolean }) {
   return <button type="button" disabled={disabled} onClick={onClick} className={`flex min-h-16 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold disabled:opacity-40 ${inverted ? "bg-white/10 text-white" : "border border-gray-200 dark:border-gray-700"}`}><span className="material-symbols-outlined text-xl">{icon}</span>{label}</button>;
 }
@@ -258,7 +273,7 @@ function SecondaryButton({ icon, label, onClick, disabled = false, inverted = fa
 function CompactClassCard({ lesson, startLocked, onStart, onContent, onContacts, onBilling, onNotice }: { lesson: StaffTodayClass; startLocked: boolean; onStart: (lesson: StaffTodayClass) => void; onContent: (lesson: StaffTodayClass) => void; onContacts: (lesson: StaffTodayClass) => void; onBilling: (lesson: StaffTodayClass) => void; onNotice: (lesson: StaffTodayClass) => void }) {
   const completed = lesson.sessionStatus === "COMPLETED";
   return <article className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-    <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-[var(--brand-accent)]">{lesson.startTime}–{lesson.endTime}</p><h3 className="mt-0.5 text-lg font-black dark:text-white">{lesson.name}</h3><p className="mt-1 text-xs text-gray-500">학생 {lesson.studentCount}명 · {lesson.location || "장소 미정"}</p></div><StatusBadge status={lesson.sessionStatus} /></div>
+    <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black text-[var(--brand-accent)]">{lesson.startTime}–{lesson.endTime}</p><div className="mt-0.5 flex flex-wrap items-center gap-2"><h3 className="text-lg font-black dark:text-white">{lesson.name}</h3>{isSeasonalLesson(lesson) && <SeasonalBadge />}</div><p className="mt-1 text-xs text-gray-500">학생 {lesson.studentCount}명 · {lesson.location || "장소 미정"}</p></div><StatusBadge status={lesson.sessionStatus} /></div>
     {!completed && <div className="mt-3 space-y-2"><button type="button" disabled={startLocked} title={startLocked ? "진행 중인 수업을 먼저 종료해 주세요." : undefined} onClick={() => onStart(lesson)} className="min-h-12 w-full rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)] disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 dark:disabled:bg-gray-800">{lesson.sessionStatus === "IN_PROGRESS" ? "수업으로 돌아가기" : startLocked ? "현재 수업 종료 후 시작" : "수업 시작"}</button><div className="grid grid-cols-4 gap-2" aria-label="수업 빠른 메뉴"><CompactAction icon="edit_note" label="내용" onClick={() => onContent(lesson)} /><CompactAction icon="groups" label="학생" onClick={() => onContacts(lesson)} /><CompactAction icon="receipt_long" label="청구" onClick={() => onBilling(lesson)} /><CompactAction icon="campaign" label="공지" onClick={() => onNotice(lesson)} /></div></div>}
   </article>;
 }

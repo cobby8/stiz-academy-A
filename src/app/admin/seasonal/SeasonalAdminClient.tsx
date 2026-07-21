@@ -1032,7 +1032,7 @@ function ClassForm({ seasonId, initial, onClose, onSubmit }: { seasonId: string;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [sessionDates, setSessionDates] = useState(() => initial?.sessionDates?.length
-    ? initial.sessionDates.map((row) => ({ startsAt: dateTimeInputValue(row.startsAt), endsAt: dateTimeInputValue(row.endsAt), location: row.location ?? "", note: row.note ?? "" }))
+    ? initial.sessionDates.map((row) => ({ id: row.id, startsAt: dateTimeInputValue(row.startsAt), endsAt: dateTimeInputValue(row.endsAt), location: row.location ?? "", note: row.note ?? "" }))
     : [{ startsAt: "", endsAt: "", location: initial?.location ?? "", note: "" }]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {

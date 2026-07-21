@@ -3,6 +3,7 @@ import {
   getAccessibleClassIds,
   getStaffClassAccessContext,
   requireStaffClassAccess,
+  requireStaffSeasonalSessionAccess,
 } from "@/lib/staff-class-access";
 
 export type StaffTodayClass = {
@@ -16,6 +17,9 @@ export type StaffTodayClass = {
   sessionStatus: string | null;
   plannedContent: string | null;
   startedAt: string | null;
+  kind: "REGULAR" | "SEASONAL";
+  scheduleKey: string;
+  sessionDateId: string | null;
 };
 
 export type StaffSessionDetail = {
@@ -43,7 +47,12 @@ export type StaffSessionStudent = {
   arrivedAt: string | null;
 };
 
-type TodayClassRow = Omit<StaffTodayClass, "startedAt"> & { startedAt: Date | string | null };
+type TodayClassRow = Omit<StaffTodayClass, "startedAt" | "kind" | "scheduleKey" | "sessionDateId"> & {
+  startedAt: Date | string | null;
+  kind?: "REGULAR" | "SEASONAL";
+  scheduleKey?: string;
+  sessionDateId?: string | null;
+};
 type SessionDetailRow = Omit<StaffSessionDetail, "startedAt" | "endedAt"> & {
   startedAt: Date | string | null;
   endedAt: Date | string | null;
@@ -68,11 +77,10 @@ function toIso(value: Date | string | null) {
 export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
   const access = await getStaffClassAccessContext();
   const classIds = await getAccessibleClassIds(access);
-  if (classIds.length === 0) return [];
 
   const dateKey = getKoreaDateKey();
   const koreaDay = new Date(`${dateKey}T12:00:00+09:00`).getDay();
-  const rows = await prisma.$queryRawUnsafe<TodayClassRow[]>(
+  const regularRows = classIds.length === 0 ? [] : await prisma.$queryRawUnsafe<TodayClassRow[]>(
     `SELECT c.id, c.name, c."startTime", c."endTime", c.location,
             COUNT(DISTINCT e.id)::int AS "studentCount",
             s.id AS "sessionId", s.status AS "sessionStatus",
@@ -80,6 +88,7 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
      FROM "Class" c
      LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
      LEFT JOIN "Session" s ON s."classId" = c.id AND s.date = $2::date
+       AND s."specialProgramSessionDateId" IS NULL
      WHERE c.id = ANY($1::text[]) AND c."dayOfWeek" = $3
      GROUP BY c.id, s.id
      ORDER BY c."startTime", c.name`,
@@ -88,27 +97,87 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
     DAY_KEYS[koreaDay],
   );
 
-  return rows.map((row) => ({ ...row, startedAt: toIso(row.startedAt) }));
+  const seasonalRows = await prisma.$queryRawUnsafe<TodayClassRow[]>(
+    `SELECT c.id, o.title AS name,
+            to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "startTime",
+            to_char(sd."endsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "endTime",
+            COALESCE(sd.location, o.location, c.location) AS location,
+            COUNT(DISTINCT a."convertedStudentId")::int AS "studentCount",
+            s.id AS "sessionId", s.status AS "sessionStatus",
+            s."plannedContent", s."startedAt",
+            'SEASONAL' AS kind,
+            ('seasonal:' || sd.id) AS "scheduleKey",
+            sd.id AS "sessionDateId"
+     FROM "SpecialProgramSessionDate" sd
+     JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+     JOIN "Class" c ON c.id = o."linkedClassId"
+     LEFT JOIN "SpecialProgramApplicationItem" i
+       ON i."offeringId" = o.id AND i.status = 'APPROVED'
+         AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+     LEFT JOIN "SpecialProgramApplication" a
+       ON a.id = i."applicationId" AND a."convertedStudentId" IS NOT NULL
+     LEFT JOIN "Session" s ON s."specialProgramSessionDateId" = sd.id
+     WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
+       AND ($2::boolean = true OR o."instructorId" = $3)
+     GROUP BY c.id, o.id, sd.id, s.id
+     ORDER BY sd."startsAt", o.title`,
+    dateKey,
+    access.canAccessAllClasses,
+    access.staff.appUserId,
+  );
+
+  const normalizedRegular = regularRows.map((row) => ({
+    ...row,
+    kind: "REGULAR" as const,
+    scheduleKey: `regular:${row.id}`,
+    sessionDateId: null,
+    startedAt: toIso(row.startedAt),
+  }));
+  const normalizedSeasonal = seasonalRows.map((row) => ({
+    ...row,
+    kind: "SEASONAL" as const,
+    scheduleKey: row.scheduleKey ?? `seasonal:${row.sessionDateId}`,
+    sessionDateId: row.sessionDateId ?? null,
+    startedAt: toIso(row.startedAt),
+  }));
+  return [...normalizedRegular, ...normalizedSeasonal].sort((a, b) =>
+    a.startTime.localeCompare(b.startTime) || a.name.localeCompare(b.name),
+  );
 }
 
 export async function getStaffSessionDetail(sessionId: string): Promise<StaffSessionDetail | null> {
-  const rows = await prisma.$queryRawUnsafe<SessionDetailRow[]>(
-    `SELECT s.id, s."classId", c.name AS "className", c."startTime", c."endTime",
-            c.location, s.status, s."plannedContent", s.content, s.notes, s."photosJSON",
+  const rows = await prisma.$queryRawUnsafe<Array<SessionDetailRow & { sessionDateId: string | null }>>(
+    `SELECT s.id, s."classId", COALESCE(o.title, c.name) AS "className",
+            COALESCE(to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI'), c."startTime") AS "startTime",
+            COALESCE(to_char(sd."endsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI'), c."endTime") AS "endTime",
+            COALESCE(sd.location, o.location, c.location) AS location,
+            s.status, s."plannedContent", s.content, s.notes, s."photosJSON",
             s."startedAt", s."endedAt",
-            COUNT(DISTINCT e.id)::int AS "studentCount"
+            s."specialProgramSessionDateId" AS "sessionDateId",
+            CASE WHEN sd.id IS NOT NULL
+              THEN COUNT(DISTINCT app."convertedStudentId")
+              ELSE COUNT(DISTINCT e.id)
+            END::int AS "studentCount"
      FROM "Session" s
      JOIN "Class" c ON c.id = s."classId"
+     LEFT JOIN "SpecialProgramSessionDate" sd ON sd.id = s."specialProgramSessionDateId"
+     LEFT JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+     LEFT JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id
+       AND i.status = 'APPROVED'
+       AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+     LEFT JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+       AND app."convertedStudentId" IS NOT NULL
      LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
      WHERE s.id = $1
-     GROUP BY s.id, c.id
+     GROUP BY s.id, c.id, sd.id, o.id
      LIMIT 1`,
     sessionId,
   );
   const row = rows[0];
   if (!row) return null;
 
-  await requireStaffClassAccess(row.classId);
+  if (row.sessionDateId) await requireStaffSeasonalSessionAccess(row.sessionDateId);
+  else await requireStaffClassAccess(row.classId);
   let photos: string[] = [];
   try {
     const parsed = JSON.parse(row.photosJSON || "[]");
@@ -131,6 +200,32 @@ export async function getStaffSessionStudents(
   sessionId: string,
   classId: string,
 ): Promise<StaffSessionStudent[]> {
+  const sessionKinds = await prisma.$queryRawUnsafe<Array<{ sessionDateId: string | null }>>(
+    `SELECT "specialProgramSessionDateId" AS "sessionDateId" FROM "Session" WHERE id = $1 LIMIT 1`,
+    sessionId,
+  );
+  const sessionDateId = sessionKinds[0]?.sessionDateId;
+  if (sessionDateId) {
+    await requireStaffSeasonalSessionAccess(sessionDateId);
+    const rows = await prisma.$queryRawUnsafe<
+      Array<Omit<StaffSessionStudent, "arrivedAt"> & { arrivedAt: Date | string | null }>
+    >(
+      `SELECT DISTINCT st.id, st.name, att.status, att.note AS "attendanceNote", att."arrivedAt"
+       FROM "Session" s
+       JOIN "SpecialProgramSessionDate" sd ON sd.id = s."specialProgramSessionDateId"
+       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = sd."offeringId"
+         AND i.status = 'APPROVED'
+         AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+       JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+       JOIN "Student" st ON st.id = app."convertedStudentId"
+       LEFT JOIN "Attendance" att ON att."sessionId" = s.id AND att."studentId" = st.id
+       WHERE s.id = $1
+       ORDER BY st.name`,
+      sessionId,
+    );
+    return rows.map((row) => ({ ...row, arrivedAt: toIso(row.arrivedAt) }));
+  }
+
   await requireStaffClassAccess(classId);
   const rows = await prisma.$queryRawUnsafe<
     Array<Omit<StaffSessionStudent, "arrivedAt"> & { arrivedAt: Date | string | null }>

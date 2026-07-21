@@ -6,7 +6,7 @@ const source = await readFile(new URL("../src/app/actions/staff-sessions.ts", im
 
 test("수업 종료 저장 뒤 학부모 알림 실패를 성공 응답과 분리한다", () => {
   const updateIndex = source.indexOf(`UPDATE "Session" SET status = 'COMPLETED'`);
-  const notificationIndex = source.indexOf("getClassParentRecipients(session.classId)", updateIndex);
+  const notificationIndex = source.indexOf("getSessionParentRecipients(session)", updateIndex);
 
   assert.ok(updateIndex >= 0, "수업 종료 DB 갱신이 있어야 합니다.");
   assert.ok(notificationIndex > updateIndex, "학부모 알림은 종료 저장 뒤에 처리해야 합니다.");

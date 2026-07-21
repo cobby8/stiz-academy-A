@@ -2,37 +2,81 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireStaffClassAccess } from "@/lib/staff-class-access";
+import { requireStaffClassAccess, requireStaffSeasonalSessionAccess } from "@/lib/staff-class-access";
 import { deliverParentNotification, getClassParentRecipients } from "@/lib/staff-notifications";
+import type { ParentRecipient } from "@/lib/staff-notifications";
 
 type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT";
 
 async function requireSessionAccess(sessionId: string) {
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; classId: string; status: string; className: string }>>(
-    `SELECT s.id, s."classId", s.status, c.name AS "className" FROM "Session" s JOIN "Class" c ON c.id = s."classId" WHERE s.id = $1 LIMIT 1`,
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; classId: string; status: string; className: string; sessionDateId: string | null }>>(
+    `SELECT s.id, s."classId", s.status, c.name AS "className", s."specialProgramSessionDateId" AS "sessionDateId"
+     FROM "Session" s JOIN "Class" c ON c.id = s."classId" WHERE s.id = $1 LIMIT 1`,
     sessionId,
   );
   if (!rows[0]) throw new Error("수업 기록을 찾을 수 없습니다.");
-  const access = await requireStaffClassAccess(rows[0].classId);
+  const access = rows[0].sessionDateId
+    ? (await requireStaffSeasonalSessionAccess(rows[0].sessionDateId)).access
+    : await requireStaffClassAccess(rows[0].classId);
   return { session: rows[0], access };
+}
+
+async function isSessionRosterStudent(classId: string, sessionDateId: string | null, studentId: string) {
+  if (!sessionDateId) {
+    const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+      `SELECT id FROM "Enrollment" WHERE "classId" = $1 AND "studentId" = $2 AND status = 'ACTIVE' LIMIT 1`, classId, studentId,
+    );
+    return Boolean(rows[0]);
+  }
+  const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT app.id FROM "SpecialProgramApplicationItem" i
+     JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+     JOIN "SpecialProgramSessionDate" sd ON sd."offeringId" = i."offeringId"
+     WHERE sd.id = $1 AND app."convertedStudentId" = $2
+       AND i.status = 'APPROVED'
+       AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED') LIMIT 1`,
+    sessionDateId, studentId,
+  );
+  return Boolean(rows[0]);
+}
+
+async function getSessionParentRecipients(session: { classId: string; sessionDateId: string | null }, studentIds?: string[]) {
+  if (!session.sessionDateId) return getClassParentRecipients(session.classId, studentIds);
+  return prisma.$queryRawUnsafe<ParentRecipient[]>(
+    `SELECT DISTINCT st.id AS "studentId", st.name AS "studentName", st."parentId" AS "userId"
+     FROM "SpecialProgramSessionDate" sd
+     JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = sd."offeringId"
+       AND i.status = 'APPROVED'
+       AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+     JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+     JOIN "Student" st ON st.id = app."convertedStudentId"
+     WHERE sd.id = $1 AND ($2::text[] IS NULL OR st.id = ANY($2::text[])) AND st."parentId" IS NOT NULL`,
+    session.sessionDateId, studentIds?.length ? studentIds : null,
+  );
 }
 
 export async function savePlannedClassContent(input: {
   classId: string;
   date: string;
   plannedContent: string;
+  sessionDateId?: string;
 }) {
-  const access = await requireStaffClassAccess(input.classId);
+  const sessionDateId = input.sessionDateId?.trim() || null;
+  const seasonal = sessionDateId ? await requireStaffSeasonalSessionAccess(sessionDateId) : null;
+  const access = seasonal?.access ?? await requireStaffClassAccess(input.classId);
+  if (seasonal && seasonal.seasonal.linkedClassId !== input.classId) {
+    return { ok: false as const, message: "특강과 연결된 수업 정보가 일치하지 않습니다." };
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
     return { ok: false as const, message: "수업 날짜를 다시 확인해 주세요." };
   }
 
-  const sessionKey = `${input.classId}:${input.date}`;
+  const sessionKey = sessionDateId ? `seasonal:${sessionDateId}` : `${input.classId}:${input.date}`;
   const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
     `INSERT INTO "Session" (
-       id, "classId", date, "sessionKey", status, "plannedContent", "coachId", "createdAt", "updatedAt"
+       id, "classId", date, "sessionKey", status, "plannedContent", "coachId", "specialProgramSessionDateId", "createdAt", "updatedAt"
      ) VALUES (
-       gen_random_uuid()::text, $1, $2::date, $3, 'PLANNED', $4, $5, NOW(), NOW()
+       gen_random_uuid()::text, $1, $2::date, $3, 'PLANNED', $4, $5, $6, NOW(), NOW()
      )
      ON CONFLICT ("sessionKey") DO UPDATE SET
        "plannedContent" = EXCLUDED."plannedContent",
@@ -44,6 +88,7 @@ export async function savePlannedClassContent(input: {
     sessionKey,
     input.plannedContent.trim() || null,
     access.coachId,
+    sessionDateId,
   );
 
   if (!rows[0]) {
@@ -74,11 +119,8 @@ export async function saveStaffAttendance(input: { sessionId: string; studentId:
   if (session.status !== "IN_PROGRESS") return { ok: false as const, message: "진행 중인 수업에서만 출결을 기록할 수 있습니다." };
   if (!["PRESENT", "LATE", "ABSENT"].includes(input.status)) return { ok: false as const, message: "올바른 출결 상태가 아닙니다." };
 
-  const enrolled = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT id FROM "Enrollment" WHERE "classId" = $1 AND "studentId" = $2 AND status = 'ACTIVE' LIMIT 1`,
-    session.classId, input.studentId,
-  );
-  if (!enrolled[0]) return { ok: false as const, message: "이 수업에 등록된 학생이 아닙니다." };
+  const enrolled = await isSessionRosterStudent(session.classId, session.sessionDateId, input.studentId);
+  if (!enrolled) return { ok: false as const, message: "이 수업의 확정 명단에 없는 학생입니다." };
 
   const previous = await prisma.$queryRawUnsafe<{ status: string }[]>(
     `SELECT status FROM "Attendance" WHERE "sessionId" = $1 AND "studentId" = $2 LIMIT 1`, input.sessionId, input.studentId,
@@ -98,7 +140,7 @@ export async function saveStaffAttendance(input: { sessionId: string; studentId:
 
   if (changed && (input.status === "PRESENT" || input.status === "LATE")) {
     try {
-      const [recipient] = await getClassParentRecipients(session.classId, [input.studentId]);
+      const [recipient] = await getSessionParentRecipients(session, [input.studentId]);
       if (recipient) {
         const delivery = await deliverParentNotification({
           eventType: input.status === "LATE" ? "ATTENDANCE_LATE" : "ATTENDANCE_PRESENT",
@@ -131,12 +173,24 @@ export async function completeClassSession(input: { sessionId: string }) {
   if (session.status === "COMPLETED") return { ok: true as const, completed: true, resumed: true };
   if (session.status !== "IN_PROGRESS") return { ok: false as const, message: "시작한 수업만 종료할 수 있습니다." };
 
-  const missing = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-    `SELECT COUNT(*)::bigint AS count FROM "Enrollment" e
-     WHERE e."classId" = $1 AND e.status = 'ACTIVE'
-       AND NOT EXISTS (SELECT 1 FROM "Attendance" a WHERE a."sessionId" = $2 AND a."studentId" = e."studentId")`,
-    session.classId, input.sessionId,
-  );
+  const missing = session.sessionDateId
+    ? await prisma.$queryRawUnsafe<{ count: bigint }[]>(
+        `SELECT COUNT(DISTINCT app."convertedStudentId")::bigint AS count
+         FROM "SpecialProgramSessionDate" sd
+         JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = sd."offeringId"
+           AND i.status = 'APPROVED'
+           AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+         JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+         WHERE sd.id = $1 AND app."convertedStudentId" IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM "Attendance" a WHERE a."sessionId" = $2 AND a."studentId" = app."convertedStudentId")`,
+        session.sessionDateId, input.sessionId,
+      )
+    : await prisma.$queryRawUnsafe<{ count: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS count FROM "Enrollment" e
+         WHERE e."classId" = $1 AND e.status = 'ACTIVE'
+           AND NOT EXISTS (SELECT 1 FROM "Attendance" a WHERE a."sessionId" = $2 AND a."studentId" = e."studentId")`,
+        session.classId, input.sessionId,
+      );
   if (Number(missing[0]?.count ?? 0) > 0) return { ok: false as const, message: "출결을 확인하지 않은 학생이 있습니다." };
 
   const ended = await prisma.$queryRawUnsafe<{ id: string }[]>(
@@ -152,7 +206,7 @@ export async function completeClassSession(input: { sessionId: string }) {
     | { code: "PARENT_NOTIFICATION_FAILED"; failedCount: number }
     | undefined;
   try {
-    const recipients = await getClassParentRecipients(session.classId);
+    const recipients = await getSessionParentRecipients(session);
     const results = await Promise.allSettled(recipients.map((recipient) => deliverParentNotification({
     eventType: "CLASS_COMPLETED",
     dedupeKey: `session:${input.sessionId}:completed:student:${recipient.studentId}:user:${recipient.userId}`,
@@ -237,6 +291,7 @@ function isLifecycleSchemaMissing(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return (
     message.includes("sessionKey") ||
+    message.includes("specialProgramSessionDateId") ||
     message.includes("startedAt") ||
     message.includes("startedByUserId") ||
     message.includes('column "status"')
@@ -250,6 +305,7 @@ function isLifecycleSchemaMissing(error: unknown) {
 export async function startClassSession(input: {
   classId: string;
   date: string;
+  sessionDateId?: string;
 }): Promise<StartClassSessionResult> {
   const classId = input.classId?.trim();
   const date = input.date?.trim();
@@ -264,8 +320,21 @@ export async function startClassSession(input: {
 
   try {
     // 화면에서 다른 수업 ID를 보내더라도 서버에서 담당 수업인지 다시 검사합니다.
-    const access = await requireStaffClassAccess(classId);
-    const sessionKey = `${classId}:${date}`;
+    const sessionDateId = input.sessionDateId?.trim() || null;
+    const seasonal = sessionDateId ? await requireStaffSeasonalSessionAccess(sessionDateId) : null;
+    const access = seasonal?.access ?? await requireStaffClassAccess(classId);
+    if (seasonal) {
+      if (seasonal.seasonal.linkedClassId !== classId) {
+        return { ok: false, code: "INVALID_INPUT", message: "특강과 연결된 수업 정보가 일치하지 않습니다." };
+      }
+      const validDate = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM "SpecialProgramSessionDate"
+         WHERE id = $1 AND ("startsAt" AT TIME ZONE 'Asia/Seoul')::date = $2::date LIMIT 1`,
+        sessionDateId, date,
+      );
+      if (!validDate[0]) return { ok: false, code: "INVALID_INPUT", message: "오늘 예정된 특강 회차가 아닙니다." };
+    }
+    const sessionKey = sessionDateId ? `seasonal:${sessionDateId}` : `${classId}:${date}`;
     const result = await prisma.$transaction(async (tx) => {
       // 교사별 잠금은 두 휴대폰에서 동시에 눌러도 한 수업만 열리게 하는 안전장치입니다.
       await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, access.staff.appUserId);
@@ -344,11 +413,11 @@ export async function startClassSession(input: {
       const inserted = await tx.$queryRawUnsafe<SessionStartRow[]>(
       `INSERT INTO "Session" (
          id, "classId", date, "sessionKey", status, "coachId",
-         "startedAt", "startedByUserId", "createdAt", "updatedAt"
+         "startedAt", "startedByUserId", "specialProgramSessionDateId", "createdAt", "updatedAt"
        )
        VALUES (
          gen_random_uuid()::text, $1, $2::date, $3, 'IN_PROGRESS', $4,
-         NOW(), $5, NOW(), NOW()
+         NOW(), $5, $6, NOW(), NOW()
        )
        ON CONFLICT ("sessionKey") DO NOTHING
        RETURNING id, "classId", status, "startedAt"`,
@@ -357,6 +426,7 @@ export async function startClassSession(input: {
       sessionKey,
       access.coachId,
       access.staff.appUserId,
+      sessionDateId,
       );
 
       if (inserted[0]) {
@@ -386,6 +456,7 @@ export async function startClassSession(input: {
 
     const message = error instanceof Error ? error.message : "수업 시작 권한을 확인하지 못했습니다.";
     const isPermissionError =
+      message.includes("담당 특강") ||
       message.includes("담당 수업") ||
       message.includes("코치 정보") ||
       message.includes("권한") ||

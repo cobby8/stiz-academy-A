@@ -5,12 +5,13 @@ import { cleanText, SeasonalError } from "@/lib/seasonal/contracts";
 import { ensureInvoiceForPayment, ensurePaymentInfrastructure } from "@/lib/payment-ledger";
 import { Prisma } from "@prisma/client";
 import { classifyAdminAuthError } from "./auth-error";
+import { syncOfferingSessionDates } from "@/lib/seasonal/session-bridge";
 
 const SEASON_STATUSES = new Set(["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"]);
 const OFFERING_STATUSES = new Set(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]);
 const APPLICATION_STATUSES = new Set(["PENDING", "PARTIALLY_WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 const ITEM_STATUSES = new Set(["PENDING", "WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
-type SessionDateInput = { startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
+type SessionDateInput = { id?: unknown; startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
 type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null };
 type AdminApplicationRow = Record<string, unknown> & {
   items: Array<Record<string, unknown> & { paymentId?: string | null }>;
@@ -250,11 +251,18 @@ export async function POST(request: NextRequest) {
       const capacity = optionalNonNegativeInt(data.capacity, "정원");
       const price = nonNegativeInt(data.price, "가격");
       const status = OFFERING_STATUSES.has(data.status) ? data.status : "DRAFT";
+      const linkedClassId = cleanText(data.linkedClassId, 100) || null;
+      const instructorId = cleanText(data.instructorId, 100) || null;
       if (status === "OPEN" && capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
       if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
-      const offering = await prisma.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId: cleanText(data.instructorId, 100), instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId: cleanText(data.linkedClassId, 100), sessionDates: { create: sessionDates } }, include: { sessionDates: true } });
+      if (status === "OPEN" && (!linkedClassId || !instructorId)) throw new SeasonalError("모집 중인 반은 연결 반과 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
+      const offering = await prisma.$transaction(async (tx) => {
+        const created = await tx.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId, instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId } });
+        await syncOfferingSessionDates(tx, { offeringId: created.id, linkedClassId, instructorId, dates: sessionDates });
+        return tx.specialProgramOffering.findUniqueOrThrow({ where: { id: created.id }, include: { sessionDates: { orderBy: { startsAt: "asc" } } } });
+      });
       await prisma.specialProgramAuditLog.create({ data: { seasonId, offeringId: offering.id, actorType: "ADMIN", actorId: actor.appUserId, action: "OFFERING_CREATED", afterJSON: offering } });
       return NextResponse.json({ offering }, { status: 201 });
     }
@@ -354,10 +362,14 @@ export async function PATCH(request: NextRequest) {
       const nextStatus = (update.status as string | undefined) ?? before.status;
       const nextCapacity = update.capacity === undefined ? before.capacity : update.capacity;
       if (nextStatus === "OPEN" && nextCapacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
+      const nextLinkedClassId = (update.linkedClassId === undefined ? before.linkedClassId : update.linkedClassId) as string | null;
+      const nextInstructorId = (update.instructorId === undefined ? before.instructorId : update.instructorId) as string | null;
+      if (nextStatus === "OPEN" && (!nextLinkedClassId || !nextInstructorId)) throw new SeasonalError("모집 중인 반은 연결 반과 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
       if (data.shuttleAvailable !== undefined) update.shuttleAvailable = Boolean(data.shuttleAvailable);
       if (data.displayOrder !== undefined) update.displayOrder = Number(data.displayOrder) || 0;
       const replacementDates = Array.isArray(data.sessionDates)
         ? (data.sessionDates as SessionDateInput[]).map((row) => ({
+            id: cleanText(row.id, 100) || null,
             startsAt: date(row.startsAt, "수업 시작 시각"),
             endsAt: date(row.endsAt, "수업 종료 시각"),
             location: cleanText(row.location, 150),
@@ -371,11 +383,15 @@ export async function PATCH(request: NextRequest) {
       }
       const offering = await prisma.$transaction(async (tx) => {
         const updated = await tx.specialProgramOffering.update({ where: { id }, data: update });
-        if (replacementDates) {
-          await tx.specialProgramSessionDate.deleteMany({ where: { offeringId: id } });
-          if (replacementDates.length) await tx.specialProgramSessionDate.createMany({ data: replacementDates.map((row: { startsAt: Date; endsAt: Date; location?: string; note?: string }) => ({ offeringId: id, ...row })) });
+        if (replacementDates || data.linkedClassId !== undefined || data.instructorId !== undefined) {
+          const dates = replacementDates ?? await tx.specialProgramSessionDate.findMany({
+            where: { offeringId: id },
+            orderBy: { startsAt: "asc" },
+            select: { id: true, startsAt: true, endsAt: true, location: true, note: true },
+          });
+          await syncOfferingSessionDates(tx, { offeringId: id, linkedClassId: nextLinkedClassId, instructorId: nextInstructorId, dates });
         }
-        return updated;
+        return tx.specialProgramOffering.findUniqueOrThrow({ where: { id: updated.id }, include: { sessionDates: { orderBy: { startsAt: "asc" } } } });
       });
       await prisma.specialProgramAuditLog.create({ data: { seasonId: offering.seasonId, offeringId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "OFFERING_UPDATED", beforeJSON: before, afterJSON: offering } });
       return NextResponse.json({ offering });
@@ -631,15 +647,35 @@ export async function DELETE(request: NextRequest) {
       const offering = await prisma.specialProgramOffering.findUnique({ where: { id }, include: { _count: { select: { applicationItems: true } } } });
       if (!offering) throw new SeasonalError("특강을 찾을 수 없습니다.", 404);
       if (offering._count.applicationItems > 0) throw new SeasonalError("신청 이력이 있는 특강은 삭제 대신 취소 처리해 주세요.", 409);
-      await prisma.specialProgramOffering.delete({ where: { id } });
-      await prisma.specialProgramAuditLog.create({ data: { seasonId: offering.seasonId, actorType: "ADMIN", actorId: actor.appUserId, action: "OFFERING_DELETED", beforeJSON: offering } });
+      const protectedSessions = await prisma.session.count({
+        where: {
+          specialProgramSessionDate: { offeringId: id },
+          OR: [{ status: { not: "PLANNED" } }, { attendances: { some: {} } }],
+        },
+      });
+      if (protectedSessions > 0) throw new SeasonalError("이미 시작했거나 출석 기록이 있는 특강은 삭제 대신 취소 처리해 주세요.", 409, "SEASONAL_SESSION_PROTECTED");
+      await prisma.$transaction(async (tx) => {
+        await tx.specialProgramAuditLog.create({ data: { seasonId: offering.seasonId, offeringId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "OFFERING_DELETED", beforeJSON: offering } });
+        await tx.session.deleteMany({ where: { specialProgramSessionDate: { offeringId: id } } });
+        await tx.specialProgramOffering.delete({ where: { id } });
+      });
       return NextResponse.json({ success: true });
     }
     const season = await prisma.specialProgramSeason.findUnique({ where: { id }, include: { _count: { select: { applications: true } } } });
     if (!season) throw new SeasonalError("시즌을 찾을 수 없습니다.", 404);
     if (season._count.applications > 0) throw new SeasonalError("신청 이력이 있는 시즌은 삭제 대신 보관 처리해 주세요.", 409);
-    await prisma.specialProgramAuditLog.create({ data: { seasonId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "SEASON_DELETED", beforeJSON: season } });
-    await prisma.specialProgramSeason.delete({ where: { id } });
+    const protectedSessions = await prisma.session.count({
+      where: {
+        specialProgramSessionDate: { offering: { seasonId: id } },
+        OR: [{ status: { not: "PLANNED" } }, { attendances: { some: {} } }],
+      },
+    });
+    if (protectedSessions > 0) throw new SeasonalError("이미 시작했거나 출석 기록이 있는 특강 시즌은 삭제 대신 보관 처리해 주세요.", 409, "SEASONAL_SESSION_PROTECTED");
+    await prisma.$transaction(async (tx) => {
+      await tx.specialProgramAuditLog.create({ data: { seasonId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "SEASON_DELETED", beforeJSON: season } });
+      await tx.session.deleteMany({ where: { specialProgramSessionDate: { offering: { seasonId: id } } } });
+      await tx.specialProgramSeason.delete({ where: { id } });
+    });
     return NextResponse.json({ success: true });
   } catch (error) { return respondError(error); }
 }

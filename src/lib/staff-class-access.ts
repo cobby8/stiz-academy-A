@@ -13,6 +13,13 @@ type StudentAccessRow = {
   id: string;
 };
 
+export type StaffSeasonalAccessRow = {
+  sessionDateId: string;
+  offeringId: string;
+  linkedClassId: string;
+  title: string;
+};
+
 export type StaffClassAccessContext = {
   staff: StaffAuthUser;
   coachId: string | null;
@@ -140,6 +147,32 @@ export async function requireStaffClassAccess(
   }
 
   return access;
+}
+
+/** 특강 회차는 정규반 배정이 아니라 특강 상품에 지정된 담당 강사를 기준으로 확인합니다. */
+export async function requireStaffSeasonalSessionAccess(
+  sessionDateId: string,
+  context?: StaffClassAccessContext,
+): Promise<{ access: StaffClassAccessContext; seasonal: StaffSeasonalAccessRow }> {
+  if (!sessionDateId) throw new Error("특강 회차 정보가 필요합니다.");
+
+  const access = context ?? (await getStaffClassAccessContext());
+  const rows = await prisma.$queryRawUnsafe<StaffSeasonalAccessRow[]>(
+    `SELECT sd.id AS "sessionDateId", o.id AS "offeringId",
+            o."linkedClassId", o.title
+     FROM "SpecialProgramSessionDate" sd
+     JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+     WHERE sd.id = $1
+       AND o."linkedClassId" IS NOT NULL
+       AND ($2::boolean = true OR o."instructorId" = $3)
+     LIMIT 1`,
+    sessionDateId,
+    access.canAccessAllClasses,
+    access.staff.appUserId,
+  );
+
+  if (!rows[0]) throw new Error("담당 특강 회차에만 접근할 수 있습니다.");
+  return { access, seasonal: rows[0] };
 }
 
 /**

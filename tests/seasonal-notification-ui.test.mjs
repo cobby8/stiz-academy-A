@@ -89,3 +89,40 @@ test("안내 실패는 warning·FAILED·템플릿 오류를 모두 포함한다"
   assert.match(client, /result\.notification\?\.status === "FAILED"/);
   assert.match(client, /result\.notification\?\.errorCode === "TEMPLATE_DISABLED_OR_MISSING"/);
 });
+
+test("신청 관리 안에 신청별·반별 명단 보기를 제공한다", () => {
+  assert.match(client, /type ApplicationsMode = "applications" \| "roster"/);
+  assert.match(client, />신청별<\/button>/);
+  assert.match(client, />반별 명단<\/button>/);
+  assert.match(client, /mode === "roster" \? <RosterView/);
+});
+
+test("명단 API는 모든 필터와 페이지를 전달하고 유연한 응답을 정규화한다", () => {
+  assert.match(client, /view: "roster", page: String\(rosterFilters\.page\), pageSize: "100"/);
+  for (const key of ["seasonId", "offeringId", "weekday", "paymentStatus", "shuttleStatus", "q"]) {
+    assert.match(client, new RegExp(`${key}: ""`));
+  }
+  assert.match(client, /body\.roster && typeof body\.roster === "object"/);
+  assert.match(client, /Array\.isArray\(source\.rows\).*Array\.isArray\(source\.items\)/);
+});
+
+test("반별 명단은 요약·데스크톱 표·모바일 카드와 상세 연결을 제공한다", () => {
+  assert.match(client, /확정<\/span>/);
+  assert.match(client, /미결제<\/span>/);
+  assert.match(client, /셔틀<\/span>/);
+  assert.match(client, /className="roster-desktop hidden overflow-x-auto md:block"/);
+  assert.match(client, /className="roster-mobile space-y-3 md:hidden"/);
+  assert.match(client, /openApplication\(row\.applicationId\)/);
+});
+
+test("인쇄와 CSV는 연락처를 마스킹하고 수식 주입을 방어한다", () => {
+  assert.match(client, /@page \{ size: A4 landscape/);
+  assert.match(client, /maskRosterName\(row\.parentName\)/);
+  assert.match(client, /maskRosterPhone\(row\.parentPhone\)/);
+  assert.match(client, /createCsv, createSafeCsvFilename, maskPhoneNumber/);
+  assert.match(client, /const csv = createCsv\(/);
+  assert.match(client, /text\/csv;charset=utf-8/);
+  assert.match(client, /createSafeCsvFilename\(/);
+  assert.match(client, />출석<\/th>/);
+  assert.match(client, />메모<\/th>/);
+});

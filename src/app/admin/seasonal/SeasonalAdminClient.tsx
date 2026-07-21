@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import AdminModal from "@/components/admin/AdminModal";
+import { createCsv, createSafeCsvFilename, maskPhoneNumber } from "@/lib/seasonal/roster-export";
 import { seoulDateTimeToIso } from "./seasonalDateTime";
 
 type SeasonStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
@@ -177,6 +178,33 @@ type BulkItemResponse = {
   error?: string;
 };
 
+type RosterRow = {
+  id: string;
+  applicationId: string;
+  itemId: string;
+  seasonId: string;
+  seasonName: string;
+  offeringId: string;
+  offeringName: string;
+  weekday: string;
+  scheduleLabel: string;
+  childName: string;
+  childGrade: string;
+  childSchool: string;
+  parentName: string;
+  parentPhone: string;
+  paymentStatus: string;
+  shuttleStatus: string;
+};
+
+type RosterPayload = {
+  rows: RosterRow[];
+  stats: { confirmed: number; unpaid: number; shuttle: number };
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
+type ApplicationsMode = "applications" | "roster";
+
 type Tab = "overview" | "seasons" | "applications";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -239,6 +267,69 @@ function stringList(value: unknown) {
   return [];
 }
 
+function recordValue(record: Record<string, unknown>, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value);
+  }
+  return fallback;
+}
+
+function normalizeRosterPayload(body: Record<string, unknown>): RosterPayload {
+  const source = body.roster && typeof body.roster === "object" ? body.roster as Record<string, unknown> : body;
+  const rawRows = Array.isArray(source.rows) ? source.rows : Array.isArray(source.items) ? source.items : [];
+  const rows = rawRows.map((value, index) => {
+    const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    return {
+      id: recordValue(row, ["id", "itemId", "applicationItemId"], `roster-${index}`),
+      applicationId: recordValue(row, ["applicationId"]),
+      itemId: recordValue(row, ["itemId", "applicationItemId", "id"]),
+      seasonId: recordValue(row, ["seasonId"]),
+      seasonName: recordValue(row, ["seasonName", "seasonTitle"], "시즌"),
+      offeringId: recordValue(row, ["offeringId", "classId"]),
+      offeringName: recordValue(row, ["offeringName", "offeringTitle", "className"], "특강 반"),
+      weekday: recordValue(row, ["weekday", "dayOfWeek"]),
+      scheduleLabel: recordValue(row, ["scheduleLabel", "schedule"]),
+      childName: recordValue(row, ["childName", "studentName"], "학생 미확인"),
+      childGrade: recordValue(row, ["childGrade", "grade"]),
+      childSchool: recordValue(row, ["childSchool", "school"]),
+      parentName: recordValue(row, ["parentName", "guardianName"]),
+      parentPhone: recordValue(row, ["parentPhone", "guardianPhone"]),
+      paymentStatus: recordValue(row, ["paymentStatus"], "UNPAID"),
+      shuttleStatus: recordValue(row, ["shuttleStatus"], "NOT_USED"),
+    } satisfies RosterRow;
+  });
+  const rawStats = source.stats && typeof source.stats === "object" ? source.stats as Record<string, unknown> : {};
+  const rawPagination = source.pagination && typeof source.pagination === "object" ? source.pagination as Record<string, unknown> : {};
+  const numberValue = (value: unknown, fallback: number) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const pageSize = numberValue(rawPagination.pageSize, Math.max(rows.length, 50));
+  const total = numberValue(rawPagination.total, rows.length);
+  return {
+    rows,
+    stats: {
+      confirmed: numberValue(rawStats.confirmed ?? rawStats.confirmedSeats, rows.length),
+      unpaid: numberValue(rawStats.unpaid, rows.filter((row) => row.paymentStatus !== "PAID").length),
+      shuttle: numberValue(rawStats.shuttle ?? rawStats.shuttleRequested, rows.filter((row) => row.shuttleStatus !== "NOT_USED" && row.shuttleStatus !== "NONE").length),
+    },
+    pagination: {
+      page: numberValue(rawPagination.page, 1),
+      pageSize,
+      total,
+      totalPages: numberValue(rawPagination.totalPages, Math.max(1, Math.ceil(total / pageSize))),
+    },
+  };
+}
+
+function maskRosterName(value: string) {
+  if (!value) return "미입력";
+  if (value.length === 1) return `${value}○`;
+  return `${value[0]}${"○".repeat(Math.max(1, value.length - 1))}`;
+}
+
+function maskRosterPhone(value: string) {
+  return maskPhoneNumber(value) || "미입력";
+}
+
 function applicantTypeLabel(value?: string | null) {
   if (value === "NEW") return "신규";
   if (value === "EXISTING") return "기존";
@@ -269,6 +360,11 @@ export default function SeasonalAdminClient() {
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [bulkProcessingStatus, setBulkProcessingStatus] = useState<ItemStatus | "">("");
   const [bulkConverting, setBulkConverting] = useState(false);
+  const [applicationsMode, setApplicationsMode] = useState<ApplicationsMode>("applications");
+  const [roster, setRoster] = useState<RosterPayload>({ rows: [], stats: { confirmed: 0, unpaid: 0, shuttle: 0 }, pagination: { page: 1, pageSize: 100, total: 0, totalPages: 1 } });
+  const [rosterFilters, setRosterFilters] = useState({ seasonId: "", offeringId: "", weekday: "", paymentStatus: "", shuttleStatus: "", q: "", page: 1 });
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState("");
 
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get("tab");
@@ -350,6 +446,31 @@ export default function SeasonalAdminClient() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (tab !== "applications" || applicationsMode !== "roster") return;
+    const controller = new AbortController();
+    const fetchRoster = async () => {
+      setRosterLoading(true);
+      setRosterError("");
+      try {
+        const params = new URLSearchParams({ view: "roster", page: String(rosterFilters.page), pageSize: "100" });
+        for (const [key, value] of Object.entries(rosterFilters)) {
+          if (key !== "page" && value) params.set(key, String(value));
+        }
+        const response = await fetch(`/api/admin/seasonal?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || "반별 확정 명단을 불러오지 못했습니다.");
+        setRoster(normalizeRosterPayload(body as Record<string, unknown>));
+      } catch (caught) {
+        if ((caught as Error).name !== "AbortError") setRosterError(caught instanceof Error ? caught.message : "반별 확정 명단을 불러오지 못했습니다.");
+      } finally {
+        if (!controller.signal.aborted) setRosterLoading(false);
+      }
+    };
+    void fetchRoster();
+    return () => controller.abort();
+  }, [applicationsMode, rosterFilters, tab]);
 
   const selectedSeason = data.seasons.find((season) => season.id === selectedSeasonId) ?? data.seasons[0];
   const filteredApplications = useMemo(() => {
@@ -624,7 +745,7 @@ export default function SeasonalAdminClient() {
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
-      ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
+      ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
@@ -653,6 +774,8 @@ function SeasonsView({ seasons, selected, onSelect, onAddClass, onEditSeason, on
 
 function ApplicationsView({
   applications,
+  allApplications,
+  seasons,
   search,
   status,
   selectedItemIdSet,
@@ -661,6 +784,13 @@ function ApplicationsView({
   allVisibleSelected,
   bulkProcessingStatus,
   bulkConverting,
+  mode,
+  roster,
+  rosterFilters,
+  rosterLoading,
+  rosterError,
+  onMode,
+  onRosterFilters,
   onSearch,
   onStatus,
   onSelect,
@@ -670,6 +800,8 @@ function ApplicationsView({
   onBulkConversion,
 }: {
   applications: Application[];
+  allApplications: Application[];
+  seasons: Season[];
   search: string;
   status: string;
   selectedItemIdSet: Set<string>;
@@ -678,6 +810,13 @@ function ApplicationsView({
   allVisibleSelected: boolean;
   bulkProcessingStatus: ItemStatus | "";
   bulkConverting: boolean;
+  mode: ApplicationsMode;
+  roster: RosterPayload;
+  rosterFilters: { seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number };
+  rosterLoading: boolean;
+  rosterError: string;
+  onMode: (mode: ApplicationsMode) => void;
+  onRosterFilters: Dispatch<SetStateAction<{ seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number }>>;
   onSearch: (value: string) => void;
   onStatus: (value: string) => void;
   onSelect: (application: Application) => void;
@@ -688,7 +827,12 @@ function ApplicationsView({
 }) {
   const visibleItemCount = applications.reduce((sum, application) => sum + application.items.length, 0);
 
-  return <Panel title="신청 목록" icon="assignment_ind">
+  return <div className="space-y-4">
+    <div className="print:hidden inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900" aria-label="신청 관리 보기">
+      <button type="button" onClick={() => onMode("applications")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${mode === "applications" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>신청별</button>
+      <button type="button" onClick={() => onMode("roster")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${mode === "roster" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>반별 명단</button>
+    </div>
+    {mode === "roster" ? <RosterView seasons={seasons} applications={allApplications} roster={roster} filters={rosterFilters} loading={rosterLoading} error={rosterError} onFilters={onRosterFilters} onSelect={onSelect} /> : <Panel title="신청 목록" icon="assignment_ind">
     <div className="mb-4 flex flex-col gap-3 sm:flex-row">
       <label className="relative flex-1">
         <Icon name="search" className="absolute left-3 top-3 text-xl text-gray-400" />
@@ -802,6 +946,100 @@ function ApplicationsView({
         </tbody>
       </table>
     </div>
+  </Panel>}
+  </div>;
+}
+
+function RosterView({ seasons, applications, roster, filters, loading, error, onFilters, onSelect }: {
+  seasons: Season[];
+  applications: Application[];
+  roster: RosterPayload;
+  filters: { seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number };
+  loading: boolean;
+  error: string;
+  onFilters: Dispatch<SetStateAction<{ seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number }>>;
+  onSelect: (application: Application) => void;
+}) {
+  const selectedSeason = seasons.find((season) => season.id === filters.seasonId);
+  const offerings = selectedSeason?.classes ?? seasons.flatMap((season) => season.classes);
+  const changeFilter = (key: keyof typeof filters, value: string | number) => onFilters((current) => ({
+    ...current,
+    [key]: value,
+    page: key === "page" ? Number(value) : 1,
+    ...(key === "seasonId" ? { offeringId: "", weekday: "" } : {}),
+  }));
+  const openApplication = (applicationId: string) => {
+    const application = applications.find((candidate) => candidate.id === applicationId);
+    if (application) onSelect(application);
+  };
+  const downloadCsv = async () => {
+    const params = new URLSearchParams({ view: "roster", page: "1", pageSize: "100" });
+    for (const [key, value] of Object.entries(filters)) if (key !== "page" && value) params.set(key, String(value));
+    const rows: RosterRow[] = [];
+    let page = 1;
+    let totalPages = 1;
+    do {
+      params.set("page", String(page));
+      const response = await fetch(`/api/admin/seasonal?${params.toString()}`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "CSV 명단을 준비하지 못했습니다.");
+      const payload = normalizeRosterPayload(body as Record<string, unknown>);
+      rows.push(...payload.rows);
+      totalPages = payload.pagination.totalPages;
+      page += 1;
+    } while (page <= totalPages);
+    const csvRows = rows.map((row) => ({
+      offering: row.offeringName,
+      schedule: [row.weekday, row.scheduleLabel].filter(Boolean).join(" "),
+      student: row.childName,
+      grade: row.childGrade,
+      school: row.childSchool,
+      parent: maskRosterName(row.parentName),
+      phone: maskRosterPhone(row.parentPhone),
+      payment: STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus,
+      shuttle: STATUS_LABEL[row.shuttleStatus] ?? row.shuttleStatus,
+    }));
+    const csv = createCsv([
+      { key: "offering", header: "반" },
+      { key: "schedule", header: "요일·시간" },
+      { key: "student", header: "학생" },
+      { key: "grade", header: "학년" },
+      { key: "school", header: "학교" },
+      { key: "parent", header: "보호자" },
+      { key: "phone", header: "연락처" },
+      { key: "payment", header: "결제" },
+      { key: "shuttle", header: "셔틀" },
+    ] as const, csvRows);
+    const href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = createSafeCsvFilename(`특강명단_${selectedSeason?.name ?? "전체"}_${new Date().toISOString().slice(0, 10)}`);
+    anchor.click();
+    URL.revokeObjectURL(href);
+  };
+  const printTitle = [selectedSeason?.name, offerings.find((offering) => offering.id === filters.offeringId)?.name, filters.weekday].filter(Boolean).join(" · ") || "방학특강 확정 명단";
+
+  return <Panel title="반별 확정 명단" icon="groups" action={<div className="print:hidden flex gap-2">
+    <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-black dark:border-gray-700"><Icon name="print" />인쇄</button>
+    <button type="button" onClick={() => void downloadCsv().catch((caught) => window.alert(caught instanceof Error ? caught.message : "CSV 다운로드에 실패했습니다."))} className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]"><Icon name="download" />CSV</button>
+  </div>}>
+    <style>{`@media print { @page { size: A4 landscape; margin: 12mm; } body * { visibility: hidden !important; } .seasonal-roster-print, .seasonal-roster-print * { visibility: visible !important; } .seasonal-roster-print { position: absolute; inset: 0; width: 100%; color: #000 !important; } .roster-desktop { display: block !important; } .roster-mobile, .print\\:hidden { display: none !important; } .seasonal-roster-print table { width: 100%; border-collapse: collapse; font-size: 10pt; } .seasonal-roster-print th, .seasonal-roster-print td { border: 1px solid #777; padding: 6px; } .seasonal-roster-print thead { display: table-header-group; } }`}</style>
+    <div className="print:hidden grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+      <select aria-label="명단 시즌" value={filters.seasonId} onChange={(event) => changeFilter("seasonId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 시즌</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select>
+      <select aria-label="명단 반" value={filters.offeringId} onChange={(event) => changeFilter("offeringId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 반</option>{offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}</select>
+      <select aria-label="명단 요일" value={filters.weekday} onChange={(event) => changeFilter("weekday", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 요일</option>{["월","화","수","목","금","토","일"].map((day) => <option key={day} value={day}>{day}요일</option>)}</select>
+      <select aria-label="명단 결제" value={filters.paymentStatus} onChange={(event) => changeFilter("paymentStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 결제</option><option value="PAID">결제 완료</option><option value="UNPAID">미결제</option><option value="PAYMENT_PENDING">결제 대기</option></select>
+      <select aria-label="명단 셔틀" value={filters.shuttleStatus} onChange={(event) => changeFilter("shuttleStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 셔틀</option><option value="NOT_USED">미이용</option><option value="REQUESTED">요청</option><option value="UNASSIGNED">미배정</option><option value="ASSIGNED">배정 완료</option></select>
+      <label className="relative"><span className="sr-only">명단 검색</span><Icon name="search" className="absolute left-3 top-3 text-xl text-gray-400" /><input value={filters.q} onChange={(event) => changeFilter("q", event.target.value)} placeholder="학생·학교 검색" className="min-h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-3 dark:border-gray-700 dark:bg-gray-800" /></label>
+    </div>
+    <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-emerald-50 p-3 text-emerald-800"><strong className="block text-xl">{roster.stats.confirmed}</strong><span className="text-xs font-bold">확정</span></div><div className="rounded-xl bg-amber-50 p-3 text-amber-800"><strong className="block text-xl">{roster.stats.unpaid}</strong><span className="text-xs font-bold">미결제</span></div><div className="rounded-xl bg-blue-50 p-3 text-blue-800"><strong className="block text-xl">{roster.stats.shuttle}</strong><span className="text-xs font-bold">셔틀</span></div></div>
+    {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+    {loading ? <Loading /> : <section className="seasonal-roster-print mt-4" aria-label="반별 확정 명단 결과">
+      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p><p className="text-xs">보호자 연락처는 개인정보 보호를 위해 마스킹되었습니다.</p></div>
+      <div className="roster-desktop hidden overflow-x-auto md:block"><table className="w-full min-w-[840px] text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="px-3 py-3">번호</th><th className="px-3 py-3">반·일정</th><th className="px-3 py-3">학생</th><th className="px-3 py-3">보호자</th><th className="px-3 py-3">결제</th><th className="px-3 py-3">셔틀</th><th className="hidden px-3 py-3 print:table-cell">출석</th><th className="hidden px-3 py-3 print:table-cell">메모</th></tr></thead><tbody className="divide-y divide-gray-100">{roster.rows.map((row, index) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-3 py-3">{(roster.pagination.page - 1) * roster.pagination.pageSize + index + 1}</td><td className="px-3 py-3"><p className="font-bold">{row.offeringName}</p><p className="text-xs text-gray-500">{[row.weekday, row.scheduleLabel].filter(Boolean).join(" · ") || "일정 미정"}</p></td><td className="px-3 py-3"><button type="button" onClick={() => openApplication(row.applicationId)} className="font-black hover:underline print:pointer-events-none">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></td><td className="px-3 py-3"><p>{maskRosterName(row.parentName)}</p><p className="text-xs">{maskRosterPhone(row.parentPhone)}</p></td><td className="px-3 py-3"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></td><td className="px-3 py-3"><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></td><td className="hidden print:table-cell">□</td><td className="hidden print:table-cell"> </td></tr>)}{!roster.rows.length && <tr><td colSpan={8}><Empty text="조건에 맞는 확정 명단이 없습니다." /></td></tr>}</tbody></table></div>
+      <div className="roster-mobile space-y-3 md:hidden">{roster.rows.map((row) => <article key={row.id} className="rounded-xl border border-gray-200 p-4"><div className="flex items-start justify-between gap-2"><div><button type="button" onClick={() => openApplication(row.applicationId)} className="min-h-11 font-black hover:underline">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></div><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></div><p className="mt-2 text-sm font-bold">{row.offeringName} · {row.weekday}</p><div className="mt-2 flex flex-wrap gap-2"><span className="text-xs">보호자 {maskRosterName(row.parentName)} · {maskRosterPhone(row.parentPhone)}</span><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></div><button type="button" onClick={() => openApplication(row.applicationId)} className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 font-bold">신청 상세</button></article>)}</div>
+    </section>}
+    {roster.pagination.totalPages > 1 && <nav className="print:hidden mt-4 flex items-center justify-center gap-3" aria-label="명단 페이지"><button type="button" disabled={filters.page <= 1} onClick={() => changeFilter("page", filters.page - 1)} className="min-h-10 rounded-lg border px-3 disabled:opacity-40">이전</button><span className="text-sm font-bold">{filters.page} / {roster.pagination.totalPages}</span><button type="button" disabled={filters.page >= roster.pagination.totalPages} onClick={() => changeFilter("page", filters.page + 1)} className="min-h-10 rounded-lg border px-3 disabled:opacity-40">다음</button></nav>}
   </Panel>;
 }
 
@@ -940,7 +1178,7 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
   const hasClass = Boolean(item.linkedClassId);
   const hasEnrollment = Boolean(item.enrollmentId);
   const hasPayment = Boolean(item.paymentId);
-  const readyToConvert = approved && hasClass && (!hasEnrollment || !hasPayment);
+  const readyToConvert = approved && (!hasEnrollment || !hasPayment);
   let title = "전환 준비됨";
   let helper = "다음 단계에서 수강 등록과 청구 생성을 실행할 수 있습니다.";
   let tone = "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100";
@@ -953,9 +1191,9 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
     helper = "먼저 신청 항목을 승인하면 수강 등록과 청구 생성 대상으로 검토할 수 있습니다.";
     tone = "border-gray-200 bg-gray-50 text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
   } else if (!hasClass) {
-    title = "정규 반 연결 필요";
-    helper = "시즌·반 설정에서 이 특강 반을 기존 반과 연결해야 자동 전환할 수 있습니다.";
-    tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
+    title = "특강 청구 생성 가능";
+    helper = "정규반 연결이 없어도 특강 학생 정보와 청구서는 생성할 수 있습니다.";
+    tone = "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-500/30 dark:bg-sky-950/30 dark:text-sky-100";
   } else if (!hasEnrollment && hasPayment) {
     title = "수강 등록 연결 필요";
     helper = "청구는 연결되어 있지만 수강 이력이 아직 연결되지 않았습니다.";

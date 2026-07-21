@@ -24,7 +24,14 @@ const ITEM_STATUSES = new Set(["PENDING", "WAITLISTED", "APPROVED", "REJECTED", 
 type SessionDateInput = { id?: unknown; startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
 type NotificationSummary = { trigger: string; status: string; attemptCount: number; updatedAt: string; errorCode: string | null; canRetry: boolean };
 type NotificationDeliveryRow = { status: string; attemptCount: number; errorCode: string | null; updatedAt: Date; payloadJSON: unknown };
-type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null; activationRequired: boolean; notification: SeasonalSmsDeliveryResult; notificationWarning?: true };
+type SeasonalRosterRow = {
+  itemId: string; applicationId: string; seasonId: string; seasonTitle: string; offeringId: string; offeringTitle: string;
+  childName: string; childGrade: string | null; childSchool: string | null; parentName: string; parentPhone: string;
+  priceSnapshot: number; itemStatus: string; createdAt: Date; paymentStatus: string; invoiceNo: string | null;
+  shuttleRequested: boolean; shuttleUnassigned: boolean; weekdays: number[];
+};
+type SeasonalRosterStats = { confirmedSeats: number; heldSeats: number; unpaid: number; shuttleRequested: number; shuttleUnassigned: number; total: number };
+type ConversionResult = { itemId: string; studentId: string; enrollmentId: string | null; paymentId: string; invoiceId: string | null; activationRequired: boolean; notification: SeasonalSmsDeliveryResult; notificationWarning?: true };
 type AdminApplicationRow = Record<string, unknown> & {
   items: Array<Record<string, unknown> & { paymentId?: string | null }>;
 };
@@ -156,6 +163,120 @@ function publicUrl(path: string) {
   return new URL(path, configured).toString();
 }
 
+const ROSTER_WEEKDAYS: Record<string, number> = { MON: 1, 월: 1, TUE: 2, 화: 2, WED: 3, 수: 3, THU: 4, 목: 4, FRI: 5, 금: 5, SAT: 6, 토: 6, SUN: 7, 일: 7 };
+
+function rosterInt(value: string | null, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
+function maskedPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 7) return "***";
+  return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+}
+
+function maskedName(value: string) {
+  if (!value) return "";
+  return `${value[0]}${"○".repeat(Math.max(1, value.length - 1))}`;
+}
+
+async function seasonalRoster(request: NextRequest) {
+  const params = request.nextUrl.searchParams;
+  const seasonId = cleanText(params.get("seasonId"), 100) || null;
+  const offeringId = cleanText(params.get("offeringId"), 100) || null;
+  const weekdayRaw = cleanText(params.get("weekday"), 10)?.toUpperCase() || null;
+  const weekday = weekdayRaw ? (ROSTER_WEEKDAYS[weekdayRaw] ?? Number(weekdayRaw)) : null;
+  if (weekday !== null && (!Number.isInteger(weekday) || weekday < 1 || weekday > 7)) throw new SeasonalError("요일 필터를 확인해 주세요.", 400, "INVALID_WEEKDAY");
+  const paymentStatus = cleanText(params.get("paymentStatus"), 30)?.toUpperCase() || null;
+  const shuttleStatus = cleanText(params.get("shuttleStatus"), 30)?.toUpperCase() || null;
+  const query = cleanText(params.get("q"), 100) || null;
+  const page = rosterInt(params.get("page"), 1, 1, 1_000_000);
+  const pageSize = rosterInt(params.get("pageSize"), 25, 1, 100);
+  const offset = (page - 1) * pageSize;
+  const paymentStatusSql = `CASE
+    WHEN payment.status IN ('PAID','COMPLETED') OR invoice.status IN ('PAID','COMPLETED') THEN 'PAID'
+    WHEN invoice.status = 'OVERDUE' OR payment.status = 'OVERDUE' THEN 'UNPAID'
+    WHEN payment.id IS NULL AND invoice.id IS NULL THEN 'UNPAID'
+    ELSE 'PAYMENT_PENDING' END`;
+  const filterSql = `
+    ($1::text IS NULL OR app."seasonId" = $1)
+    AND ($2::text IS NULL OR item."offeringId" = $2)
+    AND ($3::int IS NULL OR EXISTS (
+      SELECT 1 FROM "SpecialProgramSessionDate" sd
+       WHERE sd."offeringId" = item."offeringId"
+         AND EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int = $3
+    ))
+    AND ($4::text IS NULL OR ${paymentStatusSql} = $4)
+    AND ($5::text IS NULL OR CASE
+      WHEN $5 = 'REQUESTED' THEN shuttle.id IS NOT NULL
+      WHEN $5 = 'NOT_USED' THEN shuttle.id IS NULL
+      WHEN $5 = 'UNASSIGNED' THEN shuttle.id IS NOT NULL AND (shuttle."assignedRouteId" IS NULL OR shuttle."assignedStopId" IS NULL)
+      WHEN $5 = 'ASSIGNED' THEN shuttle."assignedRouteId" IS NOT NULL AND shuttle."assignedStopId" IS NOT NULL
+      ELSE shuttle.status = $5 END)
+    AND ($6::text IS NULL OR app."childName" ILIKE '%' || $6 || '%' OR app."parentName" ILIKE '%' || $6 || '%'
+      OR (regexp_replace($6, '[^0-9]', '', 'g') <> '' AND app."parentPhone" LIKE '%' || regexp_replace($6, '[^0-9]', '', 'g') || '%')
+      OR COALESCE(app."childSchool", '') ILIKE '%' || $6 || '%')`;
+  const queryParams = [seasonId, offeringId, weekday, paymentStatus, shuttleStatus, query];
+  const [rows, totals] = await Promise.all([
+    prisma.$queryRawUnsafe<SeasonalRosterRow[]>(`
+      SELECT item.id AS "itemId", app.id AS "applicationId", app."seasonId", season.title AS "seasonTitle",
+             item."offeringId", offering.title AS "offeringTitle", app."childName", app."childGrade", app."childSchool",
+             app."parentName", app."parentPhone", item."priceSnapshot", item.status AS "itemStatus", item."createdAt",
+             ${paymentStatusSql} AS "paymentStatus", invoice."invoiceNo",
+             (shuttle.id IS NOT NULL) AS "shuttleRequested",
+             (shuttle.id IS NOT NULL AND (shuttle."assignedRouteId" IS NULL OR shuttle."assignedStopId" IS NULL)) AS "shuttleUnassigned",
+             COALESCE((SELECT array_agg(DISTINCT EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int ORDER BY EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int)
+                         FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = item."offeringId"), ARRAY[]::int[]) AS weekdays
+        FROM "SpecialProgramApplicationItem" item
+        JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+        JOIN "SpecialProgramSeason" season ON season.id = app."seasonId"
+        JOIN "SpecialProgramOffering" offering ON offering.id = item."offeringId"
+        LEFT JOIN "Payment" payment ON payment.id = item."paymentId"
+        LEFT JOIN "PaymentInvoice" invoice ON invoice."paymentId" = item."paymentId"
+        LEFT JOIN "SpecialProgramShuttleRequest" shuttle ON shuttle."applicationItemId" = item.id
+       WHERE item.status = 'APPROVED' AND ${filterSql}
+       ORDER BY item."createdAt" DESC, item.id DESC LIMIT $7 OFFSET $8`, ...queryParams, pageSize, offset),
+    prisma.$queryRawUnsafe<Array<SeasonalRosterStats>>(`
+      SELECT COUNT(*) FILTER (WHERE item.status = 'APPROVED')::int AS "confirmedSeats",
+             COUNT(*) FILTER (WHERE item.status IN ('PENDING','APPROVED'))::int AS "heldSeats",
+             COUNT(*) FILTER (WHERE item.status = 'APPROVED' AND ${paymentStatusSql} <> 'PAID')::int AS unpaid,
+             COUNT(*) FILTER (WHERE item.status = 'APPROVED' AND shuttle.id IS NOT NULL)::int AS "shuttleRequested",
+             COUNT(*) FILTER (WHERE item.status = 'APPROVED' AND shuttle.id IS NOT NULL AND (shuttle."assignedRouteId" IS NULL OR shuttle."assignedStopId" IS NULL))::int AS "shuttleUnassigned",
+             COUNT(*) FILTER (WHERE item.status = 'APPROVED')::int AS total
+        FROM "SpecialProgramApplicationItem" item
+        JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+        LEFT JOIN "Payment" payment ON payment.id = item."paymentId"
+        LEFT JOIN "PaymentInvoice" invoice ON invoice."paymentId" = item."paymentId"
+        LEFT JOIN "SpecialProgramShuttleRequest" shuttle ON shuttle."applicationItemId" = item.id
+       WHERE item.status IN ('PENDING','APPROVED') AND ${filterSql}`, ...queryParams),
+  ]);
+  const stats = totals[0] ?? { confirmedSeats: 0, heldSeats: 0, unpaid: 0, shuttleRequested: 0, shuttleUnassigned: 0, total: 0 };
+  const weekdayLabels = ["", "월", "화", "수", "목", "금", "토", "일"];
+  const rosterRows = rows.map((row) => {
+    const weekdays = row.weekdays.map((day) => weekdayLabels[day]).filter(Boolean);
+    return {
+      ...row,
+      id: row.itemId,
+      seasonName: row.seasonTitle,
+      offeringName: row.offeringTitle,
+      weekday: weekdays.join("·"),
+      scheduleLabel: weekdays.map((day) => `${day}요일`).join(", "),
+      parentName: maskedName(row.parentName),
+      parentPhone: maskedPhone(row.parentPhone),
+      shuttleStatus: !row.shuttleRequested ? "NOT_USED" : row.shuttleUnassigned ? "UNASSIGNED" : "ASSIGNED",
+      createdAt: row.createdAt.toISOString(),
+    };
+  });
+  const pagination = { page, pageSize, total: stats.total, totalPages: Math.ceil(stats.total / pageSize) };
+  return NextResponse.json({
+    roster: { rows: rosterRows, stats, pagination },
+    stats,
+    pagination,
+    filters: { seasonId, offeringId, weekday, paymentStatus, shuttleStatus, q: query },
+  });
+}
+
 async function ensureApplicationCapacity(tx: Prisma.TransactionClient, applicationId: string) {
   const items = await tx.specialProgramApplicationItem.findMany({
     where: { applicationId },
@@ -279,6 +400,7 @@ function respondError(error: unknown) {
 export async function GET(request: NextRequest) {
   try {
     await admin();
+    if (request.nextUrl.searchParams.get("view") === "roster") return seasonalRoster(request);
     const seasonId = request.nextUrl.searchParams.get("seasonId") || undefined;
     const includeApplications = request.nextUrl.searchParams.get("includeApplications") === "true";
     const seasons = await prisma.specialProgramSeason.findMany({
@@ -405,7 +527,7 @@ export async function POST(request: NextRequest) {
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
       if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
-      if (status === "OPEN" && (!linkedClassId || !instructorId)) throw new SeasonalError("모집 중인 반은 연결 반과 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
+      if (status === "OPEN" && !instructorId) throw new SeasonalError("모집 중인 반은 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
       const offering = await prisma.$transaction(async (tx) => {
         const created = await tx.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId, instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId } });
         await syncOfferingSessionDates(tx, { offeringId: created.id, linkedClassId, instructorId, dates: sessionDates });
@@ -677,7 +799,7 @@ export async function PATCH(request: NextRequest) {
       if (nextStatus === "OPEN" && nextCapacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       const nextLinkedClassId = (update.linkedClassId === undefined ? before.linkedClassId : update.linkedClassId) as string | null;
       const nextInstructorId = (update.instructorId === undefined ? before.instructorId : update.instructorId) as string | null;
-      if (nextStatus === "OPEN" && (!nextLinkedClassId || !nextInstructorId)) throw new SeasonalError("모집 중인 반은 연결 반과 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
+      if (nextStatus === "OPEN" && !nextInstructorId) throw new SeasonalError("모집 중인 반은 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
       if (data.shuttleAvailable !== undefined) update.shuttleAvailable = Boolean(data.shuttleAvailable);
       if (data.displayOrder !== undefined) update.displayOrder = Number(data.displayOrder) || 0;
       const replacementDates = Array.isArray(data.sessionDates)
@@ -857,7 +979,7 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
     if (item.application.requiresReview || item.application.reviewReasons.length > 0) {
       throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
     }
-    if (!item.offering.linkedClassId) throw new SeasonalError("먼저 특강 반을 기존 정규 반과 연결해 주세요.", 409, "CLASS_NOT_LINKED");
+    const linkedClassId = item.offering.linkedClassId || null;
 
     const parentPhone = normalizeDigits(item.application.parentPhone);
     if (parentPhone.length < 10) throw new SeasonalError("보호자 연락처를 확인해 주세요.");
@@ -935,14 +1057,17 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
       `;
     }
 
-    const enrollments = await tx.$queryRaw<{ id: string }[]>`
-      INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
-      VALUES (gen_random_uuid()::text, ${studentId}, ${item.offering.linkedClassId}, 'ACTIVE', NOW(), NOW())
-      ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()
-      RETURNING id
-    `;
-    const enrollmentId = item.enrollmentId || enrollments[0]?.id;
-    if (!enrollmentId) throw new SeasonalError("수강 등록을 준비하지 못했습니다.", 500, "ENROLLMENT_SAVE_FAILED");
+    let enrollmentId = item.enrollmentId || null;
+    if (linkedClassId) {
+      const enrollments = await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
+        VALUES (gen_random_uuid()::text, ${studentId}, ${linkedClassId}, 'ACTIVE', NOW(), NOW())
+        ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()
+        RETURNING id
+      `;
+      enrollmentId = enrollmentId || enrollments[0]?.id || null;
+      if (!enrollmentId) throw new SeasonalError("수강 등록을 준비하지 못했습니다.", 500, "ENROLLMENT_SAVE_FAILED");
+    }
 
     let paymentId = item.paymentId || null;
     if (paymentId) {
@@ -960,7 +1085,7 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
           type, method, description, month, year, "autoGenerated", "createdAt", "updatedAt"
         )
         VALUES (
-          gen_random_uuid()::text, ${studentId}, ${item.offering.linkedClassId}, ${item.priceSnapshot}, 'PENDING', ${dueDate},
+          gen_random_uuid()::text, ${studentId}, ${linkedClassId}, ${item.priceSnapshot}, 'PENDING', ${dueDate},
           'SPECIAL', 'UNPAID', ${description}, ${month}, ${year}, false, NOW(), NOW()
         )
         RETURNING id
@@ -986,7 +1111,7 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
         actorType: "ADMIN",
         actorId,
         action: "ITEM_CONVERTED_TO_ENROLLMENT_PAYMENT",
-        afterJSON: { studentId, enrollmentId, paymentId, linkedClassId: item.offering.linkedClassId },
+        afterJSON: { studentId, enrollmentId, paymentId, linkedClassId },
       },
     });
 

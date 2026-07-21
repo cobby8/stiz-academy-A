@@ -47,6 +47,7 @@ declare global {
 }
 
 let kakaoLoader: Promise<KakaoSdk> | null = null;
+const DEFAULT_MAP_CENTER = { latitude: 37.624, longitude: 127.151 };
 
 function loadKakaoSdk(key: string) {
   if (window.kakao?.maps) return Promise.resolve(window.kakao);
@@ -77,11 +78,13 @@ function loadKakaoSdk(key: string) {
 export default function LocationPickerModal({
   title,
   initialValue,
+  confirmPending = false,
   onConfirm,
   onClose,
 }: {
   title: string;
   initialValue?: MapLocationData;
+  confirmPending?: boolean;
   onConfirm: (location: MapLocationData) => void;
   onClose: () => void;
 }) {
@@ -152,8 +155,8 @@ export default function LocationPickerModal({
     loadKakaoSdk(apiKey).then((sdk) => {
       if (cancelled || !mapElementRef.current) return;
       sdkRef.current = sdk;
-      const center = new sdk.maps.LatLng(initialValue?.latitude ?? 37.5665, initialValue?.longitude ?? 126.978);
-      const map = new sdk.maps.Map(mapElementRef.current, { center, level: initialValue ? 3 : 5 });
+      const center = new sdk.maps.LatLng(initialValue?.latitude ?? DEFAULT_MAP_CENTER.latitude, initialValue?.longitude ?? DEFAULT_MAP_CENTER.longitude);
+      const map = new sdk.maps.Map(mapElementRef.current, { center, level: initialValue ? 3 : 4 });
       mapRef.current = map;
       const updateCenter = () => {
         if (selectionEnabledRef.current) reverseGeocode(map.getCenter(), sourceRef.current, accuracyRef.current, interactionSequenceRef.current);
@@ -288,7 +291,7 @@ export default function LocationPickerModal({
             <div className="flex gap-2">
               <label className="sr-only" htmlFor={`${titleId}-search`}>주소 또는 장소 검색</label>
               <input ref={searchInputRef} id={`${titleId}-search`} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); search(); } }} placeholder="도로명, 건물명으로 검색" className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-              <button type="button" onClick={search} className="min-h-11 rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">검색</button>
+              <button type="button" onClick={search} disabled={confirmPending} className="min-h-11 rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">검색</button>
             </div>
           )}
 
@@ -304,7 +307,7 @@ export default function LocationPickerModal({
                 <div ref={mapElementRef} className="absolute inset-0" aria-label="승하차 위치 지도" />
                 {status === "loading" && <div className="absolute inset-0 grid place-items-center text-sm font-bold text-gray-500">지도를 불러오는 중...</div>}
                 <span className="material-symbols-outlined pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-full text-5xl text-brand-orange-500 drop-shadow" aria-hidden="true">location_on</span>
-                <button type="button" onClick={useCurrentLocation} className="absolute bottom-3 right-3 z-10 flex min-h-11 items-center gap-1 rounded-xl bg-white px-3 text-sm font-black text-gray-800 shadow-lg dark:bg-gray-800 dark:text-white">
+                <button type="button" onClick={useCurrentLocation} disabled={confirmPending} className="absolute bottom-3 right-3 z-10 flex min-h-11 items-center gap-1 rounded-xl bg-white px-3 text-sm font-black text-gray-800 shadow-lg disabled:opacity-60 dark:bg-gray-800 dark:text-white">
                   <span className="material-symbols-outlined text-lg" aria-hidden="true">my_location</span>현재 위치
                 </button>
               </div>
@@ -319,8 +322,8 @@ export default function LocationPickerModal({
 
         {status !== "fallback" && (
           <footer className="flex gap-2 border-t border-gray-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-gray-700">
-            <button type="button" onClick={onClose} className="min-h-12 rounded-xl border border-gray-300 px-5 font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200">취소</button>
-            <button type="button" disabled={!location} onClick={() => location && onConfirm(location)} className="min-h-12 flex-1 rounded-xl bg-brand-orange-500 px-5 font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">이 위치로 선택</button>
+            <button type="button" onClick={onClose} disabled={confirmPending} className="min-h-12 rounded-xl border border-gray-300 px-5 font-bold text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">취소</button>
+            <button type="button" disabled={!location || confirmPending} aria-busy={confirmPending} onClick={() => location && !confirmPending && onConfirm(location)} className="min-h-12 flex-1 rounded-xl bg-brand-orange-500 px-5 font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{confirmPending ? "저장 중..." : "이 위치로 선택"}</button>
           </footer>
         )}
       </section>

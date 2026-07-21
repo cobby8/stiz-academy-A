@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import test from "node:test";
+
+const picker = fs.readFileSync("src/components/maps/LocationPickerModal.tsx", "utf8");
+const apply = fs.readFileSync("src/components/seasonal/SeasonalApplyClient.tsx", "utf8");
+
+test("지도 SDK는 필요할 때만 불러오고 API 키가 없으면 텍스트 입력으로 복구한다", () => {
+  assert.match(picker, /NEXT_PUBLIC_KAKAO_MAP_JS_KEY/);
+  assert.match(picker, /autoload=false&libraries=services/);
+  assert.match(picker, /현재 지도를 사용할 수 없습니다/);
+  assert.match(picker, /텍스트로 입력하기/);
+});
+
+test("승하차 지도 위치와 별도 위치 동의가 신청 payload에 포함된다", () => {
+  assert.match(apply, /pickupLocationData/);
+  assert.match(apply, /dropoffLocationData/);
+  assert.match(apply, /locationConsent:/);
+  assert.match(apply, /locationConsentVersion:/);
+  assert.match(apply, /\(!hasMapSelection \|\| locationConsent\)/);
+});
+
+test("선택한 특강 일정의 요일을 기존 필수 신청 계약에 포함한다", () => {
+  assert.match(apply, /const selectedWeekdays = Array\.from\(new Set\(selectedOfferings\.flatMap\(offeringWeekdays\)\)\)/);
+  assert.match(apply, /selectedWeekdays,/);
+});
+
+test("수동 주소 수정 시 기존 지도 좌표를 제거해 주소와 좌표 불일치를 막는다", () => {
+  assert.match(apply, /function updateLocationText/);
+  assert.match(apply, /\[kind === "pickup" \? "pickupLocationData" : "dropoffLocationData"\]: undefined/);
+});
+
+test("사용자가 지도를 조작하기 전에는 기본 서울 좌표를 선택값으로 만들지 않는다", () => {
+  assert.match(picker, /selectionEnabledRef = useRef\(Boolean\(initialValue\)\)/);
+  assert.match(picker, /if \(selectionEnabledRef\.current\) reverseGeocode/);
+  assert.doesNotMatch(picker, /map\.relayout\(\); updateCenter\(\)/);
+});
+
+test("가장 최근의 역지오코딩 응답만 선택 위치에 반영한다", () => {
+  assert.match(picker, /requestSequence = \+\+geocodeSequenceRef\.current/);
+  assert.match(picker, /requestSequence !== geocodeSequenceRef\.current/);
+});
+
+test("지도 모달은 최초 포커스, 탭 순환, 포커스 복원을 제공한다", () => {
+  assert.match(picker, /searchInputRef\.current/);
+  assert.match(picker, /event\.key !== "Tab"/);
+  assert.match(picker, /previousFocusRef\.current\?\.focus\(\)/);
+});
+
+test("새 지도 상호작용은 이전 선택과 진행 중인 비동기 응답을 즉시 무효화한다", () => {
+  assert.match(picker, /interactionSequenceRef\.current \+= 1/);
+  assert.match(picker, /setLocation\(undefined\)/);
+  assert.match(picker, /interactionSequence !== interactionSequenceRef\.current/);
+  assert.match(picker, /requestSequence !== geocodeSequenceRef\.current/);
+});
+
+test("검색 위치의 장소 ID는 지도 중심 주소 확인 뒤에도 유지된다", () => {
+  assert.match(picker, /pendingSearchRef\.current = \{ sequence: interactionSequence/);
+  assert.match(picker, /placeId: pendingSearch\?\.placeId/);
+  assert.doesNotMatch(picker, /setLocation\(\{[\s\S]{0,500}pendingSearchRef\.current = null/);
+});

@@ -35,8 +35,8 @@ type ShuttleRequest = {
   pickupLongitude?: number | string | null;
   pickupPlaceId?: string | null;
   pickupLocationSource?: string | null;
-  pickupLocationAccuracyMeters?: number | string | null;
-  pickupLocationConfirmedAt?: string | null;
+  pickupAccuracyMeters?: number | string | null;
+  pickupConfirmedAt?: string | null;
   pickupTime?: string | null;
   dropoffLocation?: string | null;
   dropoffAddress?: string | null;
@@ -45,8 +45,8 @@ type ShuttleRequest = {
   dropoffLongitude?: number | string | null;
   dropoffPlaceId?: string | null;
   dropoffLocationSource?: string | null;
-  dropoffLocationAccuracyMeters?: number | string | null;
-  dropoffLocationConfirmedAt?: string | null;
+  dropoffAccuracyMeters?: number | string | null;
+  dropoffConfirmedAt?: string | null;
   locationConsentVersion?: string | null;
   note?: string | null;
   status?: string | null;
@@ -862,8 +862,8 @@ function shuttlePoint(request: ShuttleRequest, kind: ShuttlePointKind): ShuttleP
       longitude: request.pickupLongitude,
       placeId: request.pickupPlaceId,
       source: request.pickupLocationSource,
-      accuracyMeters: request.pickupLocationAccuracyMeters,
-      confirmedAt: request.pickupLocationConfirmedAt,
+      accuracyMeters: request.pickupAccuracyMeters,
+      confirmedAt: request.pickupConfirmedAt,
     };
   }
   return {
@@ -875,8 +875,8 @@ function shuttlePoint(request: ShuttleRequest, kind: ShuttlePointKind): ShuttleP
     longitude: request.dropoffLongitude,
     placeId: request.dropoffPlaceId,
     source: request.dropoffLocationSource,
-    accuracyMeters: request.dropoffLocationAccuracyMeters,
-    confirmedAt: request.dropoffLocationConfirmedAt,
+    accuracyMeters: request.dropoffAccuracyMeters,
+    confirmedAt: request.dropoffConfirmedAt,
   };
 }
 
@@ -908,7 +908,7 @@ function ShuttleLocationCard({ point }: { point: ShuttlePoint }) {
         <h5 className="font-black text-gray-950 dark:text-white">{point.label}</h5>
       </div>
       {hasCoordinates ? (
-        <span className={point.confirmedAt ? badge("CONFIRMED") : badge("UNASSIGNED")}>{point.confirmedAt ? "지도 위치 확인됨" : "핀 제출 · 확인 필요"}</span>
+        <span className={badge("UNASSIGNED")}>지도 핀 제출 · 관리자 확인 필요</span>
       ) : (
         <span className={badge("UNASSIGNED")}>텍스트 신청 · 위치 확인 필요</span>
       )}
@@ -918,7 +918,7 @@ function ShuttleLocationCard({ point }: { point: ShuttlePoint }) {
     {point.location && point.location !== displayAddress && <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">상세 설명: {point.location}</p>}
     <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
       <Info label="좌표">{hasCoordinates ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : "좌표 없음"}</Info>
-      <Info label="확정 여부">{point.confirmedAt ? `${formatDateTime(point.confirmedAt)} 확인` : "관리자 확인 필요"}</Info>
+      <Info label="제출 시각">{point.confirmedAt ? formatDateTime(point.confirmedAt) : "기록 없음"}</Info>
       {(point.source || point.placeId) && <Info label="지도 정보">{[point.source, point.placeId].filter(Boolean).join(" · ")}</Info>}
       {accuracy !== null && <Info label="위치 정확도">약 {Math.round(accuracy)}m</Info>}
     </dl>

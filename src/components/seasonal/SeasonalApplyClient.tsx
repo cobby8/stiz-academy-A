@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
+import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { formatWon, normalizeProgram, programClasses, type SeasonalClass, type SeasonalProgram } from "./types";
 
 type LoadState = "loading" | "ready" | "error";
@@ -28,7 +30,19 @@ type ShuttleDraft = {
   pickupTime: string;
   dropoffLocation: string;
   note: string;
+  pickupLocationData?: MapLocationData;
+  dropoffLocationData?: MapLocationData;
 };
+
+type LocationPickerTarget = { offeringId: string; kind: "pickup" | "dropoff" };
+
+function offeringWeekdays(item: SeasonalClass) {
+  if (item.weekdays.length > 0) return item.weekdays;
+  const weekdayByLabel = { 월: "MON", 화: "TUE", 수: "WED", 목: "THU", 금: "FRI", 토: "SAT", 일: "SUN" } as const;
+  return Object.entries(weekdayByLabel)
+    .filter(([label]) => item.dayLabel.includes(label))
+    .map(([, weekday]) => weekday);
+}
 
 type SubmitResult = {
   applicationId?: string;
@@ -58,7 +72,10 @@ function makeIdempotencyKey() {
 }
 
 function hasShuttle(draft?: ShuttleDraft) {
-  return Boolean(draft && Object.values(draft).some((value) => value.trim().length > 0));
+  return Boolean(draft && (
+    draft.pickupLocation.trim() || draft.pickupTime.trim() || draft.dropoffLocation.trim() || draft.note.trim()
+    || draft.pickupLocationData || draft.dropoffLocationData
+  ));
 }
 
 function emptyShuttle(): ShuttleDraft {
@@ -78,6 +95,8 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [shuttle, setShuttle] = useState<Record<string, ShuttleDraft>>({});
+  const [locationPicker, setLocationPicker] = useState<LocationPickerTarget | null>(null);
+  const [locationConsent, setLocationConsent] = useState(false);
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<SubmitResult | null>(null);
@@ -105,9 +124,12 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
 
   const offerings = useMemo(() => program ? programClasses(program) : [], [program]);
   const selectedOfferings = offerings.filter((item) => selectedIds.includes(item.id));
+  const selectedWeekdays = Array.from(new Set(selectedOfferings.flatMap(offeringWeekdays)));
   const totalPrice = selectedOfferings.reduce((sum, item) => sum + item.price, 0);
+  const hasMapSelection = selectedIds.some((id) => shuttle[id]?.pickupLocationData || shuttle[id]?.dropoffLocationData);
   const canSubmit = selectedIds.length > 0 && form.childName && form.childBirthDate && form.parentName
-    && form.parentPhone && form.agreedTerms && form.agreedPrivacy && submitState !== "submitting";
+    && form.parentPhone && form.agreedTerms && form.agreedPrivacy && (!hasMapSelection || locationConsent)
+    && submitState !== "submitting";
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -125,6 +147,50 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
       ...current,
       [offeringId]: { ...(current[offeringId] ?? emptyShuttle()), [key]: value },
     }));
+  }
+
+  function saveMapLocation(target: LocationPickerTarget, value: MapLocationData) {
+    setShuttle((current) => {
+      const draft = current[target.offeringId] ?? emptyShuttle();
+      const isPickup = target.kind === "pickup";
+      return {
+        ...current,
+        [target.offeringId]: {
+          ...draft,
+          [isPickup ? "pickupLocation" : "dropoffLocation"]: value.roadAddress ?? value.address,
+          [isPickup ? "pickupLocationData" : "dropoffLocationData"]: value,
+        },
+      };
+    });
+    setLocationPicker(null);
+  }
+
+  function updateLocationText(offeringId: string, kind: "pickup" | "dropoff", value: string) {
+    setShuttle((current) => {
+      const draft = current[offeringId] ?? emptyShuttle();
+      return {
+        ...current,
+        [offeringId]: {
+          ...draft,
+          [kind === "pickup" ? "pickupLocation" : "dropoffLocation"]: value,
+          [kind === "pickup" ? "pickupLocationData" : "dropoffLocationData"]: undefined,
+        },
+      };
+    });
+  }
+
+  function copyPickupToDropoff(offeringId: string) {
+    setShuttle((current) => {
+      const draft = current[offeringId] ?? emptyShuttle();
+      return {
+        ...current,
+        [offeringId]: {
+          ...draft,
+          dropoffLocation: draft.pickupLocation,
+          dropoffLocationData: draft.pickupLocationData ? { ...draft.pickupLocationData } : undefined,
+        },
+      };
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -161,9 +227,14 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
           memo: form.memo,
           agreedTerms: form.agreedTerms,
           agreedPrivacy: form.agreedPrivacy,
+          selectedWeekdays,
           items: selectedIds.map((offeringId) => ({
             offeringId,
-            shuttle: hasShuttle(shuttle[offeringId]) ? shuttle[offeringId] : undefined,
+            shuttle: hasShuttle(shuttle[offeringId]) ? {
+              ...shuttle[offeringId],
+              locationConsent: Boolean(shuttle[offeringId]?.pickupLocationData || shuttle[offeringId]?.dropoffLocationData) ? locationConsent : undefined,
+              locationConsentVersion: Boolean(shuttle[offeringId]?.pickupLocationData || shuttle[offeringId]?.dropoffLocationData) ? SHUTTLE_LOCATION_CONSENT_VERSION : undefined,
+            } : undefined,
           })),
         }),
       });
@@ -233,10 +304,11 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                     <div className="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
                       <p className="text-xs font-bold text-gray-600 dark:text-gray-300">셔틀 요청이 있으면 적어주세요</p>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <TextInput label="탑승 위치" value={shuttle[item.id]?.pickupLocation ?? ""} onChange={(value) => updateShuttle(item.id, "pickupLocation", value)} />
+                        <LocationField label="탑승 위치" value={shuttle[item.id]?.pickupLocation ?? ""} mapValue={shuttle[item.id]?.pickupLocationData} onChange={(value) => updateLocationText(item.id, "pickup", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "pickup" })} />
                         <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
-                        <TextInput label="하차 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} onChange={(value) => updateShuttle(item.id, "dropoffLocation", value)} />
+                        <LocationField label="하차 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} mapValue={shuttle[item.id]?.dropoffLocationData} onChange={(value) => updateLocationText(item.id, "dropoff", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "dropoff" })} />
                         <TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} />
+                        <button type="button" onClick={() => copyPickupToDropoff(item.id)} disabled={!shuttle[item.id]?.pickupLocation} className="min-h-11 rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-700 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200 sm:col-span-2">탑승 위치를 하차 위치로 사용</button>
                       </div>
                     </div>
                   )}
@@ -292,6 +364,12 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
             </div>
             <CheckBox label="방학특강 운영 안내와 환불 규정을 확인했습니다." checked={form.agreedTerms} onChange={(checked) => update("agreedTerms", checked)} />
             <CheckBox label="신청과 상담을 위한 개인정보 수집·이용에 동의합니다." checked={form.agreedPrivacy} onChange={(checked) => update("agreedPrivacy", checked)} />
+            {hasMapSelection && (
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 dark:border-orange-500/30 dark:bg-orange-500/10">
+                <CheckBox label="셔틀 운행과 노선 편성을 위해 선택한 승하차 위치(주소·좌표)를 수집·이용하는 데 동의합니다." checked={locationConsent} onChange={setLocationConsent} />
+                <p className="mt-2 pl-6 text-xs leading-5 text-gray-600 dark:text-gray-300">위치 정보는 셔틀 배정과 운행 안내에 사용됩니다. 동의하지 않으면 지도 위치를 제거하고 텍스트로 위치를 적어주세요.</p>
+              </div>
+            )}
           </aside>
         </section>
       </div>
@@ -312,6 +390,15 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
           </button>
         </div>
       </div>
+
+      {locationPicker && (
+        <LocationPickerModal
+          title={locationPicker.kind === "pickup" ? "탑승 위치 선택" : "하차 위치 선택"}
+          initialValue={locationPicker.kind === "pickup" ? shuttle[locationPicker.offeringId]?.pickupLocationData : shuttle[locationPicker.offeringId]?.dropoffLocationData}
+          onClose={() => setLocationPicker(null)}
+          onConfirm={(value) => saveMapLocation(locationPicker, value)}
+        />
+      )}
     </form>
   );
 }
@@ -342,6 +429,34 @@ function DoneView({ slug, result, offerings, message }: { slug: string; result: 
         </div>
       </section>
     </main>
+  );
+}
+
+function LocationField({
+  label,
+  value,
+  mapValue,
+  onChange,
+  onOpenMap,
+}: {
+  label: string;
+  value: string;
+  mapValue?: MapLocationData;
+  onChange: (value: string) => void;
+  onOpenMap: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+      <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+        {label}
+        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} placeholder="주소 또는 정차 위치 설명" className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+      </label>
+      <button type="button" onClick={onOpenMap} className="mt-2 flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-brand-orange-500 px-3 text-sm font-black text-brand-orange-600 dark:border-brand-neon-lime dark:text-brand-neon-lime">
+        <span className="material-symbols-outlined text-lg" aria-hidden="true">map</span>
+        {mapValue ? "지도 위치 다시 선택" : "지도에서 정확한 위치 선택"}
+      </button>
+      {mapValue && <p className="mt-2 text-xs font-bold text-green-700 dark:text-green-300">지도 위치가 저장됩니다.</p>}
+    </div>
   );
 }
 

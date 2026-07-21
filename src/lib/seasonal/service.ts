@@ -242,8 +242,35 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       for (const item of application.items) {
         const requested = input.items.find((candidate) => candidate.offeringId === item.offeringId);
         if (!requested?.shuttle || !byId.get(item.offeringId)?.shuttleAvailable) continue;
+        const pickup = requested.shuttle.pickupLocationData;
+        const dropoff = requested.shuttle.dropoffLocationData;
+        const confirmedAt = pickup || dropoff ? new Date() : undefined;
         await tx.specialProgramShuttleRequest.create({
-          data: { applicationId: application.id, applicationItemId: item.id, ...requested.shuttle },
+          data: {
+            applicationId: application.id,
+            applicationItemId: item.id,
+            pickupLocation: requested.shuttle.pickupLocation,
+            pickupTime: requested.shuttle.pickupTime,
+            dropoffLocation: requested.shuttle.dropoffLocation,
+            note: requested.shuttle.note,
+            pickupAddress: pickup?.address,
+            pickupRoadAddress: pickup?.roadAddress,
+            pickupLatitude: pickup?.latitude,
+            pickupLongitude: pickup?.longitude,
+            pickupPlaceId: pickup?.placeId,
+            pickupLocationSource: pickup?.source,
+            pickupAccuracyMeters: pickup?.accuracyMeters,
+            pickupConfirmedAt: pickup ? confirmedAt : undefined,
+            dropoffAddress: dropoff?.address,
+            dropoffRoadAddress: dropoff?.roadAddress,
+            dropoffLatitude: dropoff?.latitude,
+            dropoffLongitude: dropoff?.longitude,
+            dropoffPlaceId: dropoff?.placeId,
+            dropoffLocationSource: dropoff?.source,
+            dropoffAccuracyMeters: dropoff?.accuracyMeters,
+            dropoffConfirmedAt: dropoff ? confirmedAt : undefined,
+            locationConsentVersion: requested.shuttle.locationConsentVersion,
+          },
         });
       }
 

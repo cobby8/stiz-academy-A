@@ -13,6 +13,7 @@ export type SeasonalClass = {
   remaining: number;
   price: number;
   waitlistEnabled?: boolean;
+  weekdays: Array<"MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN">;
 };
 
 export type SeasonalProgram = {
@@ -78,6 +79,12 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
   const starts = first?.startsAt ? new Date(String(first.startsAt)) : null;
   const ends = first?.endsAt ? new Date(String(first.endsAt)) : null;
   const remaining = Number(row.remainingCapacity ?? row.remaining ?? Math.max(0, Number(row.capacity ?? 0) - Number(row.enrolled ?? 0)));
+  const weekdayByLabel = { 월: "MON", 화: "TUE", 수: "WED", 목: "THU", 금: "FRI", 토: "SAT", 일: "SUN" } as const;
+  const weekdays = Array.from(new Set(dates.flatMap((date) => {
+    if (!date.startsAt) return [];
+    const label = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(new Date(String(date.startsAt))).slice(0, 1);
+    return weekdayByLabel[label as keyof typeof weekdayByLabel] ? [weekdayByLabel[label as keyof typeof weekdayByLabel]] : [];
+  })));
   return {
     id: String(row.id ?? ""), name: String(row.title ?? row.name ?? "특강반"),
     dayLabel: String(row.dayLabel ?? (starts ? new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(starts) : "일정")),
@@ -88,6 +95,7 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
     coachName: stringOrUndefined(row.instructorName ?? row.coachName), capacity: Number(row.capacity ?? 0),
     enrolled: Math.max(0, Number(row.capacity ?? 0) - remaining), remaining, price: Number(row.price ?? 0),
     waitlistEnabled: row.waitlistEnabled === false ? false : true,
+    weekdays,
   };
 }
 

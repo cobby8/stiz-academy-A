@@ -1,3 +1,17 @@
+export const SHUTTLE_LOCATION_SOURCES = ["MAP_PIN", "SEARCH", "CURRENT_LOCATION"] as const;
+export const SHUTTLE_LOCATION_CONSENT_VERSION = "2026-07-21";
+export type ShuttleLocationSource = (typeof SHUTTLE_LOCATION_SOURCES)[number];
+
+export type SeasonalShuttleLocationInput = {
+  address: string;
+  roadAddress?: string;
+  latitude: number;
+  longitude: number;
+  placeId?: string;
+  source: ShuttleLocationSource;
+  accuracyMeters?: number;
+};
+
 export type SeasonalApplicationInput = {
   idempotencyKey: string;
   applicantType?: "NEW" | "EXISTING";
@@ -22,6 +36,10 @@ export type SeasonalApplicationInput = {
       pickupTime?: string;
       dropoffLocation?: string;
       note?: string;
+      pickupLocationData?: SeasonalShuttleLocationInput;
+      dropoffLocationData?: SeasonalShuttleLocationInput;
+      locationConsent?: true;
+      locationConsentVersion?: string;
     };
   }>;
 };
@@ -71,6 +89,53 @@ export function normalizePhone(value: string): string {
   return value.replace(/[^0-9]/g, "");
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+export function parseShuttleLocation(
+  value: unknown,
+  label: string,
+): SeasonalShuttleLocationInput | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new SeasonalError(`${label} 위치 정보가 올바르지 않습니다.`, 400, "INVALID_SHUTTLE_LOCATION");
+  }
+
+  const location = value as Record<string, unknown>;
+  const address = cleanText(location.address, 300);
+  const roadAddress = cleanText(location.roadAddress, 300);
+  const latitude = finiteNumber(location.latitude);
+  const longitude = finiteNumber(location.longitude);
+  const source = cleanText(location.source, 30);
+  const accuracyMeters = location.accuracyMeters === undefined
+    ? undefined
+    : finiteNumber(location.accuracyMeters);
+
+  if (!address || latitude === undefined || longitude === undefined) {
+    throw new SeasonalError(`${label} 주소와 지도 좌표를 확인해 주세요.`, 400, "INVALID_SHUTTLE_LOCATION");
+  }
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new SeasonalError(`${label} 지도 좌표의 범위를 확인해 주세요.`, 400, "INVALID_SHUTTLE_COORDINATES");
+  }
+  if (!source || !SHUTTLE_LOCATION_SOURCES.includes(source as ShuttleLocationSource)) {
+    throw new SeasonalError(`${label} 위치 선택 방식을 확인해 주세요.`, 400, "INVALID_SHUTTLE_LOCATION_SOURCE");
+  }
+  if (location.accuracyMeters !== undefined && (accuracyMeters === undefined || accuracyMeters < 0 || accuracyMeters > 100_000)) {
+    throw new SeasonalError(`${label} 위치 정확도를 확인해 주세요.`, 400, "INVALID_SHUTTLE_ACCURACY");
+  }
+
+  return {
+    address,
+    roadAddress,
+    latitude,
+    longitude,
+    placeId: cleanText(location.placeId, 200),
+    source: source as ShuttleLocationSource,
+    accuracyMeters,
+  };
+}
+
 export function parseApplicationInput(value: unknown): SeasonalApplicationInput {
   const body = value as Partial<SeasonalApplicationInput> | null;
   const key = cleanText(body?.idempotencyKey, 120);
@@ -97,6 +162,21 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
     const offeringId = cleanText(item?.offeringId, 100);
     if (!offeringId || seen.has(offeringId)) throw new SeasonalError("특강 선택 항목이 올바르지 않습니다.");
     seen.add(offeringId);
+    const pickupLocationData = parseShuttleLocation(item.shuttle?.pickupLocationData, "탑승");
+    const dropoffLocationData = parseShuttleLocation(item.shuttle?.dropoffLocationData, "하차");
+    const hasMapLocation = Boolean(pickupLocationData || dropoffLocationData);
+    const locationConsentVersion = cleanText(item.shuttle?.locationConsentVersion, 80);
+    if (hasMapLocation && (
+      item.shuttle?.locationConsent !== true
+      || locationConsentVersion !== SHUTTLE_LOCATION_CONSENT_VERSION
+    )) {
+      throw new SeasonalError(
+        "셔틀 위치정보 수집 및 이용에 동의해 주세요.",
+        400,
+        "SHUTTLE_LOCATION_CONSENT_REQUIRED",
+      );
+    }
+
     return {
       offeringId,
       shuttle: item.shuttle
@@ -105,6 +185,10 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
             pickupTime: cleanText(item.shuttle.pickupTime, 30),
             dropoffLocation: cleanText(item.shuttle.dropoffLocation, 200),
             note: cleanText(item.shuttle.note, 500),
+            pickupLocationData,
+            dropoffLocationData,
+            locationConsent: hasMapLocation ? true as const : undefined,
+            locationConsentVersion: hasMapLocation ? locationConsentVersion : undefined,
           }
         : undefined,
     };

@@ -1378,8 +1378,25 @@ model SpecialProgramShuttleRequest {
   applicationId String
   applicationItemId String @unique
   pickupLocation String?
+  pickupAddress String?
+  pickupRoadAddress String?
+  pickupLatitude Float?
+  pickupLongitude Float?
+  pickupPlaceId String?
+  pickupLocationSource String?
+  pickupAccuracyMeters Float?
+  pickupConfirmedAt DateTime? @db.Timestamptz(6)
   pickupTime String?
   dropoffLocation String?
+  dropoffAddress String?
+  dropoffRoadAddress String?
+  dropoffLatitude Float?
+  dropoffLongitude Float?
+  dropoffPlaceId String?
+  dropoffLocationSource String?
+  dropoffAccuracyMeters Float?
+  dropoffConfirmedAt DateTime? @db.Timestamptz(6)
+  locationConsentVersion String?
   note String?
   status String @default("REQUESTED")
   assignedRouteId String?

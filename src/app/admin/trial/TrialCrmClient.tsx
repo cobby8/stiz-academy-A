@@ -407,11 +407,11 @@ function ScheduleInfoCard({
 }) {
     return (
         <div className={`min-w-0 rounded-lg border px-3 py-2.5 ${className}`}>
-            <div className="mb-1 flex items-center gap-1 text-[11px] font-black uppercase opacity-80">
+            <div className="mb-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-black uppercase opacity-80">
                 <span className="material-symbols-outlined text-sm">{icon}</span>
                 {label}
             </div>
-            <div className="break-words text-sm font-black leading-snug">{value}</div>
+            <div className="break-keep text-sm font-black leading-snug">{value}</div>
         </div>
     );
 }
@@ -1259,40 +1259,57 @@ export default function TrialCrmClient({
                         const isClosed = isClosedTrialStatus(lead.status);
                         const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
                         const parentPhoneHref = phoneHref(lead.parentPhone);
+                        const contactCount = getContactCount(lead.parentPhone, openContactCounts);
+                        const smsBadge = getSmsDeliveryBadge(lead);
+                        const visibleBadges = [
+                            ...getTrialPriorityBadges(lead, contactCount),
+                            smsBadge,
+                        ].filter(Boolean).slice(0, 4) as PriorityBadge[];
                         return (
                             <div
                                 key={lead.id}
                                 className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
                             >
-                                <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr_2.1fr_0.9fr_1.3fr] xl:items-start">
-                                    <section className="min-w-0">
-                                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
-                                                <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                                {cfg.label}
-                                            </span>
-                                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                                                {SOURCE_LABELS[lead.source] || lead.source}
-                                            </span>
+                                <div className="space-y-4">
+                                    <section className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                                                <span className={`inline-flex whitespace-nowrap items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
+                                                    <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                                    {cfg.label}
+                                                </span>
+                                                <span className="whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                                    {SOURCE_LABELS[lead.source] || lead.source}
+                                                </span>
+                                                {visibleBadges.map((badge) => (
+                                                    <span
+                                                        key={`${lead.id}-priority-${badge.label}`}
+                                                        className={`inline-flex whitespace-nowrap items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${badge.className}`}
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">{badge.icon}</span>
+                                                        {badge.label}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <h3 className="break-keep text-lg font-black leading-snug text-gray-900 dark:text-white">
+                                                {lead.childName}
+                                                {lead.childAge ? <span className="ml-1 text-sm font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
+                                            </h3>
+                                            <p className="mt-1 break-keep text-sm text-gray-500 dark:text-gray-400">
+                                                {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
+                                            </p>
                                         </div>
-                                        <h3 className="truncate text-base font-black text-gray-900 dark:text-white">
-                                            {lead.childName}
-                                            {lead.childAge ? <span className="ml-1 text-sm font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
-                                        </h3>
-                                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                                            {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
-                                        </p>
+
+                                        <div className="min-w-0 rounded-xl bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900/70 lg:min-w-48">
+                                            <p className="break-keep font-bold text-gray-800 dark:text-gray-100">{lead.parentName || "보호자 미입력"}</p>
+                                            <a href={parentPhoneHref} className="mt-1 inline-flex items-center gap-1 whitespace-nowrap font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
+                                                <span className="material-symbols-outlined text-base">phone</span>
+                                                {lead.parentPhone}
+                                            </a>
+                                        </div>
                                     </section>
 
-                                    <section className="min-w-0">
-                                        <p className="truncate text-sm font-bold text-gray-800 dark:text-gray-100">{lead.parentName}</p>
-                                        <a href={parentPhoneHref} className="mt-1 inline-flex items-center gap-1 font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
-                                            <span className="material-symbols-outlined text-base">phone</span>
-                                            {lead.parentPhone}
-                                        </a>
-                                    </section>
-
-                                    <section className="grid min-w-0 gap-2 sm:grid-cols-2">
+                                    <section className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2">
                                         {scheduleItems.map((item) => (
                                             <ScheduleInfoCard
                                                 key={`${lead.id}-schedule-${item.label}`}
@@ -1304,9 +1321,9 @@ export default function TrialCrmClient({
                                         ))}
                                     </section>
 
-                                    <section>
+                                    <section className="flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-gray-700 lg:flex-row lg:items-center lg:justify-between">
                                         {isClosed ? (
-                                            <span className="inline-flex min-h-10 items-center rounded-lg bg-gray-100 px-3 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                                            <span className="inline-flex min-h-10 w-fit items-center whitespace-nowrap rounded-lg bg-gray-100 px-3 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                                                 종료 상태
                                             </span>
                                         ) : (
@@ -1314,7 +1331,7 @@ export default function TrialCrmClient({
                                                 value={lead.status}
                                                 onChange={(event) => handleStatusChange(lead, event.target.value)}
                                                 disabled={busy}
-                                                className="min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+                                                className="min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime lg:w-44"
                                             >
                                                 {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
                                                     <option key={s} value={s}>
@@ -1323,54 +1340,54 @@ export default function TrialCrmClient({
                                                 ))}
                                             </select>
                                         )}
-                                    </section>
 
-                                    <section className="flex flex-wrap gap-2">
-                                        <a
-                                            href={parentPhoneHref}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
-                                        >
-                                            <span className="material-symbols-outlined text-base">call</span>
-                                            전화
-                                        </a>
-                                        {!isClosed && (
+                                        <div className="flex flex-wrap gap-2">
+                                            <a
+                                                href={parentPhoneHref}
+                                                className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            >
+                                                <span className="material-symbols-outlined text-base">call</span>
+                                                전화
+                                            </a>
+                                            {!isClosed && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowScheduleModal(lead)}
+                                                    className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                                                >
+                                                    <span className="material-symbols-outlined text-base">event_available</span>
+                                                    일정
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
-                                                onClick={() => setShowScheduleModal(lead)}
-                                                className="inline-flex items-center gap-1 rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                                                onClick={() => handleRecordContact(lead, "CONTACTED")}
+                                                disabled={contactBusyId === lead.id}
+                                                className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
                                             >
-                                                <span className="material-symbols-outlined text-base">event_available</span>
-                                                일정
+                                                <span className="material-symbols-outlined text-base">done_all</span>
+                                                연락
                                             </button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRecordContact(lead, "CONTACTED")}
-                                            disabled={contactBusyId === lead.id}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
-                                        >
-                                            <span className="material-symbols-outlined text-base">done_all</span>
-                                            연락
-                                        </button>
-                                        {lead.status === "ATTENDED" && (
+                                            {lead.status === "ATTENDED" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowConvertModal(lead)}
+                                                    disabled={busy}
+                                                    className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                                                >
+                                                    <span className="material-symbols-outlined text-base">how_to_reg</span>
+                                                    등록
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
-                                                onClick={() => setShowConvertModal(lead)}
-                                                disabled={busy}
-                                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                                                onClick={() => setShowMemoModal(lead)}
+                                                className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                                             >
-                                                <span className="material-symbols-outlined text-base">how_to_reg</span>
-                                                등록
+                                                <span className="material-symbols-outlined text-base">edit_note</span>
+                                                메모
                                             </button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowMemoModal(lead)}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
-                                        >
-                                            <span className="material-symbols-outlined text-base">edit_note</span>
-                                            메모
-                                        </button>
+                                        </div>
                                     </section>
                                 </div>
                             </div>

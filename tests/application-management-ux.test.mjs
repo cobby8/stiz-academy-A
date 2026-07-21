@@ -68,7 +68,9 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
 });
 
 test("체험 신청 카드형은 목록형과 같은 핵심 항목만 단순하게 배치한다", () => {
-  assert.match(trialClient, /xl:grid-cols-\[1\.1fr_0\.9fr_2\.1fr_0\.9fr_1\.3fr\]/);
+  assert.doesNotMatch(trialClient, /xl:grid-cols-\[1\.1fr_0\.9fr_2\.1fr_0\.9fr_1\.3fr\]/);
+  assert.match(trialClient, /grid-cols-\[repeat\(auto-fit,minmax\(10rem,1fr\)\)\]/);
+  assert.match(trialClient, /whitespace-nowrap/);
   assert.match(trialClient, /신청\/희망\/수업 일정/);
   assert.match(trialClient, /setShowScheduleModal\(lead\)/);
   assert.match(trialClient, /handleRecordContact\(lead, "CONTACTED"\)/);

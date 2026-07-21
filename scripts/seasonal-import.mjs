@@ -24,6 +24,9 @@ const ALIASES = {
   shuttlePickup: ["shuttlePickup", "탑승장소", "승차장소", "픽업장소"],
   shuttleDropoff: ["shuttleDropoff", "하차장소"],
   sourceRowRef: ["sourceRowRef", "응답ID", "타임스탬프", "제출시간"],
+  agreedTerms: ["agreedTerms", "약관동의", "이용약관동의"],
+  agreedPrivacy: ["agreedPrivacy", "개인정보동의", "개인정보수집동의"],
+  memo: ["memo", "특이사항", "메모"],
 };
 
 function clean(value) {
@@ -99,6 +102,15 @@ function normalizeMoney(value) {
   return Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
 }
 
+function normalizeBoolean(value) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  const text = clean(value).toLowerCase();
+  if (/^(예|동의|동의함|yes|y|true|1|확인)$/.test(text)) return true;
+  if (/^(아니오|미동의|no|n|false|0)$/.test(text)) return false;
+  return null;
+}
+
 function stableKey(seasonSlug, identity) {
   return `sheet-${createHash("sha256")
     .update([seasonSlug, identity.childName, identity.childBirthDate, identity.parentPhone].join("|"))
@@ -153,6 +165,8 @@ export function analyzeSeasonalRows(rows, { seasonSlug }) {
     const tuition = normalizeMoney(pick(row, ALIASES.tuition));
     const applicantType = normalizeApplicantType(pick(row, ALIASES.applicantType));
     const className = normalizeClass(pick(row, ALIASES.className));
+    const agreedTerms = normalizeBoolean(pick(row, ALIASES.agreedTerms));
+    const agreedPrivacy = normalizeBoolean(pick(row, ALIASES.agreedPrivacy));
     const reviewReasons = [];
     if (!identity.childName) reviewReasons.push("MISSING_CHILD_NAME");
     if (identity.childBirthDate.length !== 8) reviewReasons.push("INVALID_BIRTH_DATE");
@@ -162,6 +176,7 @@ export function analyzeSeasonalRows(rows, { seasonSlug }) {
     if (tuition === null) reviewReasons.push("MISSING_TUITION");
     if (applicantType === "UNKNOWN") reviewReasons.push("UNKNOWN_APPLICANT_TYPE");
     if (className === "UNKNOWN" || className === "OTHER") reviewReasons.push("UNKNOWN_CLASS");
+    if (agreedTerms !== true || agreedPrivacy !== true) reviewReasons.push("CONSENT_EVIDENCE_MISSING");
 
     const identityFingerprint = createHash("sha256").update(Object.values(identity).join("|")).digest("hex");
     const idempotencyKey = stableKey(clean(seasonSlug).toLowerCase(), identity);
@@ -191,6 +206,9 @@ export function analyzeSeasonalRows(rows, { seasonSlug }) {
       parentPhone: identity.parentPhone,
       parentRelation: clean(pick(row, ALIASES.parentRelation)) || null,
       address: clean(pick(row, ALIASES.address)) || null,
+      memo: clean(pick(row, ALIASES.memo)) || null,
+      agreedTerms: agreedTerms === true,
+      agreedPrivacy: agreedPrivacy === true,
       shuttle: {
         requested: /^(예|yes|y|신청|필요|true|1)$/i.test(clean(pick(row, ALIASES.shuttle))),
         pickupLocation: clean(pick(row, ALIASES.shuttlePickup)) || null,
@@ -295,8 +313,9 @@ export async function applySeasonalImport({ adapter, seasonSlug, source, records
         parentPhone: record.parentPhone,
         parentRelation: record.parentRelation,
         address: record.address,
-        agreedTerms: false,
-        agreedPrivacy: false,
+        memo: record.memo,
+        agreedTerms: record.agreedTerms,
+        agreedPrivacy: record.agreedPrivacy,
         status: "PENDING",
         totalPriceSnapshot: safeForItem ? record.fee : 0,
       };
@@ -376,6 +395,87 @@ async function createPrismaAdapter() {
   };
 }
 
+export async function createDirectPgAdapter({ connectionString, clientFactory } = {}) {
+  if (!clean(connectionString)) throw new Error("적용 차단: DIRECT_URL 또는 DATABASE_URL이 필요합니다.");
+  let factory = clientFactory;
+  if (!factory) {
+    const { Client } = await import("pg");
+    factory = (config) => new Client(config);
+  }
+  const client = factory({ connectionString, ssl: { rejectUnauthorized: true }, application_name: "stiz-seasonal-direct-import" });
+  await client.connect();
+
+  const one = async (text, values) => (await client.query(text, values)).rows[0] ?? null;
+  const many = async (text, values) => (await client.query(text, values)).rows;
+  const tx = {
+    findSeasonBySlug: (slug) => one('SELECT id FROM "SpecialProgramSeason" WHERE slug = $1 LIMIT 1', [slug]),
+    findOfferings: (seasonId, codes) => codes.length === 0
+      ? Promise.resolve([])
+      : many('SELECT id, code, title FROM "SpecialProgramOffering" WHERE "seasonId" = $1 AND code = ANY($2::text[])', [seasonId, codes]),
+    findExisting: async ({ seasonId, importSource, sourceRowRef, idempotencyKey }) => {
+      const rows = await many(
+        'SELECT id, "importSource", "sourceRowRef", "idempotencyKey" FROM "SpecialProgramApplication" WHERE "seasonId" = $1 AND (("importSource" = $2 AND "sourceRowRef" = $3) OR "idempotencyKey" = $4)',
+        [seasonId, importSource, sourceRowRef, idempotencyKey],
+      );
+      const bySource = rows.find((row) => row.importSource === importSource && row.sourceRowRef === sourceRowRef);
+      const byKey = rows.find((row) => row.idempotencyKey === idempotencyKey);
+      if (bySource && byKey && bySource.id !== byKey.id) throw new Error("적용 차단: 원본 행과 중복 방지 키가 서로 다른 신청을 가리킵니다.");
+      return bySource ?? byKey ?? null;
+    },
+    upsertApplication: async (data) => {
+      const existing = await tx.findExisting(data);
+      const columns = [
+        "seasonId", "idempotencyKey", "importSource", "sourceRowRef", "applicantType", "selectedWeekdays",
+        "requiresReview", "reviewReasons", "childName", "childBirthDate", "childGender", "childGrade",
+        "childSchool", "childPhone", "parentName", "parentPhone", "parentRelation", "address", "memo", "agreedTerms",
+        "agreedPrivacy", "status", "totalPriceSnapshot",
+      ];
+      const values = columns.map((column) => data[column]);
+      let application;
+      if (existing) {
+        const assignments = columns.map((column, index) => `"${column}" = $${index + 1}`).join(", ");
+        application = await one(`UPDATE "SpecialProgramApplication" SET ${assignments}, "updatedAt" = NOW() WHERE id = $${values.length + 1} RETURNING id`, [...values, existing.id]);
+      } else {
+        const names = columns.map((column) => `"${column}"`).join(", ");
+        const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
+        application = await one(`INSERT INTO "SpecialProgramApplication" (${names}) VALUES (${placeholders}) RETURNING id`, values);
+      }
+      return { application, created: !existing };
+    },
+    upsertItem: async (data) => {
+      const existing = await one('SELECT id FROM "SpecialProgramApplicationItem" WHERE "applicationId" = $1 AND "offeringId" = $2 LIMIT 1', [data.applicationId, data.offeringId]);
+      const values = [data.applicationId, data.offeringId, data.priceSnapshot, data.titleSnapshot, data.status];
+      const item = existing
+        ? await one('UPDATE "SpecialProgramApplicationItem" SET "priceSnapshot" = $3, "titleSnapshot" = $4, status = $5, "updatedAt" = NOW() WHERE "applicationId" = $1 AND "offeringId" = $2 RETURNING id', values)
+        : await one('INSERT INTO "SpecialProgramApplicationItem" ("applicationId", "offeringId", "priceSnapshot", "titleSnapshot", status) VALUES ($1, $2, $3, $4, $5) RETURNING id', values);
+      return { item, created: !existing };
+    },
+    upsertShuttle: async (data) => one(
+      'INSERT INTO "SpecialProgramShuttleRequest" ("applicationId", "applicationItemId", "pickupLocation", "dropoffLocation", status) VALUES ($1, $2, $3, $4, $5) ON CONFLICT ("applicationItemId") DO UPDATE SET "applicationId" = EXCLUDED."applicationId", "pickupLocation" = EXCLUDED."pickupLocation", "dropoffLocation" = EXCLUDED."dropoffLocation", status = EXCLUDED.status, "updatedAt" = NOW() RETURNING id',
+      [data.applicationId, data.applicationItemId, data.pickupLocation, data.dropoffLocation, data.status],
+    ),
+    createAudit: (data) => one(
+      'INSERT INTO "SpecialProgramAuditLog" ("seasonId", "offeringId", "applicationId", "actorType", action, "afterJSON") VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id',
+      [data.seasonId, data.offeringId, data.applicationId, data.actorType, data.action, JSON.stringify(data.afterJSON)],
+    ),
+  };
+
+  return {
+    disconnect: () => client.end(),
+    transaction: async (work) => {
+      await client.query("BEGIN");
+      try {
+        const result = await work(tx);
+        await client.query("COMMIT");
+        return result;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    },
+  };
+}
+
 function argValue(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
@@ -394,7 +494,9 @@ export async function runCli(args = process.argv.slice(2), env = process.env) {
   }
   assertApplyAllowed(args, env, result.summary);
   const offeringMap = await loadOfferingMap(argValue(args, "--offering-map"));
-  const adapter = await createPrismaAdapter();
+  const adapter = args.includes("--direct-pg")
+    ? await createDirectPgAdapter({ connectionString: env.DIRECT_URL || env.DATABASE_URL })
+    : await createPrismaAdapter();
   try {
     const applied = await applySeasonalImport({
       adapter,
@@ -420,7 +522,11 @@ export function assertApplyAllowed(args, env, summary) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   runCli().catch((error) => {
-    console.error(`방학특강 가져오기 실패: ${error.message}`);
+    const message = clean(error?.message);
+    const safeMessage = /^(적용 차단|사용법|CSV |입력 데이터|--season-slug)/.test(message)
+      ? message
+      : "처리 중 오류가 발생해 트랜잭션을 롤백했습니다. 상세 오류는 개인정보 보호를 위해 출력하지 않습니다.";
+    console.error(`방학특강 가져오기 실패: ${safeMessage}`);
     process.exitCode = 1;
   });
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeSeasonalRows, applySeasonalImport, assertApplyAllowed, normalizeBirthDate, parseCsv } from "./seasonal-import.mjs";
+import { analyzeSeasonalRows, applySeasonalImport, assertApplyAllowed, createDirectPgAdapter, normalizeBirthDate, parseCsv } from "./seasonal-import.mjs";
 
 function row(index, overrides = {}) {
   return {
@@ -13,6 +13,9 @@ function row(index, overrides = {}) {
     신청요일: "월,수",
     수강료: "180,000원",
     차량신청: index <= 14 ? "예" : "아니오",
+    agreedTerms: true,
+    agreedPrivacy: "동의",
+    memo: `내부 메모 ${index}`,
     ...overrides,
   };
 }
@@ -61,6 +64,12 @@ test("같은 학생의 중복 신청을 찾아낸다", () => {
   assert.ok(records[1].reviewReasons.includes("DUPLICATE_APPLICATION"));
 });
 
+test("동의 증빙이 없으면 검토 대상으로 분류한다", () => {
+  const { records } = analyzeSeasonalRows([row(1, { agreedPrivacy: "" })], { seasonSlug: "summer" });
+  assert.equal(records[0].agreedPrivacy, false);
+  assert.ok(records[0].reviewReasons.includes("CONSENT_EVIDENCE_MISSING"));
+});
+
 test("apply는 확인 토큰과 review 허용 여부를 검사한다", () => {
   assert.throws(() => assertApplyAllowed(["--apply"], {}, { requiresReview: 0 }), /confirm 토큰/);
   assert.throws(
@@ -106,6 +115,9 @@ test("apply는 한 트랜잭션에서 application/item/shuttle/audit를 멱등 �
   assert.equal(calls[1][1].childName, "학생1");
   assert.equal(calls[1][1].importSource, "google-sheet:summer-2026");
   assert.equal(calls[1][1].status, "PENDING");
+  assert.equal(calls[1][1].agreedTerms, true);
+  assert.equal(calls[1][1].agreedPrivacy, true);
+  assert.equal(calls[1][1].memo, "내부 메모 1");
   assert.equal(calls[2][1].status, "PENDING");
 });
 
@@ -132,4 +144,57 @@ test("금액 또는 반 매핑이 없으면 allow-review에서도 신청서만 �
   assert.equal(calls[0][1].totalPriceSnapshot, 0);
   assert.equal(calls[0][1].requiresReview, true);
   assert.equal(calls[0][1].status, "PENDING");
+});
+
+test("direct pg adapter는 SSL 검증과 parameterized 단일 트랜잭션을 사용한다", async () => {
+  const queries = [];
+  let clientConfig;
+  const client = {
+    connect: async () => {},
+    end: async () => {},
+    query: async (text, values = []) => {
+      queries.push({ text, values });
+      if (text.startsWith('SELECT id FROM "SpecialProgramSeason"')) return { rows: [{ id: "season-1" }] };
+      if (text.startsWith('SELECT id, code, title')) return { rows: [{ id: "offering-1", code: "HIGH-2", title: "주2회" }] };
+      if (text.startsWith('SELECT id, "importSource"')) return { rows: [] };
+      if (text.startsWith('SELECT id FROM "SpecialProgramApplicationItem"')) return { rows: [] };
+      if (text.includes("RETURNING id")) return { rows: [{ id: text.includes("ApplicationItem") ? "item-1" : "application-1" }] };
+      return { rows: [] };
+    },
+  };
+  const adapter = await createDirectPgAdapter({
+    connectionString: "postgresql://example.invalid/db",
+    clientFactory: (config) => {
+      clientConfig = config;
+      return client;
+    },
+  });
+  const records = analyzeSeasonalRows([row(1)], { seasonSlug: "summer" }).records;
+  await applySeasonalImport({ adapter, seasonSlug: "summer", source: "sheet", records, offeringMap: { "ELEMENTARY_HIGH:2": "HIGH-2" } });
+
+  assert.equal(clientConfig.ssl.rejectUnauthorized, true);
+  assert.equal(queries[0].text, "BEGIN");
+  assert.equal(queries.at(-1).text, "COMMIT");
+  assert.ok(queries.every(({ text }) => !text.includes("학생1") && !text.includes("01012340001")));
+  assert.ok(queries.some(({ values }) => values.includes("학생1")));
+  assert.ok(queries.filter(({ text }) => !["BEGIN", "COMMIT"].includes(text)).every(({ text }) => /\$\d/.test(text)));
+  await adapter.disconnect();
+});
+
+test("direct pg adapter는 오류 시 rollback한다", async () => {
+  const commands = [];
+  const adapter = await createDirectPgAdapter({
+    connectionString: "postgresql://example.invalid/db",
+    clientFactory: () => ({
+      connect: async () => {},
+      end: async () => {},
+      query: async (text) => {
+        commands.push(text);
+        return { rows: [] };
+      },
+    }),
+  });
+  await assert.rejects(adapter.transaction(async () => { throw new Error("test failure"); }), /test failure/);
+  assert.deepEqual(commands, ["BEGIN", "ROLLBACK"]);
+  await adapter.disconnect();
 });

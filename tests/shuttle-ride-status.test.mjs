@@ -7,6 +7,7 @@ const migrationSource = await readFile("prisma/migrations/20260722001000_add_shu
 const serviceSource = await readFile("src/lib/shuttle/service.ts", "utf8");
 const apiSource = await readFile("src/app/api/staff/shuttle/route.ts", "utf8");
 const staffPageSource = await readFile("src/app/staff/shuttle/page.tsx", "utf8");
+const staffDashboardClientSource = await readFile("src/app/staff/shuttle/StaffShuttleDashboardClient.tsx", "utf8");
 const staffButtonsSource = await readFile("src/app/staff/shuttle/ShuttleRideStatusButtons.tsx", "utf8");
 const adminClientSource = await readFile("src/app/admin/shuttle/ShuttleRouteAdminClient.tsx", "utf8");
 
@@ -26,13 +27,18 @@ test("staff API validates and saves passenger ride status", () => {
   assert.match(apiSource, /updatePassengerRideStatus\(staff, routeId, passengerId, body\.status\)/);
 });
 
-test("driver shuttle page can check passengers immediately", () => {
-  assert.match(staffPageSource, /ShuttleRideStatusButtons/);
-  assert.match(staffPageSource, /RideStatusPill/);
-  assert.match(staffPageSource, /셔틀 기사 앱/);
-  assert.match(staffPageSource, /체크 대기/);
-  assert.match(staffPageSource, /체크 완료/);
+test("driver shuttle page can check passengers and update summary immediately", () => {
+  assert.match(staffPageSource, /StaffShuttleDashboardClient/);
+  assert.match(staffDashboardClientSource, /ShuttleRideStatusButtons/);
+  assert.match(staffDashboardClientSource, /RideStatusPill/);
+  assert.match(staffDashboardClientSource, /셔틀 기사 앱/);
+  assert.match(staffDashboardClientSource, /체크 대기/);
+  assert.match(staffDashboardClientSource, /체크 완료/);
+  assert.match(staffDashboardClientSource, /summarizeRideStatuses/);
+  assert.match(staffDashboardClientSource, /handleStatusChange\(passenger\.id, status\)/);
   assert.match(staffButtonsSource, /fetch\("\/api\/staff\/shuttle"/);
+  assert.match(staffButtonsSource, /onStatusChange\(nextStatus\)/);
+  assert.match(staffButtonsSource, /onStatusChange\(previous\)/);
   assert.match(staffButtonsSource, /저장 중/);
   assert.match(staffButtonsSource, /저장 완료/);
   assert.match(staffButtonsSource, /BOARDED/);

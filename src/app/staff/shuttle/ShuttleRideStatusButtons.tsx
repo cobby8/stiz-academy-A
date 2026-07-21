@@ -16,21 +16,22 @@ export default function ShuttleRideStatusButtons({
   routeId,
   passengerId,
   direction,
-  initialStatus,
+  status,
+  onStatusChange,
 }: {
   routeId: string;
   passengerId: string;
   direction: Direction;
-  initialStatus: RideStatus;
+  status: RideStatus;
+  onStatusChange: (status: RideStatus) => void;
 }) {
-  const [status, setStatus] = useState<RideStatus>(initialStatus || "PENDING");
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const primaryStatus: RideStatus = direction === "PICKUP" ? "BOARDED" : "DROPPED_OFF";
 
   function update(nextStatus: RideStatus) {
     const previous = status;
-    setStatus(nextStatus);
+    onStatusChange(nextStatus);
     setMessage("저장 중...");
     startTransition(async () => {
       try {
@@ -43,7 +44,7 @@ export default function ShuttleRideStatusButtons({
         if (!response.ok) throw new Error(body.error || "상태를 저장하지 못했습니다.");
         setMessage(`${STATUS_LABEL[nextStatus]} 저장 완료`);
       } catch (error) {
-        setStatus(previous);
+        onStatusChange(previous);
         setMessage(error instanceof Error ? error.message : "상태를 저장하지 못했습니다.");
       }
     });

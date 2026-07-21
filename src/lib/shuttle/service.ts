@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { chooseActiveShuttleAssignment } from "./assignment";
-import { optimizeWaypointOrderWithTmap } from "./tmap";
+import { optimizeWaypointOrderWithTmap, type TmapWaypoint } from "./tmap";
 
 export class ShuttleServiceError extends Error {
   constructor(
@@ -32,6 +32,9 @@ type ShuttleLocationKind = "pickup" | "dropoff";
 type StudentShuttleLocationKind = "PICKUP" | "DROPOFF";
 
 const SHUTTLE_RIDE_STATUSES = new Set<ShuttleRideStatus>(["PENDING", "BOARDED", "DROPPED_OFF", "NO_SHOW"]);
+const ACADEMY_LATITUDE_ENV = "SHUTTLE_ACADEMY_LATITUDE";
+const ACADEMY_LONGITUDE_ENV = "SHUTTLE_ACADEMY_LONGITUDE";
+const ACADEMY_NAME_ENV = "SHUTTLE_ACADEMY_NAME";
 
 const routeInclude = {
   vehicle: true,
@@ -664,6 +667,154 @@ export async function previewOptimizedRouteStops(actor: Actor, routeId: string) 
     stops: optimizedStops,
     totalDistance: result.rawSummary?.totalDistance,
     totalTime: result.rawSummary?.totalTime,
+  };
+}
+
+function academyWaypoint(): TmapWaypoint {
+  const latitude = Number(process.env[ACADEMY_LATITUDE_ENV]);
+  const longitude = Number(process.env[ACADEMY_LONGITUDE_ENV]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new ShuttleServiceError(
+      `${ACADEMY_LATITUDE_ENV}, ${ACADEMY_LONGITUDE_ENV} environment variables are required for class based shuttle placement.`,
+      409,
+      "ACADEMY_COORDINATES_REQUIRED",
+    );
+  }
+  return {
+    id: "academy",
+    name: process.env[ACADEMY_NAME_ENV]?.trim() || "STIZ Dasan Academy",
+    latitude,
+    longitude,
+  };
+}
+
+function readyCandidateLocation(
+  student: Awaited<ReturnType<typeof getClassBasedShuttleCandidates>>["sessions"][number]["students"][number],
+  kind: "PICKUP" | "DROPOFF",
+) {
+  const location = kind === "PICKUP" ? student.pickup : student.dropoff;
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  if (!location.ready || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { location, latitude, longitude };
+}
+
+export async function previewClassBasedShuttlePlacement(actor: Actor, input: Record<string, unknown>) {
+  void actor;
+  const serviceDate = optionalDate(input.serviceDate, "serviceDate", true);
+  if (!serviceDate) throw new ShuttleServiceError("serviceDate is required.", 400, "SERVICE_DATE_REQUIRED");
+  const direction = parseShuttleDirection(input.direction);
+  const locationKind = direction === ShuttleRouteDirection.PICKUP ? "PICKUP" : "DROPOFF";
+  const candidates = await getClassBasedShuttleCandidates(serviceDate);
+  if (candidates.unavailable) {
+    throw new ShuttleServiceError("Student shuttle location table is not available.", 409, "STUDENT_LOCATION_TABLE_UNAVAILABLE");
+  }
+
+  const academy = academyWaypoint();
+  const missingStudents: Array<{ studentId: string; studentName: string; className: string; reason: string }> = [];
+  const waypoints: Array<TmapWaypoint & {
+    studentId: string;
+    studentName: string;
+    className: string;
+    sessionId: string;
+    address?: string | null;
+    classStartTime?: string | null;
+    classEndTime?: string | null;
+  }> = [];
+
+  for (const session of candidates.sessions) {
+    for (const student of session.students) {
+      const ready = readyCandidateLocation(student, locationKind);
+      if (!ready) {
+        missingStudents.push({
+          studentId: student.studentId,
+          studentName: student.studentName,
+          className: session.className,
+          reason: locationKind === "PICKUP" ? "PICKUP_LOCATION_REQUIRED" : "DROPOFF_LOCATION_REQUIRED",
+        });
+        continue;
+      }
+      waypoints.push({
+        id: `${session.sessionId}:${student.studentId}:${locationKind}`,
+        studentId: student.studentId,
+        studentName: student.studentName,
+        className: session.className,
+        sessionId: session.sessionId,
+        name: `${student.studentName} ${locationKind === "PICKUP" ? "pickup" : "dropoff"}`,
+        address: ready.location.roadAddress || ready.location.address || ready.location.name,
+        latitude: ready.latitude,
+        longitude: ready.longitude,
+        classStartTime: session.classStartTime,
+        classEndTime: session.classEndTime,
+      });
+    }
+  }
+
+  if (waypoints.length > 100) {
+    throw new ShuttleServiceError("Tmap optimization supports up to 100 class based shuttle stops.", 400, "TOO_MANY_STOPS");
+  }
+
+  const fallbackOrder = waypoints.map((point) => point.id);
+  let provider = "LOCAL";
+  let orderedWaypointIds = fallbackOrder;
+  let rawSummary: { totalDistance?: number; totalTime?: number } | undefined;
+  let warning: string | undefined;
+
+  if (waypoints.length >= 2) {
+    try {
+      const result = await optimizeWaypointOrderWithTmap({
+        start: academy,
+        end: academy,
+        waypoints,
+      });
+      provider = result.provider;
+      orderedWaypointIds = result.orderedWaypointIds;
+      rawSummary = result.rawSummary;
+    } catch (error) {
+      const status = typeof error === "object" && error !== null && "status" in error && typeof (error as { status?: unknown }).status === "number"
+        ? (error as { status: number }).status
+        : 502;
+      throw new ShuttleServiceError(error instanceof Error ? error.message : "Failed to load TMAP class based placement.", status, "TMAP_OPTIMIZATION_FAILED");
+    }
+  } else {
+    warning = waypoints.length === 1 ? "NOT_ENOUGH_WAYPOINTS" : "NO_READY_WAYPOINTS";
+  }
+
+  const waypointById = new Map(waypoints.map((point) => [point.id, point]));
+  const stops = orderedWaypointIds.map((id, index) => {
+    const waypoint = waypointById.get(id);
+    if (!waypoint) throw new ShuttleServiceError("Optimized class candidate result does not match waypoints.", 502, "OPTIMIZED_CLASS_CANDIDATE_MISMATCH");
+    return {
+      id: waypoint.id,
+      recommendedOrder: index + 1,
+      studentId: waypoint.studentId,
+      studentName: waypoint.studentName,
+      className: waypoint.className,
+      sessionId: waypoint.sessionId,
+      address: waypoint.address,
+      latitude: waypoint.latitude,
+      longitude: waypoint.longitude,
+      classStartTime: waypoint.classStartTime,
+      classEndTime: waypoint.classEndTime,
+    };
+  });
+
+  return {
+    provider,
+    serviceDate: serviceDate.toISOString().slice(0, 10),
+    direction,
+    academy,
+    stops,
+    missingStudents,
+    warning,
+    totalDistance: rawSummary?.totalDistance,
+    totalTime: rawSummary?.totalTime,
+    totals: {
+      readyStops: stops.length,
+      missingStops: missingStudents.length,
+      sessions: candidates.totals.sessions,
+      students: candidates.totals.students,
+    },
   };
 }
 

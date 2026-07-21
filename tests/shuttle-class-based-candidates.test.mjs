@@ -39,3 +39,15 @@ test("admin UI shows class based candidates and per-student location buttons", (
   assert.match(adminClient, /onPickLocation\(student, "pickup"\)/);
   assert.match(adminClient, /onPickLocation\(student, "dropoff"\)/);
 });
+
+test("class based candidates can be preview optimized before route creation", () => {
+  assert.match(service, /export async function previewClassBasedShuttlePlacement/);
+  assert.match(service, /SHUTTLE_ACADEMY_LATITUDE/);
+  assert.match(service, /SHUTTLE_ACADEMY_LONGITUDE/);
+  assert.match(service, /optimizeWaypointOrderWithTmap\(\{/);
+  assert.match(route, /resource === "classCandidates"/);
+  assert.match(route, /previewClassBasedShuttlePlacement\(actor, data\)/);
+  assert.match(adminClient, /등원 배치 테스트/);
+  assert.match(adminClient, /하원 배치 테스트/);
+  assert.match(adminClient, /setClassPlacementPreview/);
+});

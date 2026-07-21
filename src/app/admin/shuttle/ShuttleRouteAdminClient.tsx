@@ -88,6 +88,17 @@ interface ClassBasedCandidates {
 }
 interface Payload { seasons: Season[]; selectedSeasonId?: string; vehicles: Vehicle[]; drivers: Driver[]; routes: RoutePlan[]; unassignedRequests: ShuttleRequest[]; classBasedCandidates?: ClassBasedCandidates | null }
 interface OptimizationPreview { provider: string; routeId: string; routeName: string; totalDistance?: number; totalTime?: number; stops: Array<{ id: string; previousOrder: number; recommendedOrder: number; name: string; address?: string | null; passengerCount: number }> }
+interface ClassPlacementPreview {
+  provider: string;
+  serviceDate: string;
+  direction: Direction;
+  warning?: string;
+  totalDistance?: number;
+  totalTime?: number;
+  totals: { readyStops: number; missingStops: number; sessions: number; students: number };
+  stops: Array<{ id: string; recommendedOrder: number; studentId: string; studentName: string; className: string; address?: string | null; classStartTime?: string | null; classEndTime?: string | null }>;
+  missingStudents: Array<{ studentId: string; studentName: string; className: string; reason: string }>;
+}
 type LocationPickerTarget = { request: ShuttleRequest; kind: "pickup" | "dropoff" } | { student: ClassCandidateStudent; kind: "pickup" | "dropoff" };
 
 const EMPTY_PAYLOAD: Payload = { seasons: [], vehicles: [], drivers: [], routes: [], unassignedRequests: [] };
@@ -120,6 +131,7 @@ export default function ShuttleRouteAdminClient() {
   const [assignRequest, setAssignRequest] = useState<ShuttleRequest | null>(null);
   const [locationPicker, setLocationPicker] = useState<LocationPickerTarget | null>(null);
   const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
+  const [classPlacementPreview, setClassPlacementPreview] = useState<ClassPlacementPreview | null>(null);
 
   const load = useCallback(async (requestedSeasonId?: string, requestedDirection: Direction = direction, requestedServiceDate: string = serviceDate) => {
     setLoading(true); setError("");
@@ -159,6 +171,7 @@ export default function ShuttleRouteAdminClient() {
 
   useEffect(() => { if (routes.length && !routes.some((route) => route.id === selectedRouteId)) setSelectedRouteId(routes[0].id); }, [routes, selectedRouteId]);
   useEffect(() => { setOptimizationPreview(null); }, [selectedRouteId]);
+  useEffect(() => { setClassPlacementPreview(null); }, [serviceDate]);
 
   async function mutate(body: unknown, success: string) {
     setPending(true); setError(""); setNotice("");
@@ -248,6 +261,25 @@ export default function ShuttleRouteAdminClient() {
     }
   }
 
+  async function previewClassPlacement(nextDirection: Direction) {
+    if (!serviceDate) return;
+    setPending(true); setError(""); setNotice(""); setClassPlacementPreview(null);
+    try {
+      const result = await request({
+        resource: "classCandidates",
+        id: serviceDate,
+        action: "optimizePreview",
+        data: { serviceDate, direction: nextDirection },
+      });
+      setClassPlacementPreview(result.preview as ClassPlacementPreview);
+      setNotice(`${nextDirection === "PICKUP" ? "등원" : "하원"} 자동 배치 미리보기를 불러왔습니다.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "수업 기반 자동 배치 미리보기를 불러오지 못했습니다.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function applyOptimizedStops() {
     if (!selectedRoute || !optimizationPreview) return;
     const plannedAtByStopId = new Map(stops.map((stop) => [stop.id, stop.plannedAt]));
@@ -300,7 +332,7 @@ export default function ShuttleRouteAdminClient() {
       <label className="text-sm font-bold">운행일<input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} list="shuttle-service-dates" className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900" /><datalist id="shuttle-service-dates">{availableDates.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</datalist></label>
     </section>
 
-    {serviceDate && data.classBasedCandidates && <ClassCandidatePanel candidates={data.classBasedCandidates} pending={pending} onPickLocation={(student, kind) => setLocationPicker({ student, kind })} />}
+    {serviceDate && data.classBasedCandidates && <ClassCandidatePanel candidates={data.classBasedCandidates} pending={pending} preview={classPlacementPreview} onPreview={(value) => void previewClassPlacement(value)} onPickLocation={(student, kind) => setLocationPicker({ student, kind })} />}
 
     {loading ? <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800">노선 정보를 불러오는 중입니다…</div> : !data.seasons.length ? <Empty title="운영 중인 특강 시즌이 없습니다" description="방학특강 시즌을 먼저 등록한 뒤 노선을 만들어 주세요." /> : <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.28fr)]">
       <aside className="min-w-0 space-y-4">
@@ -389,7 +421,19 @@ function mapLocationData(location?: RequestLocation | null): MapLocationData | u
   };
 }
 
-function ClassCandidatePanel({ candidates, pending, onPickLocation }: { candidates: ClassBasedCandidates; pending: boolean; onPickLocation: (student: ClassCandidateStudent, kind: "pickup" | "dropoff") => void }) {
+function ClassCandidatePanel({
+  candidates,
+  pending,
+  preview,
+  onPreview,
+  onPickLocation,
+}: {
+  candidates: ClassBasedCandidates;
+  pending: boolean;
+  preview: ClassPlacementPreview | null;
+  onPreview: (direction: Direction) => void;
+  onPickLocation: (student: ClassCandidateStudent, kind: "pickup" | "dropoff") => void;
+}) {
   if (candidates.unavailable) {
     return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">학생별 셔틀 위치 저장소가 아직 DB에 적용되지 않았습니다. 마이그레이션 적용 후 자동 후보를 확인할 수 있습니다.</section>;
   }
@@ -407,6 +451,32 @@ function ClassCandidatePanel({ candidates, pending, onPickLocation }: { candidat
         <Metric label="하원 준비" value={`${candidates.totals.dropoffReady}명`} danger={candidates.totals.missingDropoff > 0} />
       </dl>
     </div>
+    <div className="mt-4 flex flex-wrap gap-2">
+      <button type="button" onClick={() => onPreview("PICKUP")} disabled={pending || candidates.totals.pickupReady < 1} className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-40">등원 배치 테스트</button>
+      <button type="button" onClick={() => onPreview("DROPOFF")} disabled={pending || candidates.totals.dropoffReady < 1} className="min-h-10 rounded-lg bg-emerald-600 px-4 text-sm font-black text-white disabled:opacity-40">하원 배치 테스트</button>
+    </div>
+    {preview && <section className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-black text-blue-700 dark:text-blue-200">{preview.direction === "PICKUP" ? "등원" : "하원"} 자동 배치 결과 · {preview.provider}</p>
+          <h3 className="mt-1 text-lg font-black">{preview.totals.readyStops}명 추천 순서</h3>
+          <p className="mt-1 text-xs font-bold text-blue-700 dark:text-blue-200">
+            {preview.totalDistance ? `예상 거리 ${Math.round(preview.totalDistance / 100) / 10}km` : "거리 정보 없음"} · {preview.totalTime ? `예상 시간 ${Math.round(preview.totalTime / 60)}분` : "시간 정보 없음"}
+          </p>
+        </div>
+        {preview.totals.missingStops > 0 && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 dark:bg-red-950/40 dark:text-red-200">좌표 필요 {preview.totals.missingStops}명</span>}
+      </div>
+      <ol className="mt-3 grid gap-2 lg:grid-cols-2">
+        {preview.stops.map((stop) => <li key={stop.id} className="rounded-xl bg-white p-3 text-sm dark:bg-gray-900">
+          <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">{stop.recommendedOrder}</span>
+          <strong>{stop.studentName}</strong>
+          <span className="ml-2 text-xs font-bold text-gray-500">{stop.className} · {stop.address || "주소 없음"}</span>
+        </li>)}
+      </ol>
+      {preview.missingStudents.length > 0 && <div className="mt-3 rounded-xl bg-white p-3 text-xs font-bold text-red-700 dark:bg-gray-900 dark:text-red-200">
+        위치가 필요한 학생: {preview.missingStudents.slice(0, 8).map((student) => student.studentName).join(", ")}{preview.missingStudents.length > 8 ? ` 외 ${preview.missingStudents.length - 8}명` : ""}
+      </div>}
+    </section>}
     <div className="mt-4 grid gap-3 lg:grid-cols-2">
       {candidates.sessions.length ? candidates.sessions.map((session) => <article key={session.sessionId} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
         <div className="flex flex-wrap items-start justify-between gap-2">

@@ -10,6 +10,7 @@ import {
   createRoute,
   createVehicle,
   getShuttleDashboard,
+  previewClassBasedShuttlePlacement,
   previewOptimizedRouteStops,
   reorderStops,
   reviseRoute,
@@ -87,6 +88,10 @@ export async function PATCH(request: NextRequest) {
     if (body.resource === "shuttleRequest") {
       if (body.action !== "confirmLocation") throw new ShuttleServiceError("지원하지 않는 셔틀 신청 작업입니다.", 400, "UNSUPPORTED_ACTION");
       return NextResponse.json({ request: await updateShuttleRequestLocation(actor, id, data) });
+    }
+    if (body.resource === "classCandidates") {
+      if (body.action !== "optimizePreview") throw new ShuttleServiceError("지원하지 않는 수업 후보 작업입니다.", 400, "UNSUPPORTED_ACTION");
+      return NextResponse.json({ preview: await previewClassBasedShuttlePlacement(actor, data) });
     }
     if (body.resource !== "route" && body.resource !== "studentLocation") throw new ShuttleServiceError("지원하지 않는 수정 요청입니다.", 400, "UNSUPPORTED_RESOURCE");
     if (body.resource === "studentLocation") {

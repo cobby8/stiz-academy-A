@@ -7,8 +7,101 @@
 
 import { prisma } from "@/lib/prisma";
 import { sendPushToUser, sendPushToAllParents } from "@/lib/pushNotification";
-import { sendSms } from "@/lib/sms";
+import { sendSmsDetailed, type SmsSendResult } from "@/lib/sms";
 import { renderSmsTemplate } from "@/lib/smsTemplate";
+
+type SmsAudience = "ADMIN" | "COACH" | "PARENT";
+
+type SmsDeliveryOptions = {
+    eventType: string;
+    recipientPhone: string;
+    body: string;
+    trigger?: string;
+    recipientRole: SmsAudience;
+    eventId?: string;
+    recipientUserId?: string | null;
+};
+
+function normalizeSmsPhone(phone: string) {
+    return phone.replace(/\D/g, "");
+}
+
+function smsDedupeKey(input: SmsDeliveryOptions) {
+    const recipientNo = normalizeSmsPhone(input.recipientPhone);
+    const scope = input.eventId || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return [
+        "sms",
+        input.eventType,
+        scope,
+        input.recipientRole,
+        input.trigger || "fallback",
+        recipientNo,
+    ].join(":");
+}
+
+async function claimSmsDelivery(input: SmsDeliveryOptions): Promise<string | null | undefined> {
+    const recipientNo = normalizeSmsPhone(input.recipientPhone);
+    if (!recipientNo) return null;
+
+    try {
+        const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+            `INSERT INTO "NotificationDelivery" (
+                id, "eventType", "recipientUserId", "recipientPhone", channel, "dedupeKey",
+                status, "attemptCount", "payloadJSON", "createdAt", "updatedAt"
+             ) VALUES (
+                gen_random_uuid()::text, $1, $2, $3, 'SMS', $4,
+                'PENDING', 1, $5::jsonb, NOW(), NOW()
+             ) ON CONFLICT ("dedupeKey") DO NOTHING
+             RETURNING id`,
+            input.eventType,
+            input.recipientUserId ?? null,
+            recipientNo,
+            smsDedupeKey(input),
+            JSON.stringify({
+                trigger: input.trigger ?? null,
+                recipientRole: input.recipientRole,
+                eventId: input.eventId ?? null,
+                bodyLength: input.body.length,
+            }),
+        );
+        return rows[0]?.id;
+    } catch (error) {
+        console.error("[SMS delivery log] claim failed:", error);
+        return null;
+    }
+}
+
+async function finishSmsDelivery(deliveryId: string | null | undefined, result: SmsSendResult) {
+    if (!deliveryId) return;
+    try {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "NotificationDelivery"
+             SET status = $2,
+                 "sentAt" = CASE WHEN $2 = 'SENT' THEN NOW() ELSE "sentAt" END,
+                 "failedAt" = CASE WHEN $2 = 'FAILED' THEN NOW() ELSE "failedAt" END,
+                 "errorCode" = $3,
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            deliveryId,
+            result.ok ? "SENT" : "FAILED",
+            result.ok ? null : (result.reason || "SMS_FAILED").slice(0, 200),
+        );
+    } catch (error) {
+        console.error("[SMS delivery log] finish failed:", error);
+    }
+}
+
+async function sendSmsForNotification(input: SmsDeliveryOptions): Promise<SmsSendResult> {
+    const recipientNo = normalizeSmsPhone(input.recipientPhone);
+    const deliveryId = await claimSmsDelivery(input);
+    if (deliveryId === undefined) {
+        return { ok: true, to: recipientNo, reason: "DUPLICATE_SKIPPED" };
+    }
+
+    const result = await sendSmsDetailed(recipientNo, input.body);
+    await finishSmsDelivery(deliveryId, result);
+    return result;
+}
 
 // ── 슬롯 → 담당 코치 전화번호 조회 ─────────────────────────────────────────
 // slotKey 배열로 해당 슬롯에 배정된 코치의 phone을 조회한다.
@@ -104,6 +197,7 @@ export async function notifyAdmins(
         coachTrigger?: string;      // 코치용 SMS 템플릿 트리거
         variables?: Record<string, string>; // 템플릿 변수
         slotKeys?: string[];        // 해당 슬롯 키 — 있으면 담당 코치에게만 SMS, 없으면 전체 코치
+        eventId?: string;           // 신청/청구 등 원본 ID — SMS 중복 발송 방지와 이력 조회용
     },
 ) {
     try {
@@ -121,6 +215,8 @@ export async function notifyAdmins(
         // 템플릿이 비활성이거나 없으면 기존 방식 fallback
         const adminFallback = `[STIZ] ${title}\n${message}`;
 
+        const smsTasks: Promise<SmsSendResult>[] = [];
+
         for (const admin of admins) {
             // 인앱 알림 + 웹 Push
             await createNotificationRecord({
@@ -133,7 +229,15 @@ export async function notifyAdmins(
 
             // SMS 발송 (전화번호가 있을 때만, 실패해도 무시)
             if (admin.phone) {
-                sendSms(admin.phone, adminSmsMsg || adminFallback).catch(() => {});
+                smsTasks.push(sendSmsForNotification({
+                    eventType: type,
+                    eventId: smsOptions?.eventId,
+                    recipientUserId: admin.id,
+                    recipientPhone: admin.phone,
+                    recipientRole: "ADMIN",
+                    trigger: smsOptions?.adminTrigger,
+                    body: adminSmsMsg || adminFallback,
+                }));
             }
         }
 
@@ -161,9 +265,18 @@ export async function notifyAdmins(
         const adminPhones = new Set(admins.map(a => a.phone).filter(Boolean));
         for (const phone of coachPhones) {
             if (phone && !adminPhones.has(phone)) {
-                sendSms(phone, coachSmsMsg || coachFallback).catch(() => {});
+                smsTasks.push(sendSmsForNotification({
+                    eventType: type,
+                    eventId: smsOptions?.eventId,
+                    recipientPhone: phone,
+                    recipientRole: "COACH",
+                    trigger: smsOptions?.coachTrigger,
+                    body: coachSmsMsg || coachFallback,
+                }));
             }
         }
+
+        await Promise.allSettled(smsTasks);
     } catch (e) {
         // 알림 실패가 비즈니스 로직을 중단시키면 안 됨
         console.error("[notifyAdmins] failed:", e);
@@ -177,11 +290,19 @@ export async function sendParentSms(
     parentPhone: string,
     trigger: string,
     variables: Record<string, string>,
+    options?: { eventType?: string; eventId?: string },
 ): Promise<void> {
     try {
         const msg = await renderSmsTemplate(trigger, variables);
         if (msg && parentPhone) {
-            sendSms(parentPhone, msg).catch(() => {});
+            await sendSmsForNotification({
+                eventType: options?.eventType || trigger,
+                eventId: options?.eventId,
+                recipientPhone: parentPhone,
+                recipientRole: "PARENT",
+                trigger,
+                body: msg,
+            });
         }
     } catch (e) {
         console.error(`[sendParentSms] trigger=${trigger} failed:`, e);

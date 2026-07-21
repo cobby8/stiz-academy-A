@@ -4,6 +4,7 @@ const API_KEY = process.env.SOLAPI_API_KEY || "";
 const API_SECRET = process.env.SOLAPI_API_SECRET || "";
 const SENDER = process.env.SOLAPI_SENDER || "";
 const SOLAPI_URL = "https://api.solapi.com/messages/v4/send";
+const SMS_REQUEST_TIMEOUT_MS = 5000;
 
 export type SmsSendResult = {
     ok: boolean;
@@ -33,9 +34,13 @@ export async function sendSmsDetailed(to: string, body: string): Promise<SmsSend
         return { ok: false, to: recipientNo, reason };
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SMS_REQUEST_TIMEOUT_MS);
+
     try {
         const res = await fetch(SOLAPI_URL, {
             method: "POST",
+            signal: controller.signal,
             headers: {
                 "Content-Type": "application/json",
                 Authorization: makeAuthHeader(),
@@ -59,9 +64,13 @@ export async function sendSmsDetailed(to: string, body: string): Promise<SmsSend
         console.warn("[SMS] Solapi API failed:", reason);
         return { ok: false, to: recipientNo, reason: `Solapi failed: ${reason}` };
     } catch (e) {
-        const reason = (e as Error).message;
+        const reason = e instanceof Error && e.name === "AbortError"
+            ? `SMS request timed out after ${SMS_REQUEST_TIMEOUT_MS}ms`
+            : (e as Error).message;
         console.error("[SMS] Send failed:", reason);
         return { ok: false, to: recipientNo, reason: `SMS request failed: ${reason}` };
+    } finally {
+        clearTimeout(timeout);
     }
 }
 

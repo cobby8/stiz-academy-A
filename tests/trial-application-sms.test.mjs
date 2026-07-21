@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+
+const publicAction = readFileSync(new URL("../src/app/actions/public.ts", import.meta.url), "utf8");
+const trialForm = readFileSync(new URL("../src/app/apply/trial/TrialApplicationForm.tsx", import.meta.url), "utf8");
+const notification = readFileSync(new URL("../src/lib/notification.ts", import.meta.url), "utf8");
+const queries = readFileSync(new URL("../src/lib/queries.ts", import.meta.url), "utf8");
+const sms = readFileSync(new URL("../src/lib/sms.ts", import.meta.url), "utf8");
+
+test("체험 신청은 한글 요일이 아니라 DB 슬롯키로 담당 코치 SMS를 매칭한다", () => {
+  assert.match(publicAction, /TRIAL_DAY_KEY_BY_LABEL/);
+  assert.match(publicAction, /월:\s*"Mon"/);
+  assert.match(publicAction, /금:\s*"Fri"/);
+  assert.match(publicAction, /function resolveTrialSlotKey/);
+  assert.match(publicAction, /preferredSlotKey,\s*\/\/ preferredSlotKey/);
+  assert.match(publicAction, /slotKeys:\s*preferredSlotKey \? \[preferredSlotKey\] : undefined/);
+});
+
+test("체험 신청 폼은 실제 빈자리 슬롯의 slotKey를 서버로 넘긴다", () => {
+  assert.match(trialForm, /availableSlots/);
+  assert.match(trialForm, /function getSlotPeriod/);
+  assert.match(trialForm, /selectedSlot\?\.slotKey/);
+  assert.match(trialForm, /slot\.startTime/);
+});
+
+test("체험 신청 SMS는 발송 장부에 성공과 실패를 남긴다", () => {
+  assert.match(notification, /"NotificationDelivery"/);
+  assert.match(notification, /channel,\s*"dedupeKey"/);
+  assert.match(notification, /'SMS'/);
+  assert.match(notification, /result\.ok \? "SENT" : "FAILED"/);
+  assert.match(notification, /sendSmsDetailed/);
+  assert.match(publicAction, /eventId:\s*trialLeadId/);
+  assert.match(queries, /smsDeliveryTotal/);
+  assert.match(queries, /sms_delivery/);
+});
+
+test("Solapi 요청은 일정 시간 안에 끝나도록 제한한다", () => {
+  assert.match(sms, /SMS_REQUEST_TIMEOUT_MS/);
+  assert.match(sms, /AbortController/);
+  assert.match(sms, /signal:\s*controller\.signal/);
+});

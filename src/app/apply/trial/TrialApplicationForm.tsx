@@ -42,6 +42,7 @@ const SOURCE_OPTIONS = [
 
 const TRIAL_DAY_OPTIONS = ["월", "화", "수", "목", "금", "토"];
 const TRIAL_PERIOD_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8"];
+const TRIAL_DAY_ORDER = ["월", "화", "수", "목", "금", "토", "일"];
 
 // ── 폼 데이터 타입 ───────────────────────────────────────────────────────────
 interface FormData {
@@ -72,16 +73,45 @@ const INITIAL_FORM: FormData = {
     honeypot: "",
 };
 
-export default function TrialApplicationForm({ contactPhone }: Props) {
+function getSlotPeriod(slotKey: string) {
+    return slotKey.split("-").at(-1) || "";
+}
+
+function orderedUniqueDays(slots: AvailableSlot[]) {
+    const days = new Set(slots.map((slot) => slot.dayLabel).filter(Boolean));
+    return TRIAL_DAY_ORDER.filter((day) => days.has(day));
+}
+
+export default function TrialApplicationForm({ availableSlots, contactPhone }: Props) {
     const [step, setStep] = useState(1);          // 현재 스텝 (1~3)
     const [form, setForm] = useState<FormData>(INITIAL_FORM);
     const [error, setError] = useState("");
     const [completed, setCompleted] = useState(false);  // 제출 완료 여부
     const [isPending, startTransition] = useTransition();
+    const availableDayOptions = orderedUniqueDays(availableSlots);
+    const dayOptions = availableDayOptions.length > 0 ? availableDayOptions : TRIAL_DAY_OPTIONS;
+    const periodOptions = form.trialDay && availableSlots.length > 0
+        ? availableSlots
+            .filter((slot) => slot.dayLabel === form.trialDay)
+            .map((slot) => ({ period: getSlotPeriod(slot.slotKey), slot }))
+            .filter((option) => option.period)
+        : TRIAL_PERIOD_OPTIONS.map((period) => ({ period, slot: null }));
+    const selectedSlot = availableSlots.find((slot) => (
+        slot.dayLabel === form.trialDay && getSlotPeriod(slot.slotKey) === form.trialPeriod
+    ));
 
     // 폼 필드 변경 핸들러
     const update = (field: keyof FormData, value: string | boolean) => {
         setForm((prev) => ({ ...prev, [field]: value }));
+        setError("");
+    };
+
+    const selectTrialDay = (day: string) => {
+        setForm((prev) => ({
+            ...prev,
+            trialDay: day,
+            trialPeriod: prev.trialDay === day ? prev.trialPeriod : "",
+        }));
         setError("");
     };
 
@@ -135,7 +165,10 @@ export default function TrialApplicationForm({ contactPhone }: Props) {
         }
         startTransition(async () => {
             try {
-                await submitTrialApplication(form);
+                await submitTrialApplication({
+                    ...form,
+                    preferredSlotKey: selectedSlot?.slotKey,
+                });
                 trackMetaEvent("Lead", {
                     content_name: "Trial application",
                     content_category: "Application",
@@ -253,11 +286,11 @@ export default function TrialApplicationForm({ contactPhone }: Props) {
                                 요일 <span className="text-red-500">*</span>
                             </label>
                             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                                {TRIAL_DAY_OPTIONS.map((day) => (
+                                {dayOptions.map((day) => (
                                     <button
                                         key={day}
                                         type="button"
-                                        onClick={() => update("trialDay", day)}
+                                        onClick={() => selectTrialDay(day)}
                                         className={`py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
                                             form.trialDay === day
                                                 ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10 text-brand-orange-600 dark:text-brand-neon-lime"
@@ -276,9 +309,9 @@ export default function TrialApplicationForm({ contactPhone }: Props) {
                                 교시 <span className="text-red-500">*</span>
                             </label>
                             <div className="grid grid-cols-4 gap-2">
-                                {TRIAL_PERIOD_OPTIONS.map((period) => (
+                                {periodOptions.map(({ period, slot }) => (
                                     <button
-                                        key={period}
+                                        key={slot?.slotKey || period}
                                         type="button"
                                         onClick={() => update("trialPeriod", period)}
                                         className={`py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
@@ -288,6 +321,11 @@ export default function TrialApplicationForm({ contactPhone }: Props) {
                                         }`}
                                     >
                                         {period}교시
+                                        {slot && (
+                                            <span className="block text-[11px] font-normal opacity-80">
+                                                {slot.startTime}
+                                            </span>
+                                        )}
                                     </button>
                                 ))}
                             </div>

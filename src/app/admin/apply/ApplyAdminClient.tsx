@@ -124,6 +124,12 @@ interface TrialLead {
     latestContactBy: string | null;
     openFollowUpAt: string | null;
     openFollowUpNote: string | null;
+    smsDeliveryTotal: number;
+    smsDeliverySent: number;
+    smsDeliveryFailed: number;
+    smsDeliveryPending: number;
+    smsDeliveryLatestAt: string | null;
+    smsDeliveryError: string | null;
 }
 
 interface TrialStats {

@@ -17,6 +17,7 @@
 - 수업 보호: 실제 메모 저장 완료 후 이동, 실패·음성 처리 중 이동 차단
 
 ## 작업 로그
+- 2026-07-21: 체험 신청 문자 알림의 슬롯 매칭, 발송 대기, 발송 장부, 관리자 상태 표시를 보강했다.
 - 2026-07-21: 방학특강 전환 후 생성된 청구서를 관리자 상세에서 바로 열고 링크를 복사할 수 있게 했다.
 - 2026-07-20: 방학특강 승인 항목을 학생·수강·청구서로 전환하는 관리자 액션을 추가했다.
 - 2026-07-20: 방학특강 신청 상세에 수강·청구 전환 준비 상태를 표시해 자동 생성 전 점검 기준을 마련했다.
@@ -26,35 +27,38 @@
 - 2026-07-20: 토스 결제 customerKey/멱등키 규격을 보정하고 관리자 결제 점검 카드와 결제 전용 프리플라이트를 추가했다.
 - 2026-07-17: 토스 온라인 결제 시작/승인/실패 흐름에 운영 준비 상태, 멱등 승인, 학부모 복귀 UX, 관리자 준비 표시를 추가했다.
 - 2026-07-16: 최신 수강생 시트를 다시 가져와 7월 수강/수납 상태를 반영하고, 이월 청구를 미납이 아닌 취소/이월로 닫는 규칙을 추가했다.
-- 2026-07-16: 관리자 청구 콘솔에 이번 달 자동 생성/정리와 발행 전 검수 필터를 추가하고 임시 학부모 테스트 데이터 정리를 준비했다.
 
 ## 현재 작업
-- 작업명: 방학특강 청구서 링크 운영 동선 보강
+- 작업명: 체험 신청 문자 알림 신뢰성 보강
 - 상태: 구현 및 검증 완료, 커밋 대기
-- 범위: 청구서 정보 조회, 청구서 열기, 링크 복사, 회귀 테스트
+- 범위: 체험 신청 슬롯키 정규화, SMS 발송 대기/타임아웃, 발송 장부, 관리자 상태 표시
 - 기준일: 2026-07-21
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 청구서 조회 | 완료 | 방학특강 신청 항목의 paymentId로 청구서 정보를 함께 조회 |
-| 청구서 열기 | 완료 | 관리자 상세에서 결제/청구서 페이지를 새 창으로 열 수 있음 |
-| 링크 복사 | 완료 | 학부모 안내용 청구서 링크를 클립보드에 복사 |
-| 회귀 테스트 | 완료 | 청구서 조회·열기·복사 UI 정적 테스트 보강 |
-| 전체 검증 | 완료 | TypeScript, ESLint, release:code-check 통과 |
+| 슬롯키 정규화 | 완료 | 한글 요일 선택을 DB 기준 Mon/Fri 슬롯키로 저장 |
+| SMS 발송 | 완료 | 관리자·코치·학부모 문자 발송을 병렬 대기하고 요청 타임아웃 적용 |
+| 발송 장부 | 완료 | NotificationDelivery에 SMS 성공/실패 기록 |
+| 관리자 표시 | 완료 | 체험 문의 카드에 문자 발송/실패/처리중 상태 배지 표시 |
+| 전체 검증 | 완료 | TypeScript, 신규 회귀 테스트, release:code-check 통과 |
 
 ## 구현 기록
-- `src/app/api/admin/seasonal/route.ts`: paymentId가 있는 방학특강 신청 항목에 청구서 정보를 붙여 반환.
-- `src/app/admin/seasonal/SeasonalAdminClient.tsx`: 신청 상세에서 청구서 열기와 링크 복사 액션 추가.
-- `tests/seasonal-admin-ux.test.mjs`: 방학특강 청구서 링크 동선 회귀 테스트 추가.
+- `src/app/actions/public.ts`: 체험 신청 슬롯키 정규화와 SMS 발송 결과 장부 연결.
+- `src/app/apply/trial/TrialApplicationForm.tsx`: 실제 빈자리 슬롯의 slotKey를 신청 payload에 포함.
+- `src/lib/notification.ts`: SMS 발송 장부 기록과 중복 방지 키 추가.
+- `src/lib/sms.ts`: Solapi 요청 타임아웃 추가.
+- `src/lib/queries.ts`, `src/app/admin/trial/TrialCrmClient.tsx`: 체험 문의 카드에 SMS 발송 상태 표시.
+- `tests/trial-application-sms.test.mjs`: 체험 신청 SMS 회귀 테스트 추가.
 
 ## 테스트 결과
 - `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 통과
-- `cmd /c node_modules\.bin\eslint.cmd src\app\admin\seasonal\SeasonalAdminClient.tsx src\app\api\admin\seasonal\route.ts tests\seasonal-admin-ux.test.mjs`: 통과
-- `node --test tests\seasonal-admin-ux.test.mjs`: 통과
+- `node --test tests\trial-application-sms.test.mjs`: 통과
+- `node --test tests\trial-application-sms.test.mjs tests\staff-signup-entry.test.mjs tests\data-retention-policy.test.mjs`: 통과
 - `cmd /c npm run release:code-check`: 통과
 
 ## PM 체크
+- 2026-07-21: 체험 신청 문자 알림이 실제 시간표 슬롯으로 담당 코치와 매칭되고, 발송 결과가 관리자 화면에서 확인되도록 보강했다.
 - 2026-07-21: 방학특강 전환 후 생성된 청구서를 관리자 상세에서 바로 열고 복사할 수 있게 해 결제 안내 동선을 줄였다.
 - 2026-07-20: 방학특강 승인 항목을 운영 원장으로 전환하는 코드 경로를 만들고, 실제 운영 DB 실행은 하지 않았다.
 - 2026-07-20: 방학특강 승인 후 자동 수강/청구 생성 전 필요한 연결 상태를 관리자에게 먼저 보여주도록 했다.

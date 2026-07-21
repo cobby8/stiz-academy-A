@@ -59,6 +59,12 @@ export interface TrialLead {
     latestContactBy: string | null;
     openFollowUpAt: string | null;
     openFollowUpNote: string | null;
+    smsDeliveryTotal: number;
+    smsDeliverySent: number;
+    smsDeliveryFailed: number;
+    smsDeliveryPending: number;
+    smsDeliveryLatestAt: string | null;
+    smsDeliveryError: string | null;
 }
 
 interface TrialStats {
@@ -289,6 +295,29 @@ function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
     }
 
     return badges.slice(0, 4);
+}
+
+function getSmsDeliveryBadge(lead: TrialLead): PriorityBadge | null {
+    if (!lead.smsDeliveryTotal) return null;
+    if (lead.smsDeliveryFailed > 0) {
+        return {
+            icon: "sms_failed",
+            label: `문자 실패 ${lead.smsDeliveryFailed}건`,
+            className: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200",
+        };
+    }
+    if (lead.smsDeliveryPending > 0) {
+        return {
+            icon: "schedule",
+            label: "문자 처리중",
+            className: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200",
+        };
+    }
+    return {
+        icon: "mark_chat_read",
+        label: `문자 발송 ${lead.smsDeliverySent}건`,
+        className: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200",
+    };
 }
 
 function joinSummaryLines(lines: Array<string | null | undefined | false>) {
@@ -904,6 +933,24 @@ export default function TrialCrmClient({
                                                         수강신청 접수 {formatDate(lead.enrollApplicationReceivedAt)}
                                                     </span>
                                                 )}
+                                            </div>
+                                        )}
+                                        {getSmsDeliveryBadge(lead) && (
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {(() => {
+                                                    const badge = getSmsDeliveryBadge(lead);
+                                                    if (!badge) return null;
+                                                    return (
+                                                        <span
+                                                            title={lead.smsDeliveryError || undefined}
+                                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${badge.className}`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-xs">{badge.icon}</span>
+                                                            {badge.label}
+                                                            {lead.smsDeliveryLatestAt ? ` · ${formatDate(lead.smsDeliveryLatestAt)}` : ""}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                         {/* 신청 상세 정보 — 학년, 학교, 체험 희망 일정 */}

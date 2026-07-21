@@ -9,7 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { ensureTrialLeadTable } from "@/app/actions/admin";
-import { notifyAdmins, sendParentSms } from "@/lib/notification";
+import { notifyAdmins } from "@/lib/notification";
 
 // ── EnrollmentApplication DDL ensure (idempotent) ───────────────────────────
 // 테이블이 없으면 자동으로 생성 — DB push 없이도 동작하도록
@@ -113,6 +113,27 @@ function normalizePhone(raw: string): string {
     return raw.trim();
 }
 
+const TRIAL_DAY_KEY_BY_LABEL: Record<string, string> = {
+    월: "Mon",
+    화: "Tue",
+    수: "Wed",
+    목: "Thu",
+    금: "Fri",
+    토: "Sat",
+    일: "Sun",
+};
+
+function resolveTrialSlotKey(data: TrialApplicationInput): string | null {
+    const directSlotKey = data.preferredSlotKey?.trim();
+    if (directSlotKey) return directSlotKey;
+
+    const dayKey = TRIAL_DAY_KEY_BY_LABEL[data.trialDay?.trim() || ""];
+    const period = data.trialPeriod?.trim();
+    if (!dayKey || !period) return null;
+
+    return `${dayKey}-${period}`;
+}
+
 /**
  * submitTrialApplication — 체험수업 신청 (공개, 비로그인)
  *
@@ -154,6 +175,9 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
     await ensureTrialLeadTable();
 
     try {
+        const normalizedParentPhone = normalizePhone(parentPhone);
+        const preferredSlotKey = resolveTrialSlotKey(data);
+
         // TrialLead INSERT — status='NEW'로 생성
         const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
             `INSERT INTO "TrialLead" (
@@ -179,10 +203,10 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
             data.childSchool?.trim() || null,                     // childSchool
             data.basketballExp || null,                           // basketballExp
             parentName,
-            normalizePhone(parentPhone),
+            normalizedParentPhone,
             data.trialDate || null,                               // scheduledDate
             data.trialDay || null,                                // preferredDays
-            data.preferredSlotKey || `${data.trialDay}-${data.trialPeriod}`, // preferredSlotKey
+            preferredSlotKey,                                      // preferredSlotKey
             data.trialDay || null,                                // preferredDay
             data.trialPeriod || null,                             // preferredPeriod
             data.trialDate || null,                               // trialDate
@@ -204,34 +228,39 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
             childName,
             childGrade: data.childGrade || "학년 미입력",
             parentName,
-            parentPhone: normalizePhone(parentPhone),
+            parentPhone: normalizedParentPhone,
         };
+        const trialLeadId = rows[0]?.id || "ok";
 
-        // 관리자에게 알림 발송 (fire-and-forget: 실패해도 신청은 정상 완료)
+        // 관리자/학부모 문자 발송은 신청 저장 후 병렬 처리한다.
+        // 실패해도 신청 자체는 유지되며, 발송 결과는 NotificationDelivery에 남긴다.
         // 템플릿 기반 SMS: TRIAL_NEW_ADMIN(관리자), TRIAL_NEW_COACH(코치)
         // slotKeys: 희망 슬롯이 있으면 해당 슬롯 담당 코치에게만 SMS 발송
-        notifyAdmins(
-            "TRIAL_APPLICATION",
-            "새 체험수업 신청",
-            `${childName} (${data.childGrade || "학년 미입력"}) — ${parentName}`,
-            "/admin/trial",
-            {
-                adminTrigger: "TRIAL_NEW_ADMIN",
-                coachTrigger: "TRIAL_NEW_COACH",
-                variables: smsVars,
-                slotKeys: data.preferredSlotKey ? [data.preferredSlotKey] : undefined,
-            },
-        ).catch(() => {});
+        await Promise.allSettled([
+            notifyAdmins(
+                "TRIAL_APPLICATION",
+                "새 체험수업 신청",
+                `${childName} (${data.childGrade || "학년 미입력"}) — ${parentName}`,
+                "/admin/trial",
+                {
+                    adminTrigger: "TRIAL_NEW_ADMIN",
+                    coachTrigger: "TRIAL_NEW_COACH",
+                    variables: smsVars,
+                    slotKeys: preferredSlotKey ? [preferredSlotKey] : undefined,
+                    eventId: trialLeadId,
+                },
+            ),
 
-        // 학부모에게 접수 확인 SMS 발송 (fire-and-forget)
-        // academyPhone은 DB에서 비동기 조회하여 포함
-        sendParentSmsWithAcademyPhone(
-            normalizePhone(parentPhone),
-            "TRIAL_CONFIRM_PARENT",
-            { childName, parentName },
-        ).catch(() => {});
+            // 학부모에게 접수 확인 SMS 발송. academyPhone은 DB에서 조회하여 포함한다.
+            sendParentSmsWithAcademyPhone(
+                normalizedParentPhone,
+                "TRIAL_CONFIRM_PARENT",
+                { childName, parentName },
+                { eventType: "TRIAL_APPLICATION", eventId: trialLeadId },
+            ),
+        ]);
 
-        return { success: true, id: rows[0]?.id || "ok" };
+        return { success: true, id: trialLeadId };
     } catch (e) {
         console.error("[submitTrialApplication] failed:", e);
         throw new Error("신청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
@@ -606,6 +635,7 @@ async function sendParentSmsWithAcademyPhone(
     parentPhone: string,
     trigger: string,
     baseVars: Record<string, string>,
+    options?: { eventType?: string; eventId?: string },
 ) {
     try {
         // 학원 전화번호 조회
@@ -619,7 +649,7 @@ async function sendParentSmsWithAcademyPhone(
 
         // sendParentSms 호출 (notification.ts)
         const { sendParentSms: sps } = await import("@/lib/notification");
-        await sps(parentPhone, trigger, vars);
+        await sps(parentPhone, trigger, vars, options);
     } catch (e) {
         console.error(`[sendParentSmsWithAcademyPhone] trigger=${trigger} failed:`, e);
     }

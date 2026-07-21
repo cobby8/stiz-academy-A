@@ -2355,7 +2355,13 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
                           latest_log."createdAt" AS latest_contact_at,
                           latest_log."createdByName" AS latest_contact_by,
                           open_followup."nextFollowUpAt" AS open_followup_at,
-                          open_followup.note AS open_followup_note
+                          open_followup.note AS open_followup_note,
+                          sms_delivery.sms_total,
+                          sms_delivery.sms_sent,
+                          sms_delivery.sms_failed,
+                          sms_delivery.sms_pending,
+                          sms_delivery.sms_latest_at,
+                          sms_delivery.sms_error
                    FROM "TrialLead" tl
                    LEFT JOIN LATERAL (
                        SELECT action, note, "createdAt", "createdByName"
@@ -2375,6 +2381,19 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
                        ORDER BY acl."nextFollowUpAt" ASC
                        LIMIT 1
                    ) open_followup ON true
+                   LEFT JOIN LATERAL (
+                       SELECT
+                           COUNT(*)::int AS sms_total,
+                           COUNT(*) FILTER (WHERE nd.status = 'SENT')::int AS sms_sent,
+                           COUNT(*) FILTER (WHERE nd.status = 'FAILED')::int AS sms_failed,
+                           COUNT(*) FILTER (WHERE nd.status = 'PENDING')::int AS sms_pending,
+                           MAX(nd."updatedAt") AS sms_latest_at,
+                           MAX(nd."errorCode") FILTER (WHERE nd.status = 'FAILED') AS sms_error
+                       FROM "NotificationDelivery" nd
+                       WHERE nd."eventType" = 'TRIAL_APPLICATION'
+                         AND nd.channel = 'SMS'
+                         AND nd."dedupeKey" LIKE ('sms:TRIAL_APPLICATION:' || tl.id || ':%')
+                   ) sms_delivery ON true
                    WHERE tl.status = $1
                    ORDER BY tl."createdAt" DESC${limitClause}`,
                   status
@@ -2386,7 +2405,13 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
                           latest_log."createdAt" AS latest_contact_at,
                           latest_log."createdByName" AS latest_contact_by,
                           open_followup."nextFollowUpAt" AS open_followup_at,
-                          open_followup.note AS open_followup_note
+                          open_followup.note AS open_followup_note,
+                          sms_delivery.sms_total,
+                          sms_delivery.sms_sent,
+                          sms_delivery.sms_failed,
+                          sms_delivery.sms_pending,
+                          sms_delivery.sms_latest_at,
+                          sms_delivery.sms_error
                    FROM "TrialLead" tl
                    LEFT JOIN LATERAL (
                        SELECT action, note, "createdAt", "createdByName"
@@ -2406,6 +2431,19 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
                        ORDER BY acl."nextFollowUpAt" ASC
                        LIMIT 1
                    ) open_followup ON true
+                   LEFT JOIN LATERAL (
+                       SELECT
+                           COUNT(*)::int AS sms_total,
+                           COUNT(*) FILTER (WHERE nd.status = 'SENT')::int AS sms_sent,
+                           COUNT(*) FILTER (WHERE nd.status = 'FAILED')::int AS sms_failed,
+                           COUNT(*) FILTER (WHERE nd.status = 'PENDING')::int AS sms_pending,
+                           MAX(nd."updatedAt") AS sms_latest_at,
+                           MAX(nd."errorCode") FILTER (WHERE nd.status = 'FAILED') AS sms_error
+                       FROM "NotificationDelivery" nd
+                       WHERE nd."eventType" = 'TRIAL_APPLICATION'
+                         AND nd.channel = 'SMS'
+                         AND nd."dedupeKey" LIKE ('sms:TRIAL_APPLICATION:' || tl.id || ':%')
+                   ) sms_delivery ON true
                    ORDER BY tl."createdAt" DESC${limitClause}`
               );
         } catch (error) {
@@ -2463,6 +2501,12 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
             latestContactBy: r.latest_contact_by ?? null,
             openFollowUpAt: r.open_followup_at ?? null,
             openFollowUpNote: r.open_followup_note ?? null,
+            smsDeliveryTotal: Number(r.sms_total ?? 0),
+            smsDeliverySent: Number(r.sms_sent ?? 0),
+            smsDeliveryFailed: Number(r.sms_failed ?? 0),
+            smsDeliveryPending: Number(r.sms_pending ?? 0),
+            smsDeliveryLatestAt: r.sms_latest_at ?? null,
+            smsDeliveryError: r.sms_error ?? null,
         }));
     } catch (e) {
         console.error("[getTrialLeads] failed:", e);

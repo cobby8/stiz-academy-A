@@ -210,6 +210,11 @@ const SOURCE_LABELS: Record<string, string> = {
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 const APPLICATION_PAGE_SIZE = 50;
 const LONG_WAIT_HOURS = 24;
+const COMPACT_CARD_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
+const COMPACT_CARD_ACTION_DANGER_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-200";
+const COMPACT_CARD_PRIMARY_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md bg-lime-500 px-2.5 text-xs font-black text-brand-navy-900 transition hover:bg-lime-400";
+const COMPACT_CARD_CONTACT_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200 dark:hover:bg-lime-900/40";
+const COMPACT_CARD_CHIP_CLASS = "inline-flex max-w-full items-center gap-1 overflow-hidden rounded-md bg-gray-50 px-2 py-1 text-[11px] font-bold text-gray-700 dark:bg-gray-900/70 dark:text-gray-200";
 
 const APPLICATION_WORK_FILTERS: Array<{ value: ApplicationWorkFilter; label: string; icon: string }> = [
     { value: "ALL", label: "운영 전체", icon: "view_list" },
@@ -1234,7 +1239,7 @@ export default function ApplyAdminClient({
                             )}
                         </div>
                     ) : (
-                        <div className="grid gap-4">
+                        <div className="grid gap-2.5">
                             {viewMode === "list" ? renderApplicationList() : visibleApps.map((app) => {
                                 const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
                                 const age = calcAge(app.childBirthDate);
@@ -1265,52 +1270,47 @@ export default function ApplyAdminClient({
                                 return (
                                     <div
                                         key={app.id}
-                                        className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow"
+                                        className="rounded-lg border border-gray-200 bg-white p-3 transition-shadow hover:shadow-sm dark:border-gray-700 dark:bg-gray-800"
                                     >
-                                        <div className="flex flex-col gap-4">
+                                        <div className="flex flex-col gap-2.5">
                                             {/* 왼쪽: 기본 정보 */}
                                             <div className="flex-1 min-w-0">
                                                 {/* 상태 + 유입경로 배지 */}
-                                                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+                                                <div className="mb-1.5 flex items-center gap-1.5 flex-wrap">
+                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${cfg.color}`}>
                                                         <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                                         {cfg.label}
                                                     </span>
                                                     {app.referralSource && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                                        <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
                                                             {SOURCE_LABELS[app.referralSource] || app.referralSource}
                                                         </span>
                                                     )}
+                                                    {visibleBadges.map((badge) => (
+                                                        <span
+                                                            key={`${app.id}-priority-${badge.label}`}
+                                                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black ${badge.className}`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">{badge.icon}</span>
+                                                            {badge.label}
+                                                        </span>
+                                                    ))}
                                                 </div>
 
-                                                {visibleBadges.length > 0 && (
-                                                    <div className="mb-2 flex flex-wrap gap-2">
-                                                        {visibleBadges.map((badge) => (
-                                                            <span
-                                                                key={`${app.id}-priority-${badge.label}`}
-                                                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${badge.className}`}
-                                                            >
-                                                                <span className="material-symbols-outlined text-sm">{badge.icon}</span>
-                                                                {badge.label}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-
                                                 {/* 아이 이름 + 나이/학년 */}
-                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                <h3 className="text-base font-black text-gray-900 dark:text-white">
                                                     {app.childName}
                                                     {age !== null && (
-                                                        <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
+                                                        <span className="ml-1.5 text-xs font-bold text-gray-500 dark:text-gray-400">
                                                             (만 {age}세)
                                                         </span>
                                                     )}
                                                 </h3>
 
                                                 {/* 보호자 + 연락처 + 신청일 */}
-                                                <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400 flex-wrap">
+                                                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
                                                     <span className="flex items-center gap-1">
-                                                        <span className="material-symbols-outlined text-base">person</span>
+                                                        <span className="material-symbols-outlined text-sm">person</span>
                                                         {app.parentName}
                                                         {app.parentRelation && ` (${app.parentRelation})`}
                                                     </span>
@@ -1318,27 +1318,28 @@ export default function ApplyAdminClient({
                                                         href={parentPhoneHref}
                                                         className="flex items-center gap-1 font-semibold text-gray-700 hover:text-brand-orange-600 dark:text-gray-200 dark:hover:text-brand-neon-lime"
                                                     >
-                                                        <span className="material-symbols-outlined text-base">phone</span>
+                                                        <span className="material-symbols-outlined text-sm">phone</span>
                                                         {app.parentPhone}
                                                     </a>
                                                     <span className="flex items-center gap-1">
-                                                        <span className="material-symbols-outlined text-base">calendar_today</span>
+                                                        <span className="material-symbols-outlined text-sm">calendar_today</span>
                                                         {formatDate(app.createdAt)}
                                                     </span>
                                                 </div>
 
-                                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                                <div className="mt-2 flex flex-wrap gap-1.5">
                                                     {operationItems.map((item) => (
                                                         <div
                                                             key={`${app.id}-summary-${item.label}`}
-                                                            className="flex min-w-0 items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-200"
+                                                            className={COMPACT_CARD_CHIP_CLASS}
+                                                            title={`${item.label} ${item.value}`}
                                                         >
-                                                            <span className="material-symbols-outlined mt-0.5 text-sm text-brand-orange-500 dark:text-brand-neon-lime">
+                                                            <span className="material-symbols-outlined text-sm text-brand-orange-500 dark:text-brand-neon-lime">
                                                                 {item.icon}
                                                             </span>
-                                                            <span className="min-w-0">
+                                                            <span className="min-w-0 truncate">
                                                                 <span className="mr-1 font-black text-gray-900 dark:text-white">{item.label}</span>
-                                                                <span className="break-words">{item.value}</span>
+                                                                <span>{item.value}</span>
                                                             </span>
                                                         </div>
                                                     ))}
@@ -1346,21 +1347,21 @@ export default function ApplyAdminClient({
 
                                                 {/* 학년/학교/성별 태그 */}
                                                 {(app.childGrade || app.childSchool || app.childGender) && (
-                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
                                                         {app.childGrade && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
+                                                            <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
                                                                 <span className="material-symbols-outlined text-xs">school</span>
                                                                 {app.childGrade}
                                                             </span>
                                                         )}
                                                         {app.childSchool && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200">
+                                                            <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200">
                                                                 <span className="material-symbols-outlined text-xs">apartment</span>
                                                                 {app.childSchool}
                                                             </span>
                                                         )}
                                                         {app.childGender && (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-pink-50 text-pink-700 dark:bg-pink-950/40 dark:text-pink-200">
+                                                            <span className="inline-flex items-center rounded bg-pink-50 px-1.5 py-0.5 text-[11px] font-bold text-pink-700 dark:bg-pink-950/40 dark:text-pink-200">
                                                                 {app.childGender}
                                                             </span>
                                                         )}
@@ -1369,8 +1370,8 @@ export default function ApplyAdminClient({
 
                                                 {/* 농구 경험 태그 */}
                                                 {app.basketballExp && (
-                                                    <div className="flex flex-wrap gap-2 mt-2">
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200">
+                                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                                        <span className="inline-flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-[11px] font-bold text-orange-700 dark:bg-orange-950/40 dark:text-orange-200">
                                                             <span className="material-symbols-outlined text-xs">sports_basketball</span>
                                                             농구 {app.basketballExp}
                                                         </span>
@@ -1379,14 +1380,14 @@ export default function ApplyAdminClient({
 
                                                 {/* 메모 */}
                                                 {app.memo && (
-                                                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2">
+                                                    <p className="mt-1.5 line-clamp-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                                                         {app.memo}
                                                     </p>
                                                 )}
 
                                                 {/* 처리 결과 (승인/반려 시) */}
                                                 {app.processedNote && (
-                                                    <p className={`mt-2 text-sm rounded-lg px-3 py-2 ${
+                                                    <p className={`mt-1.5 line-clamp-2 rounded-md px-2 py-1.5 text-xs font-bold ${
                                                         app.status === "APPROVED"
                                                             ? "text-green-700 bg-green-50 dark:bg-green-950/40 dark:text-green-200"
                                                             : "text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-200"
@@ -1396,16 +1397,16 @@ export default function ApplyAdminClient({
                                                 )}
 
                                                 {(app.openFollowUpAt || app.latestContactAction) && (
-                                                    <div className="mt-2 flex flex-wrap gap-2">
+                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
                                                         {app.openFollowUpAt && (
-                                                            <span className="inline-flex items-center gap-1 rounded-lg bg-lime-50 px-2.5 py-1 text-xs font-bold text-lime-700 dark:bg-lime-950/40 dark:text-lime-200">
+                                                            <span className="inline-flex items-center gap-1 rounded-md bg-lime-50 px-2 py-1 text-[11px] font-bold text-lime-700 dark:bg-lime-950/40 dark:text-lime-200">
                                                                 <span className="material-symbols-outlined text-sm">phone_callback</span>
                                                                 다음 연락 {formatContactDateTime(app.openFollowUpAt)}
                                                                 {app.openFollowUpNote ? ` · ${app.openFollowUpNote}` : ""}
                                                             </span>
                                                         )}
                                                         {app.latestContactAction && (
-                                                            <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                                            <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                                                                 <span className="material-symbols-outlined text-sm">history</span>
                                                                 최근 {CONTACT_ACTION_LABELS[app.latestContactAction] ?? app.latestContactAction}
                                                                 {app.latestContactAt ? ` · ${formatContactDateTime(app.latestContactAt)}` : ""}
@@ -1416,31 +1417,31 @@ export default function ApplyAdminClient({
                                             </div>
 
                                             {/* 카드 하단: 자주 쓰는 작업만 먼저 보여주고 나머지는 접어서 모바일 깨짐을 막는다. */}
-                                            <div className="flex w-full flex-wrap items-center gap-2 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                            <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2 dark:border-gray-700">
                                                 <a
                                                     href={parentPhoneHref}
-                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    className={COMPACT_CARD_ACTION_CLASS}
                                                     title="보호자에게 전화"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">call</span>
+                                                    <span className="material-symbols-outlined text-base">call</span>
                                                     전화
                                                 </a>
                                                 <button
                                                     type="button"
                                                     onClick={() => setShowDetailModal(app)}
-                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    className={COMPACT_CARD_ACTION_CLASS}
                                                     title="신청 상세 보기"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">visibility</span>
+                                                    <span className="material-symbols-outlined text-base">visibility</span>
                                                     상세
                                                 </button>
                                                 {app.status === "PENDING" && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowApproveModal(app)}
-                                                        className="flex items-center gap-1.5 rounded-lg bg-lime-500 px-3 py-2 text-sm font-bold text-brand-navy-900 transition hover:bg-lime-400"
+                                                        className={COMPACT_CARD_PRIMARY_CLASS}
                                                     >
-                                                        <span className="material-symbols-outlined text-lg">check_circle</span>
+                                                        <span className="material-symbols-outlined text-base">check_circle</span>
                                                         승인
                                                     </button>
                                                 )}
@@ -1448,25 +1449,25 @@ export default function ApplyAdminClient({
                                                     type="button"
                                                     onClick={() => handleRecordContact(app, "CONTACTED")}
                                                     disabled={contactBusyId === app.id}
-                                                    className="flex items-center gap-1.5 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-sm font-bold text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200 dark:hover:bg-lime-900/40"
+                                                    className={COMPACT_CARD_CONTACT_CLASS}
                                                     title="보호자 연락 완료 기록"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">done_all</span>
+                                                    <span className="material-symbols-outlined text-base">done_all</span>
                                                     연락 완료
                                                 </button>
                                                 <details className="w-full sm:w-auto">
-                                                    <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime">
-                                                        <span className="material-symbols-outlined text-lg">more_horiz</span>
+                                                    <summary className={`${COMPACT_CARD_ACTION_CLASS} cursor-pointer list-none`}>
+                                                        <span className="material-symbols-outlined text-base">more_horiz</span>
                                                         더보기
                                                     </summary>
-                                                    <div className="mt-2 flex flex-wrap gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-900/60">
+                                                    <div className="mt-1.5 flex flex-wrap gap-1.5 rounded-md border border-gray-100 bg-gray-50 p-1.5 dark:border-gray-700 dark:bg-gray-900/60">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopyText(app.parentPhone, `${app.childName} 보호자 연락처를 복사했습니다.`)}
-                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    className={COMPACT_CARD_ACTION_CLASS}
                                                     title="보호자 연락처 복사"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">content_copy</span>
+                                                    <span className="material-symbols-outlined text-base">content_copy</span>
                                                     번호 복사
                                                 </button>
                                                 <button
@@ -1477,39 +1478,39 @@ export default function ApplyAdminClient({
                                                             `${app.childName} 신청 요약을 복사했습니다.`,
                                                         )
                                                     }
-                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    className={COMPACT_CARD_ACTION_CLASS}
                                                     title="상담용 신청 요약 복사"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">assignment</span>
+                                                    <span className="material-symbols-outlined text-base">assignment</span>
                                                     요약 복사
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRecordContact(app, "NO_ANSWER")}
                                                     disabled={contactBusyId === app.id}
-                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:border-amber-400 dark:hover:bg-amber-950/30 dark:hover:text-amber-200"
+                                                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:border-amber-400 dark:hover:bg-amber-950/30 dark:hover:text-amber-200"
                                                     title="부재 기록"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">phone_disabled</span>
+                                                    <span className="material-symbols-outlined text-base">phone_disabled</span>
                                                     부재
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setContactModal({ app, defaultAction: "FOLLOW_UP" })}
-                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    className={COMPACT_CARD_ACTION_CLASS}
                                                     title="재연락 예약 또는 상담 메모"
                                                 >
-                                                    <span className="material-symbols-outlined text-lg">event_repeat</span>
+                                                    <span className="material-symbols-outlined text-base">event_repeat</span>
                                                     재연락
                                                 </button>
                                                 {app.status !== "APPROVED" && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowEditModal(app)}
-                                                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                        className={COMPACT_CARD_ACTION_CLASS}
                                                         title="수강신청 내용 수정"
                                                     >
-                                                        <span className="material-symbols-outlined text-lg">edit</span>
+                                                        <span className="material-symbols-outlined text-base">edit</span>
                                                         수정
                                                     </button>
                                                 )}
@@ -1517,9 +1518,9 @@ export default function ApplyAdminClient({
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowRejectModal(app)}
-                                                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-200"
+                                                        className={COMPACT_CARD_ACTION_DANGER_CLASS}
                                                     >
-                                                        <span className="material-symbols-outlined text-lg">cancel</span>
+                                                        <span className="material-symbols-outlined text-base">cancel</span>
                                                         반려
                                                     </button>
                                                 )}
@@ -1527,10 +1528,10 @@ export default function ApplyAdminClient({
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowCancelModal(app)}
-                                                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                                        className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                                                         title="수강신청 취소 처리"
                                                     >
-                                                        <span className="material-symbols-outlined text-lg">block</span>
+                                                        <span className="material-symbols-outlined text-base">block</span>
                                                         취소
                                                     </button>
                                                 )}

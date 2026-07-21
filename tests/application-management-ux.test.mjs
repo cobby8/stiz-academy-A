@@ -125,6 +125,11 @@ test("관리자 신청 화면은 핵심 메뉴와 주요 액션만 먼저 보여
   assert.match(applyClient, /<select\s+value=\{filter\}/);
   assert.match(applyClient, /visibleBadges\s*=\s*priorityBadges\.slice\(0,\s*2\)/);
   assert.match(applyClient, /더보기/);
+  assert.match(applyClient, /COMPACT_CARD_ACTION_CLASS/);
+  assert.match(applyClient, /COMPACT_CARD_CHIP_CLASS/);
+  assert.match(applyClient, /className="rounded-lg border border-gray-200 bg-white p-3/);
+  assert.match(applyClient, /className="mt-2 flex flex-wrap gap-1\.5"/);
+  assert.doesNotMatch(applyClient, /mt-3 grid gap-2 sm:grid-cols-2/);
   assert.doesNotMatch(applyClient, /workFlags\.map/);
 });
 

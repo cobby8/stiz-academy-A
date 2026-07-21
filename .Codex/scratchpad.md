@@ -17,6 +17,7 @@
 - 수업 보호: 실제 메모 저장 완료 후 이동, 실패·음성 처리 중 이동 차단
 
 ## 작업 로그
+- 2026-07-21: 체험 신청 문자 실패 시 관리자 화면에서 실패 대상만 재발송하고, 문자 상태를 최신 시도 기준으로 집계하도록 보강했다.
 - 2026-07-21: 체험 신청 문자 알림의 슬롯 매칭, 발송 대기, 발송 장부, 관리자 상태 표시를 보강했다.
 - 2026-07-21: 방학특강 전환 후 생성된 청구서를 관리자 상세에서 바로 열고 링크를 복사할 수 있게 했다.
 - 2026-07-20: 방학특강 승인 항목을 학생·수강·청구서로 전환하는 관리자 액션을 추가했다.
@@ -29,19 +30,18 @@
 - 2026-07-16: 최신 수강생 시트를 다시 가져와 7월 수강/수납 상태를 반영하고, 이월 청구를 미납이 아닌 취소/이월로 닫는 규칙을 추가했다.
 
 ## 현재 작업
-- 작업명: 체험 신청 문자 알림 신뢰성 보강
+- 작업명: 체험 신청 문자 실패 재발송 동선 보강
 - 상태: 구현 및 검증 완료, 커밋 대기
-- 범위: 체험 신청 슬롯키 정규화, SMS 발송 대기/타임아웃, 발송 장부, 관리자 상태 표시
+- 범위: 관리자 재발송 액션, 실패 문자 재발송 버튼, 최신 SMS 상태 집계, 회귀 테스트
 - 기준일: 2026-07-21
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 슬롯키 정규화 | 완료 | 한글 요일 선택을 DB 기준 Mon/Fri 슬롯키로 저장 |
-| SMS 발송 | 완료 | 관리자·코치·학부모 문자 발송을 병렬 대기하고 요청 타임아웃 적용 |
-| 발송 장부 | 완료 | NotificationDelivery에 SMS 성공/실패 기록 |
-| 관리자 표시 | 완료 | 체험 문의 카드에 문자 발송/실패/처리중 상태 배지 표시 |
-| 전체 검증 | 완료 | TypeScript, 신규 회귀 테스트, release:code-check 통과 |
+| 재발송 액션 | 완료 | 실패한 체험 신청 문자 수신자만 다시 발송 |
+| 관리자 UI | 완료 | 실패 배지 옆 재발송 버튼 표시 |
+| 상태 집계 | 완료 | 과거 실패가 아니라 최신 발송 시도 기준으로 배지 계산 |
+| 전체 검증 | 완료 | TypeScript, SMS 회귀 테스트, release:code-check 통과 |
 
 ## 구현 기록
 - `src/app/actions/public.ts`: 체험 신청 슬롯키 정규화와 SMS 발송 결과 장부 연결.
@@ -50,12 +50,17 @@
 - `src/lib/sms.ts`: Solapi 요청 타임아웃 추가.
 - `src/lib/queries.ts`, `src/app/admin/trial/TrialCrmClient.tsx`: 체험 문의 카드에 SMS 발송 상태 표시.
 - `tests/trial-application-sms.test.mjs`: 체험 신청 SMS 회귀 테스트 추가.
+- `src/app/actions/admin.ts`: 실패한 체험 신청 SMS만 재발송하는 관리자 액션 추가.
+- `src/app/admin/trial/TrialCrmClient.tsx`: 실패 문자 재발송 버튼과 성공/오류 피드백 추가.
+- `src/lib/queries.ts`: 체험 문자 상태 배지를 최신 발송 시도 기준으로 집계.
 
 ## 테스트 결과
 - `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 통과
 - `node --test tests\trial-application-sms.test.mjs`: 통과
 - `node --test tests\trial-application-sms.test.mjs tests\staff-signup-entry.test.mjs tests\data-retention-policy.test.mjs`: 통과
 - `cmd /c npm run release:code-check`: 통과
+- `cmd /c node_modules\.bin\tsc.cmd --noEmit`: 통과
+- `node --test tests\trial-application-sms.test.mjs`: 통과
 
 ## PM 체크
 - 2026-07-21: 체험 신청 문자 알림이 실제 시간표 슬롯으로 담당 코치와 매칭되고, 발송 결과가 관리자 화면에서 확인되도록 보강했다.

@@ -9,6 +9,7 @@ import {
     notifyParentsOfStudents,
     notifyAllParents,
     sendParentSms,
+    sendTrackedSms,
 } from "@/lib/notification";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import {
@@ -4806,6 +4807,224 @@ export async function sendPostTrialEnrollGuide(trialLeadId: string): Promise<{ e
     revalidateTrialAdminCaches();
 
     return { enrollLink };
+}
+
+type TrialApplicationSmsResendResult = {
+    requested: number;
+    sent: number;
+    failed: number;
+    targets: string[];
+    message: string;
+};
+
+function normalizeAdminSmsPhone(phone: string | null | undefined) {
+    return (phone ?? "").replace(/\D/g, "");
+}
+
+async function getTrialApplicationCoachSmsRecipients(slotKey: string | null): Promise<Array<{ id: string; name: string; phone: string }>> {
+    if (!slotKey) {
+        return prisma.$queryRawUnsafe<Array<{ id: string; name: string; phone: string }>>(
+            `SELECT id, name, phone
+             FROM "Coach"
+             WHERE phone IS NOT NULL AND phone != ''
+             ORDER BY name ASC`,
+        );
+    }
+
+    return prisma.$queryRawUnsafe<Array<{ id: string; name: string; phone: string }>>(
+        `SELECT DISTINCT c.id, c.name, c.phone
+         FROM "ScheduleSlot" ss
+         JOIN "Coach" c ON c.id = ss."coachId"
+         WHERE ss."slotKey" = $1 AND c.phone IS NOT NULL AND c.phone != ''
+         UNION
+         SELECT DISTINCT c.id, c.name, c.phone
+         FROM "ClassSlotOverride" o
+         JOIN "Coach" c ON c.id = o."coachId"
+         WHERE o."slotKey" = $1 AND c.phone IS NOT NULL AND c.phone != ''
+         UNION
+         SELECT DISTINCT c.id, c.name, c.phone
+         FROM "CustomClassSlot" cs
+         JOIN "Coach" c ON c.id = cs."coachId"
+         WHERE (cs.id = $1 OR ('custom-' || cs.id) = $1)
+           AND c.phone IS NOT NULL AND c.phone != ''
+         ORDER BY name ASC`,
+        slotKey,
+    );
+}
+
+export async function resendTrialApplicationSms(trialLeadId: string): Promise<TrialApplicationSmsResendResult> {
+    await requireAdmin();
+    await ensureTrialLeadTable();
+
+    const leads = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id, "childName", "childGrade", "parentName", "parentPhone", "preferredSlotKey"
+         FROM "TrialLead"
+         WHERE id = $1
+         LIMIT 1`,
+        trialLeadId,
+    );
+    if (leads.length === 0) throw new Error("체험 신청 정보를 찾을 수 없습니다.");
+
+    const lead = leads[0];
+    const childName = lead.childName ?? lead.childname ?? "";
+    const childGrade = lead.childGrade ?? lead.childgrade ?? "학년 미입력";
+    const parentName = lead.parentName ?? lead.parentname ?? "";
+    const parentPhone = lead.parentPhone ?? lead.parentphone ?? "";
+    const preferredSlotKey = lead.preferredSlotKey ?? lead.preferredslotkey ?? null;
+
+    const failedRows = await prisma.$queryRawUnsafe<Array<{ recipientRole: string | null; trigger: string | null }>>(
+        `SELECT latest."recipientRole", latest.trigger
+         FROM (
+             SELECT DISTINCT ON (
+                 nd."recipientPhone",
+                 nd."payloadJSON"->>'recipientRole',
+                 nd."payloadJSON"->>'trigger'
+             )
+                 nd.status,
+                 nd."payloadJSON"->>'recipientRole' AS "recipientRole",
+                 nd."payloadJSON"->>'trigger' AS trigger,
+                 nd."updatedAt"
+             FROM "NotificationDelivery" nd
+             WHERE nd."eventType" = 'TRIAL_APPLICATION'
+               AND nd.channel = 'SMS'
+               AND nd."dedupeKey" LIKE ('sms:TRIAL_APPLICATION:' || $1 || ':%')
+             ORDER BY
+                 nd."recipientPhone",
+                 nd."payloadJSON"->>'recipientRole',
+                 nd."payloadJSON"->>'trigger',
+                 nd."updatedAt" DESC
+         ) latest
+         WHERE latest.status = 'FAILED'`,
+        trialLeadId,
+    );
+
+    if (failedRows.length === 0) {
+        return {
+            requested: 0,
+            sent: 0,
+            failed: 0,
+            targets: [],
+            message: "재발송할 실패 문자가 없습니다.",
+        };
+    }
+
+    const failedTargets = new Set(failedRows.map(row => `${row.recipientRole ?? ""}:${row.trigger ?? ""}`));
+    const retryAllTargets = failedRows.some(row => !row.recipientRole || !row.trigger);
+    const shouldSendParent = retryAllTargets || failedTargets.has("PARENT:TRIAL_CONFIRM_PARENT");
+    const shouldSendAdmin = retryAllTargets || failedTargets.has("ADMIN:TRIAL_NEW_ADMIN");
+    const shouldSendCoach = retryAllTargets || failedTargets.has("COACH:TRIAL_NEW_COACH");
+    const deliveryRunId = `retry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const variables = {
+        childName,
+        childGrade,
+        parentName,
+        parentPhone: normalizeAdminSmsPhone(parentPhone),
+    };
+    const { renderSmsTemplate } = await import("@/lib/smsTemplate");
+
+    const settings = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`,
+    );
+    const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
+    const smsTasks: Array<Promise<{ ok: boolean; to: string; reason?: string }>> = [];
+    const targetLabels = new Set<string>();
+    const staffPhones = new Set<string>();
+
+    if (shouldSendParent) {
+        const normalizedParentPhone = normalizeAdminSmsPhone(parentPhone);
+        if (!normalizedParentPhone) {
+            throw new Error("학부모 연락처가 없어 접수 확인 문자를 재발송할 수 없습니다.");
+        }
+        const renderedParentMessage = await renderSmsTemplate("TRIAL_CONFIRM_PARENT", {
+            childName,
+            parentName,
+            academyPhone,
+        });
+        const parentMessage = renderedParentMessage
+            || `[STIZ] ${childName} 체험수업 신청이 접수되었습니다.\n일정 확정 후 다시 안내드리겠습니다.\n문의: ${academyPhone}`;
+        targetLabels.add("학부모");
+        smsTasks.push(sendTrackedSms({
+            eventType: "TRIAL_APPLICATION",
+            eventId: trialLeadId,
+            deliveryRunId,
+            recipientPhone: normalizedParentPhone,
+            recipientRole: "PARENT",
+            trigger: "TRIAL_CONFIRM_PARENT",
+            body: parentMessage,
+        }));
+    }
+
+    if (shouldSendAdmin) {
+        const adminMessage = await renderSmsTemplate("TRIAL_NEW_ADMIN", variables)
+            || `[STIZ] 새 체험수업 신청\n${childName} (${childGrade}) - ${parentName}`;
+        const admins = await prisma.$queryRawUnsafe<Array<{ id: string; phone: string | null }>>(
+            `SELECT id, phone
+             FROM "User"
+             WHERE role IN ('ADMIN', 'VICE_ADMIN')
+               AND phone IS NOT NULL
+               AND phone != ''`,
+        );
+        for (const admin of admins) {
+            const phone = normalizeAdminSmsPhone(admin.phone);
+            if (!phone || staffPhones.has(phone)) continue;
+            staffPhones.add(phone);
+            targetLabels.add("관리자");
+            smsTasks.push(sendTrackedSms({
+                eventType: "TRIAL_APPLICATION",
+                eventId: trialLeadId,
+                deliveryRunId,
+                recipientUserId: admin.id,
+                recipientPhone: phone,
+                recipientRole: "ADMIN",
+                trigger: "TRIAL_NEW_ADMIN",
+                body: adminMessage,
+            }));
+        }
+    }
+
+    if (shouldSendCoach) {
+        const coachMessage = await renderSmsTemplate("TRIAL_NEW_COACH", variables)
+            || `[STIZ] 새 체험수업 신청\n${childName} (${childGrade})`;
+        const coaches = await getTrialApplicationCoachSmsRecipients(preferredSlotKey);
+        for (const coach of coaches) {
+            const phone = normalizeAdminSmsPhone(coach.phone);
+            if (!phone || staffPhones.has(phone)) continue;
+            staffPhones.add(phone);
+            targetLabels.add("담당 선생님");
+            smsTasks.push(sendTrackedSms({
+                eventType: "TRIAL_APPLICATION",
+                eventId: trialLeadId,
+                deliveryRunId,
+                recipientPhone: phone,
+                recipientRole: "COACH",
+                trigger: "TRIAL_NEW_COACH",
+                body: coachMessage,
+            }));
+        }
+    }
+
+    if (smsTasks.length === 0) {
+        throw new Error("재발송할 연락처가 없습니다. 관리자/담당 선생님/학부모 전화번호를 확인해주세요.");
+    }
+
+    const results = await Promise.allSettled(smsTasks);
+    const sent = results.filter(result => result.status === "fulfilled" && result.value.ok).length;
+    const failed = results.length - sent;
+    const targets = Array.from(targetLabels);
+
+    revalidatePath("/admin/trial");
+    revalidatePath("/admin/apply");
+    revalidateTrialAdminCaches();
+
+    return {
+        requested: results.length,
+        sent,
+        failed,
+        targets,
+        message: failed > 0
+            ? `${targets.join(", ")} 문자 재발송 결과: ${sent}건 성공, ${failed}건 실패`
+            : `${targets.join(", ")} 문자 ${sent}건을 다시 보냈습니다.`,
+    };
 }
 
 export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentTo: string[] }> {

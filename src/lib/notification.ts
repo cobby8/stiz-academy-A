@@ -19,6 +19,7 @@ type SmsDeliveryOptions = {
     trigger?: string;
     recipientRole: SmsAudience;
     eventId?: string;
+    deliveryRunId?: string;
     recipientUserId?: string | null;
 };
 
@@ -28,7 +29,9 @@ function normalizeSmsPhone(phone: string) {
 
 function smsDedupeKey(input: SmsDeliveryOptions) {
     const recipientNo = normalizeSmsPhone(input.recipientPhone);
-    const scope = input.eventId || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const scope = input.deliveryRunId
+        ? `${input.eventId || "manual"}:${input.deliveryRunId}`
+        : input.eventId || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     return [
         "sms",
         input.eventType,
@@ -61,6 +64,7 @@ async function claimSmsDelivery(input: SmsDeliveryOptions): Promise<string | nul
                 trigger: input.trigger ?? null,
                 recipientRole: input.recipientRole,
                 eventId: input.eventId ?? null,
+                deliveryRunId: input.deliveryRunId ?? null,
                 bodyLength: input.body.length,
             }),
         );
@@ -101,6 +105,12 @@ async function sendSmsForNotification(input: SmsDeliveryOptions): Promise<SmsSen
     const result = await sendSmsDetailed(recipientNo, input.body);
     await finishSmsDelivery(deliveryId, result);
     return result;
+}
+
+export type TrackedSmsInput = SmsDeliveryOptions;
+
+export async function sendTrackedSms(input: TrackedSmsInput): Promise<SmsSendResult> {
+    return sendSmsForNotification(input);
 }
 
 // ── 슬롯 → 담당 코치 전화번호 조회 ─────────────────────────────────────────
@@ -198,6 +208,7 @@ export async function notifyAdmins(
         variables?: Record<string, string>; // 템플릿 변수
         slotKeys?: string[];        // 해당 슬롯 키 — 있으면 담당 코치에게만 SMS, 없으면 전체 코치
         eventId?: string;           // 신청/청구 등 원본 ID — SMS 중복 발송 방지와 이력 조회용
+        deliveryRunId?: string;     // 재발송 시 같은 eventId 아래 새 시도 기록을 남김
     },
 ) {
     try {
@@ -232,6 +243,7 @@ export async function notifyAdmins(
                 smsTasks.push(sendSmsForNotification({
                     eventType: type,
                     eventId: smsOptions?.eventId,
+                    deliveryRunId: smsOptions?.deliveryRunId,
                     recipientUserId: admin.id,
                     recipientPhone: admin.phone,
                     recipientRole: "ADMIN",
@@ -268,6 +280,7 @@ export async function notifyAdmins(
                 smsTasks.push(sendSmsForNotification({
                     eventType: type,
                     eventId: smsOptions?.eventId,
+                    deliveryRunId: smsOptions?.deliveryRunId,
                     recipientPhone: phone,
                     recipientRole: "COACH",
                     trigger: smsOptions?.coachTrigger,
@@ -290,7 +303,7 @@ export async function sendParentSms(
     parentPhone: string,
     trigger: string,
     variables: Record<string, string>,
-    options?: { eventType?: string; eventId?: string },
+    options?: { eventType?: string; eventId?: string; deliveryRunId?: string },
 ): Promise<void> {
     try {
         const msg = await renderSmsTemplate(trigger, variables);
@@ -298,6 +311,7 @@ export async function sendParentSms(
             await sendSmsForNotification({
                 eventType: options?.eventType || trigger,
                 eventId: options?.eventId,
+                deliveryRunId: options?.deliveryRunId,
                 recipientPhone: parentPhone,
                 recipientRole: "PARENT",
                 trigger,

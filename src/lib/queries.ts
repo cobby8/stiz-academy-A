@@ -2384,15 +2384,30 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
                    LEFT JOIN LATERAL (
                        SELECT
                            COUNT(*)::int AS sms_total,
-                           COUNT(*) FILTER (WHERE nd.status = 'SENT')::int AS sms_sent,
-                           COUNT(*) FILTER (WHERE nd.status = 'FAILED')::int AS sms_failed,
-                           COUNT(*) FILTER (WHERE nd.status = 'PENDING')::int AS sms_pending,
-                           MAX(nd."updatedAt") AS sms_latest_at,
-                           MAX(nd."errorCode") FILTER (WHERE nd.status = 'FAILED') AS sms_error
-                       FROM "NotificationDelivery" nd
-                       WHERE nd."eventType" = 'TRIAL_APPLICATION'
-                         AND nd.channel = 'SMS'
-                         AND nd."dedupeKey" LIKE ('sms:TRIAL_APPLICATION:' || tl.id || ':%')
+                           COUNT(*) FILTER (WHERE latest.status = 'SENT')::int AS sms_sent,
+                           COUNT(*) FILTER (WHERE latest.status = 'FAILED')::int AS sms_failed,
+                           COUNT(*) FILTER (WHERE latest.status = 'PENDING')::int AS sms_pending,
+                           MAX(latest."updatedAt") AS sms_latest_at,
+                           MAX(latest."errorCode") FILTER (WHERE latest.status = 'FAILED') AS sms_error
+                       FROM (
+                           SELECT DISTINCT ON (
+                               nd."recipientPhone",
+                               nd."payloadJSON"->>'recipientRole',
+                               nd."payloadJSON"->>'trigger'
+                           )
+                               nd.status,
+                               nd."updatedAt",
+                               nd."errorCode"
+                           FROM "NotificationDelivery" nd
+                           WHERE nd."eventType" = 'TRIAL_APPLICATION'
+                             AND nd.channel = 'SMS'
+                             AND nd."dedupeKey" LIKE ('sms:TRIAL_APPLICATION:' || tl.id || ':%')
+                           ORDER BY
+                               nd."recipientPhone",
+                               nd."payloadJSON"->>'recipientRole',
+                               nd."payloadJSON"->>'trigger',
+                               nd."updatedAt" DESC
+                       ) latest
                    ) sms_delivery ON true
                    WHERE tl.status = $1
                    ORDER BY tl."createdAt" DESC${limitClause}`,
@@ -2434,15 +2449,30 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
                    LEFT JOIN LATERAL (
                        SELECT
                            COUNT(*)::int AS sms_total,
-                           COUNT(*) FILTER (WHERE nd.status = 'SENT')::int AS sms_sent,
-                           COUNT(*) FILTER (WHERE nd.status = 'FAILED')::int AS sms_failed,
-                           COUNT(*) FILTER (WHERE nd.status = 'PENDING')::int AS sms_pending,
-                           MAX(nd."updatedAt") AS sms_latest_at,
-                           MAX(nd."errorCode") FILTER (WHERE nd.status = 'FAILED') AS sms_error
-                       FROM "NotificationDelivery" nd
-                       WHERE nd."eventType" = 'TRIAL_APPLICATION'
-                         AND nd.channel = 'SMS'
-                         AND nd."dedupeKey" LIKE ('sms:TRIAL_APPLICATION:' || tl.id || ':%')
+                           COUNT(*) FILTER (WHERE latest.status = 'SENT')::int AS sms_sent,
+                           COUNT(*) FILTER (WHERE latest.status = 'FAILED')::int AS sms_failed,
+                           COUNT(*) FILTER (WHERE latest.status = 'PENDING')::int AS sms_pending,
+                           MAX(latest."updatedAt") AS sms_latest_at,
+                           MAX(latest."errorCode") FILTER (WHERE latest.status = 'FAILED') AS sms_error
+                       FROM (
+                           SELECT DISTINCT ON (
+                               nd."recipientPhone",
+                               nd."payloadJSON"->>'recipientRole',
+                               nd."payloadJSON"->>'trigger'
+                           )
+                               nd.status,
+                               nd."updatedAt",
+                               nd."errorCode"
+                           FROM "NotificationDelivery" nd
+                           WHERE nd."eventType" = 'TRIAL_APPLICATION'
+                             AND nd.channel = 'SMS'
+                             AND nd."dedupeKey" LIKE ('sms:TRIAL_APPLICATION:' || tl.id || ':%')
+                           ORDER BY
+                               nd."recipientPhone",
+                               nd."payloadJSON"->>'recipientRole',
+                               nd."payloadJSON"->>'trigger',
+                               nd."updatedAt" DESC
+                       ) latest
                    ) sms_delivery ON true
                    ORDER BY tl."createdAt" DESC${limitClause}`
               );

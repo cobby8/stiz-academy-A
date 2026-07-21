@@ -7,6 +7,7 @@ import {
     deleteTrialLead,
     sendPostTrialEnrollGuide,
     sendTrialCoachNotice,
+    resendTrialApplicationSms,
     recordApplicationContact,
 } from "@/app/actions/admin";
 
@@ -650,6 +651,22 @@ export default function TrialCrmClient({
         }
     }
 
+    async function handleResendApplicationSms(lead: TrialLead) {
+        if (busy) return;
+        if (!confirm(`"${lead.childName}" 체험 신청 문자 중 실패한 문자만 다시 보낼까요?`)) return;
+
+        setBusy(true);
+        try {
+            const result = await resendTrialApplicationSms(lead.id);
+            await loadTrialData();
+            showFeedback("success", result.message);
+        } catch {
+            showFeedback("error", "문자 재발송 중 문제가 생겼습니다. 연락처와 문자 설정을 확인해주세요.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
     // 날짜 포맷 헬퍼
     function formatDate(dateStr: string | null) {
         if (!dateStr) return "-";
@@ -951,6 +968,18 @@ export default function TrialCrmClient({
                                                         </span>
                                                     );
                                                 })()}
+                                                {lead.smsDeliveryFailed > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleResendApplicationSms(lead)}
+                                                        disabled={busy}
+                                                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-bold text-red-700 ring-1 ring-red-200 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-200 dark:ring-red-900/60 dark:hover:bg-red-950/40"
+                                                        title="실패한 문자만 다시 발송"
+                                                    >
+                                                        <span className="material-symbols-outlined text-xs">restart_alt</span>
+                                                        실패 문자 재발송
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                         {/* 신청 상세 정보 — 학년, 학교, 체험 희망 일정 */}

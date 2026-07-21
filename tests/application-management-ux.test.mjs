@@ -55,6 +55,9 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
   assert.match(trialClient, /function formatClassLabel/);
   assert.match(trialClient, /function formatConfirmedSchedule/);
   assert.match(trialClient, /formatCompactDate\(lead\.scheduledDate\).*formatClassLabel\(matchedClass\)/s);
+  assert.match(trialClient, /function formatTrialListScheduleShort/);
+  assert.match(trialClient, /const confirmedClass = lead\.scheduledClassId \? classesById\?\.get\(lead\.scheduledClassId\) : null/);
+  assert.match(trialClient, /const scheduleLabel = formatTrialListScheduleShort\(lead, classesById, classesBySlotKey\)/);
   assert.match(trialClient, /function isLikelyDefaultScheduleTime/);
   assert.match(trialClient, /시간 확인 필요/);
   assert.match(trialClient, /const DAY_CODE_BY_LABEL/);

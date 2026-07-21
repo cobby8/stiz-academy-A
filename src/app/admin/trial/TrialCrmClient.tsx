@@ -415,6 +415,16 @@ function formatConfirmedScheduleShort(
     return classLabel;
 }
 
+function formatTrialListScheduleShort(
+    lead: TrialLead,
+    classesById?: Map<string, ClassInfo>,
+    classesBySlotKey?: Map<string, ClassInfo>,
+) {
+    const confirmedClass = lead.scheduledClassId ? classesById?.get(lead.scheduledClassId) : null;
+    if (confirmedClass) return formatClassShortLabel(confirmedClass);
+    return formatPreferredScheduleShort(lead, classesBySlotKey) || "미입력";
+}
+
 function formatPreferredSchedule(lead: TrialLead, classesBySlotKey?: Map<string, ClassInfo>) {
     const matchedClass = getPreferredClass(lead, classesBySlotKey);
     if (matchedClass) return formatClassLabel(matchedClass);
@@ -962,7 +972,7 @@ export default function TrialCrmClient({
                             const rowTitle = [lead.childName, lead.childSchool, lead.childGrade || lead.childAge, lead.parentName || "보호자 미입력", lead.parentPhone].filter(Boolean).join(" · ");
                             const createdDateLabel = getScheduleValue("신청일");
                             const trialDateLabel = getScheduleValue("체험일");
-                            const scheduleLabel = getScheduleValue("수업교시");
+                            const scheduleLabel = formatTrialListScheduleShort(lead, classesById, classesBySlotKey);
                             const schoolLabel = lead.childSchool || "-";
                             const gradeLabel = lead.childGrade || lead.childAge || "-";
                             const isActionOpen = openQuickActionId === lead.id;

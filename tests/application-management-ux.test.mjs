@@ -72,8 +72,14 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
 
 test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 보여준다", () => {
   assert.match(trialClient, /function renderTrialList\(\)/);
-  assert.match(trialClient, /<table className="w-full min-w-\[760px\] table-fixed[\s\S]*lg:min-w-0/);
+  assert.match(trialClient, /<table className="w-full min-w-\[760px\] table-fixed[\s\S]*text-center[\s\S]*lg:min-w-0/);
   assert.match(trialClient, /상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*상태변경[\s\S]*액션/);
+  assert.match(trialClient, /function formatMonthDayDate/);
+  assert.match(trialClient, /const createdDateMobileLabel = formatMonthDayDate\(lead\.createdAt\)/);
+  assert.match(trialClient, /const trialDateMobileLabel = lead\.trialDate \? formatMonthDayDate\(lead\.trialDate\) : trialDateLabel/);
+  assert.match(trialClient, /sm:hidden[\s\S]*\{createdDateMobileLabel\}/);
+  assert.match(trialClient, /sm:hidden[\s\S]*\{trialDateMobileLabel\}/);
+  assert.match(trialClient, /hidden truncate sm:inline/);
   assert.match(trialClient, /setShowDetailModal\(lead\)/);
   assert.match(trialClient, /setOpenQuickActionId/);
   assert.match(trialClient, /LIST_ACTION_TRIGGER_CLASS/);

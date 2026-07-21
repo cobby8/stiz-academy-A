@@ -231,6 +231,13 @@ function formatCompactDate(dateStr: string | null) {
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function formatMonthDayDate(dateStr: string | null) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "-";
+    return `${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function formatCompactDateTime(dateStr: string | null) {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
@@ -912,12 +919,12 @@ export default function TrialCrmClient({
 
     function renderStatusChangeCell(lead: TrialLead) {
         return (
-            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="flex min-w-0 items-center justify-center gap-1.5 overflow-hidden" onClick={(event) => event.stopPropagation()}>
                 <select
                     value={lead.status}
                     onChange={(event) => handleStatusChange(lead, event.target.value)}
                     disabled={busy}
-                    className="h-8 w-[98px] shrink-0 rounded-lg border border-gray-200 bg-white px-1.5 text-xs font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+                    className="h-8 w-[98px] shrink-0 rounded-lg border border-gray-200 bg-white px-1.5 text-center text-xs font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
                 >
                     {STATUS_ORDER.map((s) => (
                         <option key={s} value={s}>
@@ -937,7 +944,7 @@ export default function TrialCrmClient({
     function renderTrialList() {
         return (
             <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-[13px] lg:min-w-0">
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-center text-[13px] lg:min-w-0">
                     <colgroup>
                         <col className="w-[12%]" />
                         <col className="w-[9%]" />
@@ -959,7 +966,7 @@ export default function TrialCrmClient({
                             <th className="px-2 py-2">학교</th>
                             <th className="px-2 py-2">학년</th>
                             <th className="px-2 py-2">상태변경</th>
-                            <th className="px-2 py-2 text-right">액션</th>
+                            <th className="px-2 py-2">액션</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -972,6 +979,8 @@ export default function TrialCrmClient({
                             const rowTitle = [lead.childName, lead.childSchool, lead.childGrade || lead.childAge, lead.parentName || "보호자 미입력", lead.parentPhone].filter(Boolean).join(" · ");
                             const createdDateLabel = getScheduleValue("신청일");
                             const trialDateLabel = getScheduleValue("체험일");
+                            const createdDateMobileLabel = formatMonthDayDate(lead.createdAt);
+                            const trialDateMobileLabel = lead.trialDate ? formatMonthDayDate(lead.trialDate) : trialDateLabel;
                             const scheduleLabel = formatTrialListScheduleShort(lead, classesById, classesBySlotKey);
                             const schoolLabel = lead.childSchool || "-";
                             const gradeLabel = lead.childGrade || lead.childAge || "-";
@@ -993,46 +1002,52 @@ export default function TrialCrmClient({
                                     }}
                                     className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
                                 >
-                                    <td className="px-2 py-1.5 align-middle">
-                                        <span className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold ${cfg.color}`} title={cfg.label}>
-                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                            <span className="truncate">{cfg.label}</span>
+                                    <td className="px-2 py-1.5 text-center align-middle">
+                                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold sm:h-auto sm:w-auto sm:max-w-full sm:gap-1 sm:px-2 sm:py-1 ${cfg.color}`} title={cfg.label}>
+                                            <span className="material-symbols-outlined text-lg sm:text-sm">{cfg.icon}</span>
+                                            <span className="hidden truncate sm:inline">{cfg.label}</span>
                                         </span>
                                     </td>
-                                    <td className="px-2 py-1.5 align-middle">
-                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={createdDateLabel}>
+                                    <td className="px-2 py-1.5 text-center align-middle">
+                                        <span className="hidden truncate font-bold text-gray-800 sm:block dark:text-gray-100" title={createdDateLabel}>
                                             {createdDateLabel}
                                         </span>
-                                    </td>
-                                    <td className="px-2 py-1.5 align-middle">
-                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={trialDateLabel}>
-                                            {trialDateLabel}
+                                        <span className="block truncate font-bold text-gray-800 sm:hidden dark:text-gray-100" title={createdDateLabel}>
+                                            {createdDateMobileLabel}
                                         </span>
                                     </td>
-                                    <td className="px-2 py-1.5 align-middle">
+                                    <td className="px-2 py-1.5 text-center align-middle">
+                                        <span className="hidden truncate font-bold text-gray-800 sm:block dark:text-gray-100" title={trialDateLabel}>
+                                            {trialDateLabel}
+                                        </span>
+                                        <span className="block truncate font-bold text-gray-800 sm:hidden dark:text-gray-100" title={trialDateLabel}>
+                                            {trialDateMobileLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center align-middle">
                                         <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={scheduleLabel}>
                                             {scheduleLabel}
                                         </span>
                                     </td>
-                                    <td className="px-2 py-1.5 align-middle">
+                                    <td className="px-2 py-1.5 text-center align-middle">
                                         <span className="block truncate font-black text-gray-900 dark:text-white" title={rowTitle}>
                                             {lead.childName}
                                         </span>
                                     </td>
-                                    <td className="px-2 py-1.5 align-middle">
+                                    <td className="px-2 py-1.5 text-center align-middle">
                                         <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={schoolLabel}>
                                             {schoolLabel}
                                         </span>
                                     </td>
-                                    <td className="px-2 py-1.5 align-middle">
+                                    <td className="px-2 py-1.5 text-center align-middle">
                                         <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={gradeLabel}>
                                             {gradeLabel}
                                         </span>
                                     </td>
-                                    <td className="px-2 py-1.5 align-middle">
+                                    <td className="px-2 py-1.5 text-center align-middle">
                                         {renderStatusChangeCell(lead)}
                                     </td>
-                                    <td className="px-2 py-1.5 text-right align-middle" onClick={(event) => event.stopPropagation()}>
+                                    <td className="px-2 py-1.5 text-center align-middle" onClick={(event) => event.stopPropagation()}>
                                         <button
                                             type="button"
                                             onClick={(event) => toggleQuickActionMenu(event, lead.id)}

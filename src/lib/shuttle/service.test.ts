@@ -43,6 +43,8 @@ test("관리자는 지도 핀으로 셔틀 신청 위치를 직접 확정한다"
   assert.match(service, /parseLocationKind/);
   assert.match(service, /pickupConfirmedAt: new Date\(\)/);
   assert.match(service, /dropoffConfirmedAt: new Date\(\)/);
+  assert.match(service, /SHUTTLE_LOCATION_CONSENT_VERSION/);
+  assert.match(service, /locationConsentVersion: SHUTTLE_LOCATION_CONSENT_VERSION/);
   assert.match(service, /SHUTTLE_LOCATION_CONFIRMED/);
   assert.match(route, /updateShuttleRequestLocation\(actor, id, data\)/);
 });
@@ -71,6 +73,12 @@ test("동시 수정 충돌은 재시도 가능한 409 응답으로 변환한다"
   assert.match(route, /P2034/);
   assert.match(route, /P2002/);
   assert.match(route, /SHUTTLE_CONCURRENT_UPDATE/);
+});
+
+test("지도 위치 저장 제약 오류는 관리자에게 원인을 알 수 있는 응답으로 변환한다", () => {
+  assert.match(route, /P2004/);
+  assert.match(route, /map_metadata_check/);
+  assert.match(route, /SHUTTLE_LOCATION_METADATA_REQUIRED/);
 });
 
 test("정류장 순서를 바꾸는 중에도 DB의 양수 제약을 지킨다", () => {

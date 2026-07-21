@@ -24,6 +24,15 @@ function errorResponse(error: unknown) {
   if (error instanceof ShuttleServiceError) {
     return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
   }
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2004") {
+    const detail = String(error.meta?.database_error ?? error.message);
+    if (detail.includes("SpecialProgramShuttleRequest") && detail.includes("map_metadata_check")) {
+      return NextResponse.json(
+        { error: "셔틀 위치 저장 조건이 맞지 않습니다. 위치 좌표, 주소, 동의 버전을 다시 확인해 주세요.", code: "SHUTTLE_LOCATION_METADATA_REQUIRED" },
+        { status: 400 },
+      );
+    }
+  }
   if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2034" || error.code === "P2002")) {
     return NextResponse.json(
       { error: "다른 관리자가 먼저 변경했습니다. 최신 내용을 불러온 뒤 다시 시도해 주세요.", code: "SHUTTLE_CONCURRENT_UPDATE" },

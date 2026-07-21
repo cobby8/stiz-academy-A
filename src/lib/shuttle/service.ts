@@ -1,5 +1,6 @@
 import { Prisma, ShuttleRouteDirection, ShuttleRoutePlanStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { chooseActiveShuttleAssignment } from "./assignment";
 import { optimizeWaypointOrderWithTmap } from "./tmap";
@@ -518,6 +519,7 @@ export async function updateShuttleRequestLocation(actor: Actor, shuttleRequestI
           pickupLocationSource: source,
           pickupAccuracyMeters: accuracyMeters,
           pickupConfirmedAt: new Date(),
+          locationConsentVersion: SHUTTLE_LOCATION_CONSENT_VERSION,
         }
       : {
           dropoffLocation: name ?? address ?? roadAddress ?? null,
@@ -529,6 +531,7 @@ export async function updateShuttleRequestLocation(actor: Actor, shuttleRequestI
           dropoffLocationSource: source,
           dropoffAccuracyMeters: accuracyMeters,
           dropoffConfirmedAt: new Date(),
+          locationConsentVersion: SHUTTLE_LOCATION_CONSENT_VERSION,
         };
     const request = await tx.specialProgramShuttleRequest.update({
       where: { id: shuttleRequestId },

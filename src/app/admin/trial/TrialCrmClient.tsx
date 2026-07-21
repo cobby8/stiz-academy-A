@@ -1142,30 +1142,6 @@ export default function TrialCrmClient({
 
     return (
         <div className="space-y-6">
-            {/* 페이지 제목 */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">handshake</span>
-                        체험 문의 관리
-                        {/* 새 신청 건수 배지 — NEW 상태가 있을 때만 표시 */}
-                        {stats.NEW > 0 && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
-                                새 신청 {stats.NEW}건
-                            </span>
-                        )}
-                    </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험 신청, 연락, 수업 일정, 정규 등록까지 한 번에 확인합니다</p>
-                </div>
-                <button
-                    onClick={() => setShowAddModal(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors font-medium"
-                >
-                    <span className="material-symbols-outlined text-xl">person_add</span>
-                    체험 신청 등록
-                </button>
-            </div>
-
             {feedback && (
                 <div
                     className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
@@ -1255,6 +1231,14 @@ export default function TrialCrmClient({
                             ))}
                         </select>
                     </label>
+                    <button
+                        type="button"
+                        onClick={() => setShowAddModal(true)}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand-orange-500 px-3 text-sm font-black text-white transition-colors hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
+                    >
+                        <span className="material-symbols-outlined text-lg">person_add</span>
+                        체험 신청 등록
+                    </button>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                     {TRIAL_WORK_FILTERS.map((item) => (

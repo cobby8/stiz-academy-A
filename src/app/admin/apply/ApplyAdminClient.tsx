@@ -211,7 +211,6 @@ type SourceStatsPayload = {
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
 type ApplicationWorkFilter = "ALL" | "NEEDS_ACTION" | "CLASS_ASSIGNMENT" | "SHUTTLE" | "TRIAL_LINKED" | "TIME_CHECK";
-type PriorityBadge = { icon: string; label: string; className: string };
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { app: EnrollApplication; defaultAction: ContactActionType } | null;
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
@@ -243,7 +242,6 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 const APPLICATION_PAGE_SIZE = 50;
-const LONG_WAIT_HOURS = 24;
 const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
 const LIST_ACTION_MENU_CLASS = "absolute right-2 top-9 z-50 w-44 rounded-xl border border-gray-200 bg-white p-1.5 text-left shadow-xl dark:border-gray-700 dark:bg-gray-950";
 const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800";
@@ -325,89 +323,8 @@ function phoneHref(phone: string) {
     return digits ? `tel:${digits}` : undefined;
 }
 
-function normalizePhone(phone: string | null | undefined) {
-    return (phone ?? "").replace(/\D/g, "");
-}
-
 function normalizeSearchValue(value: string | null | undefined) {
     return (value ?? "").replace(/\s+/g, "").replace(/-/g, "").toLowerCase();
-}
-
-function hoursSince(dateStr: string | null) {
-    if (!dateStr) return 0;
-    const timestamp = new Date(dateStr).getTime();
-    if (!Number.isFinite(timestamp)) return 0;
-    return Math.max(0, Math.floor((Date.now() - timestamp) / 36e5));
-}
-
-function formatWaitLabel(dateStr: string | null) {
-    const hours = hoursSince(dateStr);
-    if (hours >= 48) return `${Math.floor(hours / 24)}일 대기`;
-    if (hours >= 24) return "24시간 이상 대기";
-    if (hours >= 1) return `${hours}시간 대기`;
-    return "방금 접수";
-}
-
-function isFollowUpDueToday(dateStr: string | null) {
-    if (!dateStr) return false;
-    const timestamp = new Date(dateStr).getTime();
-    if (!Number.isFinite(timestamp)) return false;
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    return timestamp <= todayEnd.getTime();
-}
-
-function getApplicationPriorityBadges(
-    app: EnrollApplication,
-    preferredSlotLabel: string | null,
-    contactCount: number,
-) {
-    const badges: PriorityBadge[] = [];
-
-    if (app.status === "PENDING" && hoursSince(app.createdAt) >= LONG_WAIT_HOURS) {
-        badges.push({
-            icon: "timer",
-            label: formatWaitLabel(app.createdAt),
-            className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
-        });
-    }
-    if (app.status === "PENDING" && contactCount > 1) {
-        badges.push({
-            icon: "content_copy",
-            label: `중복 연락처 ${contactCount}건`,
-            className: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
-        });
-    }
-    if (app.status === "PENDING" && !app.assignedClassId) {
-        badges.push({
-            icon: "edit_calendar",
-            label: "반 배정 필요",
-            className: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200",
-        });
-    }
-    if (app.status === "PENDING" && app.shuttleNeeded) {
-        badges.push({
-            icon: "directions_bus",
-            label: "셔틀 먼저 확인",
-            className: "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200",
-        });
-    }
-    if (app.status === "PENDING" && !preferredSlotLabel) {
-        badges.push({
-            icon: "schedule",
-            label: "희망시간 확인",
-            className: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200",
-        });
-    }
-    if (app.status === "PENDING" && isFollowUpDueToday(app.openFollowUpAt)) {
-        badges.push({
-            icon: "phone_callback",
-            label: "오늘 재연락",
-            className: "bg-lime-100 text-lime-800 dark:bg-lime-950/50 dark:text-lime-200",
-        });
-    }
-
-    return badges.slice(0, 4);
 }
 
 function matchesApplicationWorkFilter(
@@ -445,71 +362,6 @@ function applicationMatchesSearch(app: EnrollApplication, preferredSlotLabel: st
     ].map(normalizeSearchValue).join(" ");
 
     return searchable.includes(normalizedQuery);
-}
-
-function buildOpenContactCounts(applications: EnrollApplication[], trialLeads: TrialLead[]) {
-    const counts = new Map<string, number>();
-    const add = (phone: string | null | undefined) => {
-        const normalized = normalizePhone(phone);
-        if (normalized.length < 8) return;
-        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
-    };
-
-    applications.forEach((app) => {
-        if (app.status === "PENDING") add(app.parentPhone);
-    });
-    trialLeads.forEach((lead) => {
-        if (lead.status !== "CONVERTED" && lead.status !== "LOST") add(lead.parentPhone);
-    });
-
-    return counts;
-}
-
-function getContactCount(phone: string | null | undefined, counts: Map<string, number>) {
-    const normalized = normalizePhone(phone);
-    return normalized ? counts.get(normalized) ?? 0 : 0;
-}
-
-function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
-    const badges: PriorityBadge[] = [];
-
-    if ((lead.status === "NEW" || lead.status === "CONTACTED") && hoursSince(lead.createdAt) >= LONG_WAIT_HOURS) {
-        badges.push({
-            icon: "timer",
-            label: formatWaitLabel(lead.createdAt),
-            className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
-        });
-    }
-    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && contactCount > 1) {
-        badges.push({
-            icon: "content_copy",
-            label: `중복 연락처 ${contactCount}건`,
-            className: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
-        });
-    }
-    if (lead.status === "ATTENDED" && !lead.enrollGuideSentAt) {
-        badges.push({
-            icon: "sms",
-            label: "상담 후 안내 필요",
-            className: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200",
-        });
-    }
-    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && !lead.coachNoticeSentAt) {
-        badges.push({
-            icon: "school",
-            label: "쌤 알림 필요",
-            className: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200",
-        });
-    }
-    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && isFollowUpDueToday(lead.openFollowUpAt)) {
-        badges.push({
-            icon: "phone_callback",
-            label: "오늘 재연락",
-            className: "bg-lime-100 text-lime-800 dark:bg-lime-950/50 dark:text-lime-200",
-        });
-    }
-
-    return badges.slice(0, 4);
 }
 
 function ApplyLoadingFallback() {
@@ -673,11 +525,6 @@ export default function ApplyAdminClient({
         });
         return map;
     }, [classes]);
-    const trialLeadsForSummary = useMemo(() => initialTrialLeads ?? [], [initialTrialLeads]);
-    const openContactCounts = useMemo(
-        () => buildOpenContactCounts(applications, trialLeadsForSummary),
-        [applications, trialLeadsForSummary],
-    );
     const showFeedback = useCallback((type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
@@ -757,30 +604,11 @@ export default function ApplyAdminClient({
 
         return counts;
     }, [applications, classesBySlotKey]);
-    const priorityAppCount = useMemo(() => {
-        if (!applyLoaded) return stats.PENDING;
-
-        return applications.filter((app) => {
-            const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
-            const contactCount = getContactCount(app.parentPhone, openContactCounts);
-            return getApplicationPriorityBadges(app, preferredSlotLabel, contactCount).length > 0;
-        }).length;
-    }, [applications, applyLoaded, classesBySlotKey, openContactCounts, stats.PENDING]);
-    const priorityTrialCount = useMemo(() => {
-        return trialLeadsForSummary.filter((lead) => {
-            const contactCount = getContactCount(lead.parentPhone, openContactCounts);
-            return getTrialPriorityBadges(lead, contactCount).length > 0;
-        }).length;
-    }, [openContactCounts, trialLeadsForSummary]);
 
     useEffect(() => {
         setVisibleLimit(APPLICATION_PAGE_SIZE);
     }, [filter, searchQuery, workFilter]);
     const hasApplyModal = Boolean(showApproveModal || showRejectModal || showDetailModal || showEditModal || showCancelModal);
-    const trialNewCount = initialTrialStats?.NEW ?? 0;
-    const trialScheduledCount = initialTrialStats?.SCHEDULED ?? 0;
-    const actionTotal = trialNewCount + stats.PENDING;
-    const firstLookCount = priorityAppCount + priorityTrialCount;
 
     // 날짜 포맷
     function formatDate(dateStr: string | null) {
@@ -1080,77 +908,15 @@ export default function ApplyAdminClient({
 
     return (
         <div className="space-y-6">
-            {/* 페이지 헤더 + 탭 전환 */}
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">how_to_reg</span>
-                        체험/수강신청 관리
-                        {actionTotal > 0 && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
-                                확인 필요 {actionTotal}건
-                            </span>
-                        )}
-                    </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험 문의부터 정규 등록까지 한 화면에서 확인하고 처리합니다</p>
-                </div>
-                <a
-                    href="/apply"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 text-sm text-brand-navy-900 dark:text-white border border-gray-300 dark:border-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900 transition flex items-center gap-1.5"
-                >
-                    <span className="material-symbols-outlined text-base">open_in_new</span>
-                    신청 페이지 미리보기
-                </a>
+            <div>
+                <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">how_to_reg</span>
+                    체험/수강신청 관리
+                </h1>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">체험 문의와 수강신청을 한 화면에서 확인하고 처리합니다.</p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <button
-                    type="button"
-                    onClick={() => setActiveTab(priorityTrialCount >= priorityAppCount ? "trial" : "applications")}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-red-50 px-3 text-sm font-black text-red-700 transition hover:bg-red-100 dark:bg-red-950/30 dark:text-red-200"
-                >
-                    <span className="material-symbols-outlined text-base">priority_high</span>
-                    오늘 먼저 {firstLookCount}
-                    <span className="text-xs font-bold opacity-80">체험 {priorityTrialCount} · 신청 {priorityAppCount}</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("trial")}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">diversity_3</span>
-                    새 체험 {trialNewCount}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("trial")}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">event_available</span>
-                    체험 예정 {trialScheduledCount}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("applications")}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
-                    수강 대기 {stats.PENDING}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("sources")}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">query_stats</span>
-                    유입 통계
-                </button>
-            </div>
-
-            {/* 탭 버튼 */}
-            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+            <div className="flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
                 <button
                     onClick={() => setActiveTab("trial")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${

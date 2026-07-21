@@ -580,6 +580,9 @@ export interface TrialLeadForEnroll {
     childBirthDate: string | null;
     childGrade: string | null;
     childGender: string | null;
+    childSchool: string | null;
+    basketballExp: string | null;
+    preferredSlotKey: string | null;
     parentName: string;
     parentPhone: string;
     source: string;
@@ -589,7 +592,7 @@ export interface TrialLeadForEnroll {
  * getTrialLeadForEnroll — 체험 거친 사람의 데이터를 수강 폼에 자동 채움
  *
  * 공개용이므로 관리자 메모 등 민감 정보는 제외하고
- * 이름, 생년월일, 학년, 성별, 보호자 정보만 반환
+ * 이름, 생년월일, 학년, 성별, 학교, 농구 경험, 희망 수업, 보호자 정보만 반환
  */
 export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadForEnroll | null> {
     if (!trialId) return null;
@@ -600,6 +603,7 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
 
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "childName", "childBirthDate", "childGrade", "childGender",
+                    "childSchool", "basketballExp", "preferredSlotKey",
                     "parentName", "parentPhone", source
              FROM "TrialLead"
              WHERE id = $1
@@ -617,6 +621,9 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
                 : null,
             childGrade: r.childGrade ?? r.childgrade ?? null,
             childGender: r.childGender ?? r.childgender ?? null,
+            childSchool: r.childSchool ?? r.childschool ?? null,
+            basketballExp: r.basketballExp ?? r.basketballexp ?? null,
+            preferredSlotKey: r.preferredSlotKey ?? r.preferredslotkey ?? null,
             parentName: r.parentName ?? r.parentname ?? "",
             parentPhone: r.parentPhone ?? r.parentphone ?? "",
             source: r.source ?? "WEBSITE",

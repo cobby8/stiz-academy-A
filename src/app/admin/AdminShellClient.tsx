@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { logout } from "@/app/actions/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 const LazyBackupButtons = dynamic(() => import("./AdminBackupButtons"), {
@@ -282,6 +283,7 @@ export default function AdminShellClient({
                     <div className="flex flex-shrink-0 items-center gap-2 md:gap-4">
                         {/* 알림 벨 — 읽지 않은 알림 수 배지 + 드롭다운 */}
                         <LazyNotificationBell />
+                        <ThemeToggle />
                         <span className="hidden text-sm font-medium text-gray-600 dark:text-gray-300 sm:inline">{userName}님, 환영합니다.</span>
                         <div className="w-8 h-8 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                             {userName.charAt(0) || "A"}

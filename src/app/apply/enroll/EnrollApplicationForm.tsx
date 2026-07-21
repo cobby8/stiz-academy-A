@@ -78,21 +78,24 @@ export default function EnrollApplicationForm({
     trialLeadId,
 }: Props) {
     // 체험 데이터가 있으면 초기값으로 채움 (사용자가 수정 가능)
+    const preferredTrialSlot = trialData?.preferredSlotKey && availableSlots.some((slot) => slot.slotKey === trialData.preferredSlotKey)
+        ? trialData.preferredSlotKey
+        : "";
     const [step, setStep] = useState(1);
     const [form, setForm] = useState<FormData>({
         childName: trialData?.childName || "",
         childBirthDate: trialData?.childBirthDate || "",
         childGender: trialData?.childGender || "",
         childGrade: trialData?.childGrade || "",
-        childSchool: "",
+        childSchool: trialData?.childSchool || "",
         childPhone: "",
         parentName: trialData?.parentName || "",
         parentPhone: trialData?.parentPhone || "",
         parentRelation: "",
         address: "",
         enrollmentMonths: [],
-        preferredSlotKeys: [],
-        basketballExp: "",
+        preferredSlotKeys: preferredTrialSlot ? [preferredTrialSlot] : [],
+        basketballExp: trialData?.basketballExp || "",
         shuttleChoice: "",
         shuttleNeeded: false,
         shuttlePickup: "",

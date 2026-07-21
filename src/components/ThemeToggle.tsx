@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import FontFreeIcon from "./ui/FontFreeIcon";
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -13,16 +13,21 @@ export function ThemeToggle() {
   }, []);
 
   if (!mounted) {
-    return <div className="w-9 h-9" />;
+    return <div className="h-10 w-10" aria-hidden="true" />;
   }
+
+  const isDark = resolvedTheme === "dark";
+  const label = isDark ? "라이트 모드로 변경" : "다크 모드로 변경";
 
   return (
     <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="p-2 rounded-lg hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-800 transition-colors flex items-center justify-center text-gray-700 dark:text-gray-300"
-      aria-label="Toggle theme"
+      type="button"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+      aria-label={label}
+      title={label}
     >
-      <FontFreeIcon name={theme === "dark" ? "light_mode" : "dark_mode"} size={22} />
+      <FontFreeIcon name={isDark ? "light_mode" : "dark_mode"} size={22} />
     </button>
   );
 }

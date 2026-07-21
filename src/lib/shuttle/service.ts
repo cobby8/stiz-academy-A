@@ -158,7 +158,7 @@ async function audit(
   tx: Db,
   actor: Actor,
   action: string,
-  references: { routePlanId?: string; vehicleId?: string; shuttleRequestId?: string },
+  references: { routePlanId?: string; vehicleId?: string; shuttleRequestId?: string | null },
   beforeJSON?: unknown,
   afterJSON?: unknown,
 ) {
@@ -536,7 +536,8 @@ async function draftRoute(tx: Db, id: string) {
   return route;
 }
 
-async function syncLegacyAssignment(tx: Db, shuttleRequestId: string, preferredRouteId?: string) {
+async function syncLegacyAssignment(tx: Db, shuttleRequestId: string | null | undefined, preferredRouteId?: string) {
+  if (!shuttleRequestId) return;
   const active = await tx.shuttleRoutePassenger.findMany({
     where: { shuttleRequestId, routePlan: { status: { not: ShuttleRoutePlanStatus.ARCHIVED } } },
     include: { routePlan: { select: { id: true, status: true, updatedAt: true } } },
@@ -718,6 +719,8 @@ export async function previewClassBasedShuttlePlacement(actor: Actor, input: Rec
     className: string;
     sessionId: string;
     address?: string | null;
+    parentName?: string | null;
+    parentPhone?: string | null;
     classStartTime?: string | null;
     classEndTime?: string | null;
   }> = [];
@@ -742,6 +745,8 @@ export async function previewClassBasedShuttlePlacement(actor: Actor, input: Rec
         sessionId: session.sessionId,
         name: `${student.studentName} ${locationKind === "PICKUP" ? "pickup" : "dropoff"}`,
         address: ready.location.roadAddress || ready.location.address || ready.location.name,
+        parentName: student.parentName,
+        parentPhone: student.parentPhone,
         latitude: ready.latitude,
         longitude: ready.longitude,
         classStartTime: session.classStartTime,
@@ -792,6 +797,8 @@ export async function previewClassBasedShuttlePlacement(actor: Actor, input: Rec
       className: waypoint.className,
       sessionId: waypoint.sessionId,
       address: waypoint.address,
+      parentName: waypoint.parentName,
+      parentPhone: waypoint.parentPhone,
       latitude: waypoint.latitude,
       longitude: waypoint.longitude,
       classStartTime: waypoint.classStartTime,
@@ -816,6 +823,83 @@ export async function previewClassBasedShuttlePlacement(actor: Actor, input: Rec
       students: candidates.totals.students,
     },
   };
+}
+
+export async function createClassBasedShuttleRouteDraft(actor: Actor, input: Record<string, unknown>) {
+  const seasonId = text(input.seasonId, 100);
+  if (!seasonId) throw new ShuttleServiceError("시즌을 선택해 주세요.", 400, "SEASON_REQUIRED");
+  const preview = await previewClassBasedShuttlePlacement(actor, input);
+  if (!preview.stops.length) {
+    throw new ShuttleServiceError("노선 초안을 만들 학생 위치가 없습니다.", 409, "NO_READY_WAYPOINTS");
+  }
+
+  const vehicleId = text(input.vehicleId, 100);
+  const driverUserId = text(input.driverUserId, 100);
+  const routeName = text(input.name, 150)
+    || `${preview.serviceDate} ${preview.direction === ShuttleRouteDirection.PICKUP ? "등원" : "하원"} 자동 배치`;
+  const locationKind = preview.direction === ShuttleRouteDirection.PICKUP ? "PICKUP" : "DROPOFF";
+
+  return prisma.$transaction(async (tx) => {
+    const season = await tx.specialProgramSeason.findUnique({ where: { id: seasonId }, select: { id: true } });
+    if (!season) throw new ShuttleServiceError("방학특강 시즌을 찾을 수 없습니다.", 404, "SEASON_NOT_FOUND");
+    if (vehicleId) {
+      const vehicle = await ensureVehicle(tx, vehicleId);
+      contract(() => assertShuttleCapacity(vehicle.capacity, preview.stops.length));
+    }
+    if (driverUserId) await ensureDriver(tx, driverUserId);
+
+    const route = await tx.shuttleRoutePlan.create({
+      data: {
+        seasonId,
+        vehicleId,
+        driverUserId,
+        routeKey: crypto.randomUUID(),
+        version: 1,
+        name: routeName,
+        direction: preview.direction,
+        serviceDate: new Date(`${preview.serviceDate}T00:00:00.000Z`),
+        originName: preview.academy.name,
+        originAddress: preview.academy.name,
+        originLatitude: preview.academy.latitude,
+        originLongitude: preview.academy.longitude,
+        destinationName: preview.academy.name,
+        destinationAddress: preview.academy.name,
+        destinationLatitude: preview.academy.latitude,
+        destinationLongitude: preview.academy.longitude,
+      },
+    });
+
+    for (const stop of preview.stops) {
+      const routeStop = await tx.shuttleRouteStop.create({
+        data: {
+          routePlanId: route.id,
+          stopOrder: stop.recommendedOrder,
+          name: `${stop.studentName} ${locationKind === "PICKUP" ? "등원" : "하원"}`,
+          address: stop.address || "주소 미입력",
+          roadAddress: stop.address || undefined,
+          latitude: stop.latitude,
+          longitude: stop.longitude,
+          note: `${stop.className}${stop.classStartTime ? ` · ${stop.classStartTime}` : ""}`,
+        },
+      });
+      await tx.$executeRaw`
+        INSERT INTO "ShuttleRoutePassenger" (
+          "routePlanId", "stopId", "sourceType", "studentId", "sessionId", "locationKind",
+          "studentNameSnapshot", "parentNameSnapshot", "parentPhoneSnapshot", "note",
+          "createdAt", "updatedAt"
+        )
+        VALUES (
+          ${route.id}, ${routeStop.id}, 'REGULAR_CLASS', ${stop.studentId}, ${stop.sessionId}, ${locationKind},
+          ${stop.studentName}, ${stop.parentName ?? null}, ${stop.parentPhone ?? null}, ${stop.className},
+          NOW(), NOW()
+        )
+      `;
+    }
+
+    const created = await tx.shuttleRoutePlan.findUniqueOrThrow({ where: { id: route.id }, include: routeInclude });
+    await audit(tx, actor, "CLASS_BASED_ROUTE_DRAFT_CREATED", { routePlanId: route.id }, undefined, { route: created, preview });
+    return created;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function updateShuttleRequestLocation(actor: Actor, shuttleRequestId: string, input: Record<string, unknown>) {
@@ -1012,16 +1096,19 @@ export async function assignPassenger(actor: Actor, routeId: string, input: Reco
 
 export async function unassignPassenger(actor: Actor, routeId: string, input: Record<string, unknown>) {
   const shuttleRequestId = text(input.shuttleRequestId, 100);
-  if (!shuttleRequestId) throw new ShuttleServiceError("셔틀 신청을 선택해 주세요.");
+  const passengerId = text(input.passengerId, 100);
+  if (!shuttleRequestId && !passengerId) throw new ShuttleServiceError("배정 해제할 학생을 선택해 주세요.");
   return prisma.$transaction(async (tx) => {
     await draftRoute(tx, routeId);
-    const passenger = await tx.shuttleRoutePassenger.findUnique({ where: { routePlanId_shuttleRequestId: { routePlanId: routeId, shuttleRequestId } } });
+    const passenger = shuttleRequestId
+      ? await tx.shuttleRoutePassenger.findUnique({ where: { routePlanId_shuttleRequestId: { routePlanId: routeId, shuttleRequestId } } })
+      : await tx.shuttleRoutePassenger.findFirst({ where: { id: passengerId, routePlanId: routeId } });
     if (!passenger) throw new ShuttleServiceError("배정 정보를 찾을 수 없습니다.", 404, "ASSIGNMENT_NOT_FOUND");
     await tx.shuttleRoutePassenger.delete({ where: { id: passenger.id } });
-    await syncLegacyAssignment(tx, shuttleRequestId);
+    await syncLegacyAssignment(tx, passenger.shuttleRequestId);
     const remaining = await tx.shuttleRoutePassenger.count({ where: { stopId: passenger.stopId } });
     if (remaining === 0) await tx.shuttleRouteStop.delete({ where: { id: passenger.stopId } });
-    await audit(tx, actor, "PASSENGER_UNASSIGNED", { routePlanId: routeId, shuttleRequestId }, passenger, undefined);
+    await audit(tx, actor, "PASSENGER_UNASSIGNED", { routePlanId: routeId, shuttleRequestId: passenger.shuttleRequestId }, passenger, undefined);
     return tx.shuttleRoutePlan.findUniqueOrThrow({ where: { id: routeId }, include: routeInclude });
   });
 }
@@ -1081,8 +1168,8 @@ export async function confirmRoute(actor: Actor, routeId: string) {
       data: { status: ShuttleRoutePlanStatus.ARCHIVED },
     });
     const route = await tx.shuttleRoutePlan.update({ where: { id: routeId }, data: { status: ShuttleRoutePlanStatus.CONFIRMED, confirmedAt: new Date(), confirmedByUserId: actor.appUserId }, include: routeInclude });
-    const currentRequestIds = new Set(route.stops.flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId)));
-    const affectedRequestIds = new Set([...previousPassengerRows.map((row) => row.shuttleRequestId), ...currentRequestIds]);
+    const currentRequestIds = new Set(route.stops.flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId).filter(Boolean)));
+    const affectedRequestIds = new Set([...previousPassengerRows.map((row) => row.shuttleRequestId).filter(Boolean), ...currentRequestIds]);
     for (const shuttleRequestId of affectedRequestIds) {
       await syncLegacyAssignment(tx, shuttleRequestId, currentRequestIds.has(shuttleRequestId) ? route.id : undefined);
     }
@@ -1096,7 +1183,7 @@ export async function archiveRoute(actor: Actor, routeId: string) {
     const before = await tx.shuttleRoutePlan.findUnique({ where: { id: routeId }, include: routeInclude });
     if (!before) throw new ShuttleServiceError("노선을 찾을 수 없습니다.", 404, "ROUTE_NOT_FOUND");
     const route = await tx.shuttleRoutePlan.update({ where: { id: routeId }, data: { status: ShuttleRoutePlanStatus.ARCHIVED }, include: routeInclude });
-    const requestIds = new Set(before.stops.flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId)));
+    const requestIds = new Set(before.stops.flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId).filter(Boolean)));
     for (const shuttleRequestId of requestIds) await syncLegacyAssignment(tx, shuttleRequestId);
     await audit(tx, actor, "ROUTE_ARCHIVED", { routePlanId: routeId }, before, route);
     return route;
@@ -1155,16 +1242,26 @@ export async function reviseRoute(actor: Actor, routeId: string) {
       });
       if (sourceStop.passengers.length) {
         await tx.shuttleRoutePassenger.createMany({
-          data: sourceStop.passengers.map((passenger) => ({
-            routePlanId: draft.id, stopId: stop.id, shuttleRequestId: passenger.shuttleRequestId,
-            studentNameSnapshot: passenger.studentNameSnapshot, parentNameSnapshot: passenger.parentNameSnapshot,
-            parentPhoneSnapshot: passenger.parentPhoneSnapshot, note: passenger.note,
-          })),
+          data: sourceStop.passengers.map((passenger) => {
+            const regularPassenger = passenger as unknown as {
+              sourceType?: string | null;
+              studentId?: string | null;
+              sessionId?: string | null;
+              locationKind?: string | null;
+            };
+            return {
+              routePlanId: draft.id, stopId: stop.id, shuttleRequestId: passenger.shuttleRequestId,
+              sourceType: regularPassenger.sourceType, studentId: regularPassenger.studentId, sessionId: regularPassenger.sessionId,
+              locationKind: regularPassenger.locationKind,
+              studentNameSnapshot: passenger.studentNameSnapshot, parentNameSnapshot: passenger.parentNameSnapshot,
+              parentPhoneSnapshot: passenger.parentPhoneSnapshot, note: passenger.note,
+            } as unknown as Prisma.ShuttleRoutePassengerCreateManyInput;
+          }),
         });
       }
     }
     const route = await tx.shuttleRoutePlan.findUniqueOrThrow({ where: { id: draft.id }, include: routeInclude });
-    for (const shuttleRequestId of new Set(source.stops.flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId)))) {
+    for (const shuttleRequestId of new Set(source.stops.flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId).filter(Boolean)))) {
       await syncLegacyAssignment(tx, shuttleRequestId);
     }
     await audit(tx, actor, "ROUTE_REVISION_CREATED", { routePlanId: route.id }, source, route);

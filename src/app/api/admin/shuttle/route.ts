@@ -6,6 +6,7 @@ import {
   archiveRoute,
   completeRoute,
   assignPassenger,
+  createClassBasedShuttleRouteDraft,
   confirmRoute,
   createRoute,
   createVehicle,
@@ -90,6 +91,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ request: await updateShuttleRequestLocation(actor, id, data) });
     }
     if (body.resource === "classCandidates") {
+      if (body.action === "createRouteDraft") return NextResponse.json({ route: await createClassBasedShuttleRouteDraft(actor, data) });
       if (body.action !== "optimizePreview") throw new ShuttleServiceError("지원하지 않는 수업 후보 작업입니다.", 400, "UNSUPPORTED_ACTION");
       return NextResponse.json({ preview: await previewClassBasedShuttlePlacement(actor, data) });
     }

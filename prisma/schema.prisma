@@ -95,6 +95,7 @@ model Student {
   importRawRows       StudentSheetRawRow[]
   registrationLedgers StudentRegistrationLedger[]
   shuttleRides        StudentShuttleRide[]
+  shuttleRoutePassengers ShuttleRoutePassenger[]
   shuttleLocations    StudentShuttleLocation[]
   teamRosterEntries   StudentTeamRosterEntry[]
   parent              User                        @relation(fields: [parentId], references: [id])
@@ -189,6 +190,7 @@ model Session {
   createdAt                   DateTime                   @default(now())
   updatedAt                   DateTime                   @updatedAt
   attendances                 Attendance[]
+  shuttleRoutePassengers      ShuttleRoutePassenger[]
   studentNotes                StudentSessionNote[]
   class                       Class                      @relation(fields: [classId], references: [id])
   specialProgramSessionDate   SpecialProgramSessionDate? @relation(fields: [specialProgramSessionDateId], references: [id], onDelete: Restrict)
@@ -1569,27 +1571,36 @@ model ShuttleRouteStop {
 }
 
 model ShuttleRoutePassenger {
-  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
-  routePlanId String
-  stopId String
-  shuttleRequestId String
-  studentNameSnapshot String
-  parentNameSnapshot String?
-  parentPhoneSnapshot String?
-  rideStatus String @default("PENDING")
-  rideStatusUpdatedAt DateTime? @db.Timestamptz(6)
+  id                        String                       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  routePlanId               String
+  stopId                    String
+  shuttleRequestId          String?
+  sourceType                String                       @default("SPECIAL_PROGRAM")
+  studentId                 String?
+  sessionId                 String?
+  locationKind              String?
+  studentNameSnapshot       String
+  parentNameSnapshot        String?
+  parentPhoneSnapshot       String?
+  rideStatus                String                       @default("PENDING")
+  rideStatusUpdatedAt       DateTime?                    @db.Timestamptz(6)
   rideStatusUpdatedByUserId String?
-  rideStatusNote String?
-  note String?
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-  routePlan ShuttleRoutePlan @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
-  stop ShuttleRouteStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
-  shuttleRequest SpecialProgramShuttleRequest @relation(fields: [shuttleRequestId], references: [id], onDelete: Cascade)
+  rideStatusNote            String?
+  note                      String?
+  createdAt                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime                     @default(now()) @updatedAt @db.Timestamptz(6)
+  routePlan                 ShuttleRoutePlan             @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
+  stop                      ShuttleRouteStop             @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  shuttleRequest            SpecialProgramShuttleRequest? @relation(fields: [shuttleRequestId], references: [id], onDelete: Cascade)
+  student                   Student?                     @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  session                   Session?                     @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@unique([routePlanId, shuttleRequestId])
+  @@unique([routePlanId, studentId, sessionId, locationKind])
   @@index([stopId])
   @@index([shuttleRequestId])
+  @@index([studentId, sessionId])
+  @@index([routePlanId, sourceType])
   @@index([routePlanId, rideStatus])
 }
 

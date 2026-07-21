@@ -11,7 +11,7 @@ type RouteStatus = "DRAFT" | "CONFIRMED" | "COMPLETED" | "ARCHIVED";
 interface Season { id: string; title: string; startsAt?: string | null; endsAt?: string | null }
 interface Vehicle { id: string; name: string; plateNumber?: string | null; capacity: number; notes?: string | null; isActive?: boolean }
 interface Driver { id: string; name: string; phone?: string | null; role?: string }
-interface Passenger { id: string; shuttleRequestId: string; studentNameSnapshot?: string; parentNameSnapshot?: string | null; parentPhoneSnapshot?: string | null; rideStatus?: string | null }
+interface Passenger { id: string; shuttleRequestId?: string | null; sourceType?: string | null; studentId?: string | null; sessionId?: string | null; locationKind?: string | null; studentNameSnapshot?: string; parentNameSnapshot?: string | null; parentPhoneSnapshot?: string | null; rideStatus?: string | null }
 interface Stop {
   id: string;
   name: string;
@@ -96,7 +96,7 @@ interface ClassPlacementPreview {
   totalDistance?: number;
   totalTime?: number;
   totals: { readyStops: number; missingStops: number; sessions: number; students: number };
-  stops: Array<{ id: string; recommendedOrder: number; studentId: string; studentName: string; className: string; address?: string | null; classStartTime?: string | null; classEndTime?: string | null }>;
+  stops: Array<{ id: string; recommendedOrder: number; studentId: string; studentName: string; className: string; address?: string | null; parentName?: string | null; parentPhone?: string | null; classStartTime?: string | null; classEndTime?: string | null }>;
   missingStudents: Array<{ studentId: string; studentName: string; className: string; reason: string }>;
 }
 type LocationPickerTarget = { request: ShuttleRequest; kind: "pickup" | "dropoff" } | { student: ClassCandidateStudent; kind: "pickup" | "dropoff" };
@@ -280,6 +280,33 @@ export default function ShuttleRouteAdminClient() {
     }
   }
 
+  async function createClassRouteDraft() {
+    if (!serviceDate || !classPlacementPreview) return;
+    setPending(true); setError(""); setNotice("");
+    try {
+      const result = await request({
+        resource: "classCandidates",
+        id: serviceDate,
+        action: "createRouteDraft",
+        data: {
+          seasonId,
+          serviceDate,
+          direction: classPlacementPreview.direction,
+          name: `${serviceDate} ${classPlacementPreview.direction === "PICKUP" ? "등원" : "하원"} 자동 배치`,
+        },
+      });
+      setNotice("자동 배치 결과로 노선 초안을 만들었습니다.");
+      setDirection(classPlacementPreview.direction);
+      setClassPlacementPreview(null);
+      await load(seasonId, classPlacementPreview.direction, serviceDate);
+      if (result.route?.id) setSelectedRouteId(result.route.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "자동 배치 노선 초안을 만들지 못했습니다.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function applyOptimizedStops() {
     if (!selectedRoute || !optimizationPreview) return;
     const plannedAtByStopId = new Map(stops.map((stop) => [stop.id, stop.plannedAt]));
@@ -332,7 +359,7 @@ export default function ShuttleRouteAdminClient() {
       <label className="text-sm font-bold">운행일<input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} list="shuttle-service-dates" className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900" /><datalist id="shuttle-service-dates">{availableDates.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</datalist></label>
     </section>
 
-    {serviceDate && data.classBasedCandidates && <ClassCandidatePanel candidates={data.classBasedCandidates} pending={pending} preview={classPlacementPreview} onPreview={(value) => void previewClassPlacement(value)} onPickLocation={(student, kind) => setLocationPicker({ student, kind })} />}
+    {serviceDate && data.classBasedCandidates && <ClassCandidatePanel candidates={data.classBasedCandidates} pending={pending} preview={classPlacementPreview} onPreview={(value) => void previewClassPlacement(value)} onCreateRouteDraft={() => void createClassRouteDraft()} onPickLocation={(student, kind) => setLocationPicker({ student, kind })} />}
 
     {loading ? <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800">노선 정보를 불러오는 중입니다…</div> : !data.seasons.length ? <Empty title="운영 중인 특강 시즌이 없습니다" description="방학특강 시즌을 먼저 등록한 뒤 노선을 만들어 주세요." /> : <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.28fr)]">
       <aside className="min-w-0 space-y-4">
@@ -382,7 +409,7 @@ export default function ShuttleRouteAdminClient() {
             {optimizationPreview.stops.map((stop) => <li key={stop.id} className="rounded-xl bg-white p-3 text-sm dark:bg-gray-900"><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-xs font-black text-white">{stop.recommendedOrder}</span><strong>{stop.name}</strong><span className="ml-2 text-xs font-bold text-gray-500">기존 {stop.previousOrder}번 · {stop.passengerCount}명</span></li>)}
           </ol>
         </section>}
-        <ol className="space-y-3">{stops.map((stop, index) => { const url = null; return <li key={stop.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-950 text-sm font-black text-white dark:bg-white dark:text-gray-950">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="break-words font-black">{stop.name}</h3><p className="break-words text-xs text-gray-500">{stop.roadAddress || stop.address}</p></div><div className="flex gap-1">{url && <a href={url} target="_blank" rel="noreferrer" aria-label={`${stop.name} 지도에서 열기`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={18} /></a>}{selectedRoute.status === "DRAFT" && <><button type="button" onClick={() => moveStop(index, -1)} disabled={index === 0 || pending} aria-label={`${stop.name} 순서를 위로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↑</button><button type="button" onClick={() => moveStop(index, 1)} disabled={index === stops.length - 1 || pending} aria-label={`${stop.name} 순서를 아래로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↓</button></>}</div></div><label className="mt-2 block text-xs font-bold text-gray-500">예상 도착시간<input type="time" value={stop.plannedAt?.slice(11, 16) ?? stop.plannedAt ?? ""} disabled={selectedRoute.status !== "DRAFT" || pending} onChange={(event) => void mutate({ resource: "route", id: selectedRoute.id, action: "reorder", data: { stops: stops.map((item, itemIndex) => ({ id: item.id, stopOrder: itemIndex + 1, plannedAt: item.id === stop.id ? event.target.value : item.plannedAt })) } }, "예상시간을 변경했습니다.")} className="ml-2 min-h-9 rounded-lg border border-gray-300 bg-white px-2 dark:border-gray-600 dark:bg-gray-900" /></label><div className="mt-2 flex flex-wrap gap-2">{stop.passengers?.map((passenger) => <span key={passenger.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold dark:bg-gray-700">{passenger.studentNameSnapshot || "학생"}<span className={`rounded-full px-1.5 py-0.5 text-[10px] ${rideStatusClass(passenger.rideStatus)}`}>{rideStatusLabel(passenger.rideStatus)}</span>{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "unassign", data: { shuttleRequestId: passenger.shuttleRequestId } }, "학생 배정을 해제했습니다.")} aria-label={`${passenger.studentNameSnapshot || "학생"} 배정 해제`} className="ml-1 text-base leading-none">×</button>}</span>)}</div></div></div></li> })}</ol>
+        <ol className="space-y-3">{stops.map((stop, index) => { const url = null; return <li key={stop.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-950 text-sm font-black text-white dark:bg-white dark:text-gray-950">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="break-words font-black">{stop.name}</h3><p className="break-words text-xs text-gray-500">{stop.roadAddress || stop.address}</p></div><div className="flex gap-1">{url && <a href={url} target="_blank" rel="noreferrer" aria-label={`${stop.name} 지도에서 열기`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={18} /></a>}{selectedRoute.status === "DRAFT" && <><button type="button" onClick={() => moveStop(index, -1)} disabled={index === 0 || pending} aria-label={`${stop.name} 순서를 위로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↑</button><button type="button" onClick={() => moveStop(index, 1)} disabled={index === stops.length - 1 || pending} aria-label={`${stop.name} 순서를 아래로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↓</button></>}</div></div><label className="mt-2 block text-xs font-bold text-gray-500">예상 도착시간<input type="time" value={stop.plannedAt?.slice(11, 16) ?? stop.plannedAt ?? ""} disabled={selectedRoute.status !== "DRAFT" || pending} onChange={(event) => void mutate({ resource: "route", id: selectedRoute.id, action: "reorder", data: { stops: stops.map((item, itemIndex) => ({ id: item.id, stopOrder: itemIndex + 1, plannedAt: item.id === stop.id ? event.target.value : item.plannedAt })) } }, "예상시간을 변경했습니다.")} className="ml-2 min-h-9 rounded-lg border border-gray-300 bg-white px-2 dark:border-gray-600 dark:bg-gray-900" /></label><div className="mt-2 flex flex-wrap gap-2">{stop.passengers?.map((passenger) => <span key={passenger.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold dark:bg-gray-700">{passenger.studentNameSnapshot || "학생"}<span className={`rounded-full px-1.5 py-0.5 text-[10px] ${rideStatusClass(passenger.rideStatus)}`}>{rideStatusLabel(passenger.rideStatus)}</span>{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "unassign", data: { shuttleRequestId: passenger.shuttleRequestId || undefined, passengerId: passenger.id } }, "학생 배정을 해제했습니다.")} aria-label={`${passenger.studentNameSnapshot || "학생"} 배정 해제`} className="ml-1 text-base leading-none">×</button>}</span>)}</div></div></div></li> })}</ol>
         {!stops.length && <p className="rounded-xl bg-gray-50 p-8 text-center text-sm text-gray-500 dark:bg-gray-900">왼쪽 미배정 학생을 선택해 첫 정류장을 추가하세요.</p>}
       </> : <Empty title="노선을 선택해 주세요" description="노선을 만들거나 왼쪽 목록에서 편집할 노선을 선택해 주세요." />}</section>
     </div>}
@@ -426,12 +453,14 @@ function ClassCandidatePanel({
   pending,
   preview,
   onPreview,
+  onCreateRouteDraft,
   onPickLocation,
 }: {
   candidates: ClassBasedCandidates;
   pending: boolean;
   preview: ClassPlacementPreview | null;
   onPreview: (direction: Direction) => void;
+  onCreateRouteDraft: () => void;
   onPickLocation: (student: ClassCandidateStudent, kind: "pickup" | "dropoff") => void;
 }) {
   if (candidates.unavailable) {
@@ -465,6 +494,9 @@ function ClassCandidatePanel({
           </p>
         </div>
         {preview.totals.missingStops > 0 && <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700 dark:bg-red-950/40 dark:text-red-200">좌표 필요 {preview.totals.missingStops}명</span>}
+      </div>
+      <div className="mt-3">
+        <button type="button" onClick={onCreateRouteDraft} disabled={pending || preview.totals.readyStops < 1} className="min-h-10 rounded-lg bg-gray-950 px-4 text-sm font-black text-white disabled:opacity-40 dark:bg-white dark:text-gray-950">이 결과로 노선 초안 만들기</button>
       </div>
       <ol className="mt-3 grid gap-2 lg:grid-cols-2">
         {preview.stops.map((stop) => <li key={stop.id} className="rounded-xl bg-white p-3 text-sm dark:bg-gray-900">

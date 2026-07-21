@@ -4,6 +4,7 @@ import test from "node:test";
 
 const schema = await readFile("prisma/schema.prisma", "utf8");
 const migration = await readFile("prisma/migrations/20260722143000_add_student_shuttle_locations/migration.sql", "utf8");
+const passengerMigration = await readFile("prisma/migrations/20260722172000_extend_shuttle_passengers_for_students/migration.sql", "utf8");
 const service = await readFile("src/lib/shuttle/service.ts", "utf8");
 const route = await readFile("src/app/api/admin/shuttle/route.ts", "utf8");
 const adminClient = await readFile("src/app/admin/shuttle/ShuttleRouteAdminClient.tsx", "utf8");
@@ -50,4 +51,18 @@ test("class based candidates can be preview optimized before route creation", ()
   assert.match(adminClient, /등원 배치 테스트/);
   assert.match(adminClient, /하원 배치 테스트/);
   assert.match(adminClient, /setClassPlacementPreview/);
+});
+
+test("class based placement can create draft route passengers for regular students", () => {
+  assert.match(schema, /sourceType\s+String\s+@default\("SPECIAL_PROGRAM"\)/);
+  assert.match(schema, /studentId\s+String\?/);
+  assert.match(schema, /sessionId\s+String\?/);
+  assert.match(schema, /locationKind\s+String\?/);
+  assert.match(schema, /shuttleRequestId\s+String\?/);
+  assert.match(passengerMigration, /ALTER COLUMN "shuttleRequestId" DROP NOT NULL/);
+  assert.match(passengerMigration, /"sourceType" = 'REGULAR_CLASS'/);
+  assert.match(service, /export async function createClassBasedShuttleRouteDraft/);
+  assert.match(service, /'REGULAR_CLASS'/);
+  assert.match(route, /action === "createRouteDraft"/);
+  assert.match(adminClient, /이 결과로 노선 초안 만들기/);
 });

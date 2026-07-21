@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 type Direction = "PICKUP" | "DROPOFF";
 type RideStatus = "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW";
@@ -31,7 +31,7 @@ export default function ShuttleRideStatusButtons({
   function update(nextStatus: RideStatus) {
     const previous = status;
     setStatus(nextStatus);
-    setMessage("");
+    setMessage("저장 중...");
     startTransition(async () => {
       try {
         const response = await fetch("/api/staff/shuttle", {
@@ -41,6 +41,7 @@ export default function ShuttleRideStatusButtons({
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.error || "상태를 저장하지 못했습니다.");
+        setMessage(`${STATUS_LABEL[nextStatus]} 저장 완료`);
       } catch (error) {
         setStatus(previous);
         setMessage(error instanceof Error ? error.message : "상태를 저장하지 못했습니다.");
@@ -51,34 +52,51 @@ export default function ShuttleRideStatusButtons({
   return (
     <div className="mt-2 space-y-1">
       <div className="grid grid-cols-3 gap-1.5">
-        <button
-          type="button"
-          onClick={() => update(primaryStatus)}
-          disabled={isPending}
-          className={`min-h-9 rounded-xl text-xs font-black ${status === primaryStatus ? "bg-emerald-500 text-white" : "bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-200"}`}
-        >
+        <StatusButton active={status === primaryStatus} disabled={isPending} onClick={() => update(primaryStatus)}>
           {STATUS_LABEL[primaryStatus]}
-        </button>
-        <button
-          type="button"
-          onClick={() => update("NO_SHOW")}
-          disabled={isPending}
-          className={`min-h-9 rounded-xl text-xs font-black ${status === "NO_SHOW" ? "bg-red-500 text-white" : "bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-200"}`}
-        >
+        </StatusButton>
+        <StatusButton active={status === "NO_SHOW"} disabled={isPending} tone="danger" onClick={() => update("NO_SHOW")}>
           미탑승
-        </button>
-        <button
-          type="button"
-          onClick={() => update("PENDING")}
-          disabled={isPending}
-          className={`min-h-9 rounded-xl text-xs font-black ${status === "PENDING" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-950" : "bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-200"}`}
-        >
+        </StatusButton>
+        <StatusButton active={status === "PENDING"} disabled={isPending} tone="dark" onClick={() => update("PENDING")}>
           대기
-        </button>
+        </StatusButton>
       </div>
-      <p className={`text-[11px] font-bold ${message ? "text-red-600 dark:text-red-300" : "text-gray-400"}`} role={message ? "alert" : "status"}>
+      <p className={`text-[11px] font-bold ${message.includes("못했습니다") ? "text-red-600 dark:text-red-300" : "text-gray-400"}`} role={message.includes("못했습니다") ? "alert" : "status"}>
         {message || `현재 ${STATUS_LABEL[status]}`}
       </p>
     </div>
+  );
+}
+
+function StatusButton({
+  active,
+  disabled,
+  tone = "success",
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled: boolean;
+  tone?: "success" | "danger" | "dark";
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const activeClass =
+    tone === "danger"
+      ? "bg-red-500 text-white"
+      : tone === "dark"
+        ? "bg-gray-900 text-white dark:bg-white dark:text-gray-950"
+        : "bg-emerald-500 text-white";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`min-h-9 rounded-xl text-xs font-black disabled:opacity-60 ${active ? activeClass : "bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-200"}`}
+    >
+      {children}
+    </button>
   );
 }

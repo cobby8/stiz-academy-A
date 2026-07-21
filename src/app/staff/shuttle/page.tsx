@@ -6,6 +6,10 @@ import ShuttleRideStatusButtons from "./ShuttleRideStatusButtons";
 
 export const dynamic = "force-dynamic";
 
+type RideStatus = "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW";
+
+const DONE_STATUSES = new Set<RideStatus>(["BOARDED", "DROPPED_OFF"]);
+
 export default async function StaffShuttlePage() {
   const staff = await requireStaff();
   const canUseShuttle =
@@ -14,9 +18,24 @@ export default async function StaffShuttlePage() {
     staff.appUserRole === "VICE_ADMIN";
 
   if (!canUseShuttle) redirect("/staff");
+
   const dashboard = await getStaffShuttleDashboard(staff);
   const routeCount = dashboard.routes.length;
   const passengerCount = dashboard.routes.reduce((sum, route) => sum + route.passengerCount, 0);
+  const statusSummary = dashboard.routes.reduce(
+    (summary, route) => {
+      for (const stop of route.stops) {
+        for (const passenger of stop.passengers) {
+          const status = normalizeRideStatus(passenger.rideStatus);
+          if (status === "NO_SHOW") summary.noShow += 1;
+          else if (DONE_STATUSES.has(status)) summary.done += 1;
+          else summary.pending += 1;
+        }
+      }
+      return summary;
+    },
+    { pending: 0, done: 0, noShow: 0 },
+  );
 
   return (
     <main className="mx-auto min-h-[calc(100dvh-9rem)] max-w-lg px-4 py-5">
@@ -25,7 +44,9 @@ export default async function StaffShuttlePage() {
           <div>
             <p className="text-sm font-bold text-white/65">셔틀 기사 앱</p>
             <h1 className="mt-1 text-2xl font-black">오늘 운행</h1>
-            <p className="mt-2 text-sm leading-6 text-white/75">확정된 셔틀 노선과 정류장 순서를 확인합니다.</p>
+            <p className="mt-2 text-sm leading-6 text-white/75">
+              확정된 셔틀 노선과 정류장 순서를 확인하고 학생별 탑승 상태를 체크합니다.
+            </p>
           </div>
           <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]">
             <span className="material-symbols-outlined" aria-hidden="true">airport_shuttle</span>
@@ -34,14 +55,14 @@ export default async function StaffShuttlePage() {
       </section>
 
       <section className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-900">
-          <p className="text-xs font-bold text-gray-500 dark:text-gray-400">운행 상태</p>
-          <p className="mt-2 text-lg font-black text-gray-900 dark:text-white">{routeCount ? "확정" : "대기"}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-900">
-          <p className="text-xs font-bold text-gray-500 dark:text-gray-400">오늘 노선</p>
-          <p className="mt-2 text-lg font-black text-gray-900 dark:text-white">{routeCount}개 · {passengerCount}명</p>
-        </div>
+        <StatusCard label="운행 상태" value={routeCount ? "확정" : "대기"} />
+        <StatusCard label="오늘 노선" value={`${routeCount}개 · ${passengerCount}명`} />
+      </section>
+
+      <section className="mt-3 grid grid-cols-3 gap-2">
+        <StatusCard label="체크 대기" value={`${statusSummary.pending}명`} tone={statusSummary.pending ? "warning" : "neutral"} compact />
+        <StatusCard label="체크 완료" value={`${statusSummary.done}명`} tone="success" compact />
+        <StatusCard label="미탑승" value={`${statusSummary.noShow}명`} tone={statusSummary.noShow ? "danger" : "neutral"} compact />
       </section>
 
       <section className="mt-4 space-y-3">
@@ -49,9 +70,13 @@ export default async function StaffShuttlePage() {
           <article key={route.id} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black text-[var(--brand-accent)]">{route.direction === "PICKUP" ? "등원" : "하원"} · {formatRouteDate(route.serviceDate)}</p>
+                <p className="text-xs font-black text-[var(--brand-accent)]">
+                  {route.direction === "PICKUP" ? "등원" : "하원"} · {formatRouteDate(route.serviceDate)}
+                </p>
                 <h2 className="mt-1 text-lg font-black text-gray-900 dark:text-white">{route.name}</h2>
-                <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">{route.vehicle?.name || "차량 미지정"} · {route.passengerCount}명</p>
+                <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
+                  {route.vehicle?.name || "차량 미지정"} · {route.passengerCount}명
+                </p>
               </div>
               <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">
                 <span className="material-symbols-outlined" aria-hidden="true">route</span>
@@ -77,22 +102,25 @@ export default async function StaffShuttlePage() {
                           )}
                         </div>
                         <div className="mt-2 space-y-2">
-                          {stop.passengers.map((passenger) => (
-                            <div key={passenger.id} className="rounded-2xl bg-white p-2 dark:bg-gray-900">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="min-w-0 truncate text-sm font-black text-gray-800 dark:text-gray-100">
-                                  {passenger.studentNameSnapshot || "학생"}
-                                </span>
-                                <RideStatusPill status={passenger.rideStatus} />
+                          {stop.passengers.map((passenger) => {
+                            const rideStatus = normalizeRideStatus(passenger.rideStatus);
+                            return (
+                              <div key={passenger.id} className="rounded-2xl bg-white p-2 dark:bg-gray-900">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="min-w-0 truncate text-sm font-black text-gray-800 dark:text-gray-100">
+                                    {passenger.studentNameSnapshot || "학생"}
+                                  </span>
+                                  <RideStatusPill status={rideStatus} />
+                                </div>
+                                <ShuttleRideStatusButtons
+                                  routeId={route.id}
+                                  passengerId={passenger.id}
+                                  direction={route.direction}
+                                  initialStatus={rideStatus}
+                                />
                               </div>
-                              <ShuttleRideStatusButtons
-                                routeId={route.id}
-                                passengerId={passenger.id}
-                                direction={route.direction}
-                                initialStatus={passenger.rideStatus as "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW"}
-                              />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -105,7 +133,9 @@ export default async function StaffShuttlePage() {
           <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <span className="material-symbols-outlined text-4xl text-gray-400" aria-hidden="true">event_busy</span>
             <h2 className="mt-3 font-black text-gray-900 dark:text-white">확정된 운행이 없습니다</h2>
-            <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">관리자가 노선에 기사를 배정하고 확정하면 이곳에 표시됩니다.</p>
+            <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
+              관리자가 노선을 만들고 기사를 배정한 뒤 확정하면 여기에 표시됩니다.
+            </p>
           </div>
         )}
       </section>
@@ -123,6 +153,10 @@ export default async function StaffShuttlePage() {
   );
 }
 
+function normalizeRideStatus(status?: string | null): RideStatus {
+  return status === "BOARDED" || status === "DROPPED_OFF" || status === "NO_SHOW" ? status : "PENDING";
+}
+
 function formatRouteDate(value?: string | Date | null) {
   if (!value) return "정기";
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", weekday: "short" }).format(new Date(value));
@@ -133,7 +167,7 @@ function mapUrl(lat: number | string | null | undefined, lng: number | string | 
   return `https://map.kakao.com/link/map/${encodeURIComponent(name)},${lat},${lng}`;
 }
 
-function RideStatusPill({ status }: { status: string }) {
+function RideStatusPill({ status }: { status: RideStatus }) {
   const label = status === "BOARDED" ? "탑승" : status === "DROPPED_OFF" ? "하차" : status === "NO_SHOW" ? "미탑승" : "대기";
   const color = status === "BOARDED" || status === "DROPPED_OFF"
     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
@@ -142,4 +176,32 @@ function RideStatusPill({ status }: { status: string }) {
       : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300";
 
   return <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-black ${color}`}>{label}</span>;
+}
+
+function StatusCard({
+  label,
+  value,
+  tone = "neutral",
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+  compact?: boolean;
+}) {
+  const toneClass =
+    tone === "success"
+      ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+      : tone === "warning"
+        ? "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+        : tone === "danger"
+          ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-200"
+          : "bg-white text-gray-900 dark:bg-gray-900 dark:text-white";
+
+  return (
+    <div className={`rounded-2xl p-4 shadow-sm ${toneClass}`}>
+      <p className={`font-bold opacity-70 ${compact ? "text-[11px]" : "text-xs"}`}>{label}</p>
+      <p className={`mt-2 font-black ${compact ? "text-base" : "text-lg"}`}>{value}</p>
+    </div>
+  );
 }

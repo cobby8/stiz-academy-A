@@ -29,7 +29,12 @@ test("staff API validates and saves passenger ride status", () => {
 test("driver shuttle page can check passengers immediately", () => {
   assert.match(staffPageSource, /ShuttleRideStatusButtons/);
   assert.match(staffPageSource, /RideStatusPill/);
+  assert.match(staffPageSource, /셔틀 기사 앱/);
+  assert.match(staffPageSource, /체크 대기/);
+  assert.match(staffPageSource, /체크 완료/);
   assert.match(staffButtonsSource, /fetch\("\/api\/staff\/shuttle"/);
+  assert.match(staffButtonsSource, /저장 중/);
+  assert.match(staffButtonsSource, /저장 완료/);
   assert.match(staffButtonsSource, /BOARDED/);
   assert.match(staffButtonsSource, /DROPPED_OFF/);
   assert.match(staffButtonsSource, /NO_SHOW/);

@@ -17,6 +17,7 @@ import {
   unassignPassenger,
   updateRoute,
   updateShuttleRequestLocation,
+  updateStudentShuttleLocation,
   updateVehicle,
 } from "@/lib/shuttle/service";
 
@@ -87,7 +88,11 @@ export async function PATCH(request: NextRequest) {
       if (body.action !== "confirmLocation") throw new ShuttleServiceError("지원하지 않는 셔틀 신청 작업입니다.", 400, "UNSUPPORTED_ACTION");
       return NextResponse.json({ request: await updateShuttleRequestLocation(actor, id, data) });
     }
-    if (body.resource !== "route") throw new ShuttleServiceError("지원하지 않는 수정 요청입니다.", 400, "UNSUPPORTED_RESOURCE");
+    if (body.resource !== "route" && body.resource !== "studentLocation") throw new ShuttleServiceError("지원하지 않는 수정 요청입니다.", 400, "UNSUPPORTED_RESOURCE");
+    if (body.resource === "studentLocation") {
+      if (body.action !== "confirmLocation") throw new ShuttleServiceError("지원하지 않는 학생 위치 작업입니다.", 400, "UNSUPPORTED_ACTION");
+      return NextResponse.json({ location: await updateStudentShuttleLocation(actor, id, data) });
+    }
     let route;
     switch (body.action) {
       case "update": route = await updateRoute(actor, id, data); break;

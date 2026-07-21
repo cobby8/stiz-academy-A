@@ -51,6 +51,7 @@ model Student {
   importRawRows       StudentSheetRawRow[]
   registrationLedgers StudentRegistrationLedger[]
   shuttleRides        StudentShuttleRide[]
+  shuttleLocations    StudentShuttleLocation[]
   teamRosterEntries   StudentTeamRosterEntry[]
   parent              User                        @relation(fields: [parentId], references: [id])
 
@@ -1416,6 +1417,30 @@ model SpecialProgramShuttleRequest {
   @@index([applicationId, status])
   @@index([assignedRouteId])
   @@index([assignedStopId])
+}
+
+model StudentShuttleLocation {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId      String
+  kind           String
+  name           String?
+  address        String
+  roadAddress    String?
+  latitude       Float
+  longitude      Float
+  placeId        String?
+  source         String?
+  accuracyMeters Float?
+  confirmedAt    DateTime  @default(now()) @db.Timestamptz(6)
+  consentVersion String?
+  note           String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, kind])
+  @@index([kind, confirmedAt])
+  @@index([studentId, updatedAt])
 }
 
 // 방학특강 실제 운행 계획용 차량. 홈페이지 안내용 Route/Stop과 분리한다.

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type InputHT
 import AdminModal from "@/components/admin/AdminModal";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
-import { coordinateLinkSet } from "@/lib/maps/coordinate-links";
 
 type Direction = "PICKUP" | "DROPOFF";
 type RouteStatus = "DRAFT" | "CONFIRMED" | "COMPLETED" | "ARCHIVED";
@@ -61,13 +60,35 @@ interface ShuttleRequest {
   note?: string | null;
 }
 interface RequestLocation { name?: string | null; address?: string | null; roadAddress?: string | null; latitude?: number | string | null; longitude?: number | string | null; lat?: number | string | null; lng?: number | string | null; placeId?: string | null; source?: MapLocationData["source"] | string | null; accuracyMeters?: number | string | null; confirmedAt?: string | null }
-interface Payload { seasons: Season[]; selectedSeasonId?: string; vehicles: Vehicle[]; drivers: Driver[]; routes: RoutePlan[]; unassignedRequests: ShuttleRequest[] }
-interface OptimizationPreview { provider: string; routeId: string; routeName: string; totalDistance?: number; totalTime?: number; stops: Array<{ id: string; previousOrder: number; recommendedOrder: number; name: string; address?: string | null; passengerCount: number }> }
-type LocationPickerTarget = { request: ShuttleRequest; kind: "pickup" | "dropoff" };
-
-function mapUrl(lat: number | string | null | undefined, lng: number | string | null | undefined, name: string) {
-  return coordinateLinkSet({ latitude: lat, longitude: lng, name }).kakaoMap;
+interface ClassCandidateStudent {
+  studentId: string;
+  studentName: string;
+  studentGrade?: string | null;
+  studentSchool?: string | null;
+  parentName?: string | null;
+  parentPhone?: string | null;
+  pickup: RequestLocation & { ready?: boolean; kind?: string };
+  dropoff: RequestLocation & { ready?: boolean; kind?: string };
 }
+interface ClassCandidateSession {
+  sessionId: string;
+  className: string;
+  lessonTitle?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  classStartTime?: string | null;
+  classEndTime?: string | null;
+  students: ClassCandidateStudent[];
+}
+interface ClassBasedCandidates {
+  serviceDate: string;
+  unavailable?: boolean;
+  sessions: ClassCandidateSession[];
+  totals: { sessions: number; students: number; pickupReady: number; dropoffReady: number; missingPickup: number; missingDropoff: number };
+}
+interface Payload { seasons: Season[]; selectedSeasonId?: string; vehicles: Vehicle[]; drivers: Driver[]; routes: RoutePlan[]; unassignedRequests: ShuttleRequest[]; classBasedCandidates?: ClassBasedCandidates | null }
+interface OptimizationPreview { provider: string; routeId: string; routeName: string; totalDistance?: number; totalTime?: number; stops: Array<{ id: string; previousOrder: number; recommendedOrder: number; name: string; address?: string | null; passengerCount: number }> }
+type LocationPickerTarget = { request: ShuttleRequest; kind: "pickup" | "dropoff" } | { student: ClassCandidateStudent; kind: "pickup" | "dropoff" };
 
 const EMPTY_PAYLOAD: Payload = { seasons: [], vehicles: [], drivers: [], routes: [], unassignedRequests: [] };
 const STATUS_LABEL: Record<RouteStatus, string> = { DRAFT: "작성 중", CONFIRMED: "확정", COMPLETED: "운행완료", ARCHIVED: "보관" };
@@ -109,7 +130,7 @@ export default function ShuttleRouteAdminClient() {
       const response = await fetch(`/api/admin/shuttle?${query.toString()}`, { cache: "no-store" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "셔틀 노선 정보를 불러오지 못했습니다.");
-      const payload: Payload = { seasons: body.seasons ?? [], vehicles: body.vehicles ?? [], drivers: body.drivers ?? [], routes: body.routes ?? [], unassignedRequests: body.unassignedRequests ?? [], selectedSeasonId: body.selectedSeasonId };
+      const payload: Payload = { seasons: body.seasons ?? [], vehicles: body.vehicles ?? [], drivers: body.drivers ?? [], routes: body.routes ?? [], unassignedRequests: body.unassignedRequests ?? [], classBasedCandidates: body.classBasedCandidates ?? null, selectedSeasonId: body.selectedSeasonId };
       setData(payload);
       const nextSeasonId = requestedSeasonId || payload.selectedSeasonId || payload.seasons[0]?.id || "";
       setSeasonId(nextSeasonId);
@@ -147,6 +168,25 @@ export default function ShuttleRouteAdminClient() {
   }
 
   async function saveRequestLocation(target: LocationPickerTarget, value: MapLocationData) {
+    if ("student" in target) {
+      await mutate({
+        resource: "studentLocation",
+        id: target.student.studentId,
+        action: "confirmLocation",
+        data: {
+          kind: target.kind.toUpperCase(),
+          name: value.roadAddress || value.address,
+          address: value.address,
+          roadAddress: value.roadAddress,
+          latitude: value.latitude,
+          longitude: value.longitude,
+          placeId: value.placeId,
+          source: value.source,
+          accuracyMeters: value.accuracyMeters,
+        },
+      }, `${target.student.studentName} ${target.kind === "pickup" ? "등원" : "하원"} 위치를 저장했습니다.`);
+      return;
+    }
     await mutate({
       resource: "shuttleRequest",
       id: target.request.id,
@@ -231,7 +271,8 @@ export default function ShuttleRouteAdminClient() {
   const chosenLocation = (item: ShuttleRequest) => direction === "PICKUP"
     ? { name: item.pickup?.name || item.pickup?.address || "승차 위치", address: item.pickup?.address || "", roadAddress: item.pickup?.roadAddress, latitude: item.pickup?.latitude ?? item.pickup?.lat, longitude: item.pickup?.longitude ?? item.pickup?.lng, lat: item.pickup?.latitude ?? item.pickup?.lat, lng: item.pickup?.longitude ?? item.pickup?.lng, confirmedAt: item.pickup?.confirmedAt, note: item.note, source: item.pickup?.source, placeId: item.pickup?.placeId, accuracyMeters: item.pickup?.accuracyMeters }
     : { name: item.dropoff?.name || item.dropoff?.address || "하차 위치", address: item.dropoff?.address || "", roadAddress: item.dropoff?.roadAddress, latitude: item.dropoff?.latitude ?? item.dropoff?.lat, longitude: item.dropoff?.longitude ?? item.dropoff?.lng, lat: item.dropoff?.latitude ?? item.dropoff?.lat, lng: item.dropoff?.longitude ?? item.dropoff?.lng, confirmedAt: item.dropoff?.confirmedAt, note: item.note, source: item.dropoff?.source, placeId: item.dropoff?.placeId, accuracyMeters: item.dropoff?.accuracyMeters };
-  const pickerInitialValue = locationPicker ? mapLocationData(locationPicker.kind === "pickup" ? locationPicker.request.pickup : locationPicker.request.dropoff) : undefined;
+  const pickerInitialValue = locationPicker ? mapLocationData(locationPicker.kind === "pickup" ? ("student" in locationPicker ? locationPicker.student.pickup : locationPicker.request.pickup) : ("student" in locationPicker ? locationPicker.student.dropoff : locationPicker.request.dropoff)) : undefined;
+  const pickerTitle = locationPicker ? `${"student" in locationPicker ? locationPicker.student.studentName : locationPicker.request.childName || locationPicker.request.studentName || "학생"} ${locationPicker.kind === "pickup" ? "등원" : "하원"} 위치 찍기` : "";
 
   return <main className="min-w-0 space-y-5 p-4 sm:p-6 lg:p-8">
     <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -256,8 +297,10 @@ export default function ShuttleRouteAdminClient() {
     <section aria-label="조회 조건" className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:grid-cols-3">
       <label className="text-sm font-bold">특강 시즌<select value={seasonId} onChange={(event) => void load(event.target.value, direction, serviceDate)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900">{data.seasons.map((season) => <option key={season.id} value={season.id}>{season.title}</option>)}</select></label>
       <fieldset><legend className="text-sm font-bold">운행 방향</legend><div className="mt-1 grid grid-cols-2 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">{(["PICKUP", "DROPOFF"] as Direction[]).map((value) => <button key={value} type="button" onClick={() => { setServiceDate(""); setDirection(value); }} className={`min-h-9 rounded-lg text-sm font-black ${direction === value ? "bg-white shadow dark:bg-gray-700" : "text-gray-500"}`}>{value === "PICKUP" ? "등원" : "하원"}</button>)}</div></fieldset>
-      <label className="text-sm font-bold">운행일<select value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">정기 노선 (날짜 없음)</option>{availableDates.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</select></label>
+      <label className="text-sm font-bold">운행일<input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} list="shuttle-service-dates" className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900" /><datalist id="shuttle-service-dates">{availableDates.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</datalist></label>
     </section>
+
+    {serviceDate && data.classBasedCandidates && <ClassCandidatePanel candidates={data.classBasedCandidates} pending={pending} onPickLocation={(student, kind) => setLocationPicker({ student, kind })} />}
 
     {loading ? <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800">노선 정보를 불러오는 중입니다…</div> : !data.seasons.length ? <Empty title="운영 중인 특강 시즌이 없습니다" description="방학특강 시즌을 먼저 등록한 뒤 노선을 만들어 주세요." /> : <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.28fr)]">
       <aside className="min-w-0 space-y-4">
@@ -266,7 +309,6 @@ export default function ShuttleRouteAdminClient() {
           <div className="mb-3 flex items-center justify-between"><h2 className="font-black">미배정 학생</h2><span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-black dark:bg-gray-700">{data.unassignedRequests.length}명</span></div>
           <div className="max-h-[32rem] space-y-2 overflow-y-auto">{data.unassignedRequests.length ? data.unassignedRequests.map((item) => {
             const location = chosenLocation(item);
-            const links = coordinateLinkSet({ latitude: location.lat, longitude: location.lng, name: location.name });
             const canAssign = Boolean(selectedRoute && selectedRoute.status === "DRAFT" && location.lat != null && location.lng != null && location.confirmedAt);
             return <article key={item.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
               <div className="flex justify-between gap-2">
@@ -275,12 +317,7 @@ export default function ShuttleRouteAdminClient() {
                   <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">{location.roadAddress || location.address || "위치 확인 필요"}</p>
                   {location.confirmedAt && <p className="mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">관리자 위치 확인 완료</p>}
                 </div>
-                {links.kakaoMap && <a href={links.kakaoMap} target="_blank" rel="noreferrer" aria-label={`${item.childName || "학생"} 카카오맵에서 좌표 확인`} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={19} /></a>}
               </div>
-              {links.point && <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-black">
-                <a href={links.kakaoNavigation ?? links.kakaoMap ?? "#"} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">카카오 길안내</a>
-                <a href={links.tmapNavigation ?? "#"} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-orange-200 bg-orange-50 px-2 text-orange-800 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200">T맵 길안내</a>
-              </div>}
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => setLocationPicker({ request: item, kind: direction === "PICKUP" ? "pickup" : "dropoff" })} disabled={pending} className="min-h-10 rounded-lg border border-blue-200 bg-blue-50 text-sm font-black text-blue-800 disabled:opacity-40 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">위치 찍기</button>
                 <button type="button" onClick={() => openAssign(item)} disabled={!canAssign} className="min-h-10 rounded-lg bg-gray-950 text-sm font-black text-white disabled:bg-gray-300 dark:bg-white dark:text-gray-950 dark:disabled:bg-gray-700">{canAssign ? "선택 노선에 배정" : "좌표 확인 필요"}</button>
@@ -313,7 +350,7 @@ export default function ShuttleRouteAdminClient() {
             {optimizationPreview.stops.map((stop) => <li key={stop.id} className="rounded-xl bg-white p-3 text-sm dark:bg-gray-900"><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-xs font-black text-white">{stop.recommendedOrder}</span><strong>{stop.name}</strong><span className="ml-2 text-xs font-bold text-gray-500">기존 {stop.previousOrder}번 · {stop.passengerCount}명</span></li>)}
           </ol>
         </section>}
-        <ol className="space-y-3">{stops.map((stop, index) => { const url = mapUrl(stop.lat, stop.lng, stop.name); return <li key={stop.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-950 text-sm font-black text-white dark:bg-white dark:text-gray-950">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="break-words font-black">{stop.name}</h3><p className="break-words text-xs text-gray-500">{stop.roadAddress || stop.address}</p></div><div className="flex gap-1">{url && <a href={url} target="_blank" rel="noreferrer" aria-label={`${stop.name} 지도에서 열기`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={18} /></a>}{selectedRoute.status === "DRAFT" && <><button type="button" onClick={() => moveStop(index, -1)} disabled={index === 0 || pending} aria-label={`${stop.name} 순서를 위로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↑</button><button type="button" onClick={() => moveStop(index, 1)} disabled={index === stops.length - 1 || pending} aria-label={`${stop.name} 순서를 아래로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↓</button></>}</div></div><label className="mt-2 block text-xs font-bold text-gray-500">예상 도착시간<input type="time" value={stop.plannedAt?.slice(11, 16) ?? stop.plannedAt ?? ""} disabled={selectedRoute.status !== "DRAFT" || pending} onChange={(event) => void mutate({ resource: "route", id: selectedRoute.id, action: "reorder", data: { stops: stops.map((item, itemIndex) => ({ id: item.id, stopOrder: itemIndex + 1, plannedAt: item.id === stop.id ? event.target.value : item.plannedAt })) } }, "예상시간을 변경했습니다.")} className="ml-2 min-h-9 rounded-lg border border-gray-300 bg-white px-2 dark:border-gray-600 dark:bg-gray-900" /></label><div className="mt-2 flex flex-wrap gap-2">{stop.passengers?.map((passenger) => <span key={passenger.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold dark:bg-gray-700">{passenger.studentNameSnapshot || "학생"}<span className={`rounded-full px-1.5 py-0.5 text-[10px] ${rideStatusClass(passenger.rideStatus)}`}>{rideStatusLabel(passenger.rideStatus)}</span>{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "unassign", data: { shuttleRequestId: passenger.shuttleRequestId } }, "학생 배정을 해제했습니다.")} aria-label={`${passenger.studentNameSnapshot || "학생"} 배정 해제`} className="ml-1 text-base leading-none">×</button>}</span>)}</div></div></div></li> })}</ol>
+        <ol className="space-y-3">{stops.map((stop, index) => { const url = null; return <li key={stop.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-950 text-sm font-black text-white dark:bg-white dark:text-gray-950">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="break-words font-black">{stop.name}</h3><p className="break-words text-xs text-gray-500">{stop.roadAddress || stop.address}</p></div><div className="flex gap-1">{url && <a href={url} target="_blank" rel="noreferrer" aria-label={`${stop.name} 지도에서 열기`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={18} /></a>}{selectedRoute.status === "DRAFT" && <><button type="button" onClick={() => moveStop(index, -1)} disabled={index === 0 || pending} aria-label={`${stop.name} 순서를 위로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↑</button><button type="button" onClick={() => moveStop(index, 1)} disabled={index === stops.length - 1 || pending} aria-label={`${stop.name} 순서를 아래로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↓</button></>}</div></div><label className="mt-2 block text-xs font-bold text-gray-500">예상 도착시간<input type="time" value={stop.plannedAt?.slice(11, 16) ?? stop.plannedAt ?? ""} disabled={selectedRoute.status !== "DRAFT" || pending} onChange={(event) => void mutate({ resource: "route", id: selectedRoute.id, action: "reorder", data: { stops: stops.map((item, itemIndex) => ({ id: item.id, stopOrder: itemIndex + 1, plannedAt: item.id === stop.id ? event.target.value : item.plannedAt })) } }, "예상시간을 변경했습니다.")} className="ml-2 min-h-9 rounded-lg border border-gray-300 bg-white px-2 dark:border-gray-600 dark:bg-gray-900" /></label><div className="mt-2 flex flex-wrap gap-2">{stop.passengers?.map((passenger) => <span key={passenger.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold dark:bg-gray-700">{passenger.studentNameSnapshot || "학생"}<span className={`rounded-full px-1.5 py-0.5 text-[10px] ${rideStatusClass(passenger.rideStatus)}`}>{rideStatusLabel(passenger.rideStatus)}</span>{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "unassign", data: { shuttleRequestId: passenger.shuttleRequestId } }, "학생 배정을 해제했습니다.")} aria-label={`${passenger.studentNameSnapshot || "학생"} 배정 해제`} className="ml-1 text-base leading-none">×</button>}</span>)}</div></div></div></li> })}</ol>
         {!stops.length && <p className="rounded-xl bg-gray-50 p-8 text-center text-sm text-gray-500 dark:bg-gray-900">왼쪽 미배정 학생을 선택해 첫 정류장을 추가하세요.</p>}
       </> : <Empty title="노선을 선택해 주세요" description="노선을 만들거나 왼쪽 목록에서 편집할 노선을 선택해 주세요." />}</section>
     </div>}
@@ -322,7 +359,7 @@ export default function ShuttleRouteAdminClient() {
     {modal === "route" && <SimpleModal title={`${direction === "PICKUP" ? "등원" : "하원"} 노선 만들기`} onClose={() => setModal(null)}><form onSubmit={(event) => void createResource(event, "route")} className="space-y-4"><Input name="name" label="노선명" required placeholder="예: 여름특강 등원 A노선" autoFocus /><label className="block text-sm font-bold">차량<select name="vehicleId" required className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">선택</option>{data.vehicles.filter((vehicle) => vehicle.isActive !== false).map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name} ({vehicle.capacity}명)</option>)}</select></label><label className="block text-sm font-bold">담당 기사<select name="driverUserId" required className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">기사 선택</option>{data.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}{driver.phone ? ` (${driver.phone})` : ""}</option>)}</select></label><Input name="serviceDate" label="운행일" type="date" /><EndpointFields prefix="origin" label="출발지" /><EndpointFields prefix="destination" label="도착지" /><p className="text-xs text-gray-500">현재는 출발·도착 좌표를 직접 입력합니다. 다음 자동 경로 단계에서 지도 선택으로 교체됩니다.</p><ModalActions pending={pending} onClose={() => setModal(null)} /></form></SimpleModal>}
     {modal === "assign" && assignRequest && selectedRoute && (() => { const location = chosenLocation(assignRequest); return <SimpleModal title="학생 배정" onClose={() => setModal(null)}><form onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void mutate({ resource: "route", id: selectedRoute.id, action: "assign", data: { shuttleRequestId: assignRequest.id, stop: { name: values.name, address: location.address, roadAddress: location.roadAddress, lat: Number(location.lat), lng: Number(location.lng), plannedAt: values.plannedAt || undefined, note: location.note } } }, "학생을 노선에 배정했습니다."); }} className="space-y-4"><p className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900"><strong>{assignRequest.childName || assignRequest.studentName}</strong><br />{location.address}</p><Input name="name" label="정류장 이름" required defaultValue={location.name} autoFocus /><Input name="plannedAt" label="예상 도착시간" type="time" /><ModalActions pending={pending} onClose={() => setModal(null)} submitLabel="배정" /></form></SimpleModal>; })()}
     {modal === "confirm" && selectedRoute && <SimpleModal title="노선을 확정하시겠습니까?" onClose={() => setModal(null)}><p className="text-sm leading-6 text-gray-600 dark:text-gray-300">확정 후에는 정류장 순서와 학생 배정을 직접 바꿀 수 없습니다. 변경하려면 새 수정 버전을 만들어야 합니다.</p><dl className="mt-4 grid grid-cols-2 gap-2"><Metric label="학생" value={`${passengerCount}명`} /><Metric label="정류장" value={`${stops.length}곳`} /></dl><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setModal(null)} className="min-h-11 rounded-xl border border-gray-300 px-4 font-bold dark:border-gray-600">취소</button><button type="button" disabled={pending} onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "confirm", data: {} }, "노선을 확정했습니다.")} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{pending ? "확정 중…" : "확정"}</button></div></SimpleModal>}
-    {locationPicker && <LocationPickerModal title={`${locationPicker.request.childName || locationPicker.request.studentName || "학생"} ${locationPicker.kind === "pickup" ? "탑승" : "하차"} 위치 찍기`} initialValue={pickerInitialValue} confirmPending={pending} onClose={() => setLocationPicker(null)} onConfirm={(value) => void saveRequestLocation(locationPicker, value)} />}
+    {locationPicker && <LocationPickerModal title={pickerTitle} initialValue={pickerInitialValue} confirmPending={pending} onClose={() => setLocationPicker(null)} onConfirm={(value) => void saveRequestLocation(locationPicker, value)} />}
   </main>;
 }
 
@@ -350,6 +387,50 @@ function mapLocationData(location?: RequestLocation | null): MapLocationData | u
     source: mapLocationSource(location?.source),
     accuracyMeters: accuracyMeters ?? undefined,
   };
+}
+
+function ClassCandidatePanel({ candidates, pending, onPickLocation }: { candidates: ClassBasedCandidates; pending: boolean; onPickLocation: (student: ClassCandidateStudent, kind: "pickup" | "dropoff") => void }) {
+  if (candidates.unavailable) {
+    return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">학생별 셔틀 위치 저장소가 아직 DB에 적용되지 않았습니다. 마이그레이션 적용 후 자동 후보를 확인할 수 있습니다.</section>;
+  }
+  return <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <p className="text-sm font-bold text-[var(--brand-accent)]">수업 기반 자동 후보</p>
+        <h2 className="text-xl font-black">등원·하원 자동 인식 준비</h2>
+        <p className="mt-1 text-sm text-gray-500">선택한 날짜의 수업과 소속 학생을 기준으로 후보를 확인합니다.</p>
+      </div>
+      <dl className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+        <Metric label="수업" value={`${candidates.totals.sessions}개`} />
+        <Metric label="학생" value={`${candidates.totals.students}명`} />
+        <Metric label="등원 준비" value={`${candidates.totals.pickupReady}명`} danger={candidates.totals.missingPickup > 0} />
+        <Metric label="하원 준비" value={`${candidates.totals.dropoffReady}명`} danger={candidates.totals.missingDropoff > 0} />
+      </dl>
+    </div>
+    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      {candidates.sessions.length ? candidates.sessions.map((session) => <article key={session.sessionId} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="font-black">{session.lessonTitle || session.className}</h3>
+            <p className="mt-1 text-xs font-bold text-gray-500">{session.classStartTime}~{session.classEndTime} · {session.students.length}명</p>
+          </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          {session.students.map((student) => <div key={student.studentId} className="grid gap-2 rounded-lg bg-gray-50 p-2 dark:bg-gray-900 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0">
+              <p className="font-black">{student.studentName}</p>
+              <p className="text-xs text-gray-500">{student.studentSchool || "학교 미입력"} {student.studentGrade || ""}</p>
+              <p className="mt-1 truncate text-xs text-gray-500">등원: {student.pickup.roadAddress || student.pickup.address || "위치 필요"} / 하원: {student.dropoff.roadAddress || student.dropoff.address || "위치 필요"}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => onPickLocation(student, "pickup")} disabled={pending} className={`min-h-9 rounded-lg px-3 text-xs font-black disabled:opacity-40 ${student.pickup.ready ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200" : "bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200"}`}>등원</button>
+              <button type="button" onClick={() => onPickLocation(student, "dropoff")} disabled={pending} className={`min-h-9 rounded-lg px-3 text-xs font-black disabled:opacity-40 ${student.dropoff.ready ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200" : "bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200"}`}>하원</button>
+            </div>
+          </div>)}
+        </div>
+      </article>) : <p className="rounded-xl bg-gray-50 p-5 text-sm font-bold text-gray-500 dark:bg-gray-900">선택한 날짜에 연결된 수업과 학생이 없습니다.</p>}
+    </div>
+  </section>;
 }
 
 function Empty({ title, description }: { title: string; description: string }) { return <div className="rounded-2xl border border-dashed border-gray-300 p-10 text-center dark:border-gray-700"><h2 className="font-black">{title}</h2><p className="mt-2 text-sm text-gray-500">{description}</p></div>; }

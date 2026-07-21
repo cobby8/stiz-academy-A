@@ -15,8 +15,8 @@ const staffButtonsSource = await readFile("src/app/staff/shuttle/ShuttleRideStat
 const adminClientSource = await readFile("src/app/admin/shuttle/ShuttleRouteAdminClient.tsx", "utf8");
 
 test("shuttle passengers keep live ride status", () => {
-  assert.match(schemaSource, /rideStatus String @default\("PENDING"\)/);
-  assert.match(schemaSource, /rideStatusUpdatedAt DateTime\? @db\.Timestamptz\(6\)/);
+  assert.match(schemaSource, /rideStatus\s+String\s+@default\("PENDING"\)/);
+  assert.match(schemaSource, /rideStatusUpdatedAt\s+DateTime\?\s+@db\.Timestamptz\(6\)/);
   assert.match(schemaSource, /@@index\(\[routePlanId, rideStatus\]\)/);
   assert.match(migrationSource, /"rideStatus" TEXT NOT NULL DEFAULT 'PENDING'/);
   assert.match(migrationSource, /CHECK \("rideStatus" IN \('PENDING', 'BOARDED', 'DROPPED_OFF', 'NO_SHOW'\)\)/);
@@ -59,7 +59,7 @@ test("admin route screen shows ride status for each passenger", () => {
 });
 
 test("confirmed routes can be completed only after every passenger is checked", () => {
-  assert.match(schemaSource, /completedAt DateTime\? @db\.Timestamptz\(6\)/);
+  assert.match(schemaSource, /completedAt\s+DateTime\?\s+@db\.Timestamptz\(6\)/);
   assert.match(schemaSource, /COMPLETED/);
   assert.match(completionMigrationSource, /ADD VALUE IF NOT EXISTS 'COMPLETED'/);
   assert.match(completionColumnsMigrationSource, /"completedAt" TIMESTAMPTZ\(6\)/);

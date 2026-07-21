@@ -29,6 +29,7 @@ type Actor = { appUserId: string };
 type StaffActor = Actor & { appUserRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" };
 type ShuttleRideStatus = "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW";
 type ShuttleLocationKind = "pickup" | "dropoff";
+type StudentShuttleLocationKind = "PICKUP" | "DROPOFF";
 
 const SHUTTLE_RIDE_STATUSES = new Set<ShuttleRideStatus>(["PENDING", "BOARDED", "DROPPED_OFF", "NO_SHOW"]);
 
@@ -101,6 +102,20 @@ function parseLocationKind(value: unknown): ShuttleLocationKind {
   return value;
 }
 
+function parseStudentLocationKind(value: unknown): StudentShuttleLocationKind {
+  const kind = typeof value === "string" ? value.toUpperCase() : "";
+  if (kind !== "PICKUP" && kind !== "DROPOFF") {
+    throw new ShuttleServiceError("학생의 등원 또는 하원 위치를 선택해 주세요.", 400, "INVALID_LOCATION_KIND");
+  }
+  return kind;
+}
+
+function dayRange(value: Date) {
+  const day = value.toISOString().slice(0, 10);
+  const start = new Date(`${day}T00:00:00.000Z`);
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
 function point(data: Record<string, unknown>, prefix: "origin" | "destination") {
   const nested = data[prefix] && typeof data[prefix] === "object" ? data[prefix] as Record<string, unknown> : {};
   const name = text(data[`${prefix}Name`] ?? nested.name, 150);
@@ -162,6 +177,175 @@ async function ensureDriver(tx: Db, driverUserId: string) {
   });
   if (!driver) throw new ShuttleServiceError("셔틀 기사 계정을 선택해 주세요.", 409, "DRIVER_UNAVAILABLE");
   return driver;
+}
+
+type ShuttleClassCandidateRow = {
+  sessionId: string;
+  classId: string;
+  className: string;
+  classStartTime: string;
+  classEndTime: string;
+  lessonTitle: string | null;
+  startsAt: Date | string | null;
+  endsAt: Date | string | null;
+  studentId: string;
+  studentName: string;
+  studentGrade: string | null;
+  studentSchool: string | null;
+  parentName: string | null;
+  parentPhone: string | null;
+  pickupName: string | null;
+  pickupAddress: string | null;
+  pickupRoadAddress: string | null;
+  pickupLatitude: number | null;
+  pickupLongitude: number | null;
+  pickupConfirmedAt: Date | string | null;
+  dropoffName: string | null;
+  dropoffAddress: string | null;
+  dropoffRoadAddress: string | null;
+  dropoffLatitude: number | null;
+  dropoffLongitude: number | null;
+  dropoffConfirmedAt: Date | string | null;
+};
+
+function serialLocation(row: ShuttleClassCandidateRow, kind: StudentShuttleLocationKind) {
+  const prefix = kind === "PICKUP" ? "pickup" : "dropoff";
+  const latitude = row[`${prefix}Latitude` as keyof ShuttleClassCandidateRow] as number | null;
+  const longitude = row[`${prefix}Longitude` as keyof ShuttleClassCandidateRow] as number | null;
+  const confirmedAt = row[`${prefix}ConfirmedAt` as keyof ShuttleClassCandidateRow] as Date | string | null;
+  return {
+    kind,
+    name: row[`${prefix}Name` as keyof ShuttleClassCandidateRow] as string | null,
+    address: row[`${prefix}Address` as keyof ShuttleClassCandidateRow] as string | null,
+    roadAddress: row[`${prefix}RoadAddress` as keyof ShuttleClassCandidateRow] as string | null,
+    latitude,
+    longitude,
+    confirmedAt,
+    ready: latitude !== null && longitude !== null && confirmedAt !== null,
+  };
+}
+
+function missingClassCandidateTable(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  const detail = JSON.stringify(error.meta ?? {});
+  return error.code === "P2010" && (detail.includes("42P01") || detail.includes("42703"));
+}
+
+export async function getClassBasedShuttleCandidates(serviceDate: Date) {
+  const { start, end } = dayRange(serviceDate);
+  let rows: ShuttleClassCandidateRow[];
+  try {
+    rows = await prisma.$queryRaw<ShuttleClassCandidateRow[]>`
+      SELECT
+        s.id AS "sessionId",
+        c.id AS "classId",
+        c.name AS "className",
+        c."startTime" AS "classStartTime",
+        c."endTime" AS "classEndTime",
+        c.name AS "lessonTitle",
+        NULL AS "startsAt",
+        NULL AS "endsAt",
+        st.id AS "studentId",
+        st.name AS "studentName",
+        st.grade AS "studentGrade",
+        st.school AS "studentSchool",
+        parent.name AS "parentName",
+        COALESCE(st.phone, parent.phone) AS "parentPhone",
+        pickup.name AS "pickupName",
+        pickup.address AS "pickupAddress",
+        pickup."roadAddress" AS "pickupRoadAddress",
+        pickup.latitude AS "pickupLatitude",
+        pickup.longitude AS "pickupLongitude",
+        pickup."confirmedAt" AS "pickupConfirmedAt",
+        dropoff.name AS "dropoffName",
+        dropoff.address AS "dropoffAddress",
+        dropoff."roadAddress" AS "dropoffRoadAddress",
+        dropoff.latitude AS "dropoffLatitude",
+        dropoff.longitude AS "dropoffLongitude",
+        dropoff."confirmedAt" AS "dropoffConfirmedAt"
+      FROM "Session" s
+      JOIN "Class" c ON c.id = s."classId"
+      JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+      JOIN "Student" st ON st.id = e."studentId"
+      LEFT JOIN "User" parent ON parent.id = st."parentId"
+      LEFT JOIN "StudentShuttleLocation" pickup ON pickup."studentId" = st.id AND pickup.kind = 'PICKUP'
+      LEFT JOIN "StudentShuttleLocation" dropoff ON dropoff."studentId" = st.id AND dropoff.kind = 'DROPOFF'
+      WHERE s.date >= ${start} AND s.date < ${end}
+      ORDER BY s.date, c."startTime", st.name
+    `;
+  } catch (error) {
+    if (missingClassCandidateTable(error)) {
+      return {
+        serviceDate: serviceDate.toISOString().slice(0, 10),
+        unavailable: true,
+        sessions: [],
+        totals: { sessions: 0, students: 0, pickupReady: 0, dropoffReady: 0, missingPickup: 0, missingDropoff: 0 },
+      };
+    }
+    throw error;
+  }
+
+  const sessions = new Map<string, {
+    sessionId: string;
+    classId: string;
+    className: string;
+    lessonTitle: string | null;
+    startsAt: Date | string | null;
+    endsAt: Date | string | null;
+    classStartTime: string;
+    classEndTime: string;
+    students: Array<{
+      studentId: string;
+      studentName: string;
+      studentGrade: string | null;
+      studentSchool: string | null;
+      parentName: string | null;
+      parentPhone: string | null;
+      pickup: ReturnType<typeof serialLocation>;
+      dropoff: ReturnType<typeof serialLocation>;
+    }>;
+  }>();
+
+  for (const row of rows) {
+    const session = sessions.get(row.sessionId) ?? {
+      sessionId: row.sessionId,
+      classId: row.classId,
+      className: row.className,
+      lessonTitle: row.lessonTitle,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      classStartTime: row.classStartTime,
+      classEndTime: row.classEndTime,
+      students: [],
+    };
+    session.students.push({
+      studentId: row.studentId,
+      studentName: row.studentName,
+      studentGrade: row.studentGrade,
+      studentSchool: row.studentSchool,
+      parentName: row.parentName,
+      parentPhone: row.parentPhone,
+      pickup: serialLocation(row, "PICKUP"),
+      dropoff: serialLocation(row, "DROPOFF"),
+    });
+    sessions.set(row.sessionId, session);
+  }
+
+  const list = Array.from(sessions.values());
+  const students = list.flatMap((session) => session.students);
+  return {
+    serviceDate: serviceDate.toISOString().slice(0, 10),
+    unavailable: false,
+    sessions: list,
+    totals: {
+      sessions: list.length,
+      students: students.length,
+      pickupReady: students.filter((student) => student.pickup.ready).length,
+      dropoffReady: students.filter((student) => student.dropoff.ready).length,
+      missingPickup: students.filter((student) => !student.pickup.ready).length,
+      missingDropoff: students.filter((student) => !student.dropoff.ready).length,
+    },
+  };
 }
 
 export async function getShuttleDashboard(
@@ -243,6 +427,7 @@ export async function getShuttleDashboard(
     pickupTime: request.pickupTime,
     note: request.note,
   }));
+  const classBasedCandidates = selectedServiceDate ? await getClassBasedShuttleCandidates(selectedServiceDate) : null;
 
   return {
     seasons,
@@ -256,6 +441,7 @@ export async function getShuttleDashboard(
       passengerCount: route.stops.reduce((sum, stop) => sum + stop.passengers.length, 0),
     })),
     unassignedRequests,
+    classBasedCandidates,
   };
 }
 
@@ -540,6 +726,62 @@ export async function updateShuttleRequestLocation(actor: Actor, shuttleRequestI
     });
     await audit(tx, actor, "SHUTTLE_LOCATION_CONFIRMED", { shuttleRequestId }, before, request);
     return request;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function updateStudentShuttleLocation(actor: Actor, studentId: string, input: Record<string, unknown>) {
+  const kind = parseStudentLocationKind(input.kind);
+  const nested = input.location && typeof input.location === "object" ? input.location as Record<string, unknown> : {};
+  const address = text(input.address ?? nested.address, 300);
+  const roadAddress = text(input.roadAddress ?? nested.roadAddress, 300);
+  const name = text(input.name ?? input.locationName ?? nested.name, 150) ?? roadAddress ?? address;
+  const latitude = optionalCoordinate(input.latitude ?? input.lat ?? nested.latitude ?? nested.lat, "학생 위치", -90, 90);
+  const longitude = optionalCoordinate(input.longitude ?? input.lng ?? nested.longitude ?? nested.lng, "학생 위치", -180, 180);
+  if (latitude === null || longitude === null) {
+    throw new ShuttleServiceError("학생 위치 좌표가 필요합니다.", 400, "COORDINATES_REQUIRED");
+  }
+  if (!address && !roadAddress && !name) {
+    throw new ShuttleServiceError("학생 위치 주소가 필요합니다.", 400, "ADDRESS_REQUIRED");
+  }
+  const placeId = text(input.placeId ?? nested.placeId, 200);
+  const source = text(input.source ?? nested.source, 30) ?? "ADMIN_PIN";
+  const note = text(input.note ?? nested.note, 1000);
+  const accuracyValue = input.accuracyMeters ?? nested.accuracyMeters;
+  const accuracyMeters = accuracyValue === undefined || accuracyValue === null || accuracyValue === ""
+    ? null
+    : coordinate(accuracyValue, "학생 위치 정확도", 0, 100_000);
+
+  return prisma.$transaction(async (tx) => {
+    const student = await tx.student.findUnique({ where: { id: studentId }, select: { id: true, name: true } });
+    if (!student) throw new ShuttleServiceError("학생을 찾을 수 없습니다.", 404, "STUDENT_NOT_FOUND");
+    const [location] = await tx.$queryRaw<Array<Record<string, unknown>>>`
+      INSERT INTO "StudentShuttleLocation" (
+        "studentId", kind, name, address, "roadAddress", latitude, longitude,
+        "placeId", source, "accuracyMeters", "confirmedAt", "consentVersion", note,
+        "createdAt", "updatedAt"
+      )
+      VALUES (
+        ${studentId}, ${kind}, ${name ?? address ?? roadAddress}, ${address ?? roadAddress ?? name},
+        ${roadAddress ?? null}, ${latitude}, ${longitude}, ${placeId ?? null}, ${source},
+        ${accuracyMeters}, NOW(), ${SHUTTLE_LOCATION_CONSENT_VERSION}, ${note ?? null}, NOW(), NOW()
+      )
+      ON CONFLICT ("studentId", kind) DO UPDATE SET
+        name = EXCLUDED.name,
+        address = EXCLUDED.address,
+        "roadAddress" = EXCLUDED."roadAddress",
+        latitude = EXCLUDED.latitude,
+        longitude = EXCLUDED.longitude,
+        "placeId" = EXCLUDED."placeId",
+        source = EXCLUDED.source,
+        "accuracyMeters" = EXCLUDED."accuracyMeters",
+        "confirmedAt" = EXCLUDED."confirmedAt",
+        "consentVersion" = EXCLUDED."consentVersion",
+        note = EXCLUDED.note,
+        "updatedAt" = NOW()
+      RETURNING *
+    `;
+    await audit(tx, actor, "STUDENT_SHUTTLE_LOCATION_CONFIRMED", {}, undefined, { student, location });
+    return location;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

@@ -290,7 +290,7 @@ export default function AdminShellClient({
                         </div>
                     </div>
                 </header>
-                <div className="w-full min-w-0 flex-1 p-4 md:p-8">
+                <div className="admin-table-scope w-full min-w-0 flex-1 p-4 md:p-8">
                     {children}
                 </div>
             </main>

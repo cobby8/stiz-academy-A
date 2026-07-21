@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createCoach, updateCoach, deleteCoach, reorderCoaches } from "@/app/actions/admin";
 import { compressImageForUpload } from "@/lib/clientImageCompression";
 import AdminModal from "@/components/admin/AdminModal";
+import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
 
 interface Coach {
     id: string;
@@ -39,6 +40,10 @@ function defaultForm(coach?: Coach): FormState {
         imageFile: null,
         previewUrl: coach?.imageUrl ?? null,
     };
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
 }
 
 async function uploadImage(file: File): Promise<string> {
@@ -193,7 +198,6 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
     const [editId, setEditId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<FormState>(defaultForm());
     const [editError, setEditError] = useState<string | null>(null);
-    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
     // Drag state
     const dragIndex = useRef<number | null>(null);
@@ -250,8 +254,8 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
                 setAddForm(defaultForm());
                 setShowAddModal(false);
                 await loadCoaches();
-            } catch (e: any) {
-                setAddError(e.message ?? "추가 실패");
+            } catch (e: unknown) {
+                setAddError(getErrorMessage(e, "추가 실패"));
             }
         });
     }
@@ -291,8 +295,8 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
                 } : c));
                 setEditId(null);
                 await loadCoaches();
-            } catch (e: any) {
-                setEditError(e.message ?? "수정 실패");
+            } catch (e: unknown) {
+                setEditError(getErrorMessage(e, "수정 실패"));
             }
         });
     }
@@ -301,11 +305,10 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
         startTransition(async () => {
             try {
                 await deleteCoach(id);
-                setDeleteConfirm(null);
                 setCoaches((prev) => prev.filter((c) => c.id !== id));
                 await loadCoaches();
-            } catch (e: any) {
-                alert(e.message ?? "삭제 실패");
+            } catch (e: unknown) {
+                alert(getErrorMessage(e, "삭제 실패"));
             }
         });
     }
@@ -341,8 +344,8 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
             try {
                 await reorderCoaches(next.map((c) => c.id));
                 await loadCoaches();
-            } catch (e: any) {
-                alert(e.message ?? "순서 변경 실패");
+            } catch (e: unknown) {
+                alert(getErrorMessage(e, "순서 변경 실패"));
                 setCoaches(previous);
             }
         });
@@ -534,37 +537,30 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
                                 </div>
 
                                 {/* 액션 버튼 */}
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                        onClick={() => editId === coach.id ? cancelEdit() : startEdit(coach)}
-                                        className="text-sm font-bold text-brand-navy-900 hover:bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg transition"
-                                    >
-                                        {editId === coach.id ? "취소" : "수정"}
-                                    </button>
-                                    {deleteConfirm === coach.id ? (
-                                        <>
-                                            <button
-                                                onClick={() => handleDelete(coach.id)}
-                                                disabled={pending}
-                                                className="text-sm font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
-                                            >
-                                                확인
-                                            </button>
-                                            <button
-                                                onClick={() => setDeleteConfirm(null)}
-                                                className="text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg transition"
-                                            >
-                                                취소
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <button
-                                            onClick={() => setDeleteConfirm(coach.id)}
-                                            className="text-sm font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition"
-                                        >
-                                            삭제
-                                        </button>
-                                    )}
+                                <div className="shrink-0">
+                                    <AdminQuickActionMenu
+                                        label={`${coach.name} 빠른 작업`}
+                                        actions={[
+                                            {
+                                                key: "edit",
+                                                label: editId === coach.id ? "수정 닫기" : "수정",
+                                                icon: editId === coach.id ? "close" : "edit",
+                                                onSelect: () => editId === coach.id ? cancelEdit() : startEdit(coach),
+                                            },
+                                            {
+                                                key: "delete",
+                                                label: "삭제",
+                                                icon: "delete",
+                                                tone: "danger",
+                                                disabled: pending,
+                                                onSelect: () => {
+                                                    if (window.confirm(`"${coach.name}" 강사를 삭제할까요?`)) {
+                                                        void handleDelete(coach.id);
+                                                    }
+                                                },
+                                            },
+                                        ]}
+                                    />
                                 </div>
                             </div>
 

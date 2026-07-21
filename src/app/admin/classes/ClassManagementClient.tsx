@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link"; // 클래스 상세 페이지 링크용
 import { deleteClass } from "@/app/actions/admin";
+import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
 
 const ClassFormPanel = dynamic(() => import("./ClassFormPanel"), {
     loading: () => null,
@@ -36,6 +37,10 @@ const DAYS = [
     { value: "Sat", label: "토요일" },
     { value: "Sun", label: "일요일" },
 ] as const;
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
+}
 
 function ClassesLoadingFallback() {
     return (
@@ -91,7 +96,6 @@ export default function ClassManagementClient({
     const [showForm, setShowForm] = useState(false);
     const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
     const [busy, setBusy] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
     const loadClasses = useCallback(async () => {
         setLoading(true);
@@ -133,10 +137,9 @@ export default function ClassManagementClient({
         setBusy(true);
         try {
             await deleteClass(id);
-            setDeleteConfirm(null);
             await loadClasses();
-        } catch (err: any) {
-            alert(err.message || "삭제 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "삭제 실패"));
         } finally {
             setBusy(false);
         }
@@ -232,38 +235,29 @@ export default function ClassManagementClient({
                                         <div>정원: {cls.capacity}명</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                        <div className="flex items-center gap-2 justify-end">
-                                            <button
-                                                onClick={() => startEdit(cls)}
-                                                className="text-blue-600 hover:text-blue-800 font-medium"
-                                            >
-                                                수정
-                                            </button>
-                                            {deleteConfirm === cls.id ? (
-                                                <div className="flex gap-1">
-                                                    <button
-                                                        onClick={() => handleDelete(cls.id)}
-                                                        disabled={busy}
-                                                        className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold disabled:opacity-50"
-                                                    >
-                                                        확인
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setDeleteConfirm(null)}
-                                                        className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
-                                                    >
-                                                        취소
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    onClick={() => setDeleteConfirm(cls.id)}
-                                                    className="text-red-500 hover:text-red-700 font-medium bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded transition"
-                                                >
-                                                    삭제
-                                                </button>
-                                            )}
-                                        </div>
+                                        <AdminQuickActionMenu
+                                            label={`${cls.name} 빠른 작업`}
+                                            actions={[
+                                                {
+                                                    key: "edit",
+                                                    label: "수정",
+                                                    icon: "edit",
+                                                    onSelect: () => startEdit(cls),
+                                                },
+                                                {
+                                                    key: "delete",
+                                                    label: "삭제",
+                                                    icon: "delete",
+                                                    tone: "danger",
+                                                    disabled: busy,
+                                                    onSelect: () => {
+                                                        if (window.confirm(`"${cls.name}" 반을 삭제할까요?`)) {
+                                                            void handleDelete(cls.id);
+                                                        }
+                                                    },
+                                                },
+                                            ]}
+                                        />
                                     </td>
                                 </tr>
                             ))}

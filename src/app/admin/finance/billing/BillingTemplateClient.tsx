@@ -6,6 +6,7 @@ import {
     updateBillingTemplate,
     deleteBillingTemplate,
 } from "@/app/actions/admin";
+import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
 
 // 청구 유형 라벨 매핑
 const TYPE_LABELS: Record<string, string> = {
@@ -40,6 +41,10 @@ type BillingTemplatePayload = {
 
 function formatAmount(n: number): string {
     return n.toLocaleString("ko-KR") + "원";
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
 }
 
 function BillingTemplateLoadingFallback() {
@@ -116,7 +121,6 @@ export default function BillingTemplateClient({
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
     // 폼 상태
     const [name, setName] = useState("");
@@ -197,8 +201,8 @@ export default function BillingTemplateClient({
             }
             resetForm();
             await loadBillingTemplates();
-        } catch (err: any) {
-            alert(err.message || "저장 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "저장 실패"));
         } finally {
             setBusy(false);
         }
@@ -210,8 +214,8 @@ export default function BillingTemplateClient({
         try {
             await updateBillingTemplate(tpl.id, { isActive: !tpl.isActive });
             await loadBillingTemplates();
-        } catch (err: any) {
-            alert(err.message || "상태 변경 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "상태 변경 실패"));
         } finally {
             setBusy(false);
         }
@@ -222,10 +226,9 @@ export default function BillingTemplateClient({
         setBusy(true);
         try {
             await deleteBillingTemplate(id);
-            setDeleteConfirm(null);
             await loadBillingTemplates();
-        } catch (err: any) {
-            alert(err.message || "삭제 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "삭제 실패"));
         } finally {
             setBusy(false);
         }
@@ -409,38 +412,29 @@ export default function BillingTemplateClient({
                                             </button>
                                         </td>
                                         <td className="px-5 py-3.5 text-right">
-                                            <div className="flex items-center gap-2 justify-end">
-                                                <button
-                                                    onClick={() => startEdit(tpl)}
-                                                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                                                >
-                                                    수정
-                                                </button>
-                                                {deleteConfirm === tpl.id ? (
-                                                    <div className="flex gap-1">
-                                                        <button
-                                                            onClick={() => handleDelete(tpl.id)}
-                                                            disabled={busy}
-                                                            className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold disabled:opacity-50"
-                                                        >
-                                                            확인
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setDeleteConfirm(null)}
-                                                            className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
-                                                        >
-                                                            취소
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => setDeleteConfirm(tpl.id)}
-                                                        className="text-xs text-red-500 hover:text-red-700 font-medium"
-                                                    >
-                                                        삭제
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <AdminQuickActionMenu
+                                                label={`${tpl.name} 빠른 작업`}
+                                                actions={[
+                                                    {
+                                                        key: "edit",
+                                                        label: "수정",
+                                                        icon: "edit",
+                                                        onSelect: () => startEdit(tpl),
+                                                    },
+                                                    {
+                                                        key: "delete",
+                                                        label: "삭제",
+                                                        icon: "delete",
+                                                        tone: "danger",
+                                                        disabled: busy,
+                                                        onSelect: () => {
+                                                            if (window.confirm(`"${tpl.name}" 템플릿을 삭제할까요?`)) {
+                                                                void handleDelete(tpl.id);
+                                                            }
+                                                        },
+                                                    },
+                                                ]}
+                                            />
                                         </td>
                                     </tr>
                                 ))}

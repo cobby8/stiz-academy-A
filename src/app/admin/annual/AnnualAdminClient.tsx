@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createAnnualEvent, updateAnnualEvent, deleteAnnualEvent, updateAcademySettings } from "@/app/actions/admin";
+import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
 
 type AnnualEvent = {
     id: string;
@@ -95,6 +96,10 @@ function toDateString(d: Date | string | null | undefined): string {
     return date.toISOString().split("T")[0];
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
+}
+
 export default function AnnualAdminClient({
     events: initialEvents,
     initialIcsUrl = "",
@@ -109,7 +114,6 @@ export default function AnnualAdminClient({
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
     // ICS URL 관련 상태
     const [icsUrl, setIcsUrl] = useState(initialIcsUrl);
@@ -186,8 +190,8 @@ export default function AnnualAdminClient({
             }
             resetForm();
             await loadAnnual();
-        } catch (err: any) {
-            alert(err.message || "저장 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "저장 실패"));
         } finally {
             setBusy(false);
         }
@@ -197,10 +201,9 @@ export default function AnnualAdminClient({
         setBusy(true);
         try {
             await deleteAnnualEvent(id);
-            setDeleteConfirm(null);
             await loadAnnual();
-        } catch (err: any) {
-            alert(err.message || "삭제 실패");
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, "삭제 실패"));
         } finally {
             setBusy(false);
         }
@@ -215,8 +218,8 @@ export default function AnnualAdminClient({
             setIcsMsg("저장되었습니다.");
             await loadAnnual();
             setTimeout(() => setIcsMsg(null), 3000);
-        } catch (err: any) {
-            setIcsMsg("저장 실패: " + (err.message || "알 수 없는 오류"));
+        } catch (err: unknown) {
+            setIcsMsg("저장 실패: " + getErrorMessage(err, "알 수 없는 오류"));
         } finally {
             setIcsSaving(false);
         }
@@ -388,37 +391,30 @@ export default function AnnualAdminClient({
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 shrink-0 ml-4">
-                                            <button
-                                                onClick={() => startEdit(ev)}
-                                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                                            >
-                                                수정
-                                            </button>
-                                            {deleteConfirm === ev.id ? (
-                                                <div className="flex gap-1">
-                                                    <button
-                                                        onClick={() => handleDelete(ev.id)}
-                                                        disabled={busy}
-                                                        className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold disabled:opacity-50"
-                                                    >
-                                                        확인
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setDeleteConfirm(null)}
-                                                        className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
-                                                    >
-                                                        취소
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    onClick={() => setDeleteConfirm(ev.id)}
-                                                    className="text-sm text-red-500 hover:text-red-700 font-medium"
-                                                >
-                                                    삭제
-                                                </button>
-                                            )}
+                                        <div className="shrink-0 ml-4">
+                                            <AdminQuickActionMenu
+                                                label={`${ev.title} 빠른 작업`}
+                                                actions={[
+                                                    {
+                                                        key: "edit",
+                                                        label: "수정",
+                                                        icon: "edit",
+                                                        onSelect: () => startEdit(ev),
+                                                    },
+                                                    {
+                                                        key: "delete",
+                                                        label: "삭제",
+                                                        icon: "delete",
+                                                        tone: "danger",
+                                                        disabled: busy,
+                                                        onSelect: () => {
+                                                            if (window.confirm(`"${ev.title}" 일정을 삭제할까요?`)) {
+                                                                void handleDelete(ev.id);
+                                                            }
+                                                        },
+                                                    },
+                                                ]}
+                                            />
                                         </div>
                                     </div>
                                 ))}

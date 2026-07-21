@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AdminModal from "@/components/admin/AdminModal";
+import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
 import {
     createPayment,
     updatePaymentStatus,
@@ -359,7 +360,6 @@ export default function FinanceClient({
     );
     const [showForm, setShowForm] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [summary, setSummary] = useState(initialSummary ?? EMPTY_SUMMARY);
     const [students, setStudents] = useState<Student[]>([]);
     const [studentsLoaded, setStudentsLoaded] = useState(false);
@@ -552,7 +552,6 @@ export default function FinanceClient({
         setBusy(true);
         try {
             await deletePayment(id);
-            setDeleteConfirm(null);
             await loadMonth(year, month);
         } catch (err: unknown) {
             alert(getErrorMessage(err, "삭제 실패"));
@@ -1665,78 +1664,82 @@ export default function FinanceClient({
                                                 )}
                                             </td>
                                             <td className="px-4 py-3.5 text-right">
-                                                <div className="flex items-center gap-2 justify-end">
-                                                    {invoiceHref && (
-                                                        <>
-                                                            <a
-                                                                href={invoiceHref}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="text-xs font-medium text-gray-600 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white"
-                                                            >
-                                                                청구서
-                                                            </a>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => void handleCopyInvoiceLink(p)}
-                                                                className="text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-brand-neon-lime"
-                                                            >
-                                                                링크복사
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    {p.status !== "PAID" && (
-                                                        <>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openTerminalModal(p)}
-                                                                disabled={busy || terminalSubmitting}
-                                                                className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50 dark:text-brand-neon-lime"
-                                                            >
-                                                                단말기
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleStatusChange(p.id, "PAID")}
-                                                                disabled={busy}
-                                                                className="text-xs text-green-600 hover:text-green-800 font-medium"
-                                                            >
-                                                                납부처리
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    {p.status === "PENDING" && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleStatusChange(p.id, "OVERDUE")}
-                                                            disabled={busy}
-                                                            className="text-xs text-yellow-600 hover:text-yellow-800 font-medium"
-                                                        >
-                                                            연체처리
-                                                        </button>
-                                                    )}
-                                                    {p.status === "PAID" && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleStatusChange(p.id, "REFUNDED")}
-                                                            disabled={busy}
-                                                            className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-200 font-medium"
-                                                        >
-                                                            환불
-                                                        </button>
-                                                    )}
-                                                    {deleteConfirm === p.id ? (
-                                                        <div className="flex gap-1">
-                                                            <button type="button" onClick={() => handleDelete(p.id)} disabled={busy}
-                                                                className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold disabled:opacity-50">확인</button>
-                                                            <button type="button" onClick={() => setDeleteConfirm(null)}
-                                                                className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">취소</button>
-                                                        </div>
-                                                    ) : (
-                                                        <button type="button" onClick={() => setDeleteConfirm(p.id)}
-                                                            className="text-xs text-red-500 hover:text-red-700 font-medium">삭제</button>
-                                                    )}
-                                                </div>
+                                                <AdminQuickActionMenu
+                                                    label={`${p.studentName} 수납 빠른 작업`}
+                                                    actions={[
+                                                        ...(invoiceHref ? [
+                                                            {
+                                                                key: "invoice",
+                                                                label: "청구서",
+                                                                icon: "receipt_long",
+                                                                onSelect: () => {
+                                                                    window.open(invoiceHref, "_blank", "noopener,noreferrer");
+                                                                },
+                                                            },
+                                                            {
+                                                                key: "copy",
+                                                                label: "링크복사",
+                                                                icon: "content_copy",
+                                                                onSelect: () => {
+                                                                    void handleCopyInvoiceLink(p);
+                                                                },
+                                                            },
+                                                        ] : []),
+                                                        ...(p.status !== "PAID" ? [
+                                                            {
+                                                                key: "terminal",
+                                                                label: "단말기",
+                                                                icon: "point_of_sale",
+                                                                disabled: busy || terminalSubmitting,
+                                                                onSelect: () => openTerminalModal(p),
+                                                            },
+                                                            {
+                                                                key: "paid",
+                                                                label: "납부처리",
+                                                                icon: "check_circle",
+                                                                tone: "primary" as const,
+                                                                disabled: busy,
+                                                                onSelect: () => {
+                                                                    void handleStatusChange(p.id, "PAID");
+                                                                },
+                                                            },
+                                                        ] : []),
+                                                        ...(p.status === "PENDING" ? [
+                                                            {
+                                                                key: "overdue",
+                                                                label: "연체처리",
+                                                                icon: "warning",
+                                                                disabled: busy,
+                                                                onSelect: () => {
+                                                                    void handleStatusChange(p.id, "OVERDUE");
+                                                                },
+                                                            },
+                                                        ] : []),
+                                                        ...(p.status === "PAID" ? [
+                                                            {
+                                                                key: "refund",
+                                                                label: "환불",
+                                                                icon: "undo",
+                                                                disabled: busy,
+                                                                onSelect: () => {
+                                                                    void handleStatusChange(p.id, "REFUNDED");
+                                                                },
+                                                            },
+                                                        ] : []),
+                                                        {
+                                                            key: "delete",
+                                                            label: "삭제",
+                                                            icon: "delete",
+                                                            tone: "danger" as const,
+                                                            disabled: busy,
+                                                            onSelect: () => {
+                                                                if (window.confirm(`"${p.studentName}" 수납 기록을 삭제할까요?`)) {
+                                                                    void handleDelete(p.id);
+                                                                }
+                                                            },
+                                                        },
+                                                    ]}
+                                                />
                                             </td>
                                         </tr>
                                     );

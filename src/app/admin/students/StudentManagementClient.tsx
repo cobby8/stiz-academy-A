@@ -11,6 +11,7 @@ import {
     deleteEnrollment,
 } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
+import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
 
 const ExcelUploadModal = dynamic(() => import("./ExcelUploadModal"), {
     ssr: false,
@@ -1017,7 +1018,6 @@ export default function StudentManagementClient({
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [search, setSearch] = useState("");
     const [enrollModal, setEnrollModal] = useState<string | null>(null);
     // 엑셀 업로드 모달 열기/닫기 상태
@@ -1413,7 +1413,6 @@ export default function StudentManagementClient({
         setBusy(true);
         try {
             await deleteStudent(id);
-            setDeleteConfirm(null);
             await loadData();
         } catch (err: unknown) {
             alert(err instanceof Error ? err.message : "삭제 실패");
@@ -2083,49 +2082,38 @@ export default function StudentManagementClient({
                                         <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {formatPhone(s.parent.phone)}
                                         </td>
-                                        {/* 관리: 아이콘 버튼 3개 (수강등록, 수정, 삭제) */}
+                                        {/* 관리: 반복 액션은 번개 메뉴 안에 묶어 표를 한 줄로 유지 */}
                                         <td className="px-4 py-2 text-right">
-                                            <div className="flex items-center gap-1 justify-end">
-                                                <button
-                                                    onClick={() => setEnrollModal(s.id)}
-                                                    title="수강등록"
-                                                    className="p-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition"
-                                                >
-                                                    <span className="material-symbols-outlined text-[20px]">how_to_reg</span>
-                                                </button>
-                                                <button
-                                                    onClick={() => startEdit(s)}
-                                                    title="수정"
-                                                    className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition"
-                                                >
-                                                    <span className="material-symbols-outlined text-[20px]">edit</span>
-                                                </button>
-                                                {deleteConfirm === s.id ? (
-                                                    <div className="flex gap-1">
-                                                        <button
-                                                            onClick={() => handleDelete(s.id)}
-                                                            disabled={busy}
-                                                            className="text-xs bg-red-500 text-white px-2 py-1 rounded font-bold disabled:opacity-50"
-                                                        >
-                                                            확인
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setDeleteConfirm(null)}
-                                                            className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
-                                                        >
-                                                            취소
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => setDeleteConfirm(s.id)}
-                                                        title="삭제"
-                                                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <AdminQuickActionMenu
+                                                label={`${s.name} 빠른 작업`}
+                                                actions={[
+                                                    {
+                                                        key: "enroll",
+                                                        label: "수강등록",
+                                                        icon: "how_to_reg",
+                                                        tone: "primary",
+                                                        onSelect: () => setEnrollModal(s.id),
+                                                    },
+                                                    {
+                                                        key: "edit",
+                                                        label: "수정",
+                                                        icon: "edit",
+                                                        onSelect: () => startEdit(s),
+                                                    },
+                                                    {
+                                                        key: "delete",
+                                                        label: "삭제",
+                                                        icon: "delete",
+                                                        tone: "danger",
+                                                        disabled: busy,
+                                                        onSelect: () => {
+                                                            if (window.confirm(`"${s.name}" 원생을 삭제할까요?`)) {
+                                                                void handleDelete(s.id);
+                                                            }
+                                                        },
+                                                    },
+                                                ]}
+                                            />
                                         </td>
                                     </tr>
                                 ))}

@@ -130,6 +130,82 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Admin tables share the compact, one-line rule from the application CRM table. */
+.admin-table-scope :is(.overflow-x-auto, .overflow-auto):has(> table) {
+  overflow-y: visible;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-gray-200);
+  background: white;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+}
+
+.dark .admin-table-scope :is(.overflow-x-auto, .overflow-auto):has(> table) {
+  border-color: var(--color-gray-700);
+  background: var(--color-gray-800);
+}
+
+.admin-table-scope table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.admin-table-scope thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-gray-50);
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+}
+
+.dark .admin-table-scope thead {
+  background: var(--color-gray-900);
+  color: var(--color-gray-400);
+}
+
+.admin-table-scope th,
+.admin-table-scope td {
+  padding: 0.5rem !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.admin-table-scope td :is(.text-left, .text-right),
+.admin-table-scope th :is(.text-left, .text-right) {
+  text-align: center !important;
+}
+
+.admin-table-scope td :is(.justify-start, .justify-end) {
+  justify-content: center !important;
+}
+
+.admin-table-scope th {
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.admin-table-scope td {
+  border-top: 1px solid var(--color-gray-200);
+  color: var(--color-gray-900);
+}
+
+.dark .admin-table-scope td {
+  border-color: var(--color-gray-700);
+  color: var(--color-gray-100);
+}
+
+.admin-table-scope tbody tr:hover td {
+  background: var(--color-gray-50);
+}
+
+.dark .admin-table-scope tbody tr:hover td {
+  background: var(--color-gray-900);
+}
+
 .dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 .dark textarea,
 .dark select {

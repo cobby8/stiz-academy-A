@@ -110,6 +110,7 @@ type ListPagination = {
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
 type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "COACH_NOTICE" | "ENROLL_RECEIVED";
+type TrialDateFilter = "ALL" | "UPCOMING" | "TODAY" | "THIS_WEEK" | "PAST" | "MISSING";
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
 const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
@@ -165,6 +166,15 @@ const TRIAL_WORK_FILTERS: Array<{ value: TrialWorkFilter; label: string; icon: s
     { value: "ENROLL_RECEIVED", label: "수강신청 접수", icon: "assignment_turned_in" },
 ];
 
+const TRIAL_DATE_FILTERS: Array<{ value: TrialDateFilter; label: string }> = [
+    { value: "ALL", label: "체험일 전체" },
+    { value: "UPCOMING", label: "오늘 이후" },
+    { value: "TODAY", label: "오늘" },
+    { value: "THIS_WEEK", label: "이번 주" },
+    { value: "PAST", label: "지난 일정" },
+    { value: "MISSING", label: "체험일 미입력" },
+];
+
 const CONTACT_ACTION_LABELS: Record<string, string> = {
     CONTACTED: "연락 완료",
     NO_ANSWER: "부재",
@@ -214,6 +224,35 @@ function formatShortDate(dateStr: string | null) {
     const date = new Date(dateStr);
     if (Number.isNaN(date.getTime())) return "-";
     return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function getLocalDateTime(dateStr: string | null) {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function getTodayLocalDateTime() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
+function matchesTrialDateFilter(lead: TrialLead, dateFilter: TrialDateFilter) {
+    if (dateFilter === "ALL") return true;
+
+    const trialDate = getLocalDateTime(lead.trialDate);
+    if (dateFilter === "MISSING") return trialDate === null;
+    if (trialDate === null) return false;
+
+    const today = getTodayLocalDateTime();
+    const weekEnd = today + 6 * 24 * 60 * 60 * 1000;
+
+    if (dateFilter === "UPCOMING") return trialDate >= today;
+    if (dateFilter === "TODAY") return trialDate === today;
+    if (dateFilter === "THIS_WEEK") return trialDate >= today && trialDate <= weekEnd;
+    if (dateFilter === "PAST") return trialDate < today;
+    return true;
 }
 
 function isLikelyDefaultScheduleTime(dateStr: string | null) {
@@ -548,6 +587,7 @@ export default function TrialCrmClient({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("ALL");
     const [workFilter, setWorkFilter] = useState<TrialWorkFilter>("ALL");
+    const [dateFilter, setDateFilter] = useState<TrialDateFilter>("ALL");
     const [searchQuery, setSearchQuery] = useState("");
     const [visibleLimit, setVisibleLimit] = useState(TRIAL_PAGE_SIZE);
     const [busy, setBusy] = useState(false);
@@ -643,12 +683,32 @@ export default function TrialCrmClient({
 
     // 필터링된 리드 목록
     const filteredLeads = useMemo(() => {
-        return leads.filter((lead) => {
-            if (filter !== "ALL" && lead.status !== filter) return false;
-            if (!matchesTrialWorkFilter(lead, workFilter)) return false;
-            return trialLeadMatchesSearch(lead, searchQuery);
-        });
-    }, [filter, leads, searchQuery, workFilter]);
+        return leads
+            .filter((lead) => {
+                if (filter !== "ALL" && lead.status !== filter) return false;
+                if (!matchesTrialWorkFilter(lead, workFilter)) return false;
+                if (!matchesTrialDateFilter(lead, dateFilter)) return false;
+                return trialLeadMatchesSearch(lead, searchQuery);
+            })
+            .sort((a, b) => {
+                const aTrialDate = getLocalDateTime(a.trialDate);
+                const bTrialDate = getLocalDateTime(b.trialDate);
+
+                if (aTrialDate !== null && bTrialDate === null) return -1;
+                if (aTrialDate === null && bTrialDate !== null) return 1;
+                if (aTrialDate !== null && bTrialDate !== null && aTrialDate !== bTrialDate) {
+                    return aTrialDate - bTrialDate;
+                }
+
+                const scheduleCompare = (formatPreferredScheduleShort(a, classesBySlotKey) ?? "").localeCompare(
+                    formatPreferredScheduleShort(b, classesBySlotKey) ?? "",
+                    "ko",
+                );
+                if (scheduleCompare !== 0) return scheduleCompare;
+
+                return (getLocalDateTime(a.createdAt) ?? Number.MAX_SAFE_INTEGER) - (getLocalDateTime(b.createdAt) ?? Number.MAX_SAFE_INTEGER);
+            });
+    }, [classesBySlotKey, dateFilter, filter, leads, searchQuery, workFilter]);
     const visibleLeads = useMemo(
         () => filteredLeads.slice(0, visibleLimit),
         [filteredLeads, visibleLimit],
@@ -693,7 +753,7 @@ export default function TrialCrmClient({
 
     useEffect(() => {
         setVisibleLimit(TRIAL_PAGE_SIZE);
-    }, [filter, searchQuery, workFilter]);
+    }, [dateFilter, filter, searchQuery, workFilter]);
 
     // 상태 변경 핸들러
     async function handleStatusChange(lead: TrialLead, newStatus: string) {
@@ -832,20 +892,20 @@ export default function TrialCrmClient({
             <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <table className="w-full min-w-[1080px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
+                        <col className="w-[10%]" />
+                        <col className="w-[10%]" />
                         <col className="w-[11%]" />
-                        <col className="w-[30%]" />
-                        <col className="w-[11%]" />
-                        <col className="w-[11%]" />
+                        <col className="w-[28%]" />
                         <col className="w-[16%]" />
-                        <col className="w-[13%]" />
+                        <col className="w-[17%]" />
                         <col className="w-[8%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
-                            <th className="px-3 py-2">상태</th>
-                            <th className="px-3 py-2">학생/연락처</th>
                             <th className="px-3 py-2">신청일</th>
                             <th className="px-3 py-2">체험일</th>
+                            <th className="px-3 py-2">상태</th>
+                            <th className="px-3 py-2">학생/연락처</th>
                             <th className="px-3 py-2">수업교시</th>
                             <th className="px-3 py-2">쌤알림</th>
                             <th className="px-3 py-2 text-right">액션</th>
@@ -882,6 +942,16 @@ export default function TrialCrmClient({
                                     className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
                                 >
                                     <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={createdDateLabel}>
+                                            {createdDateLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={trialDateLabel}>
+                                            {trialDateLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
                                         <span className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold ${cfg.color}`} title={cfg.label}>
                                             <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                             <span className="truncate">{cfg.label}</span>
@@ -890,16 +960,6 @@ export default function TrialCrmClient({
                                     <td className="px-3 py-1.5 align-middle">
                                         <span className="block truncate font-black text-gray-900 dark:text-white" title={studentSummary}>
                                             {studentSummary}
-                                        </span>
-                                    </td>
-                                    <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={createdDateLabel}>
-                                            {createdDateLabel}
-                                        </span>
-                                    </td>
-                                    <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={trialDateLabel}>
-                                            {trialDateLabel}
                                         </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
@@ -1084,6 +1144,21 @@ export default function TrialCrmClient({
                             </button>
                         )}
                     </label>
+                    <label className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                        <span className="material-symbols-outlined text-lg text-gray-400">event</span>
+                        <span className="sr-only">체험일 필터</span>
+                        <select
+                            value={dateFilter}
+                            onChange={(event) => setDateFilter(event.target.value as TrialDateFilter)}
+                            className="bg-transparent text-sm font-black outline-none"
+                        >
+                            {TRIAL_DATE_FILTERS.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                    {item.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                     {TRIAL_WORK_FILTERS.map((item) => (
@@ -1110,7 +1185,7 @@ export default function TrialCrmClient({
                 <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                     <span className="material-symbols-outlined text-5xl text-gray-300">person_search</span>
                     <p className="text-gray-500 dark:text-gray-400 mt-3">
-                        {searchQuery || workFilter !== "ALL"
+                        {searchQuery || workFilter !== "ALL" || dateFilter !== "ALL"
                             ? "조건에 맞는 체험 문의가 없습니다"
                             : filter === "ALL"
                             ? "등록된 체험 신청이 없습니다"

@@ -238,6 +238,13 @@ function formatCompactDateTime(dateStr: string | null) {
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function formatShortDate(dateStr: string | null) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "-";
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
 function isLikelyDefaultScheduleTime(dateStr: string | null) {
     if (!dateStr) return false;
     const date = new Date(dateStr);
@@ -246,6 +253,16 @@ function isLikelyDefaultScheduleTime(dateStr: string | null) {
 }
 
 const DAY_LABELS: Record<string, string> = {
+    Mon: "월",
+    Tue: "화",
+    Wed: "수",
+    Thu: "목",
+    Fri: "금",
+    Sat: "토",
+    Sun: "일",
+};
+
+const DAY_SHORT_LABELS: Record<string, string> = {
     Mon: "월",
     Tue: "화",
     Wed: "수",
@@ -321,6 +338,54 @@ function formatClassLabel(classInfo: ClassInfo) {
     return [dayLabel, timeLabel].filter(Boolean).join(" ") + ` · ${classInfo.name}${programName}`;
 }
 
+function getPeriodFromClass(classInfo: ClassInfo) {
+    const slotPeriod = classInfo.slotKey?.split("-")[1]?.match(/\d+/)?.[0];
+    if (slotPeriod) return slotPeriod;
+    return classInfo.name.match(/\d+/)?.[0] ?? "";
+}
+
+function formatClassShortLabel(classInfo: ClassInfo) {
+    const dayLabel = DAY_SHORT_LABELS[classInfo.dayOfWeek] || classInfo.dayOfWeek;
+    const period = getPeriodFromClass(classInfo);
+    return [dayLabel, period].filter(Boolean).join("");
+}
+
+function formatSlotShortLabel(slotKey: string | null) {
+    const normalized = normalizeSlotKey(slotKey);
+    if (!normalized) return null;
+    const [dayCode, periodPart] = normalized.split("-");
+    const dayLabel = DAY_SHORT_LABELS[dayCode] || dayCode;
+    const period = normalizePreferredPeriod(periodPart ?? "");
+    return dayLabel && period ? `${dayLabel}${period}` : normalized;
+}
+
+function formatPreferredScheduleShort(lead: TrialLead, classesBySlotKey?: Map<string, ClassInfo>) {
+    const matchedClass = getPreferredClass(lead, classesBySlotKey);
+    if (matchedClass) return formatClassShortLabel(matchedClass);
+
+    const slotLabel = formatSlotShortLabel(lead.preferredSlotKey);
+    if (slotLabel) return slotLabel;
+
+    const dayCode = normalizePreferredDayCode(lead.preferredDay);
+    const period = normalizePreferredPeriod(lead.preferredPeriod);
+    if (dayCode && period) return `${DAY_SHORT_LABELS[dayCode] || dayCode}${period}`;
+    return null;
+}
+
+function formatConfirmedScheduleShort(
+    lead: TrialLead,
+    classesById?: Map<string, ClassInfo>,
+    classesBySlotKey?: Map<string, ClassInfo>,
+) {
+    const matchedClass =
+        (lead.scheduledClassId ? classesById?.get(lead.scheduledClassId) : null) ||
+        getPreferredClass(lead, classesBySlotKey);
+    const classLabel = matchedClass ? formatClassShortLabel(matchedClass) : formatPreferredScheduleShort(lead, classesBySlotKey);
+    if (lead.scheduledDate && classLabel) return `${formatShortDate(lead.scheduledDate)} ${classLabel}`;
+    if (lead.scheduledDate) return formatShortDate(lead.scheduledDate);
+    return classLabel;
+}
+
 function formatPreferredSchedule(lead: TrialLead, classesBySlotKey?: Map<string, ClassInfo>) {
     const matchedClass = getPreferredClass(lead, classesBySlotKey);
     if (matchedClass) return formatClassLabel(matchedClass);
@@ -366,7 +431,9 @@ function getTrialScheduleItems(
 ) {
     const preferredSchedule = formatPreferredSchedule(lead, classesBySlotKey);
     const confirmedSchedule = formatConfirmedSchedule(lead, classesById, classesBySlotKey);
-    return [
+    const preferredScheduleShort = formatPreferredScheduleShort(lead, classesBySlotKey);
+    const confirmedScheduleShort = formatConfirmedScheduleShort(lead, classesById, classesBySlotKey);
+    const items = [
         {
             label: "신청일",
             icon: "inbox",
@@ -392,6 +459,11 @@ function getTrialScheduleItems(
             className: "border-sky-100 bg-sky-50 text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200",
         },
     ];
+    return items.map((item, index) => {
+        if (index === 2 && preferredScheduleShort) return { ...item, value: preferredScheduleShort };
+        if (index === 3 && confirmedScheduleShort) return { ...item, value: confirmedScheduleShort };
+        return item;
+    });
 }
 
 function ScheduleInfoCard({
@@ -406,12 +478,12 @@ function ScheduleInfoCard({
     className: string;
 }) {
     return (
-        <div className={`min-w-0 rounded-lg border px-3 py-2.5 ${className}`}>
-            <div className="mb-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-black uppercase opacity-80">
-                <span className="material-symbols-outlined text-sm">{icon}</span>
+        <div className={`min-w-0 rounded-lg border px-2.5 py-2 sm:px-3 sm:py-2.5 ${className}`}>
+            <div className="mb-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] font-black uppercase opacity-80 sm:mb-1 sm:text-[11px]">
+                <span className="material-symbols-outlined text-xs sm:text-sm">{icon}</span>
                 {label}
             </div>
-            <div className="break-keep text-sm font-black leading-snug">{value}</div>
+            <div className="truncate break-keep text-xs font-black leading-snug sm:text-sm">{value}</div>
         </div>
     );
 }
@@ -663,6 +735,7 @@ export default function TrialCrmClient({
     const [visibleLimit, setVisibleLimit] = useState(TRIAL_PAGE_SIZE);
     const [busy, setBusy] = useState(false);
     const [feedback, setFeedback] = useState<FeedbackState>(null);
+    const [openActionLeadId, setOpenActionLeadId] = useState<string | null>(null);
 
     // 모달 상태
     const [showAddModal, setShowAddModal] = useState(false);
@@ -913,10 +986,100 @@ export default function TrialCrmClient({
         return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
     }
 
+    function renderActionMenu(lead: TrialLead, isClosed: boolean, parentPhoneHref?: string) {
+        const isOpen = openActionLeadId === lead.id;
+        const closeMenu = () => setOpenActionLeadId(null);
+        const itemClass = "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800";
+
+        return (
+            <div className="relative inline-flex justify-end">
+                <button
+                    type="button"
+                    onClick={() => setOpenActionLeadId((current) => (current === lead.id ? null : lead.id))}
+                    className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10"
+                    aria-expanded={isOpen}
+                >
+                    <span className="material-symbols-outlined text-base">more_horiz</span>
+                    액션
+                </button>
+                {isOpen && (
+                    <div className="absolute right-0 top-10 z-30 w-36 rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-gray-700 dark:bg-gray-950">
+                        <a href={parentPhoneHref} onClick={closeMenu} className={itemClass}>
+                            <span className="material-symbols-outlined text-base">call</span>
+                            전화
+                        </a>
+                        {!isClosed && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    closeMenu();
+                                    setShowScheduleModal(lead);
+                                }}
+                                className={itemClass}
+                            >
+                                <span className="material-symbols-outlined text-base">event_available</span>
+                                일정
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                closeMenu();
+                                void handleRecordContact(lead, "CONTACTED");
+                            }}
+                            disabled={contactBusyId === lead.id}
+                            className={`${itemClass} disabled:opacity-50`}
+                        >
+                            <span className="material-symbols-outlined text-base">done_all</span>
+                            연락
+                        </button>
+                        {lead.status === "ATTENDED" && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    closeMenu();
+                                    setShowConvertModal(lead);
+                                }}
+                                disabled={busy}
+                                className={`${itemClass} text-emerald-700 disabled:opacity-50 dark:text-emerald-300`}
+                            >
+                                <span className="material-symbols-outlined text-base">how_to_reg</span>
+                                등록
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                closeMenu();
+                                setShowMemoModal(lead);
+                            }}
+                            className={itemClass}
+                        >
+                            <span className="material-symbols-outlined text-base">edit_note</span>
+                            메모
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     function renderTrialList() {
         return (
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
+            <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-sm">
+                    <colgroup>
+                        <col className="w-[7%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[8%]" />
+                    </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
                             <th className="px-3 py-3">상태</th>
@@ -1001,7 +1164,8 @@ export default function TrialCrmClient({
                                         )}
                                     </td>
                                     <td className="px-3 py-2 align-top">
-                                        <div className="flex flex-wrap gap-1.5">
+                                        {renderActionMenu(lead, isClosed, parentPhoneHref)}
+                                        <div className="hidden">
                                             <a
                                                 href={parentPhoneHref}
                                                 className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
@@ -1350,7 +1514,8 @@ export default function TrialCrmClient({
                                             </select>
                                         )}
 
-                                        <div className="flex flex-wrap gap-2">
+                                        {renderActionMenu(lead, isClosed, parentPhoneHref)}
+                                        <div className="hidden">
                                             <a
                                                 href={parentPhoneHref}
                                                 className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"

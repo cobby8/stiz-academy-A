@@ -1,0 +1,39 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const page = readFileSync("src/app/account/activate/page.tsx", "utf8");
+const client = readFileSync("src/app/account/activate/ParentAccountActivateClient.tsx", "utf8");
+
+test("활성화 페이지는 토큰 상태와 만료·잠금·완료 상태를 안내한다", () => {
+  assert.match(page, /getParentAccountClaim\(token\)/);
+  assert.match(page, /EXPIRED/);
+  assert.match(page, /LOCKED/);
+  assert.match(page, /ACCEPTED/);
+  assert.match(page, /활성화 링크가 만료되었습니다/);
+});
+
+test("보호자는 OTP 확인 후 실제 이메일과 비밀번호를 설정한다", () => {
+  assert.match(client, /sendParentAccountOtp\(token\)/);
+  assert.match(client, /verifyParentAccountOtp\(token, otp\)/);
+  assert.match(client, /acceptParentAccountClaim\(token, cleanEmail, password\)/);
+  assert.match(client, /password\.length < 10/);
+  assert.match(client, /password !== passwordConfirm/);
+});
+
+test("성공하면 서버가 허용한 결제 경로로 이동하고 접근성 상태를 알린다", () => {
+  assert.match(client, /safeInternalPath\(result\.redirectPath \|\| redirectPath\)/);
+  assert.match(client, /result\.sessionEstablished/);
+  assert.match(client, /result\.loginRedirect/);
+  assert.match(client, /`\/login\?redirect=\$\{encodeURIComponent\(destination\)\}`/);
+  assert.match(client, /role=\{message\.kind === "error" \? "alert" : "status"\}/);
+  assert.match(client, /autoComplete="one-time-code"/);
+  assert.match(client, /htmlFor=\{id\}/);
+});
+
+test("활성화 토큰을 주소에서 제거하고 referrer 전송을 차단한다", () => {
+  assert.match(page, /referrer: "no-referrer"/);
+  assert.match(client, /cleanUrl\.searchParams\.delete\("token"\)/);
+  assert.match(client, /window\.history\.replaceState/);
+  assert.match(client, /decoded\.includes\("\\\\"\)/);
+});

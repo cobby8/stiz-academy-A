@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth-guard";
 import { getInvoiceForParent, getPaymentProviderConfig } from "@/lib/payment-ledger";
 import PaymentCheckoutClient from "./PaymentCheckoutClient";
@@ -16,8 +17,12 @@ function formatDate(value: Date | string | null) {
 
 export default async function PaymentPage({ params }: { params: Promise<{ invoiceId: string }> }) {
     const { invoiceId } = await params;
-    const user = await requireAuth();
-    const invoice = user.email ? await getInvoiceForParent(invoiceId, user.email) : null;
+    const paymentPath = `/payments/${encodeURIComponent(invoiceId)}`;
+    const user = await requireAuth().catch(() => null);
+    if (!user) {
+        redirect(`/login?redirect=${encodeURIComponent(paymentPath)}`);
+    }
+    const invoice = await getInvoiceForParent(invoiceId, { authUserId: user.id, email: user.email ?? null });
     const providerConfig = getPaymentProviderConfig();
 
     if (!invoice) {

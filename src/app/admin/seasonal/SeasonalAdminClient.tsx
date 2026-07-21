@@ -74,6 +74,7 @@ type InvoiceInfo = {
   amount?: number | null;
   dueDate?: string | null;
   checkoutUrl?: string | null;
+  accountActivationRequired?: boolean;
 };
 
 type Season = {
@@ -190,6 +191,7 @@ function formatDateTime(value?: string | null) {
 }
 
 function getItemInvoiceHref(item: Pick<ApplicationItem, "invoice">) {
+  if (item.invoice?.accountActivationRequired) return null;
   if (item.invoice?.checkoutUrl) return item.invoice.checkoutUrl;
   if (!item.invoice?.id) return null;
   return `/payments/${encodeURIComponent(item.invoice.id)}`;
@@ -476,6 +478,28 @@ export default function SeasonalAdminClient() {
   }
 
   async function copyInvoiceLink(item: ApplicationItem) {
+    if (item.invoice?.accountActivationRequired) {
+      try {
+        const response = await fetch("/api/admin/seasonal", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resource: "accountActivation", id: item.id, data: { action: "reissue" } }),
+        });
+        const body = (await response.json().catch(() => ({}))) as { activationUrl?: string; error?: string };
+        if (!response.ok || !body.activationUrl) throw new Error(body.error || "보호자 계정 활성화 링크를 만들지 못했습니다.");
+        const absoluteHref = toAbsoluteHref(body.activationUrl);
+        try {
+          await navigator.clipboard.writeText(absoluteHref);
+          setNotice(`${item.className} 보호자 계정 활성화 링크를 복사했습니다.`);
+        } catch {
+          window.open(absoluteHref, "_blank", "noopener,noreferrer");
+          setNotice("브라우저가 복사를 막아 보호자 계정 활성화 링크를 새 창으로 열었습니다.");
+        }
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "보호자 계정 활성화 링크를 만들지 못했습니다.");
+      }
+      return;
+    }
     const href = getItemInvoiceHref(item);
     if (!href) {
       setNotice("먼저 청구서를 생성해야 링크를 복사할 수 있습니다.");
@@ -876,6 +900,7 @@ function MiniState({ active, label }: { active: boolean; label: string }) {
 
 function InvoiceActionBox({ item, onCopyInvoiceLink }: { item: ApplicationItem; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void> }) {
   const href = getItemInvoiceHref(item);
+  const activationRequired = Boolean(item.invoice?.accountActivationRequired);
   return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
@@ -889,7 +914,7 @@ function InvoiceActionBox({ item, onCopyInvoiceLink }: { item: ApplicationItem; 
       </div>
       <div className="flex shrink-0 gap-2">
         {href && <a href={href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200">청구서 열기</a>}
-        <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">링크 복사</button>
+        <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">{activationRequired ? "활성화 링크 재발급·복사" : "결제 링크 복사"}</button>
       </div>
     </div>
   </div>;

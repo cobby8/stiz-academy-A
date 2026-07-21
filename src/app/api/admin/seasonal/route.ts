@@ -6,13 +6,14 @@ import { ensureInvoiceForPayment, ensurePaymentInfrastructure } from "@/lib/paym
 import { Prisma } from "@prisma/client";
 import { classifyAdminAuthError } from "./auth-error";
 import { syncOfferingSessionDates } from "@/lib/seasonal/session-bridge";
+import { issueParentAccountClaim } from "@/lib/parent-account-claim";
 
 const SEASON_STATUSES = new Set(["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"]);
 const OFFERING_STATUSES = new Set(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]);
 const APPLICATION_STATUSES = new Set(["PENDING", "PARTIALLY_WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 const ITEM_STATUSES = new Set(["PENDING", "WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 type SessionDateInput = { id?: unknown; startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
-type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null };
+type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null; activationUrl: string | null; activationRequired: boolean };
 type AdminApplicationRow = Record<string, unknown> & {
   items: Array<Record<string, unknown> & { paymentId?: string | null }>;
 };
@@ -22,6 +23,8 @@ type BulkItemResult = {
   status?: string;
   applicationId?: string;
   invoiceId?: string | null;
+  activationUrl?: string | null;
+  activationRequired?: boolean;
   message?: string;
   code?: string;
 };
@@ -209,11 +212,25 @@ export async function GET(request: NextRequest) {
         })
       : [];
     const invoicesByPaymentId = new Map(invoiceRows.map((invoice) => [invoice.paymentId, invoice]));
+    const activationRows = invoiceRows.length
+      ? await prisma.$queryRawUnsafe<Array<{ paymentId: string; activationRequired: boolean }>>(
+          `SELECT i."paymentId", (u.email ~* '^(parent_[0-9]+@stiz\\.local|[0-9]+@import\\.local)$') AS "activationRequired"
+             FROM "PaymentInvoice" i JOIN "User" u ON u.id = i."parentId"
+            WHERE i.id = ANY($1::text[])`,
+          invoiceRows.map((invoice) => invoice.id),
+        )
+      : [];
+    const activationByPaymentId = new Map(activationRows.map((row) => [row.paymentId, row.activationRequired]));
     const applications = applicationRows.map((application) => ({
       ...application,
       items: application.items.map((item) => ({
         ...item,
-        invoice: item.paymentId ? invoicesByPaymentId.get(item.paymentId) ?? null : null,
+        invoice: item.paymentId
+          ? (() => {
+              const invoice = invoicesByPaymentId.get(item.paymentId);
+              return invoice ? { ...invoice, accountActivationRequired: activationByPaymentId.get(item.paymentId) ?? false } : null;
+            })()
+          : null,
       })),
     }));
 
@@ -312,7 +329,13 @@ export async function PATCH(request: NextRequest) {
       for (const itemId of itemIds) {
         try {
           const result = await convertApprovedItemToEnrollmentAndInvoice(itemId, actor.appUserId);
-          results.push({ itemId, ok: true, invoiceId: result.invoiceId });
+          results.push({
+            itemId,
+            ok: true,
+            invoiceId: result.invoiceId,
+            activationUrl: result.activationUrl,
+            activationRequired: result.activationRequired,
+          });
         } catch (error) {
           results.push(bulkErrorResult(itemId, error));
         }
@@ -452,6 +475,33 @@ export async function PATCH(request: NextRequest) {
     if (body.resource === "conversion") {
       const result = await convertApprovedItemToEnrollmentAndInvoice(id, actor.appUserId);
       return NextResponse.json({ success: true, ...result });
+    }
+
+    if (body.resource === "accountActivation") {
+      if (data.action !== "reissue") throw new SeasonalError("지원하지 않는 계정 활성화 작업입니다.");
+      const activation = await issueAccountClaimForItem(id);
+      if (!activation.activationRequired || !activation.activationUrl) {
+        throw new SeasonalError("이미 로그인 가능한 보호자 계정입니다.", 409, "ACCOUNT_ALREADY_ACTIVE");
+      }
+      const auditTarget = await prisma.specialProgramApplicationItem.findUnique({
+        where: { id },
+        select: { applicationId: true, offeringId: true, application: { select: { seasonId: true } } },
+      });
+      if (auditTarget) {
+        await prisma.specialProgramAuditLog.create({
+          data: {
+            seasonId: auditTarget.application.seasonId,
+            offeringId: auditTarget.offeringId,
+            applicationId: auditTarget.applicationId,
+            itemId: id,
+            actorType: "ADMIN",
+            actorId: actor.appUserId,
+            action: "PARENT_ACCOUNT_ACTIVATION_REISSUED",
+            afterJSON: { activationRequired: true },
+          },
+        });
+      }
+      return NextResponse.json({ success: true, ...activation });
     }
     throw new SeasonalError("지원하지 않는 수정 대상입니다.");
   } catch (error) { return respondError(error); }
@@ -607,17 +657,17 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
       },
     });
 
-    return { itemId: updated.id, studentId, enrollmentId, paymentId };
+    return { itemId: updated.id, studentId, enrollmentId, paymentId, parentId, applicationId: item.applicationId };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
+  let invoice: Awaited<ReturnType<typeof ensureInvoiceForPayment>>;
   try {
-    const invoice = await ensureInvoiceForPayment(converted.paymentId);
+    invoice = await ensureInvoiceForPayment(converted.paymentId);
     if (!invoice) throw new Error("INVOICE_NOT_CREATED");
     await prisma.specialProgramApplicationItem.update({
       where: { id: converted.itemId },
       data: { conversionStatus: "COMPLETED", conversionError: null },
     });
-    return { ...converted, invoiceId: invoice.id };
   } catch (error) {
     await prisma.specialProgramApplicationItem.update({
       where: { id: converted.itemId },
@@ -635,6 +685,40 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
     console.error("[admin seasonal invoice]", error);
     throw new SeasonalError("수강 등록과 결제 정보는 저장됐지만 청구서 생성에 실패했습니다. 다시 시도해 주세요.", 503, "INVOICE_RETRY_REQUIRED");
   }
+
+  const activation = await issueParentAccountClaim({
+    parentId: converted.parentId,
+    applicationId: converted.applicationId,
+    invoiceId: invoice.id,
+    redirectPath: `/payments/${encodeURIComponent(invoice.id)}`,
+  });
+  return {
+    itemId: converted.itemId,
+    studentId: converted.studentId,
+    enrollmentId: converted.enrollmentId,
+    paymentId: converted.paymentId,
+    invoiceId: invoice.id,
+    ...activation,
+  };
+}
+
+async function issueAccountClaimForItem(itemId: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ parentId: string; applicationId: string; invoiceId: string }>>(
+    `SELECT i."parentId", item."applicationId", i.id AS "invoiceId"
+       FROM "SpecialProgramApplicationItem" item
+       JOIN "PaymentInvoice" i ON i."paymentId" = item."paymentId"
+      WHERE item.id = $1 LIMIT 1`,
+    itemId,
+  );
+  const target = rows[0];
+  if (!target) throw new SeasonalError("계정 활성화 대상 청구서를 찾을 수 없습니다.", 404, "ACCOUNT_CLAIM_TARGET_NOT_FOUND");
+  return issueParentAccountClaim({
+    parentId: target.parentId,
+    applicationId: target.applicationId,
+    invoiceId: target.invoiceId,
+    redirectPath: `/payments/${encodeURIComponent(target.invoiceId)}`,
+    enforceCooldown: true,
+  });
 }
 
 export async function DELETE(request: NextRequest) {

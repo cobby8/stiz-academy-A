@@ -40,6 +40,11 @@ type ParentInvoiceRow = {
     transactionReceiptUrl: string | null;
 };
 
+export type PaymentOwnerIdentity = {
+    authUserId: string;
+    email: string | null;
+};
+
 type CheckoutTransactionRow = {
     id: string;
     orderId: string;
@@ -838,7 +843,7 @@ export function getPaymentProviderPublicStatus() {
     };
 }
 
-export async function getInvoiceForParent(invoiceId: string, parentEmail: string) {
+export async function getInvoiceForParent(invoiceId: string, owner: PaymentOwnerIdentity) {
     await ensurePaymentInfrastructure();
 
     const rows = await prisma.$queryRawUnsafe<ParentInvoiceRow[]>(
@@ -881,11 +886,16 @@ export async function getInvoiceForParent(invoiceId: string, parentEmail: string
             ORDER BY "createdAt" DESC
             LIMIT 1
         ) tx ON true
-        WHERE i.id = $1 AND LOWER(u.email) = LOWER($2)
+        WHERE i.id = $1
+          AND (
+            u."authUserId" = $2
+            OR (u."authUserId" IS NULL AND $3 <> '' AND LOWER(u.email) = LOWER($3))
+          )
         LIMIT 1
         `,
         invoiceId,
-        parentEmail,
+        owner.authUserId,
+        owner.email || "",
     );
 
     return rows[0] ?? null;
@@ -893,12 +903,12 @@ export async function getInvoiceForParent(invoiceId: string, parentEmail: string
 
 export async function createCheckoutSession(input: {
     invoiceId: string;
-    parentEmail: string;
+    owner: PaymentOwnerIdentity;
     origin: string;
 }) {
     await ensurePaymentInfrastructure();
 
-    const invoice = await getInvoiceForParent(input.invoiceId, input.parentEmail);
+    const invoice = await getInvoiceForParent(input.invoiceId, input.owner);
     if (!invoice) {
         return { ok: false as const, error: "청구서를 찾을 수 없습니다." };
     }
@@ -1112,7 +1122,7 @@ export async function confirmTossPayment(input: {
     paymentKey: string;
     orderId: string;
     amount: number;
-    parentEmail: string;
+    owner: PaymentOwnerIdentity;
 }) {
     await ensurePaymentInfrastructure();
 
@@ -1122,10 +1132,15 @@ export async function confirmTossPayment(input: {
          JOIN "PaymentInvoice" i ON i.id = tx."invoiceId"
          JOIN "Payment" p ON p.id = tx."paymentId"
          JOIN "User" u ON u.id = tx."parentId"
-         WHERE tx."orderId" = $1 AND LOWER(u.email) = LOWER($2)
+         WHERE tx."orderId" = $1
+           AND (
+             u."authUserId" = $2
+             OR (u."authUserId" IS NULL AND $3 <> '' AND LOWER(u.email) = LOWER($3))
+           )
          LIMIT 1`,
         input.orderId,
-        input.parentEmail,
+        input.owner.authUserId,
+        input.owner.email || "",
     );
     const tx = txRows[0];
     if (!tx) return { ok: false as const, error: "결제 주문을 찾을 수 없습니다." };

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
             : new URL(req.url).origin;
         const result = await createCheckoutSession({
             invoiceId,
-            parentEmail: user.email,
+            owner: { authUserId: user.id, email: user.email ?? null },
             origin,
         });
 

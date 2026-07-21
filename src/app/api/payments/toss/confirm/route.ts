@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
             paymentKey,
             orderId,
             amount,
-            parentEmail: user.email,
+            owner: { authUserId: user.id, email: user.email ?? null },
         });
         if (!result.ok) {
             return NextResponse.json(result, { status: 400 });

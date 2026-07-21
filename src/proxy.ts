@@ -14,5 +14,7 @@ export const config = {
     "/login",
     // /mypage 하위 모든 경로 보호 (향후 학부모 기능용)
     "/mypage/:path*",
+    // 결제 페이지도 세션 갱신 대상에 포함합니다. 실제 미인증 이동은 결제 페이지가 원래 주소를 보존해 처리합니다.
+    "/payments/:path*",
   ],
 };

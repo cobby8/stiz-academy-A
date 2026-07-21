@@ -9,17 +9,61 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  name      String
-  phone     String?
-  role      Role      @default(PARENT)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  classes   Class[]
-  students  Student[]
-  coach     Coach?
+  id                      String             @id @default(uuid())
+  email                   String             @unique
+  name                    String
+  phone                   String?
+  authUserId              String?            @unique
+  role                    Role               @default(PARENT)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  classes                 Class[]
+  students                Student[]
+  coach                   Coach?
   drivenShuttleRoutePlans ShuttleRoutePlan[] @relation("ShuttleRouteDriver")
+}
+
+model ParentAccountClaim {
+  id                 String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  parentId           String
+  applicationId      String?
+  invoiceId          String?
+  tokenHash          String    @unique
+  phoneHash          String
+  status             String    @default("PENDING")
+  expiresAt          DateTime  @db.Timestamptz(6)
+  otpHash            String?
+  otpExpiresAt       DateTime? @db.Timestamptz(6)
+  otpSentAt          DateTime? @db.Timestamptz(6)
+  otpAttempts        Int       @default(0)
+  lockedAt           DateTime? @db.Timestamptz(6)
+  verifiedAt         DateTime? @db.Timestamptz(6)
+  proofHash          String?
+  proofExpiresAt     DateTime? @db.Timestamptz(6)
+  consumedAt         DateTime? @db.Timestamptz(6)
+  authUserId         String?
+  processingAt       DateTime? @db.Timestamptz(6)
+  processingAttemptId String?
+  redirectPath       String    @default("/mypage")
+  lastError          String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([parentId, status, createdAt])
+  @@index([phoneHash, createdAt])
+  @@index([applicationId])
+  @@index([invoiceId])
+}
+
+model ParentAccountClaimOtpSend {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  claimId   String
+  phoneHash String
+  status    String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([claimId, createdAt])
+  @@index([phoneHash, createdAt])
 }
 
 model Student {

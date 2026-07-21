@@ -68,9 +68,13 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
 
 test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 보여준다", () => {
   assert.match(trialClient, /function renderTrialList\(\)/);
-  assert.match(trialClient, /<table className="w-full min-w-\[1040px\] table-fixed/);
-  assert.match(trialClient, /신청\/희망일[\s\S]*수업교시[\s\S]*빠른 처리/);
-  assert.match(trialClient, /onClick=\{\(\) => setShowDetailModal\(lead\)\}/);
+  assert.match(trialClient, /<table className="w-full min-w-\[960px\] table-fixed/);
+  assert.match(trialClient, /학생\/연락처[\s\S]*신청\/희망일[\s\S]*수업교시[\s\S]*액션/);
+  assert.match(trialClient, /setShowDetailModal\(lead\)/);
+  assert.match(trialClient, /setOpenQuickActionId/);
+  assert.match(trialClient, /LIST_ACTION_TRIGGER_CLASS/);
+  assert.match(trialClient, /LIST_ACTION_MENU_CLASS/);
+  assert.doesNotMatch(trialClient, /<th className="px-3 py-2(?:\.5)?">보호자<\/th>/);
   assert.match(trialClient, /setShowScheduleModal\(lead\)/);
   assert.match(trialClient, /handleRecordContact\(lead, "CONTACTED"\)/);
   assert.doesNotMatch(trialClient, /viewMode/);
@@ -124,9 +128,13 @@ test("관리자 신청 화면은 핵심 메뉴와 주요 액션만 먼저 보여
   assert.doesNotMatch(adminShell, /label="체험\/수강신청 관리"/);
   assert.match(applyClient, /학생, 보호자, 전화번호로 검색/);
   assert.match(applyClient, /<select\s+value=\{filter\}/);
-  assert.match(applyClient, /LIST_QUICK_ACTION_CLASS/);
-  assert.match(applyClient, /onClick=\{\(\) => setShowDetailModal\(app\)\}/);
-  assert.match(applyClient, /빠른 처리/);
+  assert.match(applyClient, /LIST_ACTION_TRIGGER_CLASS/);
+  assert.match(applyClient, /LIST_ACTION_MENU_CLASS/);
+  assert.match(applyClient, /setShowDetailModal\(app\)/);
+  assert.match(applyClient, /학생\/연락처/);
+  assert.match(applyClient, /액션/);
+  assert.doesNotMatch(applyClient, /LIST_QUICK_ACTION_CLASS/);
+  assert.doesNotMatch(applyClient, /<th className="px-3 py-2(?:\.5)?">보호자<\/th>/);
   assert.doesNotMatch(applyClient, /COMPACT_CARD_ACTION_CLASS/);
   assert.doesNotMatch(applyClient, /COMPACT_CARD_CHIP_CLASS/);
   assert.doesNotMatch(applyClient, /className="rounded-lg border border-gray-200 bg-white p-3/);
@@ -136,13 +144,13 @@ test("관리자 신청 화면은 핵심 메뉴와 주요 액션만 먼저 보여
 
 test("체험수업과 수강신청은 카드형을 폐기하고 목록형만 제공한다", () => {
   assert.match(applyClient, /renderApplicationList/);
-  assert.match(applyClient, /빠른 처리/);
+  assert.match(applyClient, /LIST_ACTION_TRIGGER_CLASS/);
   assert.match(applyClient, /\{renderApplicationList\(\)\}/);
   assert.doesNotMatch(applyClient, /type ViewMode/);
   assert.doesNotMatch(applyClient, /setViewMode/);
   assert.doesNotMatch(applyClient, /grid_view/);
   assert.match(trialClient, /renderTrialList/);
-  assert.match(trialClient, /빠른 처리/);
+  assert.match(trialClient, /LIST_ACTION_TRIGGER_CLASS/);
   assert.match(trialClient, /\{renderTrialList\(\)\}/);
   assert.doesNotMatch(trialClient, /type ViewMode/);
   assert.doesNotMatch(trialClient, /setViewMode/);
@@ -151,12 +159,12 @@ test("체험수업과 수강신청은 카드형을 폐기하고 목록형만 제
 });
 
 test("목록형은 스프레드시트처럼 실제 테이블 구조로 보여준다", () => {
-  assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[1040px\]/);
-  assert.match(trialClient, /<thead[\s\S]*신청\/희망일[\s\S]*수업교시[\s\S]*빠른 처리/);
+  assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[960px\]/);
+  assert.match(trialClient, /<thead[\s\S]*학생\/연락처[\s\S]*신청\/희망일[\s\S]*수업교시[\s\S]*액션/);
   assert.match(trialClient, /<tbody[\s\S]*visibleLeads\.map/);
   assert.doesNotMatch(trialClient, /hidden grid-cols-\[1fr_0\.9fr_2\.2fr_0\.8fr_1\.2fr\]/);
-  assert.match(applyClient, /function renderApplicationList\(\)[\s\S]*<table className="w-full min-w-\[980px\]/);
-  assert.match(applyClient, /<thead[\s\S]*희망\/수강[\s\S]*셔틀[\s\S]*빠른 처리/);
+  assert.match(applyClient, /function renderApplicationList\(\)[\s\S]*<table className="w-full min-w-\[960px\]/);
+  assert.match(applyClient, /<thead[\s\S]*학생\/연락처[\s\S]*신청\/희망수업[\s\S]*수강\/셔틀[\s\S]*액션/);
   assert.match(applyClient, /<tbody[\s\S]*visibleApps\.map/);
   assert.doesNotMatch(applyClient, /hidden grid-cols-\[1\.1fr_1fr_1\.3fr_0\.9fr_1\.2fr\]/);
 });

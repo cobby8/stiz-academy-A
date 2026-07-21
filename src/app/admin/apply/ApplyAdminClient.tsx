@@ -207,9 +207,10 @@ const SOURCE_LABELS: Record<string, string> = {
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 const APPLICATION_PAGE_SIZE = 50;
 const LONG_WAIT_HOURS = 24;
-const LIST_QUICK_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
-const LIST_QUICK_PRIMARY_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md bg-lime-500 px-2.5 text-xs font-black text-brand-navy-900 transition hover:bg-lime-400 disabled:opacity-50";
-const LIST_QUICK_CONTACT_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200";
+const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
+const LIST_ACTION_MENU_CLASS = "absolute right-2 top-9 z-50 w-44 rounded-xl border border-gray-200 bg-white p-1.5 text-left shadow-xl dark:border-gray-700 dark:bg-gray-950";
+const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800";
+const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-lg bg-lime-500 px-3 text-left text-xs font-black text-brand-navy-900 transition hover:bg-lime-400 disabled:opacity-50";
 
 const APPLICATION_WORK_FILTERS: Array<{ value: ApplicationWorkFilter; label: string; icon: string }> = [
     { value: "ALL", label: "운영 전체", icon: "view_list" },
@@ -555,6 +556,7 @@ export default function ApplyAdminClient({
     const [showCancelModal, setShowCancelModal] = useState<EnrollApplication | null>(null);
     const [contactModal, setContactModal] = useState<ContactModalState>(null);
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
+    const [openQuickActionId, setOpenQuickActionId] = useState<string | null>(null);
 
     const hasAnyData = applications.length > 0 || classes.length > 0 || stats.total > 0;
 
@@ -731,23 +733,21 @@ export default function ApplyAdminClient({
     function renderApplicationList() {
         return (
             <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[960px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
                         <col className="w-[12%]" />
-                        <col className="w-[17%]" />
-                        <col className="w-[16%]" />
-                        <col className="w-[27%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[16%]" />
+                        <col className="w-[34%]" />
+                        <col className="w-[24%]" />
+                        <col className="w-[22%]" />
+                        <col className="w-[8%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
-                            <th className="px-3 py-2.5">상태</th>
-                            <th className="px-3 py-2.5">학생</th>
-                            <th className="px-3 py-2.5">보호자</th>
-                            <th className="px-3 py-2.5">희망/수강</th>
-                            <th className="px-3 py-2.5">셔틀</th>
-                            <th className="px-3 py-2.5 text-right">빠른 처리</th>
+                            <th className="px-3 py-2">상태</th>
+                            <th className="px-3 py-2">학생/연락처</th>
+                            <th className="px-3 py-2">신청/희망수업</th>
+                            <th className="px-3 py-2">수강/셔틀</th>
+                            <th className="px-3 py-2 text-right">액션</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -757,102 +757,102 @@ export default function ApplyAdminClient({
                             const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
                             const parentPhoneHref = phoneHref(app.parentPhone);
                             const childMeta = [age !== null ? `만 ${age}세` : null, app.childGrade, app.childSchool].filter(Boolean).join(" · ");
-                            const applyMeta = [`접수 ${formatDate(app.createdAt)}`, app.enrollmentMonths ? `수강 ${app.enrollmentMonths}` : null]
-                                .filter(Boolean)
-                                .join(" · ");
+                            const studentSummary = [app.childName, childMeta, app.parentName, app.parentPhone].filter(Boolean).join(" · ");
+                            const applySummary = [`접수 ${formatDate(app.createdAt)}`, preferredSlotLabel || "희망 시간 확인 필요"].join(" · ");
+                            const classSummary = [app.enrollmentMonths ? `수강 ${app.enrollmentMonths}` : null, app.assignedClassId ? "배정 완료" : null].filter(Boolean).join(" · ") || "수강 정보 확인";
                             const shuttleLabel = app.shuttleNeeded
                                 ? [app.shuttlePickup, app.shuttleDropoff, app.shuttleTime].filter(Boolean).join(" / ") || "이용"
                                 : "미이용";
+                            const isActionOpen = openQuickActionId === app.id;
                             return (
                                 <tr
                                     key={`${app.id}-list`}
                                     tabIndex={0}
-                                    onClick={() => setShowDetailModal(app)}
+                                    onClick={() => {
+                                        setOpenQuickActionId(null);
+                                        setShowDetailModal(app);
+                                    }}
                                     onKeyDown={(event) => {
                                         if (event.key === "Enter" || event.key === " ") {
                                             event.preventDefault();
+                                            setOpenQuickActionId(null);
                                             setShowDetailModal(app);
                                         }
                                     }}
                                     className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
                                 >
-                                    <td className="px-3 py-2 align-middle">
-                                        <div className="flex min-w-0 items-center gap-1.5">
-                                            <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold ${cfg.color}`}>
-                                                <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                                {cfg.label}
-                                            </span>
-                                            {app.trialLeadId && (
-                                                <span className="truncate rounded bg-purple-50 px-1.5 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
-                                                    체험후
-                                                </span>
-                                            )}
-                                        </div>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className={`inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${cfg.color}`}>
+                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                            <span className="truncate">{cfg.label}{app.trialLeadId ? " · 체험후" : ""}</span>
+                                        </span>
                                     </td>
-                                    <td className="px-3 py-2 align-middle">
-                                        <p className="truncate font-black text-gray-900 dark:text-white">{app.childName}</p>
-                                        <p className="truncate text-xs font-bold text-gray-500 dark:text-gray-400">{childMeta || "학생 정보 미입력"}</p>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate font-black text-gray-900 dark:text-white" title={studentSummary}>
+                                            {studentSummary}
+                                        </span>
                                     </td>
-                                    <td className="px-3 py-2 align-middle" onClick={(event) => event.stopPropagation()}>
-                                        <p className="truncate font-bold text-gray-800 dark:text-gray-100">
-                                            {app.parentName}
-                                            {app.parentRelation ? ` (${app.parentRelation})` : ""}
-                                        </p>
-                                        <a href={parentPhoneHref} className="inline-flex max-w-full items-center gap-1 text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
-                                            <span className="material-symbols-outlined text-sm">phone</span>
-                                            <span className="truncate">{app.parentPhone}</span>
-                                        </a>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={applySummary}>
+                                            {applySummary}
+                                        </span>
                                     </td>
-                                    <td className="px-3 py-2 align-middle">
-                                        <p className="truncate font-black text-gray-800 dark:text-gray-100" title={preferredSlotLabel || "희망 시간 확인 필요"}>
-                                            {preferredSlotLabel || "희망 시간 확인 필요"}
-                                        </p>
-                                        <p className="truncate text-xs font-bold text-gray-500 dark:text-gray-400">{applyMeta}</p>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate text-xs font-bold text-gray-600 dark:text-gray-300" title={`${classSummary} · 셔틀 ${shuttleLabel}`}>
+                                            {classSummary} · 셔틀 {shuttleLabel}
+                                        </span>
                                     </td>
-                                    <td className="px-3 py-2 align-middle text-xs font-bold text-gray-600 dark:text-gray-300">
-                                        <span className="block truncate" title={shuttleLabel}>{shuttleLabel}</span>
-                                    </td>
-                                    <td className="px-3 py-2 align-middle" onClick={(event) => event.stopPropagation()}>
-                                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                                            <a href={parentPhoneHref} className={LIST_QUICK_ACTION_CLASS} title="보호자에게 전화">
-                                                <span className="material-symbols-outlined text-base">call</span>
-                                                전화
-                                            </a>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRecordContact(app, "CONTACTED")}
-                                                disabled={contactBusyId === app.id}
-                                                className={LIST_QUICK_CONTACT_CLASS}
-                                                title="보호자 연락 완료 기록"
-                                            >
-                                                <span className="material-symbols-outlined text-base">done_all</span>
-                                                연락
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setContactModal({ app, defaultAction: "MEMO" })}
-                                                className={LIST_QUICK_ACTION_CLASS}
-                                                title="상담 메모 또는 재연락 기록"
-                                            >
-                                                <span className="material-symbols-outlined text-base">edit_note</span>
-                                                메모
-                                            </button>
-                                            {app.status === "PENDING" ? (
-                                                <>
-                                                    <button type="button" onClick={() => setShowApproveModal(app)} className={LIST_QUICK_PRIMARY_CLASS}>
-                                                        승인
-                                                    </button>
-                                                    <button type="button" onClick={() => setShowRejectModal(app)} className={LIST_QUICK_ACTION_CLASS}>
-                                                        반려
-                                                    </button>
-                                                    <button type="button" onClick={() => setShowCancelModal(app)} className={LIST_QUICK_ACTION_CLASS}>
-                                                        취소
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <span className="whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400">처리 완료</span>
-                                            )}
-                                        </div>
+                                    <td className="relative px-3 py-1.5 text-right align-middle" onClick={(event) => event.stopPropagation()}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpenQuickActionId((current) => (current === app.id ? null : app.id))}
+                                            className={LIST_ACTION_TRIGGER_CLASS}
+                                            aria-expanded={isActionOpen}
+                                            aria-label={`${app.childName} 빠른 처리 열기`}
+                                        >
+                                            <span className="material-symbols-outlined text-lg">more_horiz</span>
+                                        </button>
+                                        {isActionOpen && (
+                                            <div className={LIST_ACTION_MENU_CLASS}>
+                                                <a href={parentPhoneHref} className={LIST_ACTION_ITEM_CLASS}>
+                                                    <span className="material-symbols-outlined text-base">call</span>
+                                                    전화
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRecordContact(app, "CONTACTED")}
+                                                    disabled={contactBusyId === app.id}
+                                                    className={`${LIST_ACTION_ITEM_CLASS} disabled:opacity-50`}
+                                                >
+                                                    <span className="material-symbols-outlined text-base">done_all</span>
+                                                    연락 완료
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setContactModal({ app, defaultAction: "MEMO" })}
+                                                    className={LIST_ACTION_ITEM_CLASS}
+                                                >
+                                                    <span className="material-symbols-outlined text-base">edit_note</span>
+                                                    메모
+                                                </button>
+                                                {app.status === "PENDING" && (
+                                                    <>
+                                                        <button type="button" onClick={() => setShowApproveModal(app)} className={LIST_ACTION_PRIMARY_CLASS}>
+                                                            <span className="material-symbols-outlined text-base">check_circle</span>
+                                                            승인
+                                                        </button>
+                                                        <button type="button" onClick={() => setShowRejectModal(app)} className={LIST_ACTION_ITEM_CLASS}>
+                                                            <span className="material-symbols-outlined text-base">cancel</span>
+                                                            반려
+                                                        </button>
+                                                        <button type="button" onClick={() => setShowCancelModal(app)} className={LIST_ACTION_ITEM_CLASS}>
+                                                            <span className="material-symbols-outlined text-base">block</span>
+                                                            취소
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             );

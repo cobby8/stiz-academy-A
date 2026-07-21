@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import dynamic from "next/dynamic";
+import AdminModal from "@/components/admin/AdminModal";
 import {
     updateTrialLead,
     deleteTrialLead,
@@ -1407,13 +1408,12 @@ function TrialContactModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+        <AdminModal onClose={onClose} titleId="trial-contact-modal-title" panelClassName="max-w-md" closeOnBackdrop={!busy}>
             <form
                 onSubmit={handleSubmit}
-                className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800"
-                onClick={(event) => event.stopPropagation()}
+                className="w-full p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
-                <h2 className="flex items-center gap-2 text-lg font-black text-gray-900 dark:text-white">
+                <h2 id="trial-contact-modal-title" className="flex items-center gap-2 text-lg font-black text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">phone_callback</span>
                     후속 연락 기록
                 </h2>
@@ -1484,6 +1484,6 @@ function TrialContactModal({
                     </button>
                 </div>
             </form>
-        </div>
+        </AdminModal>
     );
 }

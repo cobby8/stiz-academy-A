@@ -1,24 +1,13 @@
 import { prisma } from "@/lib/prisma";
+import { APPLICATION_CONTACT_ACTION_CONSTRAINT_SQL } from "@/lib/application-contact-actions";
+
+export {
+    APPLICATION_CONTACT_ACTIONS,
+    APPLICATION_CONTACT_ACTION_CONSTRAINT_SQL,
+    type ApplicationContactAction,
+} from "@/lib/application-contact-actions";
 
 export type ApplicationContactTargetType = "TRIAL" | "ENROLL";
-export type ApplicationContactAction =
-    | "CONTACTED"
-    | "NO_ANSWER"
-    | "FOLLOW_UP"
-    | "MEMO"
-    | "UPDATED"
-    | "SCHEDULED"
-    | "CANCELLED";
-
-export const APPLICATION_CONTACT_ACTIONS: ApplicationContactAction[] = [
-    "CONTACTED",
-    "NO_ANSWER",
-    "FOLLOW_UP",
-    "MEMO",
-    "UPDATED",
-    "SCHEDULED",
-    "CANCELLED",
-];
 
 let _applicationContactLogEnsured = false;
 
@@ -61,6 +50,11 @@ export async function ensureApplicationContactLogInfrastructure() {
             `ALTER TABLE "ApplicationContactLog" ADD COLUMN IF NOT EXISTS "${column}" ${type}`,
         );
     }
+
+    // CREATE TABLE IF NOT EXISTS does not update constraints on an existing
+    // installation. Replacing the constraint in one ALTER TABLE statement is
+    // atomic and safe to run for both new and upgraded databases.
+    await prisma.$executeRawUnsafe(APPLICATION_CONTACT_ACTION_CONSTRAINT_SQL);
 
     const indexes = [
         `CREATE INDEX IF NOT EXISTS "ApplicationContactLog_trial_createdAt_idx"

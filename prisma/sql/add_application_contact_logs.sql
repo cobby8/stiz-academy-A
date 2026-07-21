@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS "ApplicationContactLog" (
         ("targetType" = 'ENROLL' AND "enrollmentApplicationId" IS NOT NULL AND "trialLeadId" IS NULL)
     ),
     CONSTRAINT "ApplicationContactLog_action_check" CHECK (
-        action IN ('CONTACTED', 'NO_ANSWER', 'FOLLOW_UP', 'MEMO')
+        action IN ('CONTACTED', 'NO_ANSWER', 'FOLLOW_UP', 'MEMO', 'UPDATED', 'SCHEDULED', 'CANCELLED')
     )
 );
 

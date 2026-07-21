@@ -9,6 +9,7 @@ const applyClient = readFileSync(new URL("../src/app/admin/apply/ApplyAdminClien
 const applyModals = readFileSync(new URL("../src/app/admin/apply/ApplyAdminModals.tsx", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../src/lib/queries.ts", import.meta.url), "utf8");
 const contactLogs = readFileSync(new URL("../src/lib/application-contact-logs.ts", import.meta.url), "utf8");
+const contactActions = readFileSync(new URL("../src/lib/application-contact-actions.ts", import.meta.url), "utf8");
 
 test("체험 신청 카드는 접수/희망/확정 일정을 분리해서 보여주고 취소 상태를 보존한다", () => {
   assert.match(trialClient, /function getTrialScheduleItems/);
@@ -58,9 +59,9 @@ test("수강신청 수정 모달은 신청 폼의 주요 입력 항목을 관리
 });
 
 test("신청 수정, 일정 변경, 취소는 운영 이력으로 남고 관리자 화면에 읽기 쉬운 라벨로 표시된다", () => {
-  assert.match(contactLogs, /"UPDATED"/);
-  assert.match(contactLogs, /"SCHEDULED"/);
-  assert.match(contactLogs, /"CANCELLED"/);
+  assert.match(contactActions, /"UPDATED"/);
+  assert.match(contactActions, /"SCHEDULED"/);
+  assert.match(contactActions, /"CANCELLED"/);
   assert.match(adminAction, /function recordApplicationHistoryLog/);
   assert.match(adminAction, /action:\s*"UPDATED"/);
   assert.match(adminAction, /action:\s*"CANCELLED"/);

@@ -1210,7 +1210,7 @@ model ApplicationContactLog {
   targetType              String // TRIAL, ENROLL
   trialLeadId             String?
   enrollmentApplicationId String?
-  action                  String // CONTACTED, NO_ANSWER, FOLLOW_UP, MEMO
+  action                  String // CONTACTED, NO_ANSWER, FOLLOW_UP, MEMO, UPDATED, SCHEDULED, CANCELLED
   note                    String?
   nextFollowUpAt          DateTime? @db.Timestamptz(6)
   followUpCompletedAt     DateTime? @db.Timestamptz(6)

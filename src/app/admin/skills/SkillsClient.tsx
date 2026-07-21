@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import SkillRadarChart from "@/components/SkillRadarChart";
+import AdminModal from "@/components/admin/AdminModal";
 import {
     createSkillCategory,
     updateSkillCategory,
@@ -410,8 +411,13 @@ function CategoryTab({
 
             {/* 등록/수정 모달 */}
             {showForm && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/40 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="skill-category-dialog-title" onMouseDown={(event) => { if (event.target === event.currentTarget && !isPending) setShowForm(false); }}>
-                    <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-xl dark:bg-gray-800">
+                <AdminModal
+                    onClose={() => { if (!isPending) setShowForm(false); }}
+                    titleId="skill-category-dialog-title"
+                    panelClassName="max-w-md"
+                    closeOnBackdrop={!isPending}
+                >
+                    <div className="w-full p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
                         <h3 id="skill-category-dialog-title" className="mb-4 text-lg font-bold text-gray-900 dark:text-white">
                             {editId ? "카테고리 수정" : "카테고리 추가"}
                         </h3>
@@ -523,7 +529,7 @@ function CategoryTab({
                             </button>
                         </div>
                     </div>
-                </div>
+                </AdminModal>
             )}
         </div>
     );

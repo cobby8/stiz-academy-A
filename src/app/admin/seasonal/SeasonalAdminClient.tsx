@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import AdminModal from "@/components/admin/AdminModal";
 
 type SeasonStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
 type ItemStatus = "PENDING" | "APPROVED" | "WAITLISTED" | "REJECTED" | "CANCELLED";
@@ -18,6 +19,11 @@ type SeasonalClass = {
   confirmedCount?: number;
   waitlistCount?: number;
   price: number;
+  code?: string | null;
+  targetGrades?: string | null;
+  location?: string | null;
+  newApplicantPrice?: number | null;
+  existingApplicantPrice?: number | null;
   shuttleAvailable?: boolean;
 };
 
@@ -44,6 +50,7 @@ type InvoiceInfo = {
 type Season = {
   id: string;
   name: string;
+  slug?: string | null;
   status: SeasonStatus;
   enrollmentStartsAt?: string | null;
   enrollmentEndsAt?: string | null;
@@ -413,19 +420,8 @@ function ApplicationDrawer({
   const parentPhoneHref = application.parentPhone ? `tel:${application.parentPhone}` : undefined;
   const parentSmsHref = application.parentPhone ? `sms:${application.parentPhone}` : undefined;
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [onClose]);
-
-  return <div className="fixed inset-0 z-50 flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-labelledby="application-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <aside className="h-full w-full max-w-2xl overflow-y-auto overscroll-contain bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl dark:bg-gray-900 sm:p-7">
+  return <AdminModal onClose={onClose} titleId="application-title" panelClassName="h-full max-w-2xl rounded-none sm:ml-auto sm:mr-0 sm:rounded-l-2xl sm:rounded-r-none">
+    <aside className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-[var(--brand-accent)]">신청 상세</p>
@@ -436,7 +432,7 @@ function ApplicationDrawer({
             {application.shuttleNeeded && <span className={badge(application.shuttleStatus || "REQUESTED")}>셔틀 {STATUS_LABEL[application.shuttleStatus || "REQUESTED"]}</span>}
           </div>
         </div>
-        <button type="button" onClick={onClose} aria-label="닫기" className="rounded-full p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"><Icon name="close" /></button>
+        <button type="button" onClick={onClose} aria-label="닫기" data-admin-modal-initial-focus className="rounded-full p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"><Icon name="close" /></button>
       </header>
 
       <ApplicationReviewSummary application={application} onResolveReview={onResolveReview} resolving={resolvingReview} />
@@ -472,7 +468,7 @@ function ApplicationDrawer({
       {application.memo && <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black text-gray-950 dark:text-white">요청사항</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.memo}</p></section>}
       {application.processedNote && <section className="mt-3 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black text-gray-950 dark:text-white">처리 메모</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.processedNote}</p></section>}
     </aside>
-  </div>;
+  </AdminModal>;
 }
 
 function ApplicationReviewSummary({ application, onResolveReview, resolving }: { application: Application; onResolveReview: (applicationId: string, reviewNote: string) => Promise<void>; resolving: boolean }) {
@@ -618,31 +614,26 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
   return <p><span className="block text-xs font-bold text-gray-500 dark:text-gray-400">{label}</span><b className="font-bold text-gray-900 dark:text-white">{children}</b></p>;
 }
 
-function SeasonForm({ initial: _initial, onClose, onSubmit }: { initial?: Season | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
-  void _initial;
-  return <FormModal title="새 방학특강 시즌" onClose={onClose} onSubmit={onSubmit} fields={[{name:"title",label:"시즌명",placeholder:"예: 2026 여름방학 특강",required:true},{name:"slug",label:"홈페이지 주소",placeholder:"예: 2026-summer",required:true},{name:"applicationOpensAt",label:"모집 시작일",type:"date",required:true},{name:"applicationClosesAt",label:"모집 종료일",type:"date",required:true},{name:"startsAt",label:"수업 시작일",type:"date",required:true},{name:"endsAt",label:"수업 종료일",type:"date",required:true}]} />;
+function dateInputValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : date.toISOString().slice(0, 10);
 }
 
-function ClassForm({ seasonId, initial: _initial, onClose, onSubmit }: { seasonId: string; initial?: SeasonalClass | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
-  void _initial;
-  return <FormModal title="특강 반 추가" helper="정원이 미확정이면 비워두세요. 정원이 없는 반은 DRAFT 상태로만 저장되며 모집에 공개할 수 없습니다." onClose={onClose} onSubmit={(payload) => { const capacity = String(payload.capacity ?? "").trim(); const newApplicantPrice = String(payload.newApplicantPrice ?? "").trim(); const existingApplicantPrice = String(payload.existingApplicantPrice ?? "").trim(); return onSubmit({ ...payload, seasonId, capacity: capacity ? Number(capacity) : null, price: Number(payload.price), newApplicantPrice: newApplicantPrice ? Number(newApplicantPrice) : null, existingApplicantPrice: existingApplicantPrice ? Number(existingApplicantPrice) : null, status: "DRAFT" }); }} fields={[{name:"code",label:"반 코드",placeholder:"예: MON-1",required:true},{name:"title",label:"반 이름",placeholder:"예: 초등 고학년 1교시",required:true},{name:"targetGrades",label:"대상",placeholder:"예: 초등 4~6학년",required:true},{name:"location",label:"수업 장소",placeholder:"예: 다산점"},{name:"capacity",label:"정원 (미확정 가능)",type:"number"},{name:"price",label:"기본 수강료",type:"number",required:true},{name:"newApplicantPrice",label:"신규 회원 수강료",type:"number"},{name:"existingApplicantPrice",label:"기존 회원 수강료",type:"number"},{name:"instructorName",label:"담당 선생님",placeholder:"미정이면 비워두세요"}]} />;
+function SeasonForm({ initial, onClose, onSubmit }: { initial?: Season | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
+  return <FormModal title="새 방학특강 시즌" onClose={onClose} onSubmit={onSubmit} fields={[{name:"title",label:"시즌명",placeholder:"예: 2026 여름방학 특강",required:true,defaultValue:initial?.name},{name:"slug",label:"홈페이지 주소",placeholder:"예: 2026-summer",required:true,defaultValue:initial?.slug},{name:"applicationOpensAt",label:"모집 시작일",type:"date",required:true,defaultValue:dateInputValue(initial?.enrollmentStartsAt)},{name:"applicationClosesAt",label:"모집 종료일",type:"date",required:true,defaultValue:dateInputValue(initial?.enrollmentEndsAt)},{name:"startsAt",label:"수업 시작일",type:"date",required:true,defaultValue:dateInputValue(initial?.startsAt)},{name:"endsAt",label:"수업 종료일",type:"date",required:true,defaultValue:dateInputValue(initial?.endsAt)}]} />;
 }
 
-type Field = { name: string; label: string; type?: string; placeholder?: string; required?: boolean };
+function ClassForm({ seasonId, initial, onClose, onSubmit }: { seasonId: string; initial?: SeasonalClass | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
+  return <FormModal title="특강 반 추가" helper="정원이 미확정이면 비워두세요. 정원이 없는 반은 DRAFT 상태로만 저장되며 모집에 공개할 수 없습니다." onClose={onClose} onSubmit={(payload) => { const capacity = String(payload.capacity ?? "").trim(); const newApplicantPrice = String(payload.newApplicantPrice ?? "").trim(); const existingApplicantPrice = String(payload.existingApplicantPrice ?? "").trim(); return onSubmit({ ...payload, seasonId, capacity: capacity ? Number(capacity) : null, price: Number(payload.price), newApplicantPrice: newApplicantPrice ? Number(newApplicantPrice) : null, existingApplicantPrice: existingApplicantPrice ? Number(existingApplicantPrice) : null, status: "DRAFT" }); }} fields={[{name:"code",label:"반 코드",placeholder:"예: MON-1",required:true,defaultValue:initial?.code},{name:"title",label:"반 이름",placeholder:"예: 초등 고학년 1교시",required:true,defaultValue:initial?.name},{name:"targetGrades",label:"대상",placeholder:"예: 초등 4~6학년",required:true,defaultValue:initial?.targetGrades ?? initial?.targetGrade},{name:"location",label:"수업 장소",placeholder:"예: 다산점",defaultValue:initial?.location},{name:"capacity",label:"정원 (미확정 가능)",type:"number",defaultValue:initial?.capacity},{name:"price",label:"기본 수강료",type:"number",required:true,defaultValue:initial?.price},{name:"newApplicantPrice",label:"신규 회원 수강료",type:"number",defaultValue:initial?.newApplicantPrice},{name:"existingApplicantPrice",label:"기존 회원 수강료",type:"number",defaultValue:initial?.existingApplicantPrice},{name:"instructorName",label:"담당 선생님",placeholder:"미정이면 비워두세요",defaultValue:initial?.instructorName}]} />;
+}
+
+type Field = { name: string; label: string; type?: string; placeholder?: string; required?: boolean; defaultValue?: string | number | null };
 function FormModal({ title, helper, fields, onClose, onSubmit }: { title: string; helper?: string; fields: Field[]; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
   const [pending, setPending] = useState(false); const [error, setError] = useState("");
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape" && !pending) onClose(); };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [onClose, pending]);
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setPending(true); setError(""); const form = new FormData(event.currentTarget); const payload = Object.fromEntries(form.entries()); try { await onSubmit(payload); } catch (caught) { setError(caught instanceof Error ? caught.message : "저장하지 못했습니다."); setPending(false); } }
-  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/45 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900"><header className="flex items-center justify-between"><h2 className="text-xl font-black">{title}</h2><button type="button" onClick={onClose} aria-label="닫기"><Icon name="close" /></button></header>{helper && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{helper}</p>}{error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}<div className="mt-5 grid gap-4 sm:grid-cols-2">{fields.map((field) => <label key={field.name} className="text-sm font-bold text-gray-700 dark:text-gray-200">{field.label}{field.required && <span className="text-red-500"> *</span>}<input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} min={field.type === "number" ? 0 : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>)}</div><footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer></form></div>;
+  const titleId = "seasonal-form-modal-title";
+  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId={titleId}><form onSubmit={submit} className="w-full p-6"><header className="flex items-center justify-between"><h2 id={titleId} className="text-xl font-black">{title}</h2><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>{helper && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{helper}</p>}{error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}<div className="mt-5 grid gap-4 sm:grid-cols-2">{fields.map((field, index) => <label key={field.name} className="text-sm font-bold text-gray-700 dark:text-gray-200">{field.label}{field.required && <span className="text-red-500"> *</span>}<input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} defaultValue={field.defaultValue ?? ""} min={field.type === "number" ? 0 : undefined} data-admin-modal-initial-focus={index === 0 ? "true" : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>)}</div><footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={pending} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold disabled:opacity-60 dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer></form></AdminModal>;
 }
 
 function Panel({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="min-w-0 max-w-full rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"><header className="flex min-w-0 flex-col justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center dark:border-gray-800"><h2 className="flex min-w-0 items-center gap-2 break-words font-black"><Icon name={icon} className="text-[var(--brand-accent)]" />{title}</h2>{action}</header><div className="min-w-0 max-w-full p-5">{children}</div></section>; }

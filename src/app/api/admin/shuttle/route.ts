@@ -10,6 +10,7 @@ import {
   createRoute,
   createVehicle,
   getShuttleDashboard,
+  previewOptimizedRouteStops,
   reorderStops,
   reviseRoute,
   ShuttleServiceError,
@@ -81,6 +82,7 @@ export async function PATCH(request: NextRequest) {
     let route;
     switch (body.action) {
       case "update": route = await updateRoute(actor, id, data); break;
+      case "optimizePreview": return NextResponse.json({ preview: await previewOptimizedRouteStops(actor, id) });
       case "assign": route = await assignPassenger(actor, id, data); break;
       case "unassign": route = await unassignPassenger(actor, id, data); break;
       case "reorder": route = await reorderStops(actor, id, data); break;

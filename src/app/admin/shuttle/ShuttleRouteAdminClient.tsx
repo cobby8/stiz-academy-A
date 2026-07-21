@@ -62,6 +62,7 @@ interface ShuttleRequest {
 }
 interface RequestLocation { name?: string | null; address?: string | null; roadAddress?: string | null; latitude?: number | string | null; longitude?: number | string | null; lat?: number | string | null; lng?: number | string | null; placeId?: string | null; source?: MapLocationData["source"] | string | null; accuracyMeters?: number | string | null; confirmedAt?: string | null }
 interface Payload { seasons: Season[]; selectedSeasonId?: string; vehicles: Vehicle[]; drivers: Driver[]; routes: RoutePlan[]; unassignedRequests: ShuttleRequest[] }
+interface OptimizationPreview { provider: string; routeId: string; routeName: string; totalDistance?: number; totalTime?: number; stops: Array<{ id: string; previousOrder: number; recommendedOrder: number; name: string; address?: string | null; passengerCount: number }> }
 type LocationPickerTarget = { request: ShuttleRequest; kind: "pickup" | "dropoff" };
 
 function mapUrl(lat: number | string | null | undefined, lng: number | string | null | undefined, name: string) {
@@ -97,6 +98,7 @@ export default function ShuttleRouteAdminClient() {
   const [modal, setModal] = useState<"vehicle" | "route" | "assign" | "confirm" | null>(null);
   const [assignRequest, setAssignRequest] = useState<ShuttleRequest | null>(null);
   const [locationPicker, setLocationPicker] = useState<LocationPickerTarget | null>(null);
+  const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
 
   const load = useCallback(async (requestedSeasonId?: string, requestedDirection: Direction = direction, requestedServiceDate: string = serviceDate) => {
     setLoading(true); setError("");
@@ -135,6 +137,7 @@ export default function ShuttleRouteAdminClient() {
   const rideSummary = useMemo(() => summarizeRideStatuses(stops), [stops]);
 
   useEffect(() => { if (routes.length && !routes.some((route) => route.id === selectedRouteId)) setSelectedRouteId(routes[0].id); }, [routes, selectedRouteId]);
+  useEffect(() => { setOptimizationPreview(null); }, [selectedRouteId]);
 
   async function mutate(body: unknown, success: string) {
     setPending(true); setError(""); setNotice("");
@@ -188,6 +191,38 @@ export default function ShuttleRouteAdminClient() {
     if (target < 0 || target >= next.length) return;
     [next[index], next[target]] = [next[target], next[index]];
     void mutate({ resource: "route", id: selectedRoute.id, action: "reorder", data: { stops: next.map((stop, stopOrder) => ({ id: stop.id, stopOrder: stopOrder + 1, plannedAt: stop.plannedAt })) } }, "정류장 순서를 변경했습니다.");
+  }
+
+  async function previewOptimizedStops() {
+    if (!selectedRoute) return;
+    setPending(true); setError(""); setNotice(""); setOptimizationPreview(null);
+    try {
+      const result = await request({ resource: "route", id: selectedRoute.id, action: "optimizePreview", data: {} });
+      setOptimizationPreview(result.preview as OptimizationPreview);
+      setNotice("T맵 추천 순서를 불러왔습니다. 확인 후 적용해 주세요.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "T맵 추천 순서를 불러오지 못했습니다.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function applyOptimizedStops() {
+    if (!selectedRoute || !optimizationPreview) return;
+    const plannedAtByStopId = new Map(stops.map((stop) => [stop.id, stop.plannedAt]));
+    await mutate({
+      resource: "route",
+      id: selectedRoute.id,
+      action: "reorder",
+      data: {
+        stops: optimizationPreview.stops.map((stop) => ({
+          id: stop.id,
+          stopOrder: stop.recommendedOrder,
+          plannedAt: plannedAtByStopId.get(stop.id),
+        })),
+      },
+    }, "T맵 추천 순서를 노선에 적용했습니다.");
+    setOptimizationPreview(null);
   }
 
   function openAssign(item: ShuttleRequest) { setAssignRequest(item); setModal("assign"); setError(""); }
@@ -255,13 +290,28 @@ export default function ShuttleRouteAdminClient() {
       </aside>
 
       <section className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:p-5">{selectedRoute ? <>
-        <div className="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-gray-700 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="break-words text-xl font-black">{selectedRoute.name}</h2><StatusBadge status={selectedRoute.status} /></div><p className="mt-1 text-sm text-gray-500">버전 {selectedRoute.version} · {selectedRoute.vehicle?.name || "차량 미지정"} · {selectedRoute.driver?.name || "기사 미배정"}</p></div><div className="flex flex-wrap gap-2">{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => setModal("confirm")} disabled={!stops.length || !selectedRoute.vehicleId || !selectedRoute.driverUserId || passengerCount > capacity} className="min-h-10 rounded-lg bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] disabled:opacity-40">노선 확정</button>}{selectedRoute.status === "CONFIRMED" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "complete", data: {} }, "운행을 완료했습니다.")} disabled={rideSummary.pending > 0 || pending} className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-40">운행 완료</button>}{selectedRoute.status === "CONFIRMED" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "revise", data: {} }, "새 수정 버전을 만들었습니다.")} className="min-h-10 rounded-lg border border-gray-300 px-4 text-sm font-black dark:border-gray-600">수정본 만들기</button>}<button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "archive", data: {} }, "노선을 보관했습니다.")} disabled={selectedRoute.status === "ARCHIVED"} className="min-h-10 rounded-lg border border-gray-300 px-4 text-sm font-black disabled:opacity-40 dark:border-gray-600">보관</button></div></div>
+        <div className="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-gray-700 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="break-words text-xl font-black">{selectedRoute.name}</h2><StatusBadge status={selectedRoute.status} /></div><p className="mt-1 text-sm text-gray-500">버전 {selectedRoute.version} · {selectedRoute.vehicle?.name || "차량 미지정"} · {selectedRoute.driver?.name || "기사 미배정"}</p></div><div className="flex flex-wrap gap-2">{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => void previewOptimizedStops()} disabled={pending || stops.length < 2} className="min-h-10 rounded-lg border border-orange-200 bg-orange-50 px-4 text-sm font-black text-orange-800 disabled:opacity-40 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200">T맵 순서 추천</button>}{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => setModal("confirm")} disabled={!stops.length || !selectedRoute.vehicleId || !selectedRoute.driverUserId || passengerCount > capacity} className="min-h-10 rounded-lg bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] disabled:opacity-40">노선 확정</button>}{selectedRoute.status === "CONFIRMED" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "complete", data: {} }, "운행을 완료했습니다.")} disabled={rideSummary.pending > 0 || pending} className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-black text-white disabled:opacity-40">운행 완료</button>}{selectedRoute.status === "CONFIRMED" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "revise", data: {} }, "새 수정 버전을 만들었습니다.")} className="min-h-10 rounded-lg border border-gray-300 px-4 text-sm font-black dark:border-gray-600">수정본 만들기</button>}<button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "archive", data: {} }, "노선을 보관했습니다.")} disabled={selectedRoute.status === "ARCHIVED"} className="min-h-10 rounded-lg border border-gray-300 px-4 text-sm font-black disabled:opacity-40 dark:border-gray-600">보관</button></div></div>
         {selectedRoute.status === "DRAFT" && <label className="mt-4 block text-sm font-bold">담당 기사<select value={selectedRoute.driverUserId || ""} onChange={(event) => void mutate({ resource: "route", id: selectedRoute.id, action: "update", data: { driverUserId: event.target.value || null } }, "담당 기사를 변경했습니다.")} disabled={pending} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">기사 선택</option>{data.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}{driver.phone ? ` (${driver.phone})` : ""}</option>)}</select></label>}
         <div className="my-4 grid grid-cols-2 gap-2 sm:grid-cols-5"><Metric label="탑승 학생" value={`${passengerCount}명`} /><Metric label="차량 정원" value={capacity ? `${capacity}명` : "미지정"} danger={capacity > 0 && passengerCount > capacity} /><Metric label="담당 기사" value={selectedRoute.driver?.name || "미배정"} danger={!selectedRoute.driverUserId} /><Metric label="정류장" value={`${stops.length}곳`} /><Metric label="운행일" value={formatDate(selectedRoute.serviceDate)} /></div>
         <div className="mb-2 grid grid-cols-3 gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900"><Metric label="체크 대기" value={`${rideSummary.pending}명`} danger={selectedRoute.status === "CONFIRMED" && rideSummary.pending > 0} /><Metric label="완료" value={`${rideSummary.done}명`} /><Metric label="미탑승" value={`${rideSummary.noShow}명`} danger={rideSummary.noShow > 0} /></div>
         {selectedRoute.status === "CONFIRMED" && rideSummary.pending > 0 && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">체크 대기 학생을 모두 탑승, 하차, 미탑승 중 하나로 처리해야 운행 완료를 누를 수 있습니다.</p>}
         {selectedRoute.status === "CONFIRMED" && rideSummary.noShow > 0 && <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm font-bold text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">미탑승 학부모 알림은 솔라피 발신 설정 후 이 화면에서 바로 연결할 수 있도록 준비 중입니다.</p>}
         {capacity > 0 && passengerCount > capacity && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700 dark:bg-red-950/30 dark:text-red-200">차량 정원을 초과했습니다. 학생을 다른 노선으로 이동해야 확정할 수 있습니다.</p>}
+        {optimizationPreview?.routeId === selectedRoute.id && <section className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="font-black text-orange-900 dark:text-orange-100">T맵 추천 순서</h3>
+              <p className="mt-1 text-xs font-bold text-orange-700 dark:text-orange-200">{optimizationPreview.totalDistance ? `예상 거리 ${Math.round(optimizationPreview.totalDistance / 100) / 10}km` : "거리 정보 없음"} · {optimizationPreview.totalTime ? `예상 시간 ${Math.round(optimizationPreview.totalTime / 60)}분` : "시간 정보 없음"}</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setOptimizationPreview(null)} className="min-h-10 rounded-lg border border-orange-200 bg-white px-3 text-xs font-black text-orange-800 dark:border-orange-800 dark:bg-gray-900 dark:text-orange-200">닫기</button>
+              <button type="button" onClick={() => void applyOptimizedStops()} disabled={pending} className="min-h-10 rounded-lg bg-orange-500 px-3 text-xs font-black text-white disabled:opacity-40">추천 순서 적용</button>
+            </div>
+          </div>
+          <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+            {optimizationPreview.stops.map((stop) => <li key={stop.id} className="rounded-xl bg-white p-3 text-sm dark:bg-gray-900"><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-xs font-black text-white">{stop.recommendedOrder}</span><strong>{stop.name}</strong><span className="ml-2 text-xs font-bold text-gray-500">기존 {stop.previousOrder}번 · {stop.passengerCount}명</span></li>)}
+          </ol>
+        </section>}
         <ol className="space-y-3">{stops.map((stop, index) => { const url = mapUrl(stop.lat, stop.lng, stop.name); return <li key={stop.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-950 text-sm font-black text-white dark:bg-white dark:text-gray-950">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="break-words font-black">{stop.name}</h3><p className="break-words text-xs text-gray-500">{stop.roadAddress || stop.address}</p></div><div className="flex gap-1">{url && <a href={url} target="_blank" rel="noreferrer" aria-label={`${stop.name} 지도에서 열기`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={18} /></a>}{selectedRoute.status === "DRAFT" && <><button type="button" onClick={() => moveStop(index, -1)} disabled={index === 0 || pending} aria-label={`${stop.name} 순서를 위로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↑</button><button type="button" onClick={() => moveStop(index, 1)} disabled={index === stops.length - 1 || pending} aria-label={`${stop.name} 순서를 아래로 이동`} className="h-9 w-9 rounded-lg bg-gray-100 font-black disabled:opacity-30 dark:bg-gray-700">↓</button></>}</div></div><label className="mt-2 block text-xs font-bold text-gray-500">예상 도착시간<input type="time" value={stop.plannedAt?.slice(11, 16) ?? stop.plannedAt ?? ""} disabled={selectedRoute.status !== "DRAFT" || pending} onChange={(event) => void mutate({ resource: "route", id: selectedRoute.id, action: "reorder", data: { stops: stops.map((item, itemIndex) => ({ id: item.id, stopOrder: itemIndex + 1, plannedAt: item.id === stop.id ? event.target.value : item.plannedAt })) } }, "예상시간을 변경했습니다.")} className="ml-2 min-h-9 rounded-lg border border-gray-300 bg-white px-2 dark:border-gray-600 dark:bg-gray-900" /></label><div className="mt-2 flex flex-wrap gap-2">{stop.passengers?.map((passenger) => <span key={passenger.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold dark:bg-gray-700">{passenger.studentNameSnapshot || "학생"}<span className={`rounded-full px-1.5 py-0.5 text-[10px] ${rideStatusClass(passenger.rideStatus)}`}>{rideStatusLabel(passenger.rideStatus)}</span>{selectedRoute.status === "DRAFT" && <button type="button" onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "unassign", data: { shuttleRequestId: passenger.shuttleRequestId } }, "학생 배정을 해제했습니다.")} aria-label={`${passenger.studentNameSnapshot || "학생"} 배정 해제`} className="ml-1 text-base leading-none">×</button>}</span>)}</div></div></div></li> })}</ol>
         {!stops.length && <p className="rounded-xl bg-gray-50 p-8 text-center text-sm text-gray-500 dark:bg-gray-900">왼쪽 미배정 학생을 선택해 첫 정류장을 추가하세요.</p>}
       </> : <Empty title="노선을 선택해 주세요" description="노선을 만들거나 왼쪽 목록에서 편집할 노선을 선택해 주세요." />}</section>

@@ -2,6 +2,7 @@ import { Prisma, ShuttleRouteDirection, ShuttleRoutePlanStatus } from "@prisma/c
 import { prisma } from "@/lib/prisma";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { chooseActiveShuttleAssignment } from "./assignment";
+import { optimizeWaypointOrderWithTmap } from "./tmap";
 
 export class ShuttleServiceError extends Error {
   constructor(
@@ -406,6 +407,77 @@ export async function updateRoute(actor: Actor, id: string, input: Record<string
     await audit(tx, actor, "ROUTE_UPDATED", { routePlanId: id }, before, route);
     return route;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function previewOptimizedRouteStops(actor: Actor, routeId: string) {
+  void actor;
+  const route = await prisma.shuttleRoutePlan.findUnique({ where: { id: routeId }, include: routeInclude });
+  if (!route) throw new ShuttleServiceError("Route not found.", 404, "ROUTE_NOT_FOUND");
+  if (route.status !== ShuttleRoutePlanStatus.DRAFT) {
+    throw new ShuttleServiceError("Only draft routes can be optimized.", 409, "ROUTE_LOCKED");
+  }
+  if (route.stops.length < 2) {
+    throw new ShuttleServiceError("At least two stops are required for TMAP optimization.", 400, "NOT_ENOUGH_STOPS");
+  }
+  if (
+    route.originLatitude === null ||
+    route.originLongitude === null ||
+    route.destinationLatitude === null ||
+    route.destinationLongitude === null
+  ) {
+    throw new ShuttleServiceError("Origin and destination coordinates are required for TMAP optimization.", 409, "ROUTE_ENDPOINTS_REQUIRED");
+  }
+
+  const sortedStops = [...route.stops].sort((a, b) => a.stopOrder - b.stopOrder);
+  let result;
+  try {
+    result = await optimizeWaypointOrderWithTmap({
+      start: {
+        id: "origin",
+        name: route.originName || route.originAddress || "출발지",
+        latitude: route.originLatitude,
+        longitude: route.originLongitude,
+      },
+      end: {
+        id: "destination",
+        name: route.destinationName || route.destinationAddress || "도착지",
+        latitude: route.destinationLatitude,
+        longitude: route.destinationLongitude,
+      },
+      waypoints: sortedStops.map((stop) => ({
+        id: stop.id,
+        name: stop.name,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+      })),
+    });
+  } catch (error) {
+    const status = typeof error === "object" && error !== null && "status" in error && typeof (error as { status?: unknown }).status === "number"
+      ? (error as { status: number }).status
+      : 502;
+    throw new ShuttleServiceError(error instanceof Error ? error.message : "Failed to load TMAP optimized stop order.", status, "TMAP_OPTIMIZATION_FAILED");
+  }
+  const stopById = new Map(sortedStops.map((stop) => [stop.id, stop]));
+  const optimizedStops = result.orderedWaypointIds.map((id, index) => {
+    const stop = stopById.get(id);
+    if (!stop) throw new ShuttleServiceError("Optimized stop result does not match route stops.", 502, "OPTIMIZED_STOP_MISMATCH");
+    return {
+      id: stop.id,
+      previousOrder: stop.stopOrder,
+      recommendedOrder: index + 1,
+      name: stop.name,
+      address: stop.roadAddress || stop.address,
+      passengerCount: stop.passengers.length,
+    };
+  });
+  return {
+    provider: result.provider,
+    routeId,
+    routeName: route.name,
+    stops: optimizedStops,
+    totalDistance: result.rawSummary?.totalDistance,
+    totalTime: result.rawSummary?.totalTime,
+  };
 }
 
 export async function updateShuttleRequestLocation(actor: Actor, shuttleRequestId: string, input: Record<string, unknown>) {

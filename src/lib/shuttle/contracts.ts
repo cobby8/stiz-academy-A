@@ -15,6 +15,7 @@ export type ShuttleVehicleInput = {
 export type ShuttleRoutePlanInput = {
   seasonId: string;
   vehicleId?: string;
+  driverUserId?: string;
   routeKey: string;
   name: string;
   direction: ShuttleRouteDirection;
@@ -150,6 +151,7 @@ export function parseShuttleRoutePlanInput(value: unknown): ShuttleRoutePlanInpu
   return {
     seasonId: text(body.seasonId, 100, true)!,
     vehicleId: text(body.vehicleId, 100),
+    driverUserId: text(body.driverUserId, 100),
     routeKey,
     name: text(body.name, 120, true)!,
     direction: direction as ShuttleRouteDirection,

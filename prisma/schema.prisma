@@ -19,6 +19,7 @@ model User {
   classes   Class[]
   students  Student[]
   coach     Coach?
+  drivenShuttleRoutePlans ShuttleRoutePlan[] @relation("ShuttleRouteDriver")
 }
 
 model Student {
@@ -1436,6 +1437,7 @@ model ShuttleRoutePlan {
   id String @id @default(dbgenerated("(gen_random_uuid())::text"))
   seasonId String
   vehicleId String?
+  driverUserId String?
   routeKey String
   name String
   direction ShuttleRouteDirection
@@ -1457,6 +1459,7 @@ model ShuttleRoutePlan {
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
   season SpecialProgramSeason @relation(fields: [seasonId], references: [id], onDelete: Restrict)
   vehicle ShuttleVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driver User? @relation("ShuttleRouteDriver", fields: [driverUserId], references: [id], onDelete: SetNull)
   previousVersion ShuttleRoutePlan? @relation("ShuttleRoutePlanVersions", fields: [previousVersionId], references: [id], onDelete: SetNull)
   nextVersions ShuttleRoutePlan[] @relation("ShuttleRoutePlanVersions")
   stops ShuttleRouteStop[]
@@ -1466,6 +1469,7 @@ model ShuttleRoutePlan {
   @@unique([routeKey, version])
   @@index([seasonId, direction, status])
   @@index([vehicleId, serviceDate])
+  @@index([driverUserId, serviceDate])
   @@index([previousVersionId])
 }
 

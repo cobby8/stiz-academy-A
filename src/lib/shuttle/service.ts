@@ -27,6 +27,7 @@ type Actor = { appUserId: string };
 
 const routeInclude = {
   vehicle: true,
+  driver: { select: { id: true, name: true, phone: true, role: true } },
   stops: {
     orderBy: { stopOrder: "asc" as const },
     include: { passengers: { orderBy: { createdAt: "asc" as const } } },
@@ -135,6 +136,15 @@ async function audit(
   });
 }
 
+async function ensureDriver(tx: Db, driverUserId: string) {
+  const driver = await tx.user.findFirst({
+    where: { id: driverUserId, role: "DRIVER" },
+    select: { id: true, name: true, phone: true, role: true },
+  });
+  if (!driver) throw new ShuttleServiceError("셔틀 기사 계정을 선택해 주세요.", 409, "DRIVER_UNAVAILABLE");
+  return driver;
+}
+
 export async function getShuttleDashboard(
   seasonId?: string,
   requestedDirection: unknown = ShuttleRouteDirection.PICKUP,
@@ -148,7 +158,7 @@ export async function getShuttleDashboard(
     select: { id: true, title: true, startsAt: true, endsAt: true },
   });
   const selectedSeasonId = seasonId || seasons[0]?.id || null;
-  const [vehicles, routes, requests] = await Promise.all([
+  const [vehicles, routes, requests, drivers] = await Promise.all([
     prisma.shuttleVehicle.findMany({ orderBy: [{ isActive: "desc" }, { name: "asc" }] }),
     selectedSeasonId
       ? prisma.shuttleRoutePlan.findMany({
@@ -175,6 +185,11 @@ export async function getShuttleDashboard(
           include: { application: true, applicationItem: { include: { offering: { select: { title: true } } } } },
         })
       : [],
+    prisma.user.findMany({
+      where: { role: "DRIVER" },
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true, phone: true, role: true },
+    }),
   ]);
 
   const unassignedRequests = requests.map((request) => ({
@@ -210,6 +225,7 @@ export async function getShuttleDashboard(
     selectedDirection,
     selectedServiceDate,
     vehicles,
+    drivers,
     routes: routes.map((route) => ({
       ...presentRoute(route),
       passengerCount: route.stops.reduce((sum, stop) => sum + stop.passengers.length, 0),
@@ -268,11 +284,14 @@ export async function createRoute(actor: Actor, input: Record<string, unknown>) 
     if (!season) throw new ShuttleServiceError("방학특강 시즌을 찾을 수 없습니다.", 404, "SEASON_NOT_FOUND");
     const vehicleId = text(input.vehicleId, 100);
     if (vehicleId) await ensureVehicle(tx, vehicleId);
+    const driverUserId = text(input.driverUserId, 100);
+    if (driverUserId) await ensureDriver(tx, driverUserId);
     const routeKey = crypto.randomUUID();
     const route = await tx.shuttleRoutePlan.create({
       data: {
         seasonId,
         vehicleId,
+        driverUserId,
         routeKey,
         version: 1,
         name,
@@ -331,6 +350,15 @@ export async function updateRoute(actor: Actor, id: string, input: Record<string
         if (passengerCount > vehicle.capacity) throw new ShuttleServiceError("차량 정원을 초과할 수 없습니다.", 409, "VEHICLE_CAPACITY_EXCEEDED");
       }
       data.vehicle = vehicleId ? { connect: { id: vehicleId } } : { disconnect: true };
+    }
+    if (input.driverUserId !== undefined) {
+      const driverUserId = text(input.driverUserId, 100);
+      if (driverUserId) {
+        await ensureDriver(tx, driverUserId);
+        data.driver = { connect: { id: driverUserId } };
+      } else {
+        data.driver = { disconnect: true };
+      }
     }
     if (input.serviceDate !== undefined) {
       const nextServiceDate = optionalDate(input.serviceDate, "운행일", true);
@@ -487,6 +515,7 @@ export async function confirmRoute(actor: Actor, routeId: string) {
   return prisma.$transaction(async (tx) => {
     const before = await draftRoute(tx, routeId);
     if (!before.vehicleId) throw new ShuttleServiceError("노선을 확정하려면 차량을 배정해 주세요.", 409, "VEHICLE_REQUIRED");
+    if (!before.driverUserId) throw new ShuttleServiceError("노선을 확정하려면 셔틀 기사를 배정해 주세요.", 409, "DRIVER_REQUIRED");
     const vehicle = await ensureVehicle(tx, before.vehicleId);
     const passengerCount = before.stops.reduce((sum, stop) => sum + stop.passengers.length, 0);
     if (!passengerCount) throw new ShuttleServiceError("한 명 이상의 학생을 배정해 주세요.", 409, "PASSENGER_REQUIRED");
@@ -537,7 +566,7 @@ export async function reviseRoute(actor: Actor, routeId: string) {
     const latest = await tx.shuttleRoutePlan.aggregate({ where: { routeKey: source.routeKey }, _max: { version: true } });
     const draft = await tx.shuttleRoutePlan.create({
       data: {
-        seasonId: source.seasonId, vehicleId: source.vehicleId, routeKey: source.routeKey, version: (latest._max.version ?? source.version) + 1,
+        seasonId: source.seasonId, vehicleId: source.vehicleId, driverUserId: source.driverUserId, routeKey: source.routeKey, version: (latest._max.version ?? source.version) + 1,
         name: source.name, direction: source.direction, serviceDate: source.serviceDate,
         originName: source.originName, originAddress: source.originAddress, originLatitude: source.originLatitude, originLongitude: source.originLongitude,
         destinationName: source.destinationName, destinationAddress: source.destinationAddress, destinationLatitude: source.destinationLatitude, destinationLongitude: source.destinationLongitude,
@@ -569,4 +598,37 @@ export async function reviseRoute(actor: Actor, routeId: string) {
     await audit(tx, actor, "ROUTE_REVISION_CREATED", { routePlanId: route.id }, source, route);
     return route;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+function koreaDateOnly(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+export async function getStaffShuttleDashboard(actor: Actor & { appUserRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" }) {
+  const todayKey = koreaDateOnly();
+  const today = new Date(`${todayKey}T00:00:00.000Z`);
+  const isDriver = actor.appUserRole === "DRIVER";
+  const routes = await prisma.shuttleRoutePlan.findMany({
+    where: {
+      status: ShuttleRoutePlanStatus.CONFIRMED,
+      ...(isDriver ? { driverUserId: actor.appUserId } : {}),
+      OR: [{ serviceDate: null }, { serviceDate: { gte: today } }],
+    },
+    orderBy: [{ serviceDate: "asc" }, { direction: "asc" }, { name: "asc" }],
+    take: 12,
+    include: routeInclude,
+  });
+
+  return {
+    todayKey,
+    routes: routes.map((route) => ({
+      ...presentRoute(route),
+      passengerCount: route.stops.reduce((sum, stop) => sum + stop.passengers.length, 0),
+    })),
+  };
 }

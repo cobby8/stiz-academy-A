@@ -2546,7 +2546,7 @@ export const getTrialLeads = cache(async (statusOrOptions?: string | AdminListQu
 
 /**
  * 체험 CRM 파이프라인 통계 — 상태별 건수 + 전환율
- * - 각 상태(NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST)별 count
+ * - 각 상태(NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST, CANCELLED)별 count
  * - 전환율: CONVERTED / (ATTENDED + CONVERTED) * 100 (체험 참석 대비 등록 비율)
  */
 export const getTrialStats = cache(async () => {
@@ -2575,13 +2575,14 @@ export const getTrialStats = cache(async () => {
             ATTENDED: statusMap["ATTENDED"] ?? 0,
             CONVERTED: statusMap["CONVERTED"] ?? 0,
             LOST: statusMap["LOST"] ?? 0,
+            CANCELLED: statusMap["CANCELLED"] ?? 0,
             total: rows.reduce((sum, r) => sum + r.count, 0),
             conversionRate,
         };
     } catch (e) {
         console.error("[getTrialStats] failed:", e);
         return {
-            NEW: 0, CONTACTED: 0, SCHEDULED: 0, ATTENDED: 0, CONVERTED: 0, LOST: 0,
+            NEW: 0, CONTACTED: 0, SCHEDULED: 0, ATTENDED: 0, CONVERTED: 0, LOST: 0, CANCELLED: 0,
             total: 0, conversionRate: 0,
         };
     }

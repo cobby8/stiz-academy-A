@@ -75,6 +75,7 @@ interface TrialStats {
     ATTENDED: number;
     CONVERTED: number;
     LOST: number;
+    CANCELLED: number;
     total: number;
     conversionRate: number;
 }
@@ -109,6 +110,7 @@ const EMPTY_STATS: TrialStats = {
     ATTENDED: 0,
     CONVERTED: 0,
     LOST: 0,
+    CANCELLED: 0,
     total: 0,
     conversionRate: 0,
 };
@@ -122,6 +124,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string
     ATTENDED: { label: "체험완료", color: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200", icon: "check_circle" },
     CONVERTED: { label: "등록전환", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200", icon: "how_to_reg" },
     LOST: { label: "이탈", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "person_off" },
+    CANCELLED: { label: "취소", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "block" },
 };
 
 // 유입경로 라벨
@@ -135,7 +138,8 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 // 상태 순서 (파이프라인 흐름)
-const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST"] as const;
+const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST", "CANCELLED"] as const;
+const CLOSED_TRIAL_STATUSES = new Set(["CONVERTED", "LOST", "CANCELLED"]);
 const TRIAL_PAGE_SIZE = 50;
 const LONG_WAIT_HOURS = 24;
 
@@ -199,12 +203,74 @@ function formatContactDateTime(dateStr: string | null) {
     return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function isClosedTrialStatus(status: string) {
+    return CLOSED_TRIAL_STATUSES.has(status);
+}
+
+function formatCompactDate(dateStr: string | null) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "-";
+    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatCompactDateTime(dateStr: string | null) {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "-";
+    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatPreferredSchedule(lead: TrialLead) {
+    const day = lead.preferredDay ? `${lead.preferredDay}요일` : "";
+    const period = lead.preferredPeriod ? `${lead.preferredPeriod}교시` : "";
+    const label = [day, period].filter(Boolean).join(" ");
+    if (label) return label;
+    return lead.preferredSlotKey ? "희망 시간 확인 필요" : null;
+}
+
+function getTrialScheduleItems(lead: TrialLead) {
+    const preferredSchedule = formatPreferredSchedule(lead);
+    return [
+        {
+            label: "접수",
+            icon: "inbox",
+            value: formatCompactDateTime(lead.createdAt),
+            className: "border-gray-100 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
+        },
+        lead.trialDate
+            ? {
+                label: "희망일",
+                icon: "event",
+                value: formatCompactDate(lead.trialDate),
+                className: "border-lime-100 bg-lime-50 text-lime-800 dark:border-lime-900/50 dark:bg-lime-950/30 dark:text-lime-200",
+            }
+            : null,
+        preferredSchedule
+            ? {
+                label: "희망시간",
+                icon: "schedule",
+                value: preferredSchedule,
+                className: "border-purple-100 bg-purple-50 text-purple-800 dark:border-purple-900/50 dark:bg-purple-950/30 dark:text-purple-200",
+            }
+            : null,
+        lead.scheduledDate
+            ? {
+                label: "확정일",
+                icon: "event_available",
+                value: formatCompactDateTime(lead.scheduledDate),
+                className: "border-sky-100 bg-sky-50 text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200",
+            }
+            : null,
+    ].filter(Boolean) as Array<{ label: string; icon: string; value: string; className: string }>;
+}
+
 function matchesTrialWorkFilter(lead: TrialLead, workFilter: TrialWorkFilter) {
     if (workFilter === "ALL") return true;
     if (workFilter === "NEEDS_CONTACT") return lead.status === "NEW" || lead.status === "CONTACTED";
     if (workFilter === "SCHEDULED") return lead.status === "SCHEDULED";
     if (workFilter === "AFTER_TRIAL") return lead.status === "ATTENDED" && !lead.enrollGuideSentAt;
-    if (workFilter === "COACH_NOTICE") return lead.status !== "CONVERTED" && lead.status !== "LOST" && !lead.coachNoticeSentAt;
+    if (workFilter === "COACH_NOTICE") return !isClosedTrialStatus(lead.status) && !lead.coachNoticeSentAt;
     if (workFilter === "ENROLL_RECEIVED") return Boolean(lead.enrollApplicationReceivedAt);
     return true;
 }
@@ -266,7 +332,7 @@ function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
             className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
         });
     }
-    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && contactCount > 1) {
+    if (!isClosedTrialStatus(lead.status) && contactCount > 1) {
         badges.push({
             icon: "content_copy",
             label: `중복 연락처 ${contactCount}건`,
@@ -280,14 +346,14 @@ function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
             className: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200",
         });
     }
-    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && !lead.coachNoticeSentAt) {
+    if (!isClosedTrialStatus(lead.status) && !lead.coachNoticeSentAt) {
         badges.push({
             icon: "school",
             label: "쌤 알림 필요",
             className: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200",
         });
     }
-    if (lead.status !== "CONVERTED" && lead.status !== "LOST" && isFollowUpDueToday(lead.openFollowUpAt)) {
+    if (!isClosedTrialStatus(lead.status) && isFollowUpDueToday(lead.openFollowUpAt)) {
         badges.push({
             icon: "phone_callback",
             label: "오늘 재연락",
@@ -353,7 +419,7 @@ function formatTrialCopySummary(lead: TrialLead) {
         childInfo ? `학생: ${childInfo}` : null,
         `보호자: ${lead.parentName}`,
         `연락처: ${lead.parentPhone}`,
-        lead.trialDate ? `희망 체험일: ${lead.trialDate}` : null,
+        lead.trialDate ? `희망 체험일: ${formatCompactDate(lead.trialDate)}` : null,
         preferredSchedule ? `희망 시간: ${preferredSchedule}` : null,
         lead.basketballExp ? `농구 경험: ${lead.basketballExp}` : null,
         lead.trialFeeConfirmed ? "체험비: 확인" : null,
@@ -445,12 +511,15 @@ export default function TrialCrmClient({
 
     // 모달 상태
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState<TrialLead | null>(null);
+    const [showScheduleModal, setShowScheduleModal] = useState<TrialLead | null>(null);
+    const [showCancelModal, setShowCancelModal] = useState<TrialLead | null>(null);
     const [showConvertModal, setShowConvertModal] = useState<TrialLead | null>(null);
     const [showLostModal, setShowLostModal] = useState<TrialLead | null>(null);
     const [showMemoModal, setShowMemoModal] = useState<TrialLead | null>(null);
     const [contactModal, setContactModal] = useState<ContactModalState>(null);
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
-    const hasTrialModal = Boolean(showAddModal || showConvertModal || showLostModal || showMemoModal);
+    const hasTrialModal = Boolean(showAddModal || showEditModal || showScheduleModal || showCancelModal || showConvertModal || showLostModal || showMemoModal);
 
     const loadTrialData = useCallback(async (options?: { append?: boolean; offset?: number }) => {
         const append = Boolean(options?.append);
@@ -853,6 +922,8 @@ export default function TrialCrmClient({
                 <div className="grid gap-4">
                     {visibleLeads.map((lead) => {
                         const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
+                        const isClosed = isClosedTrialStatus(lead.status);
+                        const scheduleItems = getTrialScheduleItems(lead);
                         const contactCount = getContactCount(lead.parentPhone, openContactCounts);
                         const priorityBadges = getTrialPriorityBadges(lead, contactCount);
                         const parentPhoneHref = phoneHref(lead.parentPhone);
@@ -906,9 +977,25 @@ export default function TrialCrmClient({
                                             </a>
                                             <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-base">calendar_today</span>
-                                                {formatDate(lead.createdAt)}
+                                                접수 {formatDate(lead.createdAt)}
                                             </span>
                                         </div>
+                                        {scheduleItems.length > 0 && (
+                                            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                                {scheduleItems.map((item) => (
+                                                    <div
+                                                        key={`${lead.id}-schedule-${item.label}`}
+                                                        className={`rounded-lg border px-3 py-2 text-xs ${item.className}`}
+                                                    >
+                                                        <div className="mb-1 flex items-center gap-1 font-bold opacity-80">
+                                                            <span className="material-symbols-outlined text-sm">{item.icon}</span>
+                                                            {item.label}
+                                                        </div>
+                                                        <div className="truncate text-sm font-black">{item.value}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                         {/* 날짜 정보 표시 */}
                                         {(lead.scheduledDate || lead.attendedDate || lead.convertedDate) && (
                                             <div className="flex gap-4 mt-2 text-xs text-gray-400">
@@ -983,7 +1070,7 @@ export default function TrialCrmClient({
                                             </div>
                                         )}
                                         {/* 신청 상세 정보 — 학년, 학교, 체험 희망 일정 */}
-                                        {(lead.childGrade || lead.childSchool || lead.basketballExp || lead.preferredSlotKey || lead.trialDate || lead.preferredDay || lead.preferredPeriod) && (
+                                        {(lead.childGrade || lead.childSchool || lead.basketballExp || lead.trialFeeConfirmed) && (
                                             <div className="flex flex-wrap gap-2 mt-2">
                                                 {lead.childGrade && (
                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
@@ -1001,24 +1088,6 @@ export default function TrialCrmClient({
                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200">
                                                         <span className="material-symbols-outlined text-xs">sports_basketball</span>
                                                         {lead.basketballExp}
-                                                    </span>
-                                                )}
-                                                {lead.trialDate && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
-                                                        <span className="material-symbols-outlined text-xs">event</span>
-                                                        희망일: {formatDate(lead.trialDate)}
-                                                    </span>
-                                                )}
-                                                {(lead.preferredDay || lead.preferredPeriod) && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
-                                                        <span className="material-symbols-outlined text-xs">schedule</span>
-                                                        {lead.preferredDay ? `${lead.preferredDay}요일` : "요일 미입력"} {lead.preferredPeriod ? `${lead.preferredPeriod}교시` : ""}
-                                                    </span>
-                                                )}
-                                                {lead.preferredSlotKey && !lead.preferredDay && !lead.preferredPeriod && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
-                                                        <span className="material-symbols-outlined text-xs">schedule</span>
-                                                        희망 시간 확인 필요
                                                     </span>
                                                 )}
                                                 {lead.trialFeeConfirmed && (
@@ -1102,6 +1171,26 @@ export default function TrialCrmClient({
                                         </button>
                                         <button
                                             type="button"
+                                            onClick={() => setShowEditModal(lead)}
+                                            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            title="체험 신청 내용 수정"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">edit</span>
+                                            수정
+                                        </button>
+                                        {!isClosed && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowScheduleModal(lead)}
+                                                className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-sm font-bold text-sky-700 transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                                                title="체험 일정 확정 또는 변경"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">event_available</span>
+                                                일정
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
                                             onClick={() => handleRecordContact(lead, "CONTACTED")}
                                             disabled={contactBusyId === lead.id}
                                             className="flex items-center gap-1.5 rounded-lg bg-lime-500 px-3 py-2 text-sm font-bold text-brand-navy-900 transition hover:bg-lime-400 disabled:opacity-50"
@@ -1130,14 +1219,14 @@ export default function TrialCrmClient({
                                             재연락
                                         </button>
                                         {/* 상태 변경 드롭다운 — CONVERTED/LOST가 아닌 경우만 */}
-                                        {lead.status !== "CONVERTED" && lead.status !== "LOST" && (
+                                        {!isClosed && (
                                             <select
                                                 value={lead.status}
                                                 onChange={(e) => handleStatusChange(lead, e.target.value)}
                                                 disabled={busy}
                                                 className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                             >
-                                                {STATUS_ORDER.filter((s) => s !== "CONVERTED" && s !== "LOST").map((s) => (
+                                                {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
                                                     <option key={s} value={s}>
                                                         {STATUS_CONFIG[s].label}
                                                     </option>
@@ -1154,7 +1243,7 @@ export default function TrialCrmClient({
                                             <span className="material-symbols-outlined text-xl">edit_note</span>
                                         </button>
 
-                                        {lead.status !== "CONVERTED" && lead.status !== "LOST" && (
+                                        {!isClosed && (
                                             <button
                                                 onClick={() => handleSendCoachNotice(lead)}
                                                 disabled={busy}
@@ -1192,15 +1281,25 @@ export default function TrialCrmClient({
                                         )}
 
                                         {/* 이탈 처리 — CONVERTED/LOST가 아닌 경우만 */}
-                                        {lead.status !== "CONVERTED" && lead.status !== "LOST" && (
-                                            <button
-                                                onClick={() => setShowLostModal(lead)}
-                                                disabled={busy}
-                                                className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors text-sm"
-                                            >
-                                                <span className="material-symbols-outlined text-lg">person_off</span>
-                                                이탈
-                                            </button>
+                                        {!isClosed && (
+                                            <>
+                                                <button
+                                                    onClick={() => setShowCancelModal(lead)}
+                                                    disabled={busy}
+                                                    className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-gray-100"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">block</span>
+                                                    취소
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowLostModal(lead)}
+                                                    disabled={busy}
+                                                    className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors text-sm dark:text-gray-300 dark:hover:bg-red-950/30 dark:hover:text-red-200"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">person_off</span>
+                                                    이탈
+                                                </button>
+                                            </>
                                         )}
 
                                         {/* 삭제 */}
@@ -1238,10 +1337,16 @@ export default function TrialCrmClient({
             {hasTrialModal && (
                 <TrialCrmModals
                     addOpen={showAddModal}
+                    editLead={showEditModal}
+                    scheduleLead={showScheduleModal}
+                    cancelLead={showCancelModal}
                     convertLead={showConvertModal}
                     lostLead={showLostModal}
                     memoLead={showMemoModal}
                     onCloseAdd={() => setShowAddModal(false)}
+                    onCloseEdit={() => setShowEditModal(null)}
+                    onCloseSchedule={() => setShowScheduleModal(null)}
+                    onCloseCancel={() => setShowCancelModal(null)}
                     onCloseConvert={() => setShowConvertModal(null)}
                     onCloseLost={() => setShowLostModal(null)}
                     onCloseMemo={() => setShowMemoModal(null)}

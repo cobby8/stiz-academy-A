@@ -3614,8 +3614,9 @@ const TRIAL_LEAD_COLUMNS = [
     "attendedDate", "convertedDate", "convertedStudentId",
     "lostReason", "memo",
     // Phase A 추가 필드
-    "childBirthDate", "childGrade", "childGender", "basketballExp",
-    "preferredDays", "preferredSlotKey", "hopeNote", "agreedTerms", "agreedPrivacy",
+    "childBirthDate", "childGrade", "childGender", "childSchool", "basketballExp",
+    "preferredDays", "preferredSlotKey", "preferredDay", "preferredPeriod",
+    "trialDate", "trialFeeConfirmed", "hopeNote", "agreedTerms", "agreedPrivacy",
 ] as const;
 
 export async function updateTrialLead(
@@ -3646,7 +3647,7 @@ export async function updateTrialLead(
     // 동적 SET절: 컬럼명은 화이트리스트에서만 허용 → SQL 인젝션 불가능, 값은 $N 바인딩
     const setClauses = entries.map(([col], i) => {
         // 날짜 타입 필드는 ::timestamptz 캐스팅
-        const isDate = ["scheduledDate", "attendedDate", "convertedDate", "childBirthDate"].includes(col);
+        const isDate = ["scheduledDate", "attendedDate", "convertedDate", "childBirthDate", "trialDate"].includes(col);
         return `"${col}" = $${i + 1}${isDate ? "::timestamptz" : ""}`;
     }).join(", ");
     const values = entries.map(([, val]) => val ?? null);
@@ -4610,6 +4611,104 @@ export async function rejectEnrollApplication(
     } catch (e) {
         console.error("Failed to reject enrollment application:", e);
         throw new Error((e as Error).message || "수강 신청 반려 실패");
+    }
+
+    revalidatePath("/admin/apply");
+    revalidatePath("/admin");
+    revalidateApplyAdminCaches();
+}
+
+const ENROLL_APPLICATION_COLUMNS = [
+    "trialLeadId",
+    "childName", "childBirthDate", "childGender", "childGrade", "childSchool", "childPhone",
+    "parentName", "parentPhone", "parentRelation", "address",
+    "enrollmentMonths", "preferredSlotKeys", "assignedClassId",
+    "basketballExp", "uniformSize",
+    "shuttleNeeded", "shuttlePickup", "shuttleTime", "shuttleDropoff",
+    "paymentMethod", "referralSource", "memo",
+    "applicationNoticeConfirmed", "shuttleNoticeConfirmed", "processedNote",
+] as const;
+
+/**
+ * 수강 신청서 수정 — 승인 전 신청 내용을 관리자 화면에서 정리
+ * 승인 후에는 원생/수강 등록 데이터가 이미 만들어지므로 별도 메뉴에서 수정해야 한다.
+ */
+export async function updateEnrollApplication(
+    applicationId: string,
+    data: Partial<Record<(typeof ENROLL_APPLICATION_COLUMNS)[number], any>>
+) {
+    await requireAdmin();
+
+    try {
+        const apps = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT status FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+            applicationId,
+        );
+        if (apps.length === 0) throw new Error("신청서를 찾을 수 없습니다.");
+        if (apps[0].status === "APPROVED") {
+            throw new Error("이미 승인된 신청서는 원생/수강 등록 메뉴에서 수정해주세요.");
+        }
+
+        const entries = ENROLL_APPLICATION_COLUMNS
+            .filter((col) => data[col] !== undefined)
+            .map((col) => [col, data[col]] as const);
+        if (entries.length === 0) return;
+
+        const setClauses = entries.map(([col], index) => {
+            const isDate = ["childBirthDate"].includes(col);
+            return `"${col}" = $${index + 1}${isDate ? "::timestamptz" : ""}`;
+        }).join(", ");
+        const values = entries.map(([, value]) => value ?? null);
+
+        await prisma.$executeRawUnsafe(
+            `UPDATE "EnrollmentApplication"
+             SET ${setClauses}, "updatedAt" = NOW()
+             WHERE id = $${values.length + 1}`,
+            ...values,
+            applicationId,
+        );
+    } catch (e) {
+        console.error("Failed to update enrollment application:", e);
+        throw new Error((e as Error).message || "수강 신청 수정 실패");
+    }
+
+    revalidatePath("/admin/apply");
+    revalidatePath("/admin");
+    revalidateApplyAdminCaches();
+}
+
+/**
+ * 수강 신청서 취소 — 삭제하지 않고 취소 이력으로 남긴다.
+ */
+export async function cancelEnrollApplication(
+    applicationId: string,
+    reason?: string
+) {
+    await requireAdmin();
+
+    try {
+        const apps = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT status FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+            applicationId,
+        );
+        if (apps.length === 0) throw new Error("신청서를 찾을 수 없습니다.");
+        if (apps[0].status === "APPROVED") {
+            throw new Error("이미 승인된 신청은 원생/수강 등록에서 취소해주세요.");
+        }
+
+        await prisma.$executeRawUnsafe(
+            `UPDATE "EnrollmentApplication"
+             SET status = 'CANCELLED',
+                 "processedAt" = NOW(),
+                 "processedNote" = $1,
+                 "updatedAt" = NOW()
+             WHERE id = $2`,
+            reason?.trim() || "관리자 취소",
+            applicationId,
+        );
+    } catch (e) {
+        console.error("Failed to cancel enrollment application:", e);
+        throw new Error((e as Error).message || "수강 신청 취소 실패");
     }
 
     revalidatePath("/admin/apply");

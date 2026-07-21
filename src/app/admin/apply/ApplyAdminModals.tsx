@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { approveEnrollApplication, rejectEnrollApplication } from "@/app/actions/admin";
+import { useState, type FormEvent, type ReactNode } from "react";
+import {
+    approveEnrollApplication,
+    cancelEnrollApplication,
+    rejectEnrollApplication,
+    updateEnrollApplication,
+} from "@/app/actions/admin";
 
 interface EnrollApplication {
     id: string;
@@ -53,10 +58,14 @@ interface ApplyAdminModalsProps {
     approveApp: EnrollApplication | null;
     rejectApp: EnrollApplication | null;
     detailApp: EnrollApplication | null;
+    editApp: EnrollApplication | null;
+    cancelApp: EnrollApplication | null;
     classes: ClassInfo[];
     onCloseApprove: () => void;
     onCloseReject: () => void;
     onCloseDetail: () => void;
+    onCloseEdit: () => void;
+    onCloseCancel: () => void;
     onSaved: () => Promise<void> | void;
     onFeedback: (type: "success" | "error", message: string) => void;
 }
@@ -94,6 +103,8 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 const REJECT_REASON_OPTIONS = ["정원 마감", "희망 시간대 불일치", "연락 불가", "셔틀 동선 확인 필요"];
+const CANCEL_REASON_OPTIONS = ["학부모 요청", "일정 변경", "중복 신청", "연락 불가", "기타"];
+const MODAL_INPUT_CLASS = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime";
 
 function phoneHref(phone: string) {
     const digits = phone.replace(/\D/g, "");
@@ -125,6 +136,29 @@ function formatDetailDate(dateStr: string | null) {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function dateInputValue(dateStr: string | null) {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toISOString().slice(0, 10);
+}
+
+function formatPhoneInput(value: string) {
+    const nums = value.replace(/\D/g, "").slice(0, 11);
+    if (nums.length > 7) return `${nums.slice(0, 3)}-${nums.slice(3, 7)}-${nums.slice(7)}`;
+    if (nums.length > 3) return `${nums.slice(0, 3)}-${nums.slice(3)}`;
+    return nums;
+}
+
+function FormField({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="mb-1 block">{label}</span>
+            {children}
+        </label>
+    );
 }
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined | boolean }) {
@@ -195,10 +229,14 @@ export default function ApplyAdminModals({
     approveApp,
     rejectApp,
     detailApp,
+    editApp,
+    cancelApp,
     classes,
     onCloseApprove,
     onCloseReject,
     onCloseDetail,
+    onCloseEdit,
+    onCloseCancel,
     onSaved,
     onFeedback,
 }: ApplyAdminModalsProps) {
@@ -237,6 +275,36 @@ export default function ApplyAdminModals({
         }
     }
 
+    async function handleEdit(data: Record<string, any>) {
+        if (!editApp) return;
+        setBusy(true);
+        try {
+            await updateEnrollApplication(editApp.id, data);
+            onCloseEdit();
+            await onSaved();
+            onFeedback("success", `${editApp.childName} 수강신청 내용을 수정했습니다.`);
+        } catch {
+            onFeedback("error", "수정 저장 중 문제가 생겼습니다. 승인된 신청은 원생/수강 등록 메뉴에서 수정해주세요.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function handleCancel(reason: string) {
+        if (!cancelApp) return;
+        setBusy(true);
+        try {
+            await cancelEnrollApplication(cancelApp.id, reason);
+            onCloseCancel();
+            await onSaved();
+            onFeedback("success", `${cancelApp.childName} 수강신청을 취소 처리했습니다.`);
+        } catch {
+            onFeedback("error", "취소 처리 중 문제가 생겼습니다. 승인된 신청은 원생/수강 등록 메뉴에서 정리해주세요.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
     return (
         <>
             {approveApp && (
@@ -254,6 +322,25 @@ export default function ApplyAdminModals({
                     app={rejectApp}
                     onClose={onCloseReject}
                     onSubmit={handleReject}
+                    busy={busy}
+                />
+            )}
+
+            {editApp && (
+                <EditApplicationModal
+                    app={editApp}
+                    classes={classes}
+                    onClose={onCloseEdit}
+                    onSubmit={handleEdit}
+                    busy={busy}
+                />
+            )}
+
+            {cancelApp && (
+                <CancelApplicationModal
+                    app={cancelApp}
+                    onClose={onCloseCancel}
+                    onSubmit={handleCancel}
                     busy={busy}
                 />
             )}
@@ -424,6 +511,371 @@ function ApproveModal({
                                 <span className="material-symbols-outlined text-lg">check_circle</span>
                             )}
                             {busy ? "처리 중..." : `승인 (${selectedClassIds.length}개 반)`}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+function EditApplicationModal({
+    app,
+    classes,
+    onClose,
+    onSubmit,
+    busy,
+}: {
+    app: EnrollApplication;
+    classes: ClassInfo[];
+    onClose: () => void;
+    onSubmit: (data: Record<string, any>) => void;
+    busy: boolean;
+}) {
+    const initialSlotKeys = app.preferredSlotKeys?.split(",").map((key) => key.trim()).filter(Boolean) ?? [];
+    const [form, setForm] = useState({
+        childName: app.childName ?? "",
+        childBirthDate: dateInputValue(app.childBirthDate),
+        childGender: app.childGender ?? "",
+        childGrade: app.childGrade ?? "",
+        childSchool: app.childSchool ?? "",
+        childPhone: app.childPhone ?? "",
+        parentName: app.parentName ?? "",
+        parentPhone: app.parentPhone ?? "",
+        parentRelation: app.parentRelation ?? "",
+        address: app.address ?? "",
+        enrollmentMonths: app.enrollmentMonths ?? "",
+        basketballExp: app.basketballExp ?? "",
+        uniformSize: app.uniformSize ?? "",
+        shuttleNeeded: Boolean(app.shuttleNeeded),
+        shuttlePickup: app.shuttlePickup ?? "",
+        shuttleTime: app.shuttleTime ?? "",
+        shuttleDropoff: app.shuttleDropoff ?? "",
+        paymentMethod: app.paymentMethod ?? "",
+        referralSource: app.referralSource ?? "",
+        memo: app.memo ?? "",
+        applicationNoticeConfirmed: Boolean(app.applicationNoticeConfirmed),
+        shuttleNoticeConfirmed: Boolean(app.shuttleNoticeConfirmed),
+        processedNote: app.processedNote ?? "",
+    });
+    const [selectedSlotKeys, setSelectedSlotKeys] = useState<string[]>(initialSlotKeys);
+    const [formError, setFormError] = useState("");
+
+    function toggleSlot(slotKey: string) {
+        setSelectedSlotKeys((current) =>
+            current.includes(slotKey)
+                ? current.filter((key) => key !== slotKey)
+                : [...current, slotKey],
+        );
+    }
+
+    function handleSubmit(event: FormEvent) {
+        event.preventDefault();
+        if (!form.childName.trim() || !form.childBirthDate || !form.parentName.trim() || !form.parentPhone.trim()) {
+            setFormError("아이 이름, 생년월일, 보호자 이름, 연락처를 입력해주세요.");
+            return;
+        }
+        setFormError("");
+        onSubmit({
+            childName: form.childName.trim(),
+            childBirthDate: form.childBirthDate,
+            childGender: form.childGender || null,
+            childGrade: form.childGrade.trim() || null,
+            childSchool: form.childSchool.trim() || null,
+            childPhone: form.childPhone.trim() || null,
+            parentName: form.parentName.trim(),
+            parentPhone: form.parentPhone.trim(),
+            parentRelation: form.parentRelation.trim() || null,
+            address: form.address.trim() || null,
+            enrollmentMonths: form.enrollmentMonths.trim() || null,
+            preferredSlotKeys: selectedSlotKeys.join(",") || null,
+            basketballExp: form.basketballExp.trim() || null,
+            uniformSize: form.uniformSize.trim() || null,
+            shuttleNeeded: form.shuttleNeeded,
+            shuttlePickup: form.shuttleNeeded ? form.shuttlePickup.trim() || null : null,
+            shuttleTime: form.shuttleNeeded ? form.shuttleTime.trim() || null : null,
+            shuttleDropoff: form.shuttleNeeded ? form.shuttleDropoff.trim() || null : null,
+            paymentMethod: form.paymentMethod.trim() || null,
+            referralSource: form.referralSource || null,
+            memo: form.memo.trim() || null,
+            applicationNoticeConfirmed: form.applicationNoticeConfirmed,
+            shuttleNoticeConfirmed: form.shuttleNoticeConfirmed,
+            processedNote: form.processedNote.trim() || null,
+        });
+    }
+
+    const classesByDay = classes.reduce<Record<string, ClassInfo[]>>((acc, classInfo) => {
+        const day = classInfo.dayOfWeek || "기타";
+        if (!acc[day]) acc[day] = [];
+        acc[day].push(classInfo);
+        return acc;
+    }, {});
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+            <div
+                className="mx-4 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit</span>
+                    수강신청 수정
+                </h2>
+                <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                    승인 전 신청 내용을 상담 결과에 맞춰 정리합니다.
+                </p>
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    {formError && (
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                            {formError}
+                        </p>
+                    )}
+
+                    <section>
+                        <h3 className="mb-2 text-xs font-black uppercase text-gray-500 dark:text-gray-400">아이 정보</h3>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <FormField label="아이 이름 *">
+                                <input value={form.childName} onChange={(e) => setForm({ ...form, childName: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="생년월일 *">
+                                <input type="date" value={form.childBirthDate} onChange={(e) => setForm({ ...form, childBirthDate: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="성별">
+                                <select value={form.childGender} onChange={(e) => setForm({ ...form, childGender: e.target.value })} className={MODAL_INPUT_CLASS}>
+                                    <option value="">선택 안 함</option>
+                                    <option value="남">남</option>
+                                    <option value="여">여</option>
+                                </select>
+                            </FormField>
+                            <FormField label="학년">
+                                <input value={form.childGrade} onChange={(e) => setForm({ ...form, childGrade: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="학교">
+                                <input value={form.childSchool} onChange={(e) => setForm({ ...form, childSchool: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="아이 연락처">
+                                <input type="tel" value={form.childPhone} onChange={(e) => setForm({ ...form, childPhone: formatPhoneInput(e.target.value) })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 className="mb-2 text-xs font-black uppercase text-gray-500 dark:text-gray-400">보호자 정보</h3>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <FormField label="보호자 이름 *">
+                                <input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="보호자 연락처 *">
+                                <input type="tel" value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: formatPhoneInput(e.target.value) })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="관계">
+                                <input value={form.parentRelation} onChange={(e) => setForm({ ...form, parentRelation: e.target.value })} className={MODAL_INPUT_CLASS} placeholder="부 / 모 / 기타" />
+                            </FormField>
+                            <FormField label="주소">
+                                <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 className="mb-2 text-xs font-black uppercase text-gray-500 dark:text-gray-400">수강 정보</h3>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <FormField label="수강 월">
+                                <input value={form.enrollmentMonths} onChange={(e) => setForm({ ...form, enrollmentMonths: e.target.value })} className={MODAL_INPUT_CLASS} placeholder="8월, 9월" />
+                            </FormField>
+                            <FormField label="농구 경험">
+                                <input value={form.basketballExp} onChange={(e) => setForm({ ...form, basketballExp: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="유니폼 사이즈">
+                                <input value={form.uniformSize} onChange={(e) => setForm({ ...form, uniformSize: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="납부 방식">
+                                <input value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })} className={MODAL_INPUT_CLASS} />
+                            </FormField>
+                            <FormField label="유입 경로">
+                                <select value={form.referralSource} onChange={(e) => setForm({ ...form, referralSource: e.target.value })} className={MODAL_INPUT_CLASS}>
+                                    <option value="">선택 안 함</option>
+                                    {Object.entries(SOURCE_LABELS).map(([value, label]) => (
+                                        <option key={value} value={value}>{label}</option>
+                                    ))}
+                                </select>
+                            </FormField>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 className="mb-2 text-xs font-black uppercase text-gray-500 dark:text-gray-400">희망 시간</h3>
+                        <div className="max-h-56 space-y-3 overflow-y-auto rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+                            {Object.entries(classesByDay).map(([day, dayClasses]) => (
+                                <div key={day}>
+                                    <p className="mb-1 text-xs font-bold text-gray-500 dark:text-gray-400">{DAY_LABELS[day] || day}요일</p>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {dayClasses.map((classInfo) => {
+                                            const slotKey = classInfo.slotKey;
+                                            if (!slotKey) return null;
+                                            const selected = selectedSlotKeys.includes(slotKey);
+                                            return (
+                                                <button
+                                                    key={classInfo.id}
+                                                    type="button"
+                                                    onClick={() => toggleSlot(slotKey)}
+                                                    className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+                                                        selected
+                                                            ? "border-lime-400 bg-lime-50 text-lime-800 dark:bg-lime-950/40 dark:text-lime-200"
+                                                            : "border-gray-200 text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="font-bold">{classInfo.name}</span>
+                                                        {selected && <span className="material-symbols-outlined text-lg text-lime-500">check</span>}
+                                                    </div>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{classInfo.startTime}~{classInfo.endTime}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 className="mb-2 text-xs font-black uppercase text-gray-500 dark:text-gray-400">셔틀/메모</h3>
+                        <label className="mb-3 flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
+                            <input
+                                type="checkbox"
+                                checked={form.shuttleNeeded}
+                                onChange={(e) => setForm({ ...form, shuttleNeeded: e.target.checked })}
+                            />
+                            셔틀 필요
+                        </label>
+                        {form.shuttleNeeded && (
+                            <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                                <FormField label="탑승지">
+                                    <input value={form.shuttlePickup} onChange={(e) => setForm({ ...form, shuttlePickup: e.target.value })} className={MODAL_INPUT_CLASS} />
+                                </FormField>
+                                <FormField label="하차지">
+                                    <input value={form.shuttleDropoff} onChange={(e) => setForm({ ...form, shuttleDropoff: e.target.value })} className={MODAL_INPUT_CLASS} />
+                                </FormField>
+                                <FormField label="셔틀 시간">
+                                    <input value={form.shuttleTime} onChange={(e) => setForm({ ...form, shuttleTime: e.target.value })} className={MODAL_INPUT_CLASS} />
+                                </FormField>
+                            </div>
+                        )}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <FormField label="보호자 메모">
+                                <textarea value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} rows={3} className={`${MODAL_INPUT_CLASS} resize-none`} />
+                            </FormField>
+                            <FormField label="관리 메모">
+                                <textarea value={form.processedNote} onChange={(e) => setForm({ ...form, processedNote: e.target.value })} rows={3} className={`${MODAL_INPUT_CLASS} resize-none`} />
+                            </FormField>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <label className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
+                                <input
+                                    type="checkbox"
+                                    checked={form.applicationNoticeConfirmed}
+                                    onChange={(e) => setForm({ ...form, applicationNoticeConfirmed: e.target.checked })}
+                                />
+                                신청 안내 확인
+                            </label>
+                            <label className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
+                                <input
+                                    type="checkbox"
+                                    checked={form.shuttleNoticeConfirmed}
+                                    onChange={(e) => setForm({ ...form, shuttleNoticeConfirmed: e.target.checked })}
+                                />
+                                셔틀 안내 확인
+                            </label>
+                        </div>
+                    </section>
+
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                        >
+                            닫기
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={busy}
+                            className="flex-1 rounded-lg bg-brand-orange-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
+                        >
+                            {busy ? "저장 중..." : "수정 저장"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+function CancelApplicationModal({
+    app,
+    onClose,
+    onSubmit,
+    busy,
+}: {
+    app: EnrollApplication;
+    onClose: () => void;
+    onSubmit: (reason: string) => void;
+    busy: boolean;
+}) {
+    const [reason, setReason] = useState("학부모 요청");
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+            <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800" onClick={(event) => event.stopPropagation()}>
+                <h2 className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-gray-500">block</span>
+                    수강신청 취소
+                </h2>
+                <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="font-medium text-gray-900 dark:text-white">{app.childName}</span> 신청을 삭제하지 않고 취소 상태로 남깁니다.
+                </p>
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        onSubmit(reason.trim() || "관리자 취소");
+                    }}
+                    className="space-y-4"
+                >
+                    <div className="flex flex-wrap gap-2">
+                        {CANCEL_REASON_OPTIONS.map((option) => (
+                            <button
+                                key={option}
+                                type="button"
+                                onClick={() => setReason(option)}
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                    reason === option
+                                        ? "border-gray-500 bg-gray-100 text-gray-900 dark:border-gray-500 dark:bg-gray-700 dark:text-white"
+                                        : "border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+                                }`}
+                            >
+                                {option}
+                            </button>
+                        ))}
+                    </div>
+                    <FormField label="취소 사유">
+                        <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className={`${MODAL_INPUT_CLASS} resize-none`} />
+                    </FormField>
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                        >
+                            닫기
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={busy}
+                            className="flex-1 rounded-lg bg-gray-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white"
+                        >
+                            {busy ? "처리 중..." : "취소 처리"}
                         </button>
                     </div>
                 </form>

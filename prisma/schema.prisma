@@ -1052,7 +1052,7 @@ model TrialLead {
   parentName         String
   parentPhone        String
   source             String    @default("WEBSITE") // WEBSITE, NAVER, REFERRAL, OTHER
-  status             String    @default("NEW") // NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST
+  status             String    @default("NEW") // NEW, CONTACTED, SCHEDULED, ATTENDED, CONVERTED, LOST, CANCELLED
   scheduledDate      DateTime? @db.Timestamptz(6)
   scheduledClassId   String?
   attendedDate       DateTime? @db.Timestamptz(6)

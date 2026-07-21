@@ -139,6 +139,7 @@ interface TrialStats {
     ATTENDED: number;
     CONVERTED: number;
     LOST: number;
+    CANCELLED: number;
     total: number;
     conversionRate: number;
 }
@@ -633,6 +634,8 @@ export default function ApplyAdminClient({
     const [showApproveModal, setShowApproveModal] = useState<EnrollApplication | null>(null);
     const [showRejectModal, setShowRejectModal] = useState<EnrollApplication | null>(null);
     const [showDetailModal, setShowDetailModal] = useState<EnrollApplication | null>(null);
+    const [showEditModal, setShowEditModal] = useState<EnrollApplication | null>(null);
+    const [showCancelModal, setShowCancelModal] = useState<EnrollApplication | null>(null);
     const [contactModal, setContactModal] = useState<ContactModalState>(null);
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
 
@@ -801,7 +804,7 @@ export default function ApplyAdminClient({
     useEffect(() => {
         setVisibleLimit(APPLICATION_PAGE_SIZE);
     }, [filter, searchQuery, workFilter]);
-    const hasApplyModal = Boolean(showApproveModal || showRejectModal || showDetailModal);
+    const hasApplyModal = Boolean(showApproveModal || showRejectModal || showDetailModal || showEditModal || showCancelModal);
     const trialNewCount = initialTrialStats?.NEW ?? 0;
     const trialScheduledCount = initialTrialStats?.SCHEDULED ?? 0;
     const actionTotal = trialNewCount + stats.PENDING;
@@ -1381,6 +1384,17 @@ export default function ApplyAdminClient({
                                                     <span className="material-symbols-outlined text-lg">event_repeat</span>
                                                     재연락
                                                 </button>
+                                                {app.status !== "APPROVED" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowEditModal(app)}
+                                                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                        title="수강신청 내용 수정"
+                                                    >
+                                                        <span className="material-symbols-outlined text-lg">edit</span>
+                                                        수정
+                                                    </button>
+                                                )}
                                                 {/* 상세보기 */}
                                                 <button
                                                     onClick={() => setShowDetailModal(app)}
@@ -1409,6 +1423,16 @@ export default function ApplyAdminClient({
                                                     >
                                                         <span className="material-symbols-outlined text-lg">cancel</span>
                                                         반려
+                                                    </button>
+                                                )}
+                                                {app.status === "PENDING" && (
+                                                    <button
+                                                        onClick={() => setShowCancelModal(app)}
+                                                        className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-gray-100"
+                                                        title="수강신청 취소 처리"
+                                                    >
+                                                        <span className="material-symbols-outlined text-lg">block</span>
+                                                        취소
                                                     </button>
                                                 )}
                                             </div>
@@ -1445,10 +1469,14 @@ export default function ApplyAdminClient({
                     approveApp={showApproveModal}
                     rejectApp={showRejectModal}
                     detailApp={showDetailModal}
+                    editApp={showEditModal}
+                    cancelApp={showCancelModal}
                     classes={classes}
                     onCloseApprove={() => setShowApproveModal(null)}
                     onCloseReject={() => setShowRejectModal(null)}
                     onCloseDetail={() => setShowDetailModal(null)}
+                    onCloseEdit={() => setShowEditModal(null)}
+                    onCloseCancel={() => setShowCancelModal(null)}
                     onSaved={loadApplyData}
                     onFeedback={showFeedback}
                 />

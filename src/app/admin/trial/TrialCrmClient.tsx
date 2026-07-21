@@ -408,11 +408,11 @@ function getTrialScheduleItems(
         {
             label: "신청일",
             icon: "inbox",
-            value: formatCompactDateTime(lead.createdAt),
+            value: formatCompactDate(lead.createdAt),
             className: "border-gray-100 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
         },
         {
-            label: "희망일자",
+            label: "체험일",
             icon: "event",
             value: lead.trialDate ? formatCompactDate(lead.trialDate) : "미입력",
             className: "border-lime-100 bg-lime-50 text-lime-800 dark:border-lime-900/50 dark:bg-lime-950/30 dark:text-lime-200",
@@ -783,6 +783,43 @@ export default function TrialCrmClient({
         }
     }
 
+    function renderCoachNoticeCell(lead: TrialLead, isClosed: boolean) {
+        const sentLabel = lead.coachNoticeSentAt ? `완료 ${formatDate(lead.coachNoticeSentAt)}` : null;
+        const buttonLabel = lead.coachNoticeSentAt ? "재발송" : "발송";
+        const buttonIcon = lead.coachNoticeSentAt ? "refresh" : "send";
+
+        if (isClosed && !lead.coachNoticeSentAt) {
+            return (
+                <span className="inline-flex max-w-full items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                    대상 아님
+                </span>
+            );
+        }
+
+        return (
+            <div className="flex min-w-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                {sentLabel ? (
+                    <span className="min-w-0 truncate rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200" title={sentLabel}>
+                        {sentLabel}
+                    </span>
+                ) : (
+                    <span className="min-w-0 truncate rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                        미발송
+                    </span>
+                )}
+                <button
+                    type="button"
+                    onClick={() => void handleSendCoachNotice(lead)}
+                    disabled={busy}
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 text-xs font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 disabled:opacity-50 dark:border-brand-neon-lime/40 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
+                >
+                    <span className="material-symbols-outlined text-sm">{buttonIcon}</span>
+                    {buttonLabel}
+                </button>
+            </div>
+        );
+    }
+
     // 날짜 포맷 헬퍼
     function formatDate(dateStr: string | null) {
         if (!dateStr) return "-";
@@ -793,20 +830,24 @@ export default function TrialCrmClient({
     function renderTrialList() {
         return (
             <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[960px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[1080px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
-                        <col className="w-[12%]" />
-                        <col className="w-[34%]" />
-                        <col className="w-[24%]" />
-                        <col className="w-[22%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[30%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[16%]" />
+                        <col className="w-[13%]" />
                         <col className="w-[8%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
                             <th className="px-3 py-2">상태</th>
                             <th className="px-3 py-2">학생/연락처</th>
-                            <th className="px-3 py-2">신청/희망일</th>
+                            <th className="px-3 py-2">신청일</th>
+                            <th className="px-3 py-2">체험일</th>
                             <th className="px-3 py-2">수업교시</th>
+                            <th className="px-3 py-2">쌤알림</th>
                             <th className="px-3 py-2 text-right">액션</th>
                         </tr>
                     </thead>
@@ -819,9 +860,9 @@ export default function TrialCrmClient({
                             const parentPhoneHref = phoneHref(lead.parentPhone);
                             const childMeta = [lead.childAge, lead.childGrade, lead.childSchool].filter(Boolean).join(" · ");
                             const studentSummary = [lead.childName, childMeta, lead.parentName || "보호자 미입력", lead.parentPhone].filter(Boolean).join(" · ");
-                            const dateLabel = `신청 ${getScheduleValue("신청일")} · 희망 ${getScheduleValue("희망일자")} · 확정 ${getScheduleValue("확정일정")}`;
+                            const createdDateLabel = getScheduleValue("신청일");
+                            const trialDateLabel = getScheduleValue("체험일");
                             const scheduleLabel = getScheduleValue("수업교시");
-                            const lessonSummary = `${scheduleLabel} · 쌤알림 ${lead.coachNoticeSentAt ? formatDate(lead.coachNoticeSentAt) : "미발송"}`;
                             const isActionOpen = openQuickActionId === lead.id;
                             return (
                                 <tr
@@ -852,10 +893,22 @@ export default function TrialCrmClient({
                                         </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={dateLabel}>{dateLabel}</span>
+                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={createdDateLabel}>
+                                            {createdDateLabel}
+                                        </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={lessonSummary}>{lessonSummary}</span>
+                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={trialDateLabel}>
+                                            {trialDateLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={scheduleLabel}>
+                                            {scheduleLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        {renderCoachNoticeCell(lead, isClosed)}
                                     </td>
                                     <td className="relative px-3 py-1.5 text-right align-middle" onClick={(event) => event.stopPropagation()}>
                                         <button

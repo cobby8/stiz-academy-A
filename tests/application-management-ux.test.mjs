@@ -15,7 +15,7 @@ const contactActions = readFileSync(new URL("../src/lib/application-contact-acti
 test("체험 신청 목록과 상세 모달은 접수/희망/확정 일정을 분리해서 보여주고 취소 상태를 보존한다", () => {
   assert.match(trialClient, /function getTrialScheduleItems/);
   assert.match(trialClient, /label:\s*"신청일"/);
-  assert.match(trialClient, /label:\s*"희망일자"/);
+  assert.match(trialClient, /label:\s*"체험일"/);
   assert.match(trialClient, /label:\s*"수업교시"/);
   assert.match(trialClient, /label:\s*"확정일정"/);
   assert.match(trialClient, /function TrialLeadDetailModal/);
@@ -68,12 +68,15 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
 
 test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 보여준다", () => {
   assert.match(trialClient, /function renderTrialList\(\)/);
-  assert.match(trialClient, /<table className="w-full min-w-\[960px\] table-fixed/);
-  assert.match(trialClient, /학생\/연락처[\s\S]*신청\/희망일[\s\S]*수업교시[\s\S]*액션/);
+  assert.match(trialClient, /<table className="w-full min-w-\[1080px\] table-fixed/);
+  assert.match(trialClient, /학생\/연락처[\s\S]*신청일[\s\S]*체험일[\s\S]*수업교시[\s\S]*쌤알림[\s\S]*액션/);
   assert.match(trialClient, /setShowDetailModal\(lead\)/);
   assert.match(trialClient, /setOpenQuickActionId/);
   assert.match(trialClient, /LIST_ACTION_TRIGGER_CLASS/);
   assert.match(trialClient, /LIST_ACTION_MENU_CLASS/);
+  assert.match(trialClient, /function renderCoachNoticeCell/);
+  assert.match(trialClient, /lead\.coachNoticeSentAt \? "재발송" : "발송"/);
+  assert.match(trialClient, /void handleSendCoachNotice\(lead\)/);
   assert.doesNotMatch(trialClient, /<th className="px-3 py-2(?:\.5)?">보호자<\/th>/);
   assert.match(trialClient, /setShowScheduleModal\(lead\)/);
   assert.match(trialClient, /handleRecordContact\(lead, "CONTACTED"\)/);
@@ -159,8 +162,8 @@ test("체험수업과 수강신청은 카드형을 폐기하고 목록형만 제
 });
 
 test("목록형은 스프레드시트처럼 실제 테이블 구조로 보여준다", () => {
-  assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[960px\]/);
-  assert.match(trialClient, /<thead[\s\S]*학생\/연락처[\s\S]*신청\/희망일[\s\S]*수업교시[\s\S]*액션/);
+  assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[1080px\]/);
+  assert.match(trialClient, /<thead[\s\S]*학생\/연락처[\s\S]*신청일[\s\S]*체험일[\s\S]*수업교시[\s\S]*쌤알림[\s\S]*액션/);
   assert.match(trialClient, /<tbody[\s\S]*visibleLeads\.map/);
   assert.doesNotMatch(trialClient, /hidden grid-cols-\[1fr_0\.9fr_2\.2fr_0\.8fr_1\.2fr\]/);
   assert.match(applyClient, /function renderApplicationList\(\)[\s\S]*<table className="w-full min-w-\[960px\]/);

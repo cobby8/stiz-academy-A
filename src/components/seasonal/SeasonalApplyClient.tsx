@@ -300,6 +300,14 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                     <Pair label="잔여" value={item.remaining > 0 ? `${item.remaining}석` : item.waitlistEnabled ? "대기 가능" : "마감"} />
                     <Pair label="수강료" value={formatWon(item.price)} />
                   </dl>
+                  {item.sessionDates.length > 0 && (
+                    <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                      <p className="text-sm font-black text-gray-900 dark:text-white">전체 수업 일정 · {item.sessionDates.length}회</p>
+                      <ol className="mt-2 space-y-1.5">
+                        {item.sessionDates.map((session, index) => <li key={`${session.startsAt}-${index}`} className="text-xs text-gray-600 dark:text-gray-300"><span className="mr-2 font-bold text-brand-orange-500 dark:text-brand-neon-lime">{index + 1}회</span>{session.dateLabel} ({session.dayLabel}) {session.startTime}~{session.endTime}</li>)}
+                      </ol>
+                    </div>
+                  )}
                   {selected && (
                     <div className="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
                       <p className="text-xs font-bold text-gray-600 dark:text-gray-300">셔틀 요청이 있으면 적어주세요</p>
@@ -354,6 +362,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                 <div key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
                   <p className="font-bold text-gray-900 dark:text-white">{item.name}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.dayLabel} {item.startTime}~{item.endTime} · {formatWon(item.price)}</p>
+                  {item.sessionDates.length > 1 && <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">총 {item.sessionDates.length}회 · {item.sessionDates.map((session) => `${session.dateLabel}(${session.dayLabel})`).join(", ")}</p>}
                   {item.remaining <= 0 && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
                 </div>
               ))}

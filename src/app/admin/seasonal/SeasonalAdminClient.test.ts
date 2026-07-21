@@ -4,12 +4,23 @@ import test from "node:test";
 
 const source = readFileSync(new URL("./SeasonalAdminClient.tsx", import.meta.url), "utf8");
 
+test("special lecture class form saves operation settings and every session", () => {
+  assert.match(source, /name="linkedClassId"/);
+  assert.match(source, /name="linkedProgramId"/);
+  assert.match(source, /name="instructorId"/);
+  assert.match(source, /name="shuttleAvailable"/);
+  assert.match(source, /name="status" defaultValue=\{initial\?\.status \?\? "DRAFT"\}/);
+  assert.match(source, /sessionDates,/);
+  assert.match(source, /회차 추가/);
+  assert.doesNotMatch(source, /existingApplicantPrice[^\n]+status: "DRAFT"/);
+});
+
 test("시즌과 반 수정 폼은 기존 값을 입력 기본값으로 보존한다", () => {
   assert.match(source, /defaultValue:initial\?\.name/);
   assert.match(source, /defaultValue:initial\?\.slug/);
   assert.match(source, /defaultValue:dateInputValue\(initial\?\.enrollmentStartsAt\)/);
-  assert.match(source, /defaultValue:initial\?\.targetGrades \?\? initial\?\.targetGrade/);
-  assert.match(source, /defaultValue:initial\?\.price/);
+  assert.match(source, /defaultValue=\{initial\?\.targetGrades \?\? initial\?\.targetGrade\}/);
+  assert.match(source, /defaultValue=\{initial\?\.price\}/);
   assert.match(source, /defaultValue=\{field\.defaultValue \?\? ""\}/);
 });
 

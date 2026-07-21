@@ -1,3 +1,13 @@
+export type SeasonalSessionDate = {
+  startsAt: string;
+  endsAt: string;
+  dateLabel: string;
+  dayLabel: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+};
+
 export type SeasonalClass = {
   id: string;
   name: string;
@@ -13,6 +23,7 @@ export type SeasonalClass = {
   remaining: number;
   price: number;
   waitlistEnabled?: boolean;
+  sessionDates: SeasonalSessionDate[];
   weekdays: Array<"MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN">;
 };
 
@@ -74,7 +85,11 @@ export function normalizeProgram(value: unknown): SeasonalProgram {
 }
 
 function normalizeOffering(row: ApiRecord): SeasonalClass {
-  const dates = (row.sessionDates ?? []) as ApiRecord[];
+  const dates = ((row.sessionDates ?? []) as ApiRecord[]).slice().sort((a, b) => {
+    const left = new Date(String(a.startsAt ?? "")).getTime();
+    const right = new Date(String(b.startsAt ?? "")).getTime();
+    return (Number.isFinite(left) ? left : Number.MAX_SAFE_INTEGER) - (Number.isFinite(right) ? right : Number.MAX_SAFE_INTEGER);
+  });
   const first = dates[0];
   const starts = first?.startsAt ? new Date(String(first.startsAt)) : null;
   const ends = first?.endsAt ? new Date(String(first.endsAt)) : null;
@@ -95,6 +110,21 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
     coachName: stringOrUndefined(row.instructorName ?? row.coachName), capacity: Number(row.capacity ?? 0),
     enrolled: Math.max(0, Number(row.capacity ?? 0) - remaining), remaining, price: Number(row.price ?? 0),
     waitlistEnabled: row.waitlistEnabled === false ? false : true,
+    sessionDates: dates.flatMap((date) => {
+      if (!date.startsAt || !date.endsAt) return [];
+      const sessionStarts = new Date(String(date.startsAt));
+      const sessionEnds = new Date(String(date.endsAt));
+      if (Number.isNaN(sessionStarts.getTime()) || Number.isNaN(sessionEnds.getTime())) return [];
+      return [{
+        startsAt: sessionStarts.toISOString(),
+        endsAt: sessionEnds.toISOString(),
+        dateLabel: String(date.dateLabel ?? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(sessionStarts)),
+        dayLabel: String(date.dayLabel ?? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(sessionStarts)),
+        startTime: String(date.startTime ?? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(sessionStarts)),
+        endTime: String(date.endTime ?? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(sessionEnds)),
+        location: stringOrUndefined(date.location ?? row.location),
+      }];
+    }),
     weekdays,
   };
 }

@@ -11,6 +11,17 @@ const adminRoute = readFileSync(
   "utf8",
 );
 
+test("special lecture editing preserves schedule and linked operation settings", () => {
+  assert.match(adminClient, /initial\?\.sessionDates\?\.length/);
+  assert.match(adminClient, /shuttleAvailable: payload\.shuttleAvailable === "on"/);
+  assert.match(adminClient, /name="status" defaultValue=\{initial\?\.status \?\? "DRAFT"\}/);
+  assert.match(adminRoute, /SESSION_DATE_REQUIRED/);
+  assert.doesNotMatch(adminClient, /status: "DRAFT" \}\);/);
+  assert.match(adminRoute, /if \(data\.code !== undefined\)/);
+  assert.match(adminRoute, /update\.code = code/);
+  assert.match(adminRoute, /OFFERING_CODE_DUPLICATED/);
+});
+
 test("방학특강 신청 상세는 셔틀 요청 세부 정보를 버리지 않고 보여준다", () => {
   assert.match(adminRoute, /shuttleRequest:\s*true/);
   assert.match(adminClient, /shuttleRequest:\s*\(item\.shuttleRequest \?\? null\)/);
@@ -105,11 +116,11 @@ test("이전 API 응답에도 신청 검토 UI가 기본값으로 동작한다",
 });
 
 test("특강 반은 회원 유형별 가격과 미확정 정원을 입력할 수 있다", () => {
-  assert.match(adminClient, /name:"newApplicantPrice"/);
-  assert.match(adminClient, /name:"existingApplicantPrice"/);
+  assert.match(adminClient, /name="newApplicantPrice"/);
+  assert.match(adminClient, /name="existingApplicantPrice"/);
   assert.match(adminClient, /capacity: capacity \? Number\(capacity\) : null/);
-  assert.match(adminClient, /정원이 없는 반은 DRAFT 상태로만 저장/);
-  assert.match(adminClient, /status: "DRAFT"/);
+  assert.match(adminClient, /value="DRAFT">작성 중/);
+  assert.match(adminClient, /defaultValue=\{initial\?\.status \?\? "DRAFT"\}/);
 });
 
 test("확인 필요 항목은 관리자 검토 완료 액션을 제공한다", () => {

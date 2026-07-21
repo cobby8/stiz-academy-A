@@ -20,7 +20,10 @@ function publicStatus(season: { status: string; applicationOpensAt: Date; applic
 }
 
 function publicOffering(offering: PublicOfferingRow) {
-  const first = offering.sessionDates?.[0];
+  const orderedSessionDates = [...(offering.sessionDates || [])].sort(
+    (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+  );
+  const first = orderedSessionDates[0];
   const startsAt = first?.startsAt ? new Date(first.startsAt) : null;
   const endsAt = first?.endsAt ? new Date(first.endsAt) : null;
   const enrolled = offering._count?.applicationItems || 0;
@@ -34,6 +37,19 @@ function publicOffering(offering: PublicOfferingRow) {
     dateLabel: startsAt ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(startsAt) : undefined,
     startTime: time(startsAt),
     endTime: time(endsAt),
+    sessionDates: orderedSessionDates.map((session) => {
+      const sessionStartsAt = new Date(session.startsAt);
+      const sessionEndsAt = new Date(session.endsAt);
+      return {
+        startsAt: sessionStartsAt.toISOString(),
+        endsAt: sessionEndsAt.toISOString(),
+        dateLabel: new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(sessionStartsAt),
+        dayLabel: new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(sessionStartsAt),
+        startTime: time(sessionStartsAt),
+        endTime: time(sessionEndsAt),
+        location: session.location || offering.location || undefined,
+      };
+    }),
     location: first?.location || offering.location || undefined,
     targetGrade: offering.targetGrades || undefined,
     coachName: offering.instructorName || undefined,

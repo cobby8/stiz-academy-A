@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import AdminModal from "@/components/admin/AdminModal";
+import { seoulDateTimeToIso } from "./seasonalDateTime";
 
 type SeasonStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
 type ItemStatus = "PENDING" | "APPROVED" | "WAITLISTED" | "REJECTED" | "CANCELLED";
@@ -15,6 +16,7 @@ type SeasonalClass = {
   startTime: string;
   endTime: string;
   instructorName?: string | null;
+  instructorId?: string | null;
   capacity: number;
   confirmedCount?: number;
   waitlistCount?: number;
@@ -25,6 +27,16 @@ type SeasonalClass = {
   newApplicantPrice?: number | null;
   existingApplicantPrice?: number | null;
   shuttleAvailable?: boolean;
+  status?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
+  linkedProgramId?: string | null;
+  linkedClassId?: string | null;
+  sessionDates?: Array<{
+    id?: string;
+    startsAt: string;
+    endsAt: string;
+    location?: string | null;
+    note?: string | null;
+  }>;
 };
 
 type ShuttleRequest = {
@@ -1004,12 +1016,82 @@ function dateInputValue(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value.slice(0, 10) : date.toISOString().slice(0, 10);
 }
 
+function dateTimeInputValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 function SeasonForm({ initial, onClose, onSubmit }: { initial?: Season | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
   return <FormModal title="새 방학특강 시즌" onClose={onClose} onSubmit={onSubmit} fields={[{name:"title",label:"시즌명",placeholder:"예: 2026 여름방학 특강",required:true,defaultValue:initial?.name},{name:"slug",label:"홈페이지 주소",placeholder:"예: 2026-summer",required:true,defaultValue:initial?.slug},{name:"applicationOpensAt",label:"모집 시작일",type:"date",required:true,defaultValue:dateInputValue(initial?.enrollmentStartsAt)},{name:"applicationClosesAt",label:"모집 종료일",type:"date",required:true,defaultValue:dateInputValue(initial?.enrollmentEndsAt)},{name:"startsAt",label:"수업 시작일",type:"date",required:true,defaultValue:dateInputValue(initial?.startsAt)},{name:"endsAt",label:"수업 종료일",type:"date",required:true,defaultValue:dateInputValue(initial?.endsAt)}]} />;
 }
 
 function ClassForm({ seasonId, initial, onClose, onSubmit }: { seasonId: string; initial?: SeasonalClass | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
-  return <FormModal title="특강 반 추가" helper="정원이 미확정이면 비워두세요. 정원이 없는 반은 DRAFT 상태로만 저장되며 모집에 공개할 수 없습니다." onClose={onClose} onSubmit={(payload) => { const capacity = String(payload.capacity ?? "").trim(); const newApplicantPrice = String(payload.newApplicantPrice ?? "").trim(); const existingApplicantPrice = String(payload.existingApplicantPrice ?? "").trim(); return onSubmit({ ...payload, seasonId, capacity: capacity ? Number(capacity) : null, price: Number(payload.price), newApplicantPrice: newApplicantPrice ? Number(newApplicantPrice) : null, existingApplicantPrice: existingApplicantPrice ? Number(existingApplicantPrice) : null, status: "DRAFT" }); }} fields={[{name:"code",label:"반 코드",placeholder:"예: MON-1",required:true,defaultValue:initial?.code},{name:"title",label:"반 이름",placeholder:"예: 초등 고학년 1교시",required:true,defaultValue:initial?.name},{name:"targetGrades",label:"대상",placeholder:"예: 초등 4~6학년",required:true,defaultValue:initial?.targetGrades ?? initial?.targetGrade},{name:"location",label:"수업 장소",placeholder:"예: 다산점",defaultValue:initial?.location},{name:"capacity",label:"정원 (미확정 가능)",type:"number",defaultValue:initial?.capacity},{name:"price",label:"기본 수강료",type:"number",required:true,defaultValue:initial?.price},{name:"newApplicantPrice",label:"신규 회원 수강료",type:"number",defaultValue:initial?.newApplicantPrice},{name:"existingApplicantPrice",label:"기존 회원 수강료",type:"number",defaultValue:initial?.existingApplicantPrice},{name:"instructorName",label:"담당 선생님",placeholder:"미정이면 비워두세요",defaultValue:initial?.instructorName}]} />;
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [sessionDates, setSessionDates] = useState(() => initial?.sessionDates?.length
+    ? initial.sessionDates.map((row) => ({ startsAt: dateTimeInputValue(row.startsAt), endsAt: dateTimeInputValue(row.endsAt), location: row.location ?? "", note: row.note ?? "" }))
+    : [{ startsAt: "", endsAt: "", location: initial?.location ?? "", note: "" }]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError("");
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const capacity = String(payload.capacity ?? "").trim();
+    const newApplicantPrice = String(payload.newApplicantPrice ?? "").trim();
+    const existingApplicantPrice = String(payload.existingApplicantPrice ?? "").trim();
+    try {
+      await onSubmit({
+        ...payload,
+        seasonId,
+        capacity: capacity ? Number(capacity) : null,
+        price: Number(payload.price),
+        newApplicantPrice: newApplicantPrice ? Number(newApplicantPrice) : null,
+        existingApplicantPrice: existingApplicantPrice ? Number(existingApplicantPrice) : null,
+        shuttleAvailable: payload.shuttleAvailable === "on",
+        sessionDates: sessionDates.map((row) => ({
+          ...row,
+          startsAt: seoulDateTimeToIso(row.startsAt),
+          endsAt: seoulDateTimeToIso(row.endsAt),
+        })),
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "저장하지 못했습니다.");
+      setPending(false);
+    }
+  }
+
+  const inputClass = "mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white";
+  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId="seasonal-class-modal-title"><form onSubmit={submit} className="w-full max-w-3xl p-6"><header className="flex items-center justify-between"><div><h2 id="seasonal-class-modal-title" className="text-xl font-black">{initial ? "특강 반 수정" : "특강 반 추가"}</h2><p className="mt-1 text-xs text-gray-500">반 기본 정보와 실제 수업 회차를 함께 저장합니다.</p></div><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>
+    {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <ClassInput name="code" label="반 코드" required defaultValue={initial?.code} placeholder="예: MON-1" />
+      <ClassInput name="title" label="반 이름" required defaultValue={initial?.name} placeholder="예: 초등 고학년 1교시" />
+      <ClassInput name="targetGrades" label="대상" required defaultValue={initial?.targetGrades ?? initial?.targetGrade} placeholder="예: 초등 4~6학년" />
+      <ClassInput name="location" label="기본 수업 장소" defaultValue={initial?.location} placeholder="예: 다산점" />
+      <ClassInput name="capacity" label="정원 (미확정 가능)" type="number" defaultValue={initial?.capacity} />
+      <ClassInput name="price" label="기본 수강료" type="number" required defaultValue={initial?.price} />
+      <ClassInput name="newApplicantPrice" label="신규 회원 수강료" type="number" defaultValue={initial?.newApplicantPrice} />
+      <ClassInput name="existingApplicantPrice" label="기존 회원 수강료" type="number" defaultValue={initial?.existingApplicantPrice} />
+      <ClassInput name="instructorName" label="담당 선생님" defaultValue={initial?.instructorName} placeholder="미정이면 비워두세요" />
+      <ClassInput name="instructorId" label="담당 강사 ID" defaultValue={initial?.instructorId} placeholder="강사 계정 ID (선택)" />
+      <ClassInput name="linkedProgramId" label="연결 프로그램 ID" defaultValue={initial?.linkedProgramId} placeholder="기존 프로그램 ID (선택)" />
+      <ClassInput name="linkedClassId" label="연결 정규 반 ID" defaultValue={initial?.linkedClassId} placeholder="수강·출석에 연결할 반 ID" />
+      <label className="text-sm font-bold text-gray-700 dark:text-gray-200">공개 상태<select name="status" defaultValue={initial?.status ?? "DRAFT"} className={inputClass}><option value="DRAFT">작성 중</option><option value="OPEN">모집 중</option><option value="CLOSED">모집 마감</option><option value="CANCELLED">취소</option></select></label>
+      <label className="flex min-h-11 items-center gap-3 self-end rounded-xl border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><input name="shuttleAvailable" type="checkbox" defaultChecked={initial?.shuttleAvailable} className="size-5" />셔틀 이용 가능</label>
+    </div>
+    <section className="mt-6 border-t border-gray-100 pt-5 dark:border-gray-800"><div className="flex items-center justify-between"><div><h3 className="font-black">전체 수업 일정</h3><p className="text-xs text-gray-500">학생에게 안내할 모든 회차를 입력하세요.</p></div><button type="button" onClick={() => setSessionDates((rows) => [...rows, { startsAt: "", endsAt: "", location: initial?.location ?? "", note: "" }])} className="min-h-10 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700">회차 추가</button></div>
+      <div className="mt-3 space-y-3">{sessionDates.map((row, index) => <div key={index} className="grid gap-3 rounded-xl bg-gray-50 p-3 sm:grid-cols-2 dark:bg-gray-800"><label className="text-xs font-bold">{index + 1}회 시작<input required type="datetime-local" value={row.startsAt} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, startsAt: event.target.value } : item))} className={inputClass} /></label><label className="text-xs font-bold">{index + 1}회 종료<input required type="datetime-local" value={row.endsAt} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, endsAt: event.target.value } : item))} className={inputClass} /></label><label className="text-xs font-bold">장소<input value={row.location} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, location: event.target.value } : item))} className={inputClass} /></label><div className="flex items-end gap-2"><label className="min-w-0 flex-1 text-xs font-bold">메모<input value={row.note} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, note: event.target.value } : item))} className={inputClass} /></label>{sessionDates.length > 1 && <button type="button" aria-label={`${index + 1}회 삭제`} onClick={() => setSessionDates((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="mb-0 min-h-11 rounded-lg border border-red-200 px-3 text-sm font-bold text-red-700">삭제</button>}</div></div>)}</div>
+    </section>
+    <footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={pending} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold disabled:opacity-60 dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer>
+  </form></AdminModal>;
+}
+
+function ClassInput({ name, label, type = "text", placeholder, required, defaultValue }: Field) {
+  return <label className="text-sm font-bold text-gray-700 dark:text-gray-200">{label}{required && <span className="text-red-500"> *</span>}<input name={name} type={type} required={required} placeholder={placeholder} defaultValue={defaultValue ?? ""} min={type === "number" ? 0 : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>;
 }
 
 type Field = { name: string; label: string; type?: string; placeholder?: string; required?: boolean; defaultValue?: string | number | null };

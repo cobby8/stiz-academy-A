@@ -165,6 +165,9 @@ async function updateSpecialProgramItemStatus(
 
 function respondError(error: unknown) {
   if (error instanceof SeasonalError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && JSON.stringify(error.meta?.target ?? "").toLowerCase().includes("code")) {
+    return NextResponse.json({ error: "같은 시즌에 이미 사용 중인 반 코드입니다. 다른 코드를 입력해 주세요.", code: "OFFERING_CODE_DUPLICATED" }, { status: 409 });
+  }
   console.error("[admin seasonal]", error);
   return NextResponse.json({ error: "방학특강 관리 작업에 실패했습니다." }, { status: 500 });
 }
@@ -250,6 +253,7 @@ export async function POST(request: NextRequest) {
       if (status === "OPEN" && capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
+      if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
       const offering = await prisma.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId: cleanText(data.instructorId, 100), instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId: cleanText(data.linkedClassId, 100), sessionDates: { create: sessionDates } }, include: { sessionDates: true } });
       await prisma.specialProgramAuditLog.create({ data: { seasonId, offeringId: offering.id, actorType: "ADMIN", actorId: actor.appUserId, action: "OFFERING_CREATED", afterJSON: offering } });
       return NextResponse.json({ offering }, { status: 201 });
@@ -336,6 +340,11 @@ export async function PATCH(request: NextRequest) {
       const before = await prisma.specialProgramOffering.findUnique({ where: { id } });
       if (!before) throw new SeasonalError("특강을 찾을 수 없습니다.", 404);
       const update: Record<string, unknown> = {};
+      if (data.code !== undefined) {
+        const code = cleanText(data.code, 80)?.toUpperCase();
+        if (!code) throw new SeasonalError("반 코드를 입력해 주세요.");
+        update.code = code;
+      }
       for (const key of ["title", "description", "targetGrades", "instructorId", "instructorName", "location", "linkedProgramId", "linkedClassId"] as const) if (data[key] !== undefined) update[key] = cleanText(data[key], key === "description" ? 5000 : 200) || null;
       if (data.capacity !== undefined) update.capacity = optionalNonNegativeInt(data.capacity, "정원");
       if (data.price !== undefined) update.price = nonNegativeInt(data.price, "가격");
@@ -356,6 +365,10 @@ export async function PATCH(request: NextRequest) {
           }))
         : null;
       if (replacementDates?.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
+      if (nextStatus === "OPEN") {
+        const sessionDateCount = replacementDates?.length ?? await prisma.specialProgramSessionDate.count({ where: { offeringId: id } });
+        if (sessionDateCount === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
+      }
       const offering = await prisma.$transaction(async (tx) => {
         const updated = await tx.specialProgramOffering.update({ where: { id }, data: update });
         if (replacementDates) {

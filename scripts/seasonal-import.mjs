@@ -34,6 +34,34 @@ function normalizePhone(value) {
   return clean(value).replace(/\D/g, "");
 }
 
+export function normalizeBirthDate(value) {
+  const text = clean(value);
+  let year;
+  let month;
+  let day;
+  const separated = text.match(/^(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})\s*\.?$/);
+  if (separated) {
+    [, year, month, day] = separated;
+  } else if (/^\d{8}$/.test(text)) {
+    year = text.slice(0, 4);
+    month = text.slice(4, 6);
+    day = text.slice(6, 8);
+  } else return "";
+
+  const numericYear = Number(year);
+  const numericMonth = Number(month);
+  const numericDay = Number(day);
+  const date = new Date(Date.UTC(numericYear, numericMonth - 1, numericDay));
+  if (
+    numericYear < 1900
+    || numericYear > 2100
+    || date.getUTCFullYear() !== numericYear
+    || date.getUTCMonth() + 1 !== numericMonth
+    || date.getUTCDate() !== numericDay
+  ) return "";
+  return `${year}${String(numericMonth).padStart(2, "0")}${String(numericDay).padStart(2, "0")}`;
+}
+
 function pick(row, names) {
   for (const name of names) {
     if (Object.hasOwn(row, name) && clean(row[name])) return row[name];
@@ -117,7 +145,7 @@ export function analyzeSeasonalRows(rows, { seasonSlug }) {
   const records = rows.map((row, sourceIndex) => {
     const identity = {
       childName: clean(pick(row, ALIASES.childName)).replace(/\s/g, ""),
-      childBirthDate: clean(pick(row, ALIASES.childBirthDate)).replace(/\D/g, ""),
+      childBirthDate: normalizeBirthDate(pick(row, ALIASES.childBirthDate)),
       parentPhone: normalizePhone(pick(row, ALIASES.parentPhone)),
     };
     const sourceRowRef = clean(pick(row, ALIASES.sourceRowRef)) || String(sourceIndex + 2);

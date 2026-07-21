@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeSeasonalRows, applySeasonalImport, assertApplyAllowed, parseCsv } from "./seasonal-import.mjs";
+import { analyzeSeasonalRows, applySeasonalImport, assertApplyAllowed, normalizeBirthDate, parseCsv } from "./seasonal-import.mjs";
 
 function row(index, overrides = {}) {
   return {
@@ -20,6 +20,16 @@ function row(index, overrides = {}) {
 test("CSV의 쉼표와 따옴표를 안전하게 읽는다", () => {
   const rows = parseCsv('학생명,메모\r\n"홍,길동","따옴표 ""확인"""\r\n');
   assert.deepEqual(rows, [{ 학생명: "홍,길동", 메모: '따옴표 "확인"' }]);
+});
+
+test("생년월일의 한 자리 월일을 패딩하고 불가능한 날짜는 거부한다", () => {
+  assert.equal(normalizeBirthDate("2015. 12. 2"), "20151202");
+  assert.equal(normalizeBirthDate("2015-2-3"), "20150203");
+  assert.equal(normalizeBirthDate("2015/2/03"), "20150203");
+  assert.equal(normalizeBirthDate("20150203"), "20150203");
+  assert.equal(normalizeBirthDate("2015. 2. 30"), "");
+  assert.equal(normalizeBirthDate("2015/13/1"), "");
+  assert.equal(normalizeBirthDate("날짜미상"), "");
 });
 
 test("21명 미리보기에서 분류와 예외를 개인정보 없이 집계한다", () => {

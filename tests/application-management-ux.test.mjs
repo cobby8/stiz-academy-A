@@ -7,6 +7,7 @@ const trialClient = readFileSync(new URL("../src/app/admin/trial/TrialCrmClient.
 const trialModals = readFileSync(new URL("../src/app/admin/trial/TrialCrmModals.tsx", import.meta.url), "utf8");
 const applyClient = readFileSync(new URL("../src/app/admin/apply/ApplyAdminClient.tsx", import.meta.url), "utf8");
 const applyModals = readFileSync(new URL("../src/app/admin/apply/ApplyAdminModals.tsx", import.meta.url), "utf8");
+const applySourceStatsRoute = readFileSync(new URL("../src/app/api/admin/apply/source-stats/route.ts", import.meta.url), "utf8");
 const adminShell = readFileSync(new URL("../src/app/admin/AdminShellClient.tsx", import.meta.url), "utf8");
 const adminReadPayloads = readFileSync(new URL("../src/lib/adminReadPayloads.ts", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../src/lib/queries.ts", import.meta.url), "utf8");
@@ -148,6 +149,8 @@ test("관리자 신청 화면은 핵심 메뉴와 주요 액션만 먼저 보여
   assert.match(applyClient, /setShowDetailModal\(app\)/);
   assert.match(applyClient, /학생\/연락처/);
   assert.match(applyClient, /액션/);
+  assert.match(applyClient, /type TabType = "trial" \| "applications" \| "sources" \| "settings"/);
+  assert.match(applyClient, /유입 통계/);
   assert.doesNotMatch(applyClient, /LIST_QUICK_ACTION_CLASS/);
   assert.doesNotMatch(applyClient, /<th className="px-3 py-2(?:\.5)?">보호자<\/th>/);
   assert.doesNotMatch(applyClient, /COMPACT_CARD_ACTION_CLASS/);
@@ -182,4 +185,23 @@ test("목록형은 스프레드시트처럼 실제 테이블 구조로 보여준
   assert.match(applyClient, /<thead[\s\S]*학생\/연락처[\s\S]*신청\/희망수업[\s\S]*수강\/셔틀[\s\S]*액션/);
   assert.match(applyClient, /<tbody[\s\S]*visibleApps\.map/);
   assert.doesNotMatch(applyClient, /hidden grid-cols-\[1\.1fr_1fr_1\.3fr_0\.9fr_1\.2fr\]/);
+});
+
+test("신청 관리에는 유입경로 통계를 탭에서 지연 로딩한다", () => {
+  assert.match(applyClient, /type SourceStatsRange = "ALL" \| "30D" \| "THIS_MONTH"/);
+  assert.match(applyClient, /SOURCE_STATS_RANGES/);
+  assert.match(applyClient, /const \[sourceStatsData, setSourceStatsData\]/);
+  assert.match(applyClient, /fetch\(`\/api\/admin\/apply\/source-stats\?range=\$\{range\}`/);
+  assert.match(applyClient, /activeTab !== "sources"/);
+  assert.match(applyClient, /function renderSourceStats\(\)/);
+  assert.match(applyClient, /등록 전환/);
+  assert.match(applyClient, /체험 문의와 수강신청이 어떤 경로에서 들어오는지 확인합니다/);
+  assert.match(applyClient, /activeTab === "sources" \?[\s\S]*renderSourceStats\(\)/);
+  assert.match(adminReadPayloads, /getCachedAdminApplySourceStatsPayload/);
+  assert.match(adminReadPayloads, /FROM "TrialLead"/);
+  assert.match(adminReadPayloads, /FROM "EnrollmentApplication"/);
+  assert.match(adminReadPayloads, /COALESCE\(NULLIF\(TRIM\(source\), ''\), 'UNKNOWN'\)/);
+  assert.match(applySourceStatsRoute, /requireTimedAdmin/);
+  assert.match(applySourceStatsRoute, /getCachedAdminApplySourceStatsPayload\(range\)/);
+  assert.match(applySourceStatsRoute, /private, max-age=60/);
 });

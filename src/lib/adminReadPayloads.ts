@@ -762,6 +762,154 @@ export const getCachedAdminApplySummaryPayload = unstable_cache(
     { revalidate: 30, tags: ["admin-apply"] },
 );
 
+type AdminApplySourceStatsRange = "ALL" | "30D" | "THIS_MONTH";
+
+type AdminApplySourceStatsRawRow = {
+    source: string | null;
+    trial_total: number | string | null;
+    trial_scheduled: number | string | null;
+    trial_attended: number | string | null;
+    trial_converted: number | string | null;
+    enroll_total: number | string | null;
+    enroll_pending: number | string | null;
+    enroll_approved: number | string | null;
+    enroll_closed: number | string | null;
+    latest_at: string | Date | null;
+};
+
+function sourceStatsStartIso(range: AdminApplySourceStatsRange) {
+    if (range === "ALL") return null;
+
+    const now = new Date();
+    if (range === "THIS_MONTH") {
+        return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    }
+
+    return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export function getCachedAdminApplySourceStatsPayload(range: AdminApplySourceStatsRange = "30D") {
+    const normalizedRange: AdminApplySourceStatsRange = ["ALL", "30D", "THIS_MONTH"].includes(range) ? range : "30D";
+    const startIso = sourceStatsStartIso(normalizedRange);
+
+    return unstable_cache(
+        async () => {
+            const whereClause = startIso ? `WHERE "createdAt" >= $1::timestamptz` : "";
+            const params = startIso ? [startIso] : [];
+            const rows = await prisma.$queryRawUnsafe<AdminApplySourceStatsRawRow[]>(
+                `WITH trial AS (
+                    SELECT
+                        COALESCE(NULLIF(TRIM(source), ''), 'UNKNOWN') AS source,
+                        COUNT(*)::int AS trial_total,
+                        COUNT(*) FILTER (WHERE status = 'SCHEDULED')::int AS trial_scheduled,
+                        COUNT(*) FILTER (WHERE status = 'ATTENDED')::int AS trial_attended,
+                        COUNT(*) FILTER (WHERE status = 'CONVERTED')::int AS trial_converted,
+                        MAX("createdAt") AS latest_at
+                    FROM "TrialLead"
+                    ${whereClause}
+                    GROUP BY 1
+                ),
+                enroll AS (
+                    SELECT
+                        COALESCE(NULLIF(TRIM("referralSource"), ''), 'UNKNOWN') AS source,
+                        COUNT(*)::int AS enroll_total,
+                        COUNT(*) FILTER (WHERE status = 'PENDING')::int AS enroll_pending,
+                        COUNT(*) FILTER (WHERE status = 'APPROVED')::int AS enroll_approved,
+                        COUNT(*) FILTER (WHERE status IN ('REJECTED', 'CANCELLED'))::int AS enroll_closed,
+                        MAX("createdAt") AS latest_at
+                    FROM "EnrollmentApplication"
+                    ${whereClause}
+                    GROUP BY 1
+                ),
+                sources AS (
+                    SELECT source FROM trial
+                    UNION
+                    SELECT source FROM enroll
+                )
+                SELECT
+                    s.source,
+                    COALESCE(t.trial_total, 0)::int AS trial_total,
+                    COALESCE(t.trial_scheduled, 0)::int AS trial_scheduled,
+                    COALESCE(t.trial_attended, 0)::int AS trial_attended,
+                    COALESCE(t.trial_converted, 0)::int AS trial_converted,
+                    COALESCE(e.enroll_total, 0)::int AS enroll_total,
+                    COALESCE(e.enroll_pending, 0)::int AS enroll_pending,
+                    COALESCE(e.enroll_approved, 0)::int AS enroll_approved,
+                    COALESCE(e.enroll_closed, 0)::int AS enroll_closed,
+                    GREATEST(t.latest_at, e.latest_at) AS latest_at
+                FROM sources s
+                LEFT JOIN trial t ON t.source = s.source
+                LEFT JOIN enroll e ON e.source = s.source
+                ORDER BY (COALESCE(t.trial_total, 0) + COALESCE(e.enroll_total, 0)) DESC, s.source ASC`,
+                ...params,
+            );
+
+            const mappedRows = rows.map((row) => {
+                const trialTotal = Number(row.trial_total ?? 0);
+                const enrollTotal = Number(row.enroll_total ?? 0);
+                const trialConverted = Number(row.trial_converted ?? 0);
+                const enrollApproved = Number(row.enroll_approved ?? 0);
+                const total = trialTotal + enrollTotal;
+                const convertedTotal = trialConverted + enrollApproved;
+
+                return {
+                    source: String(row.source ?? "UNKNOWN"),
+                    total,
+                    trialTotal,
+                    trialScheduled: Number(row.trial_scheduled ?? 0),
+                    trialAttended: Number(row.trial_attended ?? 0),
+                    trialConverted,
+                    enrollTotal,
+                    enrollPending: Number(row.enroll_pending ?? 0),
+                    enrollApproved,
+                    enrollClosed: Number(row.enroll_closed ?? 0),
+                    conversionRate: total > 0 ? Math.round((convertedTotal / total) * 100) : 0,
+                    trialAttendRate: trialTotal > 0 ? Math.round((Number(row.trial_attended ?? 0) / trialTotal) * 100) : 0,
+                    enrollApproveRate: enrollTotal > 0 ? Math.round((enrollApproved / enrollTotal) * 100) : 0,
+                    latestAt: row.latest_at ?? null,
+                };
+            });
+
+            const totals = mappedRows.reduce(
+                (acc, row) => {
+                    acc.total += row.total;
+                    acc.trialTotal += row.trialTotal;
+                    acc.trialAttended += row.trialAttended;
+                    acc.trialConverted += row.trialConverted;
+                    acc.enrollTotal += row.enrollTotal;
+                    acc.enrollApproved += row.enrollApproved;
+                    return acc;
+                },
+                {
+                    total: 0,
+                    trialTotal: 0,
+                    trialAttended: 0,
+                    trialConverted: 0,
+                    enrollTotal: 0,
+                    enrollApproved: 0,
+                    conversionRate: 0,
+                    trialAttendRate: 0,
+                    enrollApproveRate: 0,
+                },
+            );
+
+            const convertedTotal = totals.trialConverted + totals.enrollApproved;
+            totals.conversionRate = totals.total > 0 ? Math.round((convertedTotal / totals.total) * 100) : 0;
+            totals.trialAttendRate = totals.trialTotal > 0 ? Math.round((totals.trialAttended / totals.trialTotal) * 100) : 0;
+            totals.enrollApproveRate = totals.enrollTotal > 0 ? Math.round((totals.enrollApproved / totals.enrollTotal) * 100) : 0;
+
+            return {
+                range: normalizedRange,
+                generatedAt: new Date().toISOString(),
+                rows: mappedRows,
+                totals,
+            };
+        },
+        ["admin-apply-source-stats-v1", normalizedRange, startIso ?? "all"],
+        { revalidate: 60, tags: ["admin-apply", "admin-trial"] },
+    )();
+}
+
 export function getCachedAdminApplyPayload(options?: AdminListPayloadOptions) {
     const page = normalizeAdminListPayloadOptions(options);
 

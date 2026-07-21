@@ -173,6 +173,42 @@ type ApplyPayload = {
     pagination?: ListPagination;
 };
 
+type SourceStatsRange = "ALL" | "30D" | "THIS_MONTH";
+
+type SourceStatsRow = {
+    source: string;
+    total: number;
+    trialTotal: number;
+    trialScheduled: number;
+    trialAttended: number;
+    trialConverted: number;
+    enrollTotal: number;
+    enrollPending: number;
+    enrollApproved: number;
+    enrollClosed: number;
+    conversionRate: number;
+    trialAttendRate: number;
+    enrollApproveRate: number;
+    latestAt: string | null;
+};
+
+type SourceStatsPayload = {
+    range: SourceStatsRange;
+    generatedAt: string;
+    rows: SourceStatsRow[];
+    totals: {
+        total: number;
+        trialTotal: number;
+        trialAttended: number;
+        trialConverted: number;
+        enrollTotal: number;
+        enrollApproved: number;
+        conversionRate: number;
+        trialAttendRate: number;
+        enrollApproveRate: number;
+    };
+};
+
 type FeedbackState = { type: "success" | "error"; message: string } | null;
 type ApplicationWorkFilter = "ALL" | "NEEDS_ACTION" | "CLASS_ASSIGNMENT" | "SHUTTLE" | "TRIAL_LINKED" | "TIME_CHECK";
 type PriorityBadge = { icon: string; label: string; className: string };
@@ -202,6 +238,7 @@ const SOURCE_LABELS: Record<string, string> = {
     WEBSITE: "홈페이지",
     NAVER: "네이버",
     FLYER: "전단지",
+    UNKNOWN: "미입력",
 };
 
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
@@ -238,6 +275,12 @@ const EMPTY_STATS: EnrollStats = {
     CANCELLED: 0,
     total: 0,
 };
+
+const SOURCE_STATS_RANGES: Array<{ value: SourceStatsRange; label: string }> = [
+    { value: "30D", label: "최근 30일" },
+    { value: "THIS_MONTH", label: "이번 달" },
+    { value: "ALL", label: "전체" },
+];
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월",
@@ -518,7 +561,7 @@ function ApplyErrorState({ onRetry }: { onRetry: () => void }) {
 
 // ── 탭 상수 ──────────────────────────────────────────────────────────────────────
 
-type TabType = "trial" | "applications" | "settings";
+type TabType = "trial" | "applications" | "sources" | "settings";
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
 
@@ -547,6 +590,10 @@ export default function ApplyAdminClient({
     const [visibleLimit, setVisibleLimit] = useState(APPLICATION_PAGE_SIZE);
     const [activeTab, setActiveTab] = useState<TabType>("trial");
     const [feedback, setFeedback] = useState<FeedbackState>(null);
+    const [sourceStatsRange, setSourceStatsRange] = useState<SourceStatsRange>("30D");
+    const [sourceStatsData, setSourceStatsData] = useState<SourceStatsPayload | null>(null);
+    const [sourceStatsLoading, setSourceStatsLoading] = useState(false);
+    const [sourceStatsError, setSourceStatsError] = useState<string | null>(null);
 
     // 모달 상태
     const [showApproveModal, setShowApproveModal] = useState<EnrollApplication | null>(null);
@@ -591,10 +638,33 @@ export default function ApplyAdminClient({
         }
     }, []);
 
+    const loadSourceStats = useCallback(async (range: SourceStatsRange) => {
+        setSourceStatsLoading(true);
+        setSourceStatsError(null);
+
+        try {
+            const response = await fetch(`/api/admin/apply/source-stats?range=${range}`, { cache: "no-store" });
+            if (!response.ok) throw new Error("request failed");
+            const data = (await response.json()) as SourceStatsPayload;
+            setSourceStatsData(data);
+        } catch {
+            setSourceStatsError("failed");
+        } finally {
+            setSourceStatsLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (activeTab !== "applications" || applyLoaded || loading) return;
         void loadApplyData();
     }, [activeTab, applyLoaded, loading, loadApplyData]);
+
+    useEffect(() => {
+        if (activeTab !== "sources") return;
+        if (sourceStatsData?.range === sourceStatsRange) return;
+        if (sourceStatsLoading) return;
+        void loadSourceStats(sourceStatsRange);
+    }, [activeTab, loadSourceStats, sourceStatsData?.range, sourceStatsLoading, sourceStatsRange]);
 
     const classesBySlotKey = useMemo(() => {
         const map = new Map<string, ClassInfo>();
@@ -728,6 +798,143 @@ export default function ApplyAdminClient({
         const m = today.getMonth() - birth.getMonth();
         if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
         return age;
+    }
+
+    function sourceLabel(source: string) {
+        return SOURCE_LABELS[source] || source || "미입력";
+    }
+
+    function renderSourceStats() {
+        const payload = sourceStatsData?.range === sourceStatsRange ? sourceStatsData : null;
+        const rows = payload?.rows ?? [];
+        const totals = payload?.totals;
+        const maxTotal = rows.reduce((max, row) => Math.max(max, row.total), 0);
+
+        return (
+            <div className="space-y-4">
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h2 className="text-lg font-black text-gray-900 dark:text-white">유입경로 통계</h2>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">체험 문의와 수강신청이 어떤 경로에서 들어오는지 확인합니다.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={sourceStatsRange}
+                                onChange={(event) => setSourceStatsRange(event.target.value as SourceStatsRange)}
+                                className="min-h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                            >
+                                {SOURCE_STATS_RANGES.map((range) => (
+                                    <option key={range.value} value={range.value}>
+                                        {range.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={() => void loadSourceStats(sourceStatsRange)}
+                                disabled={sourceStatsLoading}
+                                className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                            >
+                                <span className="material-symbols-outlined text-base">refresh</span>
+                                새로고침
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {sourceStatsLoading && !payload ? (
+                    <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm font-bold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                        유입경로 통계를 불러오는 중입니다.
+                    </div>
+                ) : sourceStatsError && !payload ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm font-bold text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+                        통계를 불러오지 못했습니다.
+                        <button
+                            type="button"
+                            onClick={() => void loadSourceStats(sourceStatsRange)}
+                            className="ml-3 rounded-lg bg-red-600 px-3 py-1.5 text-white"
+                        >
+                            다시 시도
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <SourceMetricCard label="전체 접수" value={`${totals?.total ?? 0}건`} icon="inbox" />
+                            <SourceMetricCard label="체험 문의" value={`${totals?.trialTotal ?? 0}건`} icon="diversity_3" />
+                            <SourceMetricCard label="수강신청" value={`${totals?.enrollTotal ?? 0}건`} icon="assignment" />
+                            <SourceMetricCard label="등록 전환" value={`${totals?.conversionRate ?? 0}%`} icon="trending_up" />
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                            <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
+                                <colgroup>
+                                    <col className="w-[24%]" />
+                                    <col className="w-[12%]" />
+                                    <col className="w-[12%]" />
+                                    <col className="w-[12%]" />
+                                    <col className="w-[12%]" />
+                                    <col className="w-[12%]" />
+                                    <col className="w-[16%]" />
+                                </colgroup>
+                                <thead className="bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                                    <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                                        <th className="px-3 py-2">유입경로</th>
+                                        <th className="px-3 py-2">전체</th>
+                                        <th className="px-3 py-2">체험</th>
+                                        <th className="px-3 py-2">수강신청</th>
+                                        <th className="px-3 py-2">등록</th>
+                                        <th className="px-3 py-2">전환율</th>
+                                        <th className="px-3 py-2">최근 접수</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                    {rows.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="px-3 py-8 text-center text-sm font-bold text-gray-500 dark:text-gray-400">
+                                                선택한 기간에 접수된 신청이 없습니다.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        rows.map((row) => {
+                                            const width = maxTotal > 0 ? Math.max(8, Math.round((row.total / maxTotal) * 100)) : 0;
+                                            return (
+                                                <tr key={row.source} className="divide-x divide-gray-100 dark:divide-gray-700">
+                                                    <td className="px-3 py-2 align-middle">
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <span className="truncate font-black text-gray-900 dark:text-white">{sourceLabel(row.source)}</span>
+                                                                <span className="shrink-0 text-xs font-bold text-gray-400">{row.source}</span>
+                                                            </div>
+                                                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-900">
+                                                                <div className="h-full rounded-full bg-brand-orange-500 dark:bg-brand-neon-lime" style={{ width: `${width}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2 font-black text-gray-900 dark:text-white">{row.total}</td>
+                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                                                        <span className="font-black">{row.trialTotal}</span>
+                                                        <span className="ml-1 text-xs text-gray-400">완료 {row.trialAttended}</span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                                                        <span className="font-black">{row.enrollTotal}</span>
+                                                        <span className="ml-1 text-xs text-gray-400">대기 {row.enrollPending}</span>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200">{row.trialConverted + row.enrollApproved}</td>
+                                                    <td className="px-3 py-2 font-black text-gray-900 dark:text-white">{row.conversionRate}%</td>
+                                                    <td className="px-3 py-2 text-xs font-bold text-gray-500 dark:text-gray-400">{formatDate(row.latestAt)}</td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                )}
+            </div>
+        );
     }
 
     function renderApplicationList() {
@@ -932,6 +1139,14 @@ export default function ApplyAdminClient({
                     <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">assignment</span>
                     수강 대기 {stats.PENDING}
                 </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("sources")}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                    <span className="material-symbols-outlined text-base text-brand-orange-500 dark:text-brand-neon-lime">query_stats</span>
+                    유입 통계
+                </button>
             </div>
 
             {/* 탭 버튼 */}
@@ -967,6 +1182,17 @@ export default function ApplyAdminClient({
                             {stats.PENDING}
                         </span>
                     )}
+                </button>
+                <button
+                    onClick={() => setActiveTab("sources")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                        activeTab === "sources"
+                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-lg">query_stats</span>
+                    유입 통계
                 </button>
                 <button
                     onClick={() => setActiveTab("settings")}
@@ -1116,6 +1342,8 @@ export default function ApplyAdminClient({
                     )}
                 </>
                 )
+            ) : activeTab === "sources" ? (
+                renderSourceStats()
             ) : (
                 /* 설정 탭 — 기존 안내 설정 UI */
                 <ApplySettingsTab />
@@ -1151,6 +1379,22 @@ export default function ApplyAdminClient({
                     }}
                 />
             )}
+        </div>
+    );
+}
+
+function SourceMetricCard({ label, value, icon }: { label: string; value: string; icon: string }) {
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400">{label}</p>
+                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{value}</p>
+                </div>
+                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand-orange-50 text-brand-orange-600 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime">
+                    <span className="material-symbols-outlined">{icon}</span>
+                </span>
+            </div>
         </div>
     );
 }

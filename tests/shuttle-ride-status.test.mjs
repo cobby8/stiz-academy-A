@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const schemaSource = await readFile("prisma/schema.prisma", "utf8");
+const migrationSource = await readFile("prisma/migrations/20260722001000_add_shuttle_passenger_ride_status/migration.sql", "utf8");
+const serviceSource = await readFile("src/lib/shuttle/service.ts", "utf8");
+const apiSource = await readFile("src/app/api/staff/shuttle/route.ts", "utf8");
+const staffPageSource = await readFile("src/app/staff/shuttle/page.tsx", "utf8");
+const staffButtonsSource = await readFile("src/app/staff/shuttle/ShuttleRideStatusButtons.tsx", "utf8");
+const adminClientSource = await readFile("src/app/admin/shuttle/ShuttleRouteAdminClient.tsx", "utf8");
+
+test("shuttle passengers keep live ride status", () => {
+  assert.match(schemaSource, /rideStatus String @default\("PENDING"\)/);
+  assert.match(schemaSource, /rideStatusUpdatedAt DateTime\? @db\.Timestamptz\(6\)/);
+  assert.match(schemaSource, /@@index\(\[routePlanId, rideStatus\]\)/);
+  assert.match(migrationSource, /"rideStatus" TEXT NOT NULL DEFAULT 'PENDING'/);
+  assert.match(migrationSource, /CHECK \("rideStatus" IN \('PENDING', 'BOARDED', 'DROPPED_OFF', 'NO_SHOW'\)\)/);
+});
+
+test("staff API validates and saves passenger ride status", () => {
+  assert.match(serviceSource, /export async function updatePassengerRideStatus/);
+  assert.match(serviceSource, /DRIVER_ROUTE_FORBIDDEN/);
+  assert.match(serviceSource, /PASSENGER_RIDE_STATUS_UPDATED/);
+  assert.match(apiSource, /export async function PATCH/);
+  assert.match(apiSource, /updatePassengerRideStatus\(staff, routeId, passengerId, body\.status\)/);
+});
+
+test("driver shuttle page can check passengers immediately", () => {
+  assert.match(staffPageSource, /ShuttleRideStatusButtons/);
+  assert.match(staffPageSource, /RideStatusPill/);
+  assert.match(staffButtonsSource, /fetch\("\/api\/staff\/shuttle"/);
+  assert.match(staffButtonsSource, /BOARDED/);
+  assert.match(staffButtonsSource, /DROPPED_OFF/);
+  assert.match(staffButtonsSource, /NO_SHOW/);
+});
+
+test("admin route screen shows ride status for each passenger", () => {
+  assert.match(adminClientSource, /rideStatus\?: string \| null/);
+  assert.match(adminClientSource, /rideStatusLabel\(passenger\.rideStatus\)/);
+  assert.match(adminClientSource, /function rideStatusClass/);
+});

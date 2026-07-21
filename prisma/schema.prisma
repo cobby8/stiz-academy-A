@@ -1502,6 +1502,10 @@ model ShuttleRoutePassenger {
   studentNameSnapshot String
   parentNameSnapshot String?
   parentPhoneSnapshot String?
+  rideStatus String @default("PENDING")
+  rideStatusUpdatedAt DateTime? @db.Timestamptz(6)
+  rideStatusUpdatedByUserId String?
+  rideStatusNote String?
   note String?
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
@@ -1512,6 +1516,7 @@ model ShuttleRoutePassenger {
   @@unique([routePlanId, shuttleRequestId])
   @@index([stopId])
   @@index([shuttleRequestId])
+  @@index([routePlanId, rideStatus])
 }
 
 model ShuttleAuditLog {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth-guard";
 import { getStaffShuttleDashboard } from "@/lib/shuttle/service";
+import ShuttleRideStatusButtons from "./ShuttleRideStatusButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -75,11 +76,22 @@ export default async function StaffShuttlePage() {
                             </a>
                           )}
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className="mt-2 space-y-2">
                           {stop.passengers.map((passenger) => (
-                            <span key={passenger.id} className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                              {passenger.studentNameSnapshot || "학생"}
-                            </span>
+                            <div key={passenger.id} className="rounded-2xl bg-white p-2 dark:bg-gray-900">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="min-w-0 truncate text-sm font-black text-gray-800 dark:text-gray-100">
+                                  {passenger.studentNameSnapshot || "학생"}
+                                </span>
+                                <RideStatusPill status={passenger.rideStatus} />
+                              </div>
+                              <ShuttleRideStatusButtons
+                                routeId={route.id}
+                                passengerId={passenger.id}
+                                direction={route.direction}
+                                initialStatus={passenger.rideStatus as "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW"}
+                              />
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -119,4 +131,15 @@ function formatRouteDate(value?: string | Date | null) {
 function mapUrl(lat: number | string | null | undefined, lng: number | string | null | undefined, name: string) {
   if (lat == null || lng == null) return null;
   return `https://map.kakao.com/link/map/${encodeURIComponent(name)},${lat},${lng}`;
+}
+
+function RideStatusPill({ status }: { status: string }) {
+  const label = status === "BOARDED" ? "탑승" : status === "DROPPED_OFF" ? "하차" : status === "NO_SHOW" ? "미탑승" : "대기";
+  const color = status === "BOARDED" || status === "DROPPED_OFF"
+    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+    : status === "NO_SHOW"
+      ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200"
+      : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300";
+
+  return <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-black ${color}`}>{label}</span>;
 }

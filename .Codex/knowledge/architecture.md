@@ -163,3 +163,9 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 특강 모집 데이터는 `SpecialProgram*` 모델에 보존하고 확정 후 기존 수업·출석·결제 구조와 연결한다.
 - 신청 가격은 서버 계산 스냅샷으로 보존하며, 정원은 행 잠금과 직렬 트랜잭션으로 보호한다.
 - 특강 셔틀 노선 운영 진입점은 `/admin/shuttle`이며 `ShuttleVehicle`, `ShuttleRoutePlan`, `ShuttleRouteStop`, `ShuttleRoutePassenger`, `ShuttleAuditLog`로 차량·정류장·탑승자·확정 이력을 관리한다.
+
+## 셔틀 기사 앱 탑승 체크 (2026-07-21)
+
+- ShuttleRoutePassenger는 실시간 운행 상태를 rideStatus로 보관한다. 값은 PENDING, BOARDED, DROPPED_OFF, NO_SHOW만 사용한다.
+- 기사 모바일 앱 /staff/shuttle은 배정된 확정 노선의 승객별 탑승/하차 버튼을 제공하고, /api/staff/shuttle PATCH로 즉시 저장한다.
+- 관리자 셔틀 화면 /admin/shuttle은 각 승객 배지에 현재 운행 상태를 함께 표시한다.

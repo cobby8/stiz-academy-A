@@ -24,6 +24,10 @@ function contract<T>(operation: () => T): T {
 
 type Db = Prisma.TransactionClient;
 type Actor = { appUserId: string };
+type StaffActor = Actor & { appUserRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" };
+type ShuttleRideStatus = "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW";
+
+const SHUTTLE_RIDE_STATUSES = new Set<ShuttleRideStatus>(["PENDING", "BOARDED", "DROPPED_OFF", "NO_SHOW"]);
 
 const routeInclude = {
   vehicle: true,
@@ -631,4 +635,53 @@ export async function getStaffShuttleDashboard(actor: Actor & { appUserRole: "AD
       passengerCount: route.stops.reduce((sum, stop) => sum + stop.passengers.length, 0),
     })),
   };
+}
+
+function parseRideStatus(value: unknown): ShuttleRideStatus {
+  if (typeof value !== "string" || !SHUTTLE_RIDE_STATUSES.has(value as ShuttleRideStatus)) {
+    throw new ShuttleServiceError("탑승 상태를 확인해 주세요.", 400, "INVALID_RIDE_STATUS");
+  }
+  return value as ShuttleRideStatus;
+}
+
+function assertRideStatusMatchesDirection(direction: ShuttleRouteDirection, status: ShuttleRideStatus) {
+  if (status === "PENDING" || status === "NO_SHOW") return;
+  if (direction === ShuttleRouteDirection.PICKUP && status !== "BOARDED") {
+    throw new ShuttleServiceError("등원 노선에서는 탑승 상태만 처리할 수 있습니다.", 400, "INVALID_PICKUP_STATUS");
+  }
+  if (direction === ShuttleRouteDirection.DROPOFF && status !== "DROPPED_OFF") {
+    throw new ShuttleServiceError("하원 노선에서는 하차 상태만 처리할 수 있습니다.", 400, "INVALID_DROPOFF_STATUS");
+  }
+}
+
+export async function updatePassengerRideStatus(actor: StaffActor, routeId: string, passengerId: string, statusValue: unknown) {
+  const status = parseRideStatus(statusValue);
+  return prisma.$transaction(async (tx) => {
+    const route = await tx.shuttleRoutePlan.findUnique({
+      where: { id: routeId },
+      select: { id: true, driverUserId: true, direction: true, status: true },
+    });
+    if (!route || route.status !== ShuttleRoutePlanStatus.CONFIRMED) {
+      throw new ShuttleServiceError("확정된 운행 노선만 체크할 수 있습니다.", 404, "CONFIRMED_ROUTE_NOT_FOUND");
+    }
+    if (actor.appUserRole === "DRIVER" && route.driverUserId !== actor.appUserId) {
+      throw new ShuttleServiceError("담당 기사에게 배정된 노선만 체크할 수 있습니다.", 403, "DRIVER_ROUTE_FORBIDDEN");
+    }
+    if (actor.appUserRole === "INSTRUCTOR") {
+      throw new ShuttleServiceError("셔틀 체크 권한이 없습니다.", 403, "SHUTTLE_CHECK_FORBIDDEN");
+    }
+    assertRideStatusMatchesDirection(route.direction, status);
+    const before = await tx.shuttleRoutePassenger.findFirst({ where: { id: passengerId, routePlanId: routeId } });
+    if (!before) throw new ShuttleServiceError("탑승 학생을 찾을 수 없습니다.", 404, "PASSENGER_NOT_FOUND");
+    const passenger = await tx.shuttleRoutePassenger.update({
+      where: { id: passengerId },
+      data: {
+        rideStatus: status,
+        rideStatusUpdatedAt: status === "PENDING" ? null : new Date(),
+        rideStatusUpdatedByUserId: status === "PENDING" ? null : actor.appUserId,
+      },
+    });
+    await audit(tx, actor, "PASSENGER_RIDE_STATUS_UPDATED", { routePlanId: routeId, shuttleRequestId: passenger.shuttleRequestId }, before, passenger);
+    return passenger;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

@@ -581,6 +581,7 @@ export interface TrialLeadForEnroll {
     childGrade: string | null;
     childGender: string | null;
     childSchool: string | null;
+    childPhone: string | null;
     basketballExp: string | null;
     preferredSlotKey: string | null;
     parentName: string;
@@ -588,11 +589,18 @@ export interface TrialLeadForEnroll {
     source: string;
 }
 
+let _trialLeadChildPhoneColumnEnsured = false;
+async function ensureTrialLeadChildPhoneColumn() {
+    if (_trialLeadChildPhoneColumnEnsured) return;
+    await prisma.$executeRawUnsafe(`ALTER TABLE "TrialLead" ADD COLUMN IF NOT EXISTS "childPhone" TEXT`);
+    _trialLeadChildPhoneColumnEnsured = true;
+}
+
 /**
  * getTrialLeadForEnroll — 체험 거친 사람의 데이터를 수강 폼에 자동 채움
  *
  * 공개용이므로 관리자 메모 등 민감 정보는 제외하고
- * 이름, 생년월일, 학년, 성별, 학교, 농구 경험, 희망 수업, 보호자 정보만 반환
+ * 이름, 생년월일, 학년, 성별, 학교, 연락처, 농구 경험, 희망 수업, 보호자 정보만 반환
  */
 export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadForEnroll | null> {
     if (!trialId) return null;
@@ -600,10 +608,11 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
     try {
         // TrialLead 테이블이 존재하는지 먼저 확인
         await ensureTrialLeadTable();
+        await ensureTrialLeadChildPhoneColumn();
 
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "childName", "childBirthDate", "childGrade", "childGender",
-                    "childSchool", "basketballExp", "preferredSlotKey",
+                    "childSchool", "childPhone", "basketballExp", "preferredSlotKey",
                     "parentName", "parentPhone", source
              FROM "TrialLead"
              WHERE id = $1
@@ -614,6 +623,7 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
         if (rows.length === 0) return null;
 
         const r = rows[0];
+        const parentName = (r.parentName ?? r.parentname ?? "").trim();
         return {
             childName: r.childName ?? r.childname ?? "",
             childBirthDate: r.childBirthDate ?? r.childbirthdate
@@ -622,9 +632,10 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
             childGrade: r.childGrade ?? r.childgrade ?? null,
             childGender: r.childGender ?? r.childgender ?? null,
             childSchool: r.childSchool ?? r.childschool ?? null,
+            childPhone: r.childPhone ?? r.childphone ?? null,
             basketballExp: r.basketballExp ?? r.basketballexp ?? null,
             preferredSlotKey: r.preferredSlotKey ?? r.preferredslotkey ?? null,
-            parentName: r.parentName ?? r.parentname ?? "",
+            parentName: parentName === "미입력" ? "" : parentName,
             parentPhone: r.parentPhone ?? r.parentphone ?? "",
             source: r.source ?? "WEBSITE",
         };

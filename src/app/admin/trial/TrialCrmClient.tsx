@@ -849,25 +849,9 @@ export default function TrialCrmClient({
         );
     }
 
-    function renderEnrollGuideButton(lead: TrialLead, variant: "menu" | "inline" = "menu") {
+    function renderEnrollGuideButton(lead: TrialLead) {
         if (lead.status !== "ATTENDED" || lead.enrollApplicationReceivedAt) return null;
         const label = lead.enrollGuideSentAt ? "안내 재발송" : "수강신청 안내";
-        if (variant === "inline") {
-            return (
-                <button
-                    type="button"
-                    onClick={() => {
-                        void handleSendEnrollGuide(lead);
-                    }}
-                    disabled={busy}
-                    className="inline-flex h-8 max-w-[108px] shrink-0 items-center gap-1 rounded-lg bg-brand-neon-lime px-2 text-xs font-black text-brand-navy-900 transition hover:bg-lime-300 disabled:opacity-50"
-                >
-                    <span className="material-symbols-outlined text-sm">send</span>
-                    <span className="truncate">{label}</span>
-                </button>
-            );
-        }
-
         return (
             <button
                 type="button"
@@ -931,7 +915,6 @@ export default function TrialCrmClient({
                         </option>
                     ))}
                 </select>
-                {renderEnrollGuideButton(lead, "inline")}
                 {lead.enrollApplicationReceivedAt && (
                     <span className="inline-flex h-8 shrink-0 items-center rounded-lg bg-emerald-50 px-2 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
                         신청 접수
@@ -944,17 +927,17 @@ export default function TrialCrmClient({
     function renderTrialList() {
         return (
             <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-[13px] lg:min-w-0">
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-[13px] lg:min-w-0">
                     <colgroup>
+                        <col className="w-[12%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[6%]" />
                         <col className="w-[11%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[9%]" />
+                        <col className="w-[21%]" />
                         <col className="w-[6%]" />
-                        <col className="w-[10%]" />
                         <col className="w-[16%]" />
-                        <col className="w-[6%]" />
-                        <col className="w-[27%]" />
-                        <col className="w-[6%]" />
+                        <col className="w-[10%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">

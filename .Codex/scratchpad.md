@@ -1,35 +1,32 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 체험/수강신청 관리 기능 강화
+- 작업명: 관리자 신청 관리 UI 단순화
 - 상태: 구현 및 검증 완료, 커밋 준비
-- 범위: 체험/수강신청 수정·일정·취소 이력, 수강신청 카드 요약, 상세 동선, 공통 관리자 모달 검증
+- 범위: 운영 사이드 메뉴 축약, 신청 관리 필터 통합, 신청 카드 액션 접기, 모바일 깨짐 방지
 - 기준일: 2026-07-21
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 체험 카드 날짜 표시 | 완료 | 접수/희망일/희망시간/확정일을 분리 표시 |
-| 체험 관리 모달 | 완료 | 수정, 일정 확정/변경, 취소 상태 처리 |
-| 수강신청 관리 모달 | 완료 | 승인 전 수정, 대기 상태 취소 처리 |
-| 서버 액션 | 완료 | 신청 수정/일정/취소를 ApplicationContactLog 이력으로 기록 |
-| 검증 | 완료 | TypeScript, 신청/모달/관리자 오류 관련 회귀 테스트 통과 |
+| 운영 메뉴 | 완료 | 핵심 업무 6개만 먼저 노출하고 기타 운영은 접이식으로 이동 |
+| 신청 필터 | 완료 | 요약 카드와 상태 칩을 통합 검색/상태/업무 필터로 단순화 |
+| 신청 카드 | 완료 | 우선 뱃지 2개 제한, 주요 액션만 노출, 보조 액션은 더보기로 접기 |
+| 검증 | 완료 | TypeScript, 신청 UX, 관리자 모달 회귀 테스트 통과 |
 
 ## 구현 기록
-- `src/app/admin/trial/TrialCrmClient.tsx`: 체험 카드 일정 블록, 취소 상태, 수정/일정/취소 버튼 추가.
-- `src/app/admin/trial/TrialCrmModals.tsx`: 체험 신청 수정, 일정 확정/변경, 취소 모달 추가.
-- `src/app/admin/apply/ApplyAdminClient.tsx`: 수강신청 목록에 운영 요약 카드, 수정/취소 이력 라벨, 모달 연결 추가.
-- `src/app/admin/apply/ApplyAdminModals.tsx`: 수강신청 상세의 최근 운영 이력과 원생/청구서 이동 동선 보강.
-- `src/app/actions/admin.ts`: 체험/수강신청 수정·일정·취소를 ApplicationContactLog에 남기는 서버 이력 기록 추가.
-- `src/lib/queries.ts`, `prisma/schema.prisma`: 체험 `CANCELLED` 상태 통계와 문서화 반영.
-- `tests/application-management-ux.test.mjs`: 체험/수강신청 관리 UX 회귀 테스트 추가.
+- `src/app/admin/AdminShellClient.tsx`: 학원운영 메뉴를 주요 업무 중심으로 줄이고 보조 메뉴를 기타 운영 접이식 그룹으로 이동.
+- `src/app/admin/apply/ApplyAdminClient.tsx`: 신청 관리 상단을 단일 필터 패널로 정리하고 카드의 보조 버튼과 상세 뱃지를 접어서 모바일 깨짐 방지.
+- `tests/application-management-ux.test.mjs`: 메뉴/신청 카드가 다시 복잡해지지 않도록 회귀 테스트 추가.
 
 ## 테스트 결과
 - `npx tsc --noEmit`: 통과
-- `node --test tests\admin-modal-accessibility.test.mjs tests\staff-signup-entry.test.mjs tests\admin-detail-query-errors.test.mjs tests\application-management-ux.test.mjs src\lib\adminLayoutAuth.test.ts`: 통과
-- `npm run lint`: 기존 `.tmp` 스크립트와 오래된 `any` 규칙 위반 605건 때문에 실패, 이번 변경 검증 기준에서는 제외
+- `node --test tests\application-management-ux.test.mjs tests\admin-modal-accessibility.test.mjs`: 통과
+- 독립 브라우저 렌더링 확인: 관리자 인증으로 로그인 화면까지만 확인, 데스크톱/모바일 가로 넘침 없음
+- `npm run lint`: 이번 작업에서는 실행하지 않음
 
 ## 작업 로그
+- 2026-07-21: 관리자 신청 관리 메뉴와 카드 액션을 핵심 업무 중심으로 줄여 모바일에서 버튼과 뱃지가 세로로 깨지는 문제를 정리했다.
 - 2026-07-21: 수강신청 카드 정보 영역이 액션 버튼에 눌려 세로로 찢어지는 문제를 막기 위해 카드 액션을 하단 줄바꿈 영역으로 분리했다.
 - 2026-07-21: 체험/수강신청 수정·일정·취소를 운영 이력으로 남기고 수강신청 카드와 상세 모달의 다음 행동 동선을 보강했다.
 - 2026-07-21: 체험/수강신청 관리자가 신청 내용을 수정하고 취소 상태로 보존할 수 있게 했으며, 체험 카드 날짜 정보를 분리 표시했다.

@@ -22,6 +22,7 @@ const LazyNotificationBell = dynamic(() => import("./AdminNotificationBell"), {
 
 // "학원운영" 탭에 속하는 경로 목록 — 이 경로로 시작하면 학원운영 탭 활성화
 const OPS_PATHS = [
+    "/admin/classes",
     "/admin/students",
     "/admin/attendance",
     "/admin/finance",
@@ -36,6 +37,25 @@ const OPS_PATHS = [
     "/admin/import",
     "/admin/staff",
     "/admin/apply",
+    "/admin/shuttle",
+    "/admin/payment-confirmations",
+    "/admin/media-revocations",
+];
+
+const MORE_OPS_PATHS = [
+    "/admin/attendance/report",
+    "/admin/requests",
+    "/admin/feedback",
+    "/admin/waitlist",
+    "/admin/makeup",
+    "/admin/skills",
+    "/admin/stats",
+    "/admin/sms",
+    "/admin/import",
+    "/admin/staff",
+    "/admin/shuttle",
+    "/admin/payment-confirmations",
+    "/admin/media-revocations",
 ];
 
 export default function AdminShellClient({
@@ -52,6 +72,7 @@ export default function AdminShellClient({
     const userEmail = initialUserEmail;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [systemToolsOpen, setSystemToolsOpen] = useState(false);
+    const moreOpsActive = useMemo(() => MORE_OPS_PATHS.some((p) => pathname.startsWith(p)), [pathname]);
     // 현재 URL 경로를 기반으로 활성 탭을 자동 결정
     // "/admin" 첫 진입은 사이트 관리부터 보여준다.
     const autoTab = useMemo(() => {
@@ -167,54 +188,55 @@ export default function AdminShellClient({
                     {/* ===== 학원운영 탭 메뉴 ===== */}
                     {activeTab === "ops" && (
                         <>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-1">학원 운영</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2">주요 업무</p>
                             <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />
+                            <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="신청 관리" />
                             <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
-                            <NavItem href="/admin/attendance" active={pathname === "/admin/attendance"} icon="✅" label="출결 관리" />
-                            <NavItem href="/admin/attendance/report" active={pathname.startsWith("/admin/attendance/report")} icon="📝" label="수업 리포트" />
-                            <NavItem href="/admin/finance" active={pathname === "/admin/finance"} icon="💳" label="수납/결제" />
-                            <NavItem href="/admin/finance/billing" active={pathname.startsWith("/admin/finance/billing")} icon="📋" label="청구 설정" />
-                            <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" />
-                            <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" />
-                            <NavItem href="/admin/seasonal?tab=applications" active={false} icon="🚌" label="특강 차량 신청" />
-                            <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="체험/수강신청 관리" />
-                            <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal")} icon="🏀" label="방학특강 운영" />
-                            <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자 관리" />
-                            <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강 관리" />
-                            <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬 트래킹" />
-                            <NavItem href="/admin/stats" active={pathname.startsWith("/admin/stats")} icon="📊" label="상세 통계" />
+                            <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
+                            <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/청구" />
+                            <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal")} icon="🏀" label="방학특강" />
 
-                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">커뮤니케이션</p>
-                            <NavItem href="/admin/sms" active={pathname === "/admin/sms"} icon="💬" label="문자 발송" />
-                            <NavItem href="/admin/sms/templates" active={pathname.startsWith("/admin/sms/templates")} icon="📋" label="템플릿 관리" />
-
-                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">데이터</p>
-                            <NavItem href="/admin/import" active={pathname.startsWith("/admin/import")} icon="📥" label="수강생 이관" />
-
-                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-4">시스템</p>
-                            <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프 관리" />
-                            <div className="pt-1">
-                                <button
-                                    type="button"
-                                    aria-controls="admin-system-tools"
-                                    aria-expanded={systemToolsOpen}
-                                    onClick={() => setSystemToolsOpen((current) => !current)}
-                                    className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                                >
-                                    <FontFreeIcon name="sync" size={20} />
-                                    <span className="flex-1 truncate">시스템 도구</span>
-                                    <FontFreeIcon
-                                        name="expand_more"
-                                        size={18}
-                                        className={`transition-transform ${systemToolsOpen ? "rotate-180" : ""}`}
-                                    />
-                                </button>
-                                {systemToolsOpen && (
-                                    <div id="admin-system-tools" className="mt-1">
-                                        <LazyBackupButtons />
+                            <details className="group mt-4" open={moreOpsActive}>
+                                <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 text-gray-300 transition-colors hover:bg-white/10 hover:text-white">
+                                    <FontFreeIcon name="more_horiz" size={20} />
+                                    <span className="flex-1 truncate text-sm font-bold">기타 운영</span>
+                                    <FontFreeIcon name="expand_more" size={18} className="transition-transform group-open:rotate-180" />
+                                </summary>
+                                <div className="mt-1 space-y-1 border-l border-white/10 pl-2">
+                                    <NavItem href="/admin/attendance/report" active={pathname.startsWith("/admin/attendance/report")} icon="📝" label="수업 리포트" compact />
+                                    <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" compact />
+                                    <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" compact />
+                                    <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자" compact />
+                                    <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강" compact />
+                                    <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬" compact />
+                                    <NavItem href="/admin/stats" active={pathname.startsWith("/admin/stats")} icon="📊" label="상세 통계" compact />
+                                    <NavItem href="/admin/sms" active={pathname.startsWith("/admin/sms")} icon="💬" label="문자/템플릿" compact />
+                                    <NavItem href="/admin/import" active={pathname.startsWith("/admin/import")} icon="📥" label="수강생 이관" compact />
+                                    <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프" compact />
+                                    <div className="pt-1">
+                                        <button
+                                            type="button"
+                                            aria-controls="admin-system-tools"
+                                            aria-expanded={systemToolsOpen}
+                                            onClick={() => setSystemToolsOpen((current) => !current)}
+                                            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                                        >
+                                            <FontFreeIcon name="sync" size={18} />
+                                            <span className="flex-1 truncate">시스템 도구</span>
+                                            <FontFreeIcon
+                                                name="expand_more"
+                                                size={18}
+                                                className={`transition-transform ${systemToolsOpen ? "rotate-180" : ""}`}
+                                            />
+                                        </button>
+                                        {systemToolsOpen && (
+                                            <div id="admin-system-tools" className="mt-1">
+                                                <LazyBackupButtons />
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            </details>
                         </>
                     )}
                 </nav>
@@ -273,17 +295,17 @@ export default function AdminShellClient({
     );
 }
 
-function NavItem({ href, active, icon, label, badge }: { href: string; active?: boolean; icon: string; label: string; badge?: number }) {
+function NavItem({ href, active, icon, label, badge, compact = false }: { href: string; active?: boolean; icon: string; label: string; badge?: number; compact?: boolean }) {
     return (
         <Link
             href={href}
             prefetch={false}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active
+            className={`flex items-center gap-3 px-4 ${compact ? "py-2.5 text-sm" : "py-3"} rounded-lg transition-colors ${active
                 ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold"
                 : "text-gray-300 hover:bg-white/10 hover:text-white"
                 }`}
         >
-            <span className="text-xl">{icon}</span>
+            <span className={compact ? "text-lg" : "text-xl"}>{icon}</span>
             <span className="flex-1">{label}</span>
             {/* 배지 — 새 신청 건수 등 알림 표시 */}
             {badge != null && badge > 0 && (

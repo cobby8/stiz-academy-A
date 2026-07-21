@@ -994,103 +994,55 @@ export default function ApplyAdminClient({
                     loadError ? <ApplyErrorState onRetry={loadApplyData} /> : <ApplyLoadingFallback />
                 ) : (
                 <>
-                    {/* 파이프라인 요약 카드 */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        {STATUS_ORDER.map((s) => {
-                            const cfg = STATUS_CONFIG[s];
-                            const count = stats[s as keyof EnrollStats] as number;
-                            return (
-                                <button
-                                    key={s}
-                                    onClick={() => setFilter(filter === s ? "ALL" : s)}
-                                    className={`rounded-xl p-4 text-center transition-all border-2 ${
-                                        filter === s
-                                            ? "border-brand-orange-500 dark:border-brand-neon-lime shadow-md"
-                                            : "border-transparent hover:border-gray-200 dark:border-gray-700"
-                                    } bg-white dark:bg-gray-800`}
-                                >
-                                    <span className={`material-symbols-outlined text-2xl ${cfg.color.split(" ")[1]}`}>
-                                        {cfg.icon}
-                                    </span>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{count}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</p>
-                                </button>
-                            );
-                        })}
-                        {/* 전체 카드 */}
-                        <button
-                            onClick={() => setFilter("ALL")}
-                            className={`rounded-xl p-4 text-center transition-all border-2 ${
-                                filter === "ALL"
-                                    ? "border-brand-orange-500 dark:border-brand-neon-lime shadow-md"
-                                    : "border-transparent hover:border-gray-200 dark:border-gray-700"
-                            } bg-white dark:bg-gray-800`}
-                        >
-                            <span className="material-symbols-outlined text-2xl text-gray-600 dark:text-gray-300">summarize</span>
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{stats.total}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">전체</p>
-                        </button>
-                    </div>
-
-                    {/* 필터 탭 */}
-                    <div className="flex gap-2 flex-wrap">
-                        <button
-                            onClick={() => setFilter("ALL")}
-                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                filter === "ALL"
-                                    ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
-                            }`}
-                        >
-                            전체 ({stats.total})
-                        </button>
-                        {STATUS_ORDER.map((s) => {
-                            const cfg = STATUS_CONFIG[s];
-                            const count = stats[s as keyof EnrollStats] as number;
-                            return (
-                                <button
-                                    key={s}
-                                    onClick={() => setFilter(filter === s ? "ALL" : s)}
-                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                        filter === s
-                                            ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                                            : `${cfg.color} hover:opacity-80`
-                                    }`}
-                                >
-                                    {cfg.label} ({count})
-                                </button>
-                            );
-                        })}
-                    </div>
-
                     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                        <label className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
-                            <span className="material-symbols-outlined text-lg text-gray-400">search</span>
-                            <input
-                                type="search"
-                                value={searchQuery}
-                                onChange={(event) => setSearchQuery(event.target.value)}
-                                placeholder="학생, 보호자, 전화번호, 학교, 메모로 검색"
-                                className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
-                            />
-                            {searchQuery && (
-                                <button
-                                    type="button"
-                                    onClick={() => setSearchQuery("")}
-                                    className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                                    title="검색어 지우기"
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
+                                <span className="material-symbols-outlined text-lg text-gray-400">search</span>
+                                <input
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                    placeholder="학생, 보호자, 전화번호로 검색"
+                                    className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery("")}
+                                        className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                                        title="검색어 지우기"
+                                    >
+                                        <span className="material-symbols-outlined text-base">close</span>
+                                    </button>
+                                )}
+                            </label>
+                            <label className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-gray-300">
+                                상태
+                                <select
+                                    value={filter}
+                                    onChange={(event) => setFilter(event.target.value)}
+                                    className="min-h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                                 >
-                                    <span className="material-symbols-outlined text-base">close</span>
-                                </button>
-                            )}
-                        </label>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                                    <option value="ALL">전체 {stats.total}</option>
+                                    {STATUS_ORDER.map((s) => {
+                                        const cfg = STATUS_CONFIG[s];
+                                        const count = stats[s as keyof EnrollStats] as number;
+                                        return (
+                                            <option key={s} value={s}>
+                                                {cfg.label} {count}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </label>
+                        </div>
+                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                             {APPLICATION_WORK_FILTERS.map((item) => (
                                 <button
                                     key={item.value}
                                     type="button"
                                     onClick={() => setWorkFilter(item.value)}
-                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
                                         workFilter === item.value
                                             ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                                             : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -1132,9 +1084,9 @@ export default function ApplyAdminClient({
                                 const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
                                 const age = calcAge(app.childBirthDate);
                                 const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
-                                const workFlags = getApplicationFlags(app, preferredSlotLabel);
                                 const contactCount = getContactCount(app.parentPhone, openContactCounts);
                                 const priorityBadges = getApplicationPriorityBadges(app, preferredSlotLabel, contactCount);
+                                const visibleBadges = priorityBadges.slice(0, 2);
                                 const parentPhoneHref = phoneHref(app.parentPhone);
                                 const operationItems = [
                                     { label: "접수", value: formatDate(app.createdAt), icon: "inbox" },
@@ -1176,29 +1128,15 @@ export default function ApplyAdminClient({
                                                     )}
                                                 </div>
 
-                                                {priorityBadges.length > 0 && (
+                                                {visibleBadges.length > 0 && (
                                                     <div className="mb-2 flex flex-wrap gap-2">
-                                                        {priorityBadges.map((badge) => (
+                                                        {visibleBadges.map((badge) => (
                                                             <span
                                                                 key={`${app.id}-priority-${badge.label}`}
                                                                 className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${badge.className}`}
                                                             >
                                                                 <span className="material-symbols-outlined text-sm">{badge.icon}</span>
                                                                 {badge.label}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                {workFlags.length > 0 && (
-                                                    <div className="flex flex-wrap gap-2 mb-2">
-                                                        {workFlags.map((flag) => (
-                                                            <span
-                                                                key={`${app.id}-${flag.label}`}
-                                                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold ${flag.className}`}
-                                                            >
-                                                                <span className="material-symbols-outlined text-xs">{flag.icon}</span>
-                                                                {flag.label}
                                                             </span>
                                                         ))}
                                                     </div>
@@ -1322,7 +1260,7 @@ export default function ApplyAdminClient({
                                                 )}
                                             </div>
 
-                                            {/* 오른쪽: 액션 버튼 */}
+                                            {/* 카드 하단: 자주 쓰는 작업만 먼저 보여주고 나머지는 접어서 모바일 깨짐을 막는다. */}
                                             <div className="flex w-full flex-wrap items-center gap-2 border-t border-gray-100 pt-4 dark:border-gray-700">
                                                 <a
                                                     href={parentPhoneHref}
@@ -1332,6 +1270,41 @@ export default function ApplyAdminClient({
                                                     <span className="material-symbols-outlined text-lg">call</span>
                                                     전화
                                                 </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowDetailModal(app)}
+                                                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                    title="신청 상세 보기"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">visibility</span>
+                                                    상세
+                                                </button>
+                                                {app.status === "PENDING" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowApproveModal(app)}
+                                                        className="flex items-center gap-1.5 rounded-lg bg-lime-500 px-3 py-2 text-sm font-bold text-brand-navy-900 transition hover:bg-lime-400"
+                                                    >
+                                                        <span className="material-symbols-outlined text-lg">check_circle</span>
+                                                        승인
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRecordContact(app, "CONTACTED")}
+                                                    disabled={contactBusyId === app.id}
+                                                    className="flex items-center gap-1.5 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-sm font-bold text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200 dark:hover:bg-lime-900/40"
+                                                    title="보호자 연락 완료 기록"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">done_all</span>
+                                                    연락 완료
+                                                </button>
+                                                <details className="w-full sm:w-auto">
+                                                    <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime">
+                                                        <span className="material-symbols-outlined text-lg">more_horiz</span>
+                                                        더보기
+                                                    </summary>
+                                                    <div className="mt-2 flex flex-wrap gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-900/60">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopyText(app.parentPhone, `${app.childName} 보호자 연락처를 복사했습니다.`)}
@@ -1354,16 +1327,6 @@ export default function ApplyAdminClient({
                                                 >
                                                     <span className="material-symbols-outlined text-lg">assignment</span>
                                                     요약 복사
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRecordContact(app, "CONTACTED")}
-                                                    disabled={contactBusyId === app.id}
-                                                    className="flex items-center gap-1.5 rounded-lg bg-lime-500 px-3 py-2 text-sm font-bold text-brand-navy-900 transition hover:bg-lime-400 disabled:opacity-50"
-                                                    title="보호자 연락 완료 기록"
-                                                >
-                                                    <span className="material-symbols-outlined text-lg">done_all</span>
-                                                    연락 완료
                                                 </button>
                                                 <button
                                                     type="button"
@@ -1395,31 +1358,11 @@ export default function ApplyAdminClient({
                                                         수정
                                                     </button>
                                                 )}
-                                                {/* 상세보기 */}
-                                                <button
-                                                    onClick={() => setShowDetailModal(app)}
-                                                    className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition-colors"
-                                                    title="상세 보기"
-                                                >
-                                                    <span className="material-symbols-outlined text-xl">visibility</span>
-                                                </button>
-
-                                                {/* 승인 버튼 — PENDING 상태에서만 */}
                                                 {app.status === "PENDING" && (
                                                     <button
-                                                        onClick={() => setShowApproveModal(app)}
-                                                        className="flex items-center gap-1.5 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
-                                                    >
-                                                        <span className="material-symbols-outlined text-lg">check_circle</span>
-                                                        승인
-                                                    </button>
-                                                )}
-
-                                                {/* 반려 버튼 — PENDING 상태에서만 */}
-                                                {app.status === "PENDING" && (
-                                                    <button
+                                                        type="button"
                                                         onClick={() => setShowRejectModal(app)}
-                                                        className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors text-sm"
+                                                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-200"
                                                     >
                                                         <span className="material-symbols-outlined text-lg">cancel</span>
                                                         반려
@@ -1427,14 +1370,17 @@ export default function ApplyAdminClient({
                                                 )}
                                                 {app.status === "PENDING" && (
                                                     <button
+                                                        type="button"
                                                         onClick={() => setShowCancelModal(app)}
-                                                        className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-gray-100"
+                                                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                                                         title="수강신청 취소 처리"
                                                     >
                                                         <span className="material-symbols-outlined text-lg">block</span>
                                                         취소
                                                     </button>
                                                 )}
+                                                    </div>
+                                                </details>
                                             </div>
                                         </div>
                                     </div>

@@ -7,6 +7,7 @@ const trialClient = readFileSync(new URL("../src/app/admin/trial/TrialCrmClient.
 const trialModals = readFileSync(new URL("../src/app/admin/trial/TrialCrmModals.tsx", import.meta.url), "utf8");
 const applyClient = readFileSync(new URL("../src/app/admin/apply/ApplyAdminClient.tsx", import.meta.url), "utf8");
 const applyModals = readFileSync(new URL("../src/app/admin/apply/ApplyAdminModals.tsx", import.meta.url), "utf8");
+const adminShell = readFileSync(new URL("../src/app/admin/AdminShellClient.tsx", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../src/lib/queries.ts", import.meta.url), "utf8");
 const contactLogs = readFileSync(new URL("../src/lib/application-contact-logs.ts", import.meta.url), "utf8");
 const contactActions = readFileSync(new URL("../src/lib/application-contact-actions.ts", import.meta.url), "utf8");
@@ -72,4 +73,16 @@ test("신청 수정, 일정 변경, 취소는 운영 이력으로 남고 관리�
   assert.match(applyClient, /CANCELLED:\s*"취소 처리"/);
   assert.match(applyModals, /최근 운영 이력/);
   assert.match(applyModals, /원생 상세 열기/);
+});
+
+test("관리자 신청 화면은 핵심 메뉴와 주요 액션만 먼저 보여준다", () => {
+  assert.match(adminShell, /label="신청 관리"/);
+  assert.match(adminShell, /label="수납\/청구"/);
+  assert.match(adminShell, /기타 운영/);
+  assert.doesNotMatch(adminShell, /label="체험\/수강신청 관리"/);
+  assert.match(applyClient, /학생, 보호자, 전화번호로 검색/);
+  assert.match(applyClient, /<select\s+value=\{filter\}/);
+  assert.match(applyClient, /visibleBadges\s*=\s*priorityBadges\.slice\(0,\s*2\)/);
+  assert.match(applyClient, /더보기/);
+  assert.doesNotMatch(applyClient, /workFlags\.map/);
 });

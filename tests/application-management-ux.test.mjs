@@ -8,16 +8,18 @@ const trialModals = readFileSync(new URL("../src/app/admin/trial/TrialCrmModals.
 const applyClient = readFileSync(new URL("../src/app/admin/apply/ApplyAdminClient.tsx", import.meta.url), "utf8");
 const applyModals = readFileSync(new URL("../src/app/admin/apply/ApplyAdminModals.tsx", import.meta.url), "utf8");
 const adminShell = readFileSync(new URL("../src/app/admin/AdminShellClient.tsx", import.meta.url), "utf8");
+const adminReadPayloads = readFileSync(new URL("../src/lib/adminReadPayloads.ts", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../src/lib/queries.ts", import.meta.url), "utf8");
 const contactLogs = readFileSync(new URL("../src/lib/application-contact-logs.ts", import.meta.url), "utf8");
 const contactActions = readFileSync(new URL("../src/lib/application-contact-actions.ts", import.meta.url), "utf8");
 
 test("체험 신청 카드는 접수/희망/확정 일정을 분리해서 보여주고 취소 상태를 보존한다", () => {
   assert.match(trialClient, /function getTrialScheduleItems/);
-  assert.match(trialClient, /label:\s*"접수"/);
-  assert.match(trialClient, /label:\s*"희망일"/);
-  assert.match(trialClient, /label:\s*"희망시간"/);
-  assert.match(trialClient, /label:\s*"확정일"/);
+  assert.match(trialClient, /label:\s*"신청일"/);
+  assert.match(trialClient, /label:\s*"희망일자"/);
+  assert.match(trialClient, /label:\s*"수업교시"/);
+  assert.match(trialClient, /label:\s*"확정일정"/);
+  assert.match(trialClient, /function ScheduleInfoCard/);
   assert.match(trialClient, /CLOSED_TRIAL_STATUSES = new Set\(\["CONVERTED", "LOST", "CANCELLED"\]\)/);
   assert.match(trialClient, /CANCELLED:\s*\{\s*label:\s*"취소"/);
   assert.match(queries, /CANCELLED:\s*statusMap\["CANCELLED"\]/);
@@ -30,10 +32,29 @@ test("체험 신청은 수정, 일정 변경, 취소 모달로 관리할 수 있
   assert.match(trialModals, /function TrialEditModal/);
   assert.match(trialModals, /function TrialScheduleModal/);
   assert.match(trialModals, /function TrialCancelModal/);
+  assert.match(trialModals, /label="확정 수업"/);
+  assert.match(trialModals, /label="확정 날짜 \*"/);
+  assert.match(trialModals, /label="확정 시간 \*"/);
+  assert.match(trialModals, /scheduledClassId/);
   assert.match(trialModals, /status:\s*"CANCELLED"/);
   assert.match(adminAction, /"childSchool",\s*"basketballExp"/);
   assert.match(adminAction, /"preferredDay",\s*"preferredPeriod"/);
   assert.match(adminAction, /"trialDate",\s*"trialFeeConfirmed"/);
+});
+
+test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간을 표시한다", () => {
+  assert.match(adminReadPayloads, /getCachedAdminTrialPayload/);
+  assert.match(adminReadPayloads, /getClasses\(\)/);
+  assert.match(adminReadPayloads, /classes,/);
+  assert.match(adminReadPayloads, /admin-trial-v3/);
+  assert.match(adminReadPayloads, /"admin-classes"/);
+  assert.match(applyClient, /initialTrialClasses/);
+  assert.match(trialClient, /interface ClassInfo/);
+  assert.match(trialClient, /classesBySlotKey/);
+  assert.match(trialClient, /classesById/);
+  assert.match(trialClient, /function formatClassLabel/);
+  assert.match(trialClient, /function formatConfirmedSchedule/);
+  assert.match(trialClient, /formatCompactDate\(lead\.scheduledDate\).*formatClassLabel\(matchedClass\)/s);
 });
 
 test("수강신청은 승인 전 내용 수정과 취소 이력 처리를 지원한다", () => {

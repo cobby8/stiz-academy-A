@@ -81,9 +81,21 @@ interface TrialStats {
     conversionRate: number;
 }
 
+export interface ClassInfo {
+    id: string;
+    name: string;
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+    capacity: number;
+    slotKey: string | null;
+    program: { id: string; name: string } | null;
+}
+
 type TrialCrmPayload = {
     leads: TrialLead[];
     stats: TrialStats;
+    classes?: ClassInfo[];
     pagination?: ListPagination;
 };
 
@@ -226,48 +238,104 @@ function formatCompactDateTime(dateStr: string | null) {
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-function formatPreferredSchedule(lead: TrialLead) {
-    const day = lead.preferredDay ? `${lead.preferredDay}요일` : "";
-    const period = lead.preferredPeriod ? `${lead.preferredPeriod}교시` : "";
+const DAY_LABELS: Record<string, string> = {
+    Mon: "월",
+    Tue: "화",
+    Wed: "수",
+    Thu: "목",
+    Fri: "금",
+    Sat: "토",
+    Sun: "일",
+};
+
+function formatClassLabel(classInfo: ClassInfo) {
+    const dayLabel = DAY_LABELS[classInfo.dayOfWeek] || classInfo.dayOfWeek;
+    const timeLabel = [classInfo.startTime, classInfo.endTime].filter(Boolean).join("~");
+    const programName = classInfo.program?.name ? ` · ${classInfo.program.name}` : "";
+    return [dayLabel, timeLabel].filter(Boolean).join(" ") + ` · ${classInfo.name}${programName}`;
+}
+
+function formatPreferredSchedule(lead: TrialLead, classesBySlotKey?: Map<string, ClassInfo>) {
+    const matchedClass = lead.preferredSlotKey ? classesBySlotKey?.get(lead.preferredSlotKey) : null;
+    if (matchedClass) return formatClassLabel(matchedClass);
+
+    const rawDay = lead.preferredDay?.replace(/요일$/, "");
+    const day = rawDay ? `${DAY_LABELS[rawDay] || rawDay}요일` : "";
+    const period = lead.preferredPeriod
+        ? lead.preferredPeriod.includes("교시")
+            ? lead.preferredPeriod
+            : `${lead.preferredPeriod}교시`
+        : "";
     const label = [day, period].filter(Boolean).join(" ");
     if (label) return label;
     return lead.preferredSlotKey ? "희망 시간 확인 필요" : null;
 }
 
-function getTrialScheduleItems(lead: TrialLead) {
-    const preferredSchedule = formatPreferredSchedule(lead);
+function formatConfirmedSchedule(lead: TrialLead, classesById?: Map<string, ClassInfo>) {
+    const matchedClass = lead.scheduledClassId ? classesById?.get(lead.scheduledClassId) : null;
+    if (lead.scheduledDate && matchedClass) {
+        return `${formatCompactDate(lead.scheduledDate)} · ${formatClassLabel(matchedClass)}`;
+    }
+    if (lead.scheduledDate) return formatCompactDateTime(lead.scheduledDate);
+    if (matchedClass) return formatClassLabel(matchedClass);
+    return null;
+}
+
+function getTrialScheduleItems(
+    lead: TrialLead,
+    classesBySlotKey?: Map<string, ClassInfo>,
+    classesById?: Map<string, ClassInfo>,
+) {
+    const preferredSchedule = formatPreferredSchedule(lead, classesBySlotKey);
+    const confirmedSchedule = formatConfirmedSchedule(lead, classesById);
     return [
         {
-            label: "접수",
+            label: "신청일",
             icon: "inbox",
             value: formatCompactDateTime(lead.createdAt),
             className: "border-gray-100 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
         },
-        lead.trialDate
-            ? {
-                label: "희망일",
-                icon: "event",
-                value: formatCompactDate(lead.trialDate),
-                className: "border-lime-100 bg-lime-50 text-lime-800 dark:border-lime-900/50 dark:bg-lime-950/30 dark:text-lime-200",
-            }
-            : null,
-        preferredSchedule
-            ? {
-                label: "희망시간",
-                icon: "schedule",
-                value: preferredSchedule,
-                className: "border-purple-100 bg-purple-50 text-purple-800 dark:border-purple-900/50 dark:bg-purple-950/30 dark:text-purple-200",
-            }
-            : null,
-        lead.scheduledDate
-            ? {
-                label: "확정일",
-                icon: "event_available",
-                value: formatCompactDateTime(lead.scheduledDate),
-                className: "border-sky-100 bg-sky-50 text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200",
-            }
-            : null,
-    ].filter(Boolean) as Array<{ label: string; icon: string; value: string; className: string }>;
+        {
+            label: "희망일자",
+            icon: "event",
+            value: lead.trialDate ? formatCompactDate(lead.trialDate) : "미입력",
+            className: "border-lime-100 bg-lime-50 text-lime-800 dark:border-lime-900/50 dark:bg-lime-950/30 dark:text-lime-200",
+        },
+        {
+            label: "수업교시",
+            icon: "schedule",
+            value: preferredSchedule || "미입력",
+            className: "border-purple-100 bg-purple-50 text-purple-800 dark:border-purple-900/50 dark:bg-purple-950/30 dark:text-purple-200",
+        },
+        {
+            label: "확정일정",
+            icon: "event_available",
+            value: confirmedSchedule || "미확정",
+            className: "border-sky-100 bg-sky-50 text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200",
+        },
+    ];
+}
+
+function ScheduleInfoCard({
+    label,
+    icon,
+    value,
+    className,
+}: {
+    label: string;
+    icon: string;
+    value: string;
+    className: string;
+}) {
+    return (
+        <div className={`min-w-0 rounded-lg border px-3 py-2.5 ${className}`}>
+            <div className="mb-1 flex items-center gap-1 text-[11px] font-black uppercase opacity-80">
+                <span className="material-symbols-outlined text-sm">{icon}</span>
+                {label}
+            </div>
+            <div className="break-words text-sm font-black leading-snug">{value}</div>
+        </div>
+    );
 }
 
 function matchesTrialWorkFilter(lead: TrialLead, workFilter: TrialWorkFilter) {
@@ -492,17 +560,20 @@ function TrialCrmErrorState({ onRetry }: { onRetry: () => void }) {
 export default function TrialCrmClient({
     initialLeads,
     initialStats,
+    initialClasses,
     initialPagination,
     applicationContacts,
 }: {
     initialLeads?: TrialLead[];
     initialStats?: TrialStats;
+    initialClasses?: ClassInfo[];
     initialPagination?: ListPagination;
     applicationContacts?: ContactSummary[];
 }) {
     const hasInitialData = Boolean(initialLeads && initialStats);
     const [leads, setLeads] = useState<TrialLead[]>(initialLeads ?? []);
     const [stats, setStats] = useState<TrialStats>(initialStats ?? EMPTY_STATS);
+    const [classes, setClasses] = useState<ClassInfo[]>(initialClasses ?? []);
     const [loading, setLoading] = useState(!hasInitialData);
     const [loadingMore, setLoadingMore] = useState(false);
     const [pagination, setPagination] = useState<ListPagination | null>(initialPagination ?? null);
@@ -545,6 +616,7 @@ export default function TrialCrmClient({
             const data = (await res.json()) as TrialCrmPayload;
             setLeads((current) => (append ? [...current, ...data.leads] : data.leads));
             setStats(data.stats);
+            setClasses(data.classes ?? []);
             setPagination(data.pagination ?? null);
         } catch {
             setLoadError("failed");
@@ -564,6 +636,20 @@ export default function TrialCrmClient({
         () => buildOpenContactCounts(leads, relatedApplicationContacts),
         [leads, relatedApplicationContacts],
     );
+    const classesBySlotKey = useMemo(() => {
+        const map = new Map<string, ClassInfo>();
+        classes.forEach((classInfo) => {
+            if (classInfo.slotKey) map.set(classInfo.slotKey, classInfo);
+        });
+        return map;
+    }, [classes]);
+    const classesById = useMemo(() => {
+        const map = new Map<string, ClassInfo>();
+        classes.forEach((classInfo) => {
+            map.set(classInfo.id, classInfo);
+        });
+        return map;
+    }, [classes]);
     const showFeedback = useCallback((type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
@@ -752,10 +838,10 @@ export default function TrialCrmClient({
     function renderTrialList() {
         return (
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="hidden grid-cols-[1.1fr_1fr_1.4fr_1fr_1.3fr] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-black uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-400 lg:grid">
+                <div className="hidden grid-cols-[1fr_0.9fr_2.2fr_0.8fr_1.2fr] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-black uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-400 lg:grid">
                     <span>학생</span>
                     <span>보호자</span>
-                    <span>일정</span>
+                    <span>신청/희망/수업 일정</span>
                     <span>상태 변경</span>
                     <span>빠른 처리</span>
                 </div>
@@ -763,12 +849,12 @@ export default function TrialCrmClient({
                     {visibleLeads.map((lead) => {
                         const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
                         const isClosed = isClosedTrialStatus(lead.status);
-                        const preferredSchedule = formatPreferredSchedule(lead);
+                        const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
                         const parentPhoneHref = phoneHref(lead.parentPhone);
                         return (
                             <div
                                 key={`${lead.id}-list`}
-                                className="grid gap-3 px-4 py-4 text-sm lg:grid-cols-[1.1fr_1fr_1.4fr_1fr_1.3fr] lg:items-center"
+                                className="grid gap-3 px-4 py-4 text-sm lg:grid-cols-[1fr_0.9fr_2.2fr_0.8fr_1.2fr] lg:items-start"
                             >
                                 <div className="min-w-0">
                                     <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -795,15 +881,22 @@ export default function TrialCrmClient({
                                         {lead.parentPhone}
                                     </a>
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="truncate font-bold text-gray-800 dark:text-gray-100">
-                                        {lead.scheduledDate ? `확정 ${formatCompactDateTime(lead.scheduledDate)}` : preferredSchedule || "희망 일정 확인 필요"}
-                                    </p>
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        접수 {formatDate(lead.createdAt)}
-                                        {lead.trialDate ? ` · 희망 ${formatCompactDate(lead.trialDate)}` : ""}
-                                        {lead.coachNoticeSentAt ? " · 담당쌤 알림" : ""}
-                                    </p>
+                                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+                                    {scheduleItems.map((item) => (
+                                        <ScheduleInfoCard
+                                            key={`${lead.id}-list-schedule-${item.label}`}
+                                            label={item.label}
+                                            icon={item.icon}
+                                            value={item.value}
+                                            className={item.className}
+                                        />
+                                    ))}
+                                    {lead.coachNoticeSentAt && (
+                                        <span className="inline-flex items-center gap-1 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-200 sm:col-span-2">
+                                            <span className="material-symbols-outlined text-sm">school</span>
+                                            담당쌤 알림 {formatDate(lead.coachNoticeSentAt)}
+                                        </span>
+                                    )}
                                 </div>
                                 <div>
                                     {isClosed ? (
@@ -1086,7 +1179,7 @@ export default function TrialCrmClient({
                     {viewMode === "list" ? renderTrialList() : visibleLeads.map((lead) => {
                         const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
                         const isClosed = isClosedTrialStatus(lead.status);
-                        const scheduleItems = getTrialScheduleItems(lead);
+                        const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
                         const contactCount = getContactCount(lead.parentPhone, openContactCounts);
                         const priorityBadges = getTrialPriorityBadges(lead, contactCount);
                         const parentPhoneHref = phoneHref(lead.parentPhone);
@@ -1143,22 +1236,17 @@ export default function TrialCrmClient({
                                                 접수 {formatDate(lead.createdAt)}
                                             </span>
                                         </div>
-                                        {scheduleItems.length > 0 && (
-                                            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                                                {scheduleItems.map((item) => (
-                                                    <div
-                                                        key={`${lead.id}-schedule-${item.label}`}
-                                                        className={`rounded-lg border px-3 py-2 text-xs ${item.className}`}
-                                                    >
-                                                        <div className="mb-1 flex items-center gap-1 font-bold opacity-80">
-                                                            <span className="material-symbols-outlined text-sm">{item.icon}</span>
-                                                            {item.label}
-                                                        </div>
-                                                        <div className="truncate text-sm font-black">{item.value}</div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                                            {scheduleItems.map((item) => (
+                                                <ScheduleInfoCard
+                                                    key={`${lead.id}-schedule-${item.label}`}
+                                                    label={item.label}
+                                                    icon={item.icon}
+                                                    value={item.value}
+                                                    className={item.className}
+                                                />
+                                            ))}
+                                        </div>
                                         {/* 날짜 정보 표시 */}
                                         {(lead.scheduledDate || lead.attendedDate || lead.convertedDate) && (
                                             <div className="flex gap-4 mt-2 text-xs text-gray-400">
@@ -1513,6 +1601,7 @@ export default function TrialCrmClient({
                     onCloseConvert={() => setShowConvertModal(null)}
                     onCloseLost={() => setShowLostModal(null)}
                     onCloseMemo={() => setShowMemoModal(null)}
+                    classes={classes}
                     onSaved={loadTrialData}
                     onFeedback={showFeedback}
                 />

@@ -162,6 +162,7 @@ interface ApplyAdminClientProps {
     initialApplyPagination?: ListPagination;
     initialTrialLeads?: TrialLead[];
     initialTrialStats?: TrialStats;
+    initialTrialClasses?: ClassInfo[];
     initialTrialPagination?: ListPagination;
 }
 
@@ -617,6 +618,7 @@ export default function ApplyAdminClient({
     initialApplyPagination,
     initialTrialLeads,
     initialTrialStats,
+    initialTrialClasses,
     initialTrialPagination,
 }: ApplyAdminClientProps) {
     const hasInitialApplyData = Boolean(initialApplications && initialClasses);
@@ -1112,6 +1114,7 @@ export default function ApplyAdminClient({
                 <TrialCrmClient
                     initialLeads={initialTrialLeads}
                     initialStats={initialTrialStats}
+                    initialClasses={initialTrialClasses}
                     initialPagination={initialTrialPagination}
                     applicationContacts={applicationContacts}
                 />

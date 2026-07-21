@@ -1005,9 +1005,10 @@ export function getCachedAdminTrialPayload(options?: AdminListPayloadOptions) {
 
     return unstable_cache(
         async () => {
-            const [leadRows, stats] = await Promise.all([
+            const [leadRows, stats, classes] = await Promise.all([
                 getTrialLeads({ limit: page.limit + 1, offset: page.offset }),
                 getTrialStats(),
+                getClasses(),
             ]);
             const hasMore = leadRows.length > page.limit;
             const leads = hasMore ? leadRows.slice(0, page.limit) : leadRows;
@@ -1015,6 +1016,7 @@ export function getCachedAdminTrialPayload(options?: AdminListPayloadOptions) {
             return {
                 leads,
                 stats,
+                classes,
                 pagination: buildListPagination({
                     limit: page.limit,
                     offset: page.offset,
@@ -1024,7 +1026,7 @@ export function getCachedAdminTrialPayload(options?: AdminListPayloadOptions) {
                 }),
             };
         },
-        ["admin-trial-v2", String(page.limit), String(page.offset)],
-        { revalidate: 30, tags: ["admin-trial"] },
+        ["admin-trial-v3", String(page.limit), String(page.offset)],
+        { revalidate: 30, tags: ["admin-trial", "admin-classes"] },
     )();
 }

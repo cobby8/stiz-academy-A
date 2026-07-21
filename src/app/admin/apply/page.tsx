@@ -17,6 +17,7 @@ export default async function AdminApplyPage() {
             initialStats={applySummary.stats}
             initialTrialLeads={trialPayload.leads}
             initialTrialStats={trialPayload.stats}
+            initialTrialClasses={trialPayload.classes}
             initialTrialPagination={trialPayload.pagination}
         />
     );

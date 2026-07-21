@@ -3,7 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { createTrialLead, convertTrialToStudent, updateTrialLead } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
-import type { TrialLead } from "./TrialCrmClient";
+import type { ClassInfo, TrialLead } from "./TrialCrmClient";
 
 interface TrialCrmModalsProps {
     addOpen: boolean;
@@ -20,6 +20,7 @@ interface TrialCrmModalsProps {
     onCloseConvert: () => void;
     onCloseLost: () => void;
     onCloseMemo: () => void;
+    classes: ClassInfo[];
     onSaved: () => Promise<void> | void;
     onFeedback: (type: "success" | "error", message: string) => void;
 }
@@ -39,6 +40,7 @@ export default function TrialCrmModals({
     onCloseConvert,
     onCloseLost,
     onCloseMemo,
+    classes,
     onSaved,
     onFeedback,
 }: TrialCrmModalsProps) {
@@ -89,6 +91,7 @@ export default function TrialCrmModals({
             {scheduleLead && (
                 <TrialScheduleModal
                     lead={scheduleLead}
+                    classes={classes}
                     onClose={onCloseSchedule}
                     onSubmit={(data) =>
                         runAction(
@@ -182,15 +185,48 @@ function dateInputValue(dateStr: string | null) {
     return date.toISOString().slice(0, 10);
 }
 
-function datetimeLocalValue(dateStr: string | null) {
+function timeInputValue(dateStr: string | null) {
     if (!dateStr) return "";
     const date = new Date(dateStr);
     if (Number.isNaN(date.getTime())) return "";
     const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    return offsetDate.toISOString().slice(0, 16);
+    return offsetDate.toISOString().slice(11, 16);
 }
 
 const MODAL_INPUT_CLASS = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime";
+
+const DAY_LABELS: Record<string, string> = {
+    Mon: "월",
+    Tue: "화",
+    Wed: "수",
+    Thu: "목",
+    Fri: "금",
+    Sat: "토",
+    Sun: "일",
+};
+
+function formatClassLabel(classInfo: ClassInfo) {
+    const dayLabel = DAY_LABELS[classInfo.dayOfWeek] || classInfo.dayOfWeek;
+    const timeLabel = [classInfo.startTime, classInfo.endTime].filter(Boolean).join("~");
+    const programName = classInfo.program?.name ? ` · ${classInfo.program.name}` : "";
+    return [dayLabel, timeLabel].filter(Boolean).join(" ") + ` · ${classInfo.name}${programName}`;
+}
+
+function formatPreferredSchedule(lead: TrialLead, classes: ClassInfo[]) {
+    const preferredClass = lead.preferredSlotKey
+        ? classes.find((classInfo) => classInfo.slotKey === lead.preferredSlotKey)
+        : null;
+    if (preferredClass) return formatClassLabel(preferredClass);
+
+    const rawDay = lead.preferredDay?.replace(/요일$/, "");
+    const day = rawDay ? `${DAY_LABELS[rawDay] || rawDay}요일` : "";
+    const period = lead.preferredPeriod
+        ? lead.preferredPeriod.includes("교시")
+            ? lead.preferredPeriod
+            : `${lead.preferredPeriod}교시`
+        : "";
+    return [day, period].filter(Boolean).join(" ") || "미입력";
+}
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
     return (
@@ -382,35 +418,56 @@ function TrialEditModal({
 
 function TrialScheduleModal({
     lead,
+    classes,
     onClose,
     onSubmit,
     busy,
 }: {
     lead: TrialLead;
+    classes: ClassInfo[];
     onClose: () => void;
     onSubmit: (data: Record<string, unknown>) => void;
     busy: boolean;
 }) {
-    const [scheduledDate, setScheduledDate] = useState(datetimeLocalValue(lead.scheduledDate || lead.trialDate));
+    const initialClass =
+        (lead.scheduledClassId ? classes.find((classInfo) => classInfo.id === lead.scheduledClassId) : null) ||
+        (lead.preferredSlotKey ? classes.find((classInfo) => classInfo.slotKey === lead.preferredSlotKey) : null) ||
+        null;
+    const [scheduledClassId, setScheduledClassId] = useState(initialClass?.id ?? "");
+    const [scheduledDate, setScheduledDate] = useState(dateInputValue(lead.scheduledDate || lead.trialDate));
+    const [scheduledTime, setScheduledTime] = useState(initialClass?.startTime || timeInputValue(lead.scheduledDate));
     const [memo, setMemo] = useState(lead.memo ?? "");
     const [formError, setFormError] = useState("");
+    const preferredSchedule = formatPreferredSchedule(lead, classes);
+
+    function handleClassChange(classId: string) {
+        setScheduledClassId(classId);
+        const selectedClass = classes.find((classInfo) => classInfo.id === classId);
+        if (selectedClass?.startTime) setScheduledTime(selectedClass.startTime);
+    }
 
     function handleSubmit(event: FormEvent) {
         event.preventDefault();
-        if (!scheduledDate) {
-            setFormError("확정할 날짜와 시간을 입력해주세요.");
+        if (!scheduledDate || !scheduledTime) {
+            setFormError("확정할 날짜와 시간을 모두 입력해주세요.");
+            return;
+        }
+        const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`);
+        if (Number.isNaN(scheduledAt.getTime())) {
+            setFormError("날짜와 시간을 다시 확인해주세요.");
             return;
         }
         setFormError("");
         onSubmit({
             status: "SCHEDULED",
-            scheduledDate: new Date(scheduledDate).toISOString(),
+            scheduledDate: scheduledAt.toISOString(),
+            scheduledClassId: scheduledClassId || null,
             memo: memo.trim() || null,
         });
     }
 
     return (
-        <AdminModal onClose={onClose} titleId="trial-schedule-title" panelClassName="max-w-md p-6">
+        <AdminModal onClose={onClose} titleId="trial-schedule-title" panelClassName="max-w-2xl p-6">
                 <h2 id="trial-schedule-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-sky-500">event_available</span>
                     체험 일정 확정/변경
@@ -424,9 +481,45 @@ function TrialScheduleModal({
                             {formError}
                         </p>
                     )}
-                    <FormField label="확정 날짜와 시간 *">
-                        <input type="datetime-local" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className={MODAL_INPUT_CLASS} />
+                    <div className="grid gap-3 rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-100 sm:grid-cols-3">
+                        <div>
+                            <p className="text-xs font-black uppercase opacity-70">신청일</p>
+                            <p className="mt-1 font-black">{dateInputValue(lead.createdAt) || "-"}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase opacity-70">희망일자</p>
+                            <p className="mt-1 font-black">{dateInputValue(lead.trialDate) || "미입력"}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase opacity-70">수업교시</p>
+                            <p className="mt-1 font-black">{preferredSchedule}</p>
+                        </div>
+                    </div>
+                    <FormField label="확정 수업">
+                        <select
+                            value={scheduledClassId}
+                            onChange={(event) => handleClassChange(event.target.value)}
+                            className={MODAL_INPUT_CLASS}
+                        >
+                            <option value="">반 선택 안 함</option>
+                            {classes.map((classInfo) => (
+                                <option key={classInfo.id} value={classInfo.id}>
+                                    {formatClassLabel(classInfo)}
+                                </option>
+                            ))}
+                        </select>
                     </FormField>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <FormField label="확정 날짜 *">
+                            <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className={MODAL_INPUT_CLASS} />
+                        </FormField>
+                        <FormField label="확정 시간 *">
+                            <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className={MODAL_INPUT_CLASS} />
+                        </FormField>
+                    </div>
+                    <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                        확정 수업을 선택하면 해당 반의 시작 시간이 자동으로 들어갑니다. 실제 체험 시간이 다르면 시간만 직접 바꿔주세요.
+                    </p>
                     <FormField label="관리 메모">
                         <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} className={`${MODAL_INPUT_CLASS} resize-none`} />
                     </FormField>

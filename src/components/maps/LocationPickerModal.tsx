@@ -104,6 +104,7 @@ export default function LocationPickerModal({
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   const [query, setQuery] = useState(initialValue?.roadAddress ?? initialValue?.address ?? "");
   const [location, setLocation] = useState<MapLocationData | undefined>(initialValue);
+  const [isLocating, setIsLocating] = useState(false);
   const [message, setMessage] = useState("지도를 움직여 핀을 실제 탑승 위치에 맞춰주세요.");
   const apiKey = process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY?.trim();
 
@@ -169,6 +170,7 @@ export default function LocationPickerModal({
         sourceRef.current = "MAP_PIN";
         accuracyRef.current = undefined;
         setLocation(undefined);
+        setIsLocating(false);
         setMessage("새 위치의 주소를 확인하고 있습니다.");
       });
       sdk.maps.event.addListener(map, "idle", updateCenter);
@@ -190,6 +192,7 @@ export default function LocationPickerModal({
     const requestSequence = ++geocodeSequenceRef.current;
     new sdk.maps.services.Geocoder().coord2Address(longitude, latitude, (results, resultStatus) => {
       if (interactionSequence !== interactionSequenceRef.current || requestSequence !== geocodeSequenceRef.current) return;
+      if (source === "CURRENT_LOCATION") setIsLocating(false);
       const pendingSearch = pendingSearchRef.current?.sequence === interactionSequence ? pendingSearchRef.current.value : undefined;
       if (resultStatus !== sdk.maps.services.Status.OK) {
         setLocation(pendingSearch ?? { address: "지도에서 선택한 위치", latitude, longitude, source, accuracyMeters });
@@ -218,6 +221,7 @@ export default function LocationPickerModal({
     geocodeSequenceRef.current += 1;
     pendingSearchRef.current = null;
     setLocation(undefined);
+    setIsLocating(false);
     setMessage("장소를 검색하고 있습니다.");
     new sdk.maps.services.Places().keywordSearch(query.trim(), (results, resultStatus) => {
       if (interactionSequence !== interactionSequenceRef.current) return;
@@ -254,11 +258,15 @@ export default function LocationPickerModal({
     geocodeSequenceRef.current += 1;
     pendingSearchRef.current = null;
     setLocation(undefined);
+    setIsLocating(true);
     setMessage("현재 위치를 확인하고 있습니다.");
     navigator.geolocation.getCurrentPosition((position) => {
       if (interactionSequence !== interactionSequenceRef.current) return;
       const sdk = sdkRef.current;
-      if (!sdk) return;
+      if (!sdk) {
+        setIsLocating(false);
+        return;
+      }
       sourceRef.current = "CURRENT_LOCATION";
       accuracyRef.current = position.coords.accuracy;
       selectionEnabledRef.current = true;
@@ -266,11 +274,27 @@ export default function LocationPickerModal({
       mapRef.current?.setCenter(mapPosition);
       reverseGeocode(mapPosition, "CURRENT_LOCATION", position.coords.accuracy, interactionSequence);
     }, () => {
-      if (interactionSequence === interactionSequenceRef.current) setMessage("위치 권한이 거부됐습니다. 검색이나 지도 이동으로 선택해주세요.");
+      if (interactionSequence === interactionSequenceRef.current) {
+        setIsLocating(false);
+        setMessage("위치 권한이 거부됐습니다. 검색이나 지도 이동으로 선택해주세요.");
+      }
     }, {
       enableHighAccuracy: true,
       timeout: 10000,
     });
+  }
+
+  function confirmSelection() {
+    if (confirmPending) return;
+    if (isLocating) {
+      setMessage("현재 위치를 확인하고 있습니다. 잠시 후 다시 눌러주세요.");
+      return;
+    }
+    if (!location) {
+      setMessage("현재 위치 확인이 끝나거나 지도를 움직여 위치를 선택해주세요.");
+      return;
+    }
+    onConfirm(location);
   }
 
   return (
@@ -307,8 +331,8 @@ export default function LocationPickerModal({
                 <div ref={mapElementRef} className="absolute inset-0" aria-label="승하차 위치 지도" />
                 {status === "loading" && <div className="absolute inset-0 grid place-items-center text-sm font-bold text-gray-500">지도를 불러오는 중...</div>}
                 <span className="material-symbols-outlined pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-full text-5xl text-brand-orange-500 drop-shadow" aria-hidden="true">location_on</span>
-                <button type="button" onClick={useCurrentLocation} disabled={confirmPending} className="absolute bottom-3 right-3 z-10 flex min-h-11 items-center gap-1 rounded-xl bg-white px-3 text-sm font-black text-gray-800 shadow-lg disabled:opacity-60 dark:bg-gray-800 dark:text-white">
-                  <span className="material-symbols-outlined text-lg" aria-hidden="true">my_location</span>현재 위치
+                <button type="button" onClick={useCurrentLocation} disabled={confirmPending || isLocating} className="absolute bottom-3 right-3 z-10 flex min-h-11 items-center gap-1 rounded-xl bg-white px-3 text-sm font-black text-gray-800 shadow-lg disabled:opacity-60 dark:bg-gray-800 dark:text-white">
+                  <span className="material-symbols-outlined text-lg" aria-hidden="true">my_location</span>{isLocating ? "확인 중" : "현재 위치"}
                 </button>
               </div>
               <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
@@ -323,7 +347,7 @@ export default function LocationPickerModal({
         {status !== "fallback" && (
           <footer className="flex gap-2 border-t border-gray-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-gray-700">
             <button type="button" onClick={onClose} disabled={confirmPending} className="min-h-12 rounded-xl border border-gray-300 px-5 font-bold text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">취소</button>
-            <button type="button" disabled={!location || confirmPending} aria-busy={confirmPending} onClick={() => location && !confirmPending && onConfirm(location)} className="min-h-12 flex-1 rounded-xl bg-brand-orange-500 px-5 font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{confirmPending ? "저장 중..." : "이 위치로 선택"}</button>
+            <button type="button" disabled={confirmPending} aria-busy={confirmPending || isLocating} onClick={confirmSelection} className="min-h-12 flex-1 rounded-xl bg-brand-orange-500 px-5 font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{confirmPending ? "저장 중..." : isLocating ? "현재 위치 확인 중..." : location ? "이 위치로 선택" : "위치 선택 필요"}</button>
           </footer>
         )}
       </section>

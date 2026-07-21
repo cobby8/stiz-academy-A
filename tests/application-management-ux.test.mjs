@@ -10,16 +10,15 @@ const applyModals = readFileSync(new URL("../src/app/admin/apply/ApplyAdminModal
 const adminShell = readFileSync(new URL("../src/app/admin/AdminShellClient.tsx", import.meta.url), "utf8");
 const adminReadPayloads = readFileSync(new URL("../src/lib/adminReadPayloads.ts", import.meta.url), "utf8");
 const queries = readFileSync(new URL("../src/lib/queries.ts", import.meta.url), "utf8");
-const contactLogs = readFileSync(new URL("../src/lib/application-contact-logs.ts", import.meta.url), "utf8");
 const contactActions = readFileSync(new URL("../src/lib/application-contact-actions.ts", import.meta.url), "utf8");
 
-test("체험 신청 카드는 접수/희망/확정 일정을 분리해서 보여주고 취소 상태를 보존한다", () => {
+test("체험 신청 목록과 상세 모달은 접수/희망/확정 일정을 분리해서 보여주고 취소 상태를 보존한다", () => {
   assert.match(trialClient, /function getTrialScheduleItems/);
   assert.match(trialClient, /label:\s*"신청일"/);
   assert.match(trialClient, /label:\s*"희망일자"/);
   assert.match(trialClient, /label:\s*"수업교시"/);
   assert.match(trialClient, /label:\s*"확정일정"/);
-  assert.match(trialClient, /function ScheduleInfoCard/);
+  assert.match(trialClient, /function TrialLeadDetailModal/);
   assert.match(trialClient, /CLOSED_TRIAL_STATUSES = new Set\(\["CONVERTED", "LOST", "CANCELLED"\]\)/);
   assert.match(trialClient, /CANCELLED:\s*\{\s*label:\s*"취소"/);
   assert.match(queries, /CANCELLED:\s*statusMap\["CANCELLED"\]/);
@@ -67,14 +66,16 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
   assert.match(trialModals, /getPreferredClass\(lead, classes\)/);
 });
 
-test("체험 신청 카드형은 목록형과 같은 핵심 항목만 단순하게 배치한다", () => {
-  assert.doesNotMatch(trialClient, /xl:grid-cols-\[1\.1fr_0\.9fr_2\.1fr_0\.9fr_1\.3fr\]/);
-  assert.match(trialClient, /grid-cols-\[repeat\(auto-fit,minmax\(10rem,1fr\)\)\]/);
-  assert.match(trialClient, /whitespace-nowrap/);
-  assert.match(trialClient, /신청일[\s\S]*희망일자[\s\S]*수업교시[\s\S]*확정일정/);
+test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 보여준다", () => {
+  assert.match(trialClient, /function renderTrialList\(\)/);
+  assert.match(trialClient, /<table className="w-full min-w-\[1040px\] table-fixed/);
+  assert.match(trialClient, /신청\/희망일[\s\S]*수업교시[\s\S]*빠른 처리/);
+  assert.match(trialClient, /onClick=\{\(\) => setShowDetailModal\(lead\)\}/);
   assert.match(trialClient, /setShowScheduleModal\(lead\)/);
   assert.match(trialClient, /handleRecordContact\(lead, "CONTACTED"\)/);
-  assert.doesNotMatch(trialClient, /md:flex-row md:items-center/);
+  assert.doesNotMatch(trialClient, /viewMode/);
+  assert.doesNotMatch(trialClient, /setViewMode/);
+  assert.doesNotMatch(trialClient, /grid_view/);
 });
 
 test("수강신청은 승인 전 내용 수정과 취소 이력 처리를 지원한다", () => {
@@ -123,36 +124,39 @@ test("관리자 신청 화면은 핵심 메뉴와 주요 액션만 먼저 보여
   assert.doesNotMatch(adminShell, /label="체험\/수강신청 관리"/);
   assert.match(applyClient, /학생, 보호자, 전화번호로 검색/);
   assert.match(applyClient, /<select\s+value=\{filter\}/);
-  assert.match(applyClient, /visibleBadges\s*=\s*priorityBadges\.slice\(0,\s*2\)/);
-  assert.match(applyClient, /더보기/);
-  assert.match(applyClient, /COMPACT_CARD_ACTION_CLASS/);
-  assert.match(applyClient, /COMPACT_CARD_CHIP_CLASS/);
-  assert.match(applyClient, /className="rounded-lg border border-gray-200 bg-white p-3/);
-  assert.match(applyClient, /className="mt-2 flex flex-wrap gap-1\.5"/);
+  assert.match(applyClient, /LIST_QUICK_ACTION_CLASS/);
+  assert.match(applyClient, /onClick=\{\(\) => setShowDetailModal\(app\)\}/);
+  assert.match(applyClient, /빠른 처리/);
+  assert.doesNotMatch(applyClient, /COMPACT_CARD_ACTION_CLASS/);
+  assert.doesNotMatch(applyClient, /COMPACT_CARD_CHIP_CLASS/);
+  assert.doesNotMatch(applyClient, /className="rounded-lg border border-gray-200 bg-white p-3/);
   assert.doesNotMatch(applyClient, /mt-3 grid gap-2 sm:grid-cols-2/);
   assert.doesNotMatch(applyClient, /workFlags\.map/);
 });
 
-test("체험수업과 수강신청은 카드형과 목록형 보기를 모두 제공한다", () => {
-  assert.match(applyClient, /type ViewMode = "cards" \| "list"/);
+test("체험수업과 수강신청은 카드형을 폐기하고 목록형만 제공한다", () => {
   assert.match(applyClient, /renderApplicationList/);
-  assert.match(applyClient, /setViewMode\("cards"\)/);
-  assert.match(applyClient, /setViewMode\("list"\)/);
-  assert.match(applyClient, /처리/);
-  assert.match(trialClient, /type ViewMode = "cards" \| "list"/);
+  assert.match(applyClient, /빠른 처리/);
+  assert.match(applyClient, /\{renderApplicationList\(\)\}/);
+  assert.doesNotMatch(applyClient, /type ViewMode/);
+  assert.doesNotMatch(applyClient, /setViewMode/);
+  assert.doesNotMatch(applyClient, /grid_view/);
   assert.match(trialClient, /renderTrialList/);
-  assert.match(trialClient, /setViewMode\("cards"\)/);
-  assert.match(trialClient, /setViewMode\("list"\)/);
+  assert.match(trialClient, /빠른 처리/);
+  assert.match(trialClient, /\{renderTrialList\(\)\}/);
+  assert.doesNotMatch(trialClient, /type ViewMode/);
+  assert.doesNotMatch(trialClient, /setViewMode/);
+  assert.doesNotMatch(trialClient, /grid_view/);
   assert.match(trialClient, /handleStatusChange\(lead, event\.target\.value\)/);
 });
 
 test("목록형은 스프레드시트처럼 실제 테이블 구조로 보여준다", () => {
-  assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[840px\]/);
-  assert.match(trialClient, /<thead[\s\S]*접수일[\s\S]*희망일[\s\S]*수업교시[\s\S]*쌤알림[\s\S]*상태변경/);
+  assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[1040px\]/);
+  assert.match(trialClient, /<thead[\s\S]*신청\/희망일[\s\S]*수업교시[\s\S]*빠른 처리/);
   assert.match(trialClient, /<tbody[\s\S]*visibleLeads\.map/);
   assert.doesNotMatch(trialClient, /hidden grid-cols-\[1fr_0\.9fr_2\.2fr_0\.8fr_1\.2fr\]/);
-  assert.match(applyClient, /function renderApplicationList\(\)[\s\S]*<table className="w-full min-w-\[1080px\]/);
-  assert.match(applyClient, /<thead[\s\S]*희망수업[\s\S]*접수일[\s\S]*수강월[\s\S]*셔틀[\s\S]*처리/);
+  assert.match(applyClient, /function renderApplicationList\(\)[\s\S]*<table className="w-full min-w-\[980px\]/);
+  assert.match(applyClient, /<thead[\s\S]*희망\/수강[\s\S]*셔틀[\s\S]*빠른 처리/);
   assert.match(applyClient, /<tbody[\s\S]*visibleApps\.map/);
   assert.doesNotMatch(applyClient, /hidden grid-cols-\[1\.1fr_1fr_1\.3fr_0\.9fr_1\.2fr\]/);
 });

@@ -175,12 +175,9 @@ type ApplyPayload = {
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
 type ApplicationWorkFilter = "ALL" | "NEEDS_ACTION" | "CLASS_ASSIGNMENT" | "SHUTTLE" | "TRIAL_LINKED" | "TIME_CHECK";
-type ContactSummary = { parentPhone: string; childName: string; status: string };
 type PriorityBadge = { icon: string; label: string; className: string };
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { app: EnrollApplication; defaultAction: ContactActionType } | null;
-type ViewMode = "cards" | "list";
-
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -210,11 +207,9 @@ const SOURCE_LABELS: Record<string, string> = {
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 const APPLICATION_PAGE_SIZE = 50;
 const LONG_WAIT_HOURS = 24;
-const COMPACT_CARD_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
-const COMPACT_CARD_ACTION_DANGER_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-200";
-const COMPACT_CARD_PRIMARY_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md bg-lime-500 px-2.5 text-xs font-black text-brand-navy-900 transition hover:bg-lime-400";
-const COMPACT_CARD_CONTACT_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200 dark:hover:bg-lime-900/40";
-const COMPACT_CARD_CHIP_CLASS = "inline-flex max-w-full items-center gap-1 overflow-hidden rounded-md bg-gray-50 px-2 py-1 text-[11px] font-bold text-gray-700 dark:bg-gray-900/70 dark:text-gray-200";
+const LIST_QUICK_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
+const LIST_QUICK_PRIMARY_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md bg-lime-500 px-2.5 text-xs font-black text-brand-navy-900 transition hover:bg-lime-400 disabled:opacity-50";
+const LIST_QUICK_CONTACT_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200";
 
 const APPLICATION_WORK_FILTERS: Array<{ value: ApplicationWorkFilter; label: string; icon: string }> = [
     { value: "ALL", label: "운영 전체", icon: "view_list" },
@@ -316,55 +311,6 @@ function isFollowUpDueToday(dateStr: string | null) {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
     return timestamp <= todayEnd.getTime();
-}
-
-function formatContactDateTime(dateStr: string | null) {
-    if (!dateStr) return "-";
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return "-";
-    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function getApplicationFlags(app: EnrollApplication, preferredSlotLabel: string | null) {
-    const flags: PriorityBadge[] = [];
-
-    if (app.status === "PENDING") {
-        flags.push({
-            icon: "priority_high",
-            label: "처리 대기",
-            className: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200",
-        });
-    }
-    if (app.status === "PENDING" && !app.assignedClassId) {
-        flags.push({
-            icon: "edit_calendar",
-            label: "반 배정 필요",
-            className: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200",
-        });
-    }
-    if (!preferredSlotLabel) {
-        flags.push({
-            icon: "schedule",
-            label: "희망 시간 확인",
-            className: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200",
-        });
-    }
-    if (app.shuttleNeeded) {
-        flags.push({
-            icon: "directions_bus",
-            label: "셔틀 확인",
-            className: "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-200",
-        });
-    }
-    if (app.trialLeadId) {
-        flags.push({
-            icon: "link",
-            label: "체험 후 신청",
-            className: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200",
-        });
-    }
-
-    return flags.slice(0, 4);
 }
 
 function getApplicationPriorityBadges(
@@ -522,47 +468,6 @@ function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
     return badges.slice(0, 4);
 }
 
-function joinSummaryLines(lines: Array<string | null | undefined | false>) {
-    return lines.filter(Boolean).join("\n");
-}
-
-async function copyTextToClipboard(text: string) {
-    if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    textarea.remove();
-}
-
-function formatApplicationCopySummary(app: EnrollApplication, preferredSlotLabel: string | null) {
-    const childInfo = [app.childGrade, app.childSchool, app.childGender].filter(Boolean).join(" / ");
-    const parentInfo = `${app.parentName}${app.parentRelation ? ` (${app.parentRelation})` : ""}`;
-    const shuttleInfo = app.shuttleNeeded
-        ? [app.shuttlePickup, app.shuttleDropoff, app.shuttleTime].filter(Boolean).join(" / ") || "필요"
-        : null;
-
-    return joinSummaryLines([
-        `[수강신청] ${app.childName}`,
-        childInfo ? `학생: ${childInfo}` : null,
-        `보호자: ${parentInfo}`,
-        `연락처: ${app.parentPhone}`,
-        app.enrollmentMonths ? `수강 월: ${app.enrollmentMonths}` : null,
-        preferredSlotLabel ? `희망 시간: ${preferredSlotLabel}` : null,
-        app.basketballExp ? `농구 경험: ${app.basketballExp}` : null,
-        shuttleInfo ? `셔틀: ${shuttleInfo}` : null,
-        app.memo ? `메모: ${app.memo}` : null,
-    ]);
-}
-
 function ApplyLoadingFallback() {
     return (
         <div className="space-y-6">
@@ -638,7 +543,6 @@ export default function ApplyAdminClient({
     const [filter, setFilter] = useState<string>("ALL");
     const [workFilter, setWorkFilter] = useState<ApplicationWorkFilter>("ALL");
     const [searchQuery, setSearchQuery] = useState("");
-    const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [visibleLimit, setVisibleLimit] = useState(APPLICATION_PAGE_SIZE);
     const [activeTab, setActiveTab] = useState<TabType>("trial");
     const [feedback, setFeedback] = useState<FeedbackState>(null);
@@ -702,27 +606,10 @@ export default function ApplyAdminClient({
         () => buildOpenContactCounts(applications, trialLeadsForSummary),
         [applications, trialLeadsForSummary],
     );
-    const applicationContacts = useMemo<ContactSummary[]>(
-        () =>
-            applications.map((app) => ({
-                parentPhone: app.parentPhone,
-                childName: app.childName,
-                status: app.status,
-            })),
-        [applications],
-    );
     const showFeedback = useCallback((type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
     }, []);
-    const handleCopyText = useCallback(async (text: string, successMessage: string) => {
-        try {
-            await copyTextToClipboard(text);
-            showFeedback("success", successMessage);
-        } catch {
-            showFeedback("error", "복사 중 문제가 생겼습니다. 직접 선택해서 복사해주세요.");
-        }
-    }, [showFeedback]);
     const handleRecordContact = useCallback(async (
         app: EnrollApplication,
         action: ContactActionType,
@@ -844,18 +731,23 @@ export default function ApplyAdminClient({
     function renderApplicationList() {
         return (
             <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-sm">
+                    <colgroup>
+                        <col className="w-[12%]" />
+                        <col className="w-[17%]" />
+                        <col className="w-[16%]" />
+                        <col className="w-[27%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[16%]" />
+                    </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
-                            <th className="px-3 py-3">상태</th>
-                            <th className="px-3 py-3">학생</th>
-                            <th className="px-3 py-3">보호자</th>
-                            <th className="px-3 py-3">희망수업</th>
-                            <th className="px-3 py-3">접수일</th>
-                            <th className="px-3 py-3">수강월</th>
-                            <th className="px-3 py-3">셔틀</th>
-                            <th className="px-3 py-3">처리</th>
-                            <th className="px-3 py-3">액션</th>
+                            <th className="px-3 py-2.5">상태</th>
+                            <th className="px-3 py-2.5">학생</th>
+                            <th className="px-3 py-2.5">보호자</th>
+                            <th className="px-3 py-2.5">희망/수강</th>
+                            <th className="px-3 py-2.5">셔틀</th>
+                            <th className="px-3 py-2.5 text-right">빠른 처리</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -864,111 +756,102 @@ export default function ApplyAdminClient({
                             const age = calcAge(app.childBirthDate);
                             const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
                             const parentPhoneHref = phoneHref(app.parentPhone);
+                            const childMeta = [age !== null ? `만 ${age}세` : null, app.childGrade, app.childSchool].filter(Boolean).join(" · ");
+                            const applyMeta = [`접수 ${formatDate(app.createdAt)}`, app.enrollmentMonths ? `수강 ${app.enrollmentMonths}` : null]
+                                .filter(Boolean)
+                                .join(" · ");
+                            const shuttleLabel = app.shuttleNeeded
+                                ? [app.shuttlePickup, app.shuttleDropoff, app.shuttleTime].filter(Boolean).join(" / ") || "이용"
+                                : "미이용";
                             return (
-                                <tr key={`${app.id}-list`} className="divide-x divide-gray-100 hover:bg-gray-50/80 dark:divide-gray-700 dark:hover:bg-gray-900/50">
-                                    <td className="px-3 py-2 align-top">
-                                        <div className="flex flex-col items-start gap-1">
-                                            <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
+                                <tr
+                                    key={`${app.id}-list`}
+                                    tabIndex={0}
+                                    onClick={() => setShowDetailModal(app)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                            event.preventDefault();
+                                            setShowDetailModal(app);
+                                        }
+                                    }}
+                                    className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
+                                >
+                                    <td className="px-3 py-2 align-middle">
+                                        <div className="flex min-w-0 items-center gap-1.5">
+                                            <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold ${cfg.color}`}>
                                                 <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                                 {cfg.label}
                                             </span>
                                             {app.trialLeadId && (
-                                                <span className="whitespace-nowrap rounded bg-purple-50 px-2 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
-                                                    체험 후 신청
+                                                <span className="truncate rounded bg-purple-50 px-1.5 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
+                                                    체험후
                                                 </span>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-3 py-2 align-top">
-                                        <p className="whitespace-nowrap font-black text-gray-900 dark:text-white">
-                                            {app.childName}
-                                            {age !== null ? <span className="ml-1 text-xs font-bold text-gray-500 dark:text-gray-400">(만 {age}세)</span> : null}
-                                        </p>
-                                        <p className="mt-0.5 max-w-44 truncate text-xs text-gray-500 dark:text-gray-400">
-                                            {[app.childGrade, app.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
-                                        </p>
+                                    <td className="px-3 py-2 align-middle">
+                                        <p className="truncate font-black text-gray-900 dark:text-white">{app.childName}</p>
+                                        <p className="truncate text-xs font-bold text-gray-500 dark:text-gray-400">{childMeta || "학생 정보 미입력"}</p>
                                     </td>
-                                    <td className="px-3 py-2 align-top">
-                                        <p className="whitespace-nowrap font-bold text-gray-800 dark:text-gray-100">
+                                    <td className="px-3 py-2 align-middle" onClick={(event) => event.stopPropagation()}>
+                                        <p className="truncate font-bold text-gray-800 dark:text-gray-100">
                                             {app.parentName}
                                             {app.parentRelation ? ` (${app.parentRelation})` : ""}
                                         </p>
-                                        <a href={parentPhoneHref} className="mt-0.5 inline-flex items-center gap-1 whitespace-nowrap text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
+                                        <a href={parentPhoneHref} className="inline-flex max-w-full items-center gap-1 text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
                                             <span className="material-symbols-outlined text-sm">phone</span>
-                                            {app.parentPhone}
+                                            <span className="truncate">{app.parentPhone}</span>
                                         </a>
                                     </td>
-                                    <td className="max-w-64 px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
-                                        <span className="line-clamp-2">{preferredSlotLabel || "희망 시간 확인 필요"}</span>
+                                    <td className="px-3 py-2 align-middle">
+                                        <p className="truncate font-black text-gray-800 dark:text-gray-100" title={preferredSlotLabel || "희망 시간 확인 필요"}>
+                                            {preferredSlotLabel || "희망 시간 확인 필요"}
+                                        </p>
+                                        <p className="truncate text-xs font-bold text-gray-500 dark:text-gray-400">{applyMeta}</p>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
-                                        {formatDate(app.createdAt)}
+                                    <td className="px-3 py-2 align-middle text-xs font-bold text-gray-600 dark:text-gray-300">
+                                        <span className="block truncate" title={shuttleLabel}>{shuttleLabel}</span>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
-                                        {app.enrollmentMonths || "-"}
-                                    </td>
-                                    <td className="px-3 py-2 align-top text-xs font-bold text-gray-600 dark:text-gray-300">
-                                        {app.shuttleNeeded ? (
-                                            <span className="line-clamp-2">{app.shuttlePickup || app.shuttleDropoff || app.shuttleTime || "이용"}</span>
-                                        ) : (
-                                            <span className="whitespace-nowrap">미이용</span>
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 align-top">
-                                        {app.status === "PENDING" ? (
-                                            <div className="flex flex-wrap gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowApproveModal(app)}
-                                                    className="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg bg-lime-500 px-2.5 text-xs font-black text-brand-navy-900 transition hover:bg-lime-400"
-                                                >
-                                                    승인
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowRejectModal(app)}
-                                                    className="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg border border-red-200 px-2.5 text-xs font-bold text-red-700 transition hover:bg-red-50 dark:border-red-900/60 dark:text-red-200 dark:hover:bg-red-950/40"
-                                                >
-                                                    반려
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowCancelModal(app)}
-                                                    className="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
-                                                >
-                                                    취소
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <span className="whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400">처리 완료</span>
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 align-top">
-                                        <div className="flex flex-wrap gap-1.5">
-                                            <a
-                                                href={parentPhoneHref}
-                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
-                                            >
-                                                <span className="material-symbols-outlined text-sm">call</span>
+                                    <td className="px-3 py-2 align-middle" onClick={(event) => event.stopPropagation()}>
+                                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                            <a href={parentPhoneHref} className={LIST_QUICK_ACTION_CLASS} title="보호자에게 전화">
+                                                <span className="material-symbols-outlined text-base">call</span>
                                                 전화
                                             </a>
                                             <button
                                                 type="button"
-                                                onClick={() => setShowDetailModal(app)}
-                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                                onClick={() => handleRecordContact(app, "CONTACTED")}
+                                                disabled={contactBusyId === app.id}
+                                                className={LIST_QUICK_CONTACT_CLASS}
+                                                title="보호자 연락 완료 기록"
                                             >
-                                                <span className="material-symbols-outlined text-sm">visibility</span>
-                                                상세
+                                                <span className="material-symbols-outlined text-base">done_all</span>
+                                                연락
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => handleRecordContact(app, "CONTACTED")}
-                                                disabled={contactBusyId === app.id}
-                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
+                                                onClick={() => setContactModal({ app, defaultAction: "MEMO" })}
+                                                className={LIST_QUICK_ACTION_CLASS}
+                                                title="상담 메모 또는 재연락 기록"
                                             >
-                                                <span className="material-symbols-outlined text-sm">done_all</span>
-                                                연락
+                                                <span className="material-symbols-outlined text-base">edit_note</span>
+                                                메모
                                             </button>
+                                            {app.status === "PENDING" ? (
+                                                <>
+                                                    <button type="button" onClick={() => setShowApproveModal(app)} className={LIST_QUICK_PRIMARY_CLASS}>
+                                                        승인
+                                                    </button>
+                                                    <button type="button" onClick={() => setShowRejectModal(app)} className={LIST_QUICK_ACTION_CLASS}>
+                                                        반려
+                                                    </button>
+                                                    <button type="button" onClick={() => setShowCancelModal(app)} className={LIST_QUICK_ACTION_CLASS}>
+                                                        취소
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <span className="whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400">처리 완료</span>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -1121,7 +1004,6 @@ export default function ApplyAdminClient({
                     initialStats={initialTrialStats}
                     initialClasses={initialTrialClasses}
                     initialPagination={initialTrialPagination}
-                    applicationContacts={applicationContacts}
                 />
             ) : activeTab === "applications" ? (
                 !applyLoaded ? (
@@ -1169,32 +1051,6 @@ export default function ApplyAdminClient({
                                     })}
                                 </select>
                             </label>
-                            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
-                                <button
-                                    type="button"
-                                    onClick={() => setViewMode("cards")}
-                                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-bold transition ${
-                                        viewMode === "cards"
-                                            ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
-                                            : "text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-base">grid_view</span>
-                                    카드
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setViewMode("list")}
-                                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-bold transition ${
-                                        viewMode === "list"
-                                            ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
-                                            : "text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-base">view_list</span>
-                                    목록
-                                </button>
-                            </div>
                         </div>
                         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                             {APPLICATION_WORK_FILTERS.map((item) => (
@@ -1240,308 +1096,7 @@ export default function ApplyAdminClient({
                         </div>
                     ) : (
                         <div className="grid gap-2.5">
-                            {viewMode === "list" ? renderApplicationList() : visibleApps.map((app) => {
-                                const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
-                                const age = calcAge(app.childBirthDate);
-                                const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
-                                const contactCount = getContactCount(app.parentPhone, openContactCounts);
-                                const priorityBadges = getApplicationPriorityBadges(app, preferredSlotLabel, contactCount);
-                                const visibleBadges = priorityBadges.slice(0, 2);
-                                const parentPhoneHref = phoneHref(app.parentPhone);
-                                const operationItems = [
-                                    { label: "접수", value: formatDate(app.createdAt), icon: "inbox" },
-                                    app.enrollmentMonths
-                                        ? { label: "수강월", value: app.enrollmentMonths, icon: "calendar_month" }
-                                        : null,
-                                    preferredSlotLabel
-                                        ? { label: "희망시간", value: preferredSlotLabel, icon: "schedule" }
-                                        : null,
-                                    app.assignedClassId
-                                        ? { label: "배정", value: "배정 완료", icon: "check_circle" }
-                                        : null,
-                                    app.shuttleNeeded
-                                        ? {
-                                            label: "셔틀",
-                                            value: [app.shuttlePickup, app.shuttleDropoff, app.shuttleTime].filter(Boolean).join(" / ") || "신청",
-                                            icon: "directions_bus",
-                                        }
-                                        : null,
-                                ].filter(Boolean) as Array<{ label: string; value: string; icon: string }>;
-                                return (
-                                    <div
-                                        key={app.id}
-                                        className="rounded-lg border border-gray-200 bg-white p-3 transition-shadow hover:shadow-sm dark:border-gray-700 dark:bg-gray-800"
-                                    >
-                                        <div className="flex flex-col gap-2.5">
-                                            {/* 왼쪽: 기본 정보 */}
-                                            <div className="flex-1 min-w-0">
-                                                {/* 상태 + 유입경로 배지 */}
-                                                <div className="mb-1.5 flex items-center gap-1.5 flex-wrap">
-                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${cfg.color}`}>
-                                                        <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                                        {cfg.label}
-                                                    </span>
-                                                    {app.referralSource && (
-                                                        <span className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                                                            {SOURCE_LABELS[app.referralSource] || app.referralSource}
-                                                        </span>
-                                                    )}
-                                                    {visibleBadges.map((badge) => (
-                                                        <span
-                                                            key={`${app.id}-priority-${badge.label}`}
-                                                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-black ${badge.className}`}
-                                                        >
-                                                            <span className="material-symbols-outlined text-sm">{badge.icon}</span>
-                                                            {badge.label}
-                                                        </span>
-                                                    ))}
-                                                </div>
-
-                                                {/* 아이 이름 + 나이/학년 */}
-                                                <h3 className="text-base font-black text-gray-900 dark:text-white">
-                                                    {app.childName}
-                                                    {age !== null && (
-                                                        <span className="ml-1.5 text-xs font-bold text-gray-500 dark:text-gray-400">
-                                                            (만 {age}세)
-                                                        </span>
-                                                    )}
-                                                </h3>
-
-                                                {/* 보호자 + 연락처 + 신청일 */}
-                                                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                                                    <span className="flex items-center gap-1">
-                                                        <span className="material-symbols-outlined text-sm">person</span>
-                                                        {app.parentName}
-                                                        {app.parentRelation && ` (${app.parentRelation})`}
-                                                    </span>
-                                                    <a
-                                                        href={parentPhoneHref}
-                                                        className="flex items-center gap-1 font-semibold text-gray-700 hover:text-brand-orange-600 dark:text-gray-200 dark:hover:text-brand-neon-lime"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">phone</span>
-                                                        {app.parentPhone}
-                                                    </a>
-                                                    <span className="flex items-center gap-1">
-                                                        <span className="material-symbols-outlined text-sm">calendar_today</span>
-                                                        {formatDate(app.createdAt)}
-                                                    </span>
-                                                </div>
-
-                                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                                    {operationItems.map((item) => (
-                                                        <div
-                                                            key={`${app.id}-summary-${item.label}`}
-                                                            className={COMPACT_CARD_CHIP_CLASS}
-                                                            title={`${item.label} ${item.value}`}
-                                                        >
-                                                            <span className="material-symbols-outlined text-sm text-brand-orange-500 dark:text-brand-neon-lime">
-                                                                {item.icon}
-                                                            </span>
-                                                            <span className="min-w-0 truncate">
-                                                                <span className="mr-1 font-black text-gray-900 dark:text-white">{item.label}</span>
-                                                                <span>{item.value}</span>
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                {/* 학년/학교/성별 태그 */}
-                                                {(app.childGrade || app.childSchool || app.childGender) && (
-                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                                        {app.childGrade && (
-                                                            <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
-                                                                <span className="material-symbols-outlined text-xs">school</span>
-                                                                {app.childGrade}
-                                                            </span>
-                                                        )}
-                                                        {app.childSchool && (
-                                                            <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200">
-                                                                <span className="material-symbols-outlined text-xs">apartment</span>
-                                                                {app.childSchool}
-                                                            </span>
-                                                        )}
-                                                        {app.childGender && (
-                                                            <span className="inline-flex items-center rounded bg-pink-50 px-1.5 py-0.5 text-[11px] font-bold text-pink-700 dark:bg-pink-950/40 dark:text-pink-200">
-                                                                {app.childGender}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* 농구 경험 태그 */}
-                                                {app.basketballExp && (
-                                                    <div className="mt-1 flex flex-wrap gap-1.5">
-                                                        <span className="inline-flex items-center gap-1 rounded bg-orange-50 px-1.5 py-0.5 text-[11px] font-bold text-orange-700 dark:bg-orange-950/40 dark:text-orange-200">
-                                                            <span className="material-symbols-outlined text-xs">sports_basketball</span>
-                                                            농구 {app.basketballExp}
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                                {/* 메모 */}
-                                                {app.memo && (
-                                                    <p className="mt-1.5 line-clamp-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
-                                                        {app.memo}
-                                                    </p>
-                                                )}
-
-                                                {/* 처리 결과 (승인/반려 시) */}
-                                                {app.processedNote && (
-                                                    <p className={`mt-1.5 line-clamp-2 rounded-md px-2 py-1.5 text-xs font-bold ${
-                                                        app.status === "APPROVED"
-                                                            ? "text-green-700 bg-green-50 dark:bg-green-950/40 dark:text-green-200"
-                                                            : "text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-200"
-                                                    }`}>
-                                                        <span className="font-medium">처리 메모:</span> {app.processedNote}
-                                                    </p>
-                                                )}
-
-                                                {(app.openFollowUpAt || app.latestContactAction) && (
-                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                                        {app.openFollowUpAt && (
-                                                            <span className="inline-flex items-center gap-1 rounded-md bg-lime-50 px-2 py-1 text-[11px] font-bold text-lime-700 dark:bg-lime-950/40 dark:text-lime-200">
-                                                                <span className="material-symbols-outlined text-sm">phone_callback</span>
-                                                                다음 연락 {formatContactDateTime(app.openFollowUpAt)}
-                                                                {app.openFollowUpNote ? ` · ${app.openFollowUpNote}` : ""}
-                                                            </span>
-                                                        )}
-                                                        {app.latestContactAction && (
-                                                            <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
-                                                                <span className="material-symbols-outlined text-sm">history</span>
-                                                                최근 {CONTACT_ACTION_LABELS[app.latestContactAction] ?? app.latestContactAction}
-                                                                {app.latestContactAt ? ` · ${formatContactDateTime(app.latestContactAt)}` : ""}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* 카드 하단: 자주 쓰는 작업만 먼저 보여주고 나머지는 접어서 모바일 깨짐을 막는다. */}
-                                            <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2 dark:border-gray-700">
-                                                <a
-                                                    href={parentPhoneHref}
-                                                    className={COMPACT_CARD_ACTION_CLASS}
-                                                    title="보호자에게 전화"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">call</span>
-                                                    전화
-                                                </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowDetailModal(app)}
-                                                    className={COMPACT_CARD_ACTION_CLASS}
-                                                    title="신청 상세 보기"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">visibility</span>
-                                                    상세
-                                                </button>
-                                                {app.status === "PENDING" && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowApproveModal(app)}
-                                                        className={COMPACT_CARD_PRIMARY_CLASS}
-                                                    >
-                                                        <span className="material-symbols-outlined text-base">check_circle</span>
-                                                        승인
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRecordContact(app, "CONTACTED")}
-                                                    disabled={contactBusyId === app.id}
-                                                    className={COMPACT_CARD_CONTACT_CLASS}
-                                                    title="보호자 연락 완료 기록"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">done_all</span>
-                                                    연락 완료
-                                                </button>
-                                                <details className="w-full sm:w-auto">
-                                                    <summary className={`${COMPACT_CARD_ACTION_CLASS} cursor-pointer list-none`}>
-                                                        <span className="material-symbols-outlined text-base">more_horiz</span>
-                                                        더보기
-                                                    </summary>
-                                                    <div className="mt-1.5 flex flex-wrap gap-1.5 rounded-md border border-gray-100 bg-gray-50 p-1.5 dark:border-gray-700 dark:bg-gray-900/60">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleCopyText(app.parentPhone, `${app.childName} 보호자 연락처를 복사했습니다.`)}
-                                                    className={COMPACT_CARD_ACTION_CLASS}
-                                                    title="보호자 연락처 복사"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">content_copy</span>
-                                                    번호 복사
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        handleCopyText(
-                                                            formatApplicationCopySummary(app, preferredSlotLabel),
-                                                            `${app.childName} 신청 요약을 복사했습니다.`,
-                                                        )
-                                                    }
-                                                    className={COMPACT_CARD_ACTION_CLASS}
-                                                    title="상담용 신청 요약 복사"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">assignment</span>
-                                                    요약 복사
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRecordContact(app, "NO_ANSWER")}
-                                                    disabled={contactBusyId === app.id}
-                                                    className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:border-amber-400 dark:hover:bg-amber-950/30 dark:hover:text-amber-200"
-                                                    title="부재 기록"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">phone_disabled</span>
-                                                    부재
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setContactModal({ app, defaultAction: "FOLLOW_UP" })}
-                                                    className={COMPACT_CARD_ACTION_CLASS}
-                                                    title="재연락 예약 또는 상담 메모"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">event_repeat</span>
-                                                    재연락
-                                                </button>
-                                                {app.status !== "APPROVED" && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowEditModal(app)}
-                                                        className={COMPACT_CARD_ACTION_CLASS}
-                                                        title="수강신청 내용 수정"
-                                                    >
-                                                        <span className="material-symbols-outlined text-base">edit</span>
-                                                        수정
-                                                    </button>
-                                                )}
-                                                {app.status === "PENDING" && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowRejectModal(app)}
-                                                        className={COMPACT_CARD_ACTION_DANGER_CLASS}
-                                                    >
-                                                        <span className="material-symbols-outlined text-base">cancel</span>
-                                                        반려
-                                                    </button>
-                                                )}
-                                                {app.status === "PENDING" && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowCancelModal(app)}
-                                                        className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                                                        title="수강신청 취소 처리"
-                                                    >
-                                                        <span className="material-symbols-outlined text-base">block</span>
-                                                        취소
-                                                    </button>
-                                                )}
-                                                    </div>
-                                                </details>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {renderApplicationList()}
                             <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
                                 <span>
                                     {filteredApps.length}건 중 {visibleApps.length}건 표시

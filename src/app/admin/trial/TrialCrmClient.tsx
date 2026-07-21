@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import AdminModal from "@/components/admin/AdminModal";
 import {
     updateTrialLead,
-    deleteTrialLead,
     sendPostTrialEnrollGuide,
     sendTrialCoachNotice,
     resendTrialApplicationSms,
@@ -111,12 +110,10 @@ type ListPagination = {
 
 type FeedbackState = { type: "success" | "error"; message: string } | null;
 type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "COACH_NOTICE" | "ENROLL_RECEIVED";
-type ContactSummary = { parentPhone: string; childName: string; status: string };
-type PriorityBadge = { icon: string; label: string; className: string };
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
-type ViewMode = "cards" | "list";
-
+const LIST_QUICK_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
+const LIST_QUICK_CONTACT_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200";
 const EMPTY_STATS: TrialStats = {
     NEW: 0,
     CONTACTED: 0,
@@ -155,7 +152,6 @@ const SOURCE_LABELS: Record<string, string> = {
 const STATUS_ORDER = ["NEW", "CONTACTED", "SCHEDULED", "ATTENDED", "CONVERTED", "LOST", "CANCELLED"] as const;
 const CLOSED_TRIAL_STATUSES = new Set(["CONVERTED", "LOST", "CANCELLED"]);
 const TRIAL_PAGE_SIZE = 50;
-const LONG_WAIT_HOURS = 24;
 
 const TRIAL_WORK_FILTERS: Array<{ value: TrialWorkFilter; label: string; icon: string }> = [
     { value: "ALL", label: "운영 전체", icon: "view_list" },
@@ -181,36 +177,8 @@ function phoneHref(phone: string) {
     return digits ? `tel:${digits}` : undefined;
 }
 
-function normalizePhone(phone: string | null | undefined) {
-    return (phone ?? "").replace(/\D/g, "");
-}
-
 function normalizeSearchValue(value: string | null | undefined) {
     return (value ?? "").replace(/\s+/g, "").replace(/-/g, "").toLowerCase();
-}
-
-function hoursSince(dateStr: string | null) {
-    if (!dateStr) return 0;
-    const timestamp = new Date(dateStr).getTime();
-    if (!Number.isFinite(timestamp)) return 0;
-    return Math.max(0, Math.floor((Date.now() - timestamp) / 36e5));
-}
-
-function formatWaitLabel(dateStr: string | null) {
-    const hours = hoursSince(dateStr);
-    if (hours >= 48) return `${Math.floor(hours / 24)}일 대기`;
-    if (hours >= 24) return "24시간 이상 대기";
-    if (hours >= 1) return `${hours}시간 대기`;
-    return "방금 접수";
-}
-
-function isFollowUpDueToday(dateStr: string | null) {
-    if (!dateStr) return false;
-    const timestamp = new Date(dateStr).getTime();
-    if (!Number.isFinite(timestamp)) return false;
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    return timestamp <= todayEnd.getTime();
 }
 
 function formatContactDateTime(dateStr: string | null) {
@@ -466,28 +434,6 @@ function getTrialScheduleItems(
     });
 }
 
-function ScheduleInfoCard({
-    label,
-    icon,
-    value,
-    className,
-}: {
-    label: string;
-    icon: string;
-    value: string;
-    className: string;
-}) {
-    return (
-        <div className={`min-w-0 rounded-lg border px-2.5 py-2 sm:px-3 sm:py-2.5 ${className}`}>
-            <div className="mb-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] font-black uppercase opacity-80 sm:mb-1 sm:text-[11px]">
-                <span className="material-symbols-outlined text-xs sm:text-sm">{icon}</span>
-                {label}
-            </div>
-            <div className="truncate break-keep text-xs font-black leading-snug sm:text-sm">{value}</div>
-        </div>
-    );
-}
-
 function matchesTrialWorkFilter(lead: TrialLead, workFilter: TrialWorkFilter) {
     if (workFilter === "ALL") return true;
     if (workFilter === "NEEDS_CONTACT") return lead.status === "NEW" || lead.status === "CONTACTED";
@@ -520,135 +466,6 @@ function trialLeadMatchesSearch(lead: TrialLead, query: string) {
     ].map(normalizeSearchValue).join(" ");
 
     return searchable.includes(normalizedQuery);
-}
-
-function buildOpenContactCounts(leads: TrialLead[], applicationContacts: ContactSummary[]) {
-    const counts = new Map<string, number>();
-    const add = (phone: string | null | undefined) => {
-        const normalized = normalizePhone(phone);
-        if (normalized.length < 8) return;
-        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
-    };
-
-    leads.forEach((lead) => {
-        if (lead.status !== "CONVERTED" && lead.status !== "LOST") add(lead.parentPhone);
-    });
-    applicationContacts.forEach((contact) => {
-        if (contact.status === "PENDING") add(contact.parentPhone);
-    });
-
-    return counts;
-}
-
-function getContactCount(phone: string | null | undefined, counts: Map<string, number>) {
-    const normalized = normalizePhone(phone);
-    return normalized ? counts.get(normalized) ?? 0 : 0;
-}
-
-function getTrialPriorityBadges(lead: TrialLead, contactCount: number) {
-    const badges: PriorityBadge[] = [];
-
-    if ((lead.status === "NEW" || lead.status === "CONTACTED") && hoursSince(lead.createdAt) >= LONG_WAIT_HOURS) {
-        badges.push({
-            icon: "timer",
-            label: formatWaitLabel(lead.createdAt),
-            className: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
-        });
-    }
-    if (!isClosedTrialStatus(lead.status) && contactCount > 1) {
-        badges.push({
-            icon: "content_copy",
-            label: `중복 연락처 ${contactCount}건`,
-            className: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
-        });
-    }
-    if (lead.status === "ATTENDED" && !lead.enrollGuideSentAt) {
-        badges.push({
-            icon: "sms",
-            label: "상담 후 안내 필요",
-            className: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200",
-        });
-    }
-    if (!isClosedTrialStatus(lead.status) && !lead.coachNoticeSentAt) {
-        badges.push({
-            icon: "school",
-            label: "쌤 알림 필요",
-            className: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200",
-        });
-    }
-    if (!isClosedTrialStatus(lead.status) && isFollowUpDueToday(lead.openFollowUpAt)) {
-        badges.push({
-            icon: "phone_callback",
-            label: "오늘 재연락",
-            className: "bg-lime-100 text-lime-800 dark:bg-lime-950/50 dark:text-lime-200",
-        });
-    }
-
-    return badges.slice(0, 4);
-}
-
-function getSmsDeliveryBadge(lead: TrialLead): PriorityBadge | null {
-    if (!lead.smsDeliveryTotal) return null;
-    if (lead.smsDeliveryFailed > 0) {
-        return {
-            icon: "sms_failed",
-            label: `문자 실패 ${lead.smsDeliveryFailed}건`,
-            className: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200",
-        };
-    }
-    if (lead.smsDeliveryPending > 0) {
-        return {
-            icon: "schedule",
-            label: "문자 처리중",
-            className: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200",
-        };
-    }
-    return {
-        icon: "mark_chat_read",
-        label: `문자 발송 ${lead.smsDeliverySent}건`,
-        className: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200",
-    };
-}
-
-function joinSummaryLines(lines: Array<string | null | undefined | false>) {
-    return lines.filter(Boolean).join("\n");
-}
-
-async function copyTextToClipboard(text: string) {
-    if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    textarea.remove();
-}
-
-function formatTrialCopySummary(lead: TrialLead) {
-    const childInfo = [lead.childAge, lead.childGrade, lead.childSchool, lead.childGender].filter(Boolean).join(" / ");
-    const preferredSchedule = [lead.preferredDay ? `${lead.preferredDay}요일` : null, lead.preferredPeriod ? `${lead.preferredPeriod}교시` : null]
-        .filter(Boolean)
-        .join(" ");
-
-    return joinSummaryLines([
-        `[체험 문의] ${lead.childName}`,
-        childInfo ? `학생: ${childInfo}` : null,
-        `보호자: ${lead.parentName}`,
-        `연락처: ${lead.parentPhone}`,
-        lead.trialDate ? `희망 체험일: ${formatCompactDate(lead.trialDate)}` : null,
-        preferredSchedule ? `희망 시간: ${preferredSchedule}` : null,
-        lead.basketballExp ? `농구 경험: ${lead.basketballExp}` : null,
-        lead.trialFeeConfirmed ? "체험비: 확인" : null,
-        lead.hopeNote ? `바라는 점: ${lead.hopeNote}` : null,
-        lead.memo ? `메모: ${lead.memo}` : null,
-    ]);
 }
 
 function TrialCrmLoadingFallback() {
@@ -712,13 +529,11 @@ export default function TrialCrmClient({
     initialStats,
     initialClasses,
     initialPagination,
-    applicationContacts,
 }: {
     initialLeads?: TrialLead[];
     initialStats?: TrialStats;
     initialClasses?: ClassInfo[];
     initialPagination?: ListPagination;
-    applicationContacts?: ContactSummary[];
 }) {
     const hasInitialData = Boolean(initialLeads && initialStats);
     const [leads, setLeads] = useState<TrialLead[]>(initialLeads ?? []);
@@ -731,12 +546,9 @@ export default function TrialCrmClient({
     const [filter, setFilter] = useState<string>("ALL");
     const [workFilter, setWorkFilter] = useState<TrialWorkFilter>("ALL");
     const [searchQuery, setSearchQuery] = useState("");
-    const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [visibleLimit, setVisibleLimit] = useState(TRIAL_PAGE_SIZE);
     const [busy, setBusy] = useState(false);
     const [feedback, setFeedback] = useState<FeedbackState>(null);
-    const [openActionLeadId, setOpenActionLeadId] = useState<string | null>(null);
-
     // 모달 상태
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState<TrialLead | null>(null);
@@ -745,6 +557,7 @@ export default function TrialCrmClient({
     const [showConvertModal, setShowConvertModal] = useState<TrialLead | null>(null);
     const [showLostModal, setShowLostModal] = useState<TrialLead | null>(null);
     const [showMemoModal, setShowMemoModal] = useState<TrialLead | null>(null);
+    const [showDetailModal, setShowDetailModal] = useState<TrialLead | null>(null);
     const [contactModal, setContactModal] = useState<ContactModalState>(null);
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
     const hasTrialModal = Boolean(showAddModal || showEditModal || showScheduleModal || showCancelModal || showConvertModal || showLostModal || showMemoModal);
@@ -782,11 +595,6 @@ export default function TrialCrmClient({
         void loadTrialData();
     }, [hasInitialData, loadTrialData]);
 
-    const relatedApplicationContacts = useMemo(() => applicationContacts ?? [], [applicationContacts]);
-    const openContactCounts = useMemo(
-        () => buildOpenContactCounts(leads, relatedApplicationContacts),
-        [leads, relatedApplicationContacts],
-    );
     const classesBySlotKey = useMemo(() => {
         const map = new Map<string, ClassInfo>();
         classes.forEach((classInfo) => {
@@ -805,14 +613,6 @@ export default function TrialCrmClient({
         setFeedback({ type, message });
         window.setTimeout(() => setFeedback(null), 3500);
     }, []);
-    const handleCopyText = useCallback(async (text: string, successMessage: string) => {
-        try {
-            await copyTextToClipboard(text);
-            showFeedback("success", successMessage);
-        } catch {
-            showFeedback("error", "복사 중 문제가 생겼습니다. 직접 선택해서 복사해주세요.");
-        }
-    }, [showFeedback]);
     const handleRecordContact = useCallback(async (
         lead: TrialLead,
         action: ContactActionType,
@@ -896,7 +696,7 @@ export default function TrialCrmClient({
         if (busy) return;
         setBusy(true);
         try {
-            const updates: Record<string, any> = { status: newStatus };
+            const updates: { status: string; attendedDate?: string } = { status: newStatus };
             // 상태에 따른 날짜 자동 설정
             if (newStatus === "ATTENDED") {
                 updates.attendedDate = new Date().toISOString();
@@ -906,21 +706,6 @@ export default function TrialCrmClient({
             showFeedback("success", `${lead.childName} 상태를 ${STATUS_CONFIG[newStatus]?.label ?? "변경"}으로 바꿨습니다.`);
         } catch {
             showFeedback("error", "상태 변경 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
-        } finally {
-            setBusy(false);
-        }
-    }
-
-    // 삭제 핸들러
-    async function handleDelete(lead: TrialLead) {
-        if (!confirm(`"${lead.childName}" 체험 신청을 삭제하시겠습니까?`)) return;
-        setBusy(true);
-        try {
-            await deleteTrialLead(lead.id);
-            await loadTrialData();
-            showFeedback("success", `${lead.childName} 체험 신청을 삭제했습니다.`);
-        } catch {
-            showFeedback("error", "삭제 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -1001,108 +786,26 @@ export default function TrialCrmClient({
         return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
     }
 
-    function renderActionMenu(lead: TrialLead, isClosed: boolean, parentPhoneHref?: string) {
-        const isOpen = openActionLeadId === lead.id;
-        const closeMenu = () => setOpenActionLeadId(null);
-        const itemClass = "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800";
-
-        return (
-            <div className="relative inline-flex justify-end">
-                <button
-                    type="button"
-                    onClick={() => setOpenActionLeadId((current) => (current === lead.id ? null : lead.id))}
-                    className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10"
-                    aria-expanded={isOpen}
-                >
-                    <span className="material-symbols-outlined text-base">more_horiz</span>
-                    액션
-                </button>
-                {isOpen && (
-                    <div className="absolute right-0 top-10 z-30 w-36 rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-gray-700 dark:bg-gray-950">
-                        <a href={parentPhoneHref} onClick={closeMenu} className={itemClass}>
-                            <span className="material-symbols-outlined text-base">call</span>
-                            전화
-                        </a>
-                        {!isClosed && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    closeMenu();
-                                    setShowScheduleModal(lead);
-                                }}
-                                className={itemClass}
-                            >
-                                <span className="material-symbols-outlined text-base">event_available</span>
-                                일정
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                closeMenu();
-                                void handleRecordContact(lead, "CONTACTED");
-                            }}
-                            disabled={contactBusyId === lead.id}
-                            className={`${itemClass} disabled:opacity-50`}
-                        >
-                            <span className="material-symbols-outlined text-base">done_all</span>
-                            연락
-                        </button>
-                        {lead.status === "ATTENDED" && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    closeMenu();
-                                    setShowConvertModal(lead);
-                                }}
-                                disabled={busy}
-                                className={`${itemClass} text-emerald-700 disabled:opacity-50 dark:text-emerald-300`}
-                            >
-                                <span className="material-symbols-outlined text-base">how_to_reg</span>
-                                직접 등록
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                closeMenu();
-                                setShowMemoModal(lead);
-                            }}
-                            className={itemClass}
-                        >
-                            <span className="material-symbols-outlined text-base">edit_note</span>
-                            메모
-                        </button>
-                    </div>
-                )}
-            </div>
-        );
-    }
-
     function renderTrialList() {
         return (
             <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[840px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[1040px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
+                        <col className="w-[11%]" />
+                        <col className="w-[16%]" />
+                        <col className="w-[16%]" />
+                        <col className="w-[22%]" />
+                        <col className="w-[17%]" />
                         <col className="w-[18%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[13%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[10%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
-                            <th className="px-3 py-3">학생</th>
-                            <th className="px-3 py-3">보호자</th>
-                            <th className="px-3 py-3">접수일</th>
-                            <th className="px-3 py-3">희망일</th>
-                            <th className="px-3 py-3">수업교시</th>
-                            <th className="px-3 py-3">쌤알림</th>
-                            <th className="px-3 py-3">상태변경</th>
-                            <th className="px-3 py-3">액션</th>
+                            <th className="px-3 py-2.5">상태</th>
+                            <th className="px-3 py-2.5">학생</th>
+                            <th className="px-3 py-2.5">보호자</th>
+                            <th className="px-3 py-2.5">신청/희망일</th>
+                            <th className="px-3 py-2.5">수업교시</th>
+                            <th className="px-3 py-2.5 text-right">빠른 처리</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -1112,83 +815,60 @@ export default function TrialCrmClient({
                             const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
                             const getScheduleValue = (label: string) => scheduleItems.find((item) => item.label === label)?.value || "-";
                             const parentPhoneHref = phoneHref(lead.parentPhone);
+                            const childMeta = [lead.childAge, lead.childGrade, lead.childSchool].filter(Boolean).join(" · ");
+                            const dateLabel = `신청 ${getScheduleValue("신청일")} · 희망 ${getScheduleValue("희망일자")}`;
+                            const scheduleLabel = getScheduleValue("수업교시");
                             return (
                                 <tr
                                     key={`${lead.id}-list`}
-                                    onClick={() => setShowEditModal(lead)}
-                                    className="cursor-pointer divide-x divide-gray-100 hover:bg-gray-50/80 dark:divide-gray-700 dark:hover:bg-gray-900/50"
+                                    tabIndex={0}
+                                    onClick={() => setShowDetailModal(lead)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                            event.preventDefault();
+                                            setShowDetailModal(lead);
+                                        }
+                                    }}
+                                    className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
                                 >
-                                    <td className="px-3 py-2 align-top">
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full ${cfg.color}`} title={cfg.label}>
-                                                <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                            </span>
-                                            <p className="min-w-0 truncate font-black text-gray-900 dark:text-white">
-                                                {lead.childName}
-                                                {lead.childAge ? <span className="ml-1 text-xs font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
-                                            </p>
-                                        </div>
-                                        <p className="mt-0.5 max-w-44 truncate text-xs text-gray-500 dark:text-gray-400">
-                                            {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
-                                        </p>
+                                    <td className="px-3 py-2 align-middle">
+                                        <span className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold ${cfg.color}`} title={cfg.label}>
+                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                            <span className="truncate">{cfg.label}</span>
+                                        </span>
                                     </td>
-                                    <td className="px-3 py-2 align-top" onClick={(event) => event.stopPropagation()}>
-                                        <p className="whitespace-nowrap font-bold text-gray-800 dark:text-gray-100">{lead.parentName || "미입력"}</p>
-                                        <a href={parentPhoneHref} className="mt-0.5 inline-flex items-center gap-1 whitespace-nowrap text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
+                                    <td className="px-3 py-2 align-middle">
+                                        <p className="truncate font-black text-gray-900 dark:text-white">{lead.childName}</p>
+                                        <p className="truncate text-xs font-bold text-gray-500 dark:text-gray-400">{childMeta || "학생 정보 미입력"}</p>
+                                    </td>
+                                    <td className="px-3 py-2 align-middle" onClick={(event) => event.stopPropagation()}>
+                                        <p className="truncate font-bold text-gray-800 dark:text-gray-100">{lead.parentName || "미입력"}</p>
+                                        <a href={parentPhoneHref} className="inline-flex max-w-full items-center gap-1 text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
                                             <span className="material-symbols-outlined text-sm">phone</span>
-                                            {lead.parentPhone}
+                                            <span className="truncate">{lead.parentPhone}</span>
                                         </a>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
-                                        {getScheduleValue("신청일")}
+                                    <td className="px-3 py-2 align-middle">
+                                        <p className="truncate font-bold text-gray-800 dark:text-gray-100" title={dateLabel}>{dateLabel}</p>
+                                        <p className="truncate text-xs font-bold text-gray-500 dark:text-gray-400">
+                                            확정 {getScheduleValue("확정일정")}
+                                        </p>
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
-                                        {getScheduleValue("희망일자")}
+                                    <td className="px-3 py-2 align-middle">
+                                        <p className="truncate font-black text-gray-800 dark:text-gray-100" title={scheduleLabel}>{scheduleLabel}</p>
+                                        <p className="truncate text-xs font-bold text-gray-500 dark:text-gray-400">
+                                            쌤알림 {lead.coachNoticeSentAt ? formatDate(lead.coachNoticeSentAt) : "미발송"}
+                                        </p>
                                     </td>
-                                    <td className="max-w-52 px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
-                                        <span className="line-clamp-2">{getScheduleValue("수업교시")}</span>
-                                    </td>
-                                    <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-bold text-gray-600 dark:text-gray-300">
-                                        {lead.coachNoticeSentAt ? formatDate(lead.coachNoticeSentAt) : "미발송"}
-                                    </td>
-                                    <td className="px-3 py-2 align-top" onClick={(event) => event.stopPropagation()}>
-                                        {isClosed ? (
-                                            <span className="whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400">종료 상태</span>
-                                        ) : (
-                                            <select
-                                                value={lead.status}
-                                                onChange={(event) => handleStatusChange(lead, event.target.value)}
-                                                disabled={busy}
-                                                className="min-h-9 w-32 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
-                                            >
-                                                {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
-                                                    <option key={s} value={s}>
-                                                        {STATUS_CONFIG[s].label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 align-top" onClick={(event) => event.stopPropagation()}>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {renderEnrollGuideButton(lead)}
-                                            {renderActionMenu(lead, isClosed, parentPhoneHref)}
-                                        </div>
-                                        <div className="hidden">
-                                            <a
-                                                href={parentPhoneHref}
-                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
-                                            >
-                                                <span className="material-symbols-outlined text-sm">call</span>
+                                    <td className="px-3 py-2 align-middle" onClick={(event) => event.stopPropagation()}>
+                                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                            <a href={parentPhoneHref} className={LIST_QUICK_ACTION_CLASS} title="보호자에게 전화">
+                                                <span className="material-symbols-outlined text-base">call</span>
                                                 전화
                                             </a>
                                             {!isClosed && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowScheduleModal(lead)}
-                                                    className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-sky-200 px-2.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
-                                                >
-                                                    <span className="material-symbols-outlined text-sm">event_available</span>
+                                                <button type="button" onClick={() => setShowScheduleModal(lead)} className={LIST_QUICK_ACTION_CLASS}>
+                                                    <span className="material-symbols-outlined text-base">event_available</span>
                                                     일정
                                                 </button>
                                             )}
@@ -1196,30 +876,34 @@ export default function TrialCrmClient({
                                                 type="button"
                                                 onClick={() => handleRecordContact(lead, "CONTACTED")}
                                                 disabled={contactBusyId === lead.id}
-                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
+                                                className={LIST_QUICK_CONTACT_CLASS}
                                             >
-                                                <span className="material-symbols-outlined text-sm">done_all</span>
+                                                <span className="material-symbols-outlined text-base">done_all</span>
                                                 연락
                                             </button>
-                                            {lead.status === "ATTENDED" && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowConvertModal(lead)}
-                                                    disabled={busy}
-                                                    className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-500 px-2.5 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
-                                                >
-                                                    <span className="material-symbols-outlined text-sm">how_to_reg</span>
-                                                    등록
-                                                </button>
-                                            )}
                                             <button
                                                 type="button"
-                                                onClick={() => setShowMemoModal(lead)}
-                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                                onClick={() => setContactModal({ lead, defaultAction: "MEMO" })}
+                                                className={LIST_QUICK_ACTION_CLASS}
                                             >
-                                                <span className="material-symbols-outlined text-sm">edit_note</span>
+                                                <span className="material-symbols-outlined text-base">edit_note</span>
                                                 메모
                                             </button>
+                                            {!isClosed && (
+                                                <select
+                                                    value={lead.status}
+                                                    onChange={(event) => handleStatusChange(lead, event.target.value)}
+                                                    disabled={busy}
+                                                    className="min-h-8 w-28 rounded-md border border-gray-200 bg-white px-2 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+                                                >
+                                                    {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
+                                                        <option key={s} value={s}>
+                                                            {STATUS_CONFIG[s].label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            )}
+                                            {renderEnrollGuideButton(lead)}
                                         </div>
                                     </td>
                                 </tr>
@@ -1339,32 +1023,6 @@ export default function TrialCrmClient({
                             </button>
                         )}
                     </label>
-                    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
-                        <button
-                            type="button"
-                            onClick={() => setViewMode("cards")}
-                            className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-bold transition ${
-                                viewMode === "cards"
-                                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
-                                    : "text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
-                            }`}
-                        >
-                            <span className="material-symbols-outlined text-base">grid_view</span>
-                            카드
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode("list")}
-                            className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-bold transition ${
-                                viewMode === "list"
-                                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
-                                    : "text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
-                            }`}
-                        >
-                            <span className="material-symbols-outlined text-base">view_list</span>
-                            목록
-                        </button>
-                    </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                     {TRIAL_WORK_FILTERS.map((item) => (
@@ -1410,147 +1068,7 @@ export default function TrialCrmClient({
                 </div>
             ) : (
                 <div className="grid gap-4">
-                    {viewMode === "list" ? renderTrialList() : visibleLeads.map((lead) => {
-                        const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
-                        const isClosed = isClosedTrialStatus(lead.status);
-                        const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
-                        const parentPhoneHref = phoneHref(lead.parentPhone);
-                        const contactCount = getContactCount(lead.parentPhone, openContactCounts);
-                        const smsBadge = getSmsDeliveryBadge(lead);
-                        const visibleBadges = [
-                            ...getTrialPriorityBadges(lead, contactCount),
-                            smsBadge,
-                        ].filter(Boolean).slice(0, 4) as PriorityBadge[];
-                        return (
-                            <div
-                                key={lead.id}
-                                onClick={() => setShowEditModal(lead)}
-                                className="cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
-                            >
-                                <div className="space-y-4">
-                                    <section className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="mb-2 flex flex-wrap items-center gap-2">
-                                                <span className={`inline-flex whitespace-nowrap items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
-                                                    <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                                    {cfg.label}
-                                                </span>
-                                                {visibleBadges.map((badge) => (
-                                                    <span
-                                                        key={`${lead.id}-priority-${badge.label}`}
-                                                        className={`inline-flex whitespace-nowrap items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${badge.className}`}
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">{badge.icon}</span>
-                                                        {badge.label}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                            <h3 className="break-keep text-lg font-black leading-snug text-gray-900 dark:text-white">
-                                                {lead.childName}
-                                                {lead.childAge ? <span className="ml-1 text-sm font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
-                                            </h3>
-                                            <p className="mt-1 break-keep text-sm text-gray-500 dark:text-gray-400">
-                                                {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
-                                            </p>
-                                        </div>
-
-                                        <div className="min-w-0 rounded-xl bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900/70 lg:min-w-48" onClick={(event) => event.stopPropagation()}>
-                                            <p className="break-keep font-bold text-gray-800 dark:text-gray-100">{lead.parentName || "보호자 미입력"}</p>
-                                            <a href={parentPhoneHref} className="mt-1 inline-flex items-center gap-1 whitespace-nowrap font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
-                                                <span className="material-symbols-outlined text-base">phone</span>
-                                                {lead.parentPhone}
-                                            </a>
-                                        </div>
-                                    </section>
-
-                                    <section className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2">
-                                        {scheduleItems.map((item) => (
-                                            <ScheduleInfoCard
-                                                key={`${lead.id}-schedule-${item.label}`}
-                                                label={item.label}
-                                                icon={item.icon}
-                                                value={item.value}
-                                                className={item.className}
-                                            />
-                                        ))}
-                                    </section>
-
-                                    <section className="flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-gray-700 lg:flex-row lg:items-center lg:justify-between" onClick={(event) => event.stopPropagation()}>
-                                        {isClosed ? (
-                                            <span className="inline-flex min-h-10 w-fit items-center whitespace-nowrap rounded-lg bg-gray-100 px-3 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                                                종료 상태
-                                            </span>
-                                        ) : (
-                                            <select
-                                                value={lead.status}
-                                                onChange={(event) => handleStatusChange(lead, event.target.value)}
-                                                disabled={busy}
-                                                className="min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime lg:w-44"
-                                            >
-                                                {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
-                                                    <option key={s} value={s}>
-                                                        {STATUS_CONFIG[s].label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {renderEnrollGuideButton(lead)}
-                                            {renderActionMenu(lead, isClosed, parentPhoneHref)}
-                                        </div>
-                                        <div className="hidden">
-                                            <a
-                                                href={parentPhoneHref}
-                                                className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
-                                            >
-                                                <span className="material-symbols-outlined text-base">call</span>
-                                                전화
-                                            </a>
-                                            {!isClosed && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowScheduleModal(lead)}
-                                                    className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">event_available</span>
-                                                    일정
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRecordContact(lead, "CONTACTED")}
-                                                disabled={contactBusyId === lead.id}
-                                                className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
-                                            >
-                                                <span className="material-symbols-outlined text-base">done_all</span>
-                                                연락
-                                            </button>
-                                            {lead.status === "ATTENDED" && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowConvertModal(lead)}
-                                                    disabled={busy}
-                                                    className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">how_to_reg</span>
-                                                    등록
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowMemoModal(lead)}
-                                                className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
-                                            >
-                                                <span className="material-symbols-outlined text-base">edit_note</span>
-                                                메모
-                                            </button>
-                                        </div>
-                                    </section>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    {renderTrialList()}
                     <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
                         <span>
                             {filteredLeads.length}건 중 {visibleLeads.length}건 표시
@@ -1591,6 +1109,28 @@ export default function TrialCrmClient({
                 />
             )}
 
+            {showDetailModal && (
+                <TrialLeadDetailModal
+                    lead={showDetailModal}
+                    scheduleItems={getTrialScheduleItems(showDetailModal, classesBySlotKey, classesById)}
+                    onClose={() => setShowDetailModal(null)}
+                    onEdit={() => {
+                        setShowEditModal(showDetailModal);
+                        setShowDetailModal(null);
+                    }}
+                    onSchedule={() => {
+                        setShowScheduleModal(showDetailModal);
+                        setShowDetailModal(null);
+                    }}
+                    onMemo={() => {
+                        setShowMemoModal(showDetailModal);
+                        setShowDetailModal(null);
+                    }}
+                    onCoachNotice={() => void handleSendCoachNotice(showDetailModal)}
+                    onResendSms={() => void handleResendApplicationSms(showDetailModal)}
+                />
+            )}
+
             {contactModal && (
                 <TrialContactModal
                     lead={contactModal.lead}
@@ -1604,6 +1144,138 @@ export default function TrialCrmClient({
                 />
             )}
         </div>
+    );
+}
+
+function TrialLeadDetailModal({
+    lead,
+    scheduleItems,
+    onClose,
+    onEdit,
+    onSchedule,
+    onMemo,
+    onCoachNotice,
+    onResendSms,
+}: {
+    lead: TrialLead;
+    scheduleItems: Array<{ label: string; icon: string; value: string; className: string }>;
+    onClose: () => void;
+    onEdit: () => void;
+    onSchedule: () => void;
+    onMemo: () => void;
+    onCoachNotice: () => void;
+    onResendSms: () => void;
+}) {
+    const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
+    const details = [
+        ["학생", [lead.childName, lead.childAge, lead.childGrade, lead.childSchool].filter(Boolean).join(" · ")],
+        ["보호자", [lead.parentName || "미입력", lead.parentPhone].filter(Boolean).join(" · ")],
+        ["유입경로", SOURCE_LABELS[lead.source] || lead.source],
+        ["농구 경험", lead.basketballExp || "미입력"],
+        ["체험비", lead.trialFeeConfirmed ? "입금 확인" : "미확인"],
+        ["최근 연락", lead.latestContactAction ? `${CONTACT_ACTION_LABELS[lead.latestContactAction] ?? lead.latestContactAction}${lead.latestContactAt ? ` · ${formatContactDateTime(lead.latestContactAt)}` : ""}` : "기록 없음"],
+    ];
+
+    return (
+        <AdminModal onClose={onClose} titleId="trial-detail-modal-title" panelClassName="max-w-2xl">
+            <div className="w-full p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${cfg.color}`}>
+                                <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                {cfg.label}
+                            </span>
+                            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">접수 {formatCompactDateTime(lead.createdAt)}</span>
+                        </div>
+                        <h2 id="trial-detail-modal-title" className="mt-2 text-xl font-black text-gray-900 dark:text-white">
+                            {lead.childName} 체험 신청 상세
+                        </h2>
+                        <p className="mt-1 text-sm font-bold text-gray-500 dark:text-gray-400">
+                            행 목록에서는 핵심만 보고, 상세 정보는 여기서 확인합니다.
+                        </p>
+                    </div>
+                    <a
+                        href={phoneHref(lead.parentPhone)}
+                        className={LIST_QUICK_ACTION_CLASS}
+                    >
+                        <span className="material-symbols-outlined text-base">call</span>
+                        전화
+                    </a>
+                </div>
+
+                <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                    {scheduleItems.map((item) => (
+                        <div key={`trial-detail-${item.label}`} className={`rounded-lg border px-3 py-2 ${item.className}`}>
+                            <p className="flex items-center gap-1 text-[11px] font-black uppercase opacity-80">
+                                <span className="material-symbols-outlined text-sm">{item.icon}</span>
+                                {item.label}
+                            </p>
+                            <p className="mt-1 break-keep text-sm font-black">{item.value}</p>
+                        </div>
+                    ))}
+                </div>
+
+                <dl className="mt-5 grid gap-2 sm:grid-cols-2">
+                    {details.map(([label, value]) => (
+                        <div key={`trial-detail-row-${label}`} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
+                            <dt className="text-[11px] font-black text-gray-500 dark:text-gray-400">{label}</dt>
+                            <dd className="mt-0.5 break-keep text-sm font-bold text-gray-900 dark:text-white">{value || "미입력"}</dd>
+                        </div>
+                    ))}
+                </dl>
+
+                {(lead.hopeNote || lead.memo || lead.openFollowUpNote) && (
+                    <div className="mt-5 space-y-2">
+                        {lead.hopeNote && (
+                            <p className="rounded-lg bg-lime-50 px-3 py-2 text-sm font-bold text-lime-800 dark:bg-lime-950/30 dark:text-lime-200">
+                                희망 메모: {lead.hopeNote}
+                            </p>
+                        )}
+                        {lead.memo && (
+                            <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                                관리 메모: {lead.memo}
+                            </p>
+                        )}
+                        {lead.openFollowUpNote && (
+                            <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+                                재연락 메모: {lead.openFollowUpNote}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                <div className="mt-6 flex flex-wrap justify-end gap-2">
+                    <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-900">
+                        닫기
+                    </button>
+                    <button type="button" onClick={onMemo} className={LIST_QUICK_ACTION_CLASS}>
+                        <span className="material-symbols-outlined text-base">edit_note</span>
+                        메모
+                    </button>
+                    {!lead.coachNoticeSentAt && (
+                        <button type="button" onClick={onCoachNotice} className={LIST_QUICK_ACTION_CLASS}>
+                            <span className="material-symbols-outlined text-base">school</span>
+                            쌤 알림
+                        </button>
+                    )}
+                    {lead.smsDeliveryFailed > 0 && (
+                        <button type="button" onClick={onResendSms} className={LIST_QUICK_ACTION_CLASS}>
+                            <span className="material-symbols-outlined text-base">sms_failed</span>
+                            문자 재발송
+                        </button>
+                    )}
+                    <button type="button" onClick={onSchedule} className={LIST_QUICK_ACTION_CLASS}>
+                        <span className="material-symbols-outlined text-base">event_available</span>
+                        일정
+                    </button>
+                    <button type="button" onClick={onEdit} className="inline-flex min-h-8 items-center gap-1.5 rounded-md bg-brand-orange-500 px-3 text-xs font-black text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400">
+                        <span className="material-symbols-outlined text-base">edit</span>
+                        수정
+                    </button>
+                </div>
+            </div>
+        </AdminModal>
     );
 }
 

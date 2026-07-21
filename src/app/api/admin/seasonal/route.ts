@@ -56,6 +56,9 @@ const ITEM_NOTIFICATION_TRIGGER: Partial<Record<string, SeasonalSmsTrigger>> = {
   CANCELLED: SEASONAL_SMS_TRIGGERS.cancelled,
 };
 
+const WEEKDAY_KEYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+const ASSIGNMENT_REVIEW_REASONS = new Set(["MISSING_WEEKDAYS", "MISSING_TUITION", "SHUTTLE_REQUEST_PENDING_ITEM"]);
+
 function notificationNeedsWarning(result: SeasonalSmsDeliveryResult | null | undefined) {
   return Boolean(result && (result.status === "FAILED" || result.errorCode === "TEMPLATE_DISABLED_OR_MISSING"));
 }
@@ -164,6 +167,15 @@ function publicUrl(path: string) {
 }
 
 const ROSTER_WEEKDAYS: Record<string, number> = { MON: 1, 월: 1, TUE: 2, 화: 2, WED: 3, 수: 3, THU: 4, 목: 4, FRI: 5, 금: 5, SAT: 6, 토: 6, SUN: 7, 일: 7 };
+const SELECTED_WEEKDAYS_SQL = `CASE UPPER(selected_day)
+  WHEN 'MON' THEN 1 WHEN '월' THEN 1
+  WHEN 'TUE' THEN 2 WHEN '화' THEN 2
+  WHEN 'WED' THEN 3 WHEN '수' THEN 3
+  WHEN 'THU' THEN 4 WHEN '목' THEN 4
+  WHEN 'FRI' THEN 5 WHEN '금' THEN 5
+  WHEN 'SAT' THEN 6 WHEN '토' THEN 6
+  WHEN 'SUN' THEN 7 WHEN '일' THEN 7
+  ELSE NULL END`;
 
 function rosterInt(value: string | null, fallback: number, min: number, max: number) {
   const parsed = Number(value);
@@ -203,9 +215,8 @@ async function seasonalRoster(request: NextRequest) {
     ($1::text IS NULL OR app."seasonId" = $1)
     AND ($2::text IS NULL OR item."offeringId" = $2)
     AND ($3::int IS NULL OR EXISTS (
-      SELECT 1 FROM "SpecialProgramSessionDate" sd
-       WHERE sd."offeringId" = item."offeringId"
-         AND EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int = $3
+      SELECT 1 FROM unnest(app."selectedWeekdays") AS selected_day
+       WHERE ${SELECTED_WEEKDAYS_SQL} = $3
     ))
     AND ($4::text IS NULL OR ${paymentStatusSql} = $4)
     AND ($5::text IS NULL OR CASE
@@ -226,8 +237,12 @@ async function seasonalRoster(request: NextRequest) {
              ${paymentStatusSql} AS "paymentStatus", invoice."invoiceNo",
              (shuttle.id IS NOT NULL) AS "shuttleRequested",
              (shuttle.id IS NOT NULL AND (shuttle."assignedRouteId" IS NULL OR shuttle."assignedStopId" IS NULL)) AS "shuttleUnassigned",
-             COALESCE((SELECT array_agg(DISTINCT EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int ORDER BY EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int)
-                         FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = item."offeringId"), ARRAY[]::int[]) AS weekdays
+             COALESCE((SELECT array_agg(day_num ORDER BY day_num)
+                         FROM (
+                           SELECT DISTINCT ${SELECTED_WEEKDAYS_SQL} AS day_num
+                             FROM unnest(app."selectedWeekdays") AS selected_day
+                         ) selected_days
+                        WHERE day_num IS NOT NULL), ARRAY[]::int[]) AS weekdays
         FROM "SpecialProgramApplicationItem" item
         JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
         JOIN "SpecialProgramSeason" season ON season.id = app."seasonId"
@@ -388,6 +403,171 @@ async function updateSpecialProgramItemStatus(
   return { item, before, changed, reservation };
 }
 
+function normalizeSelectedWeekdays(value: unknown) {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[\s,/]+/)
+      : [];
+  const days = raw
+    .map((item) => cleanText(item, 10)?.toUpperCase())
+    .map((item) => (item ? ROSTER_WEEKDAYS[item] : null))
+    .filter((item): item is number => typeof item === "number" && Number.isInteger(item) && item >= 1 && item <= 7);
+  return Array.from(new Set(days)).sort((left, right) => left - right).map((day) => WEEKDAY_KEYS[day - 1]);
+}
+
+function defaultSpecialProgramPrice(
+  offering: { price: number; newApplicantPrice: number | null; existingApplicantPrice: number | null },
+  applicantType?: string | null,
+) {
+  if (applicantType === "EXISTING" && offering.existingApplicantPrice !== null) return offering.existingApplicantPrice;
+  if (applicantType === "NEW" && offering.newApplicantPrice !== null) return offering.newApplicantPrice;
+  return offering.price;
+}
+
+async function ensureSpecialProgramOfferingCapacity(tx: Prisma.TransactionClient, offeringId: string, excludeItemId?: string) {
+  await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${offeringId} FOR UPDATE`;
+  const [offering, occupied] = await Promise.all([
+    tx.specialProgramOffering.findUnique({ where: { id: offeringId } }),
+    tx.specialProgramApplicationItem.count({
+      where: {
+        offeringId,
+        status: { in: ["PENDING", "APPROVED"] },
+        ...(excludeItemId ? { id: { not: excludeItemId } } : {}),
+      },
+    }),
+  ]);
+  if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반에는 배정할 수 없습니다.", 409, "CAPACITY_REQUIRED");
+  if (occupied >= offering.capacity) throw new SeasonalError("정원이 가득 찬 반에는 배정할 수 없습니다.", 409, "CAPACITY_FULL");
+  return offering;
+}
+
+async function refreshApplicationSummary(tx: Prisma.TransactionClient, applicationId: string, actorId: string) {
+  const items = await tx.specialProgramApplicationItem.findMany({
+    where: { applicationId },
+    select: { status: true, priceSnapshot: true },
+  });
+  return tx.specialProgramApplication.update({
+    where: { id: applicationId },
+    data: {
+      status: items.length ? applicationStatusFromItemStatuses(items.map((item) => item.status)) : "PENDING",
+      totalPriceSnapshot: items.reduce((sum, item) => sum + item.priceSnapshot, 0),
+      processedAt: new Date(),
+      processedByUserId: actorId,
+    },
+  });
+}
+
+async function saveSpecialProgramItemAssignment(
+  tx: Prisma.TransactionClient,
+  params: { itemId: string; offeringId: string; selectedWeekdays: string[]; priceSnapshot: number; actorId: string },
+) {
+  const before = await tx.specialProgramApplicationItem.findUnique({
+    where: { id: params.itemId },
+    include: { application: true, offering: true },
+  });
+  if (!before) throw new SeasonalError("신청 반을 찾을 수 없습니다.", 404, "APPLICATION_ITEM_NOT_FOUND");
+  if (before.enrollmentId || before.paymentId) {
+    throw new SeasonalError("이미 수강 등록이나 청구서가 연결된 신청은 먼저 연결을 정리한 뒤 변경해 주세요.", 409, "ITEM_ALREADY_CONVERTED");
+  }
+  const offering = await tx.specialProgramOffering.findUnique({ where: { id: params.offeringId } });
+  if (!offering || offering.seasonId !== before.application.seasonId) throw new SeasonalError("같은 시즌의 특강 반을 선택해 주세요.", 400, "OFFERING_NOT_FOUND");
+  const duplicated = await tx.specialProgramApplicationItem.findFirst({
+    where: { applicationId: before.applicationId, offeringId: params.offeringId, id: { not: before.id } },
+    select: { id: true },
+  });
+  if (duplicated) throw new SeasonalError("이미 같은 반으로 등록된 신청 항목이 있습니다.", 409, "OFFERING_ALREADY_ASSIGNED");
+  if (["PENDING", "APPROVED"].includes(before.status)) await ensureSpecialProgramOfferingCapacity(tx, params.offeringId, before.id);
+  let waitlistOrder = before.waitlistOrder;
+  if (before.status === "WAITLISTED" && before.offeringId !== params.offeringId) {
+    const last = await tx.specialProgramApplicationItem.aggregate({ where: { offeringId: params.offeringId, status: "WAITLISTED" }, _max: { waitlistOrder: true } });
+    waitlistOrder = (last._max.waitlistOrder || 0) + 1;
+  }
+  const item = await tx.specialProgramApplicationItem.update({
+    where: { id: before.id },
+    data: {
+      offeringId: offering.id,
+      titleSnapshot: offering.title,
+      priceSnapshot: params.priceSnapshot,
+      waitlistOrder: before.status === "WAITLISTED" ? waitlistOrder : null,
+      conversionStatus: "NOT_STARTED",
+      conversionError: null,
+    },
+  });
+  const reviewReasons = before.application.reviewReasons.filter((reason) => !ASSIGNMENT_REVIEW_REASONS.has(reason));
+  await tx.specialProgramApplication.update({
+    where: { id: before.applicationId },
+    data: {
+      selectedWeekdays: params.selectedWeekdays,
+      requiresReview: reviewReasons.length > 0,
+      reviewReasons,
+    },
+  });
+  const application = await refreshApplicationSummary(tx, before.applicationId, params.actorId);
+  await tx.specialProgramAuditLog.create({
+    data: {
+      seasonId: before.application.seasonId,
+      offeringId: item.offeringId,
+      applicationId: item.applicationId,
+      itemId: item.id,
+      actorType: "ADMIN",
+      actorId: params.actorId,
+      action: "ITEM_ASSIGNMENT_UPDATED",
+      beforeJSON: before,
+      afterJSON: { item, selectedWeekdays: params.selectedWeekdays, application },
+    },
+  });
+  return { item, application };
+}
+
+async function createSpecialProgramApplicationItem(
+  tx: Prisma.TransactionClient,
+  params: { applicationId: string; offeringId: string; selectedWeekdays: string[]; priceSnapshot: number; actorId: string },
+) {
+  const application = await tx.specialProgramApplication.findUnique({
+    where: { id: params.applicationId },
+    include: { items: { select: { offeringId: true } } },
+  });
+  if (!application) throw new SeasonalError("신청서를 찾을 수 없습니다.", 404, "APPLICATION_NOT_FOUND");
+  const offering = await ensureSpecialProgramOfferingCapacity(tx, params.offeringId);
+  if (offering.seasonId !== application.seasonId) throw new SeasonalError("같은 시즌의 특강 반을 선택해 주세요.", 400, "OFFERING_NOT_FOUND");
+  if (application.items.some((item) => item.offeringId === offering.id)) {
+    throw new SeasonalError("이미 같은 반으로 등록된 신청 항목이 있습니다.", 409, "OFFERING_ALREADY_ASSIGNED");
+  }
+  const item = await tx.specialProgramApplicationItem.create({
+    data: {
+      applicationId: application.id,
+      offeringId: offering.id,
+      titleSnapshot: offering.title,
+      priceSnapshot: params.priceSnapshot,
+      status: "PENDING",
+    },
+  });
+  const reviewReasons = application.reviewReasons.filter((reason) => !ASSIGNMENT_REVIEW_REASONS.has(reason));
+  await tx.specialProgramApplication.update({
+    where: { id: application.id },
+    data: {
+      selectedWeekdays: params.selectedWeekdays,
+      requiresReview: reviewReasons.length > 0,
+      reviewReasons,
+    },
+  });
+  const updatedApplication = await refreshApplicationSummary(tx, application.id, params.actorId);
+  await tx.specialProgramAuditLog.create({
+    data: {
+      seasonId: application.seasonId,
+      offeringId: item.offeringId,
+      applicationId: application.id,
+      itemId: item.id,
+      actorType: "ADMIN",
+      actorId: params.actorId,
+      action: "ITEM_ASSIGNMENT_CREATED",
+      afterJSON: { item, selectedWeekdays: params.selectedWeekdays, application: updatedApplication },
+    },
+  });
+  return { item, application: updatedApplication };
+}
+
 function respondError(error: unknown) {
   if (error instanceof SeasonalError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && JSON.stringify(error.meta?.target ?? "").toLowerCase().includes("code")) {
@@ -527,7 +707,7 @@ export async function POST(request: NextRequest) {
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
       if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
-      if (status === "OPEN" && !instructorId) throw new SeasonalError("모집 중인 반은 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
+      if (status === "OPEN" && (!linkedClassId || !instructorId)) throw new SeasonalError("모집 중인 반은 출석 연결 반과 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
       const offering = await prisma.$transaction(async (tx) => {
         const created = await tx.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId, instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId } });
         await syncOfferingSessionDates(tx, { offeringId: created.id, linkedClassId, instructorId, dates: sessionDates });
@@ -799,7 +979,7 @@ export async function PATCH(request: NextRequest) {
       if (nextStatus === "OPEN" && nextCapacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       const nextLinkedClassId = (update.linkedClassId === undefined ? before.linkedClassId : update.linkedClassId) as string | null;
       const nextInstructorId = (update.instructorId === undefined ? before.instructorId : update.instructorId) as string | null;
-      if (nextStatus === "OPEN" && !nextInstructorId) throw new SeasonalError("모집 중인 반은 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
+      if (nextStatus === "OPEN" && (!nextLinkedClassId || !nextInstructorId)) throw new SeasonalError("모집 중인 반은 출석 연결 반과 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");
       if (data.shuttleAvailable !== undefined) update.shuttleAvailable = Boolean(data.shuttleAvailable);
       if (data.displayOrder !== undefined) update.displayOrder = Number(data.displayOrder) || 0;
       const replacementDates = Array.isArray(data.sessionDates)
@@ -907,6 +1087,22 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ application, notification, ...(notificationNeedsWarning(notification) ? { notificationWarning: true } : {}) });
     }
 
+    if (body.resource === "itemAssignment" || body.resource === "applicationAssignment") {
+      const offeringId = cleanText(data.offeringId, 100);
+      if (!offeringId) throw new SeasonalError("배정할 특강 반을 선택해 주세요.", 400, "OFFERING_REQUIRED");
+      const selectedWeekdays = normalizeSelectedWeekdays(data.selectedWeekdays);
+      if (selectedWeekdays.length === 0) throw new SeasonalError("학생이 실제 참여할 요일을 선택해 주세요.", 400, "WEEKDAYS_REQUIRED");
+      const priceSnapshot = nonNegativeInt(data.priceSnapshot, "금액");
+      if (priceSnapshot <= 0) throw new SeasonalError("금액은 1원 이상이어야 합니다.", 400, "PRICE_REQUIRED");
+      const result = await prisma.$transaction(
+        (tx) => body.resource === "itemAssignment"
+          ? saveSpecialProgramItemAssignment(tx, { itemId: id, offeringId, selectedWeekdays, priceSnapshot, actorId: actor.appUserId })
+          : createSpecialProgramApplicationItem(tx, { applicationId: id, offeringId, selectedWeekdays, priceSnapshot, actorId: actor.appUserId }),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      return NextResponse.json(result);
+    }
+
     if (body.resource === "item") {
       const status = cleanText(data.status, 30);
       if (!status || !ITEM_STATUSES.has(status)) throw new SeasonalError("신청 항목 상태가 올바르지 않습니다.");
@@ -993,6 +1189,25 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
        LIMIT 1
     `;
     let parentId = existingParents[0]?.id;
+    let matchedGuardianStudentId: string | null = null;
+    if (!parentId) {
+      const guardianMatches = await tx.$queryRaw<Array<{ studentId: string }>>`
+        SELECT DISTINCT student.id AS "studentId"
+          FROM "Student" student
+          JOIN "Guardian" guardian ON guardian."studentId" = student.id
+         WHERE student.name = ${item.application.childName}
+           AND ((student."birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date = (${item.application.childBirthDate}::timestamptz AT TIME ZONE 'Asia/Seoul')::date
+           AND regexp_replace(COALESCE(guardian.phone, ''), '[^0-9]', '', 'g') = ${parentPhone}
+         ORDER BY student.id
+         LIMIT 2
+      `;
+      if (guardianMatches.length > 1) {
+        throw new SeasonalError("같은 학생 정보와 보호자 연락처가 여러 건이라 관리자 확인이 필요합니다.", 409, "GUARDIAN_MATCH_AMBIGUOUS");
+      }
+      if (guardianMatches[0]) {
+        matchedGuardianStudentId = guardianMatches[0].studentId;
+      }
+    }
     if (!parentId) {
       const parents = await tx.$queryRaw<{ id: string }[]>`
         INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
@@ -1007,14 +1222,14 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
     }
     if (!parentId) throw new SeasonalError("학부모 계정을 준비하지 못했습니다.", 500, "PARENT_SAVE_FAILED");
 
-    const existingStudents = await tx.$queryRaw<{ id: string }[]>`
+    const existingStudents = matchedGuardianStudentId ? [] : await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM "Student"
        WHERE name = ${item.application.childName}
          AND "parentId" = ${parentId}
          AND (("birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date = (${item.application.childBirthDate}::timestamptz AT TIME ZONE 'Asia/Seoul')::date
        LIMIT 1
     `;
-    let studentId = existingStudents[0]?.id;
+    let studentId = matchedGuardianStudentId ?? existingStudents[0]?.id;
     if (studentId) {
       await tx.$executeRaw`
         UPDATE "Student" SET

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminModal from "@/components/admin/AdminModal";
 import { createCsv, createSafeCsvFilename, maskPhoneNumber } from "@/lib/seasonal/roster-export";
 import { seoulDateTimeToIso } from "./seasonalDateTime";
@@ -125,6 +125,7 @@ type ApplicationItem = {
 
 type Application = {
   id: string;
+  seasonId: string;
   childName: string;
   childBirthDate?: string | null;
   childGender?: string | null;
@@ -207,6 +208,14 @@ type ApplicationsMode = "applications" | "roster";
 
 type Tab = "overview" | "seasons" | "applications";
 
+type AssignmentInput = {
+  applicationId: string;
+  itemId?: string;
+  offeringId: string;
+  selectedWeekdays: string[];
+  priceSnapshot: number;
+};
+
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "작성 중", PUBLISHED: "모집 중", OPEN: "모집 중", CLOSED: "모집 마감", ARCHIVED: "보관",
   PENDING: "승인 대기", APPROVED: "승인", PAYMENT_PENDING: "결제 대기", CONFIRMED: "최종 확정", WAITLISTED: "대기", REJECTED: "반려", CANCELLED: "취소",
@@ -220,6 +229,15 @@ const TABS: Array<{ key: Tab; label: string; icon: string }> = [
 ];
 
 const BULK_ITEM_STATUSES: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
+const WEEKDAY_OPTIONS = [
+  { value: "MON", label: "월" },
+  { value: "TUE", label: "화" },
+  { value: "WED", label: "수" },
+  { value: "THU", label: "목" },
+  { value: "FRI", label: "금" },
+  { value: "SAT", label: "토" },
+  { value: "SUN", label: "일" },
+] as const;
 
 function Icon({ name, className = "" }: { name: string; className?: string }) {
   return <span className={`material-symbols-outlined ${className}`} aria-hidden="true">{name}</span>;
@@ -265,6 +283,34 @@ function stringList(value: unknown) {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
   if (typeof value === "string" && value.trim()) return value.split(/[,/]/).map((item) => item.trim()).filter(Boolean);
   return [];
+}
+
+function weekdayLabel(value: string) {
+  return WEEKDAY_OPTIONS.find((option) => option.value === value || option.label === value)?.label ?? value;
+}
+
+function weekdayKey(value: string) {
+  return WEEKDAY_OPTIONS.find((option) => option.value === value || option.label === value)?.value ?? null;
+}
+
+function normalizeWeekdayKeys(values?: string[] | null) {
+  const keys: string[] = [];
+  for (const value of values ?? []) {
+    const key = weekdayKey(value);
+    if (key && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
+function assignmentPriceFor(application: Application, offering?: SeasonalClass) {
+  if (!offering) return 0;
+  if (application.applicantType === "EXISTING" && offering.existingApplicantPrice !== null && offering.existingApplicantPrice !== undefined) {
+    return offering.existingApplicantPrice;
+  }
+  if (application.applicantType === "NEW" && offering.newApplicantPrice !== null && offering.newApplicantPrice !== undefined) {
+    return offering.newApplicantPrice;
+  }
+  return offering.price ?? 0;
 }
 
 function recordValue(record: Record<string, unknown>, keys: string[], fallback = "") {
@@ -355,6 +401,10 @@ export default function SeasonalAdminClient() {
   const [editingSeason, setEditingSeason] = useState<Season | null>(null);
   const [editingClass, setEditingClass] = useState<SeasonalClass | null>(null);
   const [convertingItemId, setConvertingItemId] = useState("");
+  const updatingItemIdsRef = useRef(new Set<string>());
+  const [updatingItemIds, setUpdatingItemIds] = useState<Set<string>>(() => new Set());
+  const [itemUpdateErrors, setItemUpdateErrors] = useState<Record<string, string>>({});
+  const [assigningKey, setAssigningKey] = useState("");
   const [sendingNotificationKey, setSendingNotificationKey] = useState("");
   const [resolvingReview, setResolvingReview] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -514,6 +564,15 @@ export default function SeasonalAdminClient() {
   }
 
   async function updateItem(itemId: string, status: ItemStatus) {
+    if (updatingItemIdsRef.current.has(itemId)) return;
+    updatingItemIdsRef.current.add(itemId);
+    setUpdatingItemIds(new Set(updatingItemIdsRef.current));
+    setItemUpdateErrors((current) => {
+      if (!current[itemId]) return current;
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
     try {
       const result = await mutate("PATCH", { resource: "item", id: itemId, data: { status } }, `신청 항목을 '${STATUS_LABEL[status]}' 상태로 변경했습니다.`) as { notification?: { status: NotificationSummary["status"]; errorCode?: string | null } | null };
       const expected = itemNotification(status);
@@ -530,7 +589,47 @@ export default function SeasonalAdminClient() {
         status,
         notificationSummary: nextSummary ?? (item.notificationSummary?.trigger === expected?.trigger ? item.notificationSummary : null),
       } : item) } : current);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "상태를 변경하지 못했습니다."); }
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "상태를 변경하지 못했습니다.";
+      setError(message);
+      setItemUpdateErrors((current) => ({ ...current, [itemId]: message }));
+    } finally {
+      updatingItemIdsRef.current.delete(itemId);
+      setUpdatingItemIds(new Set(updatingItemIdsRef.current));
+    }
+  }
+
+  async function saveAssignment(input: AssignmentInput) {
+    const key = input.itemId ?? input.applicationId;
+    setAssigningKey(key);
+    setError("");
+    setItemUpdateErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    try {
+      await mutate(
+        "PATCH",
+        {
+          resource: input.itemId ? "itemAssignment" : "applicationAssignment",
+          id: key,
+          data: {
+            offeringId: input.offeringId,
+            selectedWeekdays: input.selectedWeekdays,
+            priceSnapshot: input.priceSnapshot,
+          },
+        },
+        "수업 정보를 저장했습니다.",
+      );
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "수업 정보를 저장하지 못했습니다.";
+      setError(message);
+      setItemUpdateErrors((current) => ({ ...current, [key]: message }));
+    } finally {
+      setAssigningKey("");
+    }
   }
 
   async function convertItem(itemId: string) {
@@ -747,7 +846,7 @@ export default function SeasonalAdminClient() {
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
-      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
+      {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
       {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
@@ -1045,8 +1144,13 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
 
 function ApplicationDrawer({
   application,
+  seasons,
   onClose,
   onUpdateItem,
+  updatingItemIds,
+  itemUpdateErrors,
+  onSaveAssignment,
+  assigningKey,
   onConvertItem,
   onCopyInvoiceLink,
   onRetryNotification,
@@ -1056,8 +1160,13 @@ function ApplicationDrawer({
   convertingItemId,
 }: {
   application: Application;
+  seasons: Season[];
   onClose: () => void;
   onUpdateItem: (id: string, status: ItemStatus) => Promise<void>;
+  updatingItemIds: Set<string>;
+  itemUpdateErrors: Record<string, string>;
+  onSaveAssignment: (input: AssignmentInput) => Promise<void>;
+  assigningKey: string;
   onConvertItem: (id: string) => Promise<void>;
   onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>;
   onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>;
@@ -1069,6 +1178,7 @@ function ApplicationDrawer({
   const totalAmount = application.totalAmount ?? application.items.reduce((sum, item) => sum + (item.amount ?? 0), 0);
   const parentPhoneHref = application.parentPhone ? `tel:${application.parentPhone}` : undefined;
   const parentSmsHref = application.parentPhone ? `sms:${application.parentPhone}` : undefined;
+  const offeringOptions = seasons.find((season) => season.id === application.seasonId)?.classes ?? seasons.flatMap((season) => season.classes);
 
   return <AdminModal onClose={onClose} titleId="application-title" panelClassName="h-full max-w-2xl rounded-none sm:ml-auto sm:mr-0 sm:rounded-l-2xl sm:rounded-r-none">
     <aside className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
@@ -1118,7 +1228,33 @@ function ApplicationDrawer({
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
         </div>
         <div className="mt-3 space-y-3">
-          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} onConvertItem={onConvertItem} onCopyInvoiceLink={onCopyInvoiceLink} onRetryNotification={onRetryNotification} sendingNotificationKey={sendingNotificationKey} converting={convertingItemId === item.id} />)}
+          {application.items.length === 0 && (
+            <ApplicationAssignmentEditor
+              application={application}
+              offerings={offeringOptions}
+              saving={assigningKey === application.id}
+              error={itemUpdateErrors[application.id]}
+              onSaveAssignment={onSaveAssignment}
+            />
+          )}
+          {application.items.map((item) => (
+            <ApplicationItemCard
+              key={item.id}
+              application={application}
+              offerings={offeringOptions}
+              item={item}
+              onUpdateItem={onUpdateItem}
+              updating={updatingItemIds.has(item.id)}
+              updateError={itemUpdateErrors[item.id]}
+              onSaveAssignment={onSaveAssignment}
+              assignmentSaving={assigningKey === item.id}
+              onConvertItem={onConvertItem}
+              onCopyInvoiceLink={onCopyInvoiceLink}
+              onRetryNotification={onRetryNotification}
+              sendingNotificationKey={sendingNotificationKey}
+              converting={convertingItemId === item.id}
+            />
+          ))}
         </div>
       </section>
 
@@ -1130,7 +1266,7 @@ function ApplicationDrawer({
 
 function ApplicationReviewSummary({ application, onResolveReview, resolving }: { application: Application; onResolveReview: (applicationId: string, reviewNote: string) => Promise<void>; resolving: boolean }) {
   const importedLabel = application.imported ? `가져온 신청${application.importSource ? ` · ${application.importSource}` : ""}` : "홈페이지 신청";
-  const weekdays = application.selectedWeekdays?.length ? application.selectedWeekdays.join(" · ") : "요일 미확인";
+  const weekdays = application.selectedWeekdays?.length ? application.selectedWeekdays.map(weekdayLabel).join(" · ") : "요일 미확인";
   const needsReview = application.reviewReasons ?? [];
   const [reviewNote, setReviewNote] = useState("");
   return <section aria-label="운영 확인 정보" className="mt-5 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
@@ -1144,11 +1280,143 @@ function ApplicationReviewSummary({ application, onResolveReview, resolving }: {
   </section>;
 }
 
-function ApplicationItemCard({ item, onUpdateItem, onConvertItem, onCopyInvoiceLink, onRetryNotification, sendingNotificationKey, converting }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void>; onConvertItem: (id: string) => Promise<void>; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>; sendingNotificationKey: string; converting: boolean }) {
+function ApplicationAssignmentEditor({
+  application,
+  item,
+  offerings,
+  saving,
+  error,
+  onSaveAssignment,
+}: {
+  application: Application;
+  item?: ApplicationItem;
+  offerings: SeasonalClass[];
+  saving: boolean;
+  error?: string;
+  onSaveAssignment: (input: AssignmentInput) => Promise<void>;
+}) {
+  const initialOfferingId = item?.classId || offerings[0]?.id || "";
+  const [offeringId, setOfferingId] = useState(initialOfferingId);
+  const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>(() => normalizeWeekdayKeys(application.selectedWeekdays));
+  const selectedOffering = useMemo(() => offerings.find((offering) => offering.id === offeringId), [offeringId, offerings]);
+  const [price, setPrice] = useState(() => String(item?.amount ?? assignmentPriceFor(application, selectedOffering)));
+  const [localError, setLocalError] = useState("");
+  const lastOfferingIdRef = useRef(initialOfferingId);
+  const locked = Boolean(item?.enrollmentId || item?.paymentId);
+
+  useEffect(() => {
+    const nextOfferingId = item?.classId || offerings[0]?.id || "";
+    const nextOffering = offerings.find((offering) => offering.id === nextOfferingId);
+    setOfferingId(nextOfferingId);
+    setSelectedWeekdays(normalizeWeekdayKeys(application.selectedWeekdays));
+    setPrice(String(item?.amount ?? assignmentPriceFor(application, nextOffering)));
+    setLocalError("");
+    lastOfferingIdRef.current = nextOfferingId;
+  }, [application.id, application.selectedWeekdays, item?.id, item?.amount, item?.classId, offerings]);
+
+  useEffect(() => {
+    if (lastOfferingIdRef.current === offeringId) return;
+    lastOfferingIdRef.current = offeringId;
+    setPrice(String(assignmentPriceFor(application, selectedOffering)));
+  }, [application, offeringId, selectedOffering]);
+
+  const toggleWeekday = (value: string, checked: boolean) => {
+    setSelectedWeekdays((current) => {
+      const next = new Set(current);
+      if (checked) next.add(value);
+      else next.delete(value);
+      return WEEKDAY_OPTIONS.map((option) => option.value).filter((weekday) => next.has(weekday));
+    });
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError("");
+    const priceSnapshot = Number(price);
+    if (!offeringId) {
+      setLocalError("특강 반을 선택해 주세요.");
+      return;
+    }
+    if (selectedWeekdays.length === 0) {
+      setLocalError("학생이 참여할 요일을 선택해 주세요.");
+      return;
+    }
+    if (!Number.isFinite(priceSnapshot) || priceSnapshot <= 0) {
+      setLocalError("금액을 확인해 주세요.");
+      return;
+    }
+    await onSaveAssignment({ applicationId: application.id, itemId: item?.id, offeringId, selectedWeekdays, priceSnapshot });
+  };
+
+  return <form onSubmit={submit} className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-800/70">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h4 className="font-black text-gray-950 dark:text-white">{item ? "수업 정보" : "반 지정 필요"}</h4>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{locked ? "수강·청구 연결 후에는 이 화면에서 반 정보를 바꿀 수 없습니다." : "반, 참여 요일, 금액을 확인하고 저장합니다."}</p>
+      </div>
+      <button type="submit" disabled={saving || locked || offerings.length === 0} className="min-h-9 rounded-lg bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "저장 중…" : "저장"}</button>
+    </div>
+    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_140px]">
+      <label className="text-xs font-black text-gray-600 dark:text-gray-300">
+        특강 반
+        <select value={offeringId} disabled={saving || locked} onChange={(event) => setOfferingId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+          <option value="">반 선택</option>
+          {offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}
+        </select>
+      </label>
+      <label className="text-xs font-black text-gray-600 dark:text-gray-300">
+        금액
+        <input value={price} disabled={saving || locked} onChange={(event) => setPrice(event.target.value)} inputMode="numeric" type="number" min={1} className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+      </label>
+    </div>
+    <fieldset className="mt-3">
+      <legend className="text-xs font-black text-gray-600 dark:text-gray-300">참여 요일</legend>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {WEEKDAY_OPTIONS.map((option) => (
+          <label key={option.value} className={`inline-flex min-h-9 items-center gap-1 rounded-lg border px-2.5 text-xs font-black ${selectedWeekdays.includes(option.value) ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"}`}>
+            <input type="checkbox" disabled={saving || locked} checked={selectedWeekdays.includes(option.value)} onChange={(event) => toggleWeekday(option.value, event.target.checked)} className="sr-only" />
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+    {(localError || error) && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-bold text-red-700 dark:border-red-500/30 dark:bg-red-950/30 dark:text-red-200">{localError || error}</p>}
+  </form>;
+}
+
+function ApplicationItemCard({
+  application,
+  offerings,
+  item,
+  onUpdateItem,
+  updating,
+  updateError,
+  onSaveAssignment,
+  assignmentSaving,
+  onConvertItem,
+  onCopyInvoiceLink,
+  onRetryNotification,
+  sendingNotificationKey,
+  converting,
+}: {
+  application: Application;
+  offerings: SeasonalClass[];
+  item: ApplicationItem;
+  onUpdateItem: (id: string, status: ItemStatus) => Promise<void>;
+  updating: boolean;
+  updateError?: string;
+  onSaveAssignment: (input: AssignmentInput) => Promise<void>;
+  assignmentSaving: boolean;
+  onConvertItem: (id: string) => Promise<void>;
+  onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>;
+  onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>;
+  sendingNotificationKey: string;
+  converting: boolean;
+}) {
   const quickStatuses: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
   const statusNotification = itemNotification(item.status);
   const currentNotificationSummary = item.notificationSummary?.trigger === statusNotification?.trigger ? item.notificationSummary : null;
-  return <article className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
+  return <article className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700" aria-busy={updating}>
     <div className="flex items-start justify-between gap-3">
       <div>
         <p className="font-black text-gray-950 dark:text-white">{item.className}</p>
@@ -1157,12 +1425,21 @@ function ApplicationItemCard({ item, onUpdateItem, onConvertItem, onCopyInvoiceL
       </div>
       <span className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>
     </div>
+    <ApplicationAssignmentEditor
+      application={application}
+      item={item}
+      offerings={offerings}
+      saving={assignmentSaving}
+      error={updateError}
+      onSaveAssignment={onSaveAssignment}
+    />
     <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {quickStatuses.map((status) => <button key={status} type="button" disabled={item.status === status} onClick={() => void onUpdateItem(item.id, status)} className={`min-h-10 rounded-xl border px-3 text-sm font-black ${item.status === status ? "border-transparent bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]" : "border-gray-200 text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200"}`}>{STATUS_LABEL[status]}</button>)}
+      {quickStatuses.map((status) => <button key={status} type="button" disabled={updating || item.status === status} onClick={() => void onUpdateItem(item.id, status)} className={`min-h-10 rounded-xl border px-3 text-sm font-black disabled:cursor-wait disabled:opacity-60 ${item.status === status ? "border-transparent bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]" : "border-gray-200 text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200"}`}>{updating ? "처리 중…" : STATUS_LABEL[status]}</button>)}
     </div>
+    {updateError && <p role="alert" aria-live="assertive" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-950/30 dark:text-red-200">{updateError}</p>}
     <label className="mt-4 block text-xs font-bold text-gray-500 dark:text-gray-400">
       상태 직접 변경
-      <select value={item.status} onChange={(event) => void onUpdateItem(item.id, event.target.value as ItemStatus)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+      <select value={item.status} disabled={updating} aria-busy={updating} onChange={(event) => void onUpdateItem(item.id, event.target.value as ItemStatus)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
         {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
       </select>
     </label>

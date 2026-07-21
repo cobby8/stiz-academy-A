@@ -81,6 +81,17 @@ test("admin shuttle screen refreshes live driver check status", () => {
   assert.match(adminClientSource, /30초 자동 새로고침/);
 });
 
+test("admin can confirm shuttle request pickup or dropoff pins before assignment", () => {
+  assert.match(serviceSource, /updateShuttleRequestLocation/);
+  assert.match(serviceSource, /SHUTTLE_LOCATION_CONFIRMED/);
+  assert.match(adminApiSource, /body\.resource === "shuttleRequest"/);
+  assert.match(adminApiSource, /confirmLocation/);
+  assert.match(adminClientSource, /LocationPickerModal/);
+  assert.match(adminClientSource, /위치 찍기/);
+  assert.match(adminClientSource, /action: "confirmLocation"/);
+  assert.match(adminClientSource, /관리자 위치 확인 완료/);
+});
+
 test("shuttle user-facing files keep Korean text readable", () => {
   for (const source of [adminClientSource, adminApiSource, staffDashboardClientSource, staffButtonsSource]) {
     assert.doesNotMatch(source, /�|泥|湲곗|誘명|뷀|댄뻾|곹깭/);

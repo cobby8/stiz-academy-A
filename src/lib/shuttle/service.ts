@@ -26,6 +26,7 @@ type Db = Prisma.TransactionClient;
 type Actor = { appUserId: string };
 type StaffActor = Actor & { appUserRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" };
 type ShuttleRideStatus = "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW";
+type ShuttleLocationKind = "pickup" | "dropoff";
 
 const SHUTTLE_RIDE_STATUSES = new Set<ShuttleRideStatus>(["PENDING", "BOARDED", "DROPPED_OFF", "NO_SHOW"]);
 
@@ -60,6 +61,11 @@ function coordinate(value: unknown, label: string, min: number, max: number) {
   return parsed;
 }
 
+function optionalCoordinate(value: unknown, label: string, min: number, max: number) {
+  if (value === undefined || value === null || value === "") return null;
+  return coordinate(value, label, min, max);
+}
+
 function optionalDate(value: unknown, label: string, dateOnly = false) {
   if (value === undefined || value === null || value === "") return null;
   const raw = String(value);
@@ -82,6 +88,13 @@ function plannedDate(value: unknown, serviceDate: Date | null) {
 export function parseShuttleDirection(value: unknown): ShuttleRouteDirection {
   if (value !== ShuttleRouteDirection.PICKUP && value !== ShuttleRouteDirection.DROPOFF) {
     throw new ShuttleServiceError("등원 또는 하원 방향을 선택해 주세요.", 400, "INVALID_DIRECTION");
+  }
+  return value;
+}
+
+function parseLocationKind(value: unknown): ShuttleLocationKind {
+  if (value !== "pickup" && value !== "dropoff") {
+    throw new ShuttleServiceError("탑승 또는 하차 위치를 선택해 주세요.", 400, "INVALID_LOCATION_KIND");
   }
   return value;
 }
@@ -209,6 +222,9 @@ export async function getShuttleDashboard(
       roadAddress: request.pickupRoadAddress,
       lat: request.pickupLatitude,
       lng: request.pickupLongitude,
+      placeId: request.pickupPlaceId,
+      source: request.pickupLocationSource,
+      accuracyMeters: request.pickupAccuracyMeters,
       confirmedAt: request.pickupConfirmedAt,
     },
     dropoff: {
@@ -217,6 +233,9 @@ export async function getShuttleDashboard(
       roadAddress: request.dropoffRoadAddress,
       lat: request.dropoffLatitude,
       lng: request.dropoffLongitude,
+      placeId: request.dropoffPlaceId,
+      source: request.dropoffLocationSource,
+      accuracyMeters: request.dropoffAccuracyMeters,
       confirmedAt: request.dropoffConfirmedAt,
     },
     pickupTime: request.pickupTime,
@@ -386,6 +405,66 @@ export async function updateRoute(actor: Actor, id: string, input: Record<string
     const route = await tx.shuttleRoutePlan.update({ where: { id }, data, include: routeInclude });
     await audit(tx, actor, "ROUTE_UPDATED", { routePlanId: id }, before, route);
     return route;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function updateShuttleRequestLocation(actor: Actor, shuttleRequestId: string, input: Record<string, unknown>) {
+  const kind = parseLocationKind(input.kind);
+  const nested = input.location && typeof input.location === "object" ? input.location as Record<string, unknown> : {};
+  const address = text(input.address ?? nested.address, 300);
+  const roadAddress = text(input.roadAddress ?? nested.roadAddress, 300);
+  const name = text(input.name ?? input.locationName ?? nested.name, 150) ?? roadAddress ?? address;
+  const latitude = optionalCoordinate(input.latitude ?? input.lat ?? nested.latitude ?? nested.lat, kind === "pickup" ? "탑승 위치" : "하차 위치", -90, 90);
+  const longitude = optionalCoordinate(input.longitude ?? input.lng ?? nested.longitude ?? nested.lng, kind === "pickup" ? "탑승 위치" : "하차 위치", -180, 180);
+  if (latitude === null || longitude === null) {
+    throw new ShuttleServiceError("지도에서 찍은 좌표가 필요합니다.", 400, "COORDINATES_REQUIRED");
+  }
+  if (!address && !roadAddress && !name) {
+    throw new ShuttleServiceError("지도에서 확인한 주소가 필요합니다.", 400, "ADDRESS_REQUIRED");
+  }
+  const placeId = text(input.placeId ?? nested.placeId, 200);
+  const source = text(input.source ?? nested.source, 30) ?? "ADMIN_PIN";
+  const accuracyValue = input.accuracyMeters ?? nested.accuracyMeters;
+  const accuracyMeters = accuracyValue === undefined || accuracyValue === null || accuracyValue === ""
+    ? null
+    : coordinate(accuracyValue, "위치 정확도", 0, 100_000);
+
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.specialProgramShuttleRequest.findUnique({
+      where: { id: shuttleRequestId },
+      include: { application: true, applicationItem: { include: { offering: { select: { title: true } } } } },
+    });
+    if (!before) throw new ShuttleServiceError("셔틀 신청을 찾을 수 없습니다.", 404, "REQUEST_NOT_FOUND");
+    const data: Prisma.SpecialProgramShuttleRequestUpdateInput = kind === "pickup"
+      ? {
+          pickupLocation: name ?? address ?? roadAddress ?? null,
+          pickupAddress: address ?? roadAddress ?? name ?? null,
+          pickupRoadAddress: roadAddress ?? null,
+          pickupLatitude: latitude,
+          pickupLongitude: longitude,
+          pickupPlaceId: placeId ?? null,
+          pickupLocationSource: source,
+          pickupAccuracyMeters: accuracyMeters,
+          pickupConfirmedAt: new Date(),
+        }
+      : {
+          dropoffLocation: name ?? address ?? roadAddress ?? null,
+          dropoffAddress: address ?? roadAddress ?? name ?? null,
+          dropoffRoadAddress: roadAddress ?? null,
+          dropoffLatitude: latitude,
+          dropoffLongitude: longitude,
+          dropoffPlaceId: placeId ?? null,
+          dropoffLocationSource: source,
+          dropoffAccuracyMeters: accuracyMeters,
+          dropoffConfirmedAt: new Date(),
+        };
+    const request = await tx.specialProgramShuttleRequest.update({
+      where: { id: shuttleRequestId },
+      data,
+      include: { application: true, applicationItem: { include: { offering: { select: { title: true } } } } },
+    });
+    await audit(tx, actor, "SHUTTLE_LOCATION_CONFIRMED", { shuttleRequestId }, before, request);
+    return request;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

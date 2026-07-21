@@ -15,6 +15,7 @@ import {
   ShuttleServiceError,
   unassignPassenger,
   updateRoute,
+  updateShuttleRequestLocation,
   updateVehicle,
 } from "@/lib/shuttle/service";
 
@@ -72,6 +73,10 @@ export async function PATCH(request: NextRequest) {
     const id = typeof body.id === "string" ? body.id : "";
     if (!id) throw new ShuttleServiceError("수정할 항목 ID가 필요합니다.", 400, "ID_REQUIRED");
     if (body.resource === "vehicle") return NextResponse.json({ vehicle: await updateVehicle(actor, id, data) });
+    if (body.resource === "shuttleRequest") {
+      if (body.action !== "confirmLocation") throw new ShuttleServiceError("지원하지 않는 셔틀 신청 작업입니다.", 400, "UNSUPPORTED_ACTION");
+      return NextResponse.json({ request: await updateShuttleRequestLocation(actor, id, data) });
+    }
     if (body.resource !== "route") throw new ShuttleServiceError("지원하지 않는 수정 요청입니다.", 400, "UNSUPPORTED_RESOURCE");
     let route;
     switch (body.action) {

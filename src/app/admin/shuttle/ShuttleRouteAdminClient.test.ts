@@ -35,6 +35,16 @@ test("노선 편성 핵심 동작을 관리자 API 계약으로 요청한다", (
   assert.match(source, /resource: "route"/);
 });
 
+test("관리자는 미배정 학생의 승하차 위치를 지도 핀으로 저장한다", () => {
+  assert.match(source, /LocationPickerModal/);
+  assert.match(source, /type MapLocationData/);
+  assert.match(source, /위치 찍기/);
+  assert.match(source, /resource: "shuttleRequest"/);
+  assert.match(source, /action: "confirmLocation"/);
+  assert.match(source, /mapLocationData/);
+  assert.match(source, /관리자 위치 확인 완료/);
+});
+
 test("관리자는 기사 체크 현황을 즉시 또는 자동으로 새로고침한다", () => {
   assert.match(source, /autoRefresh/);
   assert.match(source, /window\.setInterval/);

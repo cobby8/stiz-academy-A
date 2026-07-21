@@ -113,10 +113,11 @@ type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "
 type TrialDateFilter = "ALL" | "UPCOMING" | "TODAY" | "THIS_WEEK" | "PAST" | "MISSING";
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
-const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
-const LIST_ACTION_MENU_CLASS = "absolute right-2 top-9 z-50 w-44 rounded-xl border border-gray-200 bg-white p-1.5 text-left shadow-xl dark:border-gray-700 dark:bg-gray-950";
-const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800";
-const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-lg bg-blue-600 px-3 text-left text-xs font-black text-white transition hover:bg-blue-700 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-300";
+const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-9 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/20 transition hover:scale-105 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:shadow-brand-neon-lime/20 dark:hover:bg-lime-300";
+const LIST_ACTION_MENU_CLASS = "absolute right-12 top-1/2 z-50 flex -translate-y-1/2 flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-2 text-left shadow-2xl backdrop-blur dark:border-gray-700 dark:bg-gray-950/95";
+const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-36 items-center justify-between gap-2 rounded-full border border-gray-200 bg-white px-2 pl-3 text-left text-xs font-black text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
+const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-36 items-center justify-between gap-2 rounded-full bg-brand-neon-lime px-2 pl-3 text-left text-xs font-black text-brand-navy-900 shadow-sm transition hover:bg-lime-300 disabled:opacity-50";
+const LIST_ACTION_ICON_CLASS = "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900";
 const DETAIL_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-3 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10";
 const EMPTY_STATS: TrialStats = {
     NEW: 0,
@@ -796,8 +797,31 @@ export default function TrialCrmClient({
         }
     }
 
-    function renderEnrollGuideButton(lead: TrialLead) {
+    function renderActionIcon(icon: string, primary = false) {
+        return (
+            <span className={primary ? "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy-900 text-white" : LIST_ACTION_ICON_CLASS}>
+                <span className="material-symbols-outlined text-base">{icon}</span>
+            </span>
+        );
+    }
+
+    function renderEnrollGuideButton(lead: TrialLead, variant: "menu" | "inline" = "menu") {
         if (lead.status !== "ATTENDED" || lead.enrollApplicationReceivedAt) return null;
+        const label = lead.enrollGuideSentAt ? "안내 재발송" : "수강신청 안내";
+        if (variant === "inline") {
+            return (
+                <button
+                    type="button"
+                    onClick={() => void handleSendEnrollGuide(lead)}
+                    disabled={busy}
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-brand-neon-lime px-2 text-xs font-black text-brand-navy-900 transition hover:bg-lime-300 disabled:opacity-50"
+                >
+                    <span className="material-symbols-outlined text-sm">send</span>
+                    {label}
+                </button>
+            );
+        }
+
         return (
             <button
                 type="button"
@@ -805,8 +829,8 @@ export default function TrialCrmClient({
                 disabled={busy}
                 className={LIST_ACTION_PRIMARY_CLASS}
             >
-                <span className="material-symbols-outlined text-base">send</span>
-                {lead.enrollGuideSentAt ? "안내 재발송" : "수강신청 안내"}
+                <span>{label}</span>
+                {renderActionIcon("send", true)}
             </button>
         );
     }
@@ -843,71 +867,56 @@ export default function TrialCrmClient({
         }
     }
 
-    function renderCoachNoticeCell(lead: TrialLead, isClosed: boolean) {
-        const sentLabel = lead.coachNoticeSentAt ? `완료 ${formatDate(lead.coachNoticeSentAt)}` : null;
-        const buttonLabel = lead.coachNoticeSentAt ? "재발송" : "발송";
-        const buttonIcon = lead.coachNoticeSentAt ? "refresh" : "send";
-
-        if (isClosed && !lead.coachNoticeSentAt) {
-            return (
-                <span className="inline-flex max-w-full items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                    대상 아님
-                </span>
-            );
-        }
-
+    function renderStatusChangeCell(lead: TrialLead) {
         return (
             <div className="flex min-w-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
-                {sentLabel ? (
-                    <span className="min-w-0 truncate rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200" title={sentLabel}>
-                        {sentLabel}
-                    </span>
-                ) : (
-                    <span className="min-w-0 truncate rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-                        미발송
+                <select
+                    value={lead.status}
+                    onChange={(event) => handleStatusChange(lead, event.target.value)}
+                    disabled={busy}
+                    className="h-8 min-w-[106px] rounded-lg border border-gray-200 bg-white px-2 text-xs font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+                >
+                    {STATUS_ORDER.map((s) => (
+                        <option key={s} value={s}>
+                            {STATUS_CONFIG[s].label}
+                        </option>
+                    ))}
+                </select>
+                {renderEnrollGuideButton(lead, "inline")}
+                {lead.enrollApplicationReceivedAt && (
+                    <span className="inline-flex h-8 shrink-0 items-center rounded-lg bg-emerald-50 px-2 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
+                        신청 접수
                     </span>
                 )}
-                <button
-                    type="button"
-                    onClick={() => void handleSendCoachNotice(lead)}
-                    disabled={busy}
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 text-xs font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 disabled:opacity-50 dark:border-brand-neon-lime/40 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
-                >
-                    <span className="material-symbols-outlined text-sm">{buttonIcon}</span>
-                    {buttonLabel}
-                </button>
             </div>
         );
-    }
-
-    // 날짜 포맷 헬퍼
-    function formatDate(dateStr: string | null) {
-        if (!dateStr) return "-";
-        const d = new Date(dateStr);
-        return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
     }
 
     function renderTrialList() {
         return (
             <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <table className="w-full min-w-[1080px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[1260px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
-                        <col className="w-[10%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[11%]" />
-                        <col className="w-[28%]" />
-                        <col className="w-[16%]" />
-                        <col className="w-[17%]" />
+                        <col className="w-[9%]" />
                         <col className="w-[8%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[17%]" />
+                        <col className="w-[7%]" />
+                        <col className="w-[20%]" />
+                        <col className="w-[9%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                            <th className="px-3 py-2">상태</th>
                             <th className="px-3 py-2">신청일</th>
                             <th className="px-3 py-2">체험일</th>
-                            <th className="px-3 py-2">상태</th>
-                            <th className="px-3 py-2">학생/연락처</th>
-                            <th className="px-3 py-2">수업교시</th>
-                            <th className="px-3 py-2">쌤알림</th>
+                            <th className="px-3 py-2">수업</th>
+                            <th className="px-3 py-2">수강생이름</th>
+                            <th className="px-3 py-2">학교</th>
+                            <th className="px-3 py-2">학년</th>
+                            <th className="px-3 py-2">상태변경</th>
                             <th className="px-3 py-2 text-right">액션</th>
                         </tr>
                     </thead>
@@ -918,11 +927,12 @@ export default function TrialCrmClient({
                             const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
                             const getScheduleValue = (label: string) => scheduleItems.find((item) => item.label === label)?.value || "-";
                             const parentPhoneHref = phoneHref(lead.parentPhone);
-                            const childMeta = [lead.childAge, lead.childGrade, lead.childSchool].filter(Boolean).join(" · ");
-                            const studentSummary = [lead.childName, childMeta, lead.parentName || "보호자 미입력", lead.parentPhone].filter(Boolean).join(" · ");
+                            const rowTitle = [lead.childName, lead.childSchool, lead.childGrade || lead.childAge, lead.parentName || "보호자 미입력", lead.parentPhone].filter(Boolean).join(" · ");
                             const createdDateLabel = getScheduleValue("신청일");
                             const trialDateLabel = getScheduleValue("체험일");
                             const scheduleLabel = getScheduleValue("수업교시");
+                            const schoolLabel = lead.childSchool || "-";
+                            const gradeLabel = lead.childGrade || lead.childAge || "-";
                             const isActionOpen = openQuickActionId === lead.id;
                             return (
                                 <tr
@@ -942,6 +952,12 @@ export default function TrialCrmClient({
                                     className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
                                 >
                                     <td className="px-3 py-1.5 align-middle">
+                                        <span className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold ${cfg.color}`} title={cfg.label}>
+                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                            <span className="truncate">{cfg.label}</span>
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
                                         <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={createdDateLabel}>
                                             {createdDateLabel}
                                         </span>
@@ -952,23 +968,27 @@ export default function TrialCrmClient({
                                         </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
-                                        <span className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold ${cfg.color}`} title={cfg.label}>
-                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                            <span className="truncate">{cfg.label}</span>
-                                        </span>
-                                    </td>
-                                    <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate font-black text-gray-900 dark:text-white" title={studentSummary}>
-                                            {studentSummary}
-                                        </span>
-                                    </td>
-                                    <td className="px-3 py-1.5 align-middle">
                                         <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={scheduleLabel}>
                                             {scheduleLabel}
                                         </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
-                                        {renderCoachNoticeCell(lead, isClosed)}
+                                        <span className="block truncate font-black text-gray-900 dark:text-white" title={rowTitle}>
+                                            {lead.childName}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={schoolLabel}>
+                                            {schoolLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={gradeLabel}>
+                                            {gradeLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-1.5 align-middle">
+                                        {renderStatusChangeCell(lead)}
                                     </td>
                                     <td className="relative px-3 py-1.5 text-right align-middle" onClick={(event) => event.stopPropagation()}>
                                         <button
@@ -978,18 +998,29 @@ export default function TrialCrmClient({
                                             aria-expanded={isActionOpen}
                                             aria-label={`${lead.childName} 빠른 처리 열기`}
                                         >
-                                            <span className="material-symbols-outlined text-lg">more_horiz</span>
+                                            <span className="material-symbols-outlined text-lg">flash_on</span>
                                         </button>
                                         {isActionOpen && (
                                             <div className={LIST_ACTION_MENU_CLASS}>
                                                 <a href={parentPhoneHref} className={LIST_ACTION_ITEM_CLASS}>
-                                                    <span className="material-symbols-outlined text-base">call</span>
-                                                    전화
+                                                    <span>전화</span>
+                                                    {renderActionIcon("call")}
                                                 </a>
                                                 {!isClosed && (
                                                     <button type="button" onClick={() => setShowScheduleModal(lead)} className={LIST_ACTION_ITEM_CLASS}>
-                                                        <span className="material-symbols-outlined text-base">event_available</span>
-                                                        일정
+                                                        <span>일정</span>
+                                                        {renderActionIcon("event_available")}
+                                                    </button>
+                                                )}
+                                                {(!isClosed || lead.coachNoticeSentAt) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleSendCoachNotice(lead)}
+                                                        disabled={busy}
+                                                        className={LIST_ACTION_ITEM_CLASS}
+                                                    >
+                                                        <span>{lead.coachNoticeSentAt ? "쌤알림 재발송" : "쌤알림 발송"}</span>
+                                                        {renderActionIcon(lead.coachNoticeSentAt ? "refresh" : "school")}
                                                     </button>
                                                 )}
                                                 <button
@@ -998,31 +1029,17 @@ export default function TrialCrmClient({
                                                     disabled={contactBusyId === lead.id}
                                                     className={`${LIST_ACTION_ITEM_CLASS} disabled:opacity-50`}
                                                 >
-                                                    <span className="material-symbols-outlined text-base">done_all</span>
-                                                    연락 완료
+                                                    <span>연락 완료</span>
+                                                    {renderActionIcon("done_all")}
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setContactModal({ lead, defaultAction: "MEMO" })}
                                                     className={LIST_ACTION_ITEM_CLASS}
                                                 >
-                                                    <span className="material-symbols-outlined text-base">edit_note</span>
-                                                    메모
+                                                    <span>메모</span>
+                                                    {renderActionIcon("edit_note")}
                                                 </button>
-                                                {!isClosed && (
-                                                    <select
-                                                        value={lead.status}
-                                                        onChange={(event) => handleStatusChange(lead, event.target.value)}
-                                                        disabled={busy}
-                                                        className="mt-1 min-h-9 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
-                                                    >
-                                                        {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
-                                                            <option key={s} value={s}>
-                                                                {STATUS_CONFIG[s].label}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                )}
                                                 {renderEnrollGuideButton(lead)}
                                             </div>
                                         )}

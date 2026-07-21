@@ -7,6 +7,8 @@ const route = readFileSync(
     "utf8",
 );
 
-test("기존 셔틀 관리자 주소는 방학특강 신청 관리 화면으로 연결된다", () => {
-    assert.match(route, /redirect\("\/admin\/seasonal\?tab=applications"\)/);
+test("셔틀 관리자 주소는 실제 노선 관리 화면을 제공한다", () => {
+    assert.match(route, /import ShuttleRouteAdminClient/);
+    assert.match(route, /<ShuttleRouteAdminClient/);
+    assert.doesNotMatch(route, /redirect\(/);
 });

@@ -82,6 +82,7 @@ export default function ShuttleRouteAdminClient() {
   const [data, setData] = useState<Payload>(EMPTY_PAYLOAD);
   const [seasonId, setSeasonId] = useState("");
   const [direction, setDirection] = useState<Direction>("PICKUP");
+  const [serviceDate, setServiceDate] = useState("");
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
@@ -90,11 +91,12 @@ export default function ShuttleRouteAdminClient() {
   const [modal, setModal] = useState<"vehicle" | "route" | "assign" | "confirm" | null>(null);
   const [assignRequest, setAssignRequest] = useState<ShuttleRequest | null>(null);
 
-  const load = useCallback(async (requestedSeasonId?: string, requestedDirection: Direction = direction) => {
+  const load = useCallback(async (requestedSeasonId?: string, requestedDirection: Direction = direction, requestedServiceDate: string = serviceDate) => {
     setLoading(true); setError("");
     try {
       const query = new URLSearchParams({ direction: requestedDirection });
       if (requestedSeasonId) query.set("seasonId", requestedSeasonId);
+      if (requestedServiceDate) query.set("serviceDate", requestedServiceDate);
       const response = await fetch(`/api/admin/shuttle?${query.toString()}`, { cache: "no-store" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "셔틀 노선 정보를 불러오지 못했습니다.");
@@ -104,11 +106,15 @@ export default function ShuttleRouteAdminClient() {
       setSeasonId(nextSeasonId);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "셔틀 노선 정보를 불러오지 못했습니다."); }
     finally { setLoading(false); }
-  }, [direction]);
+  }, [direction, serviceDate]);
 
   useEffect(() => { void load(); }, [load]);
 
-  const routes = useMemo(() => data.routes.filter((route) => route.direction === direction), [data.routes, direction]);
+  const availableDates = useMemo(() => Array.from(new Set(data.routes
+    .filter((route) => route.direction === direction && route.serviceDate)
+    .map((route) => route.serviceDate!.slice(0, 10)))).sort(), [data.routes, direction]);
+  const routes = useMemo(() => data.routes.filter((route) => route.direction === direction
+    && (serviceDate ? route.serviceDate?.slice(0, 10) === serviceDate : !route.serviceDate)), [data.routes, direction, serviceDate]);
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) ?? routes[0] ?? null;
   const stops = useMemo(() => [...(selectedRoute?.stops ?? [])].sort((a, b) => a.stopOrder - b.stopOrder), [selectedRoute]);
   const passengerCount = selectedRoute?.passengerCount ?? stops.reduce((sum, stop) => sum + (stop.passengers?.length ?? 0), 0);
@@ -118,7 +124,7 @@ export default function ShuttleRouteAdminClient() {
 
   async function mutate(body: unknown, success: string) {
     setPending(true); setError(""); setNotice("");
-    try { await request(body); setNotice(success); setModal(null); setAssignRequest(null); await load(seasonId); }
+    try { await request(body); setNotice(success); setModal(null); setAssignRequest(null); await load(seasonId, direction, serviceDate); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "요청을 처리하지 못했습니다."); }
     finally { setPending(false); }
   }
@@ -136,7 +142,9 @@ export default function ShuttleRouteAdminClient() {
       const response = await fetch("/api/admin/shuttle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "등록하지 못했습니다.");
-      setNotice(resource === "vehicle" ? "차량을 등록했습니다." : "노선 초안을 만들었습니다."); setModal(null); await load(seasonId);
+      const nextServiceDate = resource === "route" && typeof values.serviceDate === "string" ? values.serviceDate : serviceDate;
+      if (resource === "route") setServiceDate(nextServiceDate);
+      setNotice(resource === "vehicle" ? "차량을 등록했습니다." : "노선 초안을 만들었습니다."); setModal(null); await load(seasonId, direction, nextServiceDate);
       if (result.route?.id) setSelectedRouteId(result.route.id);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "등록하지 못했습니다."); }
     finally { setPending(false); }
@@ -165,9 +173,10 @@ export default function ShuttleRouteAdminClient() {
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700 dark:bg-red-950/30 dark:text-red-200">{error}</p>}
     {notice && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">{notice}</p>}
 
-    <section aria-label="조회 조건" className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:grid-cols-2">
-      <label className="text-sm font-bold">특강 시즌<select value={seasonId} onChange={(event) => void load(event.target.value, direction)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900">{data.seasons.map((season) => <option key={season.id} value={season.id}>{season.title}</option>)}</select></label>
-      <fieldset><legend className="text-sm font-bold">운행 방향</legend><div className="mt-1 grid grid-cols-2 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">{(["PICKUP", "DROPOFF"] as Direction[]).map((value) => <button key={value} type="button" onClick={() => setDirection(value)} className={`min-h-9 rounded-lg text-sm font-black ${direction === value ? "bg-white shadow dark:bg-gray-700" : "text-gray-500"}`}>{value === "PICKUP" ? "등원" : "하원"}</button>)}</div></fieldset>
+    <section aria-label="조회 조건" className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:grid-cols-3">
+      <label className="text-sm font-bold">특강 시즌<select value={seasonId} onChange={(event) => void load(event.target.value, direction, serviceDate)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900">{data.seasons.map((season) => <option key={season.id} value={season.id}>{season.title}</option>)}</select></label>
+      <fieldset><legend className="text-sm font-bold">운행 방향</legend><div className="mt-1 grid grid-cols-2 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">{(["PICKUP", "DROPOFF"] as Direction[]).map((value) => <button key={value} type="button" onClick={() => { setServiceDate(""); setDirection(value); }} className={`min-h-9 rounded-lg text-sm font-black ${direction === value ? "bg-white shadow dark:bg-gray-700" : "text-gray-500"}`}>{value === "PICKUP" ? "등원" : "하원"}</button>)}</div></fieldset>
+      <label className="text-sm font-bold">운행일<select value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">정기 노선 (날짜 없음)</option>{availableDates.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</select></label>
     </section>
 
     {loading ? <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800">노선 정보를 불러오는 중입니다…</div> : !data.seasons.length ? <Empty title="운영 중인 특강 시즌이 없습니다" description="방학특강 시즌을 먼저 등록한 뒤 노선을 만들어 주세요." /> : <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.28fr)]">

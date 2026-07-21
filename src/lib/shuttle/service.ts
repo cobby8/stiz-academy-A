@@ -255,7 +255,7 @@ export async function updateVehicle(actor: Actor, id: string, input: Record<stri
     const vehicle = await tx.shuttleVehicle.update({ where: { id }, data });
     await audit(tx, actor, "VEHICLE_UPDATED", { vehicleId: id }, before, vehicle);
     return vehicle;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function createRoute(actor: Actor, input: Record<string, unknown>) {
@@ -354,7 +354,7 @@ export async function updateRoute(actor: Actor, id: string, input: Record<string
     const route = await tx.shuttleRoutePlan.update({ where: { id }, data, include: routeInclude });
     await audit(tx, actor, "ROUTE_UPDATED", { routePlanId: id }, before, route);
     return route;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function assignPassenger(actor: Actor, routeId: string, input: Record<string, unknown>) {
@@ -467,8 +467,12 @@ export async function reorderStops(actor: Actor, routeId: string, input: Record<
     if (existing.length !== parsed.length || existing.some((row) => !parsed.some((item) => item.id === row.id))) {
       throw new ShuttleServiceError("노선의 전체 정류장 순서를 보내 주세요.", 409, "STOP_SET_MISMATCH");
     }
+    const maximumOrder = existing.length
+      ? await tx.shuttleRouteStop.aggregate({ where: { routePlanId: routeId }, _max: { stopOrder: true } })
+      : { _max: { stopOrder: 0 } };
+    const temporaryOffset = maximumOrder._max.stopOrder ?? 0;
     for (const [index, row] of parsed.entries()) {
-      await tx.shuttleRouteStop.update({ where: { id: row.id }, data: { stopOrder: -(index + 1) } });
+      await tx.shuttleRouteStop.update({ where: { id: row.id }, data: { stopOrder: temporaryOffset + index + 1 } });
     }
     for (const row of parsed) {
       await tx.shuttleRouteStop.update({ where: { id: row.id }, data: { stopOrder: row.stopOrder, ...(row.plannedAt !== undefined ? { plannedAt: row.plannedAt } : {}) } });

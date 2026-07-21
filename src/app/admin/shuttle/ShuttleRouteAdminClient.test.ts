@@ -7,10 +7,18 @@ const source = readFileSync(new URL("./ShuttleRouteAdminClient.tsx", import.meta
 test("셔틀 관리 화면은 시즌과 등하원 방향을 기준으로 조회한다", () => {
   assert.match(source, /new URLSearchParams\(\{ direction: requestedDirection \}\)/);
   assert.match(source, /query\.set\("seasonId", requestedSeasonId\)/);
-  assert.match(source, /\}, \[direction\]\)/);
+  assert.match(source, /query\.set\("serviceDate", requestedServiceDate\)/);
+  assert.match(source, /\}, \[direction, serviceDate\]\)/);
   assert.match(source, /"PICKUP", "DROPOFF"/);
   assert.match(source, /등원/);
   assert.match(source, /하원/);
+});
+
+test("운행일별 노선과 미배정 후보를 분리한다", () => {
+  assert.match(source, /정기 노선 \(날짜 없음\)/);
+  assert.match(source, /route\.serviceDate\?\.slice\(0, 10\) === serviceDate/);
+  assert.match(source, /setServiceDate\(event\.target\.value\)/);
+  assert.match(source, /setServiceDate\(""\); setDirection\(value\)/);
 });
 
 test("서버의 충돌 응답을 관리자에게 그대로 안내하고 정류장 순서는 1부터 전송한다", () => {

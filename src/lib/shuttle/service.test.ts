@@ -6,6 +6,10 @@ import { parseShuttleRoutePlanInput, ShuttleContractError } from "./contracts.ts
 
 const service = readFileSync(new URL("./service.ts", import.meta.url), "utf8");
 const route = readFileSync(new URL("../../app/api/admin/shuttle/route.ts", import.meta.url), "utf8");
+const migration = readFileSync(
+  new URL("../../../prisma/migrations/20260721223000_add_shuttle_route_planning/migration.sql", import.meta.url),
+  "utf8",
+);
 
 test("방향 계약은 등원과 하원만 허용한다", () => {
   const base = { seasonId: "season-1", name: "A 노선" };
@@ -56,6 +60,19 @@ test("동시 수정 충돌은 재시도 가능한 409 응답으로 변환한다"
   assert.match(route, /P2034/);
   assert.match(route, /P2002/);
   assert.match(route, /SHUTTLE_CONCURRENT_UPDATE/);
+});
+
+test("정류장 순서를 바꾸는 중에도 DB의 양수 제약을 지킨다", () => {
+  assert.match(migration, /ShuttleRouteStop_order_check[\s\S]*"stopOrder" > 0/);
+  assert.match(service, /temporaryOffset \+ index \+ 1/);
+  assert.doesNotMatch(service, /stopOrder:\s*-\(index \+ 1\)/);
+});
+
+test("차량과 노선 수정도 직렬화 트랜잭션으로 동시 변경을 감지한다", () => {
+  const updateVehicle = service.slice(service.indexOf("export async function updateVehicle"), service.indexOf("export async function createRoute"));
+  const updateRoute = service.slice(service.indexOf("export async function updateRoute"), service.indexOf("export async function assignPassenger"));
+  assert.match(updateVehicle, /TransactionIsolationLevel\.Serializable/);
+  assert.match(updateRoute, /TransactionIsolationLevel\.Serializable/);
 });
 
 test("노선 및 배정 변경은 감사 로그로 남긴다", () => {

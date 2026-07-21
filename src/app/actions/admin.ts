@@ -1114,6 +1114,14 @@ function revalidateFinanceCaches() {
     revalidateTag("admin-stats", { expire: 0 });
 }
 
+async function requireFinanceOwner() {
+    const admin = await requireAdmin();
+    if (admin.appUserRole !== "ADMIN") {
+        throw new Error("수퍼관리자 권한이 필요합니다.");
+    }
+    return admin;
+}
+
 export async function createPayment(data: {
     studentId: string;
     classId?: string | null;
@@ -1123,11 +1131,15 @@ export async function createPayment(data: {
     type?: string;        // 청구 유형: MONTHLY, SHUTTLE, UNIFORM, OTHER
     description?: string; // 설명: "4월 수강료" 등
 }) {
-    await requireAdmin();
+    const admin = await requireAdmin();
     try {
         const dueDate = new Date(data.dueDate);
         const year = dueDate.getFullYear();
         const month = dueDate.getMonth() + 1;
+        const requestedStatus = data.status || "PENDING";
+        if (admin.appUserRole !== "ADMIN" && requestedStatus !== "PENDING") {
+            throw new Error("수퍼관리자만 납부 상태로 바로 등록할 수 있습니다.");
+        }
         await ensurePaymentInfrastructure();
         const classId = data.classId?.trim() || null;
         if (classId) {
@@ -1147,7 +1159,7 @@ export async function createPayment(data: {
             `INSERT INTO "Payment" (id, "studentId", "classId", amount, status, "dueDate", year, month, type, description, "createdAt", "updatedAt")
              VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5::timestamp, $6, $7, $8, $9, NOW(), NOW())
              RETURNING id`,
-            data.studentId, classId, data.amount, data.status || "PENDING", data.dueDate,
+            data.studentId, classId, data.amount, requestedStatus, data.dueDate,
             year, month,
             data.type || "MONTHLY", data.description || null,
         );
@@ -1172,7 +1184,7 @@ export async function createPayment(data: {
 }
 
 export async function updatePaymentStatus(id: string, status: string) {
-    await requireAdmin();
+    await requireFinanceOwner();
     try {
         await ensurePaymentInfrastructure();
         if (status === "PAID") {
@@ -1223,7 +1235,7 @@ export async function markTerminalPaymentPaid(data: {
     receivedAt?: string;
     memo?: string;
 }) {
-    const admin = await requireAdmin();
+    const admin = await requireFinanceOwner();
     const paymentId = data.paymentId?.trim();
     const approvalNo = data.approvalNo?.trim();
 
@@ -1254,7 +1266,7 @@ export async function markTerminalPaymentPaid(data: {
 }
 
 export async function deletePayment(id: string) {
-    await requireAdmin();
+    await requireFinanceOwner();
     try {
         await ensurePaymentInfrastructure();
         await prisma.$executeRawUnsafe(`DELETE FROM "PaymentTransaction" WHERE "paymentId" = $1`, id);
@@ -3308,7 +3320,7 @@ export async function sendUnpaidReminders(forceResend?: boolean) {
 // ── 일괄 수납 상태 변경 ──────────────────────────────────────────────────────────
 // 선택한 결제 건들의 상태를 한번에 변경 (체크박스 일괄 처리용)
 export async function bulkUpdatePaymentStatus(ids: string[], newStatus: string) {
-    await requireAdmin();
+    await requireFinanceOwner();
     if (ids.length === 0) return;
 
     try {

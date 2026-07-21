@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AdminModal from "@/components/admin/AdminModal";
-import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
+import AdminQuickActionMenu, { type AdminQuickAction } from "@/components/admin/AdminQuickActionMenu";
 import {
     createPayment,
     updatePaymentStatus,
@@ -79,6 +79,8 @@ type FinancePayload = {
     summary: Summary;
     paymentProvider: PaymentProviderStatus;
 };
+
+type AdminFinanceRole = "ADMIN" | "VICE_ADMIN";
 
 type PaymentReconcilePreview = {
     batch: {
@@ -319,12 +321,14 @@ export default function FinanceClient({
     initialMonth,
     initialSummary,
     initialPaymentProvider,
+    currentAdminRole,
 }: {
     initialPayments?: Payment[];
     initialYear?: number;
     initialMonth?: number;
     initialSummary?: Summary;
     initialPaymentProvider?: PaymentProviderStatus;
+    currentAdminRole: AdminFinanceRole;
 }) {
     const now = new Date();
     const fallbackYear = now.getFullYear();
@@ -412,6 +416,7 @@ export default function FinanceClient({
     const [description, setDescription] = useState("");
 
     const hasAnyData = payments.length > 0 || summary.totalCount > 0;
+    const canManageCriticalFinance = currentAdminRole === "ADMIN";
 
     // 월 이동 시 데이터 재조회
     const loadMonth = useCallback(async (y: number, m: number) => {
@@ -467,8 +472,8 @@ export default function FinanceClient({
         if (!studentId || !amount || !dueDate) return;
         setBusy(true);
         try {
-            // type과 description도 함께 전달 (수동 생성 시 유형/설명 저장)
-            await createPayment({ studentId, amount, dueDate, status, type: paymentType, description: description || undefined });
+            const paymentStatus = canManageCriticalFinance ? status : "PENDING";
+            await createPayment({ studentId, amount, dueDate, status: paymentStatus, type: paymentType, description: description || undefined });
             setShowForm(false);
             setStudentId("");
             setAmount(0);
@@ -486,6 +491,11 @@ export default function FinanceClient({
 
     // 개별 상태 변경
     async function handleStatusChange(id: string, newStatus: string) {
+        if (!canManageCriticalFinance) {
+            alert("수퍼관리자만 수납 상태를 변경할 수 있습니다.");
+            return;
+        }
+
         setBusy(true);
         try {
             await updatePaymentStatus(id, newStatus);
@@ -498,6 +508,11 @@ export default function FinanceClient({
     }
 
     function openTerminalModal(payment: Payment) {
+        if (!canManageCriticalFinance) {
+            alert("수퍼관리자만 납부 완료 처리를 할 수 있습니다.");
+            return;
+        }
+
         setTerminalTarget(payment);
         setTerminalApprovalNo(payment.providerOrderId ?? "");
         setTerminalReceivedAt(toDateInputValue());
@@ -515,6 +530,10 @@ export default function FinanceClient({
     async function handleTerminalSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!terminalTarget) return;
+        if (!canManageCriticalFinance) {
+            alert("수퍼관리자만 납부 완료 처리를 할 수 있습니다.");
+            return;
+        }
         if (!terminalApprovalNo.trim()) {
             alert("단말기 승인번호를 입력해 주세요.");
             return;
@@ -543,6 +562,11 @@ export default function FinanceClient({
 
     // 개별 삭제
     async function handleDelete(id: string) {
+        if (!canManageCriticalFinance) {
+            alert("수퍼관리자만 수납 기록을 삭제할 수 있습니다.");
+            return;
+        }
+
         setBusy(true);
         try {
             await deletePayment(id);
@@ -772,6 +796,10 @@ export default function FinanceClient({
 
     // 일괄 수납 처리
     async function handleBulkPaid() {
+        if (!canManageCriticalFinance) {
+            alert("수퍼관리자만 일괄 수납 처리를 할 수 있습니다.");
+            return;
+        }
         if (selectedIds.size === 0) { alert("선택된 항목이 없습니다."); return; }
         if (!confirm(`선택한 ${selectedIds.size}건을 납부완료 처리하시겠습니까?`)) return;
         setBusy(true);
@@ -788,6 +816,8 @@ export default function FinanceClient({
 
     // 체크박스: 전체 선택/해제
     function toggleSelectAll() {
+        if (!canManageCriticalFinance) return;
+
         if (selectedIds.size === payments.length) {
             setSelectedIds(new Set());
         } else {
@@ -797,6 +827,8 @@ export default function FinanceClient({
 
     // 체크박스: 개별 토글
     function toggleSelect(id: string) {
+        if (!canManageCriticalFinance) return;
+
         const next = new Set(selectedIds);
         if (next.has(id)) next.delete(id);
         else next.add(id);
@@ -1330,7 +1362,7 @@ export default function FinanceClient({
             </section>
 
             {/* 일괄 처리 바 — 선택된 항목이 있을 때만 표시 */}
-            {selectedIds.size > 0 && (
+            {canManageCriticalFinance && selectedIds.size > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center justify-between">
                     <span className="text-sm font-medium text-blue-700">
                         {selectedIds.size}건 선택됨
@@ -1419,18 +1451,24 @@ export default function FinanceClient({
                                 <option value="OTHER">기타</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">상태</label>
-                            <select
-                                value={status}
-                                onChange={(e) => setStatus(e.target.value)}
-                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
-                            >
-                                <option value="PENDING">미납</option>
-                                <option value="PAID">납부완료</option>
-                                <option value="OVERDUE">연체</option>
-                            </select>
-                        </div>
+                        {canManageCriticalFinance ? (
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">상태</label>
+                                <select
+                                    value={status}
+                                    onChange={(e) => setStatus(e.target.value)}
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                                >
+                                    <option value="PENDING">미납</option>
+                                    <option value="PAID">납부완료</option>
+                                    <option value="OVERDUE">연체</option>
+                                </select>
+                            </div>
+                        ) : (
+                            <div className="rounded-lg bg-gray-50 p-3 text-sm font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                신규 수납은 미납 상태로 등록됩니다.
+                            </div>
+                        )}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">설명 (선택)</label>
                             <input
@@ -1462,15 +1500,16 @@ export default function FinanceClient({
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
-                                    {/* 전체 선택 체크박스 */}
-                                    <th className="px-3 py-3 text-center">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedIds.size === payments.length && payments.length > 0}
-                                            onChange={toggleSelectAll}
-                                            className="rounded border-gray-300"
-                                        />
-                                    </th>
+                                    {canManageCriticalFinance && (
+                                        <th className="px-3 py-3 text-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.size === payments.length && payments.length > 0}
+                                                onChange={toggleSelectAll}
+                                                className="rounded border-gray-300"
+                                            />
+                                        </th>
+                                    )}
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">원생</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">유형</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">금액</th>
@@ -1484,30 +1523,96 @@ export default function FinanceClient({
                                 {payments.map((p) => {
                                     const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.PENDING;
                                     const invoiceHref = getInvoiceHref(p);
+                                    const rowActions: AdminQuickAction[] = [
+                                        ...(invoiceHref ? [
+                                            {
+                                                key: "invoice",
+                                                label: "청구서",
+                                                icon: "receipt_long",
+                                                onSelect: () => {
+                                                    window.open(invoiceHref, "_blank", "noopener,noreferrer");
+                                                },
+                                            },
+                                            {
+                                                key: "copy",
+                                                label: "링크복사",
+                                                icon: "content_copy",
+                                                onSelect: () => {
+                                                    void handleCopyInvoiceLink(p);
+                                                },
+                                            },
+                                        ] : []),
+                                        ...(canManageCriticalFinance && p.status !== "PAID" ? [
+                                            {
+                                                key: "terminal",
+                                                label: "단말기",
+                                                icon: "point_of_sale",
+                                                disabled: busy || terminalSubmitting,
+                                                onSelect: () => openTerminalModal(p),
+                                            },
+                                            {
+                                                key: "paid",
+                                                label: "납부처리",
+                                                icon: "check_circle",
+                                                tone: "primary" as const,
+                                                disabled: busy,
+                                                onSelect: () => {
+                                                    void handleStatusChange(p.id, "PAID");
+                                                },
+                                            },
+                                        ] : []),
+                                        ...(canManageCriticalFinance && p.status === "PENDING" ? [
+                                            {
+                                                key: "overdue",
+                                                label: "연체처리",
+                                                icon: "warning",
+                                                disabled: busy,
+                                                onSelect: () => {
+                                                    void handleStatusChange(p.id, "OVERDUE");
+                                                },
+                                            },
+                                        ] : []),
+                                        ...(canManageCriticalFinance && p.status === "PAID" ? [
+                                            {
+                                                key: "refund",
+                                                label: "환불",
+                                                icon: "undo",
+                                                disabled: busy,
+                                                onSelect: () => {
+                                                    void handleStatusChange(p.id, "REFUNDED");
+                                                },
+                                            },
+                                        ] : []),
+                                        ...(canManageCriticalFinance ? [
+                                            {
+                                                key: "delete",
+                                                label: "삭제",
+                                                icon: "delete",
+                                                tone: "danger" as const,
+                                                disabled: busy,
+                                                onSelect: () => {
+                                                    if (window.confirm(`"${p.studentName}" 수납 기록을 삭제할까요?`)) {
+                                                        void handleDelete(p.id);
+                                                    }
+                                                },
+                                            },
+                                        ] : []),
+                                    ];
+
                                     return (
                                         <tr key={p.id} className={`hover:bg-gray-50 dark:bg-gray-900 transition-colors ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
-                                            {/* 개별 체크박스 */}
-                                            <td className="px-3 py-3.5 text-center">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.has(p.id)}
-                                                    onChange={() => toggleSelect(p.id)}
-                                                    className="rounded border-gray-300"
-                                                />
-                                            </td>
+                                            {canManageCriticalFinance && (
+                                                <td className="px-3 py-3.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.has(p.id)}
+                                                        onChange={() => toggleSelect(p.id)}
+                                                        className="rounded border-gray-300"
+                                                    />
+                                                </td>
+                                            )}
                                             <td className="px-4 py-3.5">
                                                 <span className="font-medium text-gray-900 dark:text-white">{p.studentName}</span>
-                                                {p.description && (
-                                                    <p className="text-xs text-gray-400 mt-0.5">{p.description}</p>
-                                                )}
-                                                {p.invoiceNo && (
-                                                    <p className="mt-1 text-[11px] font-bold text-brand-orange-500 dark:text-brand-neon-lime">
-                                                        {p.invoiceNo}
-                                                    </p>
-                                                )}
-                                                {p.autoGenerated && (
-                                                    <span className="text-[10px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded ml-1">자동</span>
-                                                )}
                                             </td>
                                             <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">
                                                 {TYPE_LABELS[p.type] || p.type}
@@ -1551,82 +1656,14 @@ export default function FinanceClient({
                                                 )}
                                             </td>
                                             <td className="px-4 py-3.5 text-right">
-                                                <AdminQuickActionMenu
-                                                    label={`${p.studentName} 수납 빠른 작업`}
-                                                    actions={[
-                                                        ...(invoiceHref ? [
-                                                            {
-                                                                key: "invoice",
-                                                                label: "청구서",
-                                                                icon: "receipt_long",
-                                                                onSelect: () => {
-                                                                    window.open(invoiceHref, "_blank", "noopener,noreferrer");
-                                                                },
-                                                            },
-                                                            {
-                                                                key: "copy",
-                                                                label: "링크복사",
-                                                                icon: "content_copy",
-                                                                onSelect: () => {
-                                                                    void handleCopyInvoiceLink(p);
-                                                                },
-                                                            },
-                                                        ] : []),
-                                                        ...(p.status !== "PAID" ? [
-                                                            {
-                                                                key: "terminal",
-                                                                label: "단말기",
-                                                                icon: "point_of_sale",
-                                                                disabled: busy || terminalSubmitting,
-                                                                onSelect: () => openTerminalModal(p),
-                                                            },
-                                                            {
-                                                                key: "paid",
-                                                                label: "납부처리",
-                                                                icon: "check_circle",
-                                                                tone: "primary" as const,
-                                                                disabled: busy,
-                                                                onSelect: () => {
-                                                                    void handleStatusChange(p.id, "PAID");
-                                                                },
-                                                            },
-                                                        ] : []),
-                                                        ...(p.status === "PENDING" ? [
-                                                            {
-                                                                key: "overdue",
-                                                                label: "연체처리",
-                                                                icon: "warning",
-                                                                disabled: busy,
-                                                                onSelect: () => {
-                                                                    void handleStatusChange(p.id, "OVERDUE");
-                                                                },
-                                                            },
-                                                        ] : []),
-                                                        ...(p.status === "PAID" ? [
-                                                            {
-                                                                key: "refund",
-                                                                label: "환불",
-                                                                icon: "undo",
-                                                                disabled: busy,
-                                                                onSelect: () => {
-                                                                    void handleStatusChange(p.id, "REFUNDED");
-                                                                },
-                                                            },
-                                                        ] : []),
-                                                        {
-                                                            key: "delete",
-                                                            label: "삭제",
-                                                            icon: "delete",
-                                                            tone: "danger" as const,
-                                                            disabled: busy,
-                                                            onSelect: () => {
-                                                                if (window.confirm(`"${p.studentName}" 수납 기록을 삭제할까요?`)) {
-                                                                    void handleDelete(p.id);
-                                                                }
-                                                            },
-                                                        },
-                                                    ]}
-                                                />
+                                                {rowActions.length > 0 ? (
+                                                    <AdminQuickActionMenu
+                                                        label={`${p.studentName} 수납 빠른 작업`}
+                                                        actions={rowActions}
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-gray-400">-</span>
+                                                )}
                                             </td>
                                         </tr>
                                     );

@@ -28,6 +28,23 @@ test("방학특강 신청 상세는 관리자 빠른 처리 버튼과 필수 신
   assert.match(adminClient, /대기 \{item\.waitlistOrder\}번/);
 });
 
+test("방학특강 신청 목록은 복수 선택과 일괄 상태 변경을 제공한다", () => {
+  assert.match(adminClient, /selectedItemIds/);
+  assert.match(adminClient, /BULK_ITEM_STATUSES/);
+  assert.match(adminClient, /현재 목록 전체 선택/);
+  assert.match(adminClient, /선택한 신청 반 \{selectedItemCount\}개/);
+  assert.match(adminClient, /handleBulkItemStatus/);
+  assert.match(adminClient, /resource: "bulkItems"/);
+});
+
+test("방학특강 일괄 처리는 단건 항목 처리 안전장치를 재사용한다", () => {
+  assert.match(adminRoute, /body\.resource === "bulkItems"/);
+  assert.match(adminRoute, /parseBulkItemIds/);
+  assert.match(adminRoute, /updateSpecialProgramItemStatus/);
+  assert.match(adminRoute, /Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(adminRoute, /BULK_LIMIT_EXCEEDED/);
+});
+
 test("방학특강 신청 상세는 수강·청구 전환 준비 상태를 확인할 수 있다", () => {
   assert.match(adminRoute, /linkedProgramId:\s*true/);
   assert.match(adminRoute, /linkedClassId:\s*true/);

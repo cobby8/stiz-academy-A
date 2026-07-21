@@ -1,29 +1,31 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 신청 관리 목록형 스프레드시트 테이블화
+- 작업명: 방학특강 신청 목록 복수 처리
 - 상태: 구현 및 검증 완료, 커밋 준비
 - 기준일: 2026-07-21
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 체험 문의 목록형 | 완료 | div grid 대신 실제 table/thead/tbody 구조로 변경 |
-| 수강신청 목록형 | 완료 | 상태, 학생, 보호자, 희망수업, 접수일, 수강월, 셔틀, 처리, 액션 컬럼 구성 |
-| 카드/목록 역할 분리 | 완료 | 카드형은 상세 확인, 목록형은 스프레드시트식 빠른 비교로 분리 |
-| 검증 | 완료 | TypeScript, 신청 UX 테스트, diff check 통과 |
+| API 일괄 처리 | 완료 | `bulkItems`로 여러 신청 반 상태를 부분 성공/실패 결과와 함께 처리 |
+| 단건 안전장치 공유 | 완료 | 단건/복수 모두 정원 잠금, 검토 필요 차단, 대기순번 계산을 같은 함수로 사용 |
+| 목록 선택 UI | 완료 | 학생 행 체크박스, 현재 목록 전체 선택, 선택 건수/학생 수 표시 |
+| 일괄 처리 UX | 완료 | 승인/대기/반려/취소 버튼, 확인창, 실패 항목 재선택, 결과 안내 |
+| 검증 | 완료 | TypeScript, 방학특강 관리자 UX 테스트 통과 |
 
 ## 구현 기록
-- `src/app/admin/trial/TrialCrmClient.tsx`: 체험 문의 목록형을 실제 테이블로 변경하고 접수일, 희망일, 수업교시, 확정일정, 쌤알림 컬럼을 분리.
-- `src/app/admin/apply/ApplyAdminClient.tsx`: 수강신청 목록형을 실제 테이블로 변경하고 희망수업, 접수일, 수강월, 셔틀, 처리 컬럼을 분리.
-- `tests/application-management-ux.test.mjs`: 목록형이 table/thead/tbody 구조를 유지하도록 회귀 테스트 추가.
+- `src/app/api/admin/seasonal/route.ts`: 신청 항목 상태 변경 공통 함수와 `bulkItems` PATCH 처리 추가.
+- `src/app/admin/seasonal/SeasonalAdminClient.tsx`: 신청 목록 복수 선택, 현재 목록 전체 선택, 일괄 상태 처리 바 추가.
+- `tests/seasonal-admin-ux.test.mjs`: 복수 선택 UI와 일괄 처리 API 안전장치 회귀 테스트 추가.
 
 ## 테스트 결과
 - `npx tsc --noEmit`: 통과
-- `node --test tests\application-management-ux.test.mjs`: 통과
+- `node --test tests\seasonal-admin-ux.test.mjs`: 통과
 - `git diff --check`: 통과
 
 ## 작업 로그
+- 2026-07-21: 방학특강 신청 목록에서 여러 학생/신청 반을 선택해 승인·대기·반려·취소를 일괄 처리할 수 있게 했다.
 - 2026-07-21: 체험 문의와 수강신청 목록형을 div grid에서 실제 스프레드시트형 테이블 구조로 전환했다.
 - 2026-07-21: 관리자 체험신청 카드형의 5열 grid를 제거해 PC에서 배지와 이름이 세로로 깨지는 문제를 수정했다.
 - 2026-07-21: 체험신청 완료 화면에 체험수업비 입금 안내, 계좌번호 복사, 송금 정보 공유 흐름을 추가했다.

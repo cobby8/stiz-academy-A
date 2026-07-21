@@ -29,8 +29,25 @@ type SeasonalClass = {
 
 type ShuttleRequest = {
   pickupLocation?: string | null;
+  pickupAddress?: string | null;
+  pickupRoadAddress?: string | null;
+  pickupLatitude?: number | string | null;
+  pickupLongitude?: number | string | null;
+  pickupPlaceId?: string | null;
+  pickupLocationSource?: string | null;
+  pickupLocationAccuracyMeters?: number | string | null;
+  pickupLocationConfirmedAt?: string | null;
   pickupTime?: string | null;
   dropoffLocation?: string | null;
+  dropoffAddress?: string | null;
+  dropoffRoadAddress?: string | null;
+  dropoffLatitude?: number | string | null;
+  dropoffLongitude?: number | string | null;
+  dropoffPlaceId?: string | null;
+  dropoffLocationSource?: string | null;
+  dropoffLocationAccuracyMeters?: number | string | null;
+  dropoffLocationConfirmedAt?: string | null;
+  locationConsentVersion?: string | null;
   note?: string | null;
   status?: string | null;
   assignedRouteId?: string | null;
@@ -104,10 +121,28 @@ type Application = {
   items: ApplicationItem[];
 };
 
+type ShuttlePointKind = "pickup" | "dropoff";
+
 type Payload = {
   seasons: Season[];
   applications: Application[];
   stats?: { pending?: number; confirmed?: number; unpaid?: number; waitlisted?: number; shuttleUnassigned?: number };
+};
+
+type BulkItemResult = {
+  itemId: string;
+  ok: boolean;
+  status?: string;
+  applicationId?: string;
+  message?: string;
+  code?: string;
+};
+
+type BulkItemResponse = {
+  success?: boolean;
+  summary?: { total?: number; succeeded?: number; failed?: number };
+  results?: BulkItemResult[];
+  error?: string;
 };
 
 type Tab = "overview" | "seasons" | "applications";
@@ -123,6 +158,8 @@ const TABS: Array<{ key: Tab; label: string; icon: string }> = [
   { key: "seasons", label: "시즌·반", icon: "calendar_month" },
   { key: "applications", label: "신청 관리", icon: "assignment_ind" },
 ];
+
+const BULK_ITEM_STATUSES: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
 
 function Icon({ name, className = "" }: { name: string; className?: string }) {
   return <span className={`material-symbols-outlined ${className}`} aria-hidden="true">{name}</span>;
@@ -195,6 +232,8 @@ export default function SeasonalAdminClient() {
   const [editingClass, setEditingClass] = useState<SeasonalClass | null>(null);
   const [convertingItemId, setConvertingItemId] = useState("");
   const [resolvingReview, setResolvingReview] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [bulkProcessingStatus, setBulkProcessingStatus] = useState<ItemStatus | "">("");
 
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get("tab");
@@ -285,6 +324,21 @@ export default function SeasonalAdminClient() {
       return matchesText && matchesStatus;
     });
   }, [data.applications, search, statusFilter]);
+  const visibleItemIds = useMemo(() => filteredApplications.flatMap((application) => application.items.map((item) => item.id)), [filteredApplications]);
+  const visibleItemIdSet = useMemo(() => new Set(visibleItemIds), [visibleItemIds]);
+  const selectedItemIdSet = useMemo(() => new Set(selectedItemIds), [selectedItemIds]);
+  const selectedApplicationCount = useMemo(
+    () => filteredApplications.filter((application) => application.items.some((item) => selectedItemIdSet.has(item.id))).length,
+    [filteredApplications, selectedItemIdSet],
+  );
+  const allVisibleSelected = visibleItemIds.length > 0 && visibleItemIds.every((itemId) => selectedItemIdSet.has(itemId));
+
+  useEffect(() => {
+    setSelectedItemIds((current) => {
+      const next = current.filter((itemId) => visibleItemIdSet.has(itemId));
+      return next.length === current.length ? current : next;
+    });
+  }, [visibleItemIdSet]);
 
   const calculatedStats = {
     pending: data.stats?.pending ?? data.applications.filter((a) => a.items.some((i) => i.status === "PENDING")).length,
@@ -318,6 +372,62 @@ export default function SeasonalAdminClient() {
       setError(caught instanceof Error ? caught.message : "수강·청구 생성에 실패했습니다.");
     } finally {
       setConvertingItemId("");
+    }
+  }
+
+  function toggleApplicationSelection(application: Application, checked: boolean) {
+    const itemIds = application.items.map((item) => item.id);
+    setSelectedItemIds((current) => {
+      const next = new Set(current);
+      for (const itemId of itemIds) {
+        if (checked) next.add(itemId);
+        else next.delete(itemId);
+      }
+      return Array.from(next);
+    });
+  }
+
+  function toggleAllVisibleApplications(checked: boolean) {
+    setSelectedItemIds((current) => {
+      const next = new Set(current);
+      for (const itemId of visibleItemIds) {
+        if (checked) next.add(itemId);
+        else next.delete(itemId);
+      }
+      return Array.from(next);
+    });
+  }
+
+  async function handleBulkItemStatus(status: ItemStatus) {
+    if (selectedItemIds.length === 0) return;
+    const targetLabel = STATUS_LABEL[status] ?? status;
+    const confirmed = window.confirm(`${selectedApplicationCount}명, 신청 반 ${selectedItemIds.length}개를 '${targetLabel}' 처리할까요?`);
+    if (!confirmed) return;
+
+    setBulkProcessingStatus(status);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/seasonal", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource: "bulkItems", data: { itemIds: selectedItemIds, status } }),
+      });
+      const body = (await response.json().catch(() => ({}))) as BulkItemResponse;
+      if (!response.ok) throw new Error(body.error || "일괄 처리를 완료하지 못했습니다.");
+
+      const results = body.results ?? [];
+      const failed = results.filter((result) => !result.ok);
+      const succeeded = body.summary?.succeeded ?? results.filter((result) => result.ok).length;
+      const failedIds = failed.map((result) => result.itemId);
+      const failureMessage = failed[0]?.message ? ` 첫 실패 사유: ${failed[0].message}` : "";
+      setSelectedItemIds(failedIds);
+      setNotice(`${targetLabel} 일괄 처리: ${succeeded}개 완료, ${failed.length}개 실패.${failureMessage}`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "일괄 처리를 완료하지 못했습니다.");
+    } finally {
+      setBulkProcessingStatus("");
     }
   }
 
@@ -364,7 +474,7 @@ export default function SeasonalAdminClient() {
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
-      ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} />}
+      ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} />}
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
@@ -391,9 +501,143 @@ function SeasonsView({ seasons, selected, onSelect, onAddClass, onEditSeason, on
     </Panel></div>;
 }
 
-function ApplicationsView({ applications, search, status, onSearch, onStatus, onSelect }: { applications: Application[]; search: string; status: string; onSearch: (value: string) => void; onStatus: (value: string) => void; onSelect: (application: Application) => void }) {
-  return <Panel title="신청 목록" icon="assignment_ind"><div className="mb-4 flex flex-col gap-3 sm:flex-row"><label className="relative flex-1"><Icon name="search" className="absolute left-3 top-3 text-xl text-gray-400" /><input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="학생·학부모·전화번호 검색" className="min-h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-3 dark:border-gray-700 dark:bg-gray-800" /></label><select aria-label="신청 상태" value={status} onChange={(event) => onStatus(event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="ALL">전체 상태</option>{["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option value={value} key={value}>{STATUS_LABEL[value]}</option>)}</select></div>
-    <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800"><tr><th className="px-4 py-3">학생</th><th className="px-4 py-3">학부모</th><th className="px-4 py-3">신청 반</th><th className="px-4 py-3">결제</th><th className="px-4 py-3">셔틀</th><th className="px-4 py-3">접수일</th><th className="px-4 py-3"><span className="sr-only">상세</span></th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-gray-800">{applications.map((application) => <tr key={application.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50"><td className="px-4 py-4"><button type="button" onClick={() => onSelect(application)} className="font-black hover:underline">{application.childName}</button><p className="text-xs text-gray-500">{application.childGrade} {application.childSchool}</p></td><td className="px-4 py-4"><p className="font-bold">{application.parentName}</p><a href={`tel:${application.parentPhone}`} className="text-xs text-[var(--brand-accent)] hover:underline">{application.parentPhone}</a></td><td className="px-4 py-4"><p>{application.items.length}개</p><div className="mt-1 flex flex-wrap gap-1">{application.items.slice(0,2).map((item) => <span key={item.id} className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>)}</div></td><td className="px-4 py-4"><span className={badge(application.paymentStatus)}>{STATUS_LABEL[application.paymentStatus || ""] ?? application.paymentStatus ?? "청구 전"}</span><p className="mt-1 text-xs">{(application.totalAmount ?? 0).toLocaleString()}원</p></td><td className="px-4 py-4">{application.shuttleNeeded ? <span className={badge(application.shuttleStatus || "UNASSIGNED")}>{STATUS_LABEL[application.shuttleStatus || "UNASSIGNED"]}</span> : "미이용"}</td><td className="px-4 py-4 text-gray-500">{formatDate(application.createdAt)}</td><td className="px-4 py-4"><button type="button" onClick={() => onSelect(application)} className="inline-flex min-h-10 items-center rounded-lg border border-gray-200 px-3 font-bold dark:border-gray-700">상세</button></td></tr>)}{!applications.length && <tr><td colSpan={7}><Empty text="조건에 맞는 신청이 없습니다." /></td></tr>}</tbody></table></div>
+function ApplicationsView({
+  applications,
+  search,
+  status,
+  selectedItemIdSet,
+  selectedItemCount,
+  selectedApplicationCount,
+  allVisibleSelected,
+  bulkProcessingStatus,
+  onSearch,
+  onStatus,
+  onSelect,
+  onToggleApplication,
+  onToggleAll,
+  onBulkStatus,
+}: {
+  applications: Application[];
+  search: string;
+  status: string;
+  selectedItemIdSet: Set<string>;
+  selectedItemCount: number;
+  selectedApplicationCount: number;
+  allVisibleSelected: boolean;
+  bulkProcessingStatus: ItemStatus | "";
+  onSearch: (value: string) => void;
+  onStatus: (value: string) => void;
+  onSelect: (application: Application) => void;
+  onToggleApplication: (application: Application, checked: boolean) => void;
+  onToggleAll: (checked: boolean) => void;
+  onBulkStatus: (status: ItemStatus) => Promise<void>;
+}) {
+  const visibleItemCount = applications.reduce((sum, application) => sum + application.items.length, 0);
+
+  return <Panel title="신청 목록" icon="assignment_ind">
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+      <label className="relative flex-1">
+        <Icon name="search" className="absolute left-3 top-3 text-xl text-gray-400" />
+        <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="학생·학부모·전화번호 검색" className="min-h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-3 dark:border-gray-700 dark:bg-gray-800" />
+      </label>
+      <select aria-label="신청 상태" value={status} onChange={(event) => onStatus(event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800">
+        <option value="ALL">전체 상태</option>
+        {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option value={value} key={value}>{STATUS_LABEL[value]}</option>)}
+      </select>
+    </div>
+
+    {selectedItemCount > 0 && (
+      <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[var(--brand-accent)] bg-[var(--brand-accent-soft)] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-black text-gray-950 dark:text-white">선택한 신청 반 {selectedItemCount}개</p>
+          <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">{selectedApplicationCount}명 학생을 현재 목록에서 처리합니다.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {BULK_ITEM_STATUSES.map((nextStatus) => (
+            <button
+              key={nextStatus}
+              type="button"
+              disabled={Boolean(bulkProcessingStatus)}
+              onClick={() => void onBulkStatus(nextStatus)}
+              className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-900 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+            >
+              {bulkProcessingStatus === nextStatus ? "처리 중" : STATUS_LABEL[nextStatus]}
+            </button>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[940px] text-left text-sm">
+        <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800">
+          <tr>
+            <th className="w-12 px-4 py-3">
+              <input
+                type="checkbox"
+                aria-label="현재 목록 전체 선택"
+                checked={allVisibleSelected}
+                disabled={visibleItemCount === 0}
+                onChange={(event) => onToggleAll(event.target.checked)}
+                className="h-5 w-5 rounded border-gray-300 accent-[var(--brand-accent)]"
+              />
+            </th>
+            <th className="px-4 py-3">학생</th>
+            <th className="px-4 py-3">학부모</th>
+            <th className="px-4 py-3">신청 반</th>
+            <th className="px-4 py-3">결제</th>
+            <th className="px-4 py-3">셔틀</th>
+            <th className="px-4 py-3">접수일</th>
+            <th className="px-4 py-3"><span className="sr-only">상세</span></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+          {applications.map((application) => {
+            const itemIds = application.items.map((item) => item.id);
+            const selectedCount = itemIds.filter((itemId) => selectedItemIdSet.has(itemId)).length;
+            const checked = itemIds.length > 0 && selectedCount === itemIds.length;
+            return (
+              <tr key={application.id} className={checked ? "bg-[var(--brand-accent-soft)]/60 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}>
+                <td className="px-4 py-4 align-top">
+                  <input
+                    type="checkbox"
+                    aria-label={`${application.childName} 신청 선택`}
+                    checked={checked}
+                    disabled={itemIds.length === 0}
+                    onChange={(event) => onToggleApplication(application, event.target.checked)}
+                    className="h-5 w-5 rounded border-gray-300 accent-[var(--brand-accent)]"
+                  />
+                </td>
+                <td className="px-4 py-4 align-top">
+                  <button type="button" onClick={() => onSelect(application)} className="font-black hover:underline">{application.childName}</button>
+                  <p className="text-xs text-gray-500">{application.childGrade} {application.childSchool}</p>
+                  {selectedCount > 0 && <p className="mt-1 text-xs font-black text-[var(--brand-accent)]">{selectedCount}/{itemIds.length}개 선택</p>}
+                </td>
+                <td className="px-4 py-4 align-top">
+                  <p className="font-bold">{application.parentName}</p>
+                  <a href={`tel:${application.parentPhone}`} className="text-xs text-[var(--brand-accent)] hover:underline">{application.parentPhone}</a>
+                </td>
+                <td className="px-4 py-4 align-top">
+                  <p>{application.items.length}개 반</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {application.items.slice(0,2).map((item) => <span key={item.id} className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>)}
+                    {application.items.length > 2 && <span className="inline-flex min-h-7 items-center rounded-full bg-gray-100 px-2.5 text-xs font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-200">+{application.items.length - 2}</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-4 align-top">
+                  <span className={badge(application.paymentStatus)}>{STATUS_LABEL[application.paymentStatus || ""] ?? application.paymentStatus ?? "청구 전"}</span>
+                  <p className="mt-1 text-xs">{(application.totalAmount ?? 0).toLocaleString()}원</p>
+                </td>
+                <td className="px-4 py-4 align-top">{application.shuttleNeeded ? <span className={badge(application.shuttleStatus || "UNASSIGNED")}>{STATUS_LABEL[application.shuttleStatus || "UNASSIGNED"]}</span> : "미이용"}</td>
+                <td className="px-4 py-4 align-top text-gray-500">{formatDate(application.createdAt)}</td>
+                <td className="px-4 py-4 align-top"><button type="button" onClick={() => onSelect(application)} className="inline-flex min-h-10 items-center rounded-lg border border-gray-200 px-3 font-bold dark:border-gray-700">상세</button></td>
+              </tr>
+            );
+          })}
+          {!applications.length && <tr><td colSpan={8}><Empty text="조건에 맞는 신청이 없습니다." /></td></tr>}
+        </tbody>
+      </table>
+    </div>
   </Panel>;
 }
 
@@ -594,19 +838,114 @@ function InvoiceActionBox({ item, onCopyInvoiceLink }: { item: ApplicationItem; 
   </div>;
 }
 
+type ShuttlePoint = {
+  label: string;
+  location?: string | null;
+  address?: string | null;
+  roadAddress?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  placeId?: string | null;
+  source?: string | null;
+  accuracyMeters?: number | string | null;
+  confirmedAt?: string | null;
+};
+
+function shuttlePoint(request: ShuttleRequest, kind: ShuttlePointKind): ShuttlePoint {
+  if (kind === "pickup") {
+    return {
+      label: "탑승 위치",
+      location: request.pickupLocation,
+      address: request.pickupAddress,
+      roadAddress: request.pickupRoadAddress,
+      latitude: request.pickupLatitude,
+      longitude: request.pickupLongitude,
+      placeId: request.pickupPlaceId,
+      source: request.pickupLocationSource,
+      accuracyMeters: request.pickupLocationAccuracyMeters,
+      confirmedAt: request.pickupLocationConfirmedAt,
+    };
+  }
+  return {
+    label: "하차 위치",
+    location: request.dropoffLocation,
+    address: request.dropoffAddress,
+    roadAddress: request.dropoffRoadAddress,
+    latitude: request.dropoffLatitude,
+    longitude: request.dropoffLongitude,
+    placeId: request.dropoffPlaceId,
+    source: request.dropoffLocationSource,
+    accuracyMeters: request.dropoffLocationAccuracyMeters,
+    confirmedAt: request.dropoffLocationConfirmedAt,
+  };
+}
+
+function finiteCoordinate(value?: number | string | null) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function ShuttleLocationCard({ point }: { point: ShuttlePoint }) {
+  const latitude = finiteCoordinate(point.latitude);
+  const longitude = finiteCoordinate(point.longitude);
+  const hasCoordinates = latitude !== null && longitude !== null;
+  const displayAddress = point.roadAddress || point.address || point.location || "위치 미입력";
+  const searchQuery = displayAddress === "위치 미입력" ? "" : displayAddress;
+  const encodedLabel = encodeURIComponent(`${point.label} ${displayAddress}`);
+  const kakaoHref = hasCoordinates
+    ? `https://map.kakao.com/link/map/${encodedLabel},${latitude},${longitude}`
+    : searchQuery ? `https://map.kakao.com/?q=${encodeURIComponent(searchQuery)}` : null;
+  const naverHref = hasCoordinates
+    ? `https://map.naver.com/p?c=${longitude},${latitude},15,0,0,0,dh`
+    : searchQuery ? `https://map.naver.com/p/search/${encodeURIComponent(searchQuery)}` : null;
+  const accuracy = finiteCoordinate(point.accuracyMeters);
+
+  return <article className="min-w-0 rounded-xl border border-blue-200 bg-white p-3 dark:border-blue-800 dark:bg-gray-900">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <Icon name={point.label === "탑승 위치" ? "trip_origin" : "location_on"} className="shrink-0 text-xl text-blue-700 dark:text-blue-300" />
+        <h5 className="font-black text-gray-950 dark:text-white">{point.label}</h5>
+      </div>
+      {hasCoordinates ? (
+        <span className={point.confirmedAt ? badge("CONFIRMED") : badge("UNASSIGNED")}>{point.confirmedAt ? "지도 위치 확인됨" : "핀 제출 · 확인 필요"}</span>
+      ) : (
+        <span className={badge("UNASSIGNED")}>텍스트 신청 · 위치 확인 필요</span>
+      )}
+    </div>
+
+    <p className="mt-3 break-words text-sm font-bold text-gray-900 dark:text-white">{displayAddress}</p>
+    {point.location && point.location !== displayAddress && <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">상세 설명: {point.location}</p>}
+    <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+      <Info label="좌표">{hasCoordinates ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : "좌표 없음"}</Info>
+      <Info label="확정 여부">{point.confirmedAt ? `${formatDateTime(point.confirmedAt)} 확인` : "관리자 확인 필요"}</Info>
+      {(point.source || point.placeId) && <Info label="지도 정보">{[point.source, point.placeId].filter(Boolean).join(" · ")}</Info>}
+      {accuracy !== null && <Info label="위치 정확도">약 {Math.round(accuracy)}m</Info>}
+    </dl>
+
+    {(kakaoHref || naverHref) && <div className="mt-3 grid grid-cols-2 gap-2">
+      {kakaoHref && <a href={kakaoHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-2 text-xs font-black text-blue-800 hover:bg-blue-50 dark:border-blue-800 dark:bg-gray-900 dark:text-blue-200 dark:hover:bg-blue-950/40"><Icon name="map" className="text-base" />카카오맵</a>}
+      {naverHref && <a href={naverHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 text-xs font-black text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-gray-900 dark:text-emerald-200 dark:hover:bg-emerald-950/40"><Icon name="map" className="text-base" />네이버 지도</a>}
+    </div>}
+  </article>;
+}
+
 function ShuttleRequestBox({ request }: { request: ShuttleRequest }) {
-  return <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm dark:bg-blue-950/30">
-    <div className="flex items-center justify-between gap-2">
+  return <div className="mt-4 min-w-0 rounded-xl bg-blue-50 p-3 text-sm dark:bg-blue-950/30">
+    <div className="flex flex-wrap items-center justify-between gap-2">
       <h4 className="font-black text-blue-900 dark:text-blue-100">셔틀 요청</h4>
       <span className={badge(request.status || "REQUESTED")}>{STATUS_LABEL[request.status || "REQUESTED"]}</span>
     </div>
+    <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
+      <ShuttleLocationCard point={shuttlePoint(request, "pickup")} />
+      <ShuttleLocationCard point={shuttlePoint(request, "dropoff")} />
+    </div>
     <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-      <Info label="탑승 위치">{request.pickupLocation || "미입력"}</Info>
       <Info label="희망 시간">{request.pickupTime || "미입력"}</Info>
-      <Info label="하차 위치">{request.dropoffLocation || "미입력"}</Info>
       <Info label="배정">{request.assignedRouteId || request.assignedStopId ? [request.assignedRouteId, request.assignedStopId].filter(Boolean).join(" · ") : "미배정"}</Info>
+      {request.locationConsentVersion && <Info label="위치정보 동의">버전 {request.locationConsentVersion}</Info>}
     </dl>
-    {request.note && <p className="mt-3 whitespace-pre-wrap text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
+    {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
   </div>;
 }
 

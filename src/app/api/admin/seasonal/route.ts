@@ -15,6 +15,14 @@ type ConversionResult = { itemId: string; studentId: string; enrollmentId: strin
 type AdminApplicationRow = Record<string, unknown> & {
   items: Array<Record<string, unknown> & { paymentId?: string | null }>;
 };
+type BulkItemResult = {
+  itemId: string;
+  ok: boolean;
+  status?: string;
+  applicationId?: string;
+  message?: string;
+  code?: string;
+};
 
 async function admin() {
   try {
@@ -72,6 +80,86 @@ async function ensureApplicationCapacity(tx: Prisma.TransactionClient, applicati
     if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 승인할 수 없습니다.", 409, "CAPACITY_REQUIRED");
     if (occupied > offering.capacity) throw new SeasonalError("정원이 가득 차 신청을 승인할 수 없습니다.", 409, "CAPACITY_FULL");
   }
+}
+
+function applicationStatusFromItemStatuses(statuses: string[]) {
+  if (statuses.every((status) => status === "APPROVED")) return "APPROVED";
+  if (statuses.every((status) => status === "REJECTED")) return "REJECTED";
+  if (statuses.every((status) => status === "CANCELLED")) return "CANCELLED";
+  if (statuses.includes("WAITLISTED")) return "PARTIALLY_WAITLISTED";
+  return "PENDING";
+}
+
+function parseBulkItemIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((item) => cleanText(item, 100)).filter((item): item is string => Boolean(item))));
+}
+
+function bulkErrorResult(itemId: string, error: unknown): BulkItemResult {
+  if (error instanceof SeasonalError) {
+    return { itemId, ok: false, message: error.message, code: error.code };
+  }
+  console.error("[admin seasonal bulk item]", error);
+  return { itemId, ok: false, message: "처리 중 오류가 발생했습니다.", code: "BULK_ITEM_FAILED" };
+}
+
+async function updateSpecialProgramItemStatus(
+  tx: Prisma.TransactionClient,
+  params: { itemId: string; status: string; actorId: string; enrollmentId?: unknown; paymentId?: unknown },
+) {
+  const before = await tx.specialProgramApplicationItem.findUnique({ where: { id: params.itemId }, include: { application: true } });
+  if (!before) throw new SeasonalError("신청 항목을 찾을 수 없습니다.", 404);
+  if (params.status === "APPROVED" && (before.application.requiresReview || before.application.reviewReasons.length > 0)) {
+    throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
+  }
+
+  await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${before.offeringId} FOR UPDATE`;
+  if (["PENDING", "APPROVED"].includes(params.status)) {
+    const [offering, occupied] = await Promise.all([
+      tx.specialProgramOffering.findUnique({ where: { id: before.offeringId } }),
+      tx.specialProgramApplicationItem.count({ where: { offeringId: before.offeringId, id: { not: params.itemId }, status: { in: ["PENDING", "APPROVED"] } } }),
+    ]);
+    if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 승인할 수 없습니다.", 409, "CAPACITY_REQUIRED");
+    if (occupied >= offering.capacity) throw new SeasonalError("정원이 가득 차 승인할 수 없습니다.", 409, "CAPACITY_FULL");
+  }
+
+  let waitlistOrder = before.waitlistOrder;
+  if (params.status === "WAITLISTED" && !waitlistOrder) {
+    const last = await tx.specialProgramApplicationItem.aggregate({ where: { offeringId: before.offeringId, status: "WAITLISTED" }, _max: { waitlistOrder: true } });
+    waitlistOrder = (last._max.waitlistOrder || 0) + 1;
+  }
+
+  const item = await tx.specialProgramApplicationItem.update({
+    where: { id: params.itemId },
+    data: {
+      status: params.status,
+      waitlistOrder: params.status === "WAITLISTED" ? waitlistOrder : null,
+      enrollmentId: cleanText(params.enrollmentId, 100),
+      paymentId: cleanText(params.paymentId, 100),
+    },
+  });
+  const siblings = await tx.specialProgramApplicationItem.findMany({
+    where: { applicationId: before.applicationId },
+    select: { status: true },
+  });
+  await tx.specialProgramApplication.update({
+    where: { id: before.applicationId },
+    data: { status: applicationStatusFromItemStatuses(siblings.map((row) => row.status)), processedAt: new Date(), processedByUserId: params.actorId },
+  });
+  await tx.specialProgramAuditLog.create({
+    data: {
+      seasonId: before.application.seasonId,
+      offeringId: item.offeringId,
+      applicationId: item.applicationId,
+      itemId: params.itemId,
+      actorType: "ADMIN",
+      actorId: params.actorId,
+      action: "ITEM_STATUS_UPDATED",
+      beforeJSON: before,
+      afterJSON: item,
+    },
+  });
+  return item;
 }
 
 function respondError(error: unknown) {
@@ -173,8 +261,36 @@ export async function PATCH(request: NextRequest) {
   try {
     const actor = await admin();
     const body = await request.json();
-    const id = cleanText(body?.id, 100);
     const data = body?.data || {};
+    if (body.resource === "bulkItems") {
+      const status = cleanText(data.status, 30);
+      if (!status || !ITEM_STATUSES.has(status)) throw new SeasonalError("일괄 처리 상태가 올바르지 않습니다.");
+      const itemIds = parseBulkItemIds(data.itemIds);
+      if (itemIds.length === 0) throw new SeasonalError("선택된 신청 항목이 없습니다.");
+      if (itemIds.length > 100) throw new SeasonalError("한 번에 100개까지만 처리할 수 있습니다.", 413, "BULK_LIMIT_EXCEEDED");
+
+      const results: BulkItemResult[] = [];
+      for (const itemId of itemIds) {
+        try {
+          const item = await prisma.$transaction(
+            (tx) => updateSpecialProgramItemStatus(tx, { itemId, status, actorId: actor.appUserId }),
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          );
+          results.push({ itemId, ok: true, status: item.status, applicationId: item.applicationId });
+        } catch (error) {
+          results.push(bulkErrorResult(itemId, error));
+        }
+      }
+
+      const summary = {
+        total: results.length,
+        succeeded: results.filter((result) => result.ok).length,
+        failed: results.filter((result) => !result.ok).length,
+      };
+      return NextResponse.json({ success: summary.failed === 0, summary, results });
+    }
+
+    const id = cleanText(body?.id, 100);
     if (!id) throw new SeasonalError("수정 대상 ID가 필요합니다.");
 
     if (body.resource === "season") {
@@ -271,49 +387,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (body.resource === "item") {
-      if (!ITEM_STATUSES.has(data.status)) throw new SeasonalError("신청 항목 상태가 올바르지 않습니다.");
-      const before = await prisma.specialProgramApplicationItem.findUnique({ where: { id }, include: { application: true } });
-      if (!before) throw new SeasonalError("신청 항목을 찾을 수 없습니다.", 404);
-      if (data.status === "APPROVED" && (before.application.requiresReview || before.application.reviewReasons.length > 0)) {
-        throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
-      }
-      const item = await prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${before.offeringId} FOR UPDATE`;
-        if (["PENDING", "APPROVED"].includes(data.status)) {
-          const [offering, occupied] = await Promise.all([
-            tx.specialProgramOffering.findUnique({ where: { id: before.offeringId } }),
-            tx.specialProgramApplicationItem.count({ where: { offeringId: before.offeringId, id: { not: id }, status: { in: ["PENDING", "APPROVED"] } } }),
-          ]);
-          if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 승인할 수 없습니다.", 409, "CAPACITY_REQUIRED");
-          if (occupied >= offering.capacity) throw new SeasonalError("정원이 가득 차 승인할 수 없습니다.", 409, "CAPACITY_FULL");
-        }
-        let waitlistOrder = before.waitlistOrder;
-        if (data.status === "WAITLISTED" && !waitlistOrder) {
-          const last = await tx.specialProgramApplicationItem.aggregate({ where: { offeringId: before.offeringId, status: "WAITLISTED" }, _max: { waitlistOrder: true } });
-          waitlistOrder = (last._max.waitlistOrder || 0) + 1;
-        }
-        const updated = await tx.specialProgramApplicationItem.update({ where: { id }, data: { status: data.status, waitlistOrder: data.status === "WAITLISTED" ? waitlistOrder : null, enrollmentId: cleanText(data.enrollmentId, 100), paymentId: cleanText(data.paymentId, 100) } });
-        const siblings = await tx.specialProgramApplicationItem.findMany({
-          where: { applicationId: before.applicationId },
-          select: { status: true },
-        });
-        const statuses = siblings.map((row) => row.status);
-        const applicationStatus = statuses.every((status) => status === "APPROVED")
-          ? "APPROVED"
-          : statuses.every((status) => status === "REJECTED")
-            ? "REJECTED"
-            : statuses.every((status) => status === "CANCELLED")
-              ? "CANCELLED"
-              : statuses.includes("WAITLISTED")
-                ? "PARTIALLY_WAITLISTED"
-                : "PENDING";
-        await tx.specialProgramApplication.update({
-          where: { id: before.applicationId },
-          data: { status: applicationStatus, processedAt: new Date(), processedByUserId: actor.appUserId },
-        });
-        return updated;
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-      await prisma.specialProgramAuditLog.create({ data: { seasonId: before.application.seasonId, offeringId: item.offeringId, applicationId: item.applicationId, itemId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "ITEM_STATUS_UPDATED", beforeJSON: before, afterJSON: item } });
+      const status = cleanText(data.status, 30);
+      if (!status || !ITEM_STATUSES.has(status)) throw new SeasonalError("신청 항목 상태가 올바르지 않습니다.");
+      const item = await prisma.$transaction(
+        (tx) => updateSpecialProgramItemStatus(tx, { itemId: id, status, actorId: actor.appUserId, enrollmentId: data.enrollmentId, paymentId: data.paymentId }),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
       return NextResponse.json({ item });
     }
 

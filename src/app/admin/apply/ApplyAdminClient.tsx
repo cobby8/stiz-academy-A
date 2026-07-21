@@ -838,124 +838,139 @@ export default function ApplyAdminClient({
 
     function renderApplicationList() {
         return (
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="hidden grid-cols-[1.1fr_1fr_1.3fr_0.9fr_1.2fr] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-black uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-400 lg:grid">
-                    <span>학생</span>
-                    <span>보호자</span>
-                    <span>수강 정보</span>
-                    <span>상태 변경</span>
-                    <span>빠른 처리</span>
-                </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                    {visibleApps.map((app) => {
-                        const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
-                        const age = calcAge(app.childBirthDate);
-                        const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
-                        const parentPhoneHref = phoneHref(app.parentPhone);
-                        return (
-                            <div
-                                key={`${app.id}-list`}
-                                className="grid gap-3 px-4 py-4 text-sm lg:grid-cols-[1.1fr_1fr_1.3fr_0.9fr_1.2fr] lg:items-center"
-                            >
-                                <div className="min-w-0">
-                                    <div className="mb-1 flex flex-wrap items-center gap-2">
-                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
-                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                            {cfg.label}
-                                        </span>
-                                        {app.trialLeadId && (
-                                            <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs font-bold text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
-                                                체험 후 신청
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                        <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                            <th className="px-3 py-3">상태</th>
+                            <th className="px-3 py-3">학생</th>
+                            <th className="px-3 py-3">보호자</th>
+                            <th className="px-3 py-3">희망수업</th>
+                            <th className="px-3 py-3">접수일</th>
+                            <th className="px-3 py-3">수강월</th>
+                            <th className="px-3 py-3">셔틀</th>
+                            <th className="px-3 py-3">처리</th>
+                            <th className="px-3 py-3">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        {visibleApps.map((app) => {
+                            const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
+                            const age = calcAge(app.childBirthDate);
+                            const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
+                            const parentPhoneHref = phoneHref(app.parentPhone);
+                            return (
+                                <tr key={`${app.id}-list`} className="divide-x divide-gray-100 hover:bg-gray-50/80 dark:divide-gray-700 dark:hover:bg-gray-900/50">
+                                    <td className="px-3 py-2 align-top">
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
+                                                <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                                {cfg.label}
                                             </span>
+                                            {app.trialLeadId && (
+                                                <span className="whitespace-nowrap rounded bg-purple-50 px-2 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
+                                                    체험 후 신청
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <p className="whitespace-nowrap font-black text-gray-900 dark:text-white">
+                                            {app.childName}
+                                            {age !== null ? <span className="ml-1 text-xs font-bold text-gray-500 dark:text-gray-400">(만 {age}세)</span> : null}
+                                        </p>
+                                        <p className="mt-0.5 max-w-44 truncate text-xs text-gray-500 dark:text-gray-400">
+                                            {[app.childGrade, app.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
+                                        </p>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <p className="whitespace-nowrap font-bold text-gray-800 dark:text-gray-100">
+                                            {app.parentName}
+                                            {app.parentRelation ? ` (${app.parentRelation})` : ""}
+                                        </p>
+                                        <a href={parentPhoneHref} className="mt-0.5 inline-flex items-center gap-1 whitespace-nowrap text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
+                                            <span className="material-symbols-outlined text-sm">phone</span>
+                                            {app.parentPhone}
+                                        </a>
+                                    </td>
+                                    <td className="max-w-64 px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
+                                        <span className="line-clamp-2">{preferredSlotLabel || "희망 시간 확인 필요"}</span>
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
+                                        {formatDate(app.createdAt)}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
+                                        {app.enrollmentMonths || "-"}
+                                    </td>
+                                    <td className="px-3 py-2 align-top text-xs font-bold text-gray-600 dark:text-gray-300">
+                                        {app.shuttleNeeded ? (
+                                            <span className="line-clamp-2">{app.shuttlePickup || app.shuttleDropoff || app.shuttleTime || "이용"}</span>
+                                        ) : (
+                                            <span className="whitespace-nowrap">미이용</span>
                                         )}
-                                    </div>
-                                    <p className="truncate text-base font-black text-gray-900 dark:text-white">
-                                        {app.childName}
-                                        {age !== null ? <span className="ml-1 text-sm font-bold text-gray-500 dark:text-gray-400">(만 {age}세)</span> : null}
-                                    </p>
-                                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                                        {[app.childGrade, app.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
-                                    </p>
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="truncate font-bold text-gray-800 dark:text-gray-100">
-                                        {app.parentName}
-                                        {app.parentRelation ? ` (${app.parentRelation})` : ""}
-                                    </p>
-                                    <a href={parentPhoneHref} className="mt-1 inline-flex items-center gap-1 font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
-                                        <span className="material-symbols-outlined text-base">phone</span>
-                                        {app.parentPhone}
-                                    </a>
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="line-clamp-2 font-bold text-gray-800 dark:text-gray-100">
-                                        {preferredSlotLabel || "희망 시간 확인 필요"}
-                                    </p>
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        접수 {formatDate(app.createdAt)}
-                                        {app.enrollmentMonths ? ` · ${app.enrollmentMonths}` : ""}
-                                        {app.shuttleNeeded ? " · 셔틀" : ""}
-                                    </p>
-                                </div>
-                                <div>
-                                    {app.status === "PENDING" ? (
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        {app.status === "PENDING" ? (
+                                            <div className="flex flex-wrap gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowApproveModal(app)}
+                                                    className="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg bg-lime-500 px-2.5 text-xs font-black text-brand-navy-900 transition hover:bg-lime-400"
+                                                >
+                                                    승인
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowRejectModal(app)}
+                                                    className="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg border border-red-200 px-2.5 text-xs font-bold text-red-700 transition hover:bg-red-50 dark:border-red-900/60 dark:text-red-200 dark:hover:bg-red-950/40"
+                                                >
+                                                    반려
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowCancelModal(app)}
+                                                    className="inline-flex min-h-8 items-center whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                                >
+                                                    취소
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400">처리 완료</span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
                                         <div className="flex flex-wrap gap-1.5">
+                                            <a
+                                                href={parentPhoneHref}
+                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">call</span>
+                                                전화
+                                            </a>
                                             <button
                                                 type="button"
-                                                onClick={() => setShowApproveModal(app)}
-                                                className="rounded-lg bg-lime-500 px-3 py-2 text-xs font-black text-brand-navy-900 transition hover:bg-lime-400"
+                                                onClick={() => setShowDetailModal(app)}
+                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
                                             >
-                                                승인
+                                                <span className="material-symbols-outlined text-sm">visibility</span>
+                                                상세
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setShowRejectModal(app)}
-                                                className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 dark:border-red-900/60 dark:text-red-200 dark:hover:bg-red-950/40"
+                                                onClick={() => handleRecordContact(app, "CONTACTED")}
+                                                disabled={contactBusyId === app.id}
+                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
                                             >
-                                                반려
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowCancelModal(app)}
-                                                className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
-                                            >
-                                                취소
+                                                <span className="material-symbols-outlined text-sm">done_all</span>
+                                                연락
                                             </button>
                                         </div>
-                                    ) : (
-                                        <span className="text-xs font-bold text-gray-500 dark:text-gray-400">처리 완료</span>
-                                    )}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    <a
-                                        href={parentPhoneHref}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
-                                    >
-                                        <span className="material-symbols-outlined text-base">call</span>
-                                        전화
-                                    </a>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowDetailModal(app)}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
-                                    >
-                                        <span className="material-symbols-outlined text-base">visibility</span>
-                                        상세
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRecordContact(app, "CONTACTED")}
-                                        disabled={contactBusyId === app.id}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
-                                    >
-                                        <span className="material-symbols-outlined text-base">done_all</span>
-                                        연락
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
         );
     }

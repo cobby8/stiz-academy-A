@@ -915,136 +915,145 @@ export default function TrialCrmClient({
 
     function renderTrialList() {
         return (
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="hidden grid-cols-[1fr_0.9fr_2.2fr_0.8fr_1.2fr] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-black uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-400 lg:grid">
-                    <span>학생</span>
-                    <span>보호자</span>
-                    <span>신청/희망/수업 일정</span>
-                    <span>상태 변경</span>
-                    <span>빠른 처리</span>
-                </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                    {visibleLeads.map((lead) => {
-                        const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
-                        const isClosed = isClosedTrialStatus(lead.status);
-                        const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
-                        const parentPhoneHref = phoneHref(lead.parentPhone);
-                        return (
-                            <div
-                                key={`${lead.id}-list`}
-                                className="grid gap-3 px-4 py-4 text-sm lg:grid-cols-[1fr_0.9fr_2.2fr_0.8fr_1.2fr] lg:items-start"
-                            >
-                                <div className="min-w-0">
-                                    <div className="mb-1 flex flex-wrap items-center gap-2">
-                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
-                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                                            {cfg.label}
-                                        </span>
-                                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                                            {SOURCE_LABELS[lead.source] || lead.source}
-                                        </span>
-                                    </div>
-                                    <p className="truncate text-base font-black text-gray-900 dark:text-white">
-                                        {lead.childName}
-                                        {lead.childAge ? <span className="ml-1 text-sm font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
-                                    </p>
-                                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                                        {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
-                                    </p>
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="truncate font-bold text-gray-800 dark:text-gray-100">{lead.parentName}</p>
-                                    <a href={parentPhoneHref} className="mt-1 inline-flex items-center gap-1 font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
-                                        <span className="material-symbols-outlined text-base">phone</span>
-                                        {lead.parentPhone}
-                                    </a>
-                                </div>
-                                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-                                    {scheduleItems.map((item) => (
-                                        <ScheduleInfoCard
-                                            key={`${lead.id}-list-schedule-${item.label}`}
-                                            label={item.label}
-                                            icon={item.icon}
-                                            value={item.value}
-                                            className={item.className}
-                                        />
-                                    ))}
-                                    {lead.coachNoticeSentAt && (
-                                        <span className="inline-flex items-center gap-1 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-200 sm:col-span-2">
-                                            <span className="material-symbols-outlined text-sm">school</span>
-                                            담당쌤 알림 {formatDate(lead.coachNoticeSentAt)}
-                                        </span>
-                                    )}
-                                </div>
-                                <div>
-                                    {isClosed ? (
-                                        <span className="text-xs font-bold text-gray-500 dark:text-gray-400">종료 상태</span>
-                                    ) : (
-                                        <select
-                                            value={lead.status}
-                                            onChange={(event) => handleStatusChange(lead, event.target.value)}
-                                            disabled={busy}
-                                            className="min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
-                                        >
-                                            {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
-                                                <option key={s} value={s}>
-                                                    {STATUS_CONFIG[s].label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    )}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    <a
-                                        href={parentPhoneHref}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
-                                    >
-                                        <span className="material-symbols-outlined text-base">call</span>
-                                        전화
-                                    </a>
-                                    {!isClosed && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowScheduleModal(lead)}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
-                                        >
-                                            <span className="material-symbols-outlined text-base">event_available</span>
-                                            일정
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRecordContact(lead, "CONTACTED")}
-                                        disabled={contactBusyId === lead.id}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
-                                    >
-                                        <span className="material-symbols-outlined text-base">done_all</span>
-                                        연락
-                                    </button>
-                                    {lead.status === "ATTENDED" && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowConvertModal(lead)}
-                                            disabled={busy}
-                                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
-                                        >
-                                            <span className="material-symbols-outlined text-base">how_to_reg</span>
-                                            등록
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowMemoModal(lead)}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
-                                    >
-                                        <span className="material-symbols-outlined text-base">edit_note</span>
-                                        메모
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                        <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                            <th className="px-3 py-3">상태</th>
+                            <th className="px-3 py-3">학생</th>
+                            <th className="px-3 py-3">보호자</th>
+                            <th className="px-3 py-3">접수일</th>
+                            <th className="px-3 py-3">희망일</th>
+                            <th className="px-3 py-3">수업교시</th>
+                            <th className="px-3 py-3">확정일정</th>
+                            <th className="px-3 py-3">쌤알림</th>
+                            <th className="px-3 py-3">상태변경</th>
+                            <th className="px-3 py-3">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        {visibleLeads.map((lead) => {
+                            const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
+                            const isClosed = isClosedTrialStatus(lead.status);
+                            const scheduleItems = getTrialScheduleItems(lead, classesBySlotKey, classesById);
+                            const getScheduleValue = (label: string) => scheduleItems.find((item) => item.label === label)?.value || "-";
+                            const parentPhoneHref = phoneHref(lead.parentPhone);
+                            return (
+                                <tr key={`${lead.id}-list`} className="divide-x divide-gray-100 hover:bg-gray-50/80 dark:divide-gray-700 dark:hover:bg-gray-900/50">
+                                    <td className="px-3 py-2 align-top">
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
+                                                <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                                {cfg.label}
+                                            </span>
+                                            <span className="whitespace-nowrap rounded bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                                {SOURCE_LABELS[lead.source] || lead.source}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <p className="whitespace-nowrap font-black text-gray-900 dark:text-white">
+                                            {lead.childName}
+                                            {lead.childAge ? <span className="ml-1 text-xs font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
+                                        </p>
+                                        <p className="mt-0.5 max-w-44 truncate text-xs text-gray-500 dark:text-gray-400">
+                                            {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
+                                        </p>
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <p className="whitespace-nowrap font-bold text-gray-800 dark:text-gray-100">{lead.parentName || "미입력"}</p>
+                                        <a href={parentPhoneHref} className="mt-0.5 inline-flex items-center gap-1 whitespace-nowrap text-xs font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
+                                            <span className="material-symbols-outlined text-sm">phone</span>
+                                            {lead.parentPhone}
+                                        </a>
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
+                                        {getScheduleValue("신청일")}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
+                                        {getScheduleValue("희망일자")}
+                                    </td>
+                                    <td className="max-w-52 px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
+                                        <span className="line-clamp-2">{getScheduleValue("수업교시")}</span>
+                                    </td>
+                                    <td className="max-w-52 px-3 py-2 align-top font-bold text-gray-700 dark:text-gray-200">
+                                        <span className="line-clamp-2">{getScheduleValue("확정일정")}</span>
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-bold text-gray-600 dark:text-gray-300">
+                                        {lead.coachNoticeSentAt ? formatDate(lead.coachNoticeSentAt) : "미발송"}
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        {isClosed ? (
+                                            <span className="whitespace-nowrap text-xs font-bold text-gray-500 dark:text-gray-400">종료 상태</span>
+                                        ) : (
+                                            <select
+                                                value={lead.status}
+                                                onChange={(event) => handleStatusChange(lead, event.target.value)}
+                                                disabled={busy}
+                                                className="min-h-9 w-32 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+                                            >
+                                                {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
+                                                    <option key={s} value={s}>
+                                                        {STATUS_CONFIG[s].label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <a
+                                                href={parentPhoneHref}
+                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">call</span>
+                                                전화
+                                            </a>
+                                            {!isClosed && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowScheduleModal(lead)}
+                                                    className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-sky-200 px-2.5 text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">event_available</span>
+                                                    일정
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRecordContact(lead, "CONTACTED")}
+                                                disabled={contactBusyId === lead.id}
+                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-lime-300 bg-lime-50 px-2.5 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">done_all</span>
+                                                연락
+                                            </button>
+                                            {lead.status === "ATTENDED" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowConvertModal(lead)}
+                                                    disabled={busy}
+                                                    className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-500 px-2.5 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">how_to_reg</span>
+                                                    등록
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowMemoModal(lead)}
+                                                className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 px-2.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">edit_note</span>
+                                                메모
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
         );
     }

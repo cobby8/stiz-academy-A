@@ -28,12 +28,16 @@ test("체험 완료 후 수강신청서 링크는 관리자 주요 액션으로 
 });
 
 test("체험 신청 정보는 수강신청서 자동 채움으로 이어진다", () => {
-  for (const field of ["childSchool", "basketballExp", "preferredSlotKey"]) {
+  for (const field of ["childSchool", "childPhone", "basketballExp", "preferredSlotKey"]) {
     assert.match(publicActions, new RegExp(`${field}: string \\| null`));
     assert.match(publicActions, new RegExp(`"${field}"`));
   }
+  assert.match(publicActions, /ADD COLUMN IF NOT EXISTS "childPhone" TEXT/);
+  assert.match(publicActions, /parentName === "미입력" \? "" : parentName/);
   assert.match(enrollForm, /const preferredTrialSlot = trialData\?\.preferredSlotKey/);
+  assert.match(enrollForm, /const trialChildPhone = trialData\?\.childPhone \|\| trialData\?\.parentPhone \|\| ""/);
   assert.match(enrollForm, /childSchool: trialData\?\.childSchool \|\| ""/);
+  assert.match(enrollForm, /childPhone: trialChildPhone/);
   assert.match(enrollForm, /preferredSlotKeys: preferredTrialSlot \? \[preferredTrialSlot\] : \[\]/);
   assert.match(enrollForm, /basketballExp: trialData\?\.basketballExp \|\| ""/);
 });

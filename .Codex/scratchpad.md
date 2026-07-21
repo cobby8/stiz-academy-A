@@ -1,31 +1,30 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 관리자 테마 전환과 체험 후 수강신청 연결
+- 작업명: 체험신청 정보의 수강신청서 자동 채움 보강
 - 상태: 구현 및 검증 완료, 커밋 준비
 - 기준일: 2026-07-21
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 관리자 테마 토글 | 완료 | 우측 상단 알림 옆에 해/달 아이콘 버튼 배치 |
-| 체험 후 안내 액션 | 완료 | 체험완료 상태에서 수강신청 안내 발송 버튼 노출 |
-| 신청서 자동 채움 | 완료 | 체험 신청의 학교, 농구 경험, 희망 수업을 수강신청서로 전달 |
-| 검증 | 완료 | TypeScript, 신규 흐름 테스트, 신청 관리 UX 테스트 통과 |
+| 연락처 전달 | 완료 | 체험 신청의 수강생 연락처를 전달하고 없으면 보호자 연락처로 기본 채움 |
+| 보호자 이름 정리 | 완료 | 체험신청 기본값 `미입력`은 수강신청서에 빈칸으로 표시 |
+| 속도 안전장치 | 완료 | TrialLead childPhone 컬럼 보장은 서버 인스턴스당 1회만 실행 |
+| 검증 | 완료 | TypeScript, 자동 채움 회귀 테스트 통과 |
 
 ## 구현 기록
-- `src/components/ThemeToggle.tsx`, `src/app/admin/AdminShellClient.tsx`: 관리자 헤더 알림 옆 테마 토글 추가.
-- `src/app/admin/trial/TrialCrmClient.tsx`: 체험완료 리드의 수강신청 안내 버튼 노출.
-- `src/app/actions/public.ts`, `src/app/apply/enroll/EnrollApplicationForm.tsx`: 체험 신청 정보를 수강신청서 초기값으로 확장.
-- `tests/admin-theme-and-trial-enroll-flow.test.mjs`: 관리자 테마와 체험 후 수강신청 연결 회귀 테스트 추가.
+- `src/app/actions/public.ts`: 체험 리드의 `childPhone`을 수강신청서 자동 채움 데이터에 포함하고 보호자 이름 기본값을 정리.
+- `src/app/apply/enroll/EnrollApplicationForm.tsx`: 수강생 연락처를 체험 리드 연락처 또는 보호자 연락처로 자동 채움.
+- `tests/admin-theme-and-trial-enroll-flow.test.mjs`: 체험 연락처 자동 채움 회귀 테스트 보강.
 
 ## 테스트 결과
 - `npx tsc --noEmit`: 통과
 - `node --test tests\admin-theme-and-trial-enroll-flow.test.mjs`: 3개 통과
-- `node --test tests\application-management-ux.test.mjs`: 10개 통과
 - `git diff --check`: 통과
 
 ## 작업 로그
+- 2026-07-21: 체험신청의 수강생/보호자 연락처가 수강신청서에 자동 채워지도록 childPhone 전달과 보호자 연락처 fallback을 보강했다.
 - 2026-07-21: 스태프 역할에 DRIVER를 추가하고 초대/가입/로그인 라우팅을 셔틀 기사 모바일 홈(`/staff/shuttle`)까지 연결했다.
 - 2026-07-21: 관리자 헤더 알림 옆에 해/달 테마 토글을 배치하고 체험완료 후 수강신청 안내 버튼과 신청서 자동 채움 항목을 보강했다.
 - 2026-07-21: 방학특강 셔틀 노선 운영용 차량·노선·정류장·탑승자·감사 로그 구조와 관리자 노선 편성 화면을 추가했다.
@@ -35,8 +34,6 @@
 - 2026-07-21: 체험 문의와 수강신청 목록형을 div grid에서 실제 스프레드시트형 테이블 구조로 전환했다.
 - 2026-07-21: 관리자 체험신청 카드형의 5열 grid를 제거해 PC에서 배지와 이름이 세로로 깨지는 문제를 수정했다.
 - 2026-07-21: 체험신청 완료 화면에 체험수업비 입금 안내, 계좌번호 복사, 송금 정보 공유 흐름을 추가했다.
-- 2026-07-21: 체험 신청 카드형 UI를 목록형과 같은 핵심 항목으로 단순화하고 한글 slotKey/요일+교시 기반 수업 시간 보정을 추가했다.
-- 2026-07-21: 체험 신청 목록/카드에서 신청일, 희망일자, 수업교시, 확정일정을 크게 분리하고 DB 수업 시간 연결을 적용했다.
 
 ## PM 체크
 - scratchpad 작업 로그 10건 이내 유지.

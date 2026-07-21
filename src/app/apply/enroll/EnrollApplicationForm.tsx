@@ -81,6 +81,7 @@ export default function EnrollApplicationForm({
     const preferredTrialSlot = trialData?.preferredSlotKey && availableSlots.some((slot) => slot.slotKey === trialData.preferredSlotKey)
         ? trialData.preferredSlotKey
         : "";
+    const trialChildPhone = trialData?.childPhone || trialData?.parentPhone || "";
     const [step, setStep] = useState(1);
     const [form, setForm] = useState<FormData>({
         childName: trialData?.childName || "",
@@ -88,7 +89,7 @@ export default function EnrollApplicationForm({
         childGender: trialData?.childGender || "",
         childGrade: trialData?.childGrade || "",
         childSchool: trialData?.childSchool || "",
-        childPhone: "",
+        childPhone: trialChildPhone,
         parentName: trialData?.parentName || "",
         parentPhone: trialData?.parentPhone || "",
         parentRelation: "",

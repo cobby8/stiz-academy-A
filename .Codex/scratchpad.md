@@ -1,33 +1,32 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 방학특강 셔틀 지도 위치 수집
+- 작업명: 관리자 테마 전환과 체험 후 수강신청 연결
 - 상태: 구현 및 검증 완료, 커밋 준비
 - 기준일: 2026-07-21
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 공개 신청 지도 선택 | 완료 | 카카오 지도 SDK 지연 로딩, 키 누락 시 텍스트 입력 fallback |
-| 위치 동의/계약 | 완료 | 지도 좌표 저장 시 서버 고정 동의 버전과 명시적 동의 검증 |
-| DB 저장 | 완료 | 승하차 주소, 좌표, 선택 방식, 정확도, 제출 시각 저장 컬럼 추가 |
-| 관리자 확인 | 완료 | 신청 상세에서 좌표, 제출 시각, 카카오/네이버 지도 링크 확인 |
-| 검증 | 완료 | TypeScript, 위치 선택, 계약, 관리자 상세 테스트 통과 |
+| 관리자 테마 토글 | 완료 | 우측 상단 알림 옆에 해/달 아이콘 버튼 배치 |
+| 체험 후 안내 액션 | 완료 | 체험완료 상태에서 수강신청 안내 발송 버튼 노출 |
+| 신청서 자동 채움 | 완료 | 체험 신청의 학교, 농구 경험, 희망 수업을 수강신청서로 전달 |
+| 검증 | 완료 | TypeScript, 신규 흐름 테스트, 신청 관리 UX 테스트 통과 |
 
 ## 구현 기록
-- `src/components/maps/LocationPickerModal.tsx`: 카카오 지도 위치 선택 모달 추가.
-- `src/components/seasonal/SeasonalApplyClient.tsx`: 셔틀 승하차 지도 위치 선택과 위치정보 동의 payload 추가.
-- `src/lib/seasonal/contracts.ts`, `src/lib/seasonal/service.ts`: 위치 좌표 검증과 DB 저장 처리 추가.
-- `prisma/schema.prisma`, `prisma/migrations/20260721153000_add_special_program_shuttle_map_locations/migration.sql`: 셔틀 위치 저장 컬럼과 제약 추가.
-- `src/app/admin/seasonal/SeasonalAdminClient.tsx`: 관리자 상세에서 지도 제출 위치와 외부 지도 링크 표시.
+- `src/components/ThemeToggle.tsx`, `src/app/admin/AdminShellClient.tsx`: 관리자 헤더 알림 옆 테마 토글 추가.
+- `src/app/admin/trial/TrialCrmClient.tsx`: 체험완료 리드의 수강신청 안내 버튼 노출.
+- `src/app/actions/public.ts`, `src/app/apply/enroll/EnrollApplicationForm.tsx`: 체험 신청 정보를 수강신청서 초기값으로 확장.
+- `tests/admin-theme-and-trial-enroll-flow.test.mjs`: 관리자 테마와 체험 후 수강신청 연결 회귀 테스트 추가.
 
 ## 테스트 결과
 - `npx tsc --noEmit`: 통과
-- `npx prisma validate`: 통과
-- `node --test tests\seasonal-location-picker.test.mjs src\lib\seasonal\contracts.test.ts src\app\admin\seasonal\SeasonalAdminClient.test.ts tests\seasonal-admin-ux.test.mjs`: 32개 통과
+- `node --test tests\admin-theme-and-trial-enroll-flow.test.mjs`: 3개 통과
+- `node --test tests\application-management-ux.test.mjs`: 10개 통과
 - `git diff --check`: 통과
 
 ## 작업 로그
+- 2026-07-21: 관리자 헤더 알림 옆에 해/달 테마 토글을 배치하고 체험완료 후 수강신청 안내 버튼과 신청서 자동 채움 항목을 보강했다.
 - 2026-07-21: 방학특강 신청에 카카오 지도 승하차 핀·좌표·동의 저장과 관리자 위치 확인을 추가하고 기존 텍스트 신청 및 필수 요일 제출 회귀를 보완했다.
 - 2026-07-21: 방학특강 신청 목록에서 여러 학생/신청 반을 선택해 승인·대기·반려·취소를 일괄 처리할 수 있게 했다.
 - 2026-07-21: 체험 문의와 수강신청 목록형을 div grid에서 실제 스프레드시트형 테이블 구조로 전환했다.

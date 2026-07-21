@@ -947,6 +947,21 @@ export default function TrialCrmClient({
         }
     }
 
+    function renderEnrollGuideButton(lead: TrialLead) {
+        if (lead.status !== "ATTENDED" || lead.enrollApplicationReceivedAt) return null;
+        return (
+            <button
+                type="button"
+                onClick={() => void handleSendEnrollGuide(lead)}
+                disabled={busy}
+                className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-300"
+            >
+                <span className="material-symbols-outlined text-base">send</span>
+                {lead.enrollGuideSentAt ? "안내 재발송" : "수강신청 안내"}
+            </button>
+        );
+    }
+
     async function handleSendCoachNotice(lead: TrialLead) {
         if (busy) return;
         if (!confirm(`"${lead.childName}" 체험수업 정보를 담당 선생님에게 문자로 공유할까요?`)) return;
@@ -1044,7 +1059,7 @@ export default function TrialCrmClient({
                                 className={`${itemClass} text-emerald-700 disabled:opacity-50 dark:text-emerald-300`}
                             >
                                 <span className="material-symbols-outlined text-base">how_to_reg</span>
-                                등록
+                                직접 등록
                             </button>
                         )}
                         <button
@@ -1155,7 +1170,10 @@ export default function TrialCrmClient({
                                         )}
                                     </td>
                                     <td className="px-3 py-2 align-top" onClick={(event) => event.stopPropagation()}>
-                                        {renderActionMenu(lead, isClosed, parentPhoneHref)}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {renderEnrollGuideButton(lead)}
+                                            {renderActionMenu(lead, isClosed, parentPhoneHref)}
+                                        </div>
                                         <div className="hidden">
                                             <a
                                                 href={parentPhoneHref}
@@ -1477,7 +1495,10 @@ export default function TrialCrmClient({
                                             </select>
                                         )}
 
-                                        {renderActionMenu(lead, isClosed, parentPhoneHref)}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {renderEnrollGuideButton(lead)}
+                                            {renderActionMenu(lead, isClosed, parentPhoneHref)}
+                                        </div>
                                         <div className="hidden">
                                             <a
                                                 href={parentPhoneHref}

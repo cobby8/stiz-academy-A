@@ -1257,6 +1257,7 @@ model SpecialProgramSeason {
   offerings SpecialProgramOffering[]
   applications SpecialProgramApplication[]
   auditLogs SpecialProgramAuditLog[]
+  shuttleRoutePlans ShuttleRoutePlan[]
 
   @@index([status, applicationOpensAt, applicationClosesAt])
 }
@@ -1405,8 +1406,127 @@ model SpecialProgramShuttleRequest {
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
   application SpecialProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   applicationItem SpecialProgramApplicationItem @relation(fields: [applicationItemId], references: [id], onDelete: Cascade)
+  routePassengers ShuttleRoutePassenger[]
+  shuttleAuditLogs ShuttleAuditLog[]
 
   @@index([applicationId, status])
+  @@index([assignedRouteId])
+  @@index([assignedStopId])
+}
+
+// 방학특강 실제 운행 계획용 차량. 홈페이지 안내용 Route/Stop과 분리한다.
+model ShuttleVehicle {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name String
+  plateNumber String?
+  capacity Int
+  isActive Boolean @default(true)
+  notes String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  routePlans ShuttleRoutePlan[]
+  auditLogs ShuttleAuditLog[]
+
+  @@unique([plateNumber])
+  @@index([isActive, name])
+}
+
+// routeKey가 같은 레코드는 동일 노선의 버전 이력이다.
+model ShuttleRoutePlan {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  seasonId String
+  vehicleId String?
+  routeKey String
+  name String
+  direction ShuttleRouteDirection
+  status ShuttleRoutePlanStatus @default(DRAFT)
+  version Int @default(1)
+  serviceDate DateTime? @db.Date
+  originName String?
+  originAddress String?
+  originLatitude Float?
+  originLongitude Float?
+  destinationName String?
+  destinationAddress String?
+  destinationLatitude Float?
+  destinationLongitude Float?
+  previousVersionId String?
+  confirmedAt DateTime? @db.Timestamptz(6)
+  confirmedByUserId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  season SpecialProgramSeason @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  vehicle ShuttleVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  previousVersion ShuttleRoutePlan? @relation("ShuttleRoutePlanVersions", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions ShuttleRoutePlan[] @relation("ShuttleRoutePlanVersions")
+  stops ShuttleRouteStop[]
+  passengers ShuttleRoutePassenger[]
+  auditLogs ShuttleAuditLog[]
+
+  @@unique([routeKey, version])
+  @@index([seasonId, direction, status])
+  @@index([vehicleId, serviceDate])
+  @@index([previousVersionId])
+}
+
+model ShuttleRouteStop {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  routePlanId String
+  stopOrder Int
+  name String
+  address String
+  roadAddress String?
+  latitude Float
+  longitude Float
+  plannedAt DateTime? @db.Timestamptz(6)
+  note String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  routePlan ShuttleRoutePlan @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
+  passengers ShuttleRoutePassenger[]
+
+  @@unique([routePlanId, stopOrder])
+  @@unique([id, routePlanId])
+  @@index([routePlanId, plannedAt])
+}
+
+model ShuttleRoutePassenger {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  routePlanId String
+  stopId String
+  shuttleRequestId String
+  studentNameSnapshot String
+  parentNameSnapshot String?
+  parentPhoneSnapshot String?
+  note String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  routePlan ShuttleRoutePlan @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
+  stop ShuttleRouteStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  shuttleRequest SpecialProgramShuttleRequest @relation(fields: [shuttleRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([routePlanId, shuttleRequestId])
+  @@index([stopId])
+  @@index([shuttleRequestId])
+}
+
+model ShuttleAuditLog {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  routePlanId String?
+  vehicleId String?
+  shuttleRequestId String?
+  actorId String?
+  action String
+  beforeJSON Json?
+  afterJSON Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  routePlan ShuttleRoutePlan? @relation(fields: [routePlanId], references: [id], onDelete: SetNull)
+  vehicle ShuttleVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  shuttleRequest SpecialProgramShuttleRequest? @relation(fields: [shuttleRequestId], references: [id], onDelete: SetNull)
+
+  @@index([routePlanId, createdAt])
+  @@index([vehicleId, createdAt])
+  @@index([shuttleRequestId, createdAt])
 }
 
 model SpecialProgramAuditLog {
@@ -1509,4 +1629,15 @@ enum Role {
   VICE_ADMIN
   INSTRUCTOR
   PARENT
+}
+
+enum ShuttleRouteDirection {
+  PICKUP
+  DROPOFF
+}
+
+enum ShuttleRoutePlanStatus {
+  DRAFT
+  CONFIRMED
+  ARCHIVED
 }

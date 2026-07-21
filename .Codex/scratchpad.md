@@ -1,29 +1,32 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 방학특강 수강·청구 묶음 생성
+- 작업명: 방학특강 셔틀 노선 관리
 - 상태: 구현 및 검증 완료, 커밋 준비
 - 기준일: 2026-07-21
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 일괄 전환 API | 완료 | 승인된 신청 반 여러 개를 수강 등록과 청구서 생성으로 처리 |
-| 관리자 버튼 | 완료 | 선택된 학생/신청 반 수와 실패 사유를 화면 메시지로 표시 |
-| 실패 보존 | 완료 | 실패한 신청 반만 선택 상태로 남겨 재처리 가능 |
-| 검증 | 완료 | TypeScript, 방학특강 UX 테스트, diff check 통과 |
+| DB 모델 | 완료 | 차량, 노선 버전, 정류장, 탑승자, 감사 로그 테이블 추가 |
+| 관리자 API | 완료 | 차량/노선 생성, 배정, 순서 변경, 확정, 보관, 수정본 생성 지원 |
+| 관리자 화면 | 완료 | 특강 셔틀 노선 메뉴와 등원/하원 노선 편성 화면 추가 |
+| 검증 | 완료 | TypeScript, Prisma validate, 셔틀 테스트, diff check 통과 |
 
 ## 구현 기록
-- `src/app/api/admin/seasonal/route.ts`: 선택 항목을 순차 처리하는 `bulkConversion` PATCH 리소스 추가.
-- `src/app/admin/seasonal/SeasonalAdminClient.tsx`: 선택 묶음의 수강·청구 생성 버튼과 성공/실패 피드백 추가.
-- `tests/seasonal-admin-ux.test.mjs`: 방학특강 묶음 수강·청구 생성 회귀 테스트 추가.
+- `prisma/schema.prisma`, `prisma/migrations/20260721223000_add_shuttle_route_planning/migration.sql`: 셔틀 노선 운영 모델 추가.
+- `src/lib/shuttle/service.ts`, `src/app/api/admin/shuttle/route.ts`: 관리자 셔틀 노선 운영 API 추가.
+- `src/app/admin/shuttle/ShuttleRouteAdminClient.tsx`, `src/app/admin/shuttle/page.tsx`: 노선 편성 관리자 화면 추가.
+- `src/app/admin/AdminShellClient.tsx`: 특강 셔틀 노선 메뉴 추가.
 
 ## 테스트 결과
 - `npx tsc --noEmit`: 통과
-- `node --test tests\seasonal-admin-ux.test.mjs`: 12개 통과
-- `git diff --check -- src\app\api\admin\seasonal\route.ts src\app\admin\seasonal\SeasonalAdminClient.tsx tests\seasonal-admin-ux.test.mjs`: 통과
+- `npx prisma validate`: 통과
+- `node --test src\lib\shuttle\contracts.test.ts src\lib\shuttle\service.test.ts src\app\admin\shuttle\ShuttleRouteAdminClient.test.ts`: 14개 통과
+- `git diff --check`: 통과
 
 ## 작업 로그
+- 2026-07-21: 방학특강 셔틀 노선 운영용 차량·노선·정류장·탑승자·감사 로그 구조와 관리자 노선 편성 화면을 추가했다.
 - 2026-07-21: 방학특강 승인 신청 반 여러 개를 선택해 수강 등록과 청구서를 한 번에 생성하고 실패 항목만 남겨 재처리할 수 있게 했다.
 - 2026-07-21: 방학특강 신청에 카카오 지도 승하차 핀·좌표·동의 저장과 관리자 위치 확인을 추가하고 기존 텍스트 신청 및 필수 요일 제출 회귀를 보완했다.
 - 2026-07-21: 방학특강 신청 목록에서 여러 학생/신청 반을 선택해 승인·대기·반려·취소를 일괄 처리할 수 있게 했다.

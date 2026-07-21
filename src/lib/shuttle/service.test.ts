@@ -1,0 +1,65 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+// @ts-expect-error Node 내장 테스트 러너는 TypeScript 확장자 import를 실행할 수 있다.
+import { parseShuttleRoutePlanInput, ShuttleContractError } from "./contracts.ts";
+
+const service = readFileSync(new URL("./service.ts", import.meta.url), "utf8");
+const route = readFileSync(new URL("../../app/api/admin/shuttle/route.ts", import.meta.url), "utf8");
+
+test("방향 계약은 등원과 하원만 허용한다", () => {
+  const base = { seasonId: "season-1", name: "A 노선" };
+  assert.equal(parseShuttleRoutePlanInput({ ...base, direction: "PICKUP" }).direction, "PICKUP");
+  assert.equal(parseShuttleRoutePlanInput({ ...base, direction: "DROPOFF" }).direction, "DROPOFF");
+  assert.throws(
+    () => parseShuttleRoutePlanInput({ ...base, direction: "SIDEWAYS" }),
+    (error) => error instanceof ShuttleContractError && error.code === "INVALID_DIRECTION",
+  );
+});
+
+test("관리자 API는 모든 진입점에서 관리자 인증을 먼저 확인한다", () => {
+  assert.equal((route.match(/await requireAdmin\(\)/g) ?? []).length, 3);
+  assert.match(route, /export async function GET/);
+  assert.match(route, /export async function POST/);
+  assert.match(route, /export async function PATCH/);
+});
+
+test("노선 변경 API는 허용한 작업만 명시적으로 분기한다", () => {
+  for (const action of ["update", "assign", "unassign", "reorder", "confirm", "archive", "revise"]) {
+    assert.match(route, new RegExp(`case "${action}"`));
+  }
+  assert.match(route, /UNSUPPORTED_ACTION/);
+  assert.match(route, /UNSUPPORTED_RESOURCE/);
+});
+
+test("학생 배정은 위치 확인, 중복 배정, 차량 정원을 모두 검사한다", () => {
+  assert.match(service, /LOCATION_NOT_CONFIRMED/);
+  assert.match(service, /DUPLICATE_ASSIGNMENT/);
+  assert.match(service, /VEHICLE_CAPACITY_EXCEEDED/);
+  assert.match(service, /TransactionIsolationLevel\.Serializable/);
+});
+
+test("확정 노선은 잠그고 수정할 때 새 버전을 만든다", () => {
+  assert.match(service, /ROUTE_LOCKED/);
+  assert.match(service, /ROUTE_REVISION_CREATED/);
+  assert.match(service, /version: \(latest\._max\.version \?\? source\.version\) \+ 1/);
+  assert.match(service, /previousVersionId: source\.id/);
+});
+
+test("배정 포인터는 다른 활성 노선을 확인한 뒤 재동기화한다", () => {
+  assert.match(service, /async function syncLegacyAssignment/);
+  assert.match(service, /status: \{ not: ShuttleRoutePlanStatus\.ARCHIVED \}/);
+  assert.match(service, /currentRequestIds/);
+});
+
+test("동시 수정 충돌은 재시도 가능한 409 응답으로 변환한다", () => {
+  assert.match(route, /P2034/);
+  assert.match(route, /P2002/);
+  assert.match(route, /SHUTTLE_CONCURRENT_UPDATE/);
+});
+
+test("노선 및 배정 변경은 감사 로그로 남긴다", () => {
+  for (const action of ["VEHICLE_CREATED", "ROUTE_CREATED", "PASSENGER_ASSIGNED", "PASSENGER_UNASSIGNED", "STOPS_REORDERED", "ROUTE_CONFIRMED", "ROUTE_ARCHIVED"]) {
+    assert.match(service, new RegExp(`"${action}"`));
+  }
+});

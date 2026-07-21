@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import ShuttleRouteAdminClient from "./ShuttleRouteAdminClient";
 
-/** Keeps old bookmarks and notification links working after shuttle moved into seasonal applications. */
-export default function LegacyShuttleAdminPage() {
-    redirect("/admin/seasonal?tab=applications");
+export const dynamic = "force-dynamic";
+
+export default function ShuttleAdminPage() {
+  return <ShuttleRouteAdminClient />;
 }

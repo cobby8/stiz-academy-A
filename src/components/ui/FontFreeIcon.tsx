@@ -31,6 +31,7 @@ export type FontFreeIconName =
   | "image"
   | "light_mode"
   | "location_on"
+  | "map"
   | "logout"
   | "mail"
   | "menu"
@@ -96,6 +97,7 @@ const PATHS: Record<FontFreeIconName, ReactElement> = {
   image: <path d="M4 5h16v14H4zm3 10 3.5-4 3 3 2-2.5L20 16M8 8.5h.1" />,
   light_mode: <path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0-5v2m0 14v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M3 12h2m14 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />,
   location_on: <path d="M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />,
+  map: <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zm6-3v15m6-12v15" />,
   logout: <path d="M10 5H5v14h5m4-11 4 4-4 4m4-4H9" />,
   mail: <path d="M4 6.5h16v11H4zm0 1 8 6 8-6" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,

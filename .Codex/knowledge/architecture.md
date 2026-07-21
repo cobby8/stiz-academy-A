@@ -155,3 +155,4 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 운영 진입점은 `/admin/seasonal`이며 시즌·반·신청 항목 단위로 관리한다.
 - 특강 모집 데이터는 `SpecialProgram*` 모델에 보존하고 확정 후 기존 수업·출석·결제 구조와 연결한다.
 - 신청 가격은 서버 계산 스냅샷으로 보존하며, 정원은 행 잠금과 직렬 트랜잭션으로 보호한다.
+- 특강 셔틀 노선 운영 진입점은 `/admin/shuttle`이며 `ShuttleVehicle`, `ShuttleRoutePlan`, `ShuttleRouteStop`, `ShuttleRoutePassenger`, `ShuttleAuditLog`로 차량·정류장·탑승자·확정 이력을 관리한다.

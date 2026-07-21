@@ -195,6 +195,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
                             <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/청구" />
                             <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal")} icon="🏀" label="방학특강" />
+                            <NavItem href="/admin/shuttle" active={pathname.startsWith("/admin/shuttle")} icon="🚌" label="특강 셔틀 노선" />
 
                             <details className="group mt-4" open={moreOpsActive}>
                                 <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 text-gray-300 transition-colors hover:bg-white/10 hover:text-white">

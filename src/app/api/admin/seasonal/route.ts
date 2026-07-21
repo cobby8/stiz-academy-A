@@ -40,6 +40,11 @@ function nonNegativeInt(value: unknown, label: string) {
   return parsed;
 }
 
+function optionalNonNegativeInt(value: unknown, label: string) {
+  if (value === undefined || value === null || value === "") return null;
+  return nonNegativeInt(value, label);
+}
+
 function normalizeDigits(value: string) {
   return value.replace(/[^0-9]/g, "");
 }
@@ -48,6 +53,25 @@ function defaultPaymentDueDate() {
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + 7);
   return dueDate;
+}
+
+async function ensureApplicationCapacity(tx: Prisma.TransactionClient, applicationId: string) {
+  const items = await tx.specialProgramApplicationItem.findMany({
+    where: { applicationId },
+    select: { id: true, offeringId: true },
+    orderBy: { offeringId: "asc" },
+  });
+  for (const item of items) {
+    await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${item.offeringId} FOR UPDATE`;
+    const [offering, occupied] = await Promise.all([
+      tx.specialProgramOffering.findUnique({ where: { id: item.offeringId } }),
+      tx.specialProgramApplicationItem.count({
+        where: { offeringId: item.offeringId, status: { in: ["PENDING", "APPROVED"] } },
+      }),
+    ]);
+    if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 승인할 수 없습니다.", 409, "CAPACITY_REQUIRED");
+    if (occupied > offering.capacity) throw new SeasonalError("정원이 가득 차 신청을 승인할 수 없습니다.", 409, "CAPACITY_FULL");
+  }
 }
 
 function respondError(error: unknown) {
@@ -131,12 +155,13 @@ export async function POST(request: NextRequest) {
       const title = cleanText(data.title, 150);
       const code = cleanText(data.code, 80)?.toUpperCase();
       if (!seasonId || !title || !code) throw new SeasonalError("시즌, 특강명, 코드는 필수입니다.");
-      const capacity = nonNegativeInt(data.capacity, "정원");
+      const capacity = optionalNonNegativeInt(data.capacity, "정원");
       const price = nonNegativeInt(data.price, "가격");
       const status = OFFERING_STATUSES.has(data.status) ? data.status : "DRAFT";
+      if (status === "OPEN" && capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
-      const offering = await prisma.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId: cleanText(data.instructorId, 100), instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId: cleanText(data.linkedClassId, 100), sessionDates: { create: sessionDates } }, include: { sessionDates: true } });
+      const offering = await prisma.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId: cleanText(data.instructorId, 100), instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId: cleanText(data.linkedClassId, 100), sessionDates: { create: sessionDates } }, include: { sessionDates: true } });
       await prisma.specialProgramAuditLog.create({ data: { seasonId, offeringId: offering.id, actorType: "ADMIN", actorId: actor.appUserId, action: "OFFERING_CREATED", afterJSON: offering } });
       return NextResponse.json({ offering }, { status: 201 });
     }
@@ -172,9 +197,14 @@ export async function PATCH(request: NextRequest) {
       if (!before) throw new SeasonalError("특강을 찾을 수 없습니다.", 404);
       const update: Record<string, unknown> = {};
       for (const key of ["title", "description", "targetGrades", "instructorId", "instructorName", "location", "linkedProgramId", "linkedClassId"] as const) if (data[key] !== undefined) update[key] = cleanText(data[key], key === "description" ? 5000 : 200) || null;
-      if (data.capacity !== undefined) update.capacity = nonNegativeInt(data.capacity, "정원");
+      if (data.capacity !== undefined) update.capacity = optionalNonNegativeInt(data.capacity, "정원");
       if (data.price !== undefined) update.price = nonNegativeInt(data.price, "가격");
+      if (data.newApplicantPrice !== undefined) update.newApplicantPrice = optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격");
+      if (data.existingApplicantPrice !== undefined) update.existingApplicantPrice = optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격");
       if (data.status !== undefined) { if (!OFFERING_STATUSES.has(data.status)) throw new SeasonalError("특강 상태가 올바르지 않습니다."); update.status = data.status; }
+      const nextStatus = (update.status as string | undefined) ?? before.status;
+      const nextCapacity = update.capacity === undefined ? before.capacity : update.capacity;
+      if (nextStatus === "OPEN" && nextCapacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       if (data.shuttleAvailable !== undefined) update.shuttleAvailable = Boolean(data.shuttleAvailable);
       if (data.displayOrder !== undefined) update.displayOrder = Number(data.displayOrder) || 0;
       const replacementDates = Array.isArray(data.sessionDates)
@@ -198,11 +228,44 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ offering });
     }
 
+    if (body.resource === "applicationReview") {
+      if (data.action !== "CLEAR") throw new SeasonalError("검토 완료 동작을 확인해 주세요.");
+      const reviewNote = cleanText(data.reviewNote, 1000);
+      if (!reviewNote) throw new SeasonalError("검토한 근거를 메모로 남겨 주세요.", 400, "REVIEW_NOTE_REQUIRED");
+      const before = await prisma.specialProgramApplication.findUnique({ where: { id } });
+      if (!before) throw new SeasonalError("신청서를 찾을 수 없습니다.", 404);
+      const application = await prisma.$transaction(async (tx) => {
+        const updated = await tx.specialProgramApplication.update({
+          where: { id },
+          data: { requiresReview: false, reviewReasons: [], processedAt: new Date(), processedByUserId: actor.appUserId, processedNote: reviewNote },
+        });
+        await tx.specialProgramAuditLog.create({
+          data: {
+            seasonId: updated.seasonId,
+            applicationId: id,
+            actorType: "ADMIN",
+            actorId: actor.appUserId,
+            action: "APPLICATION_REVIEW_CLEARED",
+            beforeJSON: { requiresReview: before.requiresReview, reviewReasons: before.reviewReasons },
+            afterJSON: { requiresReview: false, reviewReasons: [], reviewNote },
+          },
+        });
+        return updated;
+      });
+      return NextResponse.json({ application });
+    }
+
     if (body.resource === "application") {
       if (!APPLICATION_STATUSES.has(data.status)) throw new SeasonalError("신청 상태가 올바르지 않습니다.");
       const before = await prisma.specialProgramApplication.findUnique({ where: { id } });
       if (!before) throw new SeasonalError("신청서를 찾을 수 없습니다.", 404);
-      const application = await prisma.specialProgramApplication.update({ where: { id }, data: { status: data.status, processedAt: new Date(), processedByUserId: actor.appUserId, processedNote: cleanText(data.processedNote, 1000) } });
+      if (data.status === "APPROVED" && (before.requiresReview || before.reviewReasons.length > 0)) {
+        throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
+      }
+      const application = await prisma.$transaction(async (tx) => {
+        if (data.status === "APPROVED") await ensureApplicationCapacity(tx, id);
+        return tx.specialProgramApplication.update({ where: { id }, data: { status: data.status, processedAt: new Date(), processedByUserId: actor.appUserId, processedNote: cleanText(data.processedNote, 1000) } });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       await prisma.specialProgramAuditLog.create({ data: { seasonId: application.seasonId, applicationId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "APPLICATION_STATUS_UPDATED", beforeJSON: before, afterJSON: application } });
       return NextResponse.json({ application });
     }
@@ -211,14 +274,18 @@ export async function PATCH(request: NextRequest) {
       if (!ITEM_STATUSES.has(data.status)) throw new SeasonalError("신청 항목 상태가 올바르지 않습니다.");
       const before = await prisma.specialProgramApplicationItem.findUnique({ where: { id }, include: { application: true } });
       if (!before) throw new SeasonalError("신청 항목을 찾을 수 없습니다.", 404);
+      if (data.status === "APPROVED" && (before.application.requiresReview || before.application.reviewReasons.length > 0)) {
+        throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
+      }
       const item = await prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${before.offeringId} FOR UPDATE`;
-        if (["PENDING", "APPROVED"].includes(data.status) && !["PENDING", "APPROVED"].includes(before.status)) {
+        if (["PENDING", "APPROVED"].includes(data.status)) {
           const [offering, occupied] = await Promise.all([
             tx.specialProgramOffering.findUnique({ where: { id: before.offeringId } }),
             tx.specialProgramApplicationItem.count({ where: { offeringId: before.offeringId, id: { not: id }, status: { in: ["PENDING", "APPROVED"] } } }),
           ]);
-          if (!offering || occupied >= offering.capacity) throw new SeasonalError("정원이 가득 차 승인할 수 없습니다.", 409, "CAPACITY_FULL");
+          if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 승인할 수 없습니다.", 409, "CAPACITY_REQUIRED");
+          if (occupied >= offering.capacity) throw new SeasonalError("정원이 가득 차 승인할 수 없습니다.", 409, "CAPACITY_FULL");
         }
         let waitlistOrder = before.waitlistOrder;
         if (data.status === "WAITLISTED" && !waitlistOrder) {
@@ -272,6 +339,9 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
     });
     if (!item) throw new SeasonalError("신청 항목을 찾을 수 없습니다.", 404);
     if (item.status !== "APPROVED") throw new SeasonalError("승인된 신청 항목만 수강·청구로 전환할 수 있습니다.", 409, "ITEM_NOT_APPROVED");
+    if (item.application.requiresReview || item.application.reviewReasons.length > 0) {
+      throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
+    }
     if (!item.offering.linkedClassId) throw new SeasonalError("먼저 특강 반을 기존 정규 반과 연결해 주세요.", 409, "CLASS_NOT_LINKED");
 
     const parentPhone = normalizeDigits(item.application.parentPhone);
@@ -301,7 +371,11 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
     if (!parentId) throw new SeasonalError("학부모 계정을 준비하지 못했습니다.", 500, "PARENT_SAVE_FAILED");
 
     const existingStudents = await tx.$queryRaw<{ id: string }[]>`
-      SELECT id FROM "Student" WHERE name = ${item.application.childName} AND "parentId" = ${parentId} LIMIT 1
+      SELECT id FROM "Student"
+       WHERE name = ${item.application.childName}
+         AND "parentId" = ${parentId}
+         AND (("birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date = (${item.application.childBirthDate}::timestamptz AT TIME ZONE 'Asia/Seoul')::date
+       LIMIT 1
     `;
     let studentId = existingStudents[0]?.id;
     if (studentId) {
@@ -382,7 +456,7 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
 
     const updated = await tx.specialProgramApplicationItem.update({
       where: { id: item.id },
-      data: { enrollmentId, paymentId },
+      data: { enrollmentId, paymentId, conversionStatus: "INVOICE_PENDING", conversionError: null },
     });
     await tx.specialProgramApplication.update({
       where: { id: item.applicationId },
@@ -404,8 +478,31 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
     return { itemId: updated.id, studentId, enrollmentId, paymentId };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
-  const invoice = await ensureInvoiceForPayment(converted.paymentId);
-  return { ...converted, invoiceId: invoice?.id ?? null };
+  try {
+    const invoice = await ensureInvoiceForPayment(converted.paymentId);
+    if (!invoice) throw new Error("INVOICE_NOT_CREATED");
+    await prisma.specialProgramApplicationItem.update({
+      where: { id: converted.itemId },
+      data: { conversionStatus: "COMPLETED", conversionError: null },
+    });
+    return { ...converted, invoiceId: invoice.id };
+  } catch (error) {
+    await prisma.specialProgramApplicationItem.update({
+      where: { id: converted.itemId },
+      data: { conversionStatus: "INVOICE_RETRY_REQUIRED", conversionError: "INVOICE_CREATION_FAILED" },
+    });
+    await prisma.specialProgramAuditLog.create({
+      data: {
+        itemId: converted.itemId,
+        actorType: "ADMIN",
+        actorId,
+        action: "INVOICE_CREATION_FAILED",
+        afterJSON: { paymentId: converted.paymentId, retryable: true },
+      },
+    });
+    console.error("[admin seasonal invoice]", error);
+    throw new SeasonalError("수강 등록과 결제 정보는 저장됐지만 청구서 생성에 실패했습니다. 다시 시도해 주세요.", 503, "INVOICE_RETRY_REQUIRED");
+  }
 }
 
 export async function DELETE(request: NextRequest) {

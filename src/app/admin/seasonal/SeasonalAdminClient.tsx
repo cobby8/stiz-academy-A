@@ -89,6 +89,11 @@ type Application = {
   paymentStatus?: string | null;
   totalAmount?: number;
   memo?: string | null;
+  applicantType?: "NEW" | "EXISTING" | string | null;
+  selectedWeekdays?: string[];
+  importSource?: string | null;
+  imported?: boolean;
+  reviewReasons?: string[];
   items: ApplicationItem[];
 };
 
@@ -151,6 +156,23 @@ function badge(status?: string | null) {
   return `inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-bold ${tone}`;
 }
 
+function stringList(value: unknown) {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  if (typeof value === "string" && value.trim()) return value.split(/[,/]/).map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function applicantTypeLabel(value?: string | null) {
+  if (value === "NEW") return "신규";
+  if (value === "EXISTING") return "기존";
+  return value || "구분 미확인";
+}
+
+function paymentReviewLabel(value?: string | null) {
+  if (!value || value === "PAYMENT_PENDING" || value === "UNPAID") return "결제 확인 전";
+  return STATUS_LABEL[value] ?? value;
+}
+
 export default function SeasonalAdminClient() {
   const [tab, setTab] = useState<Tab>("overview");
   const [data, setData] = useState<Payload>({ seasons: [], applications: [] });
@@ -165,6 +187,7 @@ export default function SeasonalAdminClient() {
   const [editingSeason, setEditingSeason] = useState<Season | null>(null);
   const [editingClass, setEditingClass] = useState<SeasonalClass | null>(null);
   const [convertingItemId, setConvertingItemId] = useState("");
+  const [resolvingReview, setResolvingReview] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -214,11 +237,20 @@ export default function SeasonalAdminClient() {
           ...items.map((item) => item.shuttleRequest).filter(Boolean) as ShuttleRequest[],
         ];
         const firstShuttle = shuttleRequests[0];
+        const applicantType = application.applicantType ?? application.memberType ?? application.customerType;
+        const selectedWeekdays = stringList(application.selectedWeekdays ?? application.weekdays ?? application.selectedDays);
+        const importSource = application.importSource ?? application.sourceLabel ?? application.source;
+        const reviewReasons = stringList(application.reviewReasons ?? application.needsReviewReasons ?? application.reviewReason);
         return {
           ...application,
           totalAmount: application.totalAmount ?? application.totalPriceSnapshot,
           shuttleNeeded: application.shuttleNeeded !== undefined ? Boolean(application.shuttleNeeded) : shuttleRequests.length > 0,
           shuttleStatus: application.shuttleStatus ?? firstShuttle?.status ?? null,
+          applicantType: typeof applicantType === "string" ? applicantType : null,
+          selectedWeekdays,
+          importSource: typeof importSource === "string" ? importSource : null,
+          imported: Boolean(application.imported ?? application.isImported ?? importSource),
+          reviewReasons,
           items,
         } as Application;
       });
@@ -293,6 +325,18 @@ export default function SeasonalAdminClient() {
     }
   }
 
+  async function resolveApplicationReview(applicationId: string, reviewNote: string) {
+    setResolvingReview(true);
+    try {
+      await mutate("PATCH", { resource: "applicationReview", id: applicationId, data: { action: "CLEAR", reviewNote } }, "확인 필요 항목을 검토 완료로 처리했습니다.");
+      setSelectedApplication((current) => current?.id === applicationId ? { ...current, reviewReasons: [] } : current);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "검토 완료 처리에 실패했습니다.");
+    } finally {
+      setResolvingReview(false);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-7xl space-y-6 pb-20">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -310,7 +354,7 @@ export default function SeasonalAdminClient() {
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} />}
 
-      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} convertingItemId={convertingItemId} />}
+      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
       {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
@@ -347,6 +391,8 @@ function ApplicationDrawer({
   onUpdateItem,
   onConvertItem,
   onCopyInvoiceLink,
+  onResolveReview,
+  resolvingReview,
   convertingItemId,
 }: {
   application: Application;
@@ -354,6 +400,8 @@ function ApplicationDrawer({
   onUpdateItem: (id: string, status: ItemStatus) => Promise<void>;
   onConvertItem: (id: string) => Promise<void>;
   onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>;
+  onResolveReview: (applicationId: string, reviewNote: string) => Promise<void>;
+  resolvingReview: boolean;
   convertingItemId: string;
 }) {
   const totalAmount = application.totalAmount ?? application.items.reduce((sum, item) => sum + (item.amount ?? 0), 0);
@@ -374,6 +422,8 @@ function ApplicationDrawer({
         </div>
         <button type="button" onClick={onClose} aria-label="닫기" className="rounded-full p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"><Icon name="close" /></button>
       </header>
+
+      <ApplicationReviewSummary application={application} onResolveReview={onResolveReview} resolving={resolvingReview} />
 
       <section className="mt-6 grid gap-3 rounded-2xl bg-gray-50 p-4 text-sm dark:bg-gray-800 sm:grid-cols-2">
         <Info label="학부모">{application.parentName}{application.parentRelation ? ` · ${application.parentRelation}` : ""}</Info>
@@ -407,6 +457,22 @@ function ApplicationDrawer({
       {application.processedNote && <section className="mt-3 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black text-gray-950 dark:text-white">처리 메모</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.processedNote}</p></section>}
     </aside>
   </div>;
+}
+
+function ApplicationReviewSummary({ application, onResolveReview, resolving }: { application: Application; onResolveReview: (applicationId: string, reviewNote: string) => Promise<void>; resolving: boolean }) {
+  const importedLabel = application.imported ? `가져온 신청${application.importSource ? ` · ${application.importSource}` : ""}` : "홈페이지 신청";
+  const weekdays = application.selectedWeekdays?.length ? application.selectedWeekdays.join(" · ") : "요일 미확인";
+  const needsReview = application.reviewReasons ?? [];
+  const [reviewNote, setReviewNote] = useState("");
+  return <section aria-label="운영 확인 정보" className="mt-5 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+    <div className="flex flex-wrap gap-2">
+      <span className="inline-flex min-h-7 items-center rounded-full bg-[var(--brand-accent-soft)] px-2.5 text-xs font-black text-[var(--brand-accent)]">{applicantTypeLabel(application.applicantType)} 회원</span>
+      <span className="inline-flex min-h-7 items-center rounded-full bg-gray-100 px-2.5 text-xs font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-200"><Icon name={application.imported ? "upload_file" : "language"} className="mr-1 text-base" />{importedLabel}</span>
+      <span className={badge(application.paymentStatus)}>{paymentReviewLabel(application.paymentStatus)}</span>
+    </div>
+    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><Info label="선택 요일">{weekdays}</Info><Info label="원본 가져오기">{application.imported ? "완료" : "해당 없음"}</Info></dl>
+    {needsReview.length > 0 && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100"><p className="flex items-center gap-1 text-sm font-black"><Icon name="error" className="text-lg" />확인 필요</p><ul className="mt-2 list-disc space-y-1 pl-5 text-xs">{needsReview.map((reason) => <li key={reason}>{reason}</li>)}</ul><label className="mt-3 block text-xs font-black">검토 메모 (필수)<textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={2} placeholder="확인한 내용과 처리 근거를 입력하세요" className="mt-1 w-full rounded-lg border border-amber-300 bg-white p-2 font-normal text-gray-950 dark:border-amber-700 dark:bg-gray-900 dark:text-white" /></label><div className="mt-2 flex justify-end"><button type="button" disabled={resolving || !reviewNote.trim()} onClick={() => void onResolveReview(application.id, reviewNote.trim())} className="min-h-9 rounded-lg bg-amber-900 px-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-100 dark:text-amber-950">{resolving ? "처리 중…" : "검토 완료"}</button></div></div>}
+  </section>;
 }
 
 function ApplicationItemCard({ item, onUpdateItem, onConvertItem, onCopyInvoiceLink, converting }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void>; onConvertItem: (id: string) => Promise<void>; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; converting: boolean }) {
@@ -543,14 +609,14 @@ function SeasonForm({ initial: _initial, onClose, onSubmit }: { initial?: Season
 
 function ClassForm({ seasonId, initial: _initial, onClose, onSubmit }: { seasonId: string; initial?: SeasonalClass | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
   void _initial;
-  return <FormModal title="특강 반 추가" onClose={onClose} onSubmit={(payload) => onSubmit({ ...payload, seasonId, capacity: Number(payload.capacity), price: Number(payload.price), status: "DRAFT" })} fields={[{name:"code",label:"반 코드",placeholder:"예: MON-1",required:true},{name:"title",label:"반 이름",placeholder:"예: 초등 고학년 1교시",required:true},{name:"targetGrades",label:"대상",placeholder:"예: 초등 4~6학년",required:true},{name:"location",label:"수업 장소",placeholder:"예: 다산점"},{name:"capacity",label:"정원",type:"number",required:true},{name:"price",label:"수강료",type:"number",required:true},{name:"instructorName",label:"담당 선생님",placeholder:"미정이면 비워두세요"}]} />;
+  return <FormModal title="특강 반 추가" helper="정원이 미확정이면 비워두세요. 정원이 없는 반은 DRAFT 상태로만 저장되며 모집에 공개할 수 없습니다." onClose={onClose} onSubmit={(payload) => { const capacity = String(payload.capacity ?? "").trim(); const newApplicantPrice = String(payload.newApplicantPrice ?? "").trim(); const existingApplicantPrice = String(payload.existingApplicantPrice ?? "").trim(); return onSubmit({ ...payload, seasonId, capacity: capacity ? Number(capacity) : null, price: Number(payload.price), newApplicantPrice: newApplicantPrice ? Number(newApplicantPrice) : null, existingApplicantPrice: existingApplicantPrice ? Number(existingApplicantPrice) : null, status: "DRAFT" }); }} fields={[{name:"code",label:"반 코드",placeholder:"예: MON-1",required:true},{name:"title",label:"반 이름",placeholder:"예: 초등 고학년 1교시",required:true},{name:"targetGrades",label:"대상",placeholder:"예: 초등 4~6학년",required:true},{name:"location",label:"수업 장소",placeholder:"예: 다산점"},{name:"capacity",label:"정원 (미확정 가능)",type:"number"},{name:"price",label:"기본 수강료",type:"number",required:true},{name:"newApplicantPrice",label:"신규 회원 수강료",type:"number"},{name:"existingApplicantPrice",label:"기존 회원 수강료",type:"number"},{name:"instructorName",label:"담당 선생님",placeholder:"미정이면 비워두세요"}]} />;
 }
 
 type Field = { name: string; label: string; type?: string; placeholder?: string; required?: boolean };
-function FormModal({ title, fields, onClose, onSubmit }: { title: string; fields: Field[]; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
+function FormModal({ title, helper, fields, onClose, onSubmit }: { title: string; helper?: string; fields: Field[]; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
   const [pending, setPending] = useState(false); const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setPending(true); setError(""); const form = new FormData(event.currentTarget); const payload = Object.fromEntries(form.entries()); try { await onSubmit(payload); } catch (caught) { setError(caught instanceof Error ? caught.message : "저장하지 못했습니다."); setPending(false); } }
-  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/45 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900"><header className="flex items-center justify-between"><h2 className="text-xl font-black">{title}</h2><button type="button" onClick={onClose} aria-label="닫기"><Icon name="close" /></button></header>{error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}<div className="mt-5 grid gap-4 sm:grid-cols-2">{fields.map((field) => <label key={field.name} className="text-sm font-bold text-gray-700 dark:text-gray-200">{field.label}{field.required && <span className="text-red-500"> *</span>}<input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} min={field.type === "number" ? 0 : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>)}</div><footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer></form></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/45 p-4" role="dialog" aria-modal="true"><form onSubmit={submit} className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900"><header className="flex items-center justify-between"><h2 className="text-xl font-black">{title}</h2><button type="button" onClick={onClose} aria-label="닫기"><Icon name="close" /></button></header>{helper && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{helper}</p>}{error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}<div className="mt-5 grid gap-4 sm:grid-cols-2">{fields.map((field) => <label key={field.name} className="text-sm font-bold text-gray-700 dark:text-gray-200">{field.label}{field.required && <span className="text-red-500"> *</span>}<input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} min={field.type === "number" ? 0 : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>)}</div><footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer></form></div>;
 }
 
 function Panel({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"><header className="flex flex-col justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center dark:border-gray-800"><h2 className="flex items-center gap-2 font-black"><Icon name={icon} className="text-[var(--brand-accent)]" />{title}</h2>{action}</header><div className="p-5">{children}</div></section>; }

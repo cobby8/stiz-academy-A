@@ -1,10 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SeasonalError, type SeasonalApplicationInput } from "./contracts";
-import { planApplicationItems, totalSnapshot } from "./planning";
+import { decideApplicantType, planApplicationItems, totalSnapshot, weekdayInSeoul } from "./planning";
 
 const OCCUPYING_ITEM_STATUSES = ["PENDING", "APPROVED"];
-
 type PublicOfferingRow = Prisma.SpecialProgramOfferingGetPayload<{
   include: { sessionDates: true; _count: { select: { applicationItems: true } } };
 }>;
@@ -38,9 +37,9 @@ function publicOffering(offering: PublicOfferingRow) {
     location: first?.location || offering.location || undefined,
     targetGrade: offering.targetGrades || undefined,
     coachName: offering.instructorName || undefined,
-    capacity: offering.capacity,
+    capacity: offering.capacity ?? 0,
     enrolled,
-    remaining: Math.max(0, offering.capacity - enrolled),
+    remaining: Math.max(0, (offering.capacity ?? 0) - enrolled),
     price: offering.price,
     waitlistEnabled: true,
   };
@@ -70,7 +69,7 @@ export async function listPublishedSeasons() {
     orderBy: { startsAt: "desc" },
     include: {
       offerings: {
-        where: { status: "OPEN" },
+        where: { status: "OPEN", capacity: { not: null } },
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
         include: {
           sessionDates: { orderBy: { startsAt: "asc" } },
@@ -87,7 +86,7 @@ export async function getPublishedSeason(slug: string) {
     where: { slug, status: "PUBLISHED" },
     include: {
       offerings: {
-        where: { status: "OPEN" },
+        where: { status: "OPEN", capacity: { not: null } },
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
         include: {
           sessionDates: { orderBy: { startsAt: "asc" } },
@@ -105,6 +104,28 @@ async function existingApplication(seasonId: string, idempotencyKey: string) {
     where: { seasonId_idempotencyKey: { seasonId, idempotencyKey } },
     include: { items: true },
   });
+}
+
+async function hasMatchingExistingStudent(input: SeasonalApplicationInput) {
+  const birthDate = new Date(input.child.birthDate);
+  const rows = await prisma.$queryRaw<{ exists: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1
+        FROM "Student" student
+        JOIN "User" parent ON parent.id = student."parentId"
+       WHERE student.name = ${input.child.name}
+         AND ((student."birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date = (${birthDate}::timestamptz AT TIME ZONE 'Asia/Seoul')::date
+         AND (
+           regexp_replace(COALESCE(parent.phone, ''), '[^0-9]', '', 'g') = ${input.parent.phone}
+           OR EXISTS (
+             SELECT 1 FROM "Guardian" guardian
+              WHERE guardian."studentId" = student.id
+                AND regexp_replace(COALESCE(guardian.phone, ''), '[^0-9]', '', 'g') = ${input.parent.phone}
+           )
+         )
+    ) AS exists
+  `;
+  return rows[0]?.exists === true;
 }
 
 function applicationResponse(application: Awaited<ReturnType<typeof existingApplication>>, duplicate: boolean) {
@@ -133,6 +154,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
 
   const duplicate = await existingApplication(season.id, input.idempotencyKey);
   if (duplicate) return applicationResponse(duplicate, true);
+  const applicantDecision = decideApplicantType(input.applicantType, await hasMatchingExistingStudent(input));
 
   try {
     const created = await prisma.$transaction(async (tx) => {
@@ -140,9 +162,17 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
 
       // 같은 상품을 동시에 신청할 때 정원 계산이 엇갈리지 않도록 행 잠금을 잡는다.
       await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
-      const offerings = await tx.specialProgramOffering.findMany({ where: { id: { in: ids }, seasonId: season.id } });
-      if (offerings.length !== ids.length || offerings.some((offering) => offering.status !== "OPEN")) {
+      const offerings = await tx.specialProgramOffering.findMany({
+        where: { id: { in: ids }, seasonId: season.id },
+        include: { sessionDates: { select: { startsAt: true } } },
+      });
+      if (offerings.length !== ids.length || offerings.some((offering) => offering.status !== "OPEN" || offering.capacity === null)) {
         throw new SeasonalError("마감되었거나 존재하지 않는 특강이 포함되어 있습니다.", 409, "OFFERING_UNAVAILABLE");
+      }
+      const availableWeekdays = new Set(offerings.flatMap((offering) => offering.sessionDates.map((session) => weekdayInSeoul(session.startsAt))));
+      const invalidWeekdays = input.selectedWeekdays.filter((weekday) => !availableWeekdays.has(weekday));
+      if (invalidWeekdays.length > 0) {
+        throw new SeasonalError("선택한 요일과 실제 특강 일정이 일치하지 않습니다.", 409, "WEEKDAY_NOT_OFFERED");
       }
 
       const counts = await tx.specialProgramApplicationItem.groupBy({
@@ -159,9 +189,10 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       const maxOrders = new Map(waitlistMax.map((row) => [row.offeringId, row._max.waitlistOrder || 0]));
       const byId = new Map(offerings.map((offering) => [offering.id, offering]));
       const placement = planApplicationItems(
-        input.items.map((requested) => byId.get(requested.offeringId)!),
+        input.items.map((requested) => ({ ...byId.get(requested.offeringId)!, capacity: byId.get(requested.offeringId)!.capacity! })),
         occupied,
         maxOrders,
+        applicantDecision.pricingType,
       );
       const itemPlans = input.items.map((requested, index) => ({
         requested,
@@ -175,6 +206,10 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
         data: {
           seasonId: season.id,
           idempotencyKey: input.idempotencyKey,
+          applicantType: applicantDecision.serverType,
+          selectedWeekdays: input.selectedWeekdays,
+          requiresReview: applicantDecision.requiresReview,
+          reviewReasons: applicantDecision.reviewReasons,
           childName: input.child.name,
           childBirthDate: new Date(input.child.birthDate),
           childGender: input.child.gender,
@@ -193,7 +228,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
           items: {
             create: itemPlans.map((plan) => ({
               offeringId: plan.offering.id,
-              priceSnapshot: plan.offering.price,
+              priceSnapshot: plan.priceSnapshot,
               titleSnapshot: plan.offering.title,
               status: plan.status,
               waitlistOrder: plan.waitlistOrder,

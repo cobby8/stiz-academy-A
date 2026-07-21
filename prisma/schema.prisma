@@ -1271,8 +1271,10 @@ model SpecialProgramOffering {
   instructorId String?
   instructorName String?
   location String?
-  capacity Int
+  capacity Int?
   price Int
+  newApplicantPrice Int?
+  existingApplicantPrice Int?
   shuttleAvailable Boolean @default(false)
   status String @default("DRAFT")
   displayOrder Int @default(0)
@@ -1308,6 +1310,12 @@ model SpecialProgramApplication {
   id String @id @default(dbgenerated("(gen_random_uuid())::text"))
   seasonId String
   idempotencyKey String
+  applicantType String?
+  selectedWeekdays String[] @default([])
+  importSource String?
+  sourceRowRef String?
+  requiresReview Boolean @default(false)
+  reviewReasons String[] @default([])
   childName String
   childBirthDate DateTime @db.Timestamptz(6)
   childGender String?
@@ -1335,6 +1343,8 @@ model SpecialProgramApplication {
   auditLogs SpecialProgramAuditLog[]
 
   @@unique([seasonId, idempotencyKey])
+  @@unique([seasonId, importSource, sourceRowRef])
+  @@index([seasonId, requiresReview, createdAt])
   @@index([seasonId, status, createdAt])
   @@index([parentPhone, createdAt])
 }
@@ -1349,6 +1359,8 @@ model SpecialProgramApplicationItem {
   waitlistOrder Int?
   enrollmentId String?
   paymentId String?
+  conversionStatus String @default("NOT_STARTED")
+  conversionError String?
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
   application SpecialProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)

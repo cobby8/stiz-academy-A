@@ -8,6 +8,8 @@
     "release:preflight": "node scripts/release-preflight.mjs",
     "release:code-check": "node scripts/release-preflight.mjs --skip-env",
     "payments:preflight": "dotenv -e .env.local -e .env -- node scripts/payment-preflight.mjs",
+    "seasonal:import:dry-run": "node scripts/seasonal-import.mjs",
+    "test:seasonal-import": "node --test scripts/seasonal-import.test.mjs",
     "db:push": "prisma db push",
     "start": "next start",
     "lint": "eslint",

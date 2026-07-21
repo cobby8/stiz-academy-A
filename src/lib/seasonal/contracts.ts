@@ -1,5 +1,7 @@
 export type SeasonalApplicationInput = {
   idempotencyKey: string;
+  applicantType?: "NEW" | "EXISTING";
+  selectedWeekdays: SeasonalWeekday[];
   child: {
     name: string;
     birthDate: string;
@@ -24,13 +26,38 @@ export type SeasonalApplicationInput = {
   }>;
 };
 
+export const SEASONAL_WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+export type SeasonalWeekday = (typeof SEASONAL_WEEKDAYS)[number];
+
+const WEEKDAY_ALIASES: Record<string, SeasonalWeekday> = {
+  MON: "MON", MONDAY: "MON", 월: "MON", 월요일: "MON",
+  TUE: "TUE", TUESDAY: "TUE", 화: "TUE", 화요일: "TUE",
+  WED: "WED", WEDNESDAY: "WED", 수: "WED", 수요일: "WED",
+  THU: "THU", THURSDAY: "THU", 목: "THU", 목요일: "THU",
+  FRI: "FRI", FRIDAY: "FRI", 금: "FRI", 금요일: "FRI",
+  SAT: "SAT", SATURDAY: "SAT", 토: "SAT", 토요일: "SAT",
+  SUN: "SUN", SUNDAY: "SUN", 일: "SUN", 일요일: "SUN",
+};
+
+export function normalizeSeasonalWeekdays(values: unknown): SeasonalWeekday[] {
+  if (!Array.isArray(values)) return [];
+  const normalized = values.map((value) => WEEKDAY_ALIASES[String(value).trim().toUpperCase()]);
+  if (normalized.some((weekday) => !weekday)) throw new SeasonalError("선택 요일을 확인해 주세요.", 400, "INVALID_WEEKDAY");
+  return Array.from(new Set(normalized));
+}
+
 export class SeasonalError extends Error {
+  readonly status: number;
+  readonly code: string;
+
   constructor(
     message: string,
-    public readonly status = 400,
-    public readonly code = "INVALID_REQUEST",
+    status = 400,
+    code = "INVALID_REQUEST",
   ) {
     super(message);
+    this.status = status;
+    this.code = code;
   }
 }
 
@@ -52,12 +79,18 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
   const parentPhone = normalizePhone(cleanText(body?.parent?.phone, 30) || "");
   const birthDate = cleanText(body?.child?.birthDate, 30);
   const birth = birthDate ? new Date(birthDate) : null;
+  const applicantType = body?.applicantType;
+  if (applicantType !== undefined && applicantType !== "NEW" && applicantType !== "EXISTING") {
+    throw new SeasonalError("신청자 구분을 확인해 주세요.");
+  }
+  const selectedWeekdays = normalizeSeasonalWeekdays(body?.selectedWeekdays);
 
   if (!key) throw new SeasonalError("중복 제출 방지 키가 필요합니다.");
   if (!childName || !birth || Number.isNaN(birth.getTime())) throw new SeasonalError("학생 이름과 생년월일을 확인해 주세요.");
   if (!parentName || parentPhone.length < 10 || parentPhone.length > 11) throw new SeasonalError("보호자 이름과 연락처를 확인해 주세요.");
   if (!body?.agreedTerms || !body?.agreedPrivacy) throw new SeasonalError("약관과 개인정보 처리에 동의해 주세요.");
   if (!Array.isArray(body.items) || body.items.length === 0) throw new SeasonalError("특강을 한 개 이상 선택해 주세요.");
+  if (selectedWeekdays.length === 0) throw new SeasonalError("수강할 요일을 한 개 이상 선택해 주세요.", 400, "WEEKDAY_REQUIRED");
 
   const seen = new Set<string>();
   const items = body.items.map((item) => {
@@ -79,6 +112,8 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
 
   return {
     idempotencyKey: key,
+    applicantType,
+    selectedWeekdays,
     child: {
       name: childName,
       birthDate: birth.toISOString(),
@@ -95,4 +130,3 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
     items,
   };
 }
-

@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 
 // ── DDL ensure: SmsTemplate 테이블이 없으면 생성 ──────────────────────────────
 let _smsTemplateEnsured = false;
+let _defaultSmsTemplatesEnsured = false;
 
 export async function ensureSmsTemplateTable() {
     if (_smsTemplateEnsured) return;
@@ -145,6 +146,13 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
         "미납 알림 일괄 발송 시 학부모에게 발송",
         '["childName","unpaidCount","totalAmount"]',
     ],
+    ["SPECIAL_APPLICATION_RECEIVED_PARENT", "특강 신청 접수", "PARENT", "[STIZ] {{childName}} 학생의 {{seasonTitle}} 특강 신청이 접수되었습니다.\n신청: {{offeringTitle}}\n문의: {{academyPhone}}", "특강 신청 직후 접수 안내", '["childName","seasonTitle","offeringTitle","academyPhone"]'],
+    ["SPECIAL_APPLICATION_APPROVED_PARENT", "특강 신청 승인", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 승인되었습니다.\n결제 및 계정 안내를 확인해 주세요.\n문의: {{academyPhone}}", "특강 신청 승인 안내", '["childName","seasonTitle","offeringTitle","academyPhone"]'],
+    ["SPECIAL_APPLICATION_WAITLISTED_PARENT", "특강 대기 접수", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강은 대기 접수되었습니다.\n대기순번: {{waitlistOrder}}\n자리 발생 시 안내드리겠습니다.", "특강 대기 상태 안내", '["childName","offeringTitle","waitlistOrder","academyPhone"]'],
+    ["SPECIAL_APPLICATION_REJECTED_PARENT", "특강 신청 반려", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 승인되지 않았습니다.\n문의: {{academyPhone}}", "특강 신청 반려 안내", '["childName","offeringTitle","academyPhone"]'],
+    ["SPECIAL_APPLICATION_CANCELLED_PARENT", "특강 신청 취소", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 취소되었습니다.\n문의: {{academyPhone}}", "특강 신청 취소 안내", '["childName","offeringTitle","academyPhone"]'],
+    ["SPECIAL_ACCOUNT_ACTIVATION_PARENT", "특강 보호자 계정 활성화", "PARENT", "[STIZ] {{childName}} 학생의 특강 확인을 위해 보호자 계정을 활성화해 주세요.\n{{activationUrl}}\n이 링크는 다른 사람에게 전달하지 마세요.", "신규 보호자의 일회용 계정 활성화 링크", '["childName","activationUrl"]'],
+    ["SPECIAL_PAYMENT_REQUEST_PARENT", "특강 결제 요청", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 결제를 확인해 주세요.\n금액: {{amount}}원\n납부기한: {{dueDate}}\n{{paymentUrl}}", "특강 청구서 결제 안내", '["childName","offeringTitle","amount","dueDate","paymentUrl"]'],
 ];
 
 /**
@@ -155,14 +163,9 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
  */
 export async function ensureSmsTemplates(): Promise<void> {
     await ensureSmsTemplateTable();
+    if (_defaultSmsTemplatesEnsured) return;
 
     try {
-        // 이미 데이터가 있으면 스킵 (성능: 매번 10개 INSERT 시도 방지)
-        const existing = await prisma.$queryRawUnsafe<{ cnt: number }[]>(
-            `SELECT COUNT(*)::int AS cnt FROM "SmsTemplate"`
-        );
-        if ((existing[0]?.cnt ?? 0) >= DEFAULT_TEMPLATES.length) return;
-
         // 기본 템플릿 삽입 — ON CONFLICT 로 이미 있는 trigger는 무시
         for (const [trigger, name, target, body, description, variables] of DEFAULT_TEMPLATES) {
             await prisma.$executeRawUnsafe(
@@ -172,6 +175,7 @@ export async function ensureSmsTemplates(): Promise<void> {
                 trigger, name, target, body, description, variables,
             );
         }
+        _defaultSmsTemplatesEnsured = true;
     } catch (e) {
         console.error("[ensureSmsTemplates] seed failed:", e);
     }
@@ -182,6 +186,28 @@ export async function ensureSmsTemplates(): Promise<void> {
 // 매칭되지 않는 변수는 빈 문자열로 대체 (에러 방지)
 export function renderTemplate(body: string, variables: Record<string, string>): string {
     return body.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || "");
+}
+
+export type SmsTemplateRenderResult =
+    | { ok: true; body: string }
+    | { ok: false; reason: "TEMPLATE_DISABLED_OR_MISSING" | "TEMPLATE_LOOKUP_FAILED" };
+
+export async function renderSmsTemplateResult(
+    trigger: string,
+    variables: Record<string, string>,
+): Promise<SmsTemplateRenderResult> {
+    await ensureSmsTemplates();
+    try {
+        const rows = await prisma.$queryRawUnsafe<Array<{ body: string; isActive?: boolean; isactive?: boolean }>>(
+            `SELECT body, "isActive" FROM "SmsTemplate" WHERE trigger = $1 LIMIT 1`, trigger,
+        );
+        if (rows.length === 0) return { ok: false, reason: "TEMPLATE_DISABLED_OR_MISSING" };
+        const template = rows[0];
+        if (!(template.isActive ?? template.isactive)) return { ok: false, reason: "TEMPLATE_DISABLED_OR_MISSING" };
+        return { ok: true, body: renderTemplate(template.body, variables) };
+    } catch {
+        return { ok: false, reason: "TEMPLATE_LOOKUP_FAILED" };
+    }
 }
 
 /**
@@ -199,7 +225,7 @@ export async function renderSmsTemplate(
     await ensureSmsTemplates();
 
     try {
-        const rows = await prisma.$queryRawUnsafe<any[]>(
+        const rows = await prisma.$queryRawUnsafe<Array<{ body: string; isActive?: boolean; isactive?: boolean }>>(
             `SELECT body, "isActive" FROM "SmsTemplate" WHERE trigger = $1 LIMIT 1`,
             trigger,
         );

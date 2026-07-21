@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -152,8 +153,9 @@ export async function issueParentAccountClaim(input: {
   invoiceId?: string | null;
   redirectPath?: string | null;
   enforceCooldown?: boolean;
-}) {
-  const parents = await prisma.$queryRawUnsafe<Array<{ id: string; email: string; phone: string | null }>>(
+}, externalTx?: Prisma.TransactionClient) {
+  const db = externalTx ?? prisma;
+  const parents = await db.$queryRawUnsafe<Array<{ id: string; email: string; phone: string | null }>>(
     `SELECT id, email, phone FROM "User" WHERE id = $1 AND role = 'PARENT' LIMIT 1`,
     input.parentId,
   );
@@ -162,7 +164,7 @@ export async function issueParentAccountClaim(input: {
 
   const phone = normalizePhone(parent.phone || "");
   if (phone.length < 10 || phone.length > 11) throw new Error("보호자 연락처를 확인해 주세요.");
-  const duplicates = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+  const duplicates = await db.$queryRawUnsafe<Array<{ count: number }>>(
     `SELECT COUNT(*)::int AS count FROM "User"
       WHERE role = 'PARENT' AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1`,
     phone,
@@ -171,7 +173,7 @@ export async function issueParentAccountClaim(input: {
 
   const rawToken = randomBytes(32).toString("base64url");
   const hash = tokenHash(rawToken);
-  await prisma.$transaction(async (tx) => {
+  const reserve = async (tx: Prisma.TransactionClient) => {
     await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, parent.id);
     const cooldown = await tx.$queryRawUnsafe<Array<{ recent: number }>>(
       `SELECT COUNT(*)::int AS recent FROM "ParentAccountClaim"
@@ -197,7 +199,9 @@ export async function issueParentAccountClaim(input: {
       keyedHash(`phone:${phone}`),
       safeRedirect(input.redirectPath),
     );
-  });
+  };
+  if (externalTx) await reserve(externalTx);
+  else await prisma.$transaction(reserve);
   return { activationUrl: activationUrl(rawToken), activationRequired: true };
 }
 

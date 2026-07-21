@@ -75,6 +75,21 @@ type InvoiceInfo = {
   dueDate?: string | null;
   checkoutUrl?: string | null;
   accountActivationRequired?: boolean;
+  notificationSummary?: NotificationSummary | null;
+};
+
+type NotificationSummary = {
+  trigger: string;
+  status: "PENDING" | "SENDING" | "SENT" | "FAILED" | "SKIPPED" | "UNKNOWN";
+  attemptCount: number;
+  updatedAt: string;
+  errorCode: string | null;
+  canRetry: boolean;
+};
+
+type NotificationMutationResponse = {
+  notification?: Pick<NotificationSummary, "status" | "errorCode"> | null;
+  notificationWarning?: boolean;
 };
 
 type Season = {
@@ -104,6 +119,7 @@ type ApplicationItem = {
   paymentId?: string | null;
   invoice?: InvoiceInfo | null;
   shuttleRequest?: ShuttleRequest | null;
+  notificationSummary?: NotificationSummary | null;
 };
 
 type Application = {
@@ -131,6 +147,7 @@ type Application = {
   importSource?: string | null;
   imported?: boolean;
   reviewReasons?: string[];
+  notificationSummary?: NotificationSummary | null;
   items: ApplicationItem[];
 };
 
@@ -149,11 +166,13 @@ type BulkItemResult = {
   applicationId?: string;
   message?: string;
   code?: string;
+  notification?: { status: NotificationSummary["status"]; errorCode?: string | null } | null;
+  notificationWarning?: boolean;
 };
 
 type BulkItemResponse = {
   success?: boolean;
-  summary?: { total?: number; succeeded?: number; failed?: number };
+  summary?: { total?: number; succeeded?: number; failed?: number; notificationsFailed?: number };
   results?: BulkItemResult[];
   error?: string;
 };
@@ -245,6 +264,7 @@ export default function SeasonalAdminClient() {
   const [editingSeason, setEditingSeason] = useState<Season | null>(null);
   const [editingClass, setEditingClass] = useState<SeasonalClass | null>(null);
   const [convertingItemId, setConvertingItemId] = useState("");
+  const [sendingNotificationKey, setSendingNotificationKey] = useState("");
   const [resolvingReview, setResolvingReview] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [bulkProcessingStatus, setBulkProcessingStatus] = useState<ItemStatus | "">("");
@@ -322,6 +342,7 @@ export default function SeasonalAdminClient() {
       });
       const payload: Payload = { seasons, applications, stats: body.stats };
       setData(payload);
+      setSelectedApplication((current) => current ? applications.find((application) => application.id === current.id) ?? current : null);
       setSelectedSeasonId((current) => current || payload.seasons[0]?.id || "");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "방학특강 정보를 불러오지 못했습니다.");
@@ -368,21 +389,38 @@ export default function SeasonalAdminClient() {
     const response = await fetch("/api/admin/seasonal", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "요청을 처리하지 못했습니다.");
-    setNotice(success); await load();
+    setNotice(success); await load(); return result;
   }
 
   async function updateItem(itemId: string, status: ItemStatus) {
     try {
-      await mutate("PATCH", { resource: "item", id: itemId, data: { status } }, `신청 항목을 '${STATUS_LABEL[status]}' 상태로 변경했습니다.`);
-      setSelectedApplication((current) => current ? { ...current, items: current.items.map((item) => item.id === itemId ? { ...item, status } : item) } : current);
+      const result = await mutate("PATCH", { resource: "item", id: itemId, data: { status } }, `신청 항목을 '${STATUS_LABEL[status]}' 상태로 변경했습니다.`) as { notification?: { status: NotificationSummary["status"]; errorCode?: string | null } | null };
+      const expected = itemNotification(status);
+      const nextSummary = result.notification && expected ? {
+        trigger: expected.trigger,
+        status: result.notification.status,
+        attemptCount: 1,
+        updatedAt: new Date().toISOString(),
+        errorCode: result.notification.errorCode ?? null,
+        canRetry: result.notification.status !== "PENDING",
+      } satisfies NotificationSummary : null;
+      setSelectedApplication((current) => current ? { ...current, items: current.items.map((item) => item.id === itemId ? {
+        ...item,
+        status,
+        notificationSummary: nextSummary ?? (item.notificationSummary?.trigger === expected?.trigger ? item.notificationSummary : null),
+      } : item) } : current);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "상태를 변경하지 못했습니다."); }
   }
 
   async function convertItem(itemId: string) {
     setConvertingItemId(itemId);
     try {
-      await mutate("PATCH", { resource: "conversion", id: itemId, data: {} }, "수강 등록과 청구서를 생성했습니다.");
-      setSelectedApplication(null);
+      const result = await mutate("PATCH", { resource: "conversion", id: itemId, data: {} }, "수강 등록과 청구서를 생성했습니다.") as NotificationMutationResponse;
+      if (notificationMutationFailed(result)) {
+        setNotice("수강·청구 생성 완료 / 안내 실패, 재발송이 필요합니다.");
+      } else {
+        setSelectedApplication(null);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "수강·청구 생성에 실패했습니다.");
     } finally {
@@ -435,9 +473,12 @@ export default function SeasonalAdminClient() {
       const failed = results.filter((result) => !result.ok);
       const succeeded = body.summary?.succeeded ?? results.filter((result) => result.ok).length;
       const failedIds = failed.map((result) => result.itemId);
+      const notificationFailedResults = results.filter((result) => result.ok && (result.notificationWarning || result.notification?.status === "FAILED"));
+      const notificationsFailed = body.summary?.notificationsFailed ?? notificationFailedResults.length;
+      const retryIds = Array.from(new Set([...failedIds, ...notificationFailedResults.map((result) => result.itemId)]));
       const failureMessage = failed[0]?.message ? ` 첫 실패 사유: ${failed[0].message}` : "";
-      setSelectedItemIds(failedIds);
-      setNotice(`${targetLabel} 일괄 처리: ${succeeded}개 완료, ${failed.length}개 실패.${failureMessage}`);
+      setSelectedItemIds(retryIds);
+      setNotice(`${targetLabel} 상태 처리 성공 ${succeeded}개 / 처리 실패 ${failed.length}개 / 안내 실패 ${notificationsFailed}개.${failureMessage}`);
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "일괄 처리를 완료하지 못했습니다.");
@@ -466,9 +507,12 @@ export default function SeasonalAdminClient() {
       const results = body.results ?? [];
       const failed = results.filter((result) => !result.ok);
       const succeeded = body.summary?.succeeded ?? results.filter((result) => result.ok).length;
+      const notificationFailedResults = results.filter((result) => result.ok && (result.notificationWarning || result.notification?.status === "FAILED"));
+      const notificationsFailed = body.summary?.notificationsFailed ?? notificationFailedResults.length;
+      const retryIds = Array.from(new Set([...failed.map((result) => result.itemId), ...notificationFailedResults.map((result) => result.itemId)]));
       const failureMessage = failed[0]?.message ? ` 첫 실패 사유: ${failed[0].message}` : "";
-      setSelectedItemIds(failed.map((result) => result.itemId));
-      setNotice(`수강·청구 생성: ${succeeded}개 완료, ${failed.length}개 실패.${failureMessage}`);
+      setSelectedItemIds(retryIds);
+      setNotice(`수강·청구 처리 성공 ${succeeded}개 / 처리 실패 ${failed.length}개 / 안내 실패 ${notificationsFailed}개.${failureMessage}`);
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "수강·청구 생성을 완료하지 못했습니다.");
@@ -485,16 +529,22 @@ export default function SeasonalAdminClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ resource: "accountActivation", id: item.id, data: { action: "reissue" } }),
         });
-        const body = (await response.json().catch(() => ({}))) as { activationUrl?: string; error?: string };
+        const body = (await response.json().catch(() => ({}))) as NotificationMutationResponse & { activationUrl?: string; error?: string };
         if (!response.ok || !body.activationUrl) throw new Error(body.error || "보호자 계정 활성화 링크를 만들지 못했습니다.");
         const absoluteHref = toAbsoluteHref(body.activationUrl);
+        const notificationFailed = notificationMutationFailed(body);
         try {
           await navigator.clipboard.writeText(absoluteHref);
-          setNotice(`${item.className} 보호자 계정 활성화 링크를 복사했습니다.`);
+          setNotice(notificationFailed
+            ? `${item.className} 링크 재발급 완료 / 문자 안내 실패, 재발송이 필요합니다.`
+            : `${item.className} 보호자 계정 활성화 링크를 복사했습니다.`);
         } catch {
           window.open(absoluteHref, "_blank", "noopener,noreferrer");
-          setNotice("브라우저가 복사를 막아 보호자 계정 활성화 링크를 새 창으로 열었습니다.");
+          setNotice(notificationFailed
+            ? "링크 재발급 완료 / 문자 안내 실패. 복사 대신 새 창으로 열었습니다."
+            : "브라우저가 복사를 막아 보호자 계정 활성화 링크를 새 창으로 열었습니다.");
         }
+        await load();
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "보호자 계정 활성화 링크를 만들지 못했습니다.");
       }
@@ -512,6 +562,38 @@ export default function SeasonalAdminClient() {
     } catch {
       window.open(absoluteHref, "_blank", "noopener,noreferrer");
       setNotice("브라우저가 복사를 막아 청구서를 새 창으로 열었습니다.");
+    }
+  }
+
+  async function retryNotification(scope: "application" | "item" | "invoice", id: string, trigger: string) {
+    const requestKey = `${scope}:${id}:${trigger}`;
+    setSendingNotificationKey(requestKey);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/seasonal", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource: "notificationRetry", id, data: { scope, trigger } }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { success?: boolean; notification?: NotificationSummary; error?: string };
+      if (!response.ok || !body.notification) throw new Error(body.error || "안내 문자를 발송하지 못했습니다.");
+      const summary = body.notification;
+      setSelectedApplication((current) => {
+        if (!current) return current;
+        if (scope === "application") return { ...current, notificationSummary: summary };
+        return {
+          ...current,
+          items: current.items.map((item) => item.id !== id ? item : scope === "item"
+            ? { ...item, notificationSummary: summary }
+            : { ...item, invoice: item.invoice ? { ...item.invoice, notificationSummary: summary } : item.invoice }),
+        };
+      });
+      setNotice(summary.status === "SENT" ? "보호자 안내 문자를 발송했습니다." : "문자 발송 결과를 확인해 주세요.");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "안내 문자를 발송하지 못했습니다.");
+    } finally {
+      setSendingNotificationKey("");
     }
   }
 
@@ -544,7 +626,7 @@ export default function SeasonalAdminClient() {
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
-      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
+      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
       {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
@@ -697,6 +779,7 @@ function ApplicationsView({
                 <td className="px-4 py-4 align-top">
                   <p className="font-bold">{application.parentName}</p>
                   <a href={`tel:${application.parentPhone}`} className="text-xs text-[var(--brand-accent)] hover:underline">{application.parentPhone}</a>
+                  <NotificationSummaryText summary={latestApplicationNotification(application)} />
                 </td>
                 <td className="px-4 py-4 align-top">
                   <p>{application.items.length}개 반</p>
@@ -728,6 +811,8 @@ function ApplicationDrawer({
   onUpdateItem,
   onConvertItem,
   onCopyInvoiceLink,
+  onRetryNotification,
+  sendingNotificationKey,
   onResolveReview,
   resolvingReview,
   convertingItemId,
@@ -737,6 +822,8 @@ function ApplicationDrawer({
   onUpdateItem: (id: string, status: ItemStatus) => Promise<void>;
   onConvertItem: (id: string) => Promise<void>;
   onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>;
+  onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>;
+  sendingNotificationKey: string;
   onResolveReview: (applicationId: string, reviewNote: string) => Promise<void>;
   resolvingReview: boolean;
   convertingItemId: string;
@@ -774,8 +861,15 @@ function ApplicationDrawer({
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <a href={parentPhoneHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="call" />전화</a>
-        <a href={parentSmsHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="sms" />문자</a>
+        <a href={parentSmsHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="sms" />직접 문자</a>
       </div>
+
+      <NotificationActionRow
+        label="특강 신청 접수 안내"
+        summary={application.notificationSummary?.trigger === "SPECIAL_APPLICATION_RECEIVED_PARENT" ? application.notificationSummary : null}
+        sending={sendingNotificationKey === `application:${application.id}:SPECIAL_APPLICATION_RECEIVED_PARENT`}
+        onSend={() => void onRetryNotification("application", application.id, "SPECIAL_APPLICATION_RECEIVED_PARENT")}
+      />
 
       <section className="mt-7">
         <div className="flex items-end justify-between gap-3">
@@ -786,7 +880,7 @@ function ApplicationDrawer({
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
         </div>
         <div className="mt-3 space-y-3">
-          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} onConvertItem={onConvertItem} onCopyInvoiceLink={onCopyInvoiceLink} converting={convertingItemId === item.id} />)}
+          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} onConvertItem={onConvertItem} onCopyInvoiceLink={onCopyInvoiceLink} onRetryNotification={onRetryNotification} sendingNotificationKey={sendingNotificationKey} converting={convertingItemId === item.id} />)}
         </div>
       </section>
 
@@ -812,8 +906,10 @@ function ApplicationReviewSummary({ application, onResolveReview, resolving }: {
   </section>;
 }
 
-function ApplicationItemCard({ item, onUpdateItem, onConvertItem, onCopyInvoiceLink, converting }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void>; onConvertItem: (id: string) => Promise<void>; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; converting: boolean }) {
+function ApplicationItemCard({ item, onUpdateItem, onConvertItem, onCopyInvoiceLink, onRetryNotification, sendingNotificationKey, converting }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void>; onConvertItem: (id: string) => Promise<void>; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>; sendingNotificationKey: string; converting: boolean }) {
   const quickStatuses: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
+  const statusNotification = itemNotification(item.status);
+  const currentNotificationSummary = item.notificationSummary?.trigger === statusNotification?.trigger ? item.notificationSummary : null;
   return <article className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
     <div className="flex items-start justify-between gap-3">
       <div>
@@ -832,8 +928,9 @@ function ApplicationItemCard({ item, onUpdateItem, onConvertItem, onCopyInvoiceL
         {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
       </select>
     </label>
+    {statusNotification && <NotificationActionRow label={statusNotification.label} summary={currentNotificationSummary} sending={sendingNotificationKey === `item:${item.id}:${statusNotification.trigger}`} onSend={() => void onRetryNotification("item", item.id, statusNotification.trigger)} />}
     <ConversionReadinessBox item={item} onConvertItem={onConvertItem} converting={converting} />
-    {item.invoice && <InvoiceActionBox item={item} onCopyInvoiceLink={onCopyInvoiceLink} />}
+    {item.invoice && <InvoiceActionBox item={item} onCopyInvoiceLink={onCopyInvoiceLink} onRetryNotification={onRetryNotification} sendingNotificationKey={sendingNotificationKey} />}
     {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} />}
   </article>;
 }
@@ -898,9 +995,12 @@ function MiniState({ active, label }: { active: boolean; label: string }) {
   return <span className={`rounded-full px-2 py-1 text-[11px] font-black ${active ? "bg-white text-emerald-700 dark:bg-emerald-100 dark:text-emerald-900" : "bg-white/60 text-gray-500 dark:bg-gray-900/50 dark:text-gray-300"}`}>{label}</span>;
 }
 
-function InvoiceActionBox({ item, onCopyInvoiceLink }: { item: ApplicationItem; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void> }) {
+function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendingNotificationKey }: { item: ApplicationItem; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>; sendingNotificationKey: string }) {
   const href = getItemInvoiceHref(item);
   const activationRequired = Boolean(item.invoice?.accountActivationRequired);
+  const defaultTrigger = activationRequired ? "SPECIAL_ACCOUNT_ACTIVATION_PARENT" : "SPECIAL_PAYMENT_REQUEST_PARENT";
+  const notificationLabel = activationRequired ? "계정 활성화·결제 안내" : "결제 요청 안내";
+  const currentNotificationSummary = item.invoice?.notificationSummary?.trigger === defaultTrigger ? item.invoice.notificationSummary : null;
   return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
@@ -917,6 +1017,77 @@ function InvoiceActionBox({ item, onCopyInvoiceLink }: { item: ApplicationItem; 
         <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">{activationRequired ? "활성화 링크 재발급·복사" : "결제 링크 복사"}</button>
       </div>
     </div>
+    <NotificationActionRow label={notificationLabel} summary={currentNotificationSummary} sending={sendingNotificationKey === `invoice:${item.id}:${defaultTrigger}`} onSend={() => void onRetryNotification("invoice", item.id, defaultTrigger)} />
+  </div>;
+}
+
+function itemNotification(status: ItemStatus) {
+  const notifications: Partial<Record<ItemStatus, { label: string; trigger: string }>> = {
+    APPROVED: { label: "특강 승인 안내", trigger: "SPECIAL_APPLICATION_APPROVED_PARENT" },
+    WAITLISTED: { label: "특강 대기 안내", trigger: "SPECIAL_APPLICATION_WAITLISTED_PARENT" },
+    REJECTED: { label: "특강 반려 안내", trigger: "SPECIAL_APPLICATION_REJECTED_PARENT" },
+    CANCELLED: { label: "특강 취소 안내", trigger: "SPECIAL_APPLICATION_CANCELLED_PARENT" },
+  };
+  return notifications[status] ?? null;
+}
+
+function latestApplicationNotification(application: Application) {
+  const summaries = [
+    application.notificationSummary,
+    ...application.items.flatMap((item) => [item.notificationSummary, item.invoice?.notificationSummary]),
+  ].filter((summary): summary is NotificationSummary => Boolean(summary));
+  const priority: Record<NotificationSummary["status"], number> = { FAILED: 6, UNKNOWN: 5, SENDING: 4, PENDING: 3, SKIPPED: 2, SENT: 1 };
+  return summaries.sort((a, b) => priority[b.status] - priority[a.status] || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] ?? null;
+}
+
+function notificationStatus(summary?: NotificationSummary | null) {
+  if (!summary) return { text: "미발송", className: "text-gray-500 dark:text-gray-400" };
+  if (notificationNeedsReview(summary)) return { text: "발송 여부 확인 필요", className: "text-amber-700 dark:text-amber-300" };
+  if (summary.status === "SENDING") return { text: "발송 처리 중", className: "text-amber-700 dark:text-amber-300" };
+  if (summary.status === "PENDING") return { text: "발송 중", className: "text-amber-700 dark:text-amber-300" };
+  if (summary.status === "SENT") return { text: "발송 완료", className: "text-emerald-700 dark:text-emerald-300" };
+  if (summary.status === "FAILED") return { text: "발송 실패", className: "text-red-700 dark:text-red-300" };
+  if (summary.status === "SKIPPED") return { text: "템플릿 꺼짐·미발송", className: "text-amber-700 dark:text-amber-300" };
+  return { text: "발송 상태 확인 필요", className: "text-amber-700 dark:text-amber-300" };
+}
+
+function notificationNeedsReview(summary?: NotificationSummary | null) {
+  if (!summary) return false;
+  if (summary.errorCode === "FAILED_DELIVERY_UNCERTAIN") return true;
+  if (summary.status === "UNKNOWN") return true;
+  if (summary.status !== "PENDING" && summary.status !== "SENDING") return false;
+  const updatedAt = new Date(summary.updatedAt).getTime();
+  const staleAfterMs = summary.status === "SENDING" ? 2 * 60 * 1000 : 15 * 60 * 1000;
+  return !Number.isFinite(updatedAt) || Date.now() - updatedAt >= staleAfterMs;
+}
+
+function notificationMutationFailed(result: NotificationMutationResponse) {
+  return Boolean(
+    result.notificationWarning
+    || result.notification?.status === "FAILED"
+    || result.notification?.errorCode === "TEMPLATE_DISABLED_OR_MISSING",
+  );
+}
+
+function NotificationSummaryText({ summary }: { summary?: NotificationSummary | null }) {
+  const state = notificationStatus(summary);
+  return <p className={`mt-1 text-xs font-bold ${state.className}`}>안내 {state.text}{summary?.updatedAt ? ` · ${formatDateTime(summary.updatedAt)}` : ""}</p>;
+}
+
+function NotificationActionRow({ label, summary, sending, onSend }: { label: string; summary?: NotificationSummary | null; sending: boolean; onSend: () => void }) {
+  const state = notificationStatus(summary);
+  const needsReview = notificationNeedsReview(summary);
+  const pending = sending || ((summary?.status === "PENDING" || summary?.status === "SENDING") && !needsReview);
+  const disabled = pending || Boolean(summary && !summary.canRetry && !needsReview);
+  return <div className="mt-3 flex flex-col gap-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
+    <div className="min-w-0">
+      <p className="font-black text-gray-900 dark:text-white">{label}</p>
+      <p className={`mt-1 text-xs font-bold ${state.className}`}>{pending ? "발송 중" : state.text}{summary?.updatedAt ? ` · ${formatDateTime(summary.updatedAt)}` : ""}</p>
+      {summary?.status === "FAILED" && summary.errorCode && <p className="mt-1 truncate text-xs text-red-600 dark:text-red-300" title={summary.errorCode}>{summary.errorCode}</p>}
+      {needsReview && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">중복 발송을 피하려면 발송 이력을 확인한 뒤 재시도하세요.</p>}
+      {summary?.status === "SKIPPED" && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">문자 템플릿이 켜져 있는지 확인한 뒤 재시도하세요.</p>}
+    </div>
+    <button type="button" disabled={disabled} onClick={onSend} aria-label={`${label} ${needsReview ? "확인 후 재시도" : summary ? "재발송" : "발송"}`} className="min-h-10 shrink-0 rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white">{pending ? "발송 중…" : needsReview ? "확인 후 재시도" : summary ? "재발송" : "발송"}</button>
   </div>;
 }
 

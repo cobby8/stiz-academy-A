@@ -7,13 +7,24 @@ import { Prisma } from "@prisma/client";
 import { classifyAdminAuthError } from "./auth-error";
 import { syncOfferingSessionDates } from "@/lib/seasonal/session-bridge";
 import { issueParentAccountClaim } from "@/lib/parent-account-claim";
+import { randomUUID } from "node:crypto";
+import { expireStaleSmsDeliveries } from "@/lib/notification";
+import {
+  SEASONAL_SMS_TRIGGERS,
+  dispatchSeasonalParentSms,
+  reserveSeasonalParentSms,
+  type SeasonalSmsDeliveryResult,
+  type SeasonalSmsTrigger,
+} from "@/lib/seasonal/notifications";
 
 const SEASON_STATUSES = new Set(["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"]);
 const OFFERING_STATUSES = new Set(["DRAFT", "OPEN", "CLOSED", "CANCELLED"]);
 const APPLICATION_STATUSES = new Set(["PENDING", "PARTIALLY_WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 const ITEM_STATUSES = new Set(["PENDING", "WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 type SessionDateInput = { id?: unknown; startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
-type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null; activationUrl: string | null; activationRequired: boolean };
+type NotificationSummary = { trigger: string; status: string; attemptCount: number; updatedAt: string; errorCode: string | null; canRetry: boolean };
+type NotificationDeliveryRow = { status: string; attemptCount: number; errorCode: string | null; updatedAt: Date; payloadJSON: unknown };
+type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null; activationRequired: boolean; notification: SeasonalSmsDeliveryResult; notificationWarning?: true };
 type AdminApplicationRow = Record<string, unknown> & {
   items: Array<Record<string, unknown> & { paymentId?: string | null }>;
 };
@@ -25,9 +36,80 @@ type BulkItemResult = {
   invoiceId?: string | null;
   activationUrl?: string | null;
   activationRequired?: boolean;
+  notification?: SeasonalSmsDeliveryResult;
+  notificationWarning?: boolean;
   message?: string;
   code?: string;
 };
+
+const ITEM_NOTIFICATION_TRIGGER: Partial<Record<string, SeasonalSmsTrigger>> = {
+  APPROVED: SEASONAL_SMS_TRIGGERS.approved,
+  WAITLISTED: SEASONAL_SMS_TRIGGERS.waitlisted,
+  REJECTED: SEASONAL_SMS_TRIGGERS.rejected,
+  CANCELLED: SEASONAL_SMS_TRIGGERS.cancelled,
+};
+
+function notificationNeedsWarning(result: SeasonalSmsDeliveryResult | null | undefined) {
+  return Boolean(result && (result.status === "FAILED" || result.errorCode === "TEMPLATE_DISABLED_OR_MISSING"));
+}
+
+function notificationSummary(result: SeasonalSmsDeliveryResult, trigger: SeasonalSmsTrigger): NotificationSummary {
+  return {
+    trigger,
+    status: result.status,
+    attemptCount: result.status === "SKIPPED" ? 0 : 1,
+    updatedAt: new Date().toISOString(),
+    errorCode: result.errorCode ?? null,
+    canRetry: true,
+  };
+}
+
+function deliveryEventId(applicationId: string, itemId: string | null | undefined, trigger: string) {
+  return [applicationId, itemId || "application", trigger].join(":");
+}
+
+function latestDeliverySummaries(rows: NotificationDeliveryRow[]) {
+  const summaries = new Map<string, NotificationSummary>();
+  for (const row of rows) {
+    const payload = row.payloadJSON && typeof row.payloadJSON === "object" ? row.payloadJSON as Record<string, unknown> : {};
+    const eventId = typeof payload.eventId === "string" ? payload.eventId : null;
+    const trigger = typeof payload.trigger === "string" ? payload.trigger : null;
+    if (!eventId || !trigger || summaries.has(eventId)) continue;
+    summaries.set(eventId, {
+      trigger,
+      status: row.status,
+      attemptCount: row.attemptCount,
+      updatedAt: new Date(row.updatedAt).toISOString(),
+      errorCode: row.errorCode,
+      canRetry: row.status !== "PENDING",
+    });
+  }
+  return summaries;
+}
+
+function newestNotification(summaries: Array<NotificationSummary | undefined>) {
+  return summaries
+    .filter((summary): summary is NotificationSummary => Boolean(summary))
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0] ?? null;
+}
+
+async function notifyItemStatus(result: Awaited<ReturnType<typeof updateSpecialProgramItemStatus>>) {
+  const trigger = ITEM_NOTIFICATION_TRIGGER[result.item.status];
+  if (!result.changed || !trigger || !result.reservation) return null;
+  if (result.reservation.status !== "PENDING" || !result.reservation.deliveryId) return result.reservation;
+  return dispatchSeasonalParentSms({
+    deliveryId: result.reservation.deliveryId,
+    trigger,
+    recipientPhone: result.before.application.parentPhone,
+    variables: {
+      childName: result.before.application.childName,
+      parentName: result.before.application.parentName,
+      offeringTitle: result.before.offering.title,
+      seasonTitle: "",
+      waitlistOrder: result.item.waitlistOrder ? String(result.item.waitlistOrder) : "",
+    },
+  });
+}
 
 async function admin() {
   try {
@@ -66,6 +148,12 @@ function defaultPaymentDueDate() {
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + 7);
   return dueDate;
+}
+
+function publicUrl(path: string) {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!configured || !/^https?:\/\//i.test(configured)) return path;
+  return new URL(path, configured).toString();
 }
 
 async function ensureApplicationCapacity(tx: Prisma.TransactionClient, applicationId: string) {
@@ -110,9 +198,12 @@ function bulkErrorResult(itemId: string, error: unknown): BulkItemResult {
 
 async function updateSpecialProgramItemStatus(
   tx: Prisma.TransactionClient,
-  params: { itemId: string; status: string; actorId: string; enrollmentId?: unknown; paymentId?: unknown },
+  params: { itemId: string; status: string; actorId: string; enrollmentId?: unknown; paymentId?: unknown; deliveryRunId?: string },
 ) {
-  const before = await tx.specialProgramApplicationItem.findUnique({ where: { id: params.itemId }, include: { application: true } });
+  const before = await tx.specialProgramApplicationItem.findUnique({
+    where: { id: params.itemId },
+    include: { application: true, offering: { select: { title: true } } },
+  });
   if (!before) throw new SeasonalError("신청 항목을 찾을 수 없습니다.", 404);
   if (params.status === "APPROVED" && (before.application.requiresReview || before.application.reviewReasons.length > 0)) {
     throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
@@ -134,6 +225,7 @@ async function updateSpecialProgramItemStatus(
     waitlistOrder = (last._max.waitlistOrder || 0) + 1;
   }
 
+  const changed = before.status !== params.status;
   const item = await tx.specialProgramApplicationItem.update({
     where: { id: params.itemId },
     data: {
@@ -151,7 +243,7 @@ async function updateSpecialProgramItemStatus(
     where: { id: before.applicationId },
     data: { status: applicationStatusFromItemStatuses(siblings.map((row) => row.status)), processedAt: new Date(), processedByUserId: params.actorId },
   });
-  await tx.specialProgramAuditLog.create({
+  if (changed) await tx.specialProgramAuditLog.create({
     data: {
       seasonId: before.application.seasonId,
       offeringId: item.offeringId,
@@ -164,7 +256,15 @@ async function updateSpecialProgramItemStatus(
       afterJSON: item,
     },
   });
-  return item;
+  const trigger = ITEM_NOTIFICATION_TRIGGER[item.status];
+  const reservation = changed && trigger ? await reserveSeasonalParentSms(tx, {
+    trigger,
+    applicationId: item.applicationId,
+    itemId: item.id,
+    recipientPhone: before.application.parentPhone,
+    deliveryRunId: params.deliveryRunId,
+  }) : null;
+  return { item, before, changed, reservation };
 }
 
 function respondError(error: unknown) {
@@ -221,17 +321,48 @@ export async function GET(request: NextRequest) {
         )
       : [];
     const activationByPaymentId = new Map(activationRows.map((row) => [row.paymentId, row.activationRequired]));
+    const visibleEventIds = applicationRows.flatMap((application) => {
+      const applicationId = String(application.id);
+      const applicationEvents = Object.values(SEASONAL_SMS_TRIGGERS).map((trigger) => deliveryEventId(applicationId, null, trigger));
+      const itemEvents = application.items.flatMap((item) => Object.values(SEASONAL_SMS_TRIGGERS)
+        .map((trigger) => deliveryEventId(applicationId, String(item.id), trigger)));
+      return [...applicationEvents, ...itemEvents];
+    });
+    const deliveryRows = visibleEventIds.length
+      ? await prisma.$queryRawUnsafe<NotificationDeliveryRow[]>(
+          `SELECT status, "attemptCount", "errorCode", "updatedAt", "payloadJSON"
+             FROM "NotificationDelivery"
+            WHERE "eventType" = 'SPECIAL_PROGRAM_NOTIFICATION'
+              AND "payloadJSON"->>'eventId' = ANY($1::text[])
+            ORDER BY "updatedAt" DESC`,
+          visibleEventIds,
+        )
+      : [];
+    const deliverySummaries = latestDeliverySummaries(deliveryRows);
+    const statusTriggers = Object.values(ITEM_NOTIFICATION_TRIGGER).filter((trigger): trigger is SeasonalSmsTrigger => Boolean(trigger));
     const applications = applicationRows.map((application) => ({
       ...application,
-      items: application.items.map((item) => ({
-        ...item,
-        invoice: item.paymentId
-          ? (() => {
-              const invoice = invoicesByPaymentId.get(item.paymentId);
-              return invoice ? { ...invoice, accountActivationRequired: activationByPaymentId.get(item.paymentId) ?? false } : null;
-            })()
-          : null,
-      })),
+      notificationSummary: newestNotification([
+        deliverySummaries.get(deliveryEventId(String(application.id), null, SEASONAL_SMS_TRIGGERS.received)),
+        ...statusTriggers.map((trigger) => deliverySummaries.get(deliveryEventId(String(application.id), null, trigger))),
+      ]),
+      items: application.items.map((item) => {
+        const applicationId = String(application.id);
+        const itemId = String(item.id);
+        const invoice = item.paymentId ? invoicesByPaymentId.get(item.paymentId) : null;
+        return {
+          ...item,
+          notificationSummary: newestNotification(statusTriggers.map((trigger) => deliverySummaries.get(deliveryEventId(applicationId, itemId, trigger)))),
+          invoice: invoice ? {
+            ...invoice,
+            accountActivationRequired: activationByPaymentId.get(item.paymentId!) ?? false,
+            notificationSummary: newestNotification([
+              deliverySummaries.get(deliveryEventId(applicationId, itemId, SEASONAL_SMS_TRIGGERS.accountActivation)),
+              deliverySummaries.get(deliveryEventId(applicationId, itemId, SEASONAL_SMS_TRIGGERS.paymentRequest)),
+            ]),
+          } : null,
+        };
+      }),
     }));
 
     return NextResponse.json({
@@ -287,6 +418,155 @@ export async function POST(request: NextRequest) {
   } catch (error) { return respondError(error); }
 }
 
+async function manualRetrySeasonalSms(input: {
+  trigger: SeasonalSmsTrigger; applicationId: string; itemId?: string | null; recipientPhone: string;
+  recipientUserId?: string | null; variables: Record<string, string>; deliveryRunId: string;
+}) {
+  const eventId = deliveryEventId(input.applicationId, input.itemId, input.trigger);
+  const reservation = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId}))`;
+    await expireStaleSmsDeliveries(tx);
+    const rows = await tx.$queryRawUnsafe<Array<{ status: string; updatedAt: Date; errorCode: string | null }>>(
+      `SELECT status, "updatedAt", "errorCode" FROM "NotificationDelivery"
+        WHERE "eventType" = 'SPECIAL_PROGRAM_NOTIFICATION' AND "payloadJSON"->>'eventId' = $1
+        ORDER BY "updatedAt" DESC LIMIT 1`,
+      eventId,
+    );
+    const latest = rows[0];
+    if (latest) {
+      if (latest.errorCode === "FAILED_DELIVERY_UNCERTAIN") {
+        throw new SeasonalError("이전 문자 발송 결과를 확정할 수 없어 운영 확인이 필요합니다.", 409, "NOTIFICATION_DELIVERY_UNCERTAIN");
+      }
+      const ageMs = Date.now() - new Date(latest.updatedAt).getTime();
+      if ((latest.status === "PENDING" || latest.status === "SENDING") && ageMs < 15 * 60_000) {
+        throw new SeasonalError("이미 발송이 진행 중입니다.", 409, "NOTIFICATION_PENDING");
+      }
+      if (ageMs < 3_000) throw new SeasonalError("같은 알림을 방금 재발송했습니다.", 409, "NOTIFICATION_RETRY_COOLDOWN");
+    }
+    return reserveSeasonalParentSms(tx, {
+      trigger: input.trigger, applicationId: input.applicationId, itemId: input.itemId,
+      recipientPhone: input.recipientPhone, recipientUserId: input.recipientUserId, deliveryRunId: input.deliveryRunId,
+    });
+  });
+  if (reservation.status !== "PENDING" || !reservation.deliveryId) return reservation;
+  return dispatchSeasonalParentSms({
+    deliveryId: reservation.deliveryId, trigger: input.trigger, recipientPhone: input.recipientPhone, variables: input.variables,
+  });
+}
+
+async function retryActivationSeasonalSms(input: {
+  applicationId: string; itemId: string; invoiceId: string; parentId: string; recipientPhone: string;
+  variables: Record<string, string>; deliveryRunId: string;
+}) {
+  const trigger = SEASONAL_SMS_TRIGGERS.accountActivation;
+  const eventId = deliveryEventId(input.applicationId, input.itemId, trigger);
+  const prepared = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId}))`;
+    await expireStaleSmsDeliveries(tx);
+    const rows = await tx.$queryRawUnsafe<Array<{ status: string; updatedAt: Date; errorCode: string | null }>>(
+      `SELECT status, "updatedAt", "errorCode" FROM "NotificationDelivery"
+        WHERE "eventType" = 'SPECIAL_PROGRAM_NOTIFICATION' AND "payloadJSON"->>'eventId' = $1
+        ORDER BY "updatedAt" DESC LIMIT 1`, eventId,
+    );
+    const latest = rows[0];
+    if (latest?.errorCode === "FAILED_DELIVERY_UNCERTAIN") throw new SeasonalError("이전 문자 발송 결과를 확정할 수 없어 운영 확인이 필요합니다.", 409, "NOTIFICATION_DELIVERY_UNCERTAIN");
+    if (latest) {
+      const ageMs = Date.now() - new Date(latest.updatedAt).getTime();
+      if ((latest.status === "PENDING" || latest.status === "SENDING") && ageMs < 15 * 60_000) throw new SeasonalError("이미 발송이 진행 중입니다.", 409, "NOTIFICATION_PENDING");
+      if (ageMs < 3_000) throw new SeasonalError("같은 알림을 방금 재발송했습니다.", 409, "NOTIFICATION_RETRY_COOLDOWN");
+    }
+    const activation = await issueParentAccountClaim({
+      parentId: input.parentId, applicationId: input.applicationId, invoiceId: input.invoiceId,
+      redirectPath: `/payments/${encodeURIComponent(input.invoiceId)}`, enforceCooldown: false,
+    }, tx);
+    if (!activation.activationRequired || !activation.activationUrl) throw new SeasonalError("활성화 링크를 발급할 수 없는 보호자 계정입니다.", 409, "ACCOUNT_ALREADY_ACTIVE");
+    const reservation = await reserveSeasonalParentSms(tx, {
+      trigger, applicationId: input.applicationId, itemId: input.itemId, recipientPhone: input.recipientPhone,
+      recipientUserId: input.parentId, deliveryRunId: input.deliveryRunId,
+    });
+    if (reservation.status !== "PENDING" || !reservation.deliveryId) throw new SeasonalError("활성화 안내 발송을 예약하지 못했습니다.", 503, "ACTIVATION_REISSUE_REQUIRED");
+    return { activationUrl: activation.activationUrl, deliveryId: reservation.deliveryId };
+  });
+  const notification = await dispatchSeasonalParentSms({
+    deliveryId: prepared.deliveryId, trigger, recipientPhone: input.recipientPhone,
+    variables: { ...input.variables, activationUrl: publicUrl(prepared.activationUrl) },
+  });
+  return { notification, activationUrl: prepared.activationUrl, activationRequired: true as const };
+}
+
+async function retrySeasonalNotification(params: { id: string; scope: string; trigger: SeasonalSmsTrigger; idempotencyKey?: string }) {
+  const deliveryRunId = params.idempotencyKey || randomUUID();
+  if (params.scope === "application") {
+    const allowed = new Set<SeasonalSmsTrigger>([
+      SEASONAL_SMS_TRIGGERS.received, SEASONAL_SMS_TRIGGERS.approved, SEASONAL_SMS_TRIGGERS.waitlisted,
+      SEASONAL_SMS_TRIGGERS.rejected, SEASONAL_SMS_TRIGGERS.cancelled,
+    ]);
+    if (!allowed.has(params.trigger)) throw new SeasonalError("신청서에서 재발송할 수 없는 알림입니다.", 400, "INVALID_NOTIFICATION_TRIGGER");
+    const application = await prisma.specialProgramApplication.findUnique({
+      where: { id: params.id },
+      include: { season: { select: { title: true } }, items: { include: { offering: { select: { title: true } } } } },
+    });
+    if (application) {
+      const expectedTrigger: SeasonalSmsTrigger | undefined = application.status === "PENDING" ? SEASONAL_SMS_TRIGGERS.received
+        : application.status === "PARTIALLY_WAITLISTED" ? SEASONAL_SMS_TRIGGERS.waitlisted
+        : ITEM_NOTIFICATION_TRIGGER[application.status];
+      if (params.trigger !== SEASONAL_SMS_TRIGGERS.received && params.trigger !== expectedTrigger) {
+        throw new SeasonalError("현재 신청 상태와 알림 종류가 일치하지 않습니다.", 409, "NOTIFICATION_STATE_MISMATCH");
+      }
+    }
+    if (!application) throw new SeasonalError("신청서를 찾을 수 없습니다.", 404, "APPLICATION_NOT_FOUND");
+    return manualRetrySeasonalSms({
+      trigger: params.trigger, applicationId: application.id, recipientPhone: application.parentPhone,
+      variables: { childName: application.childName, parentName: application.parentName, seasonTitle: application.season.title,
+        offeringTitle: application.items.map((item) => item.offering.title).join(", "), waitlistOrder: "" },
+      deliveryRunId,
+    });
+  }
+  const item = await prisma.specialProgramApplicationItem.findUnique({
+    where: { id: params.id }, include: { application: true, offering: { include: { season: true } } },
+  });
+  if (!item) throw new SeasonalError("신청 항목을 찾을 수 없습니다.", 404, "APPLICATION_ITEM_NOT_FOUND");
+  if (params.scope === "item") {
+    if (ITEM_NOTIFICATION_TRIGGER[item.status] !== params.trigger) throw new SeasonalError("현재 신청 항목 상태와 알림 종류가 일치하지 않습니다.", 409, "NOTIFICATION_STATE_MISMATCH");
+    if (!Object.values(ITEM_NOTIFICATION_TRIGGER).includes(params.trigger)) throw new SeasonalError("신청 항목에서 재발송할 수 없는 알림입니다.", 400, "INVALID_NOTIFICATION_TRIGGER");
+    return manualRetrySeasonalSms({
+      trigger: params.trigger, applicationId: item.applicationId, itemId: item.id, recipientPhone: item.application.parentPhone,
+      variables: { childName: item.application.childName, parentName: item.application.parentName, seasonTitle: item.offering.season.title,
+        offeringTitle: item.offering.title, waitlistOrder: item.waitlistOrder ? String(item.waitlistOrder) : "" }, deliveryRunId,
+    });
+  }
+  if (params.scope !== "invoice") throw new SeasonalError("알림 재발송 범위가 올바르지 않습니다.", 400, "INVALID_NOTIFICATION_SCOPE");
+  if (!item.paymentId) throw new SeasonalError("청구서를 찾을 수 없습니다.", 404, "INVOICE_NOT_FOUND");
+  const validationInvoice = await prisma.paymentInvoice.findUnique({ where: { paymentId: item.paymentId } });
+  if (!validationInvoice) throw new SeasonalError("청구서를 찾을 수 없습니다.", 404, "INVOICE_NOT_FOUND");
+  const invoiceParent = validationInvoice.parentId
+    ? await prisma.user.findUnique({ where: { id: validationInvoice.parentId }, select: { email: true } })
+    : null;
+  const activationRequired = Boolean(invoiceParent && /^(parent_[0-9]+@stiz\.local|[0-9]+@import\.local)$/i.test(invoiceParent.email));
+  const expectedInvoiceTrigger = activationRequired ? SEASONAL_SMS_TRIGGERS.accountActivation : SEASONAL_SMS_TRIGGERS.paymentRequest;
+  if (params.trigger !== expectedInvoiceTrigger) throw new SeasonalError("현재 보호자 계정 상태와 알림 종류가 일치하지 않습니다.", 409, "NOTIFICATION_STATE_MISMATCH");
+  if (params.trigger === SEASONAL_SMS_TRIGGERS.accountActivation) {
+    if (!validationInvoice.parentId) throw new SeasonalError("보호자 계정을 찾을 수 없습니다.", 404, "PARENT_NOT_FOUND");
+    const retried = await retryActivationSeasonalSms({
+      applicationId: item.applicationId, itemId: item.id, invoiceId: validationInvoice.id,
+      parentId: validationInvoice.parentId, recipientPhone: item.application.parentPhone,
+      variables: { childName: item.application.childName, parentName: item.application.parentName,
+        seasonTitle: item.offering.season.title, offeringTitle: item.offering.title }, deliveryRunId,
+    });
+    return retried.notification;
+  }
+  if (params.trigger !== SEASONAL_SMS_TRIGGERS.paymentRequest || !item.paymentId) throw new SeasonalError("청구서에서 재발송할 수 없는 알림입니다.", 400, "INVALID_NOTIFICATION_TRIGGER");
+  const invoice = await prisma.paymentInvoice.findUnique({ where: { paymentId: item.paymentId } });
+  if (!invoice) throw new SeasonalError("청구서를 찾을 수 없습니다.", 404, "INVOICE_NOT_FOUND");
+  return manualRetrySeasonalSms({
+    trigger: params.trigger, applicationId: item.applicationId, itemId: item.id, recipientPhone: item.application.parentPhone,
+    recipientUserId: invoice.parentId,
+    variables: { childName: item.application.childName, parentName: item.application.parentName, seasonTitle: item.offering.season.title,
+      offeringTitle: item.offering.title, paymentUrl: publicUrl(`/payments/${encodeURIComponent(invoice.id)}`), amount: String(invoice.amount),
+      dueDate: invoice.dueDate.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" }) }, deliveryRunId,
+  });
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     const actor = await admin();
@@ -302,11 +582,18 @@ export async function PATCH(request: NextRequest) {
       const results: BulkItemResult[] = [];
       for (const itemId of itemIds) {
         try {
-          const item = await prisma.$transaction(
+          const changed = await prisma.$transaction(
             (tx) => updateSpecialProgramItemStatus(tx, { itemId, status, actorId: actor.appUserId }),
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           );
-          results.push({ itemId, ok: true, status: item.status, applicationId: item.applicationId });
+          const notification = await notifyItemStatus(changed);
+          results.push({
+            itemId,
+            ok: true,
+            status: changed.item.status,
+            applicationId: changed.item.applicationId,
+            ...(notification ? { notification, notificationWarning: notificationNeedsWarning(notification) } : {}),
+          });
         } catch (error) {
           results.push(bulkErrorResult(itemId, error));
         }
@@ -316,6 +603,7 @@ export async function PATCH(request: NextRequest) {
         total: results.length,
         succeeded: results.filter((result) => result.ok).length,
         failed: results.filter((result) => !result.ok).length,
+        notificationsFailed: results.filter((result) => result.notificationWarning).length,
       };
       return NextResponse.json({ success: summary.failed === 0, summary, results });
     }
@@ -333,8 +621,9 @@ export async function PATCH(request: NextRequest) {
             itemId,
             ok: true,
             invoiceId: result.invoiceId,
-            activationUrl: result.activationUrl,
             activationRequired: result.activationRequired,
+            notification: result.notification,
+            notificationWarning: result.notificationWarning,
           });
         } catch (error) {
           results.push(bulkErrorResult(itemId, error));
@@ -345,6 +634,7 @@ export async function PATCH(request: NextRequest) {
         total: results.length,
         succeeded: results.filter((result) => result.ok).length,
         failed: results.filter((result) => !result.ok).length,
+        notificationsFailed: results.filter((result) => result.notificationWarning).length,
       };
       return NextResponse.json({ success: summary.failed === 0, summary, results });
     }
@@ -420,6 +710,22 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ offering });
     }
 
+    if (body.resource === "notificationRetry") {
+      const scope = cleanText(data.scope, 30);
+      const trigger = cleanText(data.trigger, 100);
+      if (!scope || !trigger || !Object.values(SEASONAL_SMS_TRIGGERS).includes(trigger as SeasonalSmsTrigger)) {
+        throw new SeasonalError("재발송할 알림 정보를 확인해 주세요.", 400, "INVALID_NOTIFICATION_RETRY");
+      }
+      const result = await retrySeasonalNotification({
+        id, scope, trigger: trigger as SeasonalSmsTrigger, idempotencyKey: cleanText(data.idempotencyKey, 100),
+      });
+      return NextResponse.json({
+        success: true,
+        notification: notificationSummary(result, trigger as SeasonalSmsTrigger),
+        ...(notificationNeedsWarning(result) ? { notificationWarning: true } : {}),
+      });
+    }
+
     if (body.resource === "applicationReview") {
       if (data.action !== "CLEAR") throw new SeasonalError("검토 완료 동작을 확인해 주세요.");
       const reviewNote = cleanText(data.reviewNote, 1000);
@@ -454,22 +760,44 @@ export async function PATCH(request: NextRequest) {
       if (data.status === "APPROVED" && (before.requiresReview || before.reviewReasons.length > 0)) {
         throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
       }
-      const application = await prisma.$transaction(async (tx) => {
+      const applicationChange = await prisma.$transaction(async (tx) => {
         if (data.status === "APPROVED") await ensureApplicationCapacity(tx, id);
-        return tx.specialProgramApplication.update({ where: { id }, data: { status: data.status, processedAt: new Date(), processedByUserId: actor.appUserId, processedNote: cleanText(data.processedNote, 1000) } });
+        const updated = await tx.specialProgramApplication.update({ where: { id }, data: { status: data.status, processedAt: new Date(), processedByUserId: actor.appUserId, processedNote: cleanText(data.processedNote, 1000) } });
+        if (before.status !== updated.status) {
+          await tx.specialProgramAuditLog.create({ data: { seasonId: updated.seasonId, applicationId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "APPLICATION_STATUS_UPDATED", beforeJSON: before, afterJSON: updated } });
+        }
+        const trigger = before.status === updated.status ? null : ITEM_NOTIFICATION_TRIGGER[updated.status];
+        const reservation = trigger ? await reserveSeasonalParentSms(tx, {
+          trigger,
+          applicationId: updated.id,
+          recipientPhone: updated.parentPhone,
+        }) : null;
+        return { updated, trigger, reservation };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-      await prisma.specialProgramAuditLog.create({ data: { seasonId: application.seasonId, applicationId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "APPLICATION_STATUS_UPDATED", beforeJSON: before, afterJSON: application } });
-      return NextResponse.json({ application });
+      const application = applicationChange.updated;
+      const notification = applicationChange.trigger && applicationChange.reservation?.status === "PENDING" && applicationChange.reservation.deliveryId
+        ? await dispatchSeasonalParentSms({
+        deliveryId: applicationChange.reservation.deliveryId,
+        trigger: applicationChange.trigger,
+        recipientPhone: application.parentPhone,
+        variables: { childName: application.childName, parentName: application.parentName, seasonTitle: "", offeringTitle: "", waitlistOrder: "" },
+      }) : applicationChange.reservation;
+      return NextResponse.json({ application, notification, ...(notificationNeedsWarning(notification) ? { notificationWarning: true } : {}) });
     }
 
     if (body.resource === "item") {
       const status = cleanText(data.status, 30);
       if (!status || !ITEM_STATUSES.has(status)) throw new SeasonalError("신청 항목 상태가 올바르지 않습니다.");
-      const item = await prisma.$transaction(
+      const changed = await prisma.$transaction(
         (tx) => updateSpecialProgramItemStatus(tx, { itemId: id, status, actorId: actor.appUserId, enrollmentId: data.enrollmentId, paymentId: data.paymentId }),
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
-      return NextResponse.json({ item });
+      const notification = await notifyItemStatus(changed);
+      return NextResponse.json({
+        item: changed.item,
+        notification,
+        ...(notificationNeedsWarning(notification) ? { notificationWarning: true } : {}),
+      });
     }
 
     if (body.resource === "conversion") {
@@ -479,10 +807,14 @@ export async function PATCH(request: NextRequest) {
 
     if (body.resource === "accountActivation") {
       if (data.action !== "reissue") throw new SeasonalError("지원하지 않는 계정 활성화 작업입니다.");
-      const activation = await issueAccountClaimForItem(id);
-      if (!activation.activationRequired || !activation.activationUrl) {
-        throw new SeasonalError("이미 로그인 가능한 보호자 계정입니다.", 409, "ACCOUNT_ALREADY_ACTIVE");
-      }
+      const activationTarget = await accountClaimTargetForItem(id);
+      const prepared = await retryActivationSeasonalSms({
+        applicationId: activationTarget.applicationId, itemId: id, invoiceId: activationTarget.invoiceId,
+        parentId: activationTarget.parentId, recipientPhone: activationTarget.parentPhone,
+        variables: { childName: activationTarget.childName, parentName: activationTarget.parentName,
+          seasonTitle: activationTarget.seasonTitle, offeringTitle: activationTarget.offeringTitle },
+        deliveryRunId: randomUUID(),
+      });
       const auditTarget = await prisma.specialProgramApplicationItem.findUnique({
         where: { id },
         select: { applicationId: true, offeringId: true, application: { select: { seasonId: true } } },
@@ -501,7 +833,8 @@ export async function PATCH(request: NextRequest) {
           },
         });
       }
-      return NextResponse.json({ success: true, ...activation });
+      return NextResponse.json({ success: true, activationRequired: true, activationUrl: prepared.activationUrl,
+        notification: prepared.notification, ...(notificationNeedsWarning(prepared.notification) ? { notificationWarning: true } : {}) });
     }
     throw new SeasonalError("지원하지 않는 수정 대상입니다.");
   } catch (error) { return respondError(error); }
@@ -657,17 +990,26 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
       },
     });
 
-    return { itemId: updated.id, studentId, enrollmentId, paymentId, parentId, applicationId: item.applicationId };
+    return {
+      itemId: updated.id,
+      studentId,
+      enrollmentId,
+      paymentId,
+      parentId,
+      applicationId: item.applicationId,
+      parentPhone: item.application.parentPhone,
+      parentName: item.application.parentName,
+      childName: item.application.childName,
+      seasonTitle: item.offering.season.title,
+      offeringTitle: item.offering.title,
+      amount: item.priceSnapshot,
+    };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   let invoice: Awaited<ReturnType<typeof ensureInvoiceForPayment>>;
   try {
     invoice = await ensureInvoiceForPayment(converted.paymentId);
     if (!invoice) throw new Error("INVOICE_NOT_CREATED");
-    await prisma.specialProgramApplicationItem.update({
-      where: { id: converted.itemId },
-      data: { conversionStatus: "COMPLETED", conversionError: null },
-    });
   } catch (error) {
     await prisma.specialProgramApplicationItem.update({
       where: { id: converted.itemId },
@@ -686,39 +1028,87 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
     throw new SeasonalError("수강 등록과 결제 정보는 저장됐지만 청구서 생성에 실패했습니다. 다시 시도해 주세요.", 503, "INVOICE_RETRY_REQUIRED");
   }
 
-  const activation = await issueParentAccountClaim({
-    parentId: converted.parentId,
-    applicationId: converted.applicationId,
-    invoiceId: invoice.id,
-    redirectPath: `/payments/${encodeURIComponent(invoice.id)}`,
+  const recoveryParent = await prisma.user.findUnique({ where: { id: converted.parentId }, select: { email: true } });
+  const activationRequiredOnRecovery = Boolean(recoveryParent && /^(parent_[0-9]+@stiz\.local|[0-9]+@import\.local)$/i.test(recoveryParent.email));
+  const prepared = await prisma.$transaction(async (tx) => {
+    const activation = await issueParentAccountClaim({
+      parentId: converted.parentId, applicationId: converted.applicationId, invoiceId: invoice.id,
+      redirectPath: `/payments/${encodeURIComponent(invoice.id)}`,
+    }, tx);
+    if (activation.activationRequired && !activation.activationUrl) {
+      throw new SeasonalError("계정 활성화 링크를 준비하지 못했습니다. 다시 시도해 주세요.", 503, "ACTIVATION_REISSUE_REQUIRED");
+    }
+    const trigger = activation.activationRequired ? SEASONAL_SMS_TRIGGERS.accountActivation : SEASONAL_SMS_TRIGGERS.paymentRequest;
+    const reservation = await reserveSeasonalParentSms(tx, {
+      trigger, applicationId: converted.applicationId, itemId: converted.itemId,
+      recipientPhone: converted.parentPhone, recipientUserId: converted.parentId,
+    });
+    if (reservation.status !== "PENDING" || !reservation.deliveryId) {
+      throw new SeasonalError("문자 발송을 예약하지 못했습니다. 알림 재발송이 필요합니다.", 503, "NOTIFICATION_RESERVATION_FAILED");
+    }
+    await tx.specialProgramApplicationItem.update({
+      where: { id: converted.itemId }, data: { conversionStatus: "COMPLETED", conversionError: null },
+    });
+    return { activation, trigger, reservation };
+  }).catch(async (error) => {
+    if (!(error instanceof SeasonalError) || error.code !== "NOTIFICATION_RESERVATION_FAILED") throw error;
+    await prisma.specialProgramApplicationItem.update({
+      where: { id: converted.itemId }, data: { conversionStatus: "COMPLETED", conversionError: "NOTIFICATION_RETRY_REQUIRED" },
+    });
+    return null;
   });
+  if (!prepared) {
+    return {
+      itemId: converted.itemId, studentId: converted.studentId, enrollmentId: converted.enrollmentId,
+      paymentId: converted.paymentId, invoiceId: invoice.id, activationRequired: activationRequiredOnRecovery,
+      notification: { ok: false, status: "FAILED", deliveryId: null, errorCode: "NOTIFICATION_RESERVATION_FAILED",
+        ...(activationRequiredOnRecovery ? { requiresReissue: true } : {}) },
+      notificationWarning: true,
+    };
+  }
+  const { activation, trigger, reservation } = prepared;
+  const notification = reservation.status === "PENDING" && reservation.deliveryId ? await dispatchSeasonalParentSms({
+    deliveryId: reservation.deliveryId,
+    trigger,
+    recipientPhone: converted.parentPhone,
+    variables: {
+      childName: converted.childName,
+      parentName: converted.parentName,
+      seasonTitle: converted.seasonTitle,
+      offeringTitle: converted.offeringTitle,
+      activationUrl: activation.activationRequired ? publicUrl(activation.activationUrl!) : "",
+      paymentUrl: activation.activationRequired ? "" : publicUrl(`/payments/${encodeURIComponent(invoice.id)}`),
+      amount: String(converted.amount),
+      dueDate: new Date(String(invoice.dueDate)).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" }),
+    },
+  }) : reservation;
   return {
     itemId: converted.itemId,
     studentId: converted.studentId,
     enrollmentId: converted.enrollmentId,
     paymentId: converted.paymentId,
     invoiceId: invoice.id,
-    ...activation,
+    activationRequired: activation.activationRequired,
+    notification,
+    ...(notificationNeedsWarning(notification) ? { notificationWarning: true as const } : {}),
   };
 }
 
-async function issueAccountClaimForItem(itemId: string) {
-  const rows = await prisma.$queryRawUnsafe<Array<{ parentId: string; applicationId: string; invoiceId: string }>>(
-    `SELECT i."parentId", item."applicationId", i.id AS "invoiceId"
+async function accountClaimTargetForItem(itemId: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ parentId: string; applicationId: string; invoiceId: string; parentPhone: string; parentName: string; childName: string; seasonTitle: string; offeringTitle: string }>>(
+    `SELECT i."parentId", item."applicationId", i.id AS "invoiceId",
+            app."parentPhone", app."parentName", app."childName", season.title AS "seasonTitle", offering.title AS "offeringTitle"
        FROM "SpecialProgramApplicationItem" item
        JOIN "PaymentInvoice" i ON i."paymentId" = item."paymentId"
+       JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+       JOIN "SpecialProgramOffering" offering ON offering.id = item."offeringId"
+       JOIN "SpecialProgramSeason" season ON season.id = offering."seasonId"
       WHERE item.id = $1 LIMIT 1`,
     itemId,
   );
   const target = rows[0];
   if (!target) throw new SeasonalError("계정 활성화 대상 청구서를 찾을 수 없습니다.", 404, "ACCOUNT_CLAIM_TARGET_NOT_FOUND");
-  return issueParentAccountClaim({
-    parentId: target.parentId,
-    applicationId: target.applicationId,
-    invoiceId: target.invoiceId,
-    redirectPath: `/payments/${encodeURIComponent(target.invoiceId)}`,
-    enforceCooldown: true,
-  });
+  return target;
 }
 
 export async function DELETE(request: NextRequest) {

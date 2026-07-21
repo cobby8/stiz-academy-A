@@ -1,4 +1,10 @@
 import { Prisma } from "@prisma/client";
+import {
+  SEASONAL_SMS_TRIGGERS,
+  dispatchSeasonalParentSms,
+  reserveSeasonalParentSms,
+  type SeasonalSmsDeliveryResult,
+} from "@/lib/seasonal/notifications";
 import { prisma } from "@/lib/prisma";
 import { SeasonalError, type SeasonalApplicationInput } from "./contracts";
 import { decideApplicantType, planApplicationItems, totalSnapshot, weekdayInSeoul } from "./planning";
@@ -173,7 +179,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
   const applicantDecision = decideApplicantType(input.applicantType, await hasMatchingExistingStudent(input));
 
   try {
-    const created = await prisma.$transaction(async (tx) => {
+    const committed = await prisma.$transaction(async (tx) => {
       const ids = input.items.map((item) => item.offeringId);
 
       // 같은 상품을 동시에 신청할 때 정원 계산이 엇갈리지 않도록 행 잠금을 잡는다.
@@ -293,9 +299,36 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       await tx.specialProgramAuditLog.create({
         data: { seasonId: season.id, applicationId: application.id, actorType: "PUBLIC", action: "APPLICATION_CREATED", afterJSON: { status, totalPriceSnapshot } },
       });
-      return application;
+      const reservation = await reserveSeasonalParentSms(tx, {
+        trigger: SEASONAL_SMS_TRIGGERS.received,
+        applicationId: application.id,
+        recipientPhone: input.parent.phone,
+      });
+      return { application, reservation };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    return applicationResponse(created, false);
+    const created = committed.application;
+    const response = applicationResponse(created, false);
+    const notification: SeasonalSmsDeliveryResult = committed.reservation.status === "PENDING" && committed.reservation.deliveryId
+      ? await dispatchSeasonalParentSms({
+        deliveryId: committed.reservation.deliveryId,
+        trigger: SEASONAL_SMS_TRIGGERS.received,
+        recipientPhone: input.parent.phone,
+        variables: {
+        childName: input.child.name,
+        parentName: input.parent.name,
+        seasonTitle: season.title,
+        offeringTitle: created.items.map((item) => item.titleSnapshot).join(", "),
+        waitlistOrder: created.items.filter((item) => item.waitlistOrder).map((item) => String(item.waitlistOrder)).join(", "),
+        },
+      })
+      : committed.reservation as SeasonalSmsDeliveryResult;
+    return {
+      ...response,
+      notification,
+      ...(notification.status === "FAILED" || notification.errorCode === "TEMPLATE_DISABLED_OR_MISSING"
+        ? { notificationWarning: true as const }
+        : {}),
+    };
   } catch (error) {
     if (error instanceof SeasonalError) throw error;
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

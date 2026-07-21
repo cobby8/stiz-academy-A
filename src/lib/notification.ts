@@ -5,6 +5,9 @@
  * public.ts (비로그인 신청)에서도 관리자 알림을 보낼 수 있도록.
  */
 
+import { createHmac } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendPushToUser, sendPushToAllParents } from "@/lib/pushNotification";
 import { sendSmsDetailed, type SmsSendResult } from "@/lib/sms";
@@ -111,6 +114,159 @@ export type TrackedSmsInput = SmsDeliveryOptions;
 
 export async function sendTrackedSms(input: TrackedSmsInput): Promise<SmsSendResult> {
     return sendSmsForNotification(input);
+}
+
+export type FailClosedSmsDeliveryResult = {
+    ok: boolean;
+    status: "SENT" | "FAILED" | "SKIPPED";
+    deliveryId: string | null;
+    errorCode?: string;
+};
+
+export type ReservedSmsDeliveryResult = {
+    ok: boolean;
+    status: "PENDING" | "FAILED" | "SKIPPED";
+    deliveryId: string | null;
+    errorCode?: string;
+};
+
+export type SmsDeliveryLeaseState = "PENDING" | "SENDING" | "FAILED_DELIVERY_UNCERTAIN" | "TERMINAL";
+
+export function classifySmsDeliveryLease(input: { status: string; lockedAt?: Date | string | null }, now = new Date()): SmsDeliveryLeaseState {
+    if (input.status === "PENDING") return "PENDING";
+    if (input.status !== "SENDING") return "TERMINAL";
+    if (!input.lockedAt) return "FAILED_DELIVERY_UNCERTAIN";
+    return now.getTime() - new Date(input.lockedAt).getTime() >= 2 * 60_000
+        ? "FAILED_DELIVERY_UNCERTAIN"
+        : "SENDING";
+}
+
+export type SmsLedgerDb = Pick<Prisma.TransactionClient, "$queryRawUnsafe" | "$executeRawUnsafe">;
+
+function notificationPrivacySecret() {
+    const value = process.env.NOTIFICATION_PRIVACY_SECRET || process.env.PARENT_ACCOUNT_CLAIM_SECRET || process.env.INVITE_OTP_SECRET;
+    if (value) return value;
+    if (process.env.NODE_ENV === "production") throw new Error("NOTIFICATION_PRIVACY_SECRET_MISSING");
+    return "development-only-notification-privacy-secret";
+}
+
+function privateRecipientHash(phone: string) {
+    return createHmac("sha256", notificationPrivacySecret()).update(normalizeSmsPhone(phone)).digest("hex");
+}
+
+function safeSmsErrorCode(result: SmsSendResult) {
+    if (result.ok) return undefined;
+    const reason = result.reason || "SMS_FAILED";
+    if (reason.includes("environment variables")) return "SMS_NOT_CONFIGURED";
+    if (reason.includes("timed out")) return "SMS_TIMEOUT";
+    return "SMS_PROVIDER_FAILED";
+}
+
+export async function expireStaleSmsDeliveries(db: SmsLedgerDb = prisma): Promise<void> {
+    await db.$executeRawUnsafe(
+        `UPDATE "NotificationDelivery" SET status = 'FAILED', "failedAt" = NOW(), "lockedAt" = NULL,
+                "lockToken" = NULL, "errorCode" = CASE WHEN status = 'SENDING' THEN 'FAILED_DELIVERY_UNCERTAIN' ELSE 'RESERVATION_EXPIRED' END,
+                "updatedAt" = NOW()
+          WHERE channel = 'SMS' AND ((status = 'SENDING' AND "lockedAt" < NOW() - INTERVAL '2 minutes')
+             OR (status = 'PENDING' AND "createdAt" < NOW() - INTERVAL '15 minutes'))`,
+    );
+}
+
+export async function reserveFailClosedSmsDelivery(
+    db: SmsLedgerDb,
+    input: Omit<TrackedSmsInput, "body">,
+): Promise<ReservedSmsDeliveryResult> {
+    const recipientNo = normalizeSmsPhone(input.recipientPhone);
+    if (recipientNo.length < 10 || recipientNo.length > 11) {
+        return { ok: false, status: "FAILED", deliveryId: null, errorCode: "INVALID_RECIPIENT" };
+    }
+    let recipientHash: string;
+    try {
+        recipientHash = privateRecipientHash(recipientNo);
+    } catch {
+        return { ok: false, status: "FAILED", deliveryId: null, errorCode: "PRIVACY_SECRET_MISSING" };
+    }
+    const scope = input.deliveryRunId ? `${input.eventId || "event"}:${input.deliveryRunId}` : input.eventId;
+    if (!scope) return { ok: false, status: "FAILED", deliveryId: null, errorCode: "EVENT_ID_REQUIRED" };
+    const dedupeKey = ["sms-private", input.eventType, scope, input.recipientRole, input.trigger || "fallback", recipientHash].join(":");
+    try {
+        await expireStaleSmsDeliveries(db);
+        const rows = await db.$queryRawUnsafe<Array<{ id: string }>>(
+            `INSERT INTO "NotificationDelivery" (
+                id, "eventType", "recipientUserId", "recipientPhone", channel, "dedupeKey", status,
+                "attemptCount", "payloadJSON", "nextAttemptAt", "createdAt", "updatedAt"
+             ) VALUES (gen_random_uuid()::text, $1, $2, NULL, 'SMS', $3, 'PENDING', 0, $4::jsonb, NOW(), NOW(), NOW())
+             ON CONFLICT ("dedupeKey") DO NOTHING RETURNING id`,
+            input.eventType,
+            input.recipientUserId ?? null,
+            dedupeKey,
+            JSON.stringify({ trigger: input.trigger ?? null, recipientRole: input.recipientRole, eventId: input.eventId, deliveryRunId: input.deliveryRunId ?? null, recipientHash }),
+        );
+        const deliveryId = rows[0]?.id ?? null;
+        return deliveryId
+            ? { ok: true, status: "PENDING", deliveryId }
+            : { ok: true, status: "SKIPPED", deliveryId: null, errorCode: "DUPLICATE_SKIPPED" };
+    } catch {
+        return { ok: false, status: "FAILED", deliveryId: null, errorCode: "DELIVERY_LEDGER_UNAVAILABLE" };
+    }
+}
+
+export async function dispatchReservedSmsDelivery(input: {
+    deliveryId: string;
+    recipientPhone: string;
+    body: string;
+}): Promise<FailClosedSmsDeliveryResult> {
+    const recipientNo = normalizeSmsPhone(input.recipientPhone);
+    if (recipientNo.length < 10 || recipientNo.length > 11) return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "INVALID_RECIPIENT" };
+    const lockToken = randomUUID();
+    const claimed = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        `UPDATE "NotificationDelivery" SET status = 'SENDING', "lockedAt" = NOW(), "lockToken" = $2,
+                "attemptCount" = "attemptCount" + 1, "updatedAt" = NOW()
+          WHERE id = $1 AND channel = 'SMS' AND status = 'PENDING' RETURNING id`,
+        input.deliveryId, lockToken,
+    ).catch(() => []);
+    if (!claimed[0]) return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "DELIVERY_NOT_DISPATCHABLE" };
+
+    const result = await sendSmsDetailed(recipientNo, input.body);
+    const errorCode = safeSmsErrorCode(result);
+    try {
+        const finalized = await prisma.$executeRawUnsafe(
+            `UPDATE "NotificationDelivery" SET status = $3, "sentAt" = CASE WHEN $3 = 'SENT' THEN NOW() ELSE NULL END,
+                    "failedAt" = CASE WHEN $3 = 'FAILED' THEN NOW() ELSE NULL END, "errorCode" = $4,
+                    "lockedAt" = NULL, "lockToken" = NULL, "nextAttemptAt" = NULL, "updatedAt" = NOW()
+              WHERE id = $1 AND "lockToken" = $2 AND status = 'SENDING'`,
+            input.deliveryId, lockToken, result.ok ? "SENT" : "FAILED", errorCode ?? null,
+        );
+        if (finalized !== 1) return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "FAILED_DELIVERY_UNCERTAIN" };
+    } catch {
+        return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "FAILED_DELIVERY_UNCERTAIN" };
+    }
+    return result.ok ? { ok: true, status: "SENT", deliveryId: input.deliveryId } : { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode };
+}
+
+export async function finalizeReservedSmsWithoutDispatch(input: {
+    deliveryId: string;
+    status: "FAILED" | "SKIPPED";
+    errorCode: string;
+}): Promise<void> {
+    await prisma.$executeRawUnsafe(
+        `UPDATE "NotificationDelivery" SET status = $2, "failedAt" = CASE WHEN $2 = 'FAILED' THEN NOW() ELSE NULL END,
+                "errorCode" = $3, "nextAttemptAt" = NULL, "updatedAt" = NOW()
+          WHERE id = $1 AND channel = 'SMS' AND status = 'PENDING'`,
+        input.deliveryId, input.status, input.errorCode,
+    );
+}
+
+/**
+ * Privacy-preserving tracked SMS for operational flows.
+ * The provider is never called unless the unique delivery ledger row was claimed.
+ * Message text, URLs and the raw phone number stay in memory only.
+ */
+export async function sendFailClosedTrackedSms(input: TrackedSmsInput): Promise<FailClosedSmsDeliveryResult> {
+    const { body, ...reservationInput } = input;
+    const reserved = await reserveFailClosedSmsDelivery(prisma, reservationInput);
+    if (reserved.status !== "PENDING" || !reserved.deliveryId) return reserved as FailClosedSmsDeliveryResult;
+    return dispatchReservedSmsDelivery({ deliveryId: reserved.deliveryId, recipientPhone: input.recipientPhone, body });
 }
 
 // ── 슬롯 → 담당 코치 전화번호 조회 ─────────────────────────────────────────
@@ -335,7 +491,7 @@ export async function notifyParentsOfStudents(
     try {
         if (studentIds.length === 0) return;
         const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(",");
-        const parents = await prisma.$queryRawUnsafe<any[]>(
+        const parents = await prisma.$queryRawUnsafe<Array<{ parentId?: string; parentid?: string }>>(
             `SELECT DISTINCT "parentId" FROM "Student" WHERE id IN (${placeholders})`,
             ...studentIds,
         );

@@ -1,21 +1,21 @@
 # STIZ Codex Scratchpad
 
 ## 현재 작업
-- 작업명: 체험신청 목록 컬럼 재정렬 및 번개 퀵액션 전환
+- 작업명: 체험신청 테이블 폭 축소 및 퀵액션 메뉴 잘림 수정
 - 상태: 구현 및 검증 완료, 커밋 준비
 - 기준일: 2026-07-22
 
 ## 진행 현황표
 | 항목 | 상태 | 메모 |
 | --- | --- | --- |
-| 컬럼 정리 | 완료 | 상태/신청일/체험일/수업/수강생이름/학교/학년/상태변경/액션만 유지 |
-| 상태변경 | 완료 | 기존 쌤알림 자리에서 상태를 변경하고 체험완료 시 수강신청 안내 버튼 노출 |
-| 번개 액션 | 완료 | 액션 버튼을 번개 아이콘으로 바꾸고 전화/일정/쌤알림/연락/메모를 세로 메뉴로 표시 |
-| 검증 | 완료 | TypeScript, ESLint, 신청 관리 UX 테스트, diff check 통과 |
+| 테이블 폭 | 완료 | PC에서는 부모 폭에 맞추고 모바일에서만 최소 폭으로 가로 스크롤 유지 |
+| 컬럼 여백 | 완료 | 수업/이름/학교/학년 셀 패딩과 컬럼 비율을 줄여 빈 공간 축소 |
+| 번개 액션 | 완료 | 스크롤 박스에 잘리지 않도록 화면 기준 fixed 플로팅 메뉴로 전환 |
+| 검증 | 완료 | TypeScript, ESLint, 신청 관리 UX 테스트 통과 |
 
 ## 구현 기록
-- `src/app/admin/trial/TrialCrmClient.tsx`: 체험신청 목록 컬럼을 재정렬하고 상태변경 셀/번개 퀵액션 메뉴로 정리.
-- `tests/application-management-ux.test.mjs`: 새 컬럼 순서, 쌤알림 컬럼 제거, 상태변경 셀, 번개 액션 회귀 테스트 갱신.
+- `src/app/admin/trial/TrialCrmClient.tsx`: 체험신청 테이블 최소 폭과 컬럼 비율을 줄이고 번개 메뉴를 fixed 플로팅으로 변경.
+- `tests/application-management-ux.test.mjs`: 축소된 테이블 폭과 fixed 퀵액션 메뉴 회귀 테스트 갱신.
 
 ## 테스트 결과
 - 1차 `npx tsc --noEmit`: 통과
@@ -24,9 +24,13 @@
 - 최종 `npx tsc --noEmit`: 통과
 - 최종 `node --test tests\application-management-ux.test.mjs`: 10개 통과
 - 최종 `npx eslint src\app\admin\trial\TrialCrmClient.tsx tests\application-management-ux.test.mjs`: 통과
+- 추가 `npx tsc --noEmit`: 통과
+- 추가 `node --test tests\application-management-ux.test.mjs`: 10개 통과
+- 추가 `npx eslint src\app\admin\trial\TrialCrmClient.tsx tests\application-management-ux.test.mjs`: 통과
 - `git diff --check`: 통과
 
 ## 작업 로그
+- 2026-07-22: 체험신청 테이블의 PC 강제 가로폭을 줄이고 번개 퀵액션 메뉴가 스크롤 박스에 잘리지 않도록 fixed 플로팅으로 변경했다.
 - 2026-07-22: 체험신청 목록을 상태/날짜/수업/학생정보/상태변경/번개액션 구조로 재정렬하고 쌤알림을 액션 메뉴 안으로 이동했다.
 - 2026-07-22: 체험신청 목록에서 신청일/체험일을 상태 왼쪽으로 보내고 체험일 오름차순 정렬과 날짜 필터를 추가했다.
 - 2026-07-22: 체험신청 목록에서 신청일/체험일을 날짜만 표시하고 쌤알림을 별도 컬럼의 발송/완료/재발송 버튼으로 분리했다.
@@ -36,7 +40,6 @@
 - 2026-07-22: 수강신청 카드형 화면의 큰 정보 타일과 버튼을 콤팩트 칩/버튼으로 줄여 한 화면에 더 많은 신청을 볼 수 있게 했다.
 - 2026-07-21: 셔틀 기사 앱에 승객별 탑승/하차/미탑승 즉시 체크를 추가하고 관리자 노선 화면에 운행 상태 배지를 표시했다.
 - 2026-07-21: 셔틀 노선에 담당 기사 배정을 추가하고 관리자 노선 확정 조건과 기사 모바일 운행표 조회를 연결했다.
-- 2026-07-21: 체험신청의 수강생/보호자 연락처가 수강신청서에 자동 채워지도록 childPhone 전달과 보호자 연락처 fallback을 보강했다.
 
 ## PM 체크
 - scratchpad 작업 로그 10건 이내 유지.

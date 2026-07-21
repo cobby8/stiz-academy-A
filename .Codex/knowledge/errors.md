@@ -1,5 +1,11 @@
 # Errors And Traps
 
+## 분기 안에서 이미 좁혀진 타입을 다시 비교하면 TS2367 발생
+- 현상: `variant === "inline"` 분기 안에서 다시 `variant === "menu"`를 비교하자 `This comparison appears to be unintentional` 오류가 발생했다.
+- 원인: TypeScript가 이미 해당 블록의 `variant` 타입을 `"inline"`으로 좁혔기 때문에 `"menu"`와 비교할 수 없다.
+- 해결: inline 분기에서는 메뉴 닫기 조건을 제거하고, menu 분기의 버튼에서만 닫기 처리를 한다.
+- 예방: 버튼 스타일/동작을 variant별로 나눌 때는 각 분기 안에 다른 variant 조건을 다시 넣지 않는다.
+
 ## 미완성 신규 페이지가 전체 타입검사를 막을 수 있음 (2026-07-20)
 - 현상: 결제 화면 변경 파일 대상 검증은 통과했지만 `tsc --noEmit` 전체 실행이 `src/app/seasonal/[slug]/apply/page.tsx`의 `SeasonalApplyClient` 누락으로 실패했다.
 - 원인: 계절특강 관련 파일과 Prisma 스키마 변경이 커밋되지 않은 별도 작업으로 섞여 있고, 일부 컴포넌트가 아직 완성되지 않았다.

@@ -24,7 +24,7 @@ export default function AddStaffModal({
     const [form, setForm] = useState({
         name: "",
         phone: "",
-        role: "INSTRUCTOR" as "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR",
+        role: "INSTRUCTOR" as "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER",
     });
     const [verifyStep, setVerifyStep] = useState<"input" | "sent" | "verified">("input");
     const [verifyCode, setVerifyCode] = useState("");
@@ -166,6 +166,7 @@ export default function AddStaffModal({
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">역할 *</label>
                         <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })} className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500">
                             <option value="INSTRUCTOR">코치/강사</option>
+                            <option value="DRIVER">셔틀 기사</option>
                             <option value="VICE_ADMIN">부원장</option>
                             <option value="ADMIN">원장</option>
                         </select>

@@ -14,7 +14,7 @@ type InvitationRow = {
   token?: string;
   name: string;
   phone: string;
-  role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
+  role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER";
   status: string;
   expiresAt: Date;
   createdAt?: Date;
@@ -57,7 +57,7 @@ function hashesMatch(expected: string, actual: string) {
 
 function invitationStateError(invitation?: InvitationRow) {
   if (!invitation) return "존재하지 않는 초대입니다.";
-  if (invitation.role !== "INSTRUCTOR") return "선생님 전용 초대가 아닙니다.";
+  if (invitation.role !== "INSTRUCTOR" && invitation.role !== "DRIVER") return "스태프 전용 초대가 아닙니다.";
   if (invitation.status === "ACCEPTED") return "이미 수락된 초대입니다.";
   if (invitation.status === "CANCELLED") return "취소된 초대입니다.";
   if (invitation.status === "PROCESSING" || invitation.status === "RECOVERY_REQUIRED") {
@@ -299,7 +299,7 @@ export async function acceptInvitation(token: string, password: string) {
       `UPDATE "StaffInvitation"
        SET status = 'PROCESSING', "processingAttemptId" = $2, "processingStartedAt" = NOW(),
            "otpConsumedAt" = NOW(), "recoveryAuthUserId" = NULL, "recoveryError" = NULL, "updatedAt" = NOW()
-       WHERE token = $1 AND role = 'INSTRUCTOR'::"Role" AND status = 'PENDING' AND "expiresAt" > NOW()
+       WHERE token = $1 AND role IN ('INSTRUCTOR'::"Role", 'DRIVER'::"Role") AND status = 'PENDING' AND "expiresAt" > NOW()
          AND "otpExpiresAt" > NOW() AND "otpVerifiedAt" IS NOT NULL AND "otpConsumedAt" IS NULL
          AND ("lockedAt" IS NULL OR "lockedAt" <= NOW() - INTERVAL '15 minutes')
        RETURNING id, name, phone, role, status, "expiresAt"`,
@@ -323,7 +323,7 @@ export async function acceptInvitation(token: string, password: string) {
       email: staffEmail,
       password,
       email_confirm: true,
-      user_metadata: { name: invitation.name, role: "INSTRUCTOR", invitationAttemptId: attemptId },
+      user_metadata: { name: invitation.name, role: invitation.role, invitationAttemptId: attemptId },
     });
     if (authError || !authData.user) {
       const alreadyExists = authError?.message?.toLowerCase().includes("already") ?? false;
@@ -353,11 +353,12 @@ export async function acceptInvitation(token: string, password: string) {
     await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, 'INSTRUCTOR'::"Role", NOW(), NOW())`,
+         VALUES ($1, $2, $3, $4, $5::"Role", NOW(), NOW())`,
         authUserId,
         staffEmail,
         invitation.name,
         invitation.phone,
+        invitation.role,
       );
       const accepted = await tx.$executeRawUnsafe(
         `UPDATE "StaffInvitation"

@@ -16,7 +16,7 @@ const publicItems = [
 
 const focusableSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function StaffProfileMenu({ staffName }: { staffName: string }) {
+export default function StaffProfileMenu({ staffName, staffRole }: { staffName: string; staffRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" }) {
   const pathname = usePathname();
   const isSessionInProgress = pathname.startsWith("/staff/sessions/");
   const [isOpen, setIsOpen] = useState(false);
@@ -112,7 +112,7 @@ export default function StaffProfileMenu({ staffName }: { staffName: string }) {
       >
         <span className="material-symbols-outlined text-xl text-[var(--brand-accent)]" aria-hidden="true">account_circle</span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-bold text-gray-700 dark:text-gray-200">{staffName} 선생님</span>
+          <span className="block truncate text-sm font-bold text-gray-700 dark:text-gray-200">{staffName} {staffRole === "DRIVER" ? "기사님" : "선생님"}</span>
           <span className="block text-[0.65rem] font-bold text-gray-500 dark:text-gray-400">메뉴 열기</span>
         </span>
         <span className="material-symbols-outlined text-lg text-gray-500" aria-hidden="true">expand_more</span>

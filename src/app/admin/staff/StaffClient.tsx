@@ -72,6 +72,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
     ADMIN: { label: "원장", color: "bg-red-100 text-red-800" },
     VICE_ADMIN: { label: "부원장", color: "bg-orange-100 text-orange-800" },
     INSTRUCTOR: { label: "코치/강사", color: "bg-blue-100 text-blue-800" },
+    DRIVER: { label: "셔틀 기사", color: "bg-emerald-100 text-emerald-800" },
     PARENT: { label: "학부모", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
 };
 
@@ -228,7 +229,7 @@ export default function StaffClient({
         if (!confirm(`역할을 "${ROLE_CONFIG[newRole]?.label || newRole}"(으)로 변경하시겠습니까?`)) return;
         startTransition(async () => {
             try {
-                await updateUserRole(userId, newRole as "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "PARENT");
+                await updateUserRole(userId, newRole as "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" | "PARENT");
                 setMessage({ text: "역할이 변경되었습니다.", ok: true });
                 await loadStaffData();
             } catch (error: unknown) {
@@ -289,9 +290,9 @@ export default function StaffClient({
 
         try {
             await navigator.clipboard.writeText(installUrl);
-            setMessage({ text: "교사용 앱 설치 링크를 복사했습니다.", ok: true });
+            setMessage({ text: "스태프 앱 설치 링크를 복사했습니다.", ok: true });
         } catch {
-            window.prompt("아래 교사용 앱 설치 링크를 길게 눌러 복사해주세요.", installUrl);
+            window.prompt("아래 스태프 앱 설치 링크를 길게 눌러 복사해주세요.", installUrl);
             setMessage({
                 text: "자동 복사가 제한되어 전체 설치 링크를 복사창에 표시했습니다.",
                 ok: false,
@@ -304,7 +305,7 @@ export default function StaffClient({
 
         try {
             await navigator.clipboard.writeText(inviteUrl);
-            setMessage({ text: `${name} 선생님의 개인 가입 링크를 복사했습니다.`, ok: true });
+            setMessage({ text: `${name}님의 개인 가입 링크를 복사했습니다.`, ok: true });
         } catch {
             window.prompt("아래 개인 가입 링크를 길게 눌러 복사해 주세요.", inviteUrl);
             setMessage({ text: "자동 복사가 제한되어 복사창에 개인 가입 링크를 표시했습니다.", ok: false });
@@ -326,7 +327,7 @@ export default function StaffClient({
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">스태프 관리</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        관리자, 부원장, 코치/강사 계정을 관리합니다. (원장만 변경 가능)
+                        관리자, 부원장, 코치/강사, 셔틀 기사 계정을 관리합니다. (원장만 변경 가능)
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -336,7 +337,7 @@ export default function StaffClient({
                         className="flex items-center gap-2 px-4 py-2.5 border border-brand-navy-200 text-brand-navy-900 dark:border-brand-navy-600 dark:text-white rounded-lg hover:bg-brand-navy-50 dark:hover:bg-brand-navy-800 transition-colors font-medium text-sm"
                     >
                         <span className="material-symbols-outlined text-[20px]">content_copy</span>
-                        가입 완료 선생님용 앱 설치 링크
+                        스태프용 앱 설치 링크
                     </button>
                     {/* 초대 링크 버튼 (메인) */}
                     <button
@@ -344,7 +345,7 @@ export default function StaffClient({
                         className="flex items-center gap-2 px-4 py-2.5 bg-brand-navy-900 text-white rounded-lg hover:bg-brand-navy-800 transition-colors font-medium text-sm"
                     >
                         <span className="material-symbols-outlined text-[20px]">send</span>
-                        새 선생님 초대·가입
+                        새 스태프 초대·가입
                     </button>
                     {/* 직접 추가 버튼 (보조) */}
                     <button
@@ -463,7 +464,7 @@ export default function StaffClient({
                                     <tr key={user.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-900">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm ${user.role === "ADMIN" ? "bg-red-500" : user.role === "VICE_ADMIN" ? "bg-orange-500" : "bg-blue-500"}`}>
+                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm ${user.role === "ADMIN" ? "bg-red-500" : user.role === "VICE_ADMIN" ? "bg-orange-500" : user.role === "DRIVER" ? "bg-emerald-500" : "bg-blue-500"}`}>
                                                     {user.name.charAt(0)}
                                                 </div>
                                                 <span className="max-w-40 truncate font-medium text-gray-900 dark:text-white" title={user.name}>{user.name}</span>
@@ -482,6 +483,7 @@ export default function StaffClient({
                                                 <option value="ADMIN">원장</option>
                                                 <option value="VICE_ADMIN">부원장</option>
                                                 <option value="INSTRUCTOR">코치/강사</option>
+                                                <option value="DRIVER">셔틀 기사</option>
                                                 <option value="PARENT">학부모</option>
                                             </select>
                                         </td>
@@ -549,7 +551,7 @@ export default function StaffClient({
                     <span className="material-symbols-outlined text-[20px]">info</span>
                     역할별 권한 안내
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="p-4 bg-red-50 rounded-lg border border-red-100">
                         <div className="flex items-center gap-2 mb-2">
                             <span className="inline-block w-3 h-3 rounded-full bg-red-500" />
@@ -583,6 +585,17 @@ export default function StaffClient({
                             <li>- 담당 반 SMS 수신</li>
                         </ul>
                     </div>
+                    <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="inline-block w-3 h-3 rounded-full bg-emerald-500" />
+                            <span className="font-semibold text-emerald-800">셔틀 기사 (DRIVER)</span>
+                        </div>
+                        <ul className="text-xs text-emerald-700 space-y-1">
+                            <li>- 셔틀 운행 화면 접근</li>
+                            <li>- 오늘 운행 노선 확인</li>
+                            <li>- 탑승/하차 처리는 다음 단계 연결</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -591,7 +604,7 @@ export default function StaffClient({
                 <InviteStaffModal
                     onClose={() => setShowModal(null)}
                     onSuccess={() => {
-                        setMessage({ text: "선생님 개인 가입 링크가 만들어졌습니다.", ok: true });
+                        setMessage({ text: "스태프 개인 가입 링크가 만들어졌습니다.", ok: true });
                         void loadStaffData();
                     }}
                     onError={(msg) => setMessage({ text: msg, ok: false })}

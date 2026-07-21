@@ -149,7 +149,7 @@ export async function requireAdmin(): Promise<AdminAuthUser> {
   });
 }
 
-export type StaffRole = "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
+export type StaffRole = "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER";
 
 export type StaffAuthUser = Awaited<ReturnType<typeof requireAuth>> & {
   appUserId: string;
@@ -158,7 +158,7 @@ export type StaffAuthUser = Awaited<ReturnType<typeof requireAuth>> & {
 };
 
 /**
- * requireStaff: ADMIN, VICE_ADMIN, INSTRUCTOR allowed.
+ * requireStaff: ADMIN, VICE_ADMIN, INSTRUCTOR, DRIVER allowed.
  * This protects staff-only workflows without opening the full admin area.
  */
 export async function requireStaff(): Promise<StaffAuthUser> {
@@ -172,7 +172,7 @@ export async function requireStaff(): Promise<StaffAuthUser> {
   const appUser = await getAppUserRole(email);
   if (
     !appUser ||
-    (appUser.role !== "ADMIN" && appUser.role !== "VICE_ADMIN" && appUser.role !== "INSTRUCTOR")
+    (appUser.role !== "ADMIN" && appUser.role !== "VICE_ADMIN" && appUser.role !== "INSTRUCTOR" && appUser.role !== "DRIVER")
   ) {
     throw new Error("Staff permission is required.");
   }

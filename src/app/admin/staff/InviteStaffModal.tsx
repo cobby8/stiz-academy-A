@@ -31,7 +31,11 @@ export default function InviteStaffModal({
     onSuccess: () => void;
     onError: (message: string) => void;
 }) {
-    const [form, setForm] = useState({ name: "", phone: "" });
+    const [form, setForm] = useState<{ name: string; phone: string; role: "INSTRUCTOR" | "DRIVER" }>({
+        name: "",
+        phone: "",
+        role: "INSTRUCTOR",
+    });
     const [result, setResult] = useState<InvitationResult | null>(null);
     const [copyMessage, setCopyMessage] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
@@ -46,12 +50,12 @@ export default function InviteStaffModal({
                 const invitation = await inviteStaff({
                     name: form.name.trim(),
                     phone: form.phone.trim(),
-                    role: "INSTRUCTOR",
+                    role: form.role,
                 });
                 setResult(invitation);
                 onSuccess();
             } catch (error) {
-                onError(error instanceof Error ? error.message : "선생님 초대를 만들지 못했습니다.");
+                onError(error instanceof Error ? error.message : "스태프 초대를 만들지 못했습니다.");
             }
         });
     }
@@ -71,8 +75,8 @@ export default function InviteStaffModal({
         if (!result || !navigator.share) return;
         try {
             await navigator.share({
-                title: "STIZ 선생님 가입 초대",
-                text: `${form.name.trim()} 선생님, 아래 링크에서 가입을 완료해 주세요.`,
+                title: "STIZ 스태프 가입 초대",
+                text: `${form.name.trim()}님, 아래 링크에서 가입을 완료해 주세요.`,
                 url: absoluteInviteUrl(result.inviteUrl),
             });
         } catch (error) {
@@ -86,7 +90,7 @@ export default function InviteStaffModal({
                 <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
                     <h2 id="invite-staff-modal-title" className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                         <span className="material-symbols-outlined text-[20px]">person_add</span>
-                        새 선생님 초대·가입
+                        새 스태프 초대·가입
                     </h2>
                     <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700" aria-label="닫기">
                         <span className="material-symbols-outlined">close</span>
@@ -106,7 +110,7 @@ export default function InviteStaffModal({
                         </div>
 
                         <div>
-                            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">{form.name.trim()} 선생님 개인 가입 링크</label>
+                            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">{form.name.trim()}님 개인 가입 링크</label>
                             <div className="break-all rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200">
                                 {absoluteInviteUrl(result.inviteUrl)}
                             </div>
@@ -132,10 +136,10 @@ export default function InviteStaffModal({
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-4 p-6">
                         <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
-                            선생님 전용 개인 가입 링크를 만들고 입력한 전화번호로 안내 문자를 보냅니다. 문자 발송이 안 되더라도 링크를 직접 복사해 전달할 수 있습니다.
+                            선생님 또는 기사 전용 개인 가입 링크를 만들고 입력한 전화번호로 안내 문자를 보냅니다. 문자 발송이 안 되더라도 링크를 직접 복사해 전달할 수 있습니다.
                         </div>
                         <div>
-                            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">선생님 이름 *</label>
+                            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">이름 *</label>
                             <input data-admin-modal-initial-focus type="text" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required placeholder="홍길동" className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-brand-navy-500 focus:ring-2 focus:ring-brand-navy-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
                         </div>
                         <div>
@@ -143,8 +147,19 @@ export default function InviteStaffModal({
                             <input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: formatPhone(event.target.value) })} required inputMode="numeric" autoComplete="tel" pattern="010-[0-9]{4}-[0-9]{4}" title="010-0000-0000 형식으로 입력해 주세요." placeholder="010-1234-5678" className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-brand-navy-500 focus:ring-2 focus:ring-brand-navy-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">010-0000-0000 형식으로 입력해 주세요.</p>
                         </div>
-                        <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                            초대 역할: <strong>코치/강사</strong>
+                        <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">초대 역할 *</label>
+                            <select
+                                value={form.role}
+                                onChange={(event) => setForm({ ...form, role: event.target.value as "INSTRUCTOR" | "DRIVER" })}
+                                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-bold focus:border-brand-navy-500 focus:ring-2 focus:ring-brand-navy-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="INSTRUCTOR">코치/강사</option>
+                                <option value="DRIVER">셔틀 기사</option>
+                            </select>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                선생님은 수업 앱으로, 기사는 셔틀 운행 화면으로 이동합니다.
+                            </p>
                         </div>
                         <div className="flex justify-end gap-3 pt-2">
                             <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-100">취소</button>

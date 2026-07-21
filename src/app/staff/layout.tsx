@@ -28,12 +28,12 @@ export default async function StaffLayout({ children }: { children: ReactNode })
       <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl dark:border-gray-800 dark:bg-gray-950/90">
         <div className="mx-auto flex min-h-11 max-w-lg items-center justify-between gap-3">
           <StaffHomeLink />
-          <StaffProfileMenu staffName={staff.appUserName} />
+          <StaffProfileMenu staffName={staff.appUserName} staffRole={staff.appUserRole} />
         </div>
       </header>
       <StaffInstallPrompt />
       {children}
-      <StaffBottomNav />
+      <StaffBottomNav staffRole={staff.appUserRole} />
     </div>
   );
 }

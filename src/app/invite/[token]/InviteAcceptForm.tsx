@@ -29,6 +29,7 @@ const ROLE_COLORS: Record<string, string> = {
     ADMIN: "bg-red-100 text-red-800",
     VICE_ADMIN: "bg-orange-100 text-orange-800",
     INSTRUCTOR: "bg-blue-100 text-blue-800",
+    DRIVER: "bg-emerald-100 text-emerald-800",
 };
 
 export default function InviteAcceptForm({
@@ -338,10 +339,10 @@ export default function InviteAcceptForm({
                     </div>
 
                     <a
-                        href={role === "INSTRUCTOR" ? "/staff/install" : "/login"}
+                        href={role === "INSTRUCTOR" || role === "DRIVER" ? "/staff/install" : "/login"}
                         className="inline-block w-full py-3 bg-brand-navy-900 text-white rounded-lg font-medium text-sm hover:bg-brand-navy-800 transition-colors text-center"
                     >
-                        {role === "INSTRUCTOR" ? "선생님 앱 설치하기" : "로그인하러 가기"}
+                        {role === "INSTRUCTOR" || role === "DRIVER" ? "스태프 앱 설치하기" : "로그인하러 가기"}
                     </a>
                 </div>
             )}

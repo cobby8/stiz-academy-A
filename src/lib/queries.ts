@@ -3329,23 +3329,24 @@ export const getSmsTemplate = cache(async (trigger: string) => {
     }
 });
 
-// ── 스태프 목록 조회 (ADMIN / VICE_ADMIN / INSTRUCTOR) ─────────────────────
+// ── 스태프 목록 조회 (ADMIN / VICE_ADMIN / INSTRUCTOR / DRIVER) ─────────────────────
 // 스태프 관리 페이지에서 사용 — role이 PARENT가 아닌 유저 + Coach 연결 정보
 export const getStaffUsers = cache(async () => {
     try {
-        // User 테이블에서 ADMIN/VICE_ADMIN/INSTRUCTOR 조회 + Coach 연결 (LEFT JOIN)
+        // User 테이블에서 ADMIN/VICE_ADMIN/INSTRUCTOR/DRIVER 조회 + Coach 연결 (LEFT JOIN)
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT u.id, u.email, u.name, u.phone, u.role::text AS role, u."createdAt",
                     c.id AS "coachId", c.name AS "coachName"
              FROM "User" u
              LEFT JOIN "Coach" c ON c."userId" = u.id
-             WHERE u.role::text IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR')
+             WHERE u.role::text IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR', 'DRIVER')
              ORDER BY
                CASE u.role::text
-                 WHEN 'ADMIN' THEN 1
-                 WHEN 'VICE_ADMIN' THEN 2
-                 WHEN 'INSTRUCTOR' THEN 3
-               END,
+                  WHEN 'ADMIN' THEN 1
+                  WHEN 'VICE_ADMIN' THEN 2
+                  WHEN 'INSTRUCTOR' THEN 3
+                  WHEN 'DRIVER' THEN 4
+                END,
                u."createdAt" ASC`
         );
         return rows.map((r: any) => ({
@@ -3367,13 +3368,14 @@ export const getStaffUsers = cache(async () => {
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT u.id, u.email, u.name, u.phone, u.role::text AS role, u."createdAt"
              FROM "User" u
-             WHERE u.role::text IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR')
+             WHERE u.role::text IN ('ADMIN', 'VICE_ADMIN', 'INSTRUCTOR', 'DRIVER')
              ORDER BY
                CASE u.role::text
-                 WHEN 'ADMIN' THEN 1
-                 WHEN 'VICE_ADMIN' THEN 2
-                 WHEN 'INSTRUCTOR' THEN 3
-               END,
+                  WHEN 'ADMIN' THEN 1
+                  WHEN 'VICE_ADMIN' THEN 2
+                  WHEN 'INSTRUCTOR' THEN 3
+                  WHEN 'DRIVER' THEN 4
+                END,
                u."createdAt" ASC`
         );
 

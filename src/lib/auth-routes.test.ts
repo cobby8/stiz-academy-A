@@ -15,12 +15,14 @@ test("roles land on their primary workspace", () => {
   assert.equal(defaultPathForRole("ADMIN"), "/admin");
   assert.equal(defaultPathForRole("VICE_ADMIN"), "/admin");
   assert.equal(defaultPathForRole("INSTRUCTOR"), "/staff");
+  assert.equal(defaultPathForRole("DRIVER"), "/staff/shuttle");
   assert.equal(defaultPathForRole("PARENT"), "/mypage");
 });
 
 test("staff-login context sends every role to its own primary workspace", () => {
   assert.equal(resolveRedirectForRole("ADMIN", "/staff", { preferRoleHome: true }), "/admin");
   assert.equal(resolveRedirectForRole("INSTRUCTOR", "/staff", { preferRoleHome: true }), "/staff");
+  assert.equal(resolveRedirectForRole("DRIVER", "/staff", { preferRoleHome: true }), "/staff/shuttle");
   assert.equal(resolveRedirectForRole("PARENT", "/staff", { preferRoleHome: true }), "/mypage");
 });
 
@@ -31,6 +33,7 @@ test("an explicit permitted deep link is preserved", () => {
     "/staff/billing?student=student-1&status=unpaid",
   );
   assert.equal(resolveRedirectForRole("INSTRUCTOR", "/staff/sessions/lesson-1"), "/staff/sessions/lesson-1");
+  assert.equal(resolveRedirectForRole("DRIVER", "/staff/shuttle"), "/staff/shuttle");
   assert.equal(resolveRedirectForRole("PARENT", "/mypage/reports"), "/mypage/reports");
 });
 
@@ -38,6 +41,9 @@ test("role boundaries use complete path segments", () => {
   assert.equal(canRoleAccessPath("PARENT", "/administrator-guide"), true);
   assert.equal(canRoleAccessPath("PARENT", "/staffing"), true);
   assert.equal(canRoleAccessPath("INSTRUCTOR", "/mypage"), false);
+  assert.equal(canRoleAccessPath("INSTRUCTOR", "/staff/shuttle"), false);
+  assert.equal(canRoleAccessPath("DRIVER", "/staff/students"), false);
+  assert.equal(canRoleAccessPath("DRIVER", "/staff/shuttle"), true);
   assert.equal(canRoleAccessPath("ADMIN", "/mypage"), false);
 });
 

@@ -1,7 +1,7 @@
-export type AppRole = "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "PARENT";
+export type AppRole = "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" | "PARENT";
 
 export function parseAppRole(value: unknown): AppRole | null {
-  if (value === "ADMIN" || value === "VICE_ADMIN" || value === "INSTRUCTOR" || value === "PARENT") {
+  if (value === "ADMIN" || value === "VICE_ADMIN" || value === "INSTRUCTOR" || value === "DRIVER" || value === "PARENT") {
     return value;
   }
   return null;
@@ -14,6 +14,7 @@ export function normalizeAppRole(value: unknown): AppRole {
 export function defaultPathForRole(role: AppRole) {
   if (role === "ADMIN" || role === "VICE_ADMIN") return "/admin";
   if (role === "INSTRUCTOR") return "/staff";
+  if (role === "DRIVER") return "/staff/shuttle";
   return "/mypage";
 }
 
@@ -39,6 +40,9 @@ export function canRoleAccessPath(role: AppRole, path?: string | null) {
     return role === "ADMIN" || role === "VICE_ADMIN";
   }
   if (target === "/staff" || target.startsWith("/staff/")) {
+    if (target === "/staff/shuttle" || target.startsWith("/staff/shuttle/")) {
+      return role === "ADMIN" || role === "VICE_ADMIN" || role === "DRIVER";
+    }
     return role === "ADMIN" || role === "VICE_ADMIN" || role === "INSTRUCTOR";
   }
   if (target === "/mypage" || target.startsWith("/mypage/")) {

@@ -5547,23 +5547,25 @@ export async function resetSmsTemplate(id: string) {
 // 스태프 관리 — ADMIN(원장)만 사용 가능한 권한 관리 기능
 // ══════════════════════════════════════════════════════════════════════
 
-// ── DDL: Role enum에 VICE_ADMIN 추가 + Coach.userId 컬럼 추가 ──────────────
+// ── DDL: Staff 역할 enum + Coach.userId 컬럼 추가 ──────────────
 // Prisma migrate 없이도 안전하게 동작하도록 DDL ensure 패턴 사용
 // ALTER TYPE ... ADD VALUE는 트랜잭션 내에서 실행 불가 → IF NOT EXISTS 사용
 let _staffColumnsEnsured = false;
 export async function ensureStaffColumns() {
     if (_staffColumnsEnsured) return;
     try {
-        // 1) Role enum에 VICE_ADMIN 값 추가 (이미 있으면 무시)
-        await prisma.$executeRawUnsafe(
-            `DO $$ BEGIN
-               IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'VICE_ADMIN'
-                 AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'Role'))
-               THEN
-                 ALTER TYPE "Role" ADD VALUE 'VICE_ADMIN';
-               END IF;
-             END $$`
-        );
+        // 1) Staff Role enum 값 추가 (이미 있으면 무시)
+        for (const role of ["VICE_ADMIN", "DRIVER"] as const) {
+            await prisma.$executeRawUnsafe(
+                `DO $$ BEGIN
+                   IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = '${role}'
+                     AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'Role'))
+                   THEN
+                     ALTER TYPE "Role" ADD VALUE '${role}';
+                   END IF;
+                 END $$`
+            );
+        }
         // 2) Coach 테이블에 userId 컬럼 추가 (이미 있으면 무시)
         await prisma.$executeRawUnsafe(
             `ALTER TABLE "Coach" ADD COLUMN IF NOT EXISTS "userId" TEXT UNIQUE`
@@ -5584,7 +5586,7 @@ export async function ensureStaffColumns() {
 export async function createStaffUser(data: {
     name: string;
     phone: string; // 필수 — 인증 완료된 전화번호
-    role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
+    role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER";
 }) {
     await requireOwner();
     await ensureStaffColumns();
@@ -5634,7 +5636,7 @@ export async function createStaffUser(data: {
  * updateUserRole — 사용자 역할 변경 (requireOwner: ADMIN만)
  * ADMIN은 다른 사용자의 역할을 변경할 수 있지만, 자기 자신을 변경할 수 없음
  */
-export async function updateUserRole(userId: string, newRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "PARENT") {
+export async function updateUserRole(userId: string, newRole: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER" | "PARENT") {
     const user = await requireOwner();
     await ensureStaffColumns();
 
@@ -5784,19 +5786,21 @@ const SMS_SEND_FAILED = "문자 발송에 실패했습니다. 가입 링크를 �
 export async function inviteStaff(data: {
     name: string;
     phone: string;
-    role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR";
+    role: "INSTRUCTOR" | "DRIVER";
 }) {
     const user = await requireOwner();
     await ensureStaffInvitationTable();
 
-    if (data.role !== "INSTRUCTOR") {
-        throw new Error("선생님 초대는 코치/강사 역할만 선택할 수 있습니다.");
+    if (data.role !== "INSTRUCTOR" && data.role !== "DRIVER") {
+        throw new Error("초대는 선생님 또는 기사 역할만 선택할 수 있습니다.");
     }
+    const staffRole = data.role;
+    const staffRoleLabel = staffRole === "DRIVER" ? "셔틀 기사" : "코치/강사";
 
     const cleanName = data.name.trim();
     const cleanPhone = data.phone.replace(/\D/g, "");
     if (!cleanName) {
-        throw new Error("선생님 이름을 입력해 주세요.");
+        throw new Error("이름을 입력해 주세요.");
     }
     if (!/^010\d{8}$/.test(cleanPhone)) {
         throw new Error("휴대전화 번호는 010으로 시작하는 11자리 숫자로 입력해 주세요.");
@@ -5815,7 +5819,7 @@ export async function inviteStaff(data: {
 
     // 이미 가입된 스태프인지 확인
     const existingUser = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT id FROM "User" WHERE phone = $1 AND role IN ('ADMIN','VICE_ADMIN','INSTRUCTOR') LIMIT 1`,
+        `SELECT id FROM "User" WHERE phone = $1 AND role IN ('ADMIN','VICE_ADMIN','INSTRUCTOR','DRIVER') LIMIT 1`,
         cleanPhone,
     );
     if (existingUser.length > 0) {
@@ -5836,7 +5840,7 @@ export async function inviteStaff(data: {
              RETURNING token`,
             cleanName,
             cleanPhone,
-            "INSTRUCTOR",
+            staffRole,
             user.id,
         );
 
@@ -5849,7 +5853,7 @@ export async function inviteStaff(data: {
         const smsResult = baseUrl
             ? await sendSmsDetailed(
                 cleanPhone,
-                `[STIZ 농구교실] ${cleanName}님, 스태프 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
+                `[STIZ 농구교실] ${cleanName}님, ${staffRoleLabel} 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
             )
             : { ok: false, reason: SMS_SITE_URL_MISSING };
 

@@ -43,6 +43,21 @@ const SOURCE_OPTIONS = [
 const TRIAL_DAY_OPTIONS = ["월", "화", "수", "목", "금", "토"];
 const TRIAL_PERIOD_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 const TRIAL_DAY_ORDER = ["월", "화", "수", "목", "금", "토", "일"];
+const TRIAL_FEE_PAYMENT_INFO = {
+    amountLabel: "10,000원",
+    bankName: "카카오뱅크",
+    accountNumber: "3333-05-1344817",
+    accountHolder: "김수빈",
+    memo: "STIZ 체험수업비",
+};
+const TRIAL_FEE_COPY_TEXT = [
+    "STIZ 농구교실 다산점 체험수업비 입금 안내",
+    `금액: ${TRIAL_FEE_PAYMENT_INFO.amountLabel}`,
+    `은행: ${TRIAL_FEE_PAYMENT_INFO.bankName}`,
+    `계좌: ${TRIAL_FEE_PAYMENT_INFO.accountNumber}`,
+    `예금주: ${TRIAL_FEE_PAYMENT_INFO.accountHolder}`,
+    `메모: ${TRIAL_FEE_PAYMENT_INFO.memo}`,
+].join("\n");
 
 // ── 폼 데이터 타입 ───────────────────────────────────────────────────────────
 interface FormData {
@@ -87,6 +102,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
     const [form, setForm] = useState<FormData>(INITIAL_FORM);
     const [error, setError] = useState("");
     const [completed, setCompleted] = useState(false);  // 제출 완료 여부
+    const [paymentNotice, setPaymentNotice] = useState("");
     const [isPending, startTransition] = useTransition();
     const availableDayOptions = orderedUniqueDays(availableSlots);
     const dayOptions = availableDayOptions.length > 0 ? availableDayOptions : TRIAL_DAY_OPTIONS;
@@ -99,6 +115,53 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
     const selectedSlot = availableSlots.find((slot) => (
         slot.dayLabel === form.trialDay && getSlotPeriod(slot.slotKey) === form.trialPeriod
     ));
+
+    const copyTextToClipboard = async (text: string) => {
+        if (!navigator.clipboard?.writeText) {
+            setPaymentNotice("현재 브라우저에서는 자동 복사가 어렵습니다. 계좌번호를 길게 눌러 복사해주세요.");
+            return false;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            setPaymentNotice("복사 권한이 차단되었습니다. 계좌번호를 직접 선택해서 복사해주세요.");
+            return false;
+        }
+    };
+
+    const copyTrialFeeAccount = async () => {
+        const copied = await copyTextToClipboard(TRIAL_FEE_PAYMENT_INFO.accountNumber);
+        if (copied) setPaymentNotice("계좌번호가 복사되었습니다.");
+    };
+
+    const handleTrialFeeTransfer = async () => {
+        const copied = await copyTextToClipboard(TRIAL_FEE_COPY_TEXT);
+        const sharePayload = {
+            title: "STIZ 체험수업비 입금 안내",
+            text: TRIAL_FEE_COPY_TEXT,
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(sharePayload);
+                setPaymentNotice("송금 정보가 공유되었습니다. 토스나 카카오뱅크에서 확인해 주세요.");
+                return;
+            } catch (e) {
+                if (e instanceof DOMException && e.name === "AbortError") {
+                    setPaymentNotice(copied ? "송금 정보가 복사되었습니다." : "송금 앱에서 계좌 정보를 직접 입력해주세요.");
+                    return;
+                }
+            }
+        }
+
+        setPaymentNotice(
+            copied
+                ? "송금 정보가 복사되었습니다. 토스나 카카오뱅크에서 붙여넣어 주세요."
+                : "송금 앱에서 계좌 정보를 직접 입력해주세요."
+        );
+    };
 
     // 폼 필드 변경 핸들러
     const update = (field: keyof FormData, value: string | boolean) => {
@@ -198,9 +261,67 @@ export default function TrialApplicationForm({ availableSlots, contactPhone }: P
                     </a>
                     으로 전화해주세요.
                 </p>
+                <div className="mb-6 rounded-2xl border border-brand-orange-200 bg-brand-orange-50/80 p-5 text-left dark:border-brand-neon-lime/40 dark:bg-brand-neon-lime/10">
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-950">
+                            <FontFreeIcon name="payments" size={24} />
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-widest text-brand-orange-600 dark:text-brand-neon-lime">Trial Fee</p>
+                            <h3 className="mt-1 text-xl font-black text-gray-950 dark:text-white">체험수업비 입금 안내</h3>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">입금 확인 후 체험수업 일정 안내가 진행됩니다.</p>
+                        </div>
+                    </div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl bg-white p-3 ring-1 ring-brand-orange-100 dark:bg-brand-navy-950/70 dark:ring-brand-neon-lime/20">
+                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400">체험비</p>
+                            <p className="mt-1 text-lg font-black text-brand-orange-600 dark:text-brand-neon-lime">{TRIAL_FEE_PAYMENT_INFO.amountLabel}</p>
+                        </div>
+                        <div className="rounded-xl bg-white p-3 ring-1 ring-brand-orange-100 dark:bg-brand-navy-950/70 dark:ring-brand-neon-lime/20">
+                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400">은행</p>
+                            <p className="mt-1 text-base font-black text-gray-950 dark:text-white">{TRIAL_FEE_PAYMENT_INFO.bankName}</p>
+                        </div>
+                        <div className="rounded-xl bg-white p-3 ring-1 ring-brand-orange-100 dark:bg-brand-navy-950/70 dark:ring-brand-neon-lime/20">
+                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400">예금주</p>
+                            <p className="mt-1 text-base font-black text-gray-950 dark:text-white">{TRIAL_FEE_PAYMENT_INFO.accountHolder}</p>
+                        </div>
+                    </div>
+                    <div className="mt-3 rounded-xl bg-white p-4 ring-1 ring-brand-orange-100 dark:bg-brand-navy-950/70 dark:ring-brand-neon-lime/20">
+                        <p className="text-xs font-bold text-gray-500 dark:text-gray-400">입금 계좌</p>
+                        <p className="mt-1 select-all break-all text-2xl font-black tracking-wide text-gray-950 dark:text-white">
+                            {TRIAL_FEE_PAYMENT_INFO.accountNumber}
+                        </p>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            onClick={copyTrialFeeAccount}
+                            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-brand-orange-200 bg-white px-4 py-3 text-sm font-black text-gray-950 transition-colors hover:border-brand-orange-500 dark:border-brand-neon-lime/30 dark:bg-brand-navy-950 dark:text-white dark:hover:border-brand-neon-lime"
+                        >
+                            <FontFreeIcon name="save" size={18} />
+                            계좌번호 복사하기
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleTrialFeeTransfer}
+                            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-orange-500 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-950 dark:hover:bg-lime-400"
+                        >
+                            <FontFreeIcon name="send" size={18} />
+                            송금하기
+                        </button>
+                    </div>
+                    {paymentNotice && (
+                        <p role="status" className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm font-bold text-gray-700 dark:bg-brand-navy-950/70 dark:text-gray-200">
+                            {paymentNotice}
+                        </p>
+                    )}
+                    <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                        송금하기를 누르면 송금 정보가 먼저 복사됩니다. 휴대폰에서 공유 창이 뜨면 사용하는 송금 앱을 선택하고, 앱이 바로 열리지 않으면 토스나 카카오뱅크에서 붙여넣어 주세요.
+                    </p>
+                </div>
                 <Link
                     href="/"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-navy-800 transition-colors"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-navy-800 transition-colors dark:bg-brand-neon-lime dark:text-brand-navy-950 dark:hover:bg-lime-400"
                 >
                     <FontFreeIcon name="home" size={18} />
                     홈으로 돌아가기
@@ -613,8 +734,8 @@ function TrialFeeContent() {
     return (
         <div className="space-y-2">
             <p className="font-semibold text-gray-800 dark:text-gray-100">체험수업 비용 안내</p>
-            <p>체험수업 비용은 1만원입니다.</p>
-            <p>입금계좌: 카카오뱅크 3333-05-1344817 김수빈</p>
+            <p>체험수업 비용은 {TRIAL_FEE_PAYMENT_INFO.amountLabel}입니다.</p>
+            <p>입금계좌: {TRIAL_FEE_PAYMENT_INFO.bankName} {TRIAL_FEE_PAYMENT_INFO.accountNumber} {TRIAL_FEE_PAYMENT_INFO.accountHolder}</p>
             <p>신청 후 안내문자를 받으셔야 체험수업이 확정됩니다.</p>
         </div>
     );

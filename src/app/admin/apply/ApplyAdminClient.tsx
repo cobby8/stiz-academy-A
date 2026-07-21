@@ -1160,7 +1160,7 @@ export default function ApplyAdminClient({
                                         key={app.id}
                                         className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow"
                                     >
-                                        <div className="flex flex-col md:flex-row md:items-start gap-4">
+                                        <div className="flex flex-col gap-4">
                                             {/* 왼쪽: 기본 정보 */}
                                             <div className="flex-1 min-w-0">
                                                 {/* 상태 + 유입경로 배지 */}
@@ -1323,7 +1323,7 @@ export default function ApplyAdminClient({
                                             </div>
 
                                             {/* 오른쪽: 액션 버튼 */}
-                                            <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                                            <div className="flex w-full flex-wrap items-center gap-2 border-t border-gray-100 pt-4 dark:border-gray-700">
                                                 <a
                                                     href={parentPhoneHref}
                                                     className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"

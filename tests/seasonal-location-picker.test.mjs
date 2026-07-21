@@ -25,6 +25,16 @@ test("선택한 특강 일정의 요일을 기존 필수 신청 계약에 포함
   assert.match(apply, /selectedWeekdays,/);
 });
 
+test("고정 신청 버튼 주변에 미완료 항목을 안내하고 오류를 alert로 알린다", () => {
+  assert.match(apply, /const incompleteItems = \[/);
+  assert.match(apply, /미완료: \{incompleteItems\.join\(" · "\)\}/);
+  assert.match(apply, /aria-describedby=\{incompleteItems\.length > 0 \? "seasonal-apply-incomplete"/);
+  assert.match(apply, /role=\{submitState === "error" \? "alert" : "status"\}/);
+  assert.match(apply, /aria-live=\{submitState === "error" \? "assertive" : "polite"\}/);
+  assert.match(apply, /flex-wrap items-center gap-3 sm:flex-nowrap/);
+  assert.match(apply, /order-first w-full text-xs.*sm:order-none/);
+});
+
 test("수동 주소 수정 시 기존 지도 좌표를 제거해 주소와 좌표 불일치를 막는다", () => {
   assert.match(apply, /function updateLocationText/);
   assert.match(apply, /\[kind === "pickup" \? "pickupLocationData" : "dropoffLocationData"\]: undefined/);

@@ -155,6 +155,7 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
   if (!parentName || parentPhone.length < 10 || parentPhone.length > 11) throw new SeasonalError("보호자 이름과 연락처를 확인해 주세요.");
   if (!body?.agreedTerms || !body?.agreedPrivacy) throw new SeasonalError("약관과 개인정보 처리에 동의해 주세요.");
   if (!Array.isArray(body.items) || body.items.length === 0) throw new SeasonalError("특강을 한 개 이상 선택해 주세요.");
+  if (body.items.length > 20) throw new SeasonalError("특강은 한 번에 최대 20개까지 신청할 수 있습니다.", 413, "TOO_MANY_ITEMS");
   if (selectedWeekdays.length === 0) throw new SeasonalError("수강할 요일을 한 개 이상 선택해 주세요.", 400, "WEEKDAY_REQUIRED");
 
   const seen = new Set<string>();

@@ -130,6 +130,14 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   const canSubmit = selectedIds.length > 0 && form.childName && form.childBirthDate && form.parentName
     && form.parentPhone && form.agreedTerms && form.agreedPrivacy && (!hasMapSelection || locationConsent)
     && submitState !== "submitting";
+  const incompleteItems = [
+    selectedIds.length === 0 ? "신청할 수업" : "",
+    !form.childName || !form.childBirthDate ? "학생 필수 정보" : "",
+    !form.parentName || !form.parentPhone ? "보호자 필수 정보" : "",
+    !form.agreedTerms ? "운영·환불 규정 동의" : "",
+    !form.agreedPrivacy ? "개인정보 수집 동의" : "",
+    hasMapSelection && !locationConsent ? "셔틀 위치정보 동의" : "",
+  ].filter(Boolean);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -264,7 +272,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
         </header>
 
         {message && (
-          <p role="status" className={`rounded-xl border px-4 py-3 text-sm font-bold ${submitState === "error" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" : "border-green-200 bg-green-50 text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100"}`}>
+          <p role={submitState === "error" ? "alert" : "status"} aria-live={submitState === "error" ? "assertive" : "polite"} className={`rounded-xl border px-4 py-3 text-sm font-bold ${submitState === "error" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" : "border-green-200 bg-green-50 text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100"}`}>
             {message}
           </p>
         )}
@@ -384,15 +392,17 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-        <div className="mx-auto flex max-w-5xl items-center gap-3">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 sm:flex-nowrap">
           <div className="hidden min-w-0 flex-1 sm:block">
             <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{selectedOfferings.length}개 수업 선택 · {formatWon(totalPrice)}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">제출 후 학원에서 확인 연락을 드립니다.</p>
           </div>
           <Link href={`/seasonal/${slug}`} className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 px-4 font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200">취소</Link>
+          {incompleteItems.length > 0 && submitState !== "submitting" && <p id="seasonal-apply-incomplete" role="status" className="order-first w-full text-xs font-bold text-amber-700 sm:order-none sm:min-w-0 sm:flex-1">미완료: {incompleteItems.join(" · ")}</p>}
           <button
             type="submit"
             disabled={!canSubmit}
+            aria-describedby={incompleteItems.length > 0 ? "seasonal-apply-incomplete" : undefined}
             className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-brand-orange-500 px-5 font-black text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 sm:flex-none"
           >
             {submitState === "submitting" ? "접수 중..." : "신청 접수"}

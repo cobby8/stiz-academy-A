@@ -55,9 +55,19 @@ export default function ParentAccountActivateClient({
     timeZone: "Asia/Seoul",
   }).format(new Date(expiresAt));
 
-  function requestOtp() {
+  function runServerAction(action: () => Promise<void>, fallbackMessage: string) {
     setMessage(null);
     startTransition(async () => {
+      try {
+        await action();
+      } catch {
+        setMessage({ kind: "error", text: fallbackMessage });
+      }
+    });
+  }
+
+  function requestOtp() {
+    runServerAction(async () => {
       const result = await sendParentAccountOtp(token);
       if ("error" in result) {
         setMessage({ kind: "error", text: result.error || "인증번호를 발송하지 못했습니다." });
@@ -65,13 +75,12 @@ export default function ParentAccountActivateClient({
       }
       setStep("OTP");
       setMessage({ kind: "success", text: "인증번호를 발송했습니다. 문자로 받은 6자리 번호를 입력해 주세요." });
-    });
+    }, "인증번호를 발송하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
   }
 
   function verifyOtp() {
     if (otp.length !== 6) return;
-    setMessage(null);
-    startTransition(async () => {
+    runServerAction(async () => {
       const result = await verifyParentAccountOtp(token, otp);
       if ("error" in result && result.error) {
         setMessage({ kind: "error", text: result.error });
@@ -82,7 +91,7 @@ export default function ParentAccountActivateClient({
         return;
       }
       setStep("ACCOUNT");
-    });
+    }, "인증번호를 확인하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
   }
 
   function activateAccount() {
@@ -101,7 +110,7 @@ export default function ParentAccountActivateClient({
       return;
     }
 
-    startTransition(async () => {
+    runServerAction(async () => {
       const result = await acceptParentAccountClaim(token, cleanEmail, password) as ActivationResult;
       if ("error" in result) {
         setMessage({ kind: "error", text: result.error });
@@ -113,7 +122,7 @@ export default function ParentAccountActivateClient({
         `/login?redirect=${encodeURIComponent(destination)}`,
       );
       window.location.assign(result.sessionEstablished ? destination : loginDestination);
-    });
+    }, "계정을 만들지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
   }
 
   return (
@@ -163,7 +172,7 @@ export default function ParentAccountActivateClient({
             </form>
           )}
 
-          {message && <p role={message.kind === "error" ? "alert" : "status"} aria-live="polite" className={`rounded-xl p-3 text-sm font-bold leading-6 ${message.kind === "error" ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"}`}>{message.text}</p>}
+          {message && <p role={message.kind === "error" ? "alert" : "status"} aria-live={message.kind === "error" ? "assertive" : "polite"} className={`rounded-xl p-3 text-sm font-bold leading-6 ${message.kind === "error" ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"}`}>{message.text}</p>}
           <p className="text-center text-xs leading-5 text-gray-500">링크가 만료되거나 계정이 잠기면 반복해서 시도하지 말고 학원에 문의해 주세요.</p>
         </div>
       </section>

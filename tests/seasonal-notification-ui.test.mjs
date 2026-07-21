@@ -90,6 +90,24 @@ test("안내 실패는 warning·FAILED·템플릿 오류를 모두 포함한다"
   assert.match(client, /result\.notification\?\.errorCode === "TEMPLATE_DISABLED_OR_MISSING"/);
 });
 
+test("관리자 신청 항목은 상태 변경 중 중복 요청을 막는다", () => {
+  assert.match(client, /updatingItemIdsRef = useRef\(new Set<string>\(\)\)/);
+  assert.match(client, /if \(updatingItemIdsRef\.current\.has\(itemId\)\) return/);
+  assert.match(client, /updatingItemIdsRef\.current\.add\(itemId\)/);
+  assert.match(client, /finally \{[\s\S]*updatingItemIdsRef\.current\.delete\(itemId\)/);
+  assert.match(client, /aria-busy=\{updating\}/);
+  assert.match(client, /disabled=\{updating \|\| item\.status === status\}/);
+  assert.match(client, /<select value=\{item\.status\} disabled=\{updating\} aria-busy=\{updating\}/);
+});
+
+test("관리자 상태 변경 실패는 열린 신청 항목 안에서 알린다", () => {
+  assert.match(client, /const \[itemUpdateErrors, setItemUpdateErrors\] = useState<Record<string, string>>/);
+  assert.match(client, /setItemUpdateErrors\(\(current\) => \(\{ \.\.\.current, \[itemId\]: message \}\)\)/);
+  assert.match(client, /updateError=\{itemUpdateErrors\[item\.id\]\}/);
+  assert.match(client, /updateError && <p role="alert" aria-live="assertive"/);
+  assert.match(client, /setSelectedApplication\(null\); setItemUpdateErrors\(\{\}\)/);
+});
+
 test("신청 관리 안에 신청별·반별 명단 보기를 제공한다", () => {
   assert.match(client, /type ApplicationsMode = "applications" \| "roster"/);
   assert.match(client, />신청별<\/button>/);

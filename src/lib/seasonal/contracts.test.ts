@@ -59,6 +59,15 @@ test("legacy text-only shuttle payload remains valid", () => {
   assert.equal(parsed.items[0].shuttle?.pickupLocationData, undefined);
 });
 
+test("한 요청에서 특강을 20개 넘게 선택할 수 없다", () => {
+  const payload = validApplication();
+  payload.items = Array.from({ length: 21 }, (_, index) => ({ offeringId: `offering-${index}` }));
+  assert.throws(
+    () => parseApplicationInput(payload),
+    (error) => error instanceof SeasonalError && error.status === 413 && error.code === "TOO_MANY_ITEMS",
+  );
+});
+
 test("map shuttle payload requires explicit versioned location consent", () => {
   const payload = validApplication();
   payload.items = [{

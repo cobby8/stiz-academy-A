@@ -56,6 +56,7 @@ export default function SessionInProgressClient({
   const [elapsed, setElapsed] = useState(0);
   const [memo, setMemo] = useState(session.notes || "");
   const [message, setMessage] = useState("");
+  const [bulkAttendanceProgress, setBulkAttendanceProgress] = useState("");
   const [finishError, setFinishError] = useState("");
   const [memoStatus, setMemoStatus] = useState<"saved" | "dirty" | "saving" | "error">("saved");
   const [voiceBusy, setVoiceBusy] = useState(false);
@@ -259,47 +260,60 @@ export default function SessionInProgressClient({
   function updateAttendance(studentId: string, status: AttendanceStatus) {
     setMessage("");
     startTransition(async () => {
-      const result = await saveStaffAttendance({ sessionId: session.id, studentId, status });
-      if (!result.ok) {
-        setMessage(result.message);
-        return;
-      }
-      setStudents((current) =>
-        current.map((student) =>
-          student.id === studentId
-            ? {
-                ...student,
-                status,
-                arrivedAt: status === "LATE" ? student.arrivedAt || new Date().toISOString() : null,
-              }
-            : student,
-        ),
-      );
-      if (result.notificationWarning) {
-        setMessage("출결은 저장됐지만 학부모 알림은 재전송이 필요합니다.");
+      try {
+        const result = await saveStaffAttendance({ sessionId: session.id, studentId, status });
+        if (!result.ok) {
+          setMessage(result.message);
+          return;
+        }
+        setStudents((current) =>
+          current.map((student) =>
+            student.id === studentId
+              ? {
+                  ...student,
+                  status,
+                  arrivedAt: status === "LATE" ? student.arrivedAt || new Date().toISOString() : null,
+                }
+              : student,
+          ),
+        );
+        if (result.notificationWarning) {
+          setMessage("출결은 저장됐지만 학부모 알림은 재전송이 필요합니다.");
+        }
+      } catch {
+        setMessage("출석을 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
       }
     });
   }
 
   function markAllPresent() {
     const unchecked = students.filter((student) => !student.status);
+    setMessage("");
+    setBulkAttendanceProgress(`0/${unchecked.length} 처리 중`);
     startTransition(async () => {
-      for (const student of unchecked) {
-        const result = await saveStaffAttendance({
-          sessionId: session.id,
-          studentId: student.id,
-          status: "PRESENT",
-        });
-        if (!result.ok) {
-          setMessage(result.message);
-          return;
+      try {
+        for (const [index, student] of unchecked.entries()) {
+          const result = await saveStaffAttendance({
+            sessionId: session.id,
+            studentId: student.id,
+            status: "PRESENT",
+          });
+          if (!result.ok) {
+            setMessage(`${index}명은 저장됐습니다. ${result.message}`);
+            return;
+          }
+          setStudents((current) => current.map((row) => (
+            row.id === student.id ? { ...row, status: "PRESENT" } : row
+          )));
+          setBulkAttendanceProgress(`${index + 1}/${unchecked.length} 처리 중`);
         }
-      }
-      setStudents((current) =>
-        current.map((student) => student.status ? student : { ...student, status: "PRESENT" }),
-      );
-      if (unchecked.length > 0) {
-        setMessage("전체 출석을 저장했습니다. 알림 전달 상태는 관리자 장부에서 재확인할 수 있습니다.");
+        if (unchecked.length > 0) {
+          setMessage("전체 출석을 저장했습니다. 알림 전달 상태는 관리자 장부에서 재확인할 수 있습니다.");
+        }
+      } catch {
+        setMessage("저장 중 연결이 끊겼습니다. 화면에 반영된 학생은 저장됐으니 남은 학생만 다시 처리해 주세요.");
+      } finally {
+        setBulkAttendanceProgress("");
       }
     });
   }
@@ -361,9 +375,10 @@ export default function SessionInProgressClient({
           <div className="rounded-xl bg-gray-100 p-3 text-gray-600">미확인 {counts.UNCHECKED}</div>
         </section>
 
-        <button type="button" disabled={pending || counts.UNCHECKED === 0} onClick={markAllPresent} className="min-h-12 w-full rounded-xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">
-          미확인 학생 전체 출석
+        <button type="button" disabled={pending || counts.UNCHECKED === 0} aria-busy={pending && Boolean(bulkAttendanceProgress)} onClick={markAllPresent} className="min-h-12 w-full rounded-xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">
+          {bulkAttendanceProgress || "미확인 학생 전체 출석"}
         </button>
+        {message && <p role="alert" aria-live="assertive" className="rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">{message}</p>}
 
         <section className="space-y-3">
           {students.map((student) => (
@@ -382,7 +397,6 @@ export default function SessionInProgressClient({
             </article>
           ))}
         </section>
-        {message && <p className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{message}</p>}
       </main>
     );
   }

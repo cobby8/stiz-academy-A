@@ -22,6 +22,12 @@ test("시즌 반 요일 결제 셔틀 검색 필터를 서버에서 처리한다
   assert.match(route, /AT TIME ZONE 'Asia\/Seoul'/);
 });
 
+test("반별 명단 요일은 신청서 합집합이 아니라 실제 반 회차를 사용한다", () => {
+  const roster = route.slice(route.indexOf("async function seasonalRoster"), route.indexOf("async function ensureApplicationCapacity"));
+  assert.match(roster, /FROM "SpecialProgramSessionDate" sd WHERE sd\."offeringId" = item\."offeringId"/);
+  assert.doesNotMatch(roster, /unnest\(app\."selectedWeekdays"\)/);
+});
+
 test("검색과 결제·셔틀 필터는 운영 의미로 정규화한다", () => {
   assert.match(route, /regexp_replace\(\$6, '\[\^0-9\]', '', 'g'\) <> ''/);
   assert.match(route, /payment\.status IN \('PAID','COMPLETED'\) OR invoice\.status IN \('PAID','COMPLETED'\)/);

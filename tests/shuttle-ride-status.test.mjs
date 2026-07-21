@@ -50,4 +50,7 @@ test("admin route screen shows ride status for each passenger", () => {
   assert.match(adminClientSource, /rideStatus\?: string \| null/);
   assert.match(adminClientSource, /rideStatusLabel\(passenger\.rideStatus\)/);
   assert.match(adminClientSource, /function rideStatusClass/);
+  assert.match(adminClientSource, /summarizeRideStatuses\(stops\)/);
+  assert.match(adminClientSource, /체크 대기/);
+  assert.match(adminClientSource, /미탑승/);
 });

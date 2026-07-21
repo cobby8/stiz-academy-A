@@ -153,6 +153,7 @@ export default function ShuttleRouteAdminClient() {
       action: "confirmLocation",
       data: {
         kind: target.kind,
+        name: value.roadAddress || value.address,
         address: value.address,
         roadAddress: value.roadAddress,
         latitude: value.latitude,

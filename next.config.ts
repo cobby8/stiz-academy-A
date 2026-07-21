@@ -93,6 +93,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: "/admin/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
+        ],
+      },
+      {
         // 일반 staff 권한 규칙 뒤에서 설치 화면의 카메라·마이크 권한을 다시 최소화한다.
         source: "/staff/install",
         headers: [
@@ -115,7 +124,7 @@ const nextConfig: NextConfig = {
       },
       {
         // 브라우저는 중복 권한 헤더를 교집합으로 적용하므로 교사용 경로와 겹치지 않게 한다.
-        source: "/((?!staff(?:/|$)|api/staff(?:/|$)).*)",
+        source: "/((?!staff(?:/|$)|api/staff(?:/|$)|admin(?:/|$)).*)",
         headers: [
           { key: "X-Frame-Options", value: "DENY" }, // 클릭재킹 방지: iframe 삽입 차단
           { key: "X-Content-Type-Options", value: "nosniff" }, // MIME 스니핑 방지

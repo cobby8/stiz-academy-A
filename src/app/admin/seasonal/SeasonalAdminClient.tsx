@@ -31,6 +31,16 @@ type ShuttleRequest = {
   assignedStopId?: string | null;
 };
 
+type InvoiceInfo = {
+  id: string;
+  paymentId: string;
+  invoiceNo?: string | null;
+  status?: string | null;
+  amount?: number | null;
+  dueDate?: string | null;
+  checkoutUrl?: string | null;
+};
+
 type Season = {
   id: string;
   name: string;
@@ -55,6 +65,7 @@ type ApplicationItem = {
   linkedClassId?: string | null;
   enrollmentId?: string | null;
   paymentId?: string | null;
+  invoice?: InvoiceInfo | null;
   shuttleRequest?: ShuttleRequest | null;
 };
 
@@ -115,6 +126,18 @@ function formatDateTime(value?: string | null) {
   if (!value) return "미정";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function getItemInvoiceHref(item: Pick<ApplicationItem, "invoice">) {
+  if (item.invoice?.checkoutUrl) return item.invoice.checkoutUrl;
+  if (!item.invoice?.id) return null;
+  return `/payments/${encodeURIComponent(item.invoice.id)}`;
+}
+
+function toAbsoluteHref(href: string) {
+  if (/^https?:\/\//i.test(href)) return href;
+  const normalizedHref = href.startsWith("/") ? href : `/${href}`;
+  return `${window.location.origin}${normalizedHref}`;
 }
 
 function badge(status?: string | null) {
@@ -182,6 +205,7 @@ export default function SeasonalAdminClient() {
             linkedClassId: item.linkedClassId ?? offering?.linkedClassId ?? null,
             enrollmentId: item.enrollmentId ?? null,
             paymentId: item.paymentId ?? null,
+            invoice: (item.invoice ?? null) as InvoiceInfo | null,
             shuttleRequest: (item.shuttleRequest ?? null) as ShuttleRequest | null,
           } as ApplicationItem;
         });
@@ -253,6 +277,22 @@ export default function SeasonalAdminClient() {
     }
   }
 
+  async function copyInvoiceLink(item: ApplicationItem) {
+    const href = getItemInvoiceHref(item);
+    if (!href) {
+      setNotice("먼저 청구서를 생성해야 링크를 복사할 수 있습니다.");
+      return;
+    }
+    const absoluteHref = toAbsoluteHref(href);
+    try {
+      await navigator.clipboard.writeText(absoluteHref);
+      setNotice(`${item.className} 청구서 링크를 복사했습니다.`);
+    } catch {
+      window.open(absoluteHref, "_blank", "noopener,noreferrer");
+      setNotice("브라우저가 복사를 막아 청구서를 새 창으로 열었습니다.");
+    }
+  }
+
   return (
     <main className="mx-auto max-w-7xl space-y-6 pb-20">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -270,7 +310,7 @@ export default function SeasonalAdminClient() {
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} search={search} status={statusFilter} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} />}
 
-      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} convertingItemId={convertingItemId} />}
+      {selectedApplication && <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdateItem={updateItem} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
       {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
@@ -306,12 +346,14 @@ function ApplicationDrawer({
   onClose,
   onUpdateItem,
   onConvertItem,
+  onCopyInvoiceLink,
   convertingItemId,
 }: {
   application: Application;
   onClose: () => void;
   onUpdateItem: (id: string, status: ItemStatus) => Promise<void>;
   onConvertItem: (id: string) => Promise<void>;
+  onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>;
   convertingItemId: string;
 }) {
   const totalAmount = application.totalAmount ?? application.items.reduce((sum, item) => sum + (item.amount ?? 0), 0);
@@ -357,7 +399,7 @@ function ApplicationDrawer({
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
         </div>
         <div className="mt-3 space-y-3">
-          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} onConvertItem={onConvertItem} converting={convertingItemId === item.id} />)}
+          {application.items.map((item) => <ApplicationItemCard key={item.id} item={item} onUpdateItem={onUpdateItem} onConvertItem={onConvertItem} onCopyInvoiceLink={onCopyInvoiceLink} converting={convertingItemId === item.id} />)}
         </div>
       </section>
 
@@ -367,7 +409,7 @@ function ApplicationDrawer({
   </div>;
 }
 
-function ApplicationItemCard({ item, onUpdateItem, onConvertItem, converting }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void>; onConvertItem: (id: string) => Promise<void>; converting: boolean }) {
+function ApplicationItemCard({ item, onUpdateItem, onConvertItem, onCopyInvoiceLink, converting }: { item: ApplicationItem; onUpdateItem: (id: string, status: ItemStatus) => Promise<void>; onConvertItem: (id: string) => Promise<void>; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; converting: boolean }) {
   const quickStatuses: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
   return <article className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
     <div className="flex items-start justify-between gap-3">
@@ -388,6 +430,7 @@ function ApplicationItemCard({ item, onUpdateItem, onConvertItem, converting }: 
       </select>
     </label>
     <ConversionReadinessBox item={item} onConvertItem={onConvertItem} converting={converting} />
+    {item.invoice && <InvoiceActionBox item={item} onCopyInvoiceLink={onCopyInvoiceLink} />}
     {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} />}
   </article>;
 }
@@ -450,6 +493,27 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
 
 function MiniState({ active, label }: { active: boolean; label: string }) {
   return <span className={`rounded-full px-2 py-1 text-[11px] font-black ${active ? "bg-white text-emerald-700 dark:bg-emerald-100 dark:text-emerald-900" : "bg-white/60 text-gray-500 dark:bg-gray-900/50 dark:text-gray-300"}`}>{label}</span>;
+}
+
+function InvoiceActionBox({ item, onCopyInvoiceLink }: { item: ApplicationItem; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void> }) {
+  const href = getItemInvoiceHref(item);
+  return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <p className="font-black text-gray-950 dark:text-white">청구서</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {item.invoice?.invoiceNo || "청구번호 준비됨"} · {STATUS_LABEL[item.invoice?.status || ""] ?? item.invoice?.status ?? "발행"}
+        </p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {(item.invoice?.amount ?? item.amount ?? 0).toLocaleString()}원 · 납부기한 {formatDate(item.invoice?.dueDate)}
+        </p>
+      </div>
+      <div className="flex shrink-0 gap-2">
+        {href && <a href={href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200">청구서 열기</a>}
+        <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">링크 복사</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function ShuttleRequestBox({ request }: { request: ShuttleRequest }) {

@@ -12,6 +12,9 @@ const APPLICATION_STATUSES = new Set(["PENDING", "PARTIALLY_WAITLISTED", "APPROV
 const ITEM_STATUSES = new Set(["PENDING", "WAITLISTED", "APPROVED", "REJECTED", "CANCELLED"]);
 type SessionDateInput = { startsAt?: unknown; endsAt?: unknown; location?: unknown; note?: unknown };
 type ConversionResult = { itemId: string; studentId: string; enrollmentId: string; paymentId: string; invoiceId: string | null };
+type AdminApplicationRow = Record<string, unknown> & {
+  items: Array<Record<string, unknown> & { paymentId?: string | null }>;
+};
 
 async function admin() {
   try {
@@ -76,9 +79,30 @@ export async function GET(request: NextRequest) {
         } : false,
       },
     });
+    const applicationRows: AdminApplicationRow[] = includeApplications
+      ? seasons.flatMap((season) => ((season as unknown as { applications?: AdminApplicationRow[] }).applications ?? []))
+      : [];
+    const paymentIds = Array.from(new Set(
+      applicationRows.flatMap((application) => application.items.map((item) => item.paymentId).filter(Boolean) as string[]),
+    ));
+    const invoiceRows = paymentIds.length
+      ? await prisma.paymentInvoice.findMany({
+          where: { paymentId: { in: paymentIds } },
+          select: { id: true, paymentId: true, invoiceNo: true, status: true, amount: true, dueDate: true, checkoutUrl: true },
+        })
+      : [];
+    const invoicesByPaymentId = new Map(invoiceRows.map((invoice) => [invoice.paymentId, invoice]));
+    const applications = applicationRows.map((application) => ({
+      ...application,
+      items: application.items.map((item) => ({
+        ...item,
+        invoice: item.paymentId ? invoicesByPaymentId.get(item.paymentId) ?? null : null,
+      })),
+    }));
+
     return NextResponse.json({
       seasons,
-      applications: includeApplications ? seasons.flatMap((season) => season.applications) : [],
+      applications,
     });
   } catch (error) { return respondError(error); }
 }

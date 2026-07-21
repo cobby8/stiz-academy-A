@@ -103,6 +103,7 @@ type ContactSummary = { parentPhone: string; childName: string; status: string }
 type PriorityBadge = { icon: string; label: string; className: string };
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
+type ViewMode = "cards" | "list";
 
 const EMPTY_STATS: TrialStats = {
     NEW: 0,
@@ -509,6 +510,7 @@ export default function TrialCrmClient({
     const [filter, setFilter] = useState<string>("ALL");
     const [workFilter, setWorkFilter] = useState<TrialWorkFilter>("ALL");
     const [searchQuery, setSearchQuery] = useState("");
+    const [viewMode, setViewMode] = useState<ViewMode>("cards");
     const [visibleLimit, setVisibleLimit] = useState(TRIAL_PAGE_SIZE);
     const [busy, setBusy] = useState(false);
     const [feedback, setFeedback] = useState<FeedbackState>(null);
@@ -747,6 +749,135 @@ export default function TrialCrmClient({
         return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
     }
 
+    function renderTrialList() {
+        return (
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="hidden grid-cols-[1.1fr_1fr_1.4fr_1fr_1.3fr] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-black uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-400 lg:grid">
+                    <span>학생</span>
+                    <span>보호자</span>
+                    <span>일정</span>
+                    <span>상태 변경</span>
+                    <span>빠른 처리</span>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {visibleLeads.map((lead) => {
+                        const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
+                        const isClosed = isClosedTrialStatus(lead.status);
+                        const preferredSchedule = formatPreferredSchedule(lead);
+                        const parentPhoneHref = phoneHref(lead.parentPhone);
+                        return (
+                            <div
+                                key={`${lead.id}-list`}
+                                className="grid gap-3 px-4 py-4 text-sm lg:grid-cols-[1.1fr_1fr_1.4fr_1fr_1.3fr] lg:items-center"
+                            >
+                                <div className="min-w-0">
+                                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
+                                            <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
+                                            {cfg.label}
+                                        </span>
+                                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                            {SOURCE_LABELS[lead.source] || lead.source}
+                                        </span>
+                                    </div>
+                                    <p className="truncate text-base font-black text-gray-900 dark:text-white">
+                                        {lead.childName}
+                                        {lead.childAge ? <span className="ml-1 text-sm font-bold text-gray-500 dark:text-gray-400">({lead.childAge})</span> : null}
+                                    </p>
+                                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                                        {[lead.childGrade, lead.childSchool].filter(Boolean).join(" · ") || "학년/학교 미입력"}
+                                    </p>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="truncate font-bold text-gray-800 dark:text-gray-100">{lead.parentName}</p>
+                                    <a href={parentPhoneHref} className="mt-1 inline-flex items-center gap-1 font-bold text-gray-600 hover:text-brand-orange-600 dark:text-gray-300 dark:hover:text-brand-neon-lime">
+                                        <span className="material-symbols-outlined text-base">phone</span>
+                                        {lead.parentPhone}
+                                    </a>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="truncate font-bold text-gray-800 dark:text-gray-100">
+                                        {lead.scheduledDate ? `확정 ${formatCompactDateTime(lead.scheduledDate)}` : preferredSchedule || "희망 일정 확인 필요"}
+                                    </p>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        접수 {formatDate(lead.createdAt)}
+                                        {lead.trialDate ? ` · 희망 ${formatCompactDate(lead.trialDate)}` : ""}
+                                        {lead.coachNoticeSentAt ? " · 담당쌤 알림" : ""}
+                                    </p>
+                                </div>
+                                <div>
+                                    {isClosed ? (
+                                        <span className="text-xs font-bold text-gray-500 dark:text-gray-400">종료 상태</span>
+                                    ) : (
+                                        <select
+                                            value={lead.status}
+                                            onChange={(event) => handleStatusChange(lead, event.target.value)}
+                                            disabled={busy}
+                                            className="min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
+                                        >
+                                            {STATUS_ORDER.filter((s) => !isClosedTrialStatus(s)).map((s) => (
+                                                <option key={s} value={s}>
+                                                    {STATUS_CONFIG[s].label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <a
+                                        href={parentPhoneHref}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime"
+                                    >
+                                        <span className="material-symbols-outlined text-base">call</span>
+                                        전화
+                                    </a>
+                                    {!isClosed && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowScheduleModal(lead)}
+                                            className="inline-flex items-center gap-1 rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-50 dark:border-sky-900/60 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                                        >
+                                            <span className="material-symbols-outlined text-base">event_available</span>
+                                            일정
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRecordContact(lead, "CONTACTED")}
+                                        disabled={contactBusyId === lead.id}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-lime-300 bg-lime-50 px-3 py-2 text-xs font-black text-lime-800 transition hover:bg-lime-100 disabled:opacity-50 dark:border-lime-700 dark:bg-lime-950/30 dark:text-lime-200"
+                                    >
+                                        <span className="material-symbols-outlined text-base">done_all</span>
+                                        연락
+                                    </button>
+                                    {lead.status === "ATTENDED" && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConvertModal(lead)}
+                                            disabled={busy}
+                                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                                        >
+                                            <span className="material-symbols-outlined text-base">how_to_reg</span>
+                                            등록
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMemoModal(lead)}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                    >
+                                        <span className="material-symbols-outlined text-base">edit_note</span>
+                                        메모
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
+
     if (loading && leads.length === 0) {
         return <TrialCrmLoadingFallback />;
     }
@@ -860,26 +991,54 @@ export default function TrialCrmClient({
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <label className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
-                    <span className="material-symbols-outlined text-lg text-gray-400">search</span>
-                    <input
-                        type="search"
-                        value={searchQuery}
-                        onChange={(event) => setSearchQuery(event.target.value)}
-                        placeholder="학생, 보호자, 전화번호, 학교, 메모로 검색"
-                        className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
-                    />
-                    {searchQuery && (
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
+                        <span className="material-symbols-outlined text-lg text-gray-400">search</span>
+                        <input
+                            type="search"
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
+                            placeholder="학생, 보호자, 전화번호, 학교, 메모로 검색"
+                            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                                title="검색어 지우기"
+                            >
+                                <span className="material-symbols-outlined text-base">close</span>
+                            </button>
+                        )}
+                    </label>
+                    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
                         <button
                             type="button"
-                            onClick={() => setSearchQuery("")}
-                            className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                            title="검색어 지우기"
+                            onClick={() => setViewMode("cards")}
+                            className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-bold transition ${
+                                viewMode === "cards"
+                                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
+                                    : "text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+                            }`}
                         >
-                            <span className="material-symbols-outlined text-base">close</span>
+                            <span className="material-symbols-outlined text-base">grid_view</span>
+                            카드
                         </button>
-                    )}
-                </label>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode("list")}
+                            className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-bold transition ${
+                                viewMode === "list"
+                                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white"
+                                    : "text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-base">view_list</span>
+                            목록
+                        </button>
+                    </div>
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                     {TRIAL_WORK_FILTERS.map((item) => (
                         <button
@@ -924,7 +1083,7 @@ export default function TrialCrmClient({
                 </div>
             ) : (
                 <div className="grid gap-4">
-                    {visibleLeads.map((lead) => {
+                    {viewMode === "list" ? renderTrialList() : visibleLeads.map((lead) => {
                         const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
                         const isClosed = isClosedTrialStatus(lead.status);
                         const scheduleItems = getTrialScheduleItems(lead);

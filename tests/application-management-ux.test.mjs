@@ -86,3 +86,16 @@ test("관리자 신청 화면은 핵심 메뉴와 주요 액션만 먼저 보여
   assert.match(applyClient, /더보기/);
   assert.doesNotMatch(applyClient, /workFlags\.map/);
 });
+
+test("체험수업과 수강신청은 카드형과 목록형 보기를 모두 제공한다", () => {
+  assert.match(applyClient, /type ViewMode = "cards" \| "list"/);
+  assert.match(applyClient, /renderApplicationList/);
+  assert.match(applyClient, /setViewMode\("cards"\)/);
+  assert.match(applyClient, /setViewMode\("list"\)/);
+  assert.match(applyClient, /상태 변경/);
+  assert.match(trialClient, /type ViewMode = "cards" \| "list"/);
+  assert.match(trialClient, /renderTrialList/);
+  assert.match(trialClient, /setViewMode\("cards"\)/);
+  assert.match(trialClient, /setViewMode\("list"\)/);
+  assert.match(trialClient, /handleStatusChange\(lead, event\.target\.value\)/);
+});

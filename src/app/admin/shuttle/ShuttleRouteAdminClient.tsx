@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type InputHT
 import AdminModal from "@/components/admin/AdminModal";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+import { coordinateLinkSet } from "@/lib/maps/coordinate-links";
 
 type Direction = "PICKUP" | "DROPOFF";
 type RouteStatus = "DRAFT" | "CONFIRMED" | "COMPLETED" | "ARCHIVED";
@@ -63,13 +64,12 @@ interface RequestLocation { name?: string | null; address?: string | null; roadA
 interface Payload { seasons: Season[]; selectedSeasonId?: string; vehicles: Vehicle[]; drivers: Driver[]; routes: RoutePlan[]; unassignedRequests: ShuttleRequest[] }
 type LocationPickerTarget = { request: ShuttleRequest; kind: "pickup" | "dropoff" };
 
+function mapUrl(lat: number | string | null | undefined, lng: number | string | null | undefined, name: string) {
+  return coordinateLinkSet({ latitude: lat, longitude: lng, name }).kakaoMap;
+}
+
 const EMPTY_PAYLOAD: Payload = { seasons: [], vehicles: [], drivers: [], routes: [], unassignedRequests: [] };
 const STATUS_LABEL: Record<RouteStatus, string> = { DRAFT: "작성 중", CONFIRMED: "확정", COMPLETED: "운행완료", ARCHIVED: "보관" };
-
-function mapUrl(lat: number | string | null | undefined, lng: number | string | null | undefined, name: string) {
-  if (lat == null || lng == null) return null;
-  return `https://map.kakao.com/link/map/${encodeURIComponent(name)},${lat},${lng}`;
-}
 
 function formatDate(value?: string | null) {
   if (!value) return "날짜 미지정";
@@ -230,7 +230,7 @@ export default function ShuttleRouteAdminClient() {
           <div className="mb-3 flex items-center justify-between"><h2 className="font-black">미배정 학생</h2><span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-black dark:bg-gray-700">{data.unassignedRequests.length}명</span></div>
           <div className="max-h-[32rem] space-y-2 overflow-y-auto">{data.unassignedRequests.length ? data.unassignedRequests.map((item) => {
             const location = chosenLocation(item);
-            const url = mapUrl(location.lat, location.lng, location.name);
+            const links = coordinateLinkSet({ latitude: location.lat, longitude: location.lng, name: location.name });
             const canAssign = Boolean(selectedRoute && selectedRoute.status === "DRAFT" && location.lat != null && location.lng != null && location.confirmedAt);
             return <article key={item.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
               <div className="flex justify-between gap-2">
@@ -239,8 +239,12 @@ export default function ShuttleRouteAdminClient() {
                   <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">{location.roadAddress || location.address || "위치 확인 필요"}</p>
                   {location.confirmedAt && <p className="mt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">관리자 위치 확인 완료</p>}
                 </div>
-                {url && <a href={url} target="_blank" rel="noreferrer" aria-label={`${item.childName || "학생"} 위치 지도에서 열기`} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={19} /></a>}
+                {links.kakaoMap && <a href={links.kakaoMap} target="_blank" rel="noreferrer" aria-label={`${item.childName || "학생"} 카카오맵에서 좌표 확인`} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="map" size={19} /></a>}
               </div>
+              {links.point && <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-black">
+                <a href={links.kakaoNavigation ?? links.kakaoMap ?? "#"} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">카카오 길안내</a>
+                <a href={links.tmapNavigation ?? "#"} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-orange-200 bg-orange-50 px-2 text-orange-800 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200">T맵 길안내</a>
+              </div>}
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => setLocationPicker({ request: item, kind: direction === "PICKUP" ? "pickup" : "dropoff" })} disabled={pending} className="min-h-10 rounded-lg border border-blue-200 bg-blue-50 text-sm font-black text-blue-800 disabled:opacity-40 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">위치 찍기</button>
                 <button type="button" onClick={() => openAssign(item)} disabled={!canAssign} className="min-h-10 rounded-lg bg-gray-950 text-sm font-black text-white disabled:bg-gray-300 dark:bg-white dark:text-gray-950 dark:disabled:bg-gray-700">{canAssign ? "선택 노선에 배정" : "좌표 확인 필요"}</button>

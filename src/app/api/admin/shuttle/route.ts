@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { classifyAdminAuthError } from "@/app/api/admin/seasonal/auth-error";
 import {
   archiveRoute,
+  completeRoute,
   assignPassenger,
   confirmRoute,
   createRoute,
@@ -79,6 +80,7 @@ export async function PATCH(request: NextRequest) {
       case "unassign": route = await unassignPassenger(actor, id, data); break;
       case "reorder": route = await reorderStops(actor, id, data); break;
       case "confirm": route = await confirmRoute(actor, id); break;
+      case "complete": route = await completeRoute(actor, id); break;
       case "archive": route = await archiveRoute(actor, id); break;
       case "revise": route = await reviseRoute(actor, id); break;
       default: throw new ShuttleServiceError("지원하지 않는 노선 작업입니다.", 400, "UNSUPPORTED_ACTION");

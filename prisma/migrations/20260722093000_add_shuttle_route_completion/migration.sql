@@ -1,0 +1,1 @@
+ALTER TYPE "ShuttleRoutePlanStatus" ADD VALUE IF NOT EXISTS 'COMPLETED';

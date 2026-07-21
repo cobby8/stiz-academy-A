@@ -556,6 +556,27 @@ export async function archiveRoute(actor: Actor, routeId: string) {
   });
 }
 
+export async function completeRoute(actor: Actor, routeId: string) {
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.shuttleRoutePlan.findUnique({ where: { id: routeId }, include: routeInclude });
+    if (!before) throw new ShuttleServiceError("노선을 찾을 수 없습니다.", 404, "ROUTE_NOT_FOUND");
+    if (before.status !== ShuttleRoutePlanStatus.CONFIRMED) {
+      throw new ShuttleServiceError("확정된 운행 노선만 완료 처리할 수 있습니다.", 409, "ROUTE_NOT_CONFIRMED");
+    }
+    const pendingPassengers = before.stops.reduce((sum, stop) => sum + stop.passengers.filter((passenger) => passenger.rideStatus === "PENDING").length, 0);
+    if (pendingPassengers > 0) {
+      throw new ShuttleServiceError("체크 대기 학생이 남아 있어 운행을 완료할 수 없습니다.", 409, "RIDE_STATUS_PENDING");
+    }
+    const route = await tx.shuttleRoutePlan.update({
+      where: { id: routeId },
+      data: { status: ShuttleRoutePlanStatus.COMPLETED, completedAt: new Date(), completedByUserId: actor.appUserId },
+      include: routeInclude,
+    });
+    await audit(tx, actor, "ROUTE_COMPLETED", { routePlanId: routeId }, before, route);
+    return route;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function reviseRoute(actor: Actor, routeId: string) {
   return prisma.$transaction(async (tx) => {
     const source = await tx.shuttleRoutePlan.findUnique({ where: { id: routeId }, include: routeInclude });

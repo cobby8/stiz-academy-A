@@ -1455,6 +1455,8 @@ model ShuttleRoutePlan {
   previousVersionId String?
   confirmedAt DateTime? @db.Timestamptz(6)
   confirmedByUserId String?
+  completedAt DateTime? @db.Timestamptz(6)
+  completedByUserId String?
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
   season SpecialProgramSeason @relation(fields: [seasonId], references: [id], onDelete: Restrict)
@@ -1649,5 +1651,6 @@ enum ShuttleRouteDirection {
 enum ShuttleRoutePlanStatus {
   DRAFT
   CONFIRMED
+  COMPLETED
   ARCHIVED
 }

@@ -34,7 +34,15 @@ async function isSessionRosterStudent(classId: string, sessionDateId: string | n
      JOIN "SpecialProgramSessionDate" sd ON sd."offeringId" = i."offeringId"
      WHERE sd.id = $1 AND app."convertedStudentId" = $2
        AND i.status = 'APPROVED'
-       AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED') LIMIT 1`,
+       AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+       AND (
+         COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+         OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+           WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+           WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+         END = ANY(app."selectedWeekdays")
+       )
+     LIMIT 1`,
     sessionDateId, studentId,
   );
   return Boolean(rows[0]);
@@ -49,6 +57,13 @@ async function getSessionParentRecipients(session: { classId: string; sessionDat
        AND i.status = 'APPROVED'
        AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
      JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+       AND (
+         COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+         OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+           WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+           WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+         END = ANY(app."selectedWeekdays")
+       )
      JOIN "Student" st ON st.id = app."convertedStudentId"
      WHERE sd.id = $1 AND ($2::text[] IS NULL OR st.id = ANY($2::text[])) AND st."parentId" IS NOT NULL`,
     session.sessionDateId, studentIds?.length ? studentIds : null,
@@ -182,6 +197,13 @@ export async function completeClassSession(input: { sessionId: string }) {
            AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
          JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
          WHERE sd.id = $1 AND app."convertedStudentId" IS NOT NULL
+           AND (
+             COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+             OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+               WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+               WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+             END = ANY(app."selectedWeekdays")
+           )
            AND NOT EXISTS (SELECT 1 FROM "Attendance" a WHERE a."sessionId" = $2 AND a."studentId" = app."convertedStudentId")`,
         session.sessionDateId, input.sessionId,
       )

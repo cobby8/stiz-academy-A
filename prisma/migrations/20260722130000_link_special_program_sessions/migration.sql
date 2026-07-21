@@ -1,12 +1,20 @@
-ALTER TABLE "Session" ADD COLUMN "specialProgramSessionDateId" TEXT;
+ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "specialProgramSessionDateId" TEXT;
 
-CREATE UNIQUE INDEX "Session_specialProgramSessionDateId_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "Session_specialProgramSessionDateId_key"
 ON "Session"("specialProgramSessionDateId");
 
-ALTER TABLE "Session"
-ADD CONSTRAINT "Session_specialProgramSessionDateId_fkey"
-FOREIGN KEY ("specialProgramSessionDateId") REFERENCES "SpecialProgramSessionDate"("id")
-ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Session_specialProgramSessionDateId_fkey'
+  ) THEN
+    ALTER TABLE "Session"
+    ADD CONSTRAINT "Session_specialProgramSessionDateId_fkey"
+    FOREIGN KEY ("specialProgramSessionDateId") REFERENCES "SpecialProgramSessionDate"("id")
+    ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 INSERT INTO "Session" (
   id, "classId", date, "sessionKey", status, "coachId",

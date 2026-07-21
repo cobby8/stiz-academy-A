@@ -116,6 +116,13 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
          AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
      LEFT JOIN "SpecialProgramApplication" a
        ON a.id = i."applicationId" AND a."convertedStudentId" IS NOT NULL
+        AND (
+          COALESCE(cardinality(a."selectedWeekdays"), 0) = 0
+          OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+            WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+            WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+          END = ANY(a."selectedWeekdays")
+        )
      LEFT JOIN "Session" s ON s."specialProgramSessionDateId" = sd.id
      WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
        AND ($2::boolean = true OR o."instructorId" = $3)
@@ -167,6 +174,13 @@ export async function getStaffSessionDetail(sessionId: string): Promise<StaffSes
        AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
      LEFT JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
        AND app."convertedStudentId" IS NOT NULL
+       AND (
+         COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+         OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+           WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+           WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+         END = ANY(app."selectedWeekdays")
+       )
      LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
      WHERE s.id = $1
      GROUP BY s.id, c.id, sd.id, o.id
@@ -217,6 +231,13 @@ export async function getStaffSessionStudents(
          AND i.status = 'APPROVED'
          AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
        JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+         AND (
+           COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+           OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+             WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+             WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+           END = ANY(app."selectedWeekdays")
+         )
        JOIN "Student" st ON st.id = app."convertedStudentId"
        LEFT JOIN "Attendance" att ON att."sessionId" = s.id AND att."studentId" = st.id
        WHERE s.id = $1

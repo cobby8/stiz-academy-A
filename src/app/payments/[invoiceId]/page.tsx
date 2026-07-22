@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireVerifiedParent } from "@/lib/auth-guard";
 import { getInvoiceForParent, getPaymentProviderConfig } from "@/lib/payment-ledger";
 import PaymentCheckoutClient from "./PaymentCheckoutClient";
 
@@ -18,7 +18,7 @@ function formatDate(value: Date | string | null) {
 export default async function PaymentPage({ params }: { params: Promise<{ invoiceId: string }> }) {
     const { invoiceId } = await params;
     const paymentPath = `/payments/${encodeURIComponent(invoiceId)}`;
-    const user = await requireAuth().catch(() => null);
+    const user = await requireVerifiedParent().catch(() => null);
     if (!user) {
         redirect(`/login?redirect=${encodeURIComponent(paymentPath)}`);
     }

@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import {
-  defaultPathForRole,
   normalizeAppRole,
   resolveRedirectForRole,
   type AppRole,
@@ -26,37 +25,29 @@ async function getRoleForAuthUser(user?: { id?: string | null; email?: string | 
   return rows[0] ? normalizeAppRole(rows[0].role) : null;
 }
 
-async function insertSignupUser(data: {
-  id: string;
-  email: string;
-  name: string;
-  role: "PARENT";
-}) {
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "User" (id, email, name, role, "createdAt", "updatedAt")
-     VALUES ($1, $2, $3, $4::"Role", NOW(), NOW())
-     ON CONFLICT (email) DO NOTHING`,
-    data.id,
-    data.email,
-    data.name,
-    data.role,
-  );
-}
-
 export async function login(formData: FormData) {
   const supabase = await createClient();
 
-  const email = String(formData.get("email") || "").trim();
+  const identifier = String(formData.get("email") || formData.get("username") || "").trim();
   const password = String(formData.get("password") || "");
   const redirectTo = formData.get("redirectTo") as string | null;
   const loginContext = formData.get("loginContext");
 
-  if (!email || !password) {
+  if (!identifier || !password) {
     return { error: "이메일과 비밀번호를 입력해주세요." };
   }
 
+  let authEmail = identifier;
+  if (loginContext !== "staff" && !identifier.includes("@")) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ email: string }>>(
+      `SELECT email FROM "User" WHERE LOWER(username) = LOWER($1) AND role = 'PARENT' LIMIT 1`,
+      identifier,
+    );
+    authEmail = rows[0]?.email || `${identifier.toLowerCase()}@member.stiz.kr`;
+  }
+
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
+    email: authEmail,
     password,
   });
 
@@ -90,53 +81,8 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
-  const supabase = await createClient();
-
-  const email = String(formData.get("email") || "").trim();
-  const password = String(formData.get("password") || "");
-  const name = String(formData.get("name") || "").trim();
-  // 공개 회원가입은 학부모 전용입니다. 선생님 계정은 관리자 초대 흐름에서만 생성합니다.
-  const role = "PARENT" as const;
-
-  if (!email || !password || !name) {
-    return { error: "모든 필수 항목을 입력해주세요." };
-  }
-
-  if (password.length < 6) {
-    return { error: "비밀번호는 6자 이상이어야 합니다." };
-  }
-
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        name,
-        role,
-      },
-    },
-  });
-
-  if (error) {
-    if (error.message.includes("already registered")) {
-      return { error: "이미 등록된 이메일입니다." };
-    }
-    return { error: "회원가입 중 오류가 발생했습니다." };
-  }
-
-  if (!data.user) {
-    return { error: "계정 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요." };
-  }
-
-  await insertSignupUser({
-    id: data.user.id,
-    email,
-    name,
-    role,
-  });
-
-  revalidatePath("/", "layout");
-  redirect(defaultPathForRole(role));
+  void formData;
+  return { error: "새 회원가입 화면에서 휴대폰 인증을 완료해 주세요." };
 }
 
 export async function logout() {

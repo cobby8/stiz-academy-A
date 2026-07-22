@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logout } from "@/app/actions/auth";
-import { resolveRedirectForRole, normalizeAppRole } from "@/lib/auth-routes";
+import { parseAppRole, resolveRedirectForRole } from "@/lib/auth-routes";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -21,18 +21,27 @@ export default async function AuthContinuePage({ searchParams }: ContinuePagePro
   if (!user) redirect("/login");
 
   try {
-    const rows = await prisma.$queryRawUnsafe<Array<{ role: string }>>(
-      `SELECT role FROM "User"
-       WHERE id = $1 OR LOWER(email) = LOWER($2)
-       ORDER BY CASE WHEN id = $1 THEN 0 ELSE 1 END
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ role: string; username: string | null; phoneVerifiedAt: Date | null }>
+    >(
+      `SELECT role, username, "phoneVerifiedAt" FROM "User"
+       WHERE "authUserId" = $1 OR id = $1
+       ORDER BY CASE WHEN "authUserId" = $1 THEN 0 ELSE 1 END
        LIMIT 1`,
       user.id,
-      user.email || "",
     );
-    const role = normalizeAppRole(rows[0]?.role);
+    const role = parseAppRole(rows[0]?.role);
     const params = await searchParams;
     const context = Array.isArray(params.context) ? params.context[0] : params.context;
     const requestedPath = Array.isArray(params.redirect) ? params.redirect[0] : params.redirect;
+
+    // An OAuth identity is not an application membership. New social users and
+    // unverified parents must finish the mandatory phone onboarding first.
+    if (!role || (role === "PARENT" && rows[0]?.username !== null && !rows[0]?.phoneVerifiedAt)) {
+      const onboarding = new URLSearchParams({ social: "1" });
+      if (requestedPath) onboarding.set("next", requestedPath);
+      redirect(`/signup/parent?${onboarding.toString()}`);
+    }
 
     redirect(
       resolveRedirectForRole(role, requestedPath, {

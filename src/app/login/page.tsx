@@ -104,11 +104,7 @@ function LoginContent() {
             <button
               type="button"
               onClick={() => {
-                setMode("signup");
-                setError(null);
-                setShowPassword(false); // 모드 전환 시 비밀번호 숨김으로 초기화
-                setAgreePrivacy(false);
-                setAgreeTerms(false);
+                window.location.href = "/signup/parent";
               }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 mode === "signup"
@@ -178,15 +174,15 @@ function LoginContent() {
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
               >
-                이메일
+                {isStaffMode ? "이메일" : "로그인 아이디 또는 기존 이메일"}
               </label>
               <input
                 id="email"
-                name="email"
-                type="email"
+                name={isStaffMode ? "email" : "username"}
+                type={isStaffMode ? "email" : "text"}
                 required
-                autoComplete={mode === "login" ? "email" : "off"}
-                placeholder="example@email.com"
+                autoComplete={isStaffMode ? "email" : "username"}
+                placeholder={isStaffMode ? "example@email.com" : "로그인 아이디"}
                 className="w-full px-4 py-2.5 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-gray-600 dark:bg-gray-950 dark:text-white dark:placeholder:text-gray-500 outline-none transition-colors"
               />
             </div>

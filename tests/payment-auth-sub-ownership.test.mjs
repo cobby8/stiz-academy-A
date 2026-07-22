@@ -18,7 +18,8 @@ test("checkout과 confirm도 같은 sub 우선 소유권 계약을 전달한다"
   assert.equal((ledger.match(/u\."authUserId" = \$2/g) ?? []).length, 2);
 });
 
-test("이메일 fallback은 authUserId가 없는 기존 보호자에게만 허용된다", () => {
-  const fallback = /u\."authUserId" IS NULL AND \$3 <> '' AND LOWER\(u\.email\) = LOWER\(\$3\)/g;
+test("기존 보호자 fallback도 이메일이 아니라 동일한 인증 sub만 허용한다", () => {
+  const fallback = /u\."authUserId" IS NULL AND u\.id = \$2/g;
   assert.equal((ledger.match(fallback) ?? []).length, 2);
+  assert.doesNotMatch(ledger, /LOWER\(u\.email\) = LOWER\(\$3\)/);
 });

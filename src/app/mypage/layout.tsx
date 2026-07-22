@@ -2,9 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { logout } from "@/app/actions/auth";
-import { prisma } from "@/lib/prisma";
-import { redirectPathForMyPageRole } from "@/lib/mypage-access";
-import { createClient } from "@/lib/supabase/server";
+import { requireVerifiedParent } from "@/lib/auth-guard";
 
 function SymbolIcon({ name }: { name: string }) {
     return (
@@ -19,37 +17,7 @@ export default async function MyPageLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-
-    // Middleware normally handles this case. Keeping the check here prevents
-    // protected content from rendering if the layout is reached during a stale session.
-    if (!user) {
-        redirect("/login?redirect=/mypage");
-    }
-
-    // Use the indexed auth id first. Older accounts may not share that id, so
-    // only those accounts pay for a second indexed lookup by normalized email.
-    const appUserById = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { role: true },
-    });
-    const normalizedEmail = user.email?.trim();
-    const appUser =
-        appUserById ??
-        (normalizedEmail
-            ? await prisma.user.findFirst({
-                where: { email: { equals: normalizedEmail, mode: "insensitive" } },
-                select: { role: true },
-            })
-            : null);
-    const redirectPath = redirectPathForMyPageRole(appUser?.role);
-
-    if (redirectPath) {
-        redirect(redirectPath);
-    }
+    await requireVerifiedParent().catch(() => redirect("/auth/continue?redirect=/mypage"));
 
     return (
         // surface-warm 배경 적용 — 공개 페이지와 동일한 따뜻한 톤

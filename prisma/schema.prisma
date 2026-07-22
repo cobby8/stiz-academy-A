@@ -11,8 +11,10 @@ datasource db {
 model User {
   id                      String             @id @default(uuid())
   email                   String             @unique
+  username                String?
   name                    String
   phone                   String?
+  phoneVerifiedAt         DateTime?          @db.Timestamptz(6)
   authUserId              String?            @unique
   role                    Role               @default(PARENT)
   createdAt               DateTime           @default(now())
@@ -1425,6 +1427,56 @@ model SpecialProgramApplicationItem {
   @@index([offeringId, status])
   @@index([offeringId, applicantFingerprint])
   @@index([offeringId, waitlistOrder])
+}
+
+model ParentSignupVerification {
+  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tokenHash           String    @unique
+  username            String?
+  name                String?
+  phone                String
+  phoneHash            String
+  signupMethod         String    @default("PASSWORD")
+  email                String?
+  pendingAuthUserId    String?
+  status               String    @default("PENDING")
+  expiresAt            DateTime  @db.Timestamptz(6)
+  otpHash              String?
+  otpExpiresAt         DateTime? @db.Timestamptz(6)
+  otpSentAt            DateTime? @db.Timestamptz(6)
+  otpAttempts          Int       @default(0)
+  lockedAt             DateTime? @db.Timestamptz(6)
+  verifiedAt           DateTime? @db.Timestamptz(6)
+  proofHash            String?
+  proofExpiresAt       DateTime? @db.Timestamptz(6)
+  processingAt         DateTime? @db.Timestamptz(6)
+  processingAttemptId  String?
+  authUserId           String?
+  consumedAt           DateTime? @db.Timestamptz(6)
+  termsAgreedAt        DateTime? @db.Timestamptz(6)
+  termsVersion         String?
+  privacyAgreedAt      DateTime? @db.Timestamptz(6)
+  privacyVersion       String?
+  ageConfirmedAt       DateTime? @db.Timestamptz(6)
+  lastError            String?
+  createdAt            DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([username, status, createdAt])
+  @@index([phoneHash, createdAt])
+}
+
+model ParentSignupOtpSend {
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  verificationId String
+  phoneHash      String
+  requestHash    String?
+  status         String
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([verificationId, createdAt])
+  @@index([phoneHash, createdAt])
+  @@index([requestHash, createdAt])
 }
 
 model SpecialProgramShuttleRequest {

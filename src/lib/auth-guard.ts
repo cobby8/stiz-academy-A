@@ -119,6 +119,40 @@ export async function requireAuth() {
   return userFromSupabaseUser(user);
 }
 
+export type VerifiedParentAuthUser = Awaited<ReturnType<typeof requireAuth>> & {
+  appUserId: string;
+  appUserName: string;
+  appUserRole: "PARENT";
+};
+
+/**
+ * 학부모 전용 보호 경로는 Supabase 로그인만으로 통과시키지 않는다.
+ * 앱 계정이 현재 Auth ID에 직접 연결되고 휴대폰 인증까지 끝난 경우만 허용한다.
+ */
+export async function requireVerifiedParent(): Promise<VerifiedParentAuthUser> {
+  const user = await requireAuth();
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{ id: string; name: string; role: string; username: string | null; phoneVerifiedAt: Date | null }>
+  >(
+    `SELECT id, name, role::text AS role, username, "phoneVerifiedAt"
+       FROM "User"
+      WHERE ("authUserId" = $1 OR ("authUserId" IS NULL AND id = $1))
+      LIMIT 1`,
+    user.id,
+  );
+  const appUser = rows[0];
+  const isVerifiedSignup = Boolean(appUser?.phoneVerifiedAt);
+  const isDirectlyBoundLegacyParent = appUser?.username === null;
+  if (!appUser || appUser.role !== "PARENT" || (!isVerifiedSignup && !isDirectlyBoundLegacyParent)) {
+    throw new Error("휴대폰 인증을 완료한 학부모 계정이 필요합니다.");
+  }
+  return Object.assign(user, {
+    appUserId: appUser.id,
+    appUserName: appUser.name,
+    appUserRole: "PARENT" as const,
+  });
+}
+
 /**
  * requireAdmin: ADMIN 또는 VICE_ADMIN 역할 확인
  * - 부원장(VICE_ADMIN)도 대부분의 관리 작업을 수행할 수 있도록 허용

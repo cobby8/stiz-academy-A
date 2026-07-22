@@ -889,7 +889,7 @@ export async function getInvoiceForParent(invoiceId: string, owner: PaymentOwner
         WHERE i.id = $1
           AND (
             u."authUserId" = $2
-            OR (u."authUserId" IS NULL AND $3 <> '' AND LOWER(u.email) = LOWER($3))
+            OR (u."authUserId" IS NULL AND u.id = $2)
           )
         LIMIT 1
         `,
@@ -1135,7 +1135,7 @@ export async function confirmTossPayment(input: {
          WHERE tx."orderId" = $1
            AND (
              u."authUserId" = $2
-             OR (u."authUserId" IS NULL AND $3 <> '' AND LOWER(u.email) = LOWER($3))
+             OR (u."authUserId" IS NULL AND u.id = $2)
            )
          LIMIT 1`,
         input.orderId,

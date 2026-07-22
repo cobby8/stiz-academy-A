@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { confirmTossPayment } from "@/lib/payment-ledger";
-import { requireAuth } from "@/lib/auth-guard";
+import { requireVerifiedParent } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
     try {
-        const user = await requireAuth();
+        const user = await requireVerifiedParent();
         if (!user.email) {
             return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
         }

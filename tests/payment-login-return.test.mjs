@@ -7,7 +7,7 @@ const proxy = await readFile(new URL("../src/proxy.ts", import.meta.url), "utf8"
 
 test("미인증 결제 링크는 원래 청구서 주소를 보존해 로그인으로 이동한다", () => {
   assert.match(paymentPage, /const paymentPath = `\/payments\/\$\{encodeURIComponent\(invoiceId\)\}`/);
-  assert.match(paymentPage, /requireAuth\(\)\.catch\(\(\) => null\)/);
+  assert.match(paymentPage, /requireVerifiedParent\(\)\.catch\(\(\) => null\)/);
   assert.match(paymentPage, /redirect\(`\/login\?redirect=\$\{encodeURIComponent\(paymentPath\)\}`\)/);
 });
 

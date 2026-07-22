@@ -18,9 +18,9 @@ export type SeasonalClass = {
   location?: string;
   targetGrade?: string;
   coachName?: string;
-  capacity: number;
+  capacity: number | null;
   enrolled: number;
-  remaining: number;
+  remaining: number | null;
   price: number;
   waitlistEnabled?: boolean;
   sessionDates: SeasonalSessionDate[];
@@ -93,7 +93,11 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
   const first = dates[0];
   const starts = first?.startsAt ? new Date(String(first.startsAt)) : null;
   const ends = first?.endsAt ? new Date(String(first.endsAt)) : null;
-  const remaining = Number(row.remainingCapacity ?? row.remaining ?? Math.max(0, Number(row.capacity ?? 0) - Number(row.enrolled ?? 0)));
+  const capacity = row.capacity == null || row.capacity === "" ? null : Number(row.capacity);
+  const rawRemaining = row.remainingCapacity ?? row.remaining;
+  const remaining = capacity === null
+    ? null
+    : Number(rawRemaining ?? Math.max(0, capacity - Number(row.enrolled ?? 0)));
   const weekdayByLabel = { 월: "MON", 화: "TUE", 수: "WED", 목: "THU", 금: "FRI", 토: "SAT", 일: "SUN" } as const;
   const weekdays = Array.from(new Set(dates.flatMap((date) => {
     if (!date.startsAt) return [];
@@ -107,8 +111,8 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
     startTime: String(row.startTime ?? (starts ? starts.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : "")),
     endTime: String(row.endTime ?? (ends ? ends.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : "")),
     location: stringOrUndefined(row.location ?? first?.location), targetGrade: stringOrUndefined(row.targetGrades ?? row.targetGrade),
-    coachName: stringOrUndefined(row.instructorName ?? row.coachName), capacity: Number(row.capacity ?? 0),
-    enrolled: Math.max(0, Number(row.capacity ?? 0) - remaining), remaining, price: Number(row.price ?? 0),
+    coachName: stringOrUndefined(row.instructorName ?? row.coachName), capacity,
+    enrolled: capacity === null ? Math.max(0, Number(row.enrolled ?? 0)) : Math.max(0, capacity - (remaining ?? 0)), remaining, price: Number(row.price ?? 0),
     waitlistEnabled: row.waitlistEnabled === false ? false : true,
     sessionDates: dates.flatMap((date) => {
       if (!date.startsAt || !date.endsAt) return [];

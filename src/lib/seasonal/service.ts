@@ -33,6 +33,8 @@ function publicOffering(offering: PublicOfferingRow) {
   const startsAt = first?.startsAt ? new Date(first.startsAt) : null;
   const endsAt = first?.endsAt ? new Date(first.endsAt) : null;
   const enrolled = offering._count?.applicationItems || 0;
+  const capacity = offering.capacity;
+  const remaining = capacity === null ? null : Math.max(0, capacity - enrolled);
   const time = (value: Date | null) => value
     ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(value)
     : "";
@@ -59,11 +61,11 @@ function publicOffering(offering: PublicOfferingRow) {
     location: first?.location || offering.location || undefined,
     targetGrade: offering.targetGrades || undefined,
     coachName: offering.instructorName || undefined,
-    capacity: offering.capacity ?? 0,
+    capacity,
     enrolled,
-    remaining: Math.max(0, (offering.capacity ?? 0) - enrolled),
+    remaining,
     price: offering.price,
-    waitlistEnabled: true,
+    waitlistEnabled: capacity !== null,
   };
 }
 
@@ -91,7 +93,7 @@ export async function listPublishedSeasons() {
     orderBy: { startsAt: "desc" },
     include: {
       offerings: {
-        where: { status: "OPEN", capacity: { not: null } },
+        where: { status: "OPEN" },
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
         include: {
           sessionDates: { orderBy: { startsAt: "asc" } },
@@ -108,7 +110,7 @@ export async function getPublishedSeason(slug: string) {
     where: { slug, status: "PUBLISHED" },
     include: {
       offerings: {
-        where: { status: "OPEN", capacity: { not: null } },
+        where: { status: "OPEN" },
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
         include: {
           sessionDates: { orderBy: { startsAt: "asc" } },
@@ -188,7 +190,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
         where: { id: { in: ids }, seasonId: season.id },
         include: { sessionDates: { select: { startsAt: true } } },
       });
-      if (offerings.length !== ids.length || offerings.some((offering) => offering.status !== "OPEN" || offering.capacity === null)) {
+      if (offerings.length !== ids.length || offerings.some((offering) => offering.status !== "OPEN")) {
         throw new SeasonalError("마감되었거나 존재하지 않는 특강이 포함되어 있습니다.", 409, "OFFERING_UNAVAILABLE");
       }
       const availableWeekdays = new Set(offerings.flatMap((offering) => offering.sessionDates.map((session) => weekdayInSeoul(session.startsAt))));
@@ -211,7 +213,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       const maxOrders = new Map(waitlistMax.map((row) => [row.offeringId, row._max.waitlistOrder || 0]));
       const byId = new Map(offerings.map((offering) => [offering.id, offering]));
       const placement = planApplicationItems(
-        input.items.map((requested) => ({ ...byId.get(requested.offeringId)!, capacity: byId.get(requested.offeringId)!.capacity! })),
+        input.items.map((requested) => byId.get(requested.offeringId)!),
         occupied,
         maxOrders,
         applicantDecision.pricingType,

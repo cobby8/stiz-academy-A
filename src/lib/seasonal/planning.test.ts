@@ -73,3 +73,13 @@ test("remaining capacity accepts an application before the limit", () => {
   assert.equal(plans[0].status, "PENDING");
   assert.equal(plans[0].waitlistOrder, null);
 });
+
+test("an unspecified capacity offering accepts an application without waitlisting", () => {
+  const plans = planApplicationItems(
+    [{ id: "camp-a", capacity: null, price: 50000, title: "여름 특강" }],
+    new Map([["camp-a", 99]]),
+    new Map([["camp-a", 4]]),
+  );
+  assert.equal(plans[0].status, "PENDING");
+  assert.equal(plans[0].waitlistOrder, null);
+});

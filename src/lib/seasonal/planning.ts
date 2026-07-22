@@ -9,7 +9,7 @@ export type ApplicantTypeDecision = {
 };
 export type CapacityOffering = {
   id: string;
-  capacity: number;
+  capacity: number | null;
   price: number;
   newApplicantPrice?: number | null;
   existingApplicantPrice?: number | null;
@@ -56,7 +56,7 @@ export function planApplicationItems(
   applicantType?: ApplicantType,
 ) {
   return offerings.map((offering) => {
-    const full = (occupiedByOffering.get(offering.id) || 0) >= offering.capacity;
+    const full = offering.capacity !== null && (occupiedByOffering.get(offering.id) || 0) >= offering.capacity;
     return {
       offeringId: offering.id,
       priceSnapshot: resolveOfferingPrice(offering, applicantType),

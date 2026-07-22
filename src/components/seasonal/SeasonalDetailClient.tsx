@@ -26,7 +26,7 @@ export default function SeasonalDetailClient({ slug }: { slug: string }) {
   if (failed) return <Message text="특강 정보를 찾을 수 없습니다." />;
   if (!program) return <Message text="특강 정보를 불러오고 있어요." />;
   const offerings = programClasses(program);
-  const canApply = program.status === "OPEN" && offerings.some((item) => item.remaining > 0 || item.waitlistEnabled);
+  const canApply = program.status === "OPEN" && offerings.some((item) => item.capacity === null || (item.remaining ?? 0) > 0 || item.waitlistEnabled);
 
   return (
     <>
@@ -57,8 +57,11 @@ export default function SeasonalDetailClient({ slug }: { slug: string }) {
 }
 
 function Offering({ item }: { item: SeasonalClass }) {
-  const wait = item.remaining <= 0;
-  return <article className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-brand-orange-500">{item.dayLabel} {item.dateLabel}</p><h3 className="mt-1 text-lg font-black">{item.name}</h3></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${wait ? "bg-gray-100 text-gray-600" : item.remaining <= 2 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{wait ? item.waitlistEnabled ? "대기 가능" : "마감" : `잔여 ${item.remaining}석`}</span></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><Pair label="시간" value={`${item.startTime}~${item.endTime}`} /><Pair label="대상" value={item.targetGrade || "전체"} /><Pair label="장소" value={item.location || "학원"} /><Pair label="수강료" value={formatWon(item.price)} /></dl><SessionSchedule item={item} /></article>;
+  const unlimited = item.capacity === null;
+  const remaining = item.remaining ?? 0;
+  const wait = !unlimited && remaining <= 0;
+  const badge = unlimited ? "접수 가능" : wait ? item.waitlistEnabled ? "대기 가능" : "마감" : `잔여 ${remaining}석`;
+  return <article className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-brand-orange-500">{item.dayLabel} {item.dateLabel}</p><h3 className="mt-1 text-lg font-black">{item.name}</h3></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${wait ? "bg-gray-100 text-gray-600" : unlimited || remaining > 2 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{badge}</span></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><Pair label="시간" value={`${item.startTime}~${item.endTime}`} /><Pair label="대상" value={item.targetGrade || "전체"} /><Pair label="장소" value={item.location || "학원"} /><Pair label="수강료" value={formatWon(item.price)} /></dl><SessionSchedule item={item} /></article>;
 }
 
 function SessionSchedule({ item }: { item: SeasonalClass }) {

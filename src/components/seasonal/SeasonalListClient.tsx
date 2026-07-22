@@ -31,7 +31,8 @@ export default function SeasonalListClient() {
     <div className="grid gap-4 md:grid-cols-2">
       {programs.map((program) => {
         const offerings = programClasses(program);
-        const seats = offerings.reduce((sum, item) => sum + Math.max(item.remaining, 0), 0);
+        const hasOpenCapacity = offerings.some((item) => item.capacity === null);
+        const seats = offerings.reduce((sum, item) => sum + Math.max(item.remaining ?? 0, 0), 0);
         const minPrice = Math.min(...offerings.map((item) => item.price).filter((price) => price >= 0));
         return (
           <article key={program.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -45,7 +46,7 @@ export default function SeasonalListClient() {
               <Info icon="location_on" text={program.location || "장소 준비 중"} />
               <div className="flex items-end justify-between gap-4 border-t border-gray-100 pt-4 dark:border-gray-700">
                 <div><p className="text-xs text-gray-500">수강료</p><p className="font-black text-brand-navy-900 dark:text-white">{Number.isFinite(minPrice) ? `${formatWon(minPrice)}부터` : "안내 예정"}</p></div>
-                <div className="text-right"><p className="text-xs text-gray-500">전체 잔여석</p><p className="font-bold text-emerald-600">{seats > 0 ? `${seats}석` : "대기 가능"}</p></div>
+                <div className="text-right"><p className="text-xs text-gray-500">전체 잔여석</p><p className="font-bold text-emerald-600">{hasOpenCapacity ? "접수 가능" : seats > 0 ? `${seats}석` : "대기 가능"}</p></div>
               </div>
               <Link href={`/seasonal/${program.slug}`} className="flex min-h-12 items-center justify-center rounded-xl bg-brand-orange-500 px-4 font-bold text-white transition hover:bg-orange-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-orange-500">자세히 보고 신청하기</Link>
             </div>

@@ -78,6 +78,17 @@ function hasShuttle(draft?: ShuttleDraft) {
   ));
 }
 
+function isFull(item: SeasonalClass) {
+  return item.capacity !== null && (item.remaining ?? 0) <= 0;
+}
+
+function remainingText(item: SeasonalClass) {
+  if (item.capacity === null) return "접수 가능";
+  const remaining = item.remaining ?? 0;
+  if (remaining > 0) return `${remaining}석`;
+  return item.waitlistEnabled ? "대기 가능" : "마감";
+}
+
 function emptyShuttle(): ShuttleDraft {
   return { pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "" };
 }
@@ -144,7 +155,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   }
 
   function toggleOffering(item: SeasonalClass) {
-    if (item.remaining <= 0 && !item.waitlistEnabled) return;
+    if (isFull(item) && !item.waitlistEnabled) return;
     setSelectedIds((current) => current.includes(item.id)
       ? current.filter((id) => id !== item.id)
       : [...current, item.id]);
@@ -285,7 +296,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
           <div className="grid gap-3 md:grid-cols-2">
             {offerings.map((item) => {
               const selected = selectedIds.includes(item.id);
-              const disabled = item.remaining <= 0 && !item.waitlistEnabled;
+              const disabled = isFull(item) && !item.waitlistEnabled;
               return (
                 <article key={item.id} className={`rounded-2xl border bg-white p-5 shadow-sm dark:bg-gray-800 ${selected ? "border-brand-orange-500 ring-2 ring-brand-orange-100 dark:border-brand-neon-lime dark:ring-brand-neon-lime/20" : "border-gray-200 dark:border-gray-700"} ${disabled ? "opacity-60" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
@@ -305,7 +316,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <Pair label="시간" value={`${item.startTime}~${item.endTime}`} />
                     <Pair label="대상" value={item.targetGrade || "전체"} />
-                    <Pair label="잔여" value={item.remaining > 0 ? `${item.remaining}석` : item.waitlistEnabled ? "대기 가능" : "마감"} />
+                    <Pair label="잔여" value={remainingText(item)} />
                     <Pair label="수강료" value={formatWon(item.price)} />
                   </dl>
                   {item.sessionDates.length > 0 && (
@@ -371,7 +382,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                   <p className="font-bold text-gray-900 dark:text-white">{item.name}</p>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.dayLabel} {item.startTime}~{item.endTime} · {formatWon(item.price)}</p>
                   {item.sessionDates.length > 1 && <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">총 {item.sessionDates.length}회 · {item.sessionDates.map((session) => `${session.dateLabel}(${session.dayLabel})`).join(", ")}</p>}
-                  {item.remaining <= 0 && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
+                  {isFull(item) && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
                 </div>
               ))}
             </div>

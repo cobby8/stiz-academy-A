@@ -59,6 +59,33 @@ test("phone OTP uses keyed hashes and enforces expiry, attempts, resend, and dai
   assert.match(signupMigration, /CREATE TABLE IF NOT EXISTS "ParentSignupOtpSend"[\s\S]*?"requestHash" TEXT/);
 });
 
+test("concurrent SMS requests are serialized before quota is counted", () => {
+  const globalLock = verification.indexOf('"parent-signup-sms-global"');
+  const requestLock = verification.indexOf('`parent-signup-sms-request:${requestHash}`');
+  const quotaQuery = verification.indexOf('const quota = await tx.$queryRawUnsafe');
+
+  assert.ok(globalLock >= 0, "global SMS quota needs an advisory lock");
+  assert.ok(requestLock > globalLock, "request fingerprint quota needs its own advisory lock");
+  assert.ok(quotaQuery > requestLock, "both locks must be acquired before quota counting");
+});
+
+test("seven-day cleanup deletes unfinished rows but preserves completed consent evidence", () => {
+  assert.match(
+    verification,
+    /DELETE FROM "ParentSignupVerification"[\s\S]*?status <> 'CONSUMED'[\s\S]*?INTERVAL '7 days'/,
+  );
+  assert.match(
+    verification,
+    /UPDATE "ParentSignupVerification"[\s\S]*?username=NULL[\s\S]*?phone=''[\s\S]*?status='CONSUMED'[\s\S]*?INTERVAL '7 days'/,
+  );
+  assert.match(verification, /"termsAgreedAt"=NOW\(\), "termsVersion"=\$5/);
+  assert.match(verification, /"privacyAgreedAt"=NOW\(\), "privacyVersion"=\$6/);
+  assert.match(verification, /const TERMS_VERSION = "\d{4}-\d{2}-\d{2}"/);
+  assert.match(verification, /const PRIVACY_VERSION = "\d{4}-\d{2}-\d{2}"/);
+  assert.match(signupMigration, /"termsVersion" TEXT/);
+  assert.match(signupMigration, /"privacyVersion" TEXT/);
+});
+
 test("application parent membership is created only after verified proof", () => {
   const verifiedGuard = verification.indexOf('current.status !== "VERIFIED"');
   const proofGuard = verification.indexOf("current.proofHash");

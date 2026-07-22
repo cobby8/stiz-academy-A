@@ -3,7 +3,7 @@
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { sendSms } from "@/lib/sms";
+import { isSmsProviderConfigured, sendSms } from "@/lib/sms";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const MAX_OTP_ATTEMPTS = 5;
@@ -118,7 +118,7 @@ export async function sendInviteVerification(token: string) {
   let reservedHash: string | null = null;
   let ledgerId: string | null = null;
   try {
-    if (!process.env.SOLAPI_API_KEY || !process.env.SOLAPI_API_SECRET || !process.env.SOLAPI_SENDER) {
+    if (!isSmsProviderConfigured()) {
       throw new Error("문자 발송 설정이 완료되지 않았습니다.");
     }
     const requestHash = await requestFingerprint(token);

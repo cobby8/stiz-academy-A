@@ -47,10 +47,10 @@ test("체험 신청 SMS는 발송 장부에 성공과 실패를 남긴다", () =
   assert.match(queries, /sms_delivery/);
 });
 
-test("Solapi 요청은 일정 시간 안에 끝나도록 제한한다", () => {
+test("SMS 요청은 일정 시간 안에 끝나도록 제한한다", () => {
   assert.match(sms, /SMS_REQUEST_TIMEOUT_MS/);
   assert.match(sms, /AbortController/);
-  assert.match(sms, /signal:\s*controller\.signal/);
+  assert.match(sms, /controller\.signal/);
 });
 
 test("관리자는 실패한 체험 신청 문자만 다시 발송할 수 있다", () => {

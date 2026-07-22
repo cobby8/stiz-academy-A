@@ -12,6 +12,31 @@ function isPresent(name) {
   return typeof process.env[name] === "string" && process.env[name].trim().length > 0;
 }
 
+function currentSmsProvider() {
+  const provider = (process.env.SMS_PROVIDER || "").trim().toUpperCase();
+  if (provider === "BIZPPURIO" || provider === "BIZ_PPURIO" || provider === "PPURIO") return "BIZPPURIO";
+  if (provider === "SOLAPI" || provider === "COOLSMS") return "SOLAPI";
+  return isPresent("BIZPPURIO_ACCOUNT") ? "BIZPPURIO" : "SOLAPI";
+}
+
+function requireSmsEnvironment(missing) {
+  const provider = currentSmsProvider();
+  if (provider === "BIZPPURIO") {
+    if (!isPresent("BIZPPURIO_ACCOUNT")) missing.push("BIZPPURIO_ACCOUNT");
+    if (!isPresent("BIZPPURIO_PASSWORD") && !isPresent("BIZPPURIO_API_KEY")) {
+      missing.push("BIZPPURIO_PASSWORD (or BIZPPURIO_API_KEY)");
+    }
+    if (!isPresent("BIZPPURIO_SENDER") && !isPresent("BIZPPURIO_FROM")) {
+      missing.push("BIZPPURIO_SENDER (or BIZPPURIO_FROM)");
+    }
+    return;
+  }
+
+  ["SOLAPI_API_KEY", "SOLAPI_API_SECRET", "SOLAPI_SENDER"].forEach((name) => {
+    if (!isPresent(name)) missing.push(name);
+  });
+}
+
 function checkEnvironment() {
   const missing = [];
   const requireAll = (names) => names.forEach((name) => {
@@ -35,11 +60,10 @@ function checkEnvironment() {
     "VAPID_PRIVATE_KEY",
     "GEMINI_API_KEY",
     "INVITE_OTP_SECRET",
-    "SOLAPI_API_KEY",
-    "SOLAPI_API_SECRET",
-    "SOLAPI_SENDER",
     "TOSS_PAYMENTS_SECRET_KEY",
   ]);
+
+  requireSmsEnvironment(missing);
 
   if (!isPresent("NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY") && !isPresent("TOSS_PAYMENTS_CLIENT_KEY")) {
     missing.push("NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY (또는 TOSS_PAYMENTS_CLIENT_KEY)");

@@ -865,6 +865,26 @@ export default function TrialCrmClient({
         }
     }
 
+    async function handleConfirmTrialFee(lead: TrialLead) {
+        if (busy || lead.trialFeeConfirmed) return;
+        if (!confirm(`"${lead.childName}" 체험수업 비용 입금을 확인 처리할까요?`)) return;
+
+        setBusy(true);
+        try {
+            await updateTrialLead(lead.id, { trialFeeConfirmed: true }, {
+                action: "UPDATED",
+                note: "체험비 입금 확인",
+            });
+            await loadTrialData();
+            setShowDetailModal((current) => current?.id === lead.id ? { ...current, trialFeeConfirmed: true } : current);
+            showFeedback("success", `${lead.childName} 체험비 입금을 확인 처리했습니다.`);
+        } catch {
+            showFeedback("error", "체험비 입금 확인 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
     async function copyEnrollLinkToClipboard(enrollLink: string) {
         try {
             await navigator.clipboard.writeText(enrollLink);
@@ -1092,6 +1112,14 @@ export default function TrialCrmClient({
                                         <span className="block truncate font-black text-gray-900 dark:text-white" title={rowTitle}>
                                             {lead.childName}
                                         </span>
+                                        <span className={`mx-auto mt-0.5 inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                                            lead.trialFeeConfirmed
+                                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
+                                                : "bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-400"
+                                        }`}>
+                                            <span className="material-symbols-outlined text-[12px]">{lead.trialFeeConfirmed ? "paid" : "payments"}</span>
+                                            {lead.trialFeeConfirmed ? "입금" : "미입금"}
+                                        </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
                                         <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={schoolLabel}>
@@ -1167,6 +1195,20 @@ export default function TrialCrmClient({
                                                     <span>연락 완료</span>
                                                     {renderActionIcon("done_all")}
                                                 </button>
+                                                {!lead.trialFeeConfirmed && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            closeQuickActionMenu();
+                                                            void handleConfirmTrialFee(lead);
+                                                        }}
+                                                        disabled={busy}
+                                                        className={LIST_ACTION_ITEM_CLASS}
+                                                    >
+                                                        <span>입금 확인</span>
+                                                        {renderActionIcon("paid")}
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
                                                     onClick={() => {
@@ -1403,6 +1445,8 @@ export default function TrialCrmClient({
                     }}
                     onCoachNotice={() => void handleSendCoachNotice(showDetailModal)}
                     onResendSms={() => void handleResendApplicationSms(showDetailModal)}
+                    onConfirmTrialFee={() => void handleConfirmTrialFee(showDetailModal)}
+                    busy={busy}
                 />
             )}
 
@@ -1513,6 +1557,8 @@ function TrialLeadDetailModal({
     onMemo,
     onCoachNotice,
     onResendSms,
+    onConfirmTrialFee,
+    busy,
 }: {
     lead: TrialLead;
     scheduleItems: Array<{ label: string; icon: string; value: string; className: string }>;
@@ -1522,6 +1568,8 @@ function TrialLeadDetailModal({
     onMemo: () => void;
     onCoachNotice: () => void;
     onResendSms: () => void;
+    onConfirmTrialFee: () => void;
+    busy: boolean;
 }) {
     const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
     const details = [
@@ -1610,6 +1658,12 @@ function TrialLeadDetailModal({
                         <span className="material-symbols-outlined text-base">edit_note</span>
                         메모
                     </button>
+                    {!lead.trialFeeConfirmed && (
+                        <button type="button" onClick={onConfirmTrialFee} disabled={busy} className={`${DETAIL_ACTION_CLASS} disabled:opacity-50`}>
+                            <span className="material-symbols-outlined text-base">paid</span>
+                            입금 확인
+                        </button>
+                    )}
                     {!lead.coachNoticeSentAt && (
                         <button type="button" onClick={onCoachNotice} className={DETAIL_ACTION_CLASS}>
                             <span className="material-symbols-outlined text-base">school</span>

@@ -7,6 +7,7 @@ import { seoulDateTimeToIso } from "./seasonalDateTime";
 
 type SeasonStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
 type ItemStatus = "PENDING" | "APPROVED" | "WAITLISTED" | "REJECTED" | "CANCELLED";
+type ApplicationCloseStatus = "REJECTED" | "CANCELLED";
 
 type SeasonalClass = {
   id: string;
@@ -229,6 +230,7 @@ const TABS: Array<{ key: Tab; label: string; icon: string }> = [
 ];
 
 const BULK_ITEM_STATUSES: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
+const APPLICATION_CLOSE_STATUSES: ApplicationCloseStatus[] = ["REJECTED", "CANCELLED"];
 const WEEKDAY_OPTIONS = [
   { value: "MON", label: "월" },
   { value: "TUE", label: "화" },
@@ -405,6 +407,7 @@ export default function SeasonalAdminClient() {
   const [updatingItemIds, setUpdatingItemIds] = useState<Set<string>>(() => new Set());
   const [itemUpdateErrors, setItemUpdateErrors] = useState<Record<string, string>>({});
   const [assigningKey, setAssigningKey] = useState("");
+  const [updatingApplicationStatus, setUpdatingApplicationStatus] = useState("");
   const [sendingNotificationKey, setSendingNotificationKey] = useState("");
   const [resolvingReview, setResolvingReview] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -596,6 +599,28 @@ export default function SeasonalAdminClient() {
     } finally {
       updatingItemIdsRef.current.delete(itemId);
       setUpdatingItemIds(new Set(updatingItemIdsRef.current));
+    }
+  }
+
+  async function updateApplicationStatus(applicationId: string, status: ApplicationCloseStatus) {
+    setUpdatingApplicationStatus(status);
+    setError("");
+    try {
+      await mutate(
+        "PATCH",
+        { resource: "application", id: applicationId, data: { status } },
+        `신청을 '${STATUS_LABEL[status] ?? status}' 처리했습니다.`,
+      );
+      setSelectedApplication((current) => current?.id === applicationId ? {
+        ...current,
+        status,
+        reviewReasons: [],
+        processedNote: current.processedNote,
+      } : current);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "신청 상태를 변경하지 못했습니다.");
+    } finally {
+      setUpdatingApplicationStatus("");
     }
   }
 
@@ -846,7 +871,7 @@ export default function SeasonalAdminClient() {
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
-      {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} convertingItemId={convertingItemId} />}
+      {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
       {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
@@ -1157,6 +1182,8 @@ function ApplicationDrawer({
   sendingNotificationKey,
   onResolveReview,
   resolvingReview,
+  onUpdateApplicationStatus,
+  updatingApplicationStatus,
   convertingItemId,
 }: {
   application: Application;
@@ -1173,12 +1200,16 @@ function ApplicationDrawer({
   sendingNotificationKey: string;
   onResolveReview: (applicationId: string, reviewNote: string) => Promise<void>;
   resolvingReview: boolean;
+  onUpdateApplicationStatus: (applicationId: string, status: ApplicationCloseStatus) => Promise<void>;
+  updatingApplicationStatus: string;
   convertingItemId: string;
 }) {
   const totalAmount = application.totalAmount ?? application.items.reduce((sum, item) => sum + (item.amount ?? 0), 0);
   const parentPhoneHref = application.parentPhone ? `tel:${application.parentPhone}` : undefined;
   const parentSmsHref = application.parentPhone ? `sms:${application.parentPhone}` : undefined;
   const offeringOptions = seasons.find((season) => season.id === application.seasonId)?.classes ?? seasons.flatMap((season) => season.classes);
+  const hasNoItems = application.items.length === 0;
+  const applicationClosed = application.status === "CANCELLED" || application.status === "REJECTED";
 
   return <AdminModal onClose={onClose} titleId="application-title" panelClassName="h-full max-w-2xl rounded-none sm:ml-auto sm:mr-0 sm:rounded-l-2xl sm:rounded-r-none">
     <aside className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
@@ -1228,7 +1259,30 @@ function ApplicationDrawer({
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
         </div>
         <div className="mt-3 space-y-3">
-          {application.items.length === 0 && (
+          {hasNoItems && (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-black">신청 반이 아직 없습니다.</p>
+                  <p className="mt-1 text-xs font-bold opacity-80">반을 배정해 접수하거나, 실제 취소 건이면 여기서 신청 자체를 닫아 주세요.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {APPLICATION_CLOSE_STATUSES.map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      disabled={applicationClosed || Boolean(updatingApplicationStatus)}
+                      onClick={() => void onUpdateApplicationStatus(application.id, status)}
+                      className="min-h-10 rounded-xl border border-amber-300 bg-white px-3 text-xs font-black text-amber-950 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-400/40 dark:bg-gray-950 dark:text-amber-100"
+                    >
+                      {updatingApplicationStatus === status ? "처리 중" : STATUS_LABEL[status]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+          {hasNoItems && !applicationClosed && (
             <ApplicationAssignmentEditor
               application={application}
               offerings={offeringOptions}

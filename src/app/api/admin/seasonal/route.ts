@@ -705,7 +705,6 @@ export async function POST(request: NextRequest) {
       const instructorId = cleanText(data.instructorId, 100) || null;
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
-      if (status === "OPEN" && capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
       const offering = await prisma.$transaction(async (tx) => {
         const created = await tx.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId, instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId } });
@@ -974,10 +973,8 @@ export async function PATCH(request: NextRequest) {
       if (data.existingApplicantPrice !== undefined) update.existingApplicantPrice = optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격");
       if (data.status !== undefined) { if (!OFFERING_STATUSES.has(data.status)) throw new SeasonalError("특강 상태가 올바르지 않습니다."); update.status = data.status; }
       const nextStatus = (update.status as string | undefined) ?? before.status;
-      const nextCapacity = (update.capacity === undefined ? before.capacity : update.capacity) as number | null;
       const nextLinkedClassId = (update.linkedClassId === undefined ? before.linkedClassId : update.linkedClassId) as string | null;
       const nextInstructorId = (update.instructorId === undefined ? before.instructorId : update.instructorId) as string | null;
-      if (nextStatus === "OPEN" && nextCapacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       if (data.shuttleAvailable !== undefined) update.shuttleAvailable = Boolean(data.shuttleAvailable);
       if (data.displayOrder !== undefined) update.displayOrder = Number(data.displayOrder) || 0;
       const replacementDates = Array.isArray(data.sessionDates)
@@ -1062,7 +1059,17 @@ export async function PATCH(request: NextRequest) {
       }
       const applicationChange = await prisma.$transaction(async (tx) => {
         if (data.status === "APPROVED") await ensureApplicationCapacity(tx, id);
-        const updated = await tx.specialProgramApplication.update({ where: { id }, data: { status: data.status, processedAt: new Date(), processedByUserId: actor.appUserId, processedNote: cleanText(data.processedNote, 1000) } });
+        const closesApplication = data.status === "CANCELLED" || data.status === "REJECTED";
+        const updated = await tx.specialProgramApplication.update({
+          where: { id },
+          data: {
+            status: data.status,
+            processedAt: new Date(),
+            processedByUserId: actor.appUserId,
+            processedNote: cleanText(data.processedNote, 1000),
+            ...(closesApplication ? { requiresReview: false, reviewReasons: [] } : {}),
+          },
+        });
         if (before.status !== updated.status) {
           await tx.specialProgramAuditLog.create({ data: { seasonId: updated.seasonId, applicationId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "APPLICATION_STATUS_UPDATED", beforeJSON: before, afterJSON: updated } });
         }

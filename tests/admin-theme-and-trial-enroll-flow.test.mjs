@@ -42,3 +42,15 @@ test("체험 신청 정보는 수강신청서 자동 채움으로 이어진다",
   assert.match(enrollForm, /preferredSlotKeys: preferredTrialSlot \? \[preferredTrialSlot\] : \[\]/);
   assert.match(enrollForm, /basketballExp: trialData\?\.basketballExp \|\| ""/);
 });
+
+test("등록전환 상태 변경은 확인 모달에서 수강신청서 링크 복사로 처리한다", () => {
+  assert.match(trialClient, /generateEnrollLink/);
+  assert.match(trialClient, /type EnrollGuideConfirmState/);
+  assert.match(trialClient, /newStatus === "CONVERTED" && lead\.status !== "CONVERTED"/);
+  assert.match(trialClient, /setEnrollGuideConfirm\(\{ lead, convertAfterConfirm: true \}\)/);
+  assert.match(trialClient, /function EnrollGuideConfirmModal/);
+  assert.match(trialClient, /수강신청서를 전송하시겠습니까/);
+  assert.match(trialClient, /navigator\.clipboard\.writeText\(enrollLink\)/);
+  assert.match(trialClient, /updateTrialLead\(lead\.id,\s*\{[\s\S]*status: "CONVERTED"[\s\S]*convertedDate:/);
+  assert.doesNotMatch(trialClient, /sendPostTrialEnrollGuide/);
+});

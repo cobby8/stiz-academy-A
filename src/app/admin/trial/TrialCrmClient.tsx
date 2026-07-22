@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import AdminModal from "@/components/admin/AdminModal";
 import {
     updateTrialLead,
-    sendPostTrialEnrollGuide,
+    generateEnrollLink,
     sendTrialCoachNotice,
     resendTrialApplicationSms,
     recordApplicationContact,
@@ -113,6 +113,7 @@ type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "
 type TrialDateFilter = "ALL" | "UPCOMING" | "TODAY" | "THIS_WEEK" | "PAST" | "MISSING";
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
+type EnrollGuideConfirmState = { lead: TrialLead; convertAfterConfirm: boolean } | null;
 const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-9 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/20 transition hover:scale-105 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:shadow-brand-neon-lime/20 dark:hover:bg-lime-300";
 const LIST_ACTION_MENU_CLASS = "fixed z-[80] flex w-40 -translate-y-1/2 flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-2 text-left shadow-2xl backdrop-blur dark:border-gray-700 dark:bg-gray-950/95";
 const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center justify-between gap-2 rounded-full border border-gray-200 bg-white px-2 pl-3 text-left text-xs font-black text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
@@ -642,6 +643,7 @@ export default function TrialCrmClient({
     const [showMemoModal, setShowMemoModal] = useState<TrialLead | null>(null);
     const [showDetailModal, setShowDetailModal] = useState<TrialLead | null>(null);
     const [contactModal, setContactModal] = useState<ContactModalState>(null);
+    const [enrollGuideConfirm, setEnrollGuideConfirm] = useState<EnrollGuideConfirmState>(null);
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
     const [openQuickActionId, setOpenQuickActionId] = useState<string | null>(null);
     const [quickActionMenuPosition, setQuickActionMenuPosition] = useState<QuickActionMenuPosition | null>(null);
@@ -824,12 +826,20 @@ export default function TrialCrmClient({
     // 상태 변경 핸들러
     async function handleStatusChange(lead: TrialLead, newStatus: string) {
         if (busy) return;
+        if (newStatus === "CONVERTED" && lead.status !== "CONVERTED") {
+            closeQuickActionMenu();
+            setEnrollGuideConfirm({ lead, convertAfterConfirm: true });
+            return;
+        }
+
         setBusy(true);
         try {
-            const updates: { status: string; attendedDate?: string } = { status: newStatus };
+            const updates: { status: string; attendedDate?: string; convertedDate?: string } = { status: newStatus };
             // 상태에 따른 날짜 자동 설정
             if (newStatus === "ATTENDED") {
                 updates.attendedDate = new Date().toISOString();
+            } else if (newStatus === "CONVERTED") {
+                updates.convertedDate = new Date().toISOString();
             }
             await updateTrialLead(lead.id, updates);
             await loadTrialData();
@@ -841,25 +851,47 @@ export default function TrialCrmClient({
         }
     }
 
-    async function handleSendEnrollGuide(lead: TrialLead) {
-        if (busy) return;
-        if (!confirm(`"${lead.childName}" 체험 후 유선상담을 완료 처리하고 수강신청/입학 안내 문자를 발송할까요?`)) return;
+    async function copyEnrollLinkToClipboard(enrollLink: string) {
+        try {
+            await navigator.clipboard.writeText(enrollLink);
+            return true;
+        } catch {
+            window.prompt("수강신청서 링크를 복사해 학부모에게 보내주세요.", enrollLink);
+            return false;
+        }
+    }
 
+    async function handleConfirmEnrollGuide() {
+        if (busy || !enrollGuideConfirm) return;
+        const { lead, convertAfterConfirm } = enrollGuideConfirm;
         setBusy(true);
         try {
-            const result = await sendPostTrialEnrollGuide(lead.id);
-            try {
-                await navigator.clipboard.writeText(result.enrollLink);
-            } catch {
-                // Clipboard access can fail on some mobile browsers; SMS sending is the main action.
+            if (convertAfterConfirm) {
+                await updateTrialLead(lead.id, {
+                    status: "CONVERTED",
+                    convertedDate: new Date().toISOString(),
+                });
             }
+            const enrollLink = await generateEnrollLink(lead.id);
+            const copied = await copyEnrollLinkToClipboard(enrollLink);
+            setEnrollGuideConfirm(null);
             await loadTrialData();
-            showFeedback("success", `${lead.childName} 보호자에게 수강신청/입학 안내를 보냈습니다.`);
+            showFeedback(
+                "success",
+                copied
+                    ? `${lead.childName} 수강신청서 링크를 복사했습니다. 카톡이나 문자에 붙여넣어 보내주세요.`
+                    : `${lead.childName} 수강신청서 링크를 확인했습니다. 열린 창의 링크를 복사해 보내주세요.`,
+            );
         } catch {
-            showFeedback("error", "안내 문자 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            showFeedback("error", "수강신청서 링크 준비 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
+    }
+
+    function handleSendEnrollGuide(lead: TrialLead) {
+        if (busy) return;
+        setEnrollGuideConfirm({ lead, convertAfterConfirm: false });
     }
 
     function renderActionIcon(icon: string, primary = false) {
@@ -1364,7 +1396,89 @@ export default function TrialCrmClient({
                     }}
                 />
             )}
+
+            {enrollGuideConfirm && (
+                <EnrollGuideConfirmModal
+                    lead={enrollGuideConfirm.lead}
+                    convertAfterConfirm={enrollGuideConfirm.convertAfterConfirm}
+                    busy={busy}
+                    onClose={() => {
+                        if (!busy) setEnrollGuideConfirm(null);
+                    }}
+                    onConfirm={() => void handleConfirmEnrollGuide()}
+                />
+            )}
         </div>
+    );
+}
+
+function EnrollGuideConfirmModal({
+    lead,
+    convertAfterConfirm,
+    busy,
+    onClose,
+    onConfirm,
+}: {
+    lead: TrialLead;
+    convertAfterConfirm: boolean;
+    busy: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <AdminModal onClose={busy ? () => undefined : onClose} titleId="trial-enroll-guide-confirm-title" panelClassName="max-w-md">
+            <div className="p-6">
+                <div className="flex items-start gap-3">
+                    <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-neon-lime text-brand-navy-900">
+                        <span className="material-symbols-outlined">send</span>
+                    </span>
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-widest text-brand-orange-500 dark:text-brand-neon-lime">
+                            수강신청 전환
+                        </p>
+                        <h2 id="trial-enroll-guide-confirm-title" className="mt-1 text-xl font-black text-gray-900 dark:text-white">
+                            수강신청서를 전송하시겠습니까?
+                        </h2>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
+                            {lead.childName} 보호자에게 보낼 수강신청서 링크를 준비합니다.
+                            문자 발송 설정 전까지는 확인을 누르면 링크가 복사됩니다.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-900">
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold text-gray-500 dark:text-gray-400">수강생</span>
+                        <span className="font-black text-gray-900 dark:text-white">{lead.childName}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                        <span className="font-bold text-gray-500 dark:text-gray-400">처리</span>
+                        <span className="font-black text-gray-900 dark:text-white">
+                            {convertAfterConfirm ? "등록전환 + 링크 복사" : "링크 복사"}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={busy}
+                        className="min-h-11 rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                    >
+                        취소
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        disabled={busy}
+                        className="min-h-11 rounded-xl bg-brand-orange-500 px-4 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-300"
+                    >
+                        {busy ? "준비 중..." : "확인"}
+                    </button>
+                </div>
+            </div>
+        </AdminModal>
     );
 }
 

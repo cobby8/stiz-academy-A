@@ -8,6 +8,7 @@ import { formatWon, normalizeProgram, programClasses, type SeasonalClass, type S
 
 type LoadState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting" | "done" | "error";
+type ApplicantType = "NEW" | "EXISTING";
 
 type FormState = {
   childName: string;
@@ -100,10 +101,17 @@ function statusText(status: string) {
   return status;
 }
 
+function applicantPrice(item: SeasonalClass, applicantType: ApplicantType | "") {
+  if (applicantType === "NEW") return item.newApplicantPrice ?? item.price;
+  if (applicantType === "EXISTING") return item.existingApplicantPrice ?? item.price;
+  return item.price;
+}
+
 export default function SeasonalApplyClient({ slug }: { slug: string }) {
   const [state, setState] = useState<LoadState>("loading");
   const [program, setProgram] = useState<SeasonalProgram | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [applicantType, setApplicantType] = useState<ApplicantType | "">("");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [shuttle, setShuttle] = useState<Record<string, ShuttleDraft>>({});
   const [locationPicker, setLocationPicker] = useState<LocationPickerTarget | null>(null);
@@ -136,13 +144,15 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   const offerings = useMemo(() => program ? programClasses(program) : [], [program]);
   const selectedOfferings = offerings.filter((item) => selectedIds.includes(item.id));
   const selectedWeekdays = Array.from(new Set(selectedOfferings.flatMap(offeringWeekdays)));
-  const totalPrice = selectedOfferings.reduce((sum, item) => sum + item.price, 0);
+  // 신청자가 고른 회원 구분과 서버의 가격 스냅샷 기준을 화면에서도 동일하게 맞춘다.
+  const totalPrice = selectedOfferings.reduce((sum, item) => sum + applicantPrice(item, applicantType), 0);
   const hasMapSelection = selectedIds.some((id) => shuttle[id]?.pickupLocationData || shuttle[id]?.dropoffLocationData);
-  const canSubmit = selectedIds.length > 0 && form.childName && form.childBirthDate && form.parentName
+  const canSubmit = selectedIds.length > 0 && applicantType && form.childName && form.childBirthDate && form.parentName
     && form.parentPhone && form.agreedTerms && form.agreedPrivacy && (!hasMapSelection || locationConsent)
     && submitState !== "submitting";
   const incompleteItems = [
     selectedIds.length === 0 ? "신청할 수업" : "",
+    !applicantType ? "회원 구분" : "",
     !form.childName || !form.childBirthDate ? "학생 필수 정보" : "",
     !form.parentName || !form.parentPhone ? "보호자 필수 정보" : "",
     !form.agreedTerms ? "운영·환불 규정 동의" : "",
@@ -229,6 +239,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idempotencyKey: idempotencyKeyRef.current,
+          applicantType,
           child: {
             name: form.childName,
             birthDate: form.childBirthDate,
@@ -317,7 +328,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                     <Pair label="시간" value={`${item.startTime}~${item.endTime}`} />
                     <Pair label="대상" value={item.targetGrade || "전체"} />
                     <Pair label="잔여" value={remainingText(item)} />
-                    <Pair label="수강료" value={formatWon(item.price)} />
+                    <Pair label="수강료" value={formatWon(applicantPrice(item, applicantType))} />
                   </dl>
                   {item.sessionDates.length > 0 && (
                     <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
@@ -348,6 +359,31 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
         <section className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
           <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <h2 className="text-xl font-black text-gray-900 dark:text-white">신청 정보</h2>
+            <fieldset>
+              <legend className="text-sm font-black text-gray-700 dark:text-gray-200">회원 구분 *</legend>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">현재 학원에 등록된 학생인지 선택해 주세요. 회원별 수강료 확인에 사용됩니다.</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {([[
+                  "EXISTING",
+                  "기존 회원",
+                ], [
+                  "NEW",
+                  "신규 회원",
+                ]] as const).map(([value, label]) => (
+                  <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200">
+                    <input
+                      type="radio"
+                      name="applicantType"
+                      value={value}
+                      checked={applicantType === value}
+                      onChange={() => setApplicantType(value)}
+                      required
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="grid gap-3 sm:grid-cols-2">
               <TextInput label="학생 이름 *" value={form.childName} onChange={(value) => update("childName", value)} required />
               <DateInput label="학생 생년월일 *" value={form.childBirthDate} onChange={(value) => update("childBirthDate", value)} required />
@@ -380,7 +416,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
               ) : selectedOfferings.map((item) => (
                 <div key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
                   <p className="font-bold text-gray-900 dark:text-white">{item.name}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.dayLabel} {item.startTime}~{item.endTime} · {formatWon(item.price)}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.dayLabel} {item.startTime}~{item.endTime} · {formatWon(applicantPrice(item, applicantType))}</p>
                   {item.sessionDates.length > 1 && <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">총 {item.sessionDates.length}회 · {item.sessionDates.map((session) => `${session.dateLabel}(${session.dayLabel})`).join(", ")}</p>}
                   {isFull(item) && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
                 </div>

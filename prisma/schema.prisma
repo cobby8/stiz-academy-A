@@ -1408,6 +1408,7 @@ model SpecialProgramApplicationItem {
   priceSnapshot Int
   titleSnapshot String
   status String @default("PENDING")
+  applicantFingerprint String?
   waitlistOrder Int?
   enrollmentId String?
   paymentId String?
@@ -1422,6 +1423,7 @@ model SpecialProgramApplicationItem {
 
   @@unique([applicationId, offeringId])
   @@index([offeringId, status])
+  @@index([offeringId, applicantFingerprint])
   @@index([offeringId, waitlistOrder])
 }
 

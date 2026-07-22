@@ -13,15 +13,15 @@ const migration = readFileSync(
   "utf8",
 );
 
-test("public seasonal pages include open offerings even when capacity is unspecified", () => {
-  assert.doesNotMatch(service, /capacity: \{ not: null \}/);
+test("public seasonal pages hide open offerings until capacity is confirmed", () => {
+  assert.match(service, /capacity: \{ not: null \}/);
   assert.doesNotMatch(service, /offering\.capacity === null/);
   assert.doesNotMatch(service, /capacity: byId\.get/);
   assert.match(service, /const remaining = capacity === null \? null/);
   assert.match(service, /waitlistEnabled: capacity !== null/);
 });
 
-test("seasonal planning and public UI treat unspecified capacity as receivable", () => {
+test("seasonal planning and public UI still handle unspecified capacity defensively", () => {
   assert.match(planning, /capacity: number \| null/);
   assert.match(planning, /offering\.capacity !== null &&/);
   assert.match(types, /remaining: number \| null/);

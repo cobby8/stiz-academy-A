@@ -34,9 +34,9 @@ test("관리자 수정은 기존 회차 ID를 보존해 API로 전달한다", ()
   assert.doesNotMatch(route, /specialProgramSessionDate\.createMany/);
 });
 
-test("미연결·정원 미정 특강도 회차가 있으면 모집 공개할 수 있다", () => {
-  assert.doesNotMatch(route, /status === "OPEN" && capacity === null/);
-  assert.doesNotMatch(route, /nextStatus === "OPEN" && nextCapacity === null/);
+test("미연결 특강도 정원과 회차가 있으면 모집 공개할 수 있다", () => {
+  assert.match(route, /status === "OPEN" && capacity === null/);
+  assert.match(route, /nextStatus === "OPEN" && nextCapacity === null/);
   assert.match(route, /status === "OPEN" && sessionDates\.length === 0/);
   assert.doesNotMatch(route, /ATTENDANCE_LINK_REQUIRED/);
   assert.doesNotMatch(route, /!nextLinkedClassId \|\| !nextInstructorId/);

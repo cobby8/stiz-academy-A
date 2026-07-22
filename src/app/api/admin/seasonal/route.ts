@@ -167,15 +167,6 @@ function publicUrl(path: string) {
 }
 
 const ROSTER_WEEKDAYS: Record<string, number> = { MON: 1, 월: 1, TUE: 2, 화: 2, WED: 3, 수: 3, THU: 4, 목: 4, FRI: 5, 금: 5, SAT: 6, 토: 6, SUN: 7, 일: 7 };
-const SELECTED_WEEKDAYS_SQL = `CASE UPPER(selected_day)
-  WHEN 'MON' THEN 1 WHEN '월' THEN 1
-  WHEN 'TUE' THEN 2 WHEN '화' THEN 2
-  WHEN 'WED' THEN 3 WHEN '수' THEN 3
-  WHEN 'THU' THEN 4 WHEN '목' THEN 4
-  WHEN 'FRI' THEN 5 WHEN '금' THEN 5
-  WHEN 'SAT' THEN 6 WHEN '토' THEN 6
-  WHEN 'SUN' THEN 7 WHEN '일' THEN 7
-  ELSE NULL END`;
 
 function rosterInt(value: string | null, fallback: number, min: number, max: number) {
   const parsed = Number(value);
@@ -215,8 +206,9 @@ async function seasonalRoster(request: NextRequest) {
     ($1::text IS NULL OR app."seasonId" = $1)
     AND ($2::text IS NULL OR item."offeringId" = $2)
     AND ($3::int IS NULL OR EXISTS (
-      SELECT 1 FROM unnest(app."selectedWeekdays") AS selected_day
-       WHERE ${SELECTED_WEEKDAYS_SQL} = $3
+      -- 신청 당시 선택값이 아니라 실제 편성된 수업일의 서울 기준 요일로 반을 찾습니다.
+      SELECT 1 FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = item."offeringId"
+        AND EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int = $3
     ))
     AND ($4::text IS NULL OR ${paymentStatusSql} = $4)
     AND ($5::text IS NULL OR CASE
@@ -237,12 +229,12 @@ async function seasonalRoster(request: NextRequest) {
              ${paymentStatusSql} AS "paymentStatus", invoice."invoiceNo",
              (shuttle.id IS NOT NULL) AS "shuttleRequested",
              (shuttle.id IS NOT NULL AND (shuttle."assignedRouteId" IS NULL OR shuttle."assignedStopId" IS NULL)) AS "shuttleUnassigned",
-             COALESCE((SELECT array_agg(day_num ORDER BY day_num)
+             COALESCE((SELECT array_agg(session_day ORDER BY session_day)
                          FROM (
-                           SELECT DISTINCT ${SELECTED_WEEKDAYS_SQL} AS day_num
-                             FROM unnest(app."selectedWeekdays") AS selected_day
-                         ) selected_days
-                        WHERE day_num IS NOT NULL), ARRAY[]::int[]) AS weekdays
+                           -- 같은 요일에 여러 회차가 있어도 명단에는 요일을 한 번만 표시합니다.
+                           SELECT DISTINCT EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int AS session_day
+                             FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = item."offeringId"
+                         ) actual_session_days), ARRAY[]::int[]) AS weekdays
         FROM "SpecialProgramApplicationItem" item
         JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
         JOIN "SpecialProgramSeason" season ON season.id = app."seasonId"
@@ -705,6 +697,7 @@ export async function POST(request: NextRequest) {
       const instructorId = cleanText(data.instructorId, 100) || null;
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
+      if (status === "OPEN" && capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
       const offering = await prisma.$transaction(async (tx) => {
         const created = await tx.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId, instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId } });
@@ -973,8 +966,10 @@ export async function PATCH(request: NextRequest) {
       if (data.existingApplicantPrice !== undefined) update.existingApplicantPrice = optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격");
       if (data.status !== undefined) { if (!OFFERING_STATUSES.has(data.status)) throw new SeasonalError("특강 상태가 올바르지 않습니다."); update.status = data.status; }
       const nextStatus = (update.status as string | undefined) ?? before.status;
+      const nextCapacity = (update.capacity === undefined ? before.capacity : update.capacity) as number | null;
       const nextLinkedClassId = (update.linkedClassId === undefined ? before.linkedClassId : update.linkedClassId) as string | null;
       const nextInstructorId = (update.instructorId === undefined ? before.instructorId : update.instructorId) as string | null;
+      if (nextStatus === "OPEN" && nextCapacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       if (data.shuttleAvailable !== undefined) update.shuttleAvailable = Boolean(data.shuttleAvailable);
       if (data.displayOrder !== undefined) update.displayOrder = Number(data.displayOrder) || 0;
       const replacementDates = Array.isArray(data.sessionDates)

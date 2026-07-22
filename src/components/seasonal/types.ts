@@ -22,6 +22,8 @@ export type SeasonalClass = {
   enrolled: number;
   remaining: number | null;
   price: number;
+  newApplicantPrice?: number | null;
+  existingApplicantPrice?: number | null;
   waitlistEnabled?: boolean;
   sessionDates: SeasonalSessionDate[];
   weekdays: Array<"MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN">;
@@ -113,6 +115,8 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
     location: stringOrUndefined(row.location ?? first?.location), targetGrade: stringOrUndefined(row.targetGrades ?? row.targetGrade),
     coachName: stringOrUndefined(row.instructorName ?? row.coachName), capacity,
     enrolled: capacity === null ? Math.max(0, Number(row.enrolled ?? 0)) : Math.max(0, capacity - (remaining ?? 0)), remaining, price: Number(row.price ?? 0),
+    newApplicantPrice: nullableNumber(row.newApplicantPrice),
+    existingApplicantPrice: nullableNumber(row.existingApplicantPrice),
     waitlistEnabled: row.waitlistEnabled === false ? false : true,
     sessionDates: dates.flatMap((date) => {
       if (!date.startsAt || !date.endsAt) return [];
@@ -131,6 +135,12 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
     }),
     weekdays,
   };
+}
+
+function nullableNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function stringOrUndefined(value: unknown) { return value == null || value === "" ? undefined : String(value); }

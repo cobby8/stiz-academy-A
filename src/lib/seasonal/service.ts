@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import {
   SEASONAL_SMS_TRIGGERS,
@@ -10,6 +11,7 @@ import { SeasonalError, type SeasonalApplicationInput } from "./contracts";
 import { decideApplicantType, planApplicationItems, totalSnapshot, weekdayInSeoul } from "./planning";
 
 const OCCUPYING_ITEM_STATUSES = ["PENDING", "APPROVED"];
+const ACTIVE_APPLICATION_ITEM_STATUSES = ["PENDING", "APPROVED", "WAITLISTED"];
 type PublicOfferingRow = Prisma.SpecialProgramOfferingGetPayload<{
   include: { sessionDates: true; _count: { select: { applicationItems: true } } };
 }>;
@@ -65,6 +67,8 @@ function publicOffering(offering: PublicOfferingRow) {
     enrolled,
     remaining,
     price: offering.price,
+    newApplicantPrice: offering.newApplicantPrice,
+    existingApplicantPrice: offering.existingApplicantPrice,
     waitlistEnabled: capacity !== null,
   };
 }
@@ -93,7 +97,8 @@ export async function listPublishedSeasons() {
     orderBy: { startsAt: "desc" },
     include: {
       offerings: {
-        where: { status: "OPEN" },
+        // 공개 신청은 정원이 확정된 반만 노출해 접수 후 정원 판정이 달라지지 않게 한다.
+        where: { status: "OPEN", capacity: { not: null } },
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
         include: {
           sessionDates: { orderBy: { startsAt: "asc" } },
@@ -110,7 +115,7 @@ export async function getPublishedSeason(slug: string) {
     where: { slug, status: "PUBLISHED" },
     include: {
       offerings: {
-        where: { status: "OPEN" },
+        where: { status: "OPEN", capacity: { not: null } },
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
         include: {
           sessionDates: { orderBy: { startsAt: "asc" } },
@@ -128,6 +133,37 @@ async function existingApplication(seasonId: string, idempotencyKey: string) {
     where: { seasonId_idempotencyKey: { seasonId, idempotencyKey } },
     include: { items: true },
   });
+}
+
+function applicantFingerprint(input: SeasonalApplicationInput) {
+  // 이름의 띄어쓰기·대소문자와 전화번호 표기 차이는 같은 신청자로 취급한다.
+  const normalizedName = input.child.name.replace(/\s+/g, "").toLocaleLowerCase("ko-KR");
+  const birthDate = new Date(input.child.birthDate).toISOString().slice(0, 10);
+  const normalizedPhone = input.parent.phone.replace(/[^0-9]/g, "");
+  return createHash("sha256").update(`${normalizedName}|${birthDate}|${normalizedPhone}`, "utf8").digest("hex");
+}
+
+async function findActiveDuplicate(
+  client: Prisma.TransactionClient | typeof prisma,
+  offeringIds: string[],
+  fingerprint: string,
+) {
+  return client.specialProgramApplicationItem.findFirst({
+    where: {
+      offeringId: { in: offeringIds },
+      applicantFingerprint: fingerprint,
+      status: { in: ACTIVE_APPLICATION_ITEM_STATUSES },
+    },
+    select: { offeringId: true },
+  });
+}
+
+function duplicateApplicationError() {
+  return new SeasonalError(
+    "같은 학생이 이미 신청한 특강이 포함되어 있습니다. 기존 신청 내역을 확인해 주세요.",
+    409,
+    "DUPLICATE_APPLICATION",
+  );
 }
 
 async function hasMatchingExistingStudent(input: SeasonalApplicationInput) {
@@ -168,6 +204,67 @@ function applicationResponse(application: Awaited<ReturnType<typeof existingAppl
   };
 }
 
+type ReceivedDeliveryRow = { id: string; status: string; errorCode: string | null };
+
+async function recoverReceivedNotification(
+  application: NonNullable<Awaited<ReturnType<typeof existingApplication>>>,
+  seasonTitle: string,
+): Promise<SeasonalSmsDeliveryResult | null> {
+  const eventId = `${application.id}:application:${SEASONAL_SMS_TRIGGERS.received}`;
+  const deliveries = await prisma.$queryRawUnsafe<ReceivedDeliveryRow[]>(
+    `SELECT id, status, "errorCode" FROM "NotificationDelivery"
+      WHERE channel = 'SMS' AND "payloadJSON"->>'eventId' = $1
+      ORDER BY "createdAt" DESC LIMIT 1`,
+    eventId,
+  ).catch(() => []);
+  const latest = deliveries[0];
+  if (!latest || latest.status === "SENT" || latest.status === "SKIPPED" || latest.status === "SENDING") return null;
+
+  let deliveryId: string | null = latest.status === "PENDING" ? latest.id : null;
+  if (latest.status === "FAILED" && latest.errorCode !== "FAILED_DELIVERY_UNCERTAIN") {
+    // 실패 건은 조건부 갱신에 성공한 요청 하나만 다시 발송하게 해 동시 재시도의 중복 문자를 막는다.
+    const recovered = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `UPDATE "NotificationDelivery"
+          SET status = 'PENDING', "errorCode" = NULL, "failedAt" = NULL, "nextAttemptAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $1 AND status = 'FAILED' AND COALESCE("errorCode", '') <> 'FAILED_DELIVERY_UNCERTAIN'
+        RETURNING id`,
+      latest.id,
+    ).catch(() => []);
+    deliveryId = recovered[0]?.id ?? null;
+  }
+  if (!deliveryId) return null;
+
+  return dispatchSeasonalParentSms({
+    deliveryId,
+    trigger: SEASONAL_SMS_TRIGGERS.received,
+    recipientPhone: application.parentPhone,
+    variables: {
+      childName: application.childName,
+      parentName: application.parentName,
+      seasonTitle,
+      offeringTitle: application.items.map((item) => item.titleSnapshot).join(", "),
+      waitlistOrder: application.items.filter((item) => item.waitlistOrder).map((item) => String(item.waitlistOrder)).join(", "),
+    },
+  });
+}
+
+async function duplicateApplicationResponse(
+  application: NonNullable<Awaited<ReturnType<typeof existingApplication>>>,
+  seasonTitle: string,
+) {
+  const response = applicationResponse(application, true);
+  const notification = await recoverReceivedNotification(application, seasonTitle);
+  return notification
+    ? {
+        ...response,
+        notification,
+        ...(notification.status === "FAILED" || notification.errorCode === "TEMPLATE_DISABLED_OR_MISSING"
+          ? { notificationWarning: true as const }
+          : {}),
+      }
+    : response;
+}
+
 export async function submitSeasonalApplication(slug: string, input: SeasonalApplicationInput, retryCount = 0) {
   const season = await prisma.specialProgramSeason.findUnique({ where: { slug } });
   if (!season || season.status !== "PUBLISHED") throw new SeasonalError("신청할 수 없는 방학특강입니다.", 404, "SEASON_NOT_FOUND");
@@ -177,7 +274,8 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
   }
 
   const duplicate = await existingApplication(season.id, input.idempotencyKey);
-  if (duplicate) return applicationResponse(duplicate, true);
+  if (duplicate) return duplicateApplicationResponse(duplicate, season.title);
+  const fingerprint = applicantFingerprint(input);
   const applicantDecision = decideApplicantType(input.applicantType, await hasMatchingExistingStudent(input));
 
   try {
@@ -193,6 +291,8 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       if (offerings.length !== ids.length || offerings.some((offering) => offering.status !== "OPEN")) {
         throw new SeasonalError("마감되었거나 존재하지 않는 특강이 포함되어 있습니다.", 409, "OFFERING_UNAVAILABLE");
       }
+      // 특강 행 잠금 안에서 확인하므로 같은 특강으로 동시에 들어온 요청도 순서대로 판정된다.
+      if (await findActiveDuplicate(tx, ids, fingerprint)) throw duplicateApplicationError();
       const availableWeekdays = new Set(offerings.flatMap((offering) => offering.sessionDates.map((session) => weekdayInSeoul(session.startsAt))));
       const invalidWeekdays = input.selectedWeekdays.filter((weekday) => !availableWeekdays.has(weekday));
       if (invalidWeekdays.length > 0) {
@@ -255,6 +355,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
               priceSnapshot: plan.priceSnapshot,
               titleSnapshot: plan.offering.title,
               status: plan.status,
+              applicantFingerprint: fingerprint,
               waitlistOrder: plan.waitlistOrder,
             })),
           },
@@ -335,7 +436,11 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
     if (error instanceof SeasonalError) throw error;
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const duplicateAfterRace = await existingApplication(season.id, input.idempotencyKey);
-      if (duplicateAfterRace) return applicationResponse(duplicateAfterRace, true);
+      if (duplicateAfterRace) return duplicateApplicationResponse(duplicateAfterRace, season.title);
+      // 다른 고유 키 충돌과 동시에 활성 중복이 확인되면 사용자에게 중복 신청으로 안내한다.
+      if (await findActiveDuplicate(prisma, input.items.map((item) => item.offeringId), fingerprint)) {
+        throw duplicateApplicationError();
+      }
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" && retryCount < 2) {
       return submitSeasonalApplication(slug, input, retryCount + 1);

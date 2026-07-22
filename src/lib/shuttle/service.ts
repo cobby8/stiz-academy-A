@@ -577,7 +577,9 @@ export async function updateRoute(actor: Actor, id: string, input: Record<string
     }
     if (input.serviceDate !== undefined) {
       const nextServiceDate = optionalDate(input.serviceDate, "운행일", true);
-      const shuttleRequestIds = before.stops.flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId));
+      const shuttleRequestIds = before.stops
+        .flatMap((stop) => stop.passengers.map((passenger) => passenger.shuttleRequestId))
+        .filter((requestId): requestId is string => Boolean(requestId));
       if (shuttleRequestIds.length) {
         const duplicate = await tx.shuttleRoutePassenger.findFirst({
           where: {

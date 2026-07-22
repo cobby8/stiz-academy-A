@@ -1174,7 +1174,7 @@ export function getCachedAdminTrialPayload(options?: AdminListPayloadOptions) {
                 }),
             };
         },
-        ["admin-trial-v3", String(page.limit), String(page.offset)],
+        ["admin-trial-v4", String(page.limit), String(page.offset)],
         { revalidate: 30, tags: ["admin-trial", "admin-classes"] },
     )();
 }

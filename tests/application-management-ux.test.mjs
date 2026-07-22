@@ -46,18 +46,23 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
   assert.match(adminReadPayloads, /getCachedAdminTrialPayload/);
   assert.match(adminReadPayloads, /getClasses\(\)/);
   assert.match(adminReadPayloads, /classes,/);
-  assert.match(adminReadPayloads, /admin-trial-v3/);
+  assert.match(adminReadPayloads, /admin-trial-v4/);
   assert.match(adminReadPayloads, /"admin-classes"/);
+  assert.match(queries, /COALESCE\(ss_co\.name, cso_co\.name, ccs_co\.name, u\.name\) AS coach_name/);
   assert.match(applyClient, /initialTrialClasses/);
   assert.match(trialClient, /interface ClassInfo/);
+  assert.match(trialClient, /coachName\?: string \| null/);
+  assert.match(trialClient, /instructorName\?: string \| null/);
   assert.match(trialClient, /classesBySlotKey/);
   assert.match(trialClient, /classesById/);
   assert.match(trialClient, /function formatClassLabel/);
   assert.match(trialClient, /function formatConfirmedSchedule/);
   assert.match(trialClient, /formatCompactDate\(lead\.scheduledDate\).*formatClassLabel\(matchedClass\)/s);
   assert.match(trialClient, /function formatTrialListScheduleShort/);
+  assert.match(trialClient, /function formatTrialListTeacherName/);
   assert.match(trialClient, /const confirmedClass = lead\.scheduledClassId \? classesById\?\.get\(lead\.scheduledClassId\) : null/);
   assert.match(trialClient, /const scheduleLabel = formatTrialListScheduleShort\(lead, classesById, classesBySlotKey\)/);
+  assert.match(trialClient, /const teacherLabel = formatTrialListTeacherName\(lead, classesById, classesBySlotKey\)/);
   assert.match(trialClient, /function isLikelyDefaultScheduleTime/);
   assert.match(trialClient, /시간 확인 필요/);
   assert.match(trialClient, /const DAY_CODE_BY_LABEL/);
@@ -73,7 +78,7 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
 test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 보여준다", () => {
   assert.match(trialClient, /function renderTrialList\(\)/);
   assert.match(trialClient, /<table className="w-full min-w-\[760px\] table-fixed[\s\S]*text-center[\s\S]*lg:min-w-0/);
-  assert.match(trialClient, /상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*상태변경[\s\S]*액션/);
+  assert.match(trialClient, /상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*담당교사[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*상태변경[\s\S]*액션/);
   assert.match(trialClient, /function formatMonthDayDate/);
   assert.match(trialClient, /function getTrialListDateValue/);
   assert.match(trialClient, /const createdDateMobileLabel = formatMonthDayDate\(lead\.createdAt\)/);
@@ -198,7 +203,7 @@ test("체험수업과 수강신청은 카드형을 폐기하고 목록형만 제
 
 test("목록형은 스프레드시트처럼 실제 테이블 구조로 보여준다", () => {
   assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[760px\][\s\S]*lg:min-w-0/);
-  assert.match(trialClient, /<thead[\s\S]*상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*상태변경[\s\S]*액션/);
+  assert.match(trialClient, /<thead[\s\S]*상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*담당교사[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*상태변경[\s\S]*액션/);
   assert.match(trialClient, /<tbody[\s\S]*visibleLeads\.map/);
   assert.doesNotMatch(trialClient, /hidden grid-cols-\[1fr_0\.9fr_2\.2fr_0\.8fr_1\.2fr\]/);
   assert.match(applyClient, /function renderApplicationList\(\)[\s\S]*<table className="w-full min-w-\[960px\]/);

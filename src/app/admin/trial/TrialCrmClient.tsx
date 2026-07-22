@@ -88,6 +88,9 @@ export interface ClassInfo {
     endTime: string;
     capacity: number;
     slotKey: string | null;
+    coachId?: string | null;
+    coachName?: string | null;
+    instructorName?: string | null;
     program: { id: string; name: string } | null;
 }
 
@@ -435,6 +438,17 @@ function formatTrialListScheduleShort(
     const confirmedClass = lead.scheduledClassId ? classesById?.get(lead.scheduledClassId) : null;
     if (confirmedClass) return formatClassShortLabel(confirmedClass);
     return formatPreferredScheduleShort(lead, classesBySlotKey) || "미입력";
+}
+
+function formatTrialListTeacherName(
+    lead: TrialLead,
+    classesById?: Map<string, ClassInfo>,
+    classesBySlotKey?: Map<string, ClassInfo>,
+) {
+    const matchedClass =
+        (lead.scheduledClassId ? classesById?.get(lead.scheduledClassId) : null) ||
+        getPreferredClass(lead, classesBySlotKey);
+    return matchedClass?.coachName || matchedClass?.instructorName || "-";
 }
 
 function formatPreferredSchedule(lead: TrialLead, classesBySlotKey?: Map<string, ClassInfo>) {
@@ -986,11 +1000,12 @@ export default function TrialCrmClient({
                         <col className="w-[9%]" />
                         <col className="w-[9%]" />
                         <col className="w-[6%]" />
-                        <col className="w-[11%]" />
-                        <col className="w-[21%]" />
-                        <col className="w-[6%]" />
-                        <col className="w-[16%]" />
+                        <col className="w-[8%]" />
                         <col className="w-[10%]" />
+                        <col className="w-[18%]" />
+                        <col className="w-[5%]" />
+                        <col className="w-[16%]" />
+                        <col className="w-[8%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         <tr className="divide-x divide-gray-200 dark:divide-gray-700">
@@ -998,6 +1013,7 @@ export default function TrialCrmClient({
                             <th className="px-2 py-2">신청일</th>
                             <th className="px-2 py-2">체험일</th>
                             <th className="px-2 py-2">수업</th>
+                            <th className="px-2 py-2">담당교사</th>
                             <th className="px-2 py-2">수강생이름</th>
                             <th className="px-2 py-2">학교</th>
                             <th className="px-2 py-2">학년</th>
@@ -1019,6 +1035,7 @@ export default function TrialCrmClient({
                             const createdDateMobileLabel = formatMonthDayDate(lead.createdAt);
                             const trialDateMobileLabel = trialListDate ? formatMonthDayDate(trialListDate) : trialDateLabel;
                             const scheduleLabel = formatTrialListScheduleShort(lead, classesById, classesBySlotKey);
+                            const teacherLabel = formatTrialListTeacherName(lead, classesById, classesBySlotKey);
                             const schoolLabel = lead.childSchool || "-";
                             const gradeLabel = lead.childGrade || lead.childAge || "-";
                             const isActionOpen = openQuickActionId === lead.id;
@@ -1064,6 +1081,11 @@ export default function TrialCrmClient({
                                     <td className="px-2 py-1.5 text-center align-middle">
                                         <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={scheduleLabel}>
                                             {scheduleLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center align-middle">
+                                        <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={teacherLabel}>
+                                            {teacherLabel}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">

@@ -162,9 +162,19 @@ export const getClasses = cache(async () => {
             `SELECT c.id, c."programId", c."instructorId", c.name, c."dayOfWeek",
                     c."startTime", c."endTime", c.location, c.capacity, c."slotKey",
                     c."createdAt", c."updatedAt",
-                    p.id AS p_id, p.name AS p_name
+                    p.id AS p_id, p.name AS p_name,
+                    u.name AS instructor_name,
+                    COALESCE(ss_co.id, cso_co.id, ccs_co.id) AS coach_id,
+                    COALESCE(ss_co.name, cso_co.name, ccs_co.name, u.name) AS coach_name
              FROM "Class" c
              LEFT JOIN "Program" p ON c."programId" = p.id
+             LEFT JOIN "User" u ON c."instructorId" = u.id
+             LEFT JOIN "ScheduleSlot" ss ON ss."slotKey" = c."slotKey"
+             LEFT JOIN "Coach" ss_co ON ss_co.id = ss."coachId"
+             LEFT JOIN "ClassSlotOverride" cso ON cso."slotKey" = c."slotKey"
+             LEFT JOIN "Coach" cso_co ON cso_co.id = cso."coachId"
+             LEFT JOIN "CustomClassSlot" ccs ON c."slotKey" = ccs.id OR c."slotKey" = CONCAT('custom-', ccs.id)
+             LEFT JOIN "Coach" ccs_co ON ccs_co.id = ccs."coachId"
              ORDER BY CASE c."dayOfWeek"
                         WHEN 'Mon' THEN 0 WHEN 'Tue' THEN 1 WHEN 'Wed' THEN 2
                         WHEN 'Thu' THEN 3 WHEN 'Fri' THEN 4 WHEN 'Sat' THEN 5
@@ -182,6 +192,9 @@ export const getClasses = cache(async () => {
             location: r.location ?? null,
             capacity: Number(r.capacity ?? 0),
             slotKey: r.slotKey ?? r.slotkey ?? null,
+            coachId: r.coach_id ?? r.coachId ?? r.coachid ?? null,
+            coachName: r.coach_name ?? r.coachName ?? r.coachname ?? null,
+            instructorName: r.instructor_name ?? r.instructorName ?? r.instructorname ?? null,
             createdAt: r.createdAt ?? r.createdat,
             updatedAt: r.updatedAt ?? r.updatedat,
             program: r.p_id ? { id: r.p_id, name: r.p_name } : null,

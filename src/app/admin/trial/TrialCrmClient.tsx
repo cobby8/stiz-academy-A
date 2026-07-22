@@ -1112,14 +1112,6 @@ export default function TrialCrmClient({
                                         <span className="block truncate font-black text-gray-900 dark:text-white" title={rowTitle}>
                                             {lead.childName}
                                         </span>
-                                        <span className={`mx-auto mt-0.5 inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-black ${
-                                            lead.trialFeeConfirmed
-                                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
-                                                : "bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-400"
-                                        }`}>
-                                            <span className="material-symbols-outlined text-[12px]">{lead.trialFeeConfirmed ? "paid" : "payments"}</span>
-                                            {lead.trialFeeConfirmed ? "입금" : "미입금"}
-                                        </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
                                         <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={schoolLabel}>
@@ -1195,7 +1187,12 @@ export default function TrialCrmClient({
                                                     <span>연락 완료</span>
                                                     {renderActionIcon("done_all")}
                                                 </button>
-                                                {!lead.trialFeeConfirmed && (
+                                                {lead.trialFeeConfirmed ? (
+                                                    <div className={`${LIST_ACTION_ITEM_CLASS} pointer-events-none bg-emerald-50 text-emerald-700 opacity-90 dark:bg-emerald-950/30 dark:text-emerald-200`}>
+                                                        <span>입금 완료</span>
+                                                        {renderActionIcon("paid")}
+                                                    </div>
+                                                ) : (
                                                     <button
                                                         type="button"
                                                         onClick={() => {

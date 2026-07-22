@@ -4,15 +4,15 @@ export type CoordinateLinkInput = {
   name: string;
 };
 
-function finiteCoordinate(value: CoordinateLinkInput["latitude"]) {
+function finiteCoordinate(value: CoordinateLinkInput["latitude"], min: number, max: number) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
 }
 
 export function coordinatePoint(input: CoordinateLinkInput) {
-  const latitude = finiteCoordinate(input.latitude);
-  const longitude = finiteCoordinate(input.longitude);
+  const latitude = finiteCoordinate(input.latitude, -90, 90);
+  const longitude = finiteCoordinate(input.longitude, -180, 180);
   if (latitude === null || longitude === null) return null;
   return { latitude, longitude, name: input.name.trim() || "STIZ shuttle point" };
 }

@@ -24,7 +24,8 @@ test("체험 완료 후 수강신청서 링크는 관리자 주요 액션으로 
   assert.match(trialClient, /handleSendEnrollGuide\(lead\)/);
   assert.match(trialClient, /수강신청 안내/);
   assert.match(trialClient, /안내 재발송/);
-  assert.match(trialClient, /직접 등록/);
+  // 목록 단순화 이후에도 체험 완료 후속 안내는 번개 퀵액션의 주요 버튼으로 유지되어야 한다.
+  assert.match(trialClient, /openQuickActionId === lead\.id[\s\S]*renderEnrollGuideButton\(lead\)/);
 });
 
 test("체험 신청 정보는 수강신청서 자동 채움으로 이어진다", () => {

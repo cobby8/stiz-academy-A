@@ -306,8 +306,8 @@ async function ensureApplicationCapacity(tx: Prisma.TransactionClient, applicati
         where: { offeringId: item.offeringId, status: { in: ["PENDING", "APPROVED"] } },
       }),
     ]);
-    if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 승인할 수 없습니다.", 409, "CAPACITY_REQUIRED");
-    if (occupied > offering.capacity) throw new SeasonalError("정원이 가득 차 신청을 승인할 수 없습니다.", 409, "CAPACITY_FULL");
+    if (!offering) throw new SeasonalError("승인할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
+    if (offering.capacity !== null && occupied > offering.capacity) throw new SeasonalError("정원이 가득 차 신청을 승인할 수 없습니다.", 409, "CAPACITY_FULL");
   }
 }
 
@@ -351,8 +351,8 @@ async function updateSpecialProgramItemStatus(
       tx.specialProgramOffering.findUnique({ where: { id: before.offeringId } }),
       tx.specialProgramApplicationItem.count({ where: { offeringId: before.offeringId, id: { not: params.itemId }, status: { in: ["PENDING", "APPROVED"] } } }),
     ]);
-    if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 승인할 수 없습니다.", 409, "CAPACITY_REQUIRED");
-    if (occupied >= offering.capacity) throw new SeasonalError("정원이 가득 차 승인할 수 없습니다.", 409, "CAPACITY_FULL");
+    if (!offering) throw new SeasonalError("승인할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
+    if (offering.capacity !== null && occupied >= offering.capacity) throw new SeasonalError("정원이 가득 차 승인할 수 없습니다.", 409, "CAPACITY_FULL");
   }
 
   let waitlistOrder = before.waitlistOrder;
@@ -437,8 +437,8 @@ async function ensureSpecialProgramOfferingCapacity(tx: Prisma.TransactionClient
       },
     }),
   ]);
-  if (!offering || offering.capacity === null) throw new SeasonalError("정원이 정해지지 않은 반에는 배정할 수 없습니다.", 409, "CAPACITY_REQUIRED");
-  if (occupied >= offering.capacity) throw new SeasonalError("정원이 가득 찬 반에는 배정할 수 없습니다.", 409, "CAPACITY_FULL");
+  if (!offering) throw new SeasonalError("배정할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
+  if (offering.capacity !== null && occupied >= offering.capacity) throw new SeasonalError("정원이 가득 찬 반에는 배정할 수 없습니다.", 409, "CAPACITY_FULL");
   return offering;
 }
 
@@ -703,7 +703,6 @@ export async function POST(request: NextRequest) {
       const status = OFFERING_STATUSES.has(data.status) ? data.status : "DRAFT";
       const linkedClassId = cleanText(data.linkedClassId, 100) || null;
       const instructorId = cleanText(data.instructorId, 100) || null;
-      if (status === "OPEN" && capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       const sessionDates = Array.isArray(data.sessionDates) ? (data.sessionDates as SessionDateInput[]).map((row) => ({ startsAt: date(row.startsAt, "수업 시작 시각"), endsAt: date(row.endsAt, "수업 종료 시각"), location: cleanText(row.location, 150), note: cleanText(row.note, 500) })) : [];
       if (sessionDates.some((row: { startsAt: Date; endsAt: Date }) => row.endsAt <= row.startsAt)) throw new SeasonalError("수업 종료 시각은 시작 시각보다 늦어야 합니다.");
       if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
@@ -975,8 +974,6 @@ export async function PATCH(request: NextRequest) {
       if (data.existingApplicantPrice !== undefined) update.existingApplicantPrice = optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격");
       if (data.status !== undefined) { if (!OFFERING_STATUSES.has(data.status)) throw new SeasonalError("특강 상태가 올바르지 않습니다."); update.status = data.status; }
       const nextStatus = (update.status as string | undefined) ?? before.status;
-      const nextCapacity = update.capacity === undefined ? before.capacity : update.capacity;
-      if (nextStatus === "OPEN" && nextCapacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       const nextLinkedClassId = (update.linkedClassId === undefined ? before.linkedClassId : update.linkedClassId) as string | null;
       const nextInstructorId = (update.instructorId === undefined ? before.instructorId : update.instructorId) as string | null;
       if (nextStatus === "OPEN" && (!nextLinkedClassId || !nextInstructorId)) throw new SeasonalError("모집 중인 반은 출석 연결 반과 담당 강사를 지정해야 합니다.", 409, "ATTENDANCE_LINK_REQUIRED");

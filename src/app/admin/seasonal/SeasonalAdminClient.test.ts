@@ -9,7 +9,7 @@ test("special lecture class form saves operation settings and every session", ()
   assert.match(source, /name="linkedProgramId"/);
   assert.match(source, /name="instructorId"/);
   assert.match(source, /name="shuttleAvailable"/);
-  assert.match(source, /name="status" defaultValue=\{initial\?\.status \?\? "DRAFT"\}/);
+  assert.match(source, /name="status" value=\{attendanceReadiness\.status\}/);
   assert.match(source, /sessionDates,/);
   assert.match(source, /회차 추가/);
   assert.doesNotMatch(source, /existingApplicantPrice[^\n]+status: "DRAFT"/);

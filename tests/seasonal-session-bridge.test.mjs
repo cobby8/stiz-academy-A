@@ -6,6 +6,8 @@ const schema = readFileSync("prisma/schema.prisma", "utf8");
 const bridge = readFileSync("src/lib/seasonal/session-bridge.ts", "utf8");
 const route = readFileSync("src/app/api/admin/seasonal/route.ts", "utf8");
 const admin = readFileSync("src/app/admin/seasonal/SeasonalAdminClient.tsx", "utf8");
+const staffQueries = readFileSync("src/lib/staff-session-queries.ts", "utf8");
+const staffAccess = readFileSync("src/lib/staff-class-access.ts", "utf8");
 
 test("특강 회차와 출석 Session을 일대일로 연결한다", () => {
   assert.match(schema, /specialProgramSessionDateId\s+String\?\s+@unique/);
@@ -32,9 +34,19 @@ test("관리자 수정은 기존 회차 ID를 보존해 API로 전달한다", ()
   assert.doesNotMatch(route, /specialProgramSessionDate\.createMany/);
 });
 
-test("모집 공개에는 출석 연결 반과 담당 강사가 필요하다", () => {
-  assert.match(route, /ATTENDANCE_LINK_REQUIRED/g);
-  assert.match(route, /!nextLinkedClassId \|\| !nextInstructorId/);
+test("미연결 특강도 정원과 회차가 있으면 모집 공개할 수 있다", () => {
+  assert.match(route, /status === "OPEN" && capacity === null/);
+  assert.match(route, /status === "OPEN" && sessionDates\.length === 0/);
+  assert.doesNotMatch(route, /ATTENDANCE_LINK_REQUIRED/);
+  assert.doesNotMatch(route, /!nextLinkedClassId \|\| !nextInstructorId/);
+});
+
+test("미연결 특강은 출석 Session을 만들거나 강사 화면에 노출하지 않는다", () => {
+  assert.match(bridge, /if \(input\.linkedClassId\)/);
+  assert.match(bridge, /else if \(previous\?\.session\)/);
+  assert.match(bridge, /await tx\.session\.delete/);
+  assert.match(staffQueries, /JOIN "Class" c ON c\.id = o\."linkedClassId"/);
+  assert.match(staffAccess, /o\."linkedClassId" IS NOT NULL/);
 });
 
 test("진행 전 빈 출석 세션만 특강과 함께 안전하게 삭제한다", () => {

@@ -20,10 +20,21 @@ export type TmapRouteOptimizationResult = {
   };
 };
 
-class TmapApiError extends Error {
-  constructor(message: string, readonly status = 502) {
+export class TmapApiError extends Error {
+  constructor(
+    message: string,
+    readonly status = 502,
+    readonly code = "TMAP_API_ERROR",
+  ) {
     super(message);
+    this.name = "TmapApiError";
   }
+}
+
+const TMAP_REQUEST_TIMEOUT_MS = 10_000;
+
+function isTimeoutError(error: unknown) {
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 }
 
 function productLimit(count: number) {
@@ -86,29 +97,48 @@ export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimization
     return { provider: "TMAP", orderedWaypointIds: [], rawSummary: undefined };
   }
 
-  const response = await fetch(routeOptimizationUrl(input.waypoints.length), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      appKey,
-    },
-    body: JSON.stringify({
-      reqCoordType: "WGS84GEO",
-      resCoordType: "WGS84GEO",
-      ...pointPayload(input.start, "start"),
-      ...pointPayload(input.end, "end"),
-      viaPoints: input.waypoints.map((point) => ({
-        viaPointId: point.id,
-        viaPointName: point.name,
-        viaX: String(point.longitude),
-        viaY: String(point.latitude),
-      })),
-    }),
-  });
-  const body = await response.json().catch(() => null);
+  let response: Response;
+  let body: unknown = null;
+  try {
+    response = await fetch(routeOptimizationUrl(input.waypoints.length), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        appKey,
+      },
+      signal: AbortSignal.timeout(TMAP_REQUEST_TIMEOUT_MS),
+      body: JSON.stringify({
+        reqCoordType: "WGS84GEO",
+        resCoordType: "WGS84GEO",
+        ...pointPayload(input.start, "start"),
+        ...pointPayload(input.end, "end"),
+        viaPoints: input.waypoints.map((point) => ({
+          viaPointId: point.id,
+          viaPointName: point.name,
+          viaX: String(point.longitude),
+          viaY: String(point.latitude),
+        })),
+      }),
+    });
+    body = await response.json().catch((error: unknown) => {
+      // fetch에 전달한 신호는 응답 본문을 읽는 동안에도 유효합니다.
+      // 시간 초과는 바깥 catch에서 504로 변환하고, 잘못된 JSON만 기존처럼 빈 응답으로 처리합니다.
+      if (isTimeoutError(error)) throw error;
+      return null;
+    });
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new TmapApiError(
+        "T맵 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.",
+        504,
+        "TMAP_OPTIMIZATION_TIMEOUT",
+      );
+    }
+    throw new TmapApiError("T맵 경유지 최적화 요청에 연결하지 못했습니다.");
+  }
   if (!response.ok) {
-    throw new TmapApiError("T맵 경유지 최적화 요청이 실패했습니다.", response.status);
+    throw new TmapApiError("T맵 경유지 최적화 요청이 실패했습니다.");
   }
 
   const knownIds = new Set(input.waypoints.map((point) => point.id));

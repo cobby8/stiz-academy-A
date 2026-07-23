@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { chooseActiveShuttleAssignment } from "./assignment";
-import { optimizeWaypointOrderWithTmap, type TmapWaypoint } from "./tmap";
+import { optimizeWaypointOrderWithTmap, TmapApiError, type TmapWaypoint } from "./tmap";
 
 export class ShuttleServiceError extends Error {
   constructor(
@@ -645,10 +645,14 @@ export async function previewOptimizedRouteStops(actor: Actor, routeId: string) 
       })),
     });
   } catch (error) {
-    const status = typeof error === "object" && error !== null && "status" in error && typeof (error as { status?: unknown }).status === "number"
-      ? (error as { status: number }).status
-      : 502;
-    throw new ShuttleServiceError(error instanceof Error ? error.message : "Failed to load TMAP optimized stop order.", status, "TMAP_OPTIMIZATION_FAILED");
+    if (error instanceof TmapApiError) {
+      throw new ShuttleServiceError(error.message, error.status, error.code);
+    }
+    throw new ShuttleServiceError(
+      error instanceof Error ? error.message : "Failed to load TMAP optimized stop order.",
+      502,
+      "TMAP_OPTIMIZATION_FAILED",
+    );
   }
   const stopById = new Map(sortedStops.map((stop) => [stop.id, stop]));
   const optimizedStops = result.orderedWaypointIds.map((id, index) => {
@@ -778,10 +782,14 @@ export async function previewClassBasedShuttlePlacement(actor: Actor, input: Rec
       orderedWaypointIds = result.orderedWaypointIds;
       rawSummary = result.rawSummary;
     } catch (error) {
-      const status = typeof error === "object" && error !== null && "status" in error && typeof (error as { status?: unknown }).status === "number"
-        ? (error as { status: number }).status
-        : 502;
-      throw new ShuttleServiceError(error instanceof Error ? error.message : "Failed to load TMAP class based placement.", status, "TMAP_OPTIMIZATION_FAILED");
+      if (error instanceof TmapApiError) {
+        throw new ShuttleServiceError(error.message, error.status, error.code);
+      }
+      throw new ShuttleServiceError(
+        error instanceof Error ? error.message : "Failed to load TMAP class based placement.",
+        502,
+        "TMAP_OPTIMIZATION_FAILED",
+      );
     }
   } else {
     warning = waypoints.length === 1 ? "NOT_ENOUGH_WAYPOINTS" : "NO_READY_WAYPOINTS";

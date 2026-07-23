@@ -11,6 +11,7 @@ import {
     notifyAllParents,
     sendParentSms,
     sendParentSmsWithResult,
+    sendFailClosedTrackedSms,
     sendTrackedSms,
 } from "@/lib/notification";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
@@ -5636,11 +5637,10 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
         preferredSlotKey: slotKey,
         memo: lead.memo ?? lead.hopeNote ?? lead.hopenote ?? "",
     });
-    const message = renderedMessage || `[STIZ] 체험수업 알림
-학생: ${lead.childName ?? lead.childname ?? ""}
-일정: ${trialDateText}
-수업: ${className || scheduleLabel || slotKey}
-학부모: ${lead.parentName ?? lead.parentname ?? ""} ${lead.parentPhone ?? lead.parentphone ?? ""}`;
+    if (!renderedMessage) {
+        throw new Error("담당 선생님 문자 템플릿이 비활성화되어 발송하지 않았습니다.");
+    }
+    const message = renderedMessage;
 
     const sentNames: string[] = [];
     const failedMessages: string[] = [];
@@ -5648,7 +5648,14 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
     for (const coach of coachRows) {
         if (!coach.phone || sentPhones.has(coach.phone)) continue;
         sentPhones.add(coach.phone);
-        const result = await sendSmsDetailed(coach.phone, message);
+        const result = await sendTrackedSms({
+            eventType: "TRIAL_COACH_NOTICE",
+            eventId: trialLeadId,
+            recipientPhone: coach.phone,
+            recipientRole: "COACH",
+            trigger: "TRIAL_COACH_NOTICE",
+            body: message,
+        });
         const label = coach.name || coach.phone;
         if (result.ok) {
             sentNames.push(label);
@@ -5678,7 +5685,21 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
     return { sentTo: sentNames };
 }
 
-import { sendSmsBulk, sendSmsDetailed } from "@/lib/sms";
+import { sendSmsDetailed } from "@/lib/sms";
+import {
+    claimMessageDelivery,
+    finalizeMessageDelivery,
+    finalizeMessageDeliveryBatch,
+    reserveMessageDelivery,
+    reserveMessageDeliveryBatch,
+} from "@/lib/message-ledger";
+import {
+    MANUAL_MESSAGE_RECIPIENT_LIMIT,
+    normalizeUniqueManualRecipients,
+    validateManualMessageRequestId,
+    type ManualMessageRecipientResult,
+    type ManualMessageSendResult,
+} from "@/lib/manual-message-service";
 
 /**
  * getCoachPhones — SMS 발송 수신자 선택 UI용 코치 전화번호 목록 조회
@@ -5701,17 +5722,149 @@ export async function getCoachPhones(): Promise<{ id: string; name: string; role
 export async function sendManualSms(
     recipients: string[],
     message: string,
-): Promise<{ total: number; success: number; failed: number }> {
-    await requireAdmin();
+    options?: {
+        requestId?: string;
+        purpose?: string;
+        reason?: string;
+        audienceScope?: "INTERNAL" | "EXTERNAL";
+    },
+): Promise<ManualMessageSendResult> {
+    const admin = await requireAdmin();
 
     if (!recipients.length) throw new Error("수신자를 선택해주세요.");
     if (!message.trim()) throw new Error("메시지를 입력해주세요.");
 
-    // 발신 제한: 한 번에 100건 이하
-    if (recipients.length > 100) throw new Error("한 번에 100건 이하만 발송할 수 있습니다.");
+    const normalized = normalizeUniqueManualRecipients(recipients);
+    if (!normalized.recipients.length) throw new Error("올바른 휴대폰 번호를 입력해주세요.");
+    if (normalized.recipients.length > MANUAL_MESSAGE_RECIPIENT_LIMIT) {
+        throw new Error(`한 번에 ${MANUAL_MESSAGE_RECIPIENT_LIMIT}명 이하만 발송할 수 있습니다.`);
+    }
 
-    const result = await sendSmsBulk(recipients, `[STIZ] ${message.trim()}`);
-    return result;
+    const body = `[STIZ] ${message.trim()}`;
+    const purpose = options?.purpose?.trim() || "관리자 수동 문자 발송";
+    const reason = options?.reason?.trim() || "관리자 문자센터에서 직접 발송";
+    const audienceScope = options?.audienceScope || "INTERNAL";
+    const requestId = validateManualMessageRequestId(options?.requestId);
+    const requestFingerprint = createHash("sha256")
+        .update(`${admin.appUserId}:${body}:${normalized.recipients.join(",")}`)
+        .digest("hex")
+        .slice(0, 24);
+    const stableEventKey = requestId
+        ? `manual:request:${requestId}:${requestFingerprint}`
+        : `manual:click:${requestFingerprint}:${Math.floor(Date.now() / 30_000)}`;
+    const batchId = await reserveMessageDeliveryBatch({
+        source: "MANUAL",
+        stableEventKey,
+        audienceScope,
+        trigger: "MANUAL_MESSAGE",
+        actorUserId: admin.appUserId,
+        actorName: admin.appUserName,
+        purpose,
+        reason,
+        body,
+        requestedChannel: "SMS",
+    });
+    if (!batchId) throw new Error("문자 발송 장부를 생성하지 못했습니다.");
+
+    const results: ManualMessageRecipientResult[] = [];
+    for (const recipient of normalized.recipients) {
+        const reserved = await reserveMessageDelivery({
+            batchId,
+            source: "MANUAL",
+            stableEventKey,
+            eventType: "MANUAL_MESSAGE",
+            trigger: "MANUAL_MESSAGE",
+            audienceScope,
+            recipientPhone: recipient,
+            body,
+            requestedChannel: "SMS",
+        });
+        if (!reserved.deliveryId) {
+            results.push({
+                recipient,
+                last4: recipient.slice(-4),
+                ok: false,
+                status: "ALREADY_PROCESSED",
+                reason: "중복 발송 요청입니다.",
+            });
+            continue;
+        }
+
+        const claimed = await claimMessageDelivery(reserved.deliveryId);
+        if (!claimed.claimed) {
+            results.push({
+                recipient,
+                last4: recipient.slice(-4),
+                ok: false,
+                status: "ALREADY_PROCESSED",
+                reason: "이미 처리 중이거나 처리된 발송 요청입니다.",
+            });
+            continue;
+        }
+
+        const sent = await sendSmsDetailed(recipient, body);
+        try {
+            await finalizeMessageDelivery({
+                deliveryId: reserved.deliveryId,
+                ok: sent.ok,
+                provider: sent.provider,
+                requestedChannel: "SMS",
+                actualChannel: sent.messageType || "SMS",
+                providerGroupId: sent.groupId,
+                providerMessageId: sent.messageId,
+                providerStatus: sent.ok ? "ACCEPTED" : "FAILED",
+                errorCode: sent.ok ? null : sent.reason?.slice(0, 500),
+            });
+        } catch {
+            results.push({
+                recipient,
+                last4: recipient.slice(-4),
+                ok: false,
+                status: "UNCERTAIN",
+                uncertain: true,
+                reason: "발송 공급자 처리 후 장부 기록을 확인해야 합니다.",
+                provider: sent.provider,
+                providerMessageId: sent.messageId,
+                providerGroupId: sent.groupId,
+                messageType: sent.messageType,
+            });
+            continue;
+        }
+        results.push({
+            recipient,
+            last4: recipient.slice(-4),
+            ok: sent.ok,
+            status: sent.ok ? "SENT" : "FAILED",
+            reason: sent.reason,
+            provider: sent.provider,
+            providerMessageId: sent.messageId,
+            providerGroupId: sent.groupId,
+            messageType: sent.messageType,
+        });
+    }
+
+    try {
+        await finalizeMessageDeliveryBatch(batchId);
+    } catch {
+        // 공급자 호출이 끝난 뒤 묶음 집계 실패로 전체 요청을 실패 처리하면 중복 발송 위험이 있습니다.
+    }
+    const success = results.filter((result) => result.ok).length;
+    const retryRecipients = results
+        .filter((result) => result.status === "FAILED")
+        .map((result) => result.recipient);
+    const failed = results.filter((result) => result.status === "FAILED").length;
+    const uncertain = results.filter((result) => result.status === "UNCERTAIN").length;
+    return {
+        batchId,
+        total: results.length,
+        success,
+        failed,
+        uncertain,
+        duplicateCount: normalized.duplicateCount,
+        invalidCount: normalized.invalidCount,
+        results,
+        retryRecipients,
+    };
 }
 
 // ── SMS 템플릿 관리 Server Actions ──────────────────────────────────────────
@@ -6297,28 +6450,37 @@ export async function inviteStaff(data: {
                NOW() + INTERVAL '7 days',
                $4, NOW(), NOW()
              )
-             RETURNING token`,
+             RETURNING id, token`,
             cleanName,
             cleanPhone,
             staffRole,
             user.id,
         );
 
+        const invitationId = rows[0]?.id;
         const token = rows[0]?.token;
-        if (!token) throw new Error("초대 생성 실패");
+        if (!invitationId || !token) throw new Error("초대 생성 실패");
 
         // 문자 발송이 실패해도 생성된 초대와 복사용 링크는 그대로 유지한다.
         const inviteUrl = getStaffInvitationUrl(token);
         const baseUrl = getStaffInvitationBaseUrl();
         const smsResult = baseUrl
-            ? await sendSmsDetailed(
-                cleanPhone,
-                `[STIZ 농구교실] ${cleanName}님, ${staffRoleLabel} 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
-            )
+            ? await sendFailClosedTrackedSms({
+                eventType: "STAFF_INVITATION",
+                eventId: invitationId,
+                recipientPhone: cleanPhone,
+                recipientRole: "ADMIN",
+                trigger: "SECURITY_STAFF_INVITATION",
+                source: "SECURITY",
+                body: `[STIZ 농구교실] ${cleanName}님, ${staffRoleLabel} 초대가 도착했습니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
+            })
             : { ok: false, reason: SMS_SITE_URL_MISSING };
 
         if (baseUrl && !smsResult.ok) {
-            console.error("[inviteStaff SMS] failed:", smsResult.reason);
+            console.error(
+                "[inviteStaff SMS] failed:",
+                "reason" in smsResult ? smsResult.reason : smsResult.errorCode,
+            );
         }
 
         revalidateStaffAdminCaches();
@@ -6406,14 +6568,23 @@ export async function resendInvitation(invitationId: string) {
         const inviteUrl = getStaffInvitationUrl(inv.token);
         const baseUrl = getStaffInvitationBaseUrl();
         const smsResult = baseUrl
-            ? await sendSmsDetailed(
-                cleanPhone,
-                `[STIZ 농구교실] ${inv.name}님, 스태프 초대 링크를 재발송합니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
-            )
+            ? await sendFailClosedTrackedSms({
+                eventType: "STAFF_INVITATION",
+                eventId: invitationId,
+                deliveryRunId: `manual-resend:${Math.floor(Date.now() / 30_000)}`,
+                recipientPhone: cleanPhone,
+                recipientRole: "ADMIN",
+                trigger: "SECURITY_STAFF_INVITATION",
+                source: "SECURITY",
+                body: `[STIZ 농구교실] ${inv.name}님, 스태프 초대 링크를 재발송합니다.\n아래 링크에서 가입을 완료해주세요:\n${inviteUrl}`,
+            })
             : { ok: false, reason: SMS_SITE_URL_MISSING };
 
         if (baseUrl && !smsResult.ok) {
-            console.error("[resendInvitation SMS] failed:", smsResult.reason);
+            console.error(
+                "[resendInvitation SMS] failed:",
+                "reason" in smsResult ? smsResult.reason : smsResult.errorCode,
+            );
         }
 
         revalidateStaffAdminCaches();

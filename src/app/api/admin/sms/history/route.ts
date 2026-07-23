@@ -4,11 +4,15 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-function maskPhone(value: string | null) {
-    if (!value) return "보호됨";
-    const digits = value.replace(/\D/g, "");
-    if (digits.length < 8) return "보호됨";
-    return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+function maskPhoneLast4(value: string | null) {
+    // 이력 API는 원문 전화번호를 읽지 않고, 장부에 따로 보관한 끝 4자리만 표시합니다.
+    if (!value || !/^\d{4}$/.test(value)) return "보호됨";
+    return `***-****-${value}`;
+}
+
+function normalizeChannel(value: string | null) {
+    if (!value) return null;
+    return value === "KAKAO_ALIMTALK" ? "ALIMTALK" : value;
 }
 
 export async function GET(request: NextRequest) {
@@ -29,33 +33,83 @@ export async function GET(request: NextRequest) {
             eventType: string;
             audienceScope: string | null;
             channel: string;
+            requestedChannel: string | null;
             messageType: string | null;
             status: string;
-            recipientPhone: string | null;
+            provider: string | null;
+            providerStatus: string | null;
+            fallbackUsed: boolean;
+            fallbackChannel: string | null;
+            unitCost: string | number | null;
+            currency: string;
+            errorCode: string | null;
+            source: string | null;
+            batchId: string | null;
+            recipientPhoneLast4: string | null;
+            batchStatus: string | null;
+            batchTotalCount: number | null;
+            batchSuccessCount: number | null;
+            batchFailureCount: number | null;
         }>>(
-            `SELECT id, "sentAt", "createdAt", trigger, "eventType", "audienceScope",
-                    channel, "messageType", status, "recipientPhone"
-               FROM "NotificationDelivery"
-              WHERE channel IN ('SMS', 'LMS', 'ALIMTALK', 'KAKAO_ALIMTALK', 'RCS')
-                 OR "messageType" IN ('SMS', 'LMS', 'ALIMTALK', 'KAKAO_ALIMTALK', 'RCS')
-              ORDER BY "createdAt" DESC
+            `SELECT d.id, d."sentAt", d."createdAt", d.trigger, d."eventType", d."audienceScope",
+                    d.channel, d."requestedChannel", d."messageType", d.status,
+                    d.provider, d."providerStatus", d."fallbackUsed", d."fallbackChannel",
+                    d."unitCost", d.currency, d."errorCode",
+                    COALESCE(d.source, b.source) AS source,
+                    d."batchId", d."recipientPhoneLast4",
+                    b.status AS "batchStatus", b."totalCount" AS "batchTotalCount",
+                    b."successCount" AS "batchSuccessCount", b."failureCount" AS "batchFailureCount"
+               FROM "NotificationDelivery" d
+               LEFT JOIN "MessageDeliveryBatch" b ON b.id = d."batchId"
+              WHERE d.channel IN ('SMS', 'LMS', 'ALIMTALK', 'KAKAO_ALIMTALK', 'RCS')
+                 OR d."requestedChannel" IN ('SMS', 'LMS', 'ALIMTALK', 'KAKAO_ALIMTALK', 'RCS')
+                 OR d."messageType" IN ('SMS', 'LMS', 'ALIMTALK', 'KAKAO_ALIMTALK', 'RCS')
+              ORDER BY d."createdAt" DESC
               LIMIT $1`,
             limit,
         );
-        const deliveries = rows.map((row) => ({
-            id: row.id,
-            sentAt: (row.sentAt || row.createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }),
-            name: row.trigger || row.eventType,
-            audience: row.audienceScope === "INTERNAL" || row.audienceScope === "SECURITY"
-                ? row.audienceScope
-                : "EXTERNAL",
-            channel: row.messageType === "KAKAO_ALIMTALK" ? "ALIMTALK"
-                : row.messageType || (row.channel === "KAKAO_ALIMTALK" ? "ALIMTALK" : row.channel),
-            status: row.status === "SENT" || row.status === "FAILED" || row.status === "PENDING"
-                ? row.status
-                : "SKIPPED",
-            recipient: maskPhone(row.recipientPhone),
-        }));
+        const now = Date.now();
+        const deliveries = rows.map((row) => {
+            const createdAt = new Date(row.createdAt);
+            const isStaleSending = row.status === "SENDING"
+                && now - createdAt.getTime() >= 10 * 60 * 1000;
+            const isUncertain = isStaleSending
+                || row.status === "UNCERTAIN"
+                || row.errorCode === "FAILED_DELIVERY_UNCERTAIN"
+                || (row.status === "SENDING" && row.providerStatus === "ACCEPTED");
+            const actualChannel = normalizeChannel(row.messageType || row.channel) || "SMS";
+            const requestedChannel = normalizeChannel(row.requestedChannel) || actualChannel;
+
+            return {
+                id: row.id,
+                batchId: row.batchId,
+                sentAt: (row.sentAt || createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }),
+                name: row.trigger || row.eventType,
+                source: row.source || "AUTO",
+                audience: row.audienceScope === "INTERNAL" || row.audienceScope === "SECURITY"
+                    ? row.audienceScope
+                    : "EXTERNAL",
+                requestedChannel,
+                channel: actualChannel,
+                provider: row.provider,
+                providerStatus: row.providerStatus,
+                status: isUncertain ? "UNCERTAIN" : row.status,
+                isUncertain,
+                isStaleSending,
+                fallbackUsed: row.fallbackUsed,
+                fallbackChannel: normalizeChannel(row.fallbackChannel),
+                unitCost: row.unitCost === null ? null : Number(row.unitCost),
+                currency: row.currency,
+                errorCode: row.errorCode,
+                recipient: maskPhoneLast4(row.recipientPhoneLast4),
+                batch: row.batchId ? {
+                    status: row.batchStatus,
+                    totalCount: row.batchTotalCount ?? 0,
+                    successCount: row.batchSuccessCount ?? 0,
+                    failureCount: row.batchFailureCount ?? 0,
+                } : null,
+            };
+        });
         return NextResponse.json({ deliveries }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
         console.error("[api/admin/sms/history] failed:", error);

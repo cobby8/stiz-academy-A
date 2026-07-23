@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { getCoachPhones, sendManualSms } from "@/app/actions/admin";
 import SmsTemplateClient from "./templates/SmsTemplateClient";
 
@@ -34,8 +34,34 @@ interface DeliveryHistory {
     name: string;
     audience: Audience;
     channel: Channel;
-    status: "SENT" | "FAILED" | "PENDING" | "SKIPPED";
+    requestedChannel?: Channel;
+    provider?: string | null;
+    source?: "AUTO" | "MANUAL" | "SECURITY";
+    fallbackUsed?: boolean;
+    unitCost?: number | null;
+    currency?: string;
+    errorCode?: string | null;
+    status: "SENT" | "FAILED" | "PENDING" | "SENDING" | "UNCERTAIN" | "SKIPPED";
     recipient: string;
+}
+
+interface ManualSendResult {
+    batchId: string;
+    total: number;
+    success: number;
+    failed: number;
+    uncertain: number;
+    duplicateCount: number;
+    invalidCount: number;
+    results: Array<{
+        recipient: string;
+        last4: string;
+        ok: boolean;
+        status: "SENT" | "FAILED" | "UNCERTAIN" | "ALREADY_PROCESSED";
+        uncertain?: boolean;
+        reason?: string;
+    }>;
+    retryRecipients: string[];
 }
 
 const TABS: Array<{ id: CenterTab; label: string; icon: string }> = [
@@ -57,45 +83,6 @@ const CHANNEL_LABELS: Record<Channel, string> = {
     LMS: "LMS",
     RCS: "RCS",
 };
-
-const DEFAULT_RULES: AutomationRule[] = [
-    {
-        id: "staff-notification",
-        name: "담당 선생님 업무 알림",
-        description: "체험·수강 신청과 일정 변경 내용을 담당 선생님에게 알립니다.",
-        audience: "INTERNAL",
-        isActive: true,
-        locked: false,
-        primaryChannel: "SMS",
-        fallbackChannel: "NONE",
-        configured: true,
-        estimatedUnitCost: 18,
-    },
-    {
-        id: "parent-schedule",
-        name: "학부모 일정·승인 안내",
-        description: "체험 완료, 수강 승인, 결제와 일정 안내를 학부모에게 발송합니다.",
-        audience: "EXTERNAL",
-        isActive: true,
-        locked: false,
-        primaryChannel: "ALIMTALK",
-        fallbackChannel: "LMS",
-        configured: false,
-        estimatedUnitCost: 13,
-    },
-    {
-        id: "phone-verification",
-        name: "휴대폰 본인인증",
-        description: "회원가입과 직원 인증번호입니다. 계정 보호를 위해 끌 수 없습니다.",
-        audience: "SECURITY",
-        isActive: true,
-        locked: true,
-        primaryChannel: "SMS",
-        fallbackChannel: "NONE",
-        configured: true,
-        estimatedUnitCost: 18,
-    },
-];
 
 export default function SmsClient({ coaches: initialCoaches }: { coaches?: CoachPhone[] }) {
     const [activeTab, setActiveTab] = useState<CenterTab>("automation");
@@ -178,23 +165,36 @@ function ChannelReadiness() {
 }
 
 function AutomationPanel() {
-    const [rules, setRules] = useState<AutomationRule[]>(DEFAULT_RULES);
+    const [rules, setRules] = useState<AutomationRule[]>([]);
     const [filter, setFilter] = useState<Audience>("INTERNAL");
     const [loading, setLoading] = useState(true);
     const [notice, setNotice] = useState<string | null>(null);
+    const [loadFailed, setLoadFailed] = useState(false);
 
-    useEffect(() => {
+    const loadRules = useCallback(() => {
         let ignore = false;
+        setLoading(true);
+        setLoadFailed(false);
+        setNotice(null);
         fetch("/api/admin/sms/automations", { cache: "no-store" })
             .then(response => {
                 if (!response.ok) throw new Error("not-ready");
                 return response.json() as Promise<{ rules: AutomationRule[] }>;
             })
             .then(data => {
-                if (!ignore && data.rules?.length) setRules(data.rules);
+                if (ignore) return;
+                setRules(data.rules ?? []);
+                if (!data.rules?.length) {
+                    setLoadFailed(true);
+                    setNotice("저장된 자동 발송 설정이 없습니다. 설정이 준비되기 전에는 자동 발송이 실행되지 않습니다.");
+                }
             })
             .catch(() => {
-                if (!ignore) setNotice("현재 저장된 문자 설정을 표시합니다. 카카오·RCS 연결 후 채널 설정을 저장할 수 있습니다.");
+                if (!ignore) {
+                    setRules([]);
+                    setLoadFailed(true);
+                    setNotice("자동 발송 설정을 불러오지 못했습니다. 안전을 위해 설정을 임의로 표시하거나 발송하지 않습니다.");
+                }
             })
             .finally(() => {
                 if (!ignore) setLoading(false);
@@ -203,6 +203,10 @@ function AutomationPanel() {
             ignore = true;
         };
     }, []);
+
+    useEffect(() => {
+        return loadRules();
+    }, [loadRules]);
 
     const updateRule = useCallback(async (id: string, patch: Partial<AutomationRule>) => {
         const previous = rules;
@@ -251,6 +255,16 @@ function AutomationPanel() {
             {notice && <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">{notice}</p>}
 
             <div className="space-y-3">
+                {loading && <p className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800">자동 발송 설정을 불러오는 중입니다.</p>}
+                {!loading && loadFailed && (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-900 dark:bg-red-950/30">
+                        <span className="material-symbols-outlined text-3xl text-red-500">error</span>
+                        <p className="mt-2 text-sm font-bold text-red-700 dark:text-red-200">실제 설정을 확인할 수 없습니다.</p>
+                        <button type="button" onClick={loadRules} className="mt-3 min-h-11 rounded-xl bg-brand-navy-900 px-5 text-sm font-bold text-white">
+                            다시 불러오기
+                        </button>
+                    </div>
+                )}
                 {filteredRules.map(rule => (
                     <AutomationCard key={rule.id} rule={rule} disabled={loading} onUpdate={patch => void updateRule(rule.id, patch)} />
                 ))}
@@ -356,19 +370,37 @@ function HistoryPanel() {
                 </div>
             ) : (
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] text-left text-sm">
+                    <table className="w-full min-w-[980px] text-left text-sm">
                         <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                            <tr><th className="px-5 py-3">발송 시각</th><th className="px-5 py-3">알림</th><th className="px-5 py-3">구분</th><th className="px-5 py-3">채널</th><th className="px-5 py-3">수신자</th><th className="px-5 py-3">결과</th></tr>
+                            <tr><th className="px-5 py-3">발송 시각</th><th className="px-5 py-3">알림</th><th className="px-5 py-3">출처</th><th className="px-5 py-3">구분</th><th className="px-5 py-3">실제 채널</th><th className="px-5 py-3">수신자</th><th className="px-5 py-3">결과·사유</th></tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {items.map(item => (
                                 <tr key={item.id}>
                                     <td className="px-5 py-4 text-gray-500">{item.sentAt}</td>
                                     <td className="px-5 py-4 font-bold text-gray-900 dark:text-white">{item.name}</td>
+                                    <td className="px-5 py-4">{item.source === "MANUAL" ? "수동" : item.source === "SECURITY" ? "보안" : "자동"}</td>
                                     <td className="px-5 py-4">{AUDIENCE_META[item.audience]?.label ?? item.audience}</td>
-                                    <td className="px-5 py-4">{CHANNEL_LABELS[item.channel] ?? item.channel}</td>
+                                    <td className="px-5 py-4">
+                                        <span>{CHANNEL_LABELS[item.channel] ?? item.channel}</span>
+                                        {item.requestedChannel && item.requestedChannel !== item.channel && (
+                                            <span className="mt-1 block text-xs text-gray-400">
+                                                요청 {CHANNEL_LABELS[item.requestedChannel] ?? item.requestedChannel}
+                                            </span>
+                                        )}
+                                        {item.fallbackUsed && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">대체 발송</span>}
+                                        {item.provider && <span className="mt-1 block text-xs text-gray-400">{item.provider}</span>}
+                                        {item.unitCost !== null && item.unitCost !== undefined && (
+                                            <span className="mt-1 block text-xs text-gray-400">
+                                                {item.unitCost.toLocaleString("ko-KR")} {item.currency === "KRW" ? "원" : item.currency}
+                                            </span>
+                                        )}
+                                    </td>
                                     <td className="px-5 py-4">{item.recipient}</td>
-                                    <td className="px-5 py-4"><DeliveryBadge status={item.status} /></td>
+                                    <td className="px-5 py-4">
+                                        <DeliveryBadge status={item.status} />
+                                        {item.errorCode && <span className="mt-1 block text-xs text-red-600">{item.errorCode}</span>}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -380,11 +412,13 @@ function HistoryPanel() {
 }
 
 function DeliveryBadge({ status }: { status: DeliveryHistory["status"] }) {
-    const labels = { SENT: "접수 완료", FAILED: "실패", PENDING: "처리 중", SKIPPED: "미발송" };
+    const labels = { SENT: "접수 완료", FAILED: "실패", PENDING: "대기", SENDING: "확인 중", UNCERTAIN: "확인 필요", SKIPPED: "미발송" };
     const colors = {
         SENT: "bg-green-50 text-green-700",
         FAILED: "bg-red-50 text-red-700",
         PENDING: "bg-blue-50 text-blue-700",
+        SENDING: "bg-amber-50 text-amber-700",
+        UNCERTAIN: "bg-amber-50 text-amber-700",
         SKIPPED: "bg-gray-100 text-gray-600",
     };
     return <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${colors[status]}`}>{labels[status]}</span>;
@@ -398,8 +432,11 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [manualNumbers, setManualNumbers] = useState("");
     const [message, setMessage] = useState("");
-    const [result, setResult] = useState<{ total: number; success: number; failed: number } | null>(null);
+    const [result, setResult] = useState<ManualSendResult | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // 응답을 잃어버린 재시도에는 같은 번호표를 써서 중복 발송을 막습니다.
+    const requestIdRef = useRef<string | null>(null);
+    const requestPayloadRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (hasInitialCoaches) return;
@@ -413,20 +450,40 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
     }, [coaches, manualNumbers, mode, selectedIds]);
     const bytes = new TextEncoder().encode(`[STIZ] ${message}`).length;
 
-    function send() {
-        if (!recipients.length || !message.trim()) {
+    const resetRequest = useCallback(() => {
+        requestIdRef.current = null;
+        requestPayloadRef.current = null;
+        setResult(null);
+        setError(null);
+    }, []);
+
+    function send(targetRecipients: string[] = recipients, retry = false) {
+        if (!targetRecipients.length || !message.trim()) {
             setError("수신자와 메시지를 모두 입력해주세요.");
             return;
         }
-        if (!confirm(`${recipients.length}명에게 문자를 발송할까요?`)) return;
+        if (!confirm(`${targetRecipients.length}명에게 문자를 발송할까요?`)) return;
+
+        const payloadKey = JSON.stringify([targetRecipients, message.trim()]);
+        // 실제 실패 건 재발송은 새로운 발송이고, 응답 유실 재시도만 기존 ID를 이어 씁니다.
+        if (retry || requestPayloadRef.current !== payloadKey || !requestIdRef.current) {
+            requestIdRef.current = crypto.randomUUID();
+            requestPayloadRef.current = payloadKey;
+        }
+        const requestId = requestIdRef.current;
+
         setError(null);
         setResult(null);
         startTransition(async () => {
             try {
-                const response = await sendManualSms(recipients, message.trim());
+                const response = await sendManualSms(targetRecipients, message.trim(), { requestId });
                 setResult(response);
-                if (response.success > 0) setMessage("");
+                // 서버가 결과를 확정했으므로 다음 발송부터는 새 요청 ID를 사용합니다.
+                requestIdRef.current = null;
+                requestPayloadRef.current = null;
+                if (response.success > 0 && response.failed === 0 && response.uncertain === 0) setMessage("");
             } catch (caught) {
+                // 응답 유실 가능성이 있어 ID를 유지합니다. 같은 내용 재시도 시 서버가 중복을 차단합니다.
                 setError(caught instanceof Error ? caught.message : "문자를 발송하지 못했습니다.");
             }
         });
@@ -442,7 +499,7 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
                         { id: "select" as const, label: "직원 선택" },
                         { id: "manual" as const, label: "직접 입력" },
                     ].map(option => (
-                        <button key={option.id} type="button" onClick={() => setMode(option.id)} className={`min-h-11 rounded-xl px-2 text-sm font-bold ${mode === option.id ? "bg-brand-navy-900 text-white" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200"}`}>{option.label}</button>
+                        <button key={option.id} type="button" onClick={() => { setMode(option.id); resetRequest(); }} className={`min-h-11 rounded-xl px-2 text-sm font-bold ${mode === option.id ? "bg-brand-navy-900 text-white" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200"}`}>{option.label}</button>
                     ))}
                 </div>
                 {mode === "all" && <p className="mt-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-950/30 dark:text-blue-200">연락처가 등록된 직원 <strong>{coaches.length}명</strong>에게 발송합니다.</p>}
@@ -454,6 +511,7 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
                                     type="checkbox"
                                     checked={selectedIds.has(coach.id)}
                                     onChange={() => setSelectedIds(current => {
+                                        resetRequest();
                                         const next = new Set(current);
                                         if (next.has(coach.id)) next.delete(coach.id); else next.add(coach.id);
                                         return next;
@@ -466,21 +524,52 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
                         ))}
                     </div>
                 )}
-                {mode === "manual" && <textarea value={manualNumbers} onChange={event => setManualNumbers(event.target.value)} rows={7} placeholder={"010-1234-5678\n010-9876-5432"} className="mt-4 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />}
+                {mode === "manual" && <textarea value={manualNumbers} onChange={event => { setManualNumbers(event.target.value); resetRequest(); }} rows={7} placeholder={"010-1234-5678\n010-9876-5432"} className="mt-4 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />}
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 className="font-extrabold text-gray-900 dark:text-white">메시지 작성</h2>
-                <textarea value={message} onChange={event => setMessage(event.target.value)} rows={9} maxLength={1000} placeholder="보낼 메시지를 입력하세요." className="mt-4 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+                <textarea value={message} onChange={event => { setMessage(event.target.value); resetRequest(); }} rows={9} maxLength={1000} placeholder="보낼 메시지를 입력하세요." className="mt-4 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
                 <div className="mt-2 flex justify-between text-xs text-gray-500">
                     <span>발송할 때 [STIZ]가 자동으로 붙습니다.</span>
                     <strong>{bytes}바이트 · {bytes > 90 ? "LMS" : "SMS"}</strong>
                 </div>
-                {result && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-bold text-green-700">전체 {result.total}건 · 성공 {result.success}건 · 실패 {result.failed}건</p>}
+                {result && (
+                    <div className="mt-4 space-y-3">
+                        <p className="rounded-xl bg-green-50 p-3 text-sm font-bold text-green-700 dark:bg-green-950/30 dark:text-green-200">
+                            전체 {result.total}건 · 성공 {result.success}건 · 실패 {result.failed}건 · 확인 필요 {result.uncertain}건
+                            {(result.duplicateCount > 0 || result.invalidCount > 0) && <span className="mt-1 block text-xs font-medium">중복 제외 {result.duplicateCount}건 · 잘못된 번호 제외 {result.invalidCount}건</span>}
+                        </p>
+                        {result.uncertain > 0 && (
+                            <p role="alert" className="flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                                <span className="material-symbols-outlined text-[19px]">warning</span>
+                                발송 여부를 확인할 수 없는 {result.uncertain}건은 재발송하면 안 됩니다. 발송 이력에서 먼저 확인해 주세요.
+                            </p>
+                        )}
+                        {result.results.length > 0 && (
+                            <ul className="max-h-40 space-y-1 overflow-auto rounded-xl border border-gray-200 p-2 text-xs dark:border-gray-700">
+                                {result.results.map((item, index) => (
+                                    <li key={`${item.last4}-${index}`} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5">
+                                        <span className="text-gray-600 dark:text-gray-300">휴대폰 끝자리 {item.last4}</span>
+                                        <strong className={item.status === "FAILED" ? "text-red-600" : item.status === "UNCERTAIN" ? "text-amber-700 dark:text-amber-300" : "text-green-700 dark:text-green-300"}>
+                                            {item.status === "SENT" ? "성공" : item.status === "FAILED" ? "실패" : item.status === "UNCERTAIN" ? "확인 필요" : "이미 처리됨"}
+                                        </strong>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {result.retryRecipients.length > 0 && (
+                            <button type="button" onClick={() => send(result.retryRecipients, true)} disabled={pending} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 font-bold text-red-700 disabled:opacity-40 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+                                <span className="material-symbols-outlined text-[19px]">refresh</span>
+                                실패 {result.retryRecipients.length}건만 다시 발송
+                            </button>
+                        )}
+                    </div>
+                )}
                 {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
-                <button type="button" onClick={send} disabled={pending || !recipients.length || !message.trim()} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-navy-900 font-bold text-white disabled:opacity-40">
+                <button type="button" onClick={() => send()} disabled={pending || !recipients.length || !message.trim() || Boolean(result?.uncertain)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-navy-900 font-bold text-white disabled:opacity-40">
                     <span className="material-symbols-outlined text-[19px]">send</span>
-                    {pending ? "발송 중..." : `${recipients.length}명에게 발송`}
+                    {pending ? "발송 중..." : result?.uncertain ? "발송 이력 확인 후 새로 작성" : `${recipients.length}명에게 발송`}
                 </button>
             </div>
         </section>

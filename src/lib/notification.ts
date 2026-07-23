@@ -17,6 +17,15 @@ import {
     type MessageDispatchResult,
 } from "@/lib/message-dispatch";
 import type { MessageAudience, MessageChannel } from "@/lib/message-channel-policy";
+import {
+    claimMessageDelivery,
+    finalizeMessageDelivery,
+    finalizeMessageDeliveryBatch,
+    hashMessageBody,
+    reserveMessageDelivery,
+    reserveMessageDeliveryBatch,
+    type MessageLedgerSource,
+} from "@/lib/message-ledger";
 
 type SmsAudience = "ADMIN" | "COACH" | "PARENT";
 
@@ -32,6 +41,7 @@ type SmsDeliveryOptions = {
     requestedChannel?: MessageChannel;
     audienceScope?: "INTERNAL" | "EXTERNAL" | "SECURITY";
     forceSms?: boolean;
+    source?: MessageLedgerSource;
 };
 
 type AutomationPolicy = {
@@ -41,9 +51,12 @@ type AutomationPolicy = {
     fallbackChannel: "SMS" | "LMS" | null;
 };
 
-async function getAutomationPolicy(input: SmsDeliveryOptions): Promise<AutomationPolicy> {
+export async function getAutomationPolicy(input: SmsDeliveryOptions): Promise<AutomationPolicy> {
+    if (input.source === "SECURITY") {
+        return { enabled: true, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
+    }
     if (!input.trigger) {
-        return { enabled: true, requestedChannel: "SMS", fallbackEnabled: true, fallbackChannel: null };
+        return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
     }
     try {
         const rows = await prisma.$queryRawUnsafe<Array<{
@@ -52,40 +65,48 @@ async function getAutomationPolicy(input: SmsDeliveryOptions): Promise<Automatio
             fallbackEnabled: boolean;
             fallbackChannel: string | null;
             channelEnabled: boolean | null;
+            fallbackChannelEnabled: boolean | null;
         }>>(
             `SELECT r."isActive", r."requestedChannel", r."fallbackEnabled", r."fallbackChannel",
-                    cs."isEnabled" AS "channelEnabled"
+                    cs."isEnabled" AS "channelEnabled",
+                    fallback_cs."isEnabled" AS "fallbackChannelEnabled"
                FROM "MessageAutomationRule" r
                LEFT JOIN "MessageChannelSetting" cs
                  ON cs."audienceScope" = r."audienceScope"
                 AND cs.channel = r."requestedChannel"
+               LEFT JOIN "MessageChannelSetting" fallback_cs
+                 ON fallback_cs."audienceScope" = r."audienceScope"
+                AND fallback_cs.channel = r."fallbackChannel"
               WHERE r.trigger = $1 LIMIT 1`,
             input.trigger,
         );
         if (!rows.length) {
-            return { enabled: true, requestedChannel: "SMS", fallbackEnabled: true, fallbackChannel: null };
+            return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
         }
         const requested = rows[0].requestedChannel === "KAKAO_ALIMTALK"
             ? "ALIMTALK"
             : rows[0].requestedChannel;
-        const configuredChannelEnabled = rows[0].channelEnabled !== false;
-        const requestedChannel = configuredChannelEnabled
-            ? requested
-            : rows[0].fallbackChannel || "SMS";
+        const configuredChannelEnabled = rows[0].channelEnabled === true;
+        const validFallback = rows[0].fallbackEnabled
+            && rows[0].fallbackChannelEnabled === true
+            && (rows[0].fallbackChannel === "SMS" || rows[0].fallbackChannel === "LMS")
+            ? rows[0].fallbackChannel
+            : null;
+        if (!configuredChannelEnabled && !validFallback) {
+            return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
+        }
+        const requestedChannel = configuredChannelEnabled ? requested : validFallback!;
         return {
             enabled: rows[0].isActive,
             requestedChannel: ["AUTO", "SMS", "LMS", "ALIMTALK", "RCS"].includes(requestedChannel)
                 ? requestedChannel as MessageChannel
                 : "SMS",
-            fallbackEnabled: rows[0].fallbackEnabled,
-            fallbackChannel: rows[0].fallbackEnabled
-                && (rows[0].fallbackChannel === "SMS" || rows[0].fallbackChannel === "LMS")
-                ? rows[0].fallbackChannel
-                : null,
+            fallbackEnabled: validFallback !== null,
+            fallbackChannel: validFallback,
         };
     } catch {
         // 코드가 먼저 배포되고 마이그레이션이 뒤따르는 짧은 구간에도 기존 SMS는 유지한다.
-        return { enabled: true, requestedChannel: "SMS", fallbackEnabled: true, fallbackChannel: null };
+        return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
     }
 }
 
@@ -103,6 +124,9 @@ function normalizeSmsPhone(phone: string) {
 
 function smsDedupeKey(input: SmsDeliveryOptions) {
     const recipientNo = normalizeSmsPhone(input.recipientPhone);
+    const privacySecret = process.env.MESSAGE_PRIVACY_HMAC_SECRET;
+    if (!privacySecret) throw new Error("MESSAGE_PRIVACY_HMAC_SECRET is required");
+    const recipientHash = createHmac("sha256", privacySecret).update(recipientNo).digest("hex");
     const scope = input.deliveryRunId
         ? `${input.eventId || "manual"}:${input.deliveryRunId}`
         : input.eventId || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -112,7 +136,7 @@ function smsDedupeKey(input: SmsDeliveryOptions) {
         scope,
         input.recipientRole,
         input.trigger || "fallback",
-        recipientNo,
+        recipientHash,
     ].join(":");
 }
 
@@ -127,8 +151,8 @@ async function claimSmsDelivery(input: SmsDeliveryOptions): Promise<string | nul
                 channel, "requestedChannel", "dedupeKey", status, "attemptCount",
                 "payloadJSON", "createdAt", "updatedAt"
              ) VALUES (
-                gen_random_uuid()::text, $1, $2, $3, $4, $5,
-                'SMS', $6, $7, 'PENDING', 1, $8::jsonb, NOW(), NOW()
+                gen_random_uuid()::text, $1, $2, $3, $4, NULL,
+                'SMS', $5, $6, 'PENDING', 1, $7::jsonb, NOW(), NOW()
              ) ON CONFLICT ("dedupeKey") DO UPDATE
                SET status = 'PENDING',
                    "attemptCount" = "NotificationDelivery"."attemptCount" + 1,
@@ -142,7 +166,6 @@ async function claimSmsDelivery(input: SmsDeliveryOptions): Promise<string | nul
             input.trigger ?? null,
             input.audienceScope ?? messageAudienceScope(input.recipientRole),
             input.recipientUserId ?? null,
-            recipientNo,
             input.requestedChannel ?? "SMS",
             smsDedupeKey(input),
             JSON.stringify({
@@ -162,8 +185,8 @@ async function claimSmsDelivery(input: SmsDeliveryOptions): Promise<string | nul
                     id, "eventType", "recipientUserId", "recipientPhone", channel, "dedupeKey",
                     status, "attemptCount", "payloadJSON", "createdAt", "updatedAt"
                  ) VALUES (
-                    gen_random_uuid()::text, $1, $2, $3, 'SMS', $4,
-                    'PENDING', 1, $5::jsonb, NOW(), NOW()
+                    gen_random_uuid()::text, $1, $2, NULL, 'SMS', $3,
+                    'PENDING', 1, $4::jsonb, NOW(), NOW()
                  ) ON CONFLICT ("dedupeKey") DO UPDATE
                    SET status = 'PENDING',
                        "attemptCount" = "NotificationDelivery"."attemptCount" + 1,
@@ -174,7 +197,6 @@ async function claimSmsDelivery(input: SmsDeliveryOptions): Promise<string | nul
                  RETURNING id`,
                 input.eventType,
                 input.recipientUserId ?? null,
-                recipientNo,
                 smsDedupeKey(input),
                 JSON.stringify({
                     trigger: input.trigger ?? null,
@@ -254,6 +276,80 @@ async function finishSmsDelivery(
     }
 }
 
+async function claimLedgerSmsDelivery(input: SmsDeliveryOptions): Promise<{
+    deliveryId: string | null;
+    duplicateStatus?: string | null;
+}> {
+    const recipientNo = normalizeSmsPhone(input.recipientPhone);
+    const triggerKey = input.trigger || "missing-trigger";
+    const stableEventKey = input.deliveryRunId
+        ? `${input.eventType}:${triggerKey}:${input.eventId || "event"}:${input.deliveryRunId}`
+        : input.eventId ? `${input.eventType}:${triggerKey}:${input.eventId}` : "";
+    if (!recipientNo || !stableEventKey) return { deliveryId: null };
+    try {
+        const source = input.source ?? "AUTO";
+        const audienceScope = input.audienceScope ?? messageAudienceScope(input.recipientRole);
+        const batchId = await reserveMessageDeliveryBatch({
+            source,
+            stableEventKey,
+            audienceScope,
+            trigger: input.trigger,
+            purpose: input.eventType,
+            body: input.body,
+            requestedChannel: input.requestedChannel ?? "SMS",
+        });
+        if (!batchId) return { deliveryId: null };
+        const reserved = await reserveMessageDelivery({
+            batchId,
+            source,
+            stableEventKey,
+            eventType: input.eventType,
+            trigger: input.trigger,
+            audienceScope,
+            recipientUserId: input.recipientUserId,
+            recipientPhone: recipientNo,
+            body: input.body,
+            requestedChannel: input.requestedChannel ?? "SMS",
+        });
+        return { deliveryId: reserved.deliveryId, duplicateStatus: reserved.existingStatus };
+    } catch (error) {
+        console.error("[SMS delivery ledger] claim failed:", error);
+        return { deliveryId: null };
+    }
+}
+
+async function finishLedgerSmsDelivery(
+    deliveryId: string,
+    result: SmsSendResult | MessageDispatchResult,
+): Promise<boolean> {
+    try {
+        await finalizeMessageDelivery({
+            deliveryId,
+            ok: result.ok,
+            provider: "provider" in result ? result.provider ?? null : null,
+            requestedChannel: "requestedChannel" in result ? result.requestedChannel : "SMS",
+            actualChannel: "actualChannel" in result ? result.actualChannel : "SMS",
+            providerGroupId: "groupId" in result ? result.groupId ?? null : null,
+            providerMessageId: "messageId" in result ? result.messageId ?? null : null,
+            providerStatus: result.ok ? "ACCEPTED" : "FAILED",
+            fallbackUsed: "fallbackUsed" in result ? result.fallbackUsed : false,
+            fallbackChannel: "fallbackUsed" in result && result.fallbackUsed && "actualChannel" in result
+                ? result.actualChannel : null,
+            unitCost: "estimatedCostWon" in result && result.ok ? result.estimatedCostWon : null,
+            errorCode: result.ok ? null : (result.reason || "SMS_FAILED").slice(0, 200),
+        });
+        const batchRows = await prisma.$queryRawUnsafe<Array<{ batchId: string | null }>>(
+            `SELECT "batchId" FROM "NotificationDelivery" WHERE id = $1 LIMIT 1`,
+            deliveryId,
+        );
+        if (batchRows[0]?.batchId) await finalizeMessageDeliveryBatch(batchRows[0].batchId);
+        return true;
+    } catch (error) {
+        console.error("[SMS delivery ledger] finalize failed:", error);
+        return false;
+    }
+}
+
 async function sendSmsForNotification(input: SmsDeliveryOptions): Promise<SmsSendResult> {
     const recipientNo = normalizeSmsPhone(input.recipientPhone);
     const policy = await getAutomationPolicy(input);
@@ -266,23 +362,28 @@ async function sendSmsForNotification(input: SmsDeliveryOptions): Promise<SmsSen
         requestedChannel,
         audienceScope: input.audienceScope ?? messageAudienceScope(input.recipientRole),
     };
-    const deliveryId = await claimSmsDelivery(deliveryInput);
-    if (deliveryId === null) {
+    const claim = await claimLedgerSmsDelivery(deliveryInput);
+    const deliveryId = claim.deliveryId;
+    if (deliveryId === null && !claim.duplicateStatus) {
         // 장부를 확보하지 못한 문자는 성공 여부를 추적할 수 없으므로 공급자 호출도 하지 않는다.
         return { ok: false, to: recipientNo, reason: "문자 장부를 만들지 못해 발송 전 중단했습니다. 잠시 후 다시 시도해주세요." };
     }
-    if (deliveryId === undefined) {
-        const existing = await prisma.$queryRawUnsafe<Array<{ status: string }>>(
-            `SELECT status FROM "NotificationDelivery" WHERE "dedupeKey" = $1 LIMIT 1`,
-            smsDedupeKey(deliveryInput),
-        ).catch(() => []);
-        return existing[0]?.status === "SENT"
+    if (deliveryId === null) {
+        return claim.duplicateStatus === "SENT"
             ? { ok: true, to: recipientNo, reason: "DUPLICATE_SKIPPED" }
             : {
                 ok: false,
                 to: recipientNo,
                 reason: "문자 발송이 처리 중이거나 결과 확인이 필요합니다. 공급자·문자 장부를 확인한 뒤 재시도 여부를 판단해주세요.",
             };
+    }
+    const claimed = await claimMessageDelivery(deliveryId);
+    if (!claimed.claimed) {
+        return {
+            ok: false,
+            to: recipientNo,
+            reason: "발송 건이 이미 처리 중이거나 결과 확인이 필요합니다.",
+        };
     }
 
     const result = await sendMessageDetailed({
@@ -296,7 +397,7 @@ async function sendSmsForNotification(input: SmsDeliveryOptions): Promise<SmsSen
         // 승인된 알림톡 변수 계약이 연결되기 전에는 기존 SMS/LMS로만 안전하게 대체한다.
         alimtalk: undefined,
     });
-    const finalized = await finishSmsDelivery(deliveryId, result);
+    const finalized = await finishLedgerSmsDelivery(deliveryId, result);
     if (!finalized) {
         // 공급자 호출 뒤 결과 장부를 확정하지 못하면 자동 재전송하지 않고 운영 확인 대상으로 남긴다.
         return {
@@ -396,19 +497,35 @@ export async function reserveFailClosedSmsDelivery(
     }
     const scope = input.deliveryRunId ? `${input.eventId || "event"}:${input.deliveryRunId}` : input.eventId;
     if (!scope) return { ok: false, status: "FAILED", deliveryId: null, errorCode: "EVENT_ID_REQUIRED" };
+    const source = input.source ?? "AUTO";
+    const audienceScope = source === "SECURITY"
+        ? "SECURITY"
+        : input.audienceScope ?? messageAudienceScope(input.recipientRole);
     const dedupeKey = ["sms-private", input.eventType, scope, input.recipientRole, input.trigger || "fallback", recipientHash].join(":");
     try {
         await expireStaleSmsDeliveries(db);
         const rows = await db.$queryRawUnsafe<Array<{ id: string }>>(
             `INSERT INTO "NotificationDelivery" (
-                id, "eventType", "recipientUserId", "recipientPhone", channel, "dedupeKey", status,
+                id, source, "stableEventKey", "eventType", trigger, "audienceScope",
+                "recipientUserId", "recipientPhone", "recipientPhoneHash", "recipientPhoneLast4",
+                channel, "requestedChannel", "dedupeKey", status,
                 "attemptCount", "payloadJSON", "nextAttemptAt", "createdAt", "updatedAt"
-             ) VALUES (gen_random_uuid()::text, $1, $2, NULL, 'SMS', $3, 'PENDING', 0, $4::jsonb, NOW(), NOW(), NOW())
+             ) VALUES (
+                gen_random_uuid()::text, $10, $1, $2, $3, $4,
+                $5, NULL, $6, $7, 'SMS', 'SMS', $8, 'PENDING',
+                0, $9::jsonb, NOW(), NOW(), NOW()
+             )
              ON CONFLICT ("dedupeKey") DO NOTHING RETURNING id`,
+            scope,
             input.eventType,
+            input.trigger ?? null,
+            audienceScope,
             input.recipientUserId ?? null,
+            recipientHash,
+            recipientNo.slice(-4),
             dedupeKey,
             JSON.stringify({ trigger: input.trigger ?? null, recipientRole: input.recipientRole, eventId: input.eventId, deliveryRunId: input.deliveryRunId ?? null, recipientHash }),
+            source,
         );
         const deliveryId = rows[0]?.id ?? null;
         return deliveryId
@@ -435,17 +552,100 @@ export async function dispatchReservedSmsDelivery(input: {
     ).catch(() => []);
     if (!claimed[0]) return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "DELIVERY_NOT_DISPATCHABLE" };
 
-    const result = await sendSmsDetailed(recipientNo, input.body);
+    const deliveryRows = await prisma.$queryRawUnsafe<Array<{
+        source: "AUTO" | "SECURITY";
+        trigger: string | null;
+        eventType: string;
+        stableEventKey: string | null;
+        audienceScope: "INTERNAL" | "EXTERNAL" | "SECURITY" | null;
+        recipientUserId: string | null;
+    }>>(
+        `SELECT source, trigger, "eventType", "stableEventKey", "audienceScope", "recipientUserId"
+           FROM "NotificationDelivery" WHERE id = $1 LIMIT 1`,
+        input.deliveryId,
+    ).catch(() => []);
+    const delivery = deliveryRows[0];
+    if (!delivery?.trigger || !delivery.stableEventKey) {
+        await finalizeReservedSmsWithoutDispatch({
+            deliveryId: input.deliveryId,
+            status: "FAILED",
+            errorCode: "AUTOMATION_RULE_REQUIRED",
+        });
+        return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "AUTOMATION_RULE_REQUIRED" };
+    }
+    const policy = await getAutomationPolicy({
+        source: delivery.source,
+        eventType: delivery.eventType,
+        eventId: delivery.stableEventKey,
+        recipientPhone: recipientNo,
+        recipientRole: delivery.audienceScope === "INTERNAL" ? "ADMIN" : "PARENT",
+        trigger: delivery.trigger,
+        body: input.body,
+    });
+    if (!policy.enabled) {
+        await finalizeReservedSmsWithoutDispatch({
+            deliveryId: input.deliveryId,
+            status: "SKIPPED",
+            errorCode: "AUTOMATION_DISABLED",
+        });
+        return { ok: false, status: "SKIPPED", deliveryId: input.deliveryId, errorCode: "AUTOMATION_DISABLED" };
+    }
+    try {
+        const batchId = await reserveMessageDeliveryBatch({
+            source: delivery.source,
+            stableEventKey: delivery.stableEventKey,
+            audienceScope: delivery.audienceScope ?? "EXTERNAL",
+            trigger: delivery.trigger,
+            purpose: delivery.eventType,
+            body: input.body,
+            requestedChannel: policy.requestedChannel,
+        });
+        await prisma.$executeRawUnsafe(
+            `UPDATE "NotificationDelivery"
+                SET "batchId" = $2, "bodyHash" = $3, "requestedChannel" = $4, "updatedAt" = NOW()
+              WHERE id = $1`,
+            input.deliveryId,
+            batchId,
+            hashMessageBody(input.body),
+            policy.requestedChannel,
+        );
+    } catch {
+        await finalizeReservedSmsWithoutDispatch({
+            deliveryId: input.deliveryId,
+            status: "FAILED",
+            errorCode: "DELIVERY_LEDGER_UNAVAILABLE",
+        });
+        return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "DELIVERY_LEDGER_UNAVAILABLE" };
+    }
+    const result = await sendMessageDetailed({
+        to: recipientNo,
+        body: input.body,
+        audience: delivery.audienceScope === "INTERNAL" ? "INTERNAL" : "EXTERNAL",
+        requestedChannel: policy.requestedChannel,
+        fallbackEnabled: policy.fallbackEnabled,
+        fallbackChannel: policy.fallbackChannel,
+    });
     const errorCode = safeSmsErrorCode(result);
     try {
-        const finalized = await prisma.$executeRawUnsafe(
-            `UPDATE "NotificationDelivery" SET status = $3, "sentAt" = CASE WHEN $3 = 'SENT' THEN NOW() ELSE NULL END,
-                    "failedAt" = CASE WHEN $3 = 'FAILED' THEN NOW() ELSE NULL END, "errorCode" = $4,
-                    "lockedAt" = NULL, "lockToken" = NULL, "nextAttemptAt" = NULL, "updatedAt" = NOW()
-              WHERE id = $1 AND "lockToken" = $2 AND status = 'SENDING'`,
-            input.deliveryId, lockToken, result.ok ? "SENT" : "FAILED", errorCode ?? null,
+        await finalizeMessageDelivery({
+            deliveryId: input.deliveryId,
+            ok: result.ok,
+            provider: result.provider,
+            requestedChannel: result.requestedChannel,
+            actualChannel: result.actualChannel,
+            providerGroupId: result.groupId,
+            providerMessageId: result.messageId,
+            providerStatus: result.ok ? "ACCEPTED" : "FAILED",
+            fallbackUsed: result.fallbackUsed,
+            fallbackChannel: result.fallbackUsed ? result.actualChannel : null,
+            unitCost: result.ok ? result.estimatedCostWon : null,
+            errorCode: errorCode ?? null,
+        });
+        const batchRows = await prisma.$queryRawUnsafe<Array<{ batchId: string | null }>>(
+            `SELECT "batchId" FROM "NotificationDelivery" WHERE id = $1 LIMIT 1`,
+            input.deliveryId,
         );
-        if (finalized !== 1) return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "FAILED_DELIVERY_UNCERTAIN" };
+        if (batchRows[0]?.batchId) await finalizeMessageDeliveryBatch(batchRows[0].batchId);
     } catch {
         return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "FAILED_DELIVERY_UNCERTAIN" };
     }
@@ -460,7 +660,7 @@ export async function finalizeReservedSmsWithoutDispatch(input: {
     await prisma.$executeRawUnsafe(
         `UPDATE "NotificationDelivery" SET status = $2, "failedAt" = CASE WHEN $2 = 'FAILED' THEN NOW() ELSE NULL END,
                 "errorCode" = $3, "nextAttemptAt" = NULL, "updatedAt" = NOW()
-          WHERE id = $1 AND channel = 'SMS' AND status = 'PENDING'`,
+          WHERE id = $1 AND channel = 'SMS' AND status IN ('PENDING', 'SENDING')`,
         input.deliveryId, input.status, input.errorCode,
     );
 }
@@ -612,8 +812,6 @@ export async function notifyAdmins(
             adminSmsMsg = await renderSmsTemplate(smsOptions.adminTrigger, smsOptions.variables);
         }
         // 템플릿이 비활성이거나 없으면 기존 방식 fallback
-        const adminFallback = `[STIZ] ${title}\n${message}`;
-
         const smsTasks: Array<{ audience: "ADMIN" | "COACH"; task: Promise<SmsSendResult> }> = [];
 
         for (const admin of admins) {
@@ -627,7 +825,7 @@ export async function notifyAdmins(
             });
 
             // SMS 발송 (전화번호가 있을 때만, 실패해도 무시)
-            if (admin.phone) {
+            if (admin.phone && adminSmsMsg && smsOptions?.adminTrigger) {
                 smsTasks.push({
                     audience: "ADMIN",
                     task: sendSmsForNotification({
@@ -638,7 +836,7 @@ export async function notifyAdmins(
                         recipientPhone: admin.phone,
                         recipientRole: "ADMIN",
                         trigger: smsOptions?.adminTrigger,
-                        body: adminSmsMsg || adminFallback,
+                        body: adminSmsMsg,
                     }),
                 });
             }
@@ -675,12 +873,10 @@ export async function notifyAdmins(
         if (smsOptions?.coachTrigger && smsOptions.variables) {
             coachSmsMsg = await renderSmsTemplate(smsOptions.coachTrigger, smsOptions.variables);
         }
-        const coachFallback = `[STIZ] ${title}\n${message}`;
-
         // ADMIN 사용자 phone과 중복되는 번호는 제외 (같은 번호로 두 번 발송 방지)
         const adminPhones = new Set(admins.map(a => a.phone).filter(Boolean));
         for (const phone of coachPhones) {
-            if (phone && !adminPhones.has(phone)) {
+            if (phone && coachSmsMsg && smsOptions?.coachTrigger && !adminPhones.has(phone)) {
                 smsTasks.push({
                     audience: "COACH",
                     task: sendSmsForNotification({
@@ -690,7 +886,7 @@ export async function notifyAdmins(
                         recipientPhone: phone,
                         recipientRole: "COACH",
                         trigger: smsOptions?.coachTrigger,
-                        body: coachSmsMsg || coachFallback,
+                        body: coachSmsMsg,
                     }),
                 });
             }

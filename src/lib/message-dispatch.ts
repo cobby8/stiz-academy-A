@@ -13,6 +13,13 @@ import {
     type MessageAudience,
     type MessageChannel,
 } from "@/lib/message-channel-policy";
+import {
+    claimMessageDelivery,
+    finalizeMessageDelivery,
+    finalizeMessageDeliveryBatch,
+    reserveMessageDelivery,
+    reserveMessageDeliveryBatch,
+} from "@/lib/message-ledger";
 
 const SOLAPI_URL = "https://api.solapi.com/messages/v4/send";
 const MESSAGE_REQUEST_TIMEOUT_MS = 5000;
@@ -52,15 +59,58 @@ export const SECURITY_PHONE_OTP_TRIGGER = "SECURITY_PHONE_OTP";
 
 // 인증번호는 관리자 설정과 관계없이 SMS로 고정하고 다른 채널로 우회하지 않는다.
 export async function sendAuthenticationSms(to: string, body: string): Promise<boolean> {
-    const result = await sendMessageDetailed({
-        to,
-        body,
-        audience: "AUTH",
-        requestedChannel: "SMS",
-        fallbackEnabled: false,
-        fallbackChannel: null,
-    });
-    return result.ok;
+    const stableEventKey = `${SECURITY_PHONE_OTP_TRIGGER}:${crypto.randomUUID()}`;
+    try {
+        const batchId = await reserveMessageDeliveryBatch({
+            source: "SECURITY",
+            stableEventKey,
+            audienceScope: "SECURITY",
+            trigger: SECURITY_PHONE_OTP_TRIGGER,
+            purpose: "휴대폰 본인인증",
+            body,
+            requestedChannel: "SMS",
+        });
+        if (!batchId) return false;
+        const reserved = await reserveMessageDelivery({
+            batchId,
+            source: "SECURITY",
+            stableEventKey,
+            eventType: SECURITY_PHONE_OTP_TRIGGER,
+            trigger: SECURITY_PHONE_OTP_TRIGGER,
+            audienceScope: "SECURITY",
+            recipientPhone: to,
+            body,
+            requestedChannel: "SMS",
+        });
+        if (!reserved.deliveryId) return false;
+        const claimed = await claimMessageDelivery(reserved.deliveryId);
+        if (!claimed.claimed) return false;
+        const result = await sendMessageDetailed({
+            to,
+            body,
+            audience: "AUTH",
+            requestedChannel: "SMS",
+            fallbackEnabled: false,
+            fallbackChannel: null,
+        });
+        await finalizeMessageDelivery({
+            deliveryId: reserved.deliveryId,
+            ok: result.ok,
+            provider: result.provider,
+            requestedChannel: "SMS",
+            actualChannel: result.actualChannel,
+            providerGroupId: result.groupId,
+            providerMessageId: result.messageId,
+            providerStatus: result.ok ? "ACCEPTED" : "FAILED",
+            fallbackUsed: false,
+            unitCost: result.ok ? result.estimatedCostWon : null,
+            errorCode: result.ok ? null : result.reason ?? "SMS_PROVIDER_FAILED",
+        });
+        await finalizeMessageDeliveryBatch(batchId);
+        return result.ok;
+    } catch {
+        return false;
+    }
 }
 
 function normalizePhone(value: string): string {

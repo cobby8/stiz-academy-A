@@ -1,12 +1,16 @@
 // STIZ PWA service worker
 // 사용자 정보가 포함될 수 있는 화면/데이터는 저장하지 않고 공개 정적 자산만 캐시한다.
-const CACHE_NAME = "stiz-public-static-v20260715-2";
+const CACHE_NAME = "stiz-public-static-v20260724-icon-v2";
 
 const PRECACHE_URLS = [
     "/manifest.json",
     "/manifest-staff.json",
     "/icon-192.png",
     "/icon-512.png",
+    "/icon-v2-192.png",
+    "/icon-v2-512.png",
+    "/icon-maskable-v2-192.png",
+    "/icon-maskable-v2-512.png",
 ];
 
 // 이 경로는 응답뿐 아니라 과거 캐시 fallback도 금지한다.

@@ -51,7 +51,7 @@ export default async function RootLayout({
                 {/* PWA 테마 색상은 ThemeColorUpdater가 현재 테마에 맞게 갱신합니다. */}
                 <meta name="theme-color" content="#ccff00" />
                 {/* iOS에서 홈 화면 아이콘으로 쓸 이미지 */}
-                <link rel="apple-touch-icon" href="/icon-192.png" />
+                <link rel="apple-touch-icon" href="/icon-v2-192.png" />
             </head>
             <body
                 className="antialiased selection:bg-brand-orange-500 selection:text-white dark:selection:bg-brand-neon-lime dark:selection:text-brand-navy-900"

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     title: "STIZ 선생님",
   },
   icons: {
-    apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icon-v2-192.png", sizes: "192x192", type: "image/png" }],
   },
 };
 

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
+const NOTIFICATION_CACHE_MS = 60_000;
+
 interface NotificationItem {
     id: string;
     type: string;
@@ -52,6 +54,7 @@ export default function AdminNotificationBell() {
     const [items, setItems] = useState<NotificationItem[]>([]);
     const [loading, setLoading] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const lastLoadedAtRef = useRef(0);
     const router = useRouter();
 
     const fetchNotifications = useCallback(async () => {
@@ -62,6 +65,7 @@ export default function AdminNotificationBell() {
             const data = await res.json();
             setUnreadCount(data.unreadCount ?? 0);
             setItems(data.notifications ?? []);
+            lastLoadedAtRef.current = Date.now();
         } catch {
             // 알림 실패는 관리자 본문 사용을 막지 않습니다.
         }
@@ -79,7 +83,7 @@ export default function AdminNotificationBell() {
     }, [open]);
 
     function handleToggle() {
-        if (!open) void fetchNotifications();
+        if (!open && Date.now() - lastLoadedAtRef.current > NOTIFICATION_CACHE_MS) void fetchNotifications();
         setOpen((current) => !current);
     }
 

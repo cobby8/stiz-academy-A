@@ -3,6 +3,12 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { createTrialLead, convertTrialToStudent, updateTrialLead } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
+import {
+    resolveTrialScheduleStartTime,
+    seoulDateInputValue,
+    seoulTimeInputValue,
+    toSeoulScheduledDateTime,
+} from "@/lib/trial-schedule-time";
 import type { ClassInfo, TrialLead } from "./TrialCrmClient";
 
 interface TrialCrmModalsProps {
@@ -179,18 +185,11 @@ function formatPhoneInput(value: string) {
 }
 
 function dateInputValue(dateStr: string | null) {
-    if (!dateStr) return "";
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toISOString().slice(0, 10);
+    return seoulDateInputValue(dateStr);
 }
 
 function timeInputValue(dateStr: string | null) {
-    if (!dateStr) return "";
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return "";
-    const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    return offsetDate.toISOString().slice(11, 16);
+    return seoulTimeInputValue(dateStr);
 }
 
 function isLikelyDefaultScheduleTime(dateStr: string | null) {
@@ -498,12 +497,18 @@ function TrialScheduleModal({
         getPreferredClass(lead, classes) ||
         null;
     const [scheduledClassId, setScheduledClassId] = useState(initialClass?.id ?? "");
-    const [scheduledDate, setScheduledDate] = useState(dateInputValue(lead.scheduledDate || lead.trialDate));
+    const initialScheduledDate = dateInputValue(lead.scheduledDate || lead.trialDate);
+    const [scheduledDate, setScheduledDate] = useState(initialScheduledDate);
     const [scheduledTime, setScheduledTime] = useState(
-        initialClass?.startTime ||
-        (isLikelyDefaultScheduleTime(lead.scheduledDate) && getPreferredSlotKeyCandidates(lead).length > 0
-            ? ""
-            : timeInputValue(lead.scheduledDate)),
+        lead.scheduledDate && (
+            Boolean(lead.scheduledClassId) ||
+            !isLikelyDefaultScheduleTime(lead.scheduledDate)
+        )
+            ? timeInputValue(lead.scheduledDate)
+            : resolveTrialScheduleStartTime(initialClass, initialScheduledDate) ||
+                (isLikelyDefaultScheduleTime(lead.scheduledDate) && getPreferredSlotKeyCandidates(lead).length > 0
+                    ? ""
+                    : timeInputValue(lead.scheduledDate)),
     );
     const [memo, setMemo] = useState(lead.memo ?? "");
     const [formError, setFormError] = useState("");
@@ -512,7 +517,13 @@ function TrialScheduleModal({
     function handleClassChange(classId: string) {
         setScheduledClassId(classId);
         const selectedClass = classes.find((classInfo) => classInfo.id === classId);
-        if (selectedClass?.startTime) setScheduledTime(selectedClass.startTime);
+        setScheduledTime(resolveTrialScheduleStartTime(selectedClass, scheduledDate));
+    }
+
+    function handleDateChange(date: string) {
+        setScheduledDate(date);
+        const selectedClass = classes.find((classInfo) => classInfo.id === scheduledClassId);
+        if (selectedClass) setScheduledTime(resolveTrialScheduleStartTime(selectedClass, date));
     }
 
     function handleSubmit(event: FormEvent) {
@@ -521,15 +532,15 @@ function TrialScheduleModal({
             setFormError("확정할 날짜와 시간을 모두 입력해주세요.");
             return;
         }
-        const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`);
-        if (Number.isNaN(scheduledAt.getTime())) {
+        const scheduledAt = toSeoulScheduledDateTime(scheduledDate, scheduledTime);
+        if (!scheduledAt) {
             setFormError("날짜와 시간을 다시 확인해주세요.");
             return;
         }
         setFormError("");
         onSubmit({
             status: "SCHEDULED",
-            scheduledDate: scheduledAt.toISOString(),
+            scheduledDate: scheduledAt,
             scheduledClassId: scheduledClassId || null,
             memo: memo.trim() || null,
         });
@@ -580,7 +591,7 @@ function TrialScheduleModal({
                     </FormField>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <FormField label="확정 날짜 *">
-                            <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className={MODAL_INPUT_CLASS} />
+                            <input type="date" value={scheduledDate} onChange={(e) => handleDateChange(e.target.value)} className={MODAL_INPUT_CLASS} />
                         </FormField>
                         <FormField label="확정 시간 *">
                             <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className={MODAL_INPUT_CLASS} />

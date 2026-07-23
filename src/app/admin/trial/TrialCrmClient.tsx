@@ -92,6 +92,14 @@ export interface ClassInfo {
     coachId?: string | null;
     coachName?: string | null;
     instructorName?: string | null;
+    scheduleStartTime?: string | null;
+    scheduleEndTime?: string | null;
+    scheduleActiveFrom?: string | null;
+    scheduleActiveTo?: string | null;
+    startTimeOverride?: string | null;
+    endTimeOverride?: string | null;
+    customStartTime?: string | null;
+    customEndTime?: string | null;
     program: { id: string; name: string } | null;
 }
 

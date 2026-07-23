@@ -39,9 +39,17 @@ import {
     type ApplicationContactTargetType,
 } from "@/lib/application-contact-logs";
 import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
+import { formatTrialSmsDateTime } from "@/lib/trial-sms-time";
 
 type AdminActor = Awaited<ReturnType<typeof requireAdmin>>;
 type ApplicationHistoryAction = Extract<ApplicationContactAction, "UPDATED" | "SCHEDULED" | "CANCELLED">;
+
+function getSeoulWeekdayKey(value: Date) {
+    return new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Seoul",
+        weekday: "short",
+    }).format(value);
+}
 
 async function recordApplicationHistoryLog(input: {
     targetType: ApplicationContactTargetType;
@@ -3720,10 +3728,42 @@ export async function updateTrialLead(
     if (entries.length === 0) return;
 
     const previousRows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT status, "attendedSmsSentAt" FROM "TrialLead" WHERE id = $1 LIMIT 1`,
+        `SELECT status, "attendedSmsSentAt", "scheduledDate", "scheduledClassId"
+         FROM "TrialLead" WHERE id = $1 LIMIT 1`,
         id,
     );
     const previousLead = previousRows[0];
+
+    if (data.status === "SCHEDULED") {
+        const scheduledDate = data.scheduledDate !== undefined
+            ? data.scheduledDate
+            : previousLead?.scheduledDate ?? previousLead?.scheduleddate;
+        const scheduledClassId = data.scheduledClassId !== undefined
+            ? data.scheduledClassId
+            : previousLead?.scheduledClassId ?? previousLead?.scheduledclassid;
+        const parsedScheduledDate = new Date(scheduledDate);
+
+        if (!scheduledDate || Number.isNaN(parsedScheduledDate.getTime())) {
+            throw new Error("체험수업 일정을 확정하려면 올바른 수업 날짜와 시간을 입력해주세요.");
+        }
+        if (typeof scheduledClassId !== "string" || !scheduledClassId.trim()) {
+            throw new Error("체험수업 일정을 확정하려면 수업 반을 선택해주세요.");
+        }
+
+        const scheduledClasses = await prisma.$queryRawUnsafe<Array<{ id: string; dayOfWeek: string | null }>>(
+            `SELECT id, "dayOfWeek" FROM "Class" WHERE id = $1 LIMIT 1`,
+            scheduledClassId.trim(),
+        );
+        if (scheduledClasses.length === 0) {
+            throw new Error("선택한 수업 반을 찾을 수 없습니다. 반을 다시 선택해주세요.");
+        }
+        const classDay = scheduledClasses[0].dayOfWeek;
+        const scheduledDay = getSeoulWeekdayKey(parsedScheduledDate);
+        if (classDay && classDay !== scheduledDay) {
+            throw new Error("선택한 날짜의 요일과 수업 반의 요일이 다릅니다. 날짜나 반을 다시 선택해주세요.");
+        }
+    }
+
     const shouldSendAttendedSms =
         data.status === "ATTENDED"
         && previousLead
@@ -3791,9 +3831,7 @@ export async function updateTrialLead(
                 const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
 
                 // 날짜 포맷팅
-                const dateStr = scheduledDate
-                    ? new Date(scheduledDate).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" })
-                    : "";
+                const dateStr = formatTrialSmsDateTime(scheduledDate);
 
                 if (parentPhone) {
                     sendParentSms(parentPhone, "TRIAL_SCHEDULED_PARENT", {

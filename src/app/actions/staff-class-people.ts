@@ -13,14 +13,16 @@ export type LoadStaffClassPeopleResult =
 export async function loadStaffClassPeople(input: {
   classId: string;
   sessionId?: string | null;
+  sessionDateId?: string | null;
 }): Promise<LoadStaffClassPeopleResult> {
   const classId = input.classId?.trim();
   const sessionId = input.sessionId?.trim() || null;
+  const sessionDateId = input.sessionDateId?.trim() || null;
 
-  if (!classId || classId.length > 100 || (sessionId && sessionId.length > 100)) {
+  if (!classId || classId.length > 100 || (sessionId && sessionId.length > 100) || (sessionDateId && sessionDateId.length > 100)) {
     return { ok: false, message: "수업 정보를 다시 확인해 주세요." };
   }
 
-  const people = await getStaffClassPeople(classId, sessionId);
+  const people = await getStaffClassPeople(classId, sessionId, sessionDateId);
   return { ok: true, people };
 }

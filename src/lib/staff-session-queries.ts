@@ -123,7 +123,20 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
               END = ANY(a."selectedWeekdays")
             )
         WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
-          AND ($2::boolean = true OR o."instructorId" = $3)
+          AND (
+            $2::boolean = true
+            OR EXISTS (
+              SELECT 1
+                FROM "SpecialProgramSessionDate" access_sd
+                JOIN "SpecialProgramOffering" access_o ON access_o.id = access_sd."offeringId"
+                LEFT JOIN "Session" access_s ON access_s."specialProgramSessionDateId" = access_sd.id
+               WHERE access_sd."startsAt" = sd."startsAt"
+                 AND access_sd."endsAt" = sd."endsAt"
+                 AND access_o."linkedClassId" = o."linkedClassId"
+                 AND access_o."seasonId" = o."seasonId"
+                 AND (access_s."coachId" = $3 OR (access_s.id IS NULL AND access_o."instructorId" = $3))
+            )
+          )
         GROUP BY c.id, c.name, c.location, sd."startsAt", sd."endsAt"
      )
      SELECT occurrence.id,
@@ -142,7 +155,7 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
       ORDER BY occurrence."startsAt", occurrence.name`,
     dateKey,
     access.canAccessAllClasses,
-    access.staff.appUserId,
+    access.coachId,
   );
 
   const normalizedRegular = regularRows.map((row) => ({

@@ -8,9 +8,9 @@ import { useStaffDialog } from "./useStaffDialog";
 const peopleRequests = new Map<string, Promise<Awaited<ReturnType<typeof loadStaffClassPeople>>>>();
 const phoneHref = (phone: string) => phone.replace(/[^\d+]/g, "");
 
-export function ClassPeopleSheet({ open, classId, sessionId, className, onClose, onOpenBilling }: { open: boolean; classId: string; sessionId?: string | null; className: string; onClose: () => void; onOpenBilling: (student: { id: string; name: string }) => void }) {
+export function ClassPeopleSheet({ open, classId, sessionId, sessionDateId, className, onClose, onOpenBilling }: { open: boolean; classId: string; sessionId?: string | null; sessionDateId?: string | null; className: string; onClose: () => void; onOpenBilling: (student: { id: string; name: string }) => void }) {
   const sheetRef = useRef<HTMLElement>(null);
-  const cacheKey = `${classId}:${sessionId || "today"}`;
+  const cacheKey = `${classId}:${sessionId || sessionDateId || "today"}`;
   const [people, setPeople] = useState<StaffClassPerson[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,13 +21,13 @@ export function ClassPeopleSheet({ open, classId, sessionId, className, onClose,
     if (!open) return;
     let active = true;
     queueMicrotask(() => { if (active) { setPeople([]); setLoading(true); setError(""); } });
-    const request = peopleRequests.get(cacheKey) ?? loadStaffClassPeople({ classId, sessionId });
+    const request = peopleRequests.get(cacheKey) ?? loadStaffClassPeople({ classId, sessionId, sessionDateId });
     peopleRequests.set(cacheKey, request);
     void request.then((result) => { if (!result.ok) throw new Error(result.message); if (active) setPeople(result.people); })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "학생 정보를 불러오지 못했습니다."); })
       .finally(() => { peopleRequests.delete(cacheKey); if (active) setLoading(false); });
     return () => { active = false; };
-  }, [cacheKey, classId, open, sessionId]);
+  }, [cacheKey, classId, open, sessionDateId, sessionId]);
 
   const visible = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase("ko");

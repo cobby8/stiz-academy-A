@@ -219,6 +219,152 @@ export const getClasses = cache(async () => {
 });
 
 /** 원생 목록 조회 (학부모 정보 포함) */
+const ATTENDANCE_DAY_KEYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+type AttendanceClassKind = "REGULAR" | "SEASONAL";
+
+export type AttendanceClassOption = {
+    id: string;
+    lessonKey: string;
+    kind: AttendanceClassKind;
+    name: string;
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+    location: string | null;
+    program: { id: string; name: string } | null;
+    sessionDateId: string | null;
+    sessionId: string | null;
+    sessionStatus: string | null;
+    studentCount: number;
+    coachName: string | null;
+};
+
+function normalizedAttendanceDateKey(date?: string | null) {
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
+
+function attendanceDayOfWeek(date: string) {
+    return ATTENDANCE_DAY_KEYS[new Date(`${date}T12:00:00+09:00`).getDay()];
+}
+
+type SeasonalAttendanceClassRow = {
+    id: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+    location: string | null;
+    sessionDateId: string;
+    sessionId: string | null;
+    sessionStatus: string | null;
+    studentCount: number | string | null;
+    coachName: string | null;
+};
+
+export const getAttendanceClassOptions = cache(async (date?: string | null): Promise<AttendanceClassOption[]> => {
+    const dateKey = normalizedAttendanceDateKey(date);
+    const dayOfWeek = attendanceDayOfWeek(dateKey);
+    const [classes, seasonalRows] = await Promise.all([
+        getClasses(),
+        prisma.$queryRawUnsafe<SeasonalAttendanceClassRow[]>(
+            `WITH occurrence AS (
+               SELECT c.id,
+                      c.name,
+                      sd."startsAt",
+                      sd."endsAt",
+                      COALESCE(MIN(sd.location), MIN(o.location), c.location) AS location,
+                      (ARRAY_AGG(sd.id ORDER BY CASE WHEN existing_s.id IS NULL THEN 1 ELSE 0 END, sd.id))[1] AS "sessionDateId",
+                      COUNT(DISTINCT app."convertedStudentId") FILTER (WHERE app."convertedStudentId" IS NOT NULL)::int AS "studentCount"
+                 FROM "SpecialProgramSessionDate" sd
+                 JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+                 JOIN "SpecialProgramSeason" season ON season.id = o."seasonId"
+                 JOIN "Class" c ON c.id = o."linkedClassId"
+                 LEFT JOIN "Session" existing_s ON existing_s."specialProgramSessionDateId" = sd.id
+                 LEFT JOIN "SpecialProgramApplicationItem" item
+                   ON item."offeringId" = o.id
+                  AND item.status = 'APPROVED'
+                  AND item."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+                 LEFT JOIN "SpecialProgramApplication" app
+                   ON app.id = item."applicationId"
+                  AND app."convertedStudentId" IS NOT NULL
+                  AND (
+                    COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+                    OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+                      WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+                      WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+                    END = ANY(app."selectedWeekdays")
+                  )
+                WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
+                  AND o."linkedClassId" IS NOT NULL
+                  AND o.status <> 'CANCELLED'
+                  AND season.status <> 'ARCHIVED'
+                GROUP BY c.id, c.name, c.location, sd."startsAt", sd."endsAt"
+             )
+             SELECT occurrence.id,
+                    occurrence.name,
+                    to_char(occurrence."startsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "startTime",
+                    to_char(occurrence."endsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "endTime",
+                    occurrence.location,
+                    occurrence."sessionDateId",
+                    s.id AS "sessionId",
+                    s.status AS "sessionStatus",
+                    occurrence."studentCount",
+                    coach.name AS "coachName"
+               FROM occurrence
+               LEFT JOIN "Session" s ON s."specialProgramSessionDateId" = occurrence."sessionDateId"
+               LEFT JOIN "Coach" coach ON coach.id = s."coachId"
+              ORDER BY occurrence."startsAt", occurrence.name`,
+            dateKey,
+        ),
+    ]);
+
+    const regularOptions = classes
+        .filter((klass: any) => klass.dayOfWeek === dayOfWeek)
+        .map((klass: any) => ({
+            id: klass.id,
+            lessonKey: `regular:${klass.id}`,
+            kind: "REGULAR" as const,
+            name: klass.name,
+            dayOfWeek: klass.dayOfWeek,
+            startTime: klass.startTime,
+            endTime: klass.endTime,
+            location: klass.location ?? null,
+            program: klass.program,
+            sessionDateId: null,
+            sessionId: null,
+            sessionStatus: null,
+            studentCount: 0,
+            coachName: klass.coachName ?? klass.instructorName ?? null,
+        }));
+
+    const seasonalOptions = seasonalRows.map((row) => ({
+        id: row.id,
+        lessonKey: `seasonal:${row.sessionDateId}`,
+        kind: "SEASONAL" as const,
+        name: row.name,
+        dayOfWeek,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        location: row.location ?? null,
+        program: { id: "seasonal", name: "방학특강" },
+        sessionDateId: row.sessionDateId,
+        sessionId: row.sessionId,
+        sessionStatus: row.sessionStatus,
+        studentCount: Number(row.studentCount ?? 0),
+        coachName: row.coachName,
+    }));
+
+    return [...regularOptions, ...seasonalOptions].sort((left, right) =>
+        left.startTime.localeCompare(right.startTime) || left.name.localeCompare(right.name),
+    );
+});
+
 export const getStudents = cache(async (limit?: number) => {
     try {
         const normalizedLimit =
@@ -560,12 +706,90 @@ export const getDashboardStats = cache(async () => {
 });
 
 /** 출결: 특정 날짜+반의 세션 및 출석 데이터 조회 */
-export const getAttendanceByDateAndClass = cache(async (date: string, classId: string) => {
+export const getAttendanceByDateAndClass = cache(async (date: string, classId: string, sessionDateId?: string | null) => {
     try {
         // 세션 조회
+        if (sessionDateId) {
+            const sessionDates = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT sd.id, sd."startsAt", sd."endsAt", o."linkedClassId"
+                   FROM "SpecialProgramSessionDate" sd
+                   JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+                  WHERE sd.id = $1
+                    AND o."linkedClassId" = $2
+                    AND (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $3::date
+                  LIMIT 1`,
+                sessionDateId, classId, date,
+            );
+            if (!sessionDates[0]) return { session: null, students: [] };
+
+            const sessions = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT s.id, s."classId", s.date, s.notes, s.status
+                   FROM "Session" s
+                  WHERE s."specialProgramSessionDateId" = $1
+                  LIMIT 1`,
+                sessionDateId,
+            );
+            const session = sessions[0] ?? null;
+
+            const roster = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT DISTINCT st.id AS "studentId", st.name AS student_name
+                   FROM "SpecialProgramSessionDate" anchor_sd
+                   JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+                   JOIN "SpecialProgramSessionDate" sd
+                     ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+                   JOIN "SpecialProgramOffering" o
+                     ON o.id = sd."offeringId"
+                    AND (
+                      o.id = anchor_o.id
+                      OR (
+                        anchor_o."linkedClassId" IS NOT NULL
+                        AND o."linkedClassId" = anchor_o."linkedClassId"
+                        AND o."seasonId" = anchor_o."seasonId"
+                      )
+                    )
+                   JOIN "SpecialProgramApplicationItem" item ON item."offeringId" = o.id
+                    AND item.status = 'APPROVED'
+                    AND item."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+                   JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+                    AND app."convertedStudentId" IS NOT NULL
+                    AND (
+                      COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+                      OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+                        WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+                        WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+                      END = ANY(app."selectedWeekdays")
+                    )
+                   JOIN "Student" st ON st.id = app."convertedStudentId"
+                  WHERE anchor_sd.id = $1
+                  ORDER BY st.name`,
+                sessionDateId,
+            );
+
+            const attendances = session
+                ? await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT id, "studentId", status FROM "Attendance" WHERE "sessionId" = $1`,
+                    session.id,
+                )
+                : [];
+
+            return {
+                session,
+                students: roster.map((student: any) => {
+                    const studentId = student.studentId ?? student.studentid;
+                    const attendance = attendances.find((item: any) => (item.studentId ?? item.studentid) === studentId);
+                    return {
+                        studentId,
+                        studentName: student.student_name,
+                        status: attendance?.status ?? null,
+                        attendanceId: attendance?.id ?? null,
+                    };
+                }),
+            };
+        }
+
         const sessions = await prisma.$queryRawUnsafe<any[]>(
             `SELECT id, "classId", date, notes FROM "Session"
-             WHERE "classId" = $1 AND date::date = $2::date LIMIT 1`,
+             WHERE "classId" = $1 AND date::date = $2::date AND "specialProgramSessionDateId" IS NULL LIMIT 1`,
             classId, date
         );
         const session = sessions[0] ?? null;

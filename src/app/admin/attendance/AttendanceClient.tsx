@@ -6,10 +6,18 @@ import { saveAttendance } from "@/app/actions/admin";
 
 type ClassItem = {
     id: string;
+    lessonKey?: string;
+    kind?: "REGULAR" | "SEASONAL";
     name: string;
     dayOfWeek: string;
     startTime: string;
     endTime: string;
+    location?: string | null;
+    sessionDateId?: string | null;
+    sessionId?: string | null;
+    sessionStatus?: string | null;
+    studentCount?: number;
+    coachName?: string | null;
     program: { id: string; name: string } | null;
 };
 
@@ -36,6 +44,10 @@ const STATUS_OPTIONS = [
 
 function todayStr() {
     return new Date().toISOString().split("T")[0];
+}
+
+function lessonKeyOf(item: ClassItem) {
+    return item.lessonKey || `${item.kind === "SEASONAL" ? "seasonal" : "regular"}:${item.sessionDateId || item.id}`;
 }
 
 function AttendanceLoadingFallback() {
@@ -85,11 +97,11 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
-    const loadClasses = useCallback(async () => {
+    const loadClasses = useCallback(async (targetDate = date) => {
         setClassesLoading(true);
         setClassesError(false);
         try {
-            const response = await fetch("/api/admin/attendance", { cache: "no-store" });
+            const response = await fetch(`/api/admin/attendance?date=${encodeURIComponent(targetDate)}`, { cache: "no-store" });
             if (!response.ok) {
                 throw new Error("Failed to load classes.");
             }
@@ -101,21 +113,31 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
         } finally {
             setClassesLoading(false);
         }
-    }, []);
+    }, [date]);
 
     useEffect(() => {
-        if (hasInitialClasses) return;
-        void loadClasses();
-    }, [hasInitialClasses, loadClasses]);
+        void loadClasses(date);
+    }, [date, loadClasses]);
+
+    useEffect(() => {
+        if (!selectedClass) return;
+        if (classes.some((item) => lessonKeyOf(item) === selectedClass)) return;
+        setSelectedClass("");
+        setStudents([]);
+    }, [classes, selectedClass]);
+
+    const selectedLesson = classes.find((item) => lessonKeyOf(item) === selectedClass) ?? null;
 
     const loadAttendance = useCallback(async (options?: { resetSaved?: boolean }) => {
-        if (!selectedClass || !date) return;
+        if (!selectedLesson || !date) return;
         setLoading(true);
         if (options?.resetSaved !== false) {
             setSaved(false);
         }
         try {
-            const res = await fetch(`/api/admin/attendance?classId=${selectedClass}&date=${date}`);
+            const params = new URLSearchParams({ classId: selectedLesson.id, date });
+            if (selectedLesson.sessionDateId) params.set("sessionDateId", selectedLesson.sessionDateId);
+            const res = await fetch(`/api/admin/attendance?${params.toString()}`);
             if (res.ok) {
                 const data = await res.json();
                 setStudents(data.students || []);
@@ -125,7 +147,7 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
         } finally {
             setLoading(false);
         }
-    }, [selectedClass, date]);
+    }, [date, selectedLesson]);
 
     useEffect(() => {
         loadAttendance();
@@ -146,7 +168,7 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
     }
 
     async function handleSave() {
-        if (!selectedClass || !date) return;
+        if (!selectedLesson || !date) return;
         const records = students
             .filter((s) => s.status)
             .map((s) => ({ studentId: s.studentId, status: s.status! }));
@@ -156,7 +178,7 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
         }
         setSaving(true);
         try {
-            await saveAttendance(selectedClass, date, records);
+            await saveAttendance(selectedLesson.id, date, records, { sessionDateId: selectedLesson.sessionDateId });
             await loadAttendance({ resetSaved: false });
             setSaved(true);
         } catch (err: any) {
@@ -218,8 +240,8 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
                         >
                             <option value="">반을 선택하세요</option>
                             {classes.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name} ({DAY_LABELS[c.dayOfWeek] || c.dayOfWeek} {c.startTime}~{c.endTime}) — {c.program?.name}
+                                <option key={lessonKeyOf(c)} value={lessonKeyOf(c)}>
+                                    [{c.kind === "SEASONAL" ? "특강" : "정규"}] {c.name} ({DAY_LABELS[c.dayOfWeek] || c.dayOfWeek} {c.startTime}~{c.endTime}) — {c.program?.name}{c.coachName ? ` · ${c.coachName}` : ""}{c.kind === "SEASONAL" ? ` · ${c.studentCount ?? 0}명` : ""}
                                 </option>
                             ))}
                         </select>
@@ -228,7 +250,7 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
             </div>
 
             {/* Attendance Grid */}
-            {selectedClass && (
+            {selectedLesson && (
                 <>
                     {loading ? (
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">

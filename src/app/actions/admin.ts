@@ -44,6 +44,7 @@ import {
 } from "@/lib/application-contact-logs";
 import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
 import { formatTrialSmsDateTime } from "@/lib/trial-sms-time";
+import { sessionDateForKorea } from "@/lib/seasonal/session-bridge";
 
 type AdminActor = Awaited<ReturnType<typeof requireAdmin>>;
 type ApplicationHistoryAction = Extract<ApplicationContactAction, "UPDATED" | "SCHEDULED" | "CANCELLED">;
@@ -1073,12 +1074,124 @@ export async function deleteEnrollment(enrollmentId: string) {
 }
 
 // ── 출결 관리 ──────────────────────────────────────────────────────────────────
-export async function saveAttendance(classId: string, date: string, records: { studentId: string; status: string }[]) {
-    await requireAdmin();
+type AdminSeasonalAttendanceContext = {
+    sessionDateId: string;
+    startsAt: Date;
+    linkedClassId: string;
+    coachId: string | null;
+};
+
+async function getAdminSeasonalAttendanceContext(classId: string, date: string, sessionDateId: string) {
+    const rows = await prisma.$queryRawUnsafe<AdminSeasonalAttendanceContext[]>(
+        `SELECT sd.id AS "sessionDateId", sd."startsAt", o."linkedClassId", s."coachId"
+           FROM "SpecialProgramSessionDate" sd
+           JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+           LEFT JOIN "Session" s ON s."specialProgramSessionDateId" = sd.id
+          WHERE sd.id = $1
+            AND o."linkedClassId" = $2
+            AND (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $3::date
+          LIMIT 1`,
+        sessionDateId, classId, date,
+    );
+    return rows[0] ?? null;
+}
+
+async function getAdminSeasonalRosterStudentIds(sessionDateId: string) {
+    const rows = await prisma.$queryRawUnsafe<{ studentId: string }[]>(
+        `SELECT DISTINCT app."convertedStudentId" AS "studentId"
+           FROM "SpecialProgramSessionDate" anchor_sd
+           JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+           JOIN "SpecialProgramSessionDate" sd
+             ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+           JOIN "SpecialProgramOffering" o
+             ON o.id = sd."offeringId"
+            AND (
+              o.id = anchor_o.id
+              OR (
+                anchor_o."linkedClassId" IS NOT NULL
+                AND o."linkedClassId" = anchor_o."linkedClassId"
+                AND o."seasonId" = anchor_o."seasonId"
+              )
+            )
+           JOIN "SpecialProgramApplicationItem" item ON item."offeringId" = o.id
+            AND item.status = 'APPROVED'
+            AND item."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+           JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+            AND app."convertedStudentId" IS NOT NULL
+            AND (
+              COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+              OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+                WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+                WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+              END = ANY(app."selectedWeekdays")
+            )
+          WHERE anchor_sd.id = $1`,
+        sessionDateId,
+    );
+    return new Set(rows.map((row) => row.studentId));
+}
+
+export async function saveAttendance(classId: string, date: string, records: { studentId: string; status: string }[], options?: { sessionDateId?: string | null }) {
+    const admin = await requireAdmin();
+    const sessionDateId = options?.sessionDateId?.trim() || null;
+    if (sessionDateId) {
+        try {
+            const context = await getAdminSeasonalAttendanceContext(classId, date, sessionDateId);
+            if (!context) throw new Error("방학특강 회차 정보를 찾을 수 없습니다.");
+            const rosterStudentIds = await getAdminSeasonalRosterStudentIds(sessionDateId);
+            const allowedRecords = records.filter((record) => rosterStudentIds.has(record.studentId));
+            if (allowedRecords.length === 0) throw new Error("저장할 방학특강 출석 대상이 없습니다.");
+
+            const sessionRows = await prisma.$queryRawUnsafe<any[]>(
+                `INSERT INTO "Session" (
+                    id, "classId", date, "sessionKey", status, "coachId", "specialProgramSessionDateId", "createdAt", "updatedAt"
+                 )
+                 VALUES (
+                    gen_random_uuid()::text, $1, $2::date, $3, 'PLANNED', $4, $5, NOW(), NOW()
+                 )
+                 ON CONFLICT ("sessionKey") DO UPDATE SET "updatedAt" = NOW()
+                 RETURNING id`,
+                classId,
+                sessionDateForKorea(context.startsAt),
+                `seasonal:${sessionDateId}`,
+                context.coachId,
+                sessionDateId,
+            );
+            const sessionId = sessionRows[0].id;
+            for (const rec of allowedRecords) {
+                await prisma.$executeRawUnsafe(
+                    `INSERT INTO "Attendance" (id, "sessionId", "studentId", status, "checkedAt", "checkedByUserId", "createdAt", "updatedAt")
+                     VALUES (gen_random_uuid()::text, $1, $2, $3, NOW(), $4, NOW(), NOW())
+                     ON CONFLICT ("sessionId", "studentId") DO UPDATE SET
+                       status = $3,
+                       "checkedAt" = COALESCE("Attendance"."checkedAt", NOW()),
+                       "checkedByUserId" = $4,
+                       "updatedAt" = NOW()`,
+                    sessionId, rec.studentId, rec.status, admin.appUserId,
+                );
+            }
+            const studentIds = allowedRecords.map(r => r.studentId);
+            const dateStr = new Date(date).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+            await notifyParentsOfStudents(
+                studentIds,
+                "ATTENDANCE",
+                "출석 확인",
+                `${dateStr} 방학특강 출석이 기록되었습니다.`,
+                "/mypage",
+            );
+        } catch (e) {
+            console.error("Failed to save seasonal attendance:", e);
+            throw new Error("방학특강 출석 저장 실패");
+        }
+        revalidatePath("/admin/attendance");
+        revalidatePath("/staff");
+        revalidatePath("/mypage");
+        return;
+    }
     try {
         // 세션 생성 또는 조회
         const existing = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "Session" WHERE "classId" = $1 AND date::date = $2::date LIMIT 1`,
+            `SELECT id FROM "Session" WHERE "classId" = $1 AND date::date = $2::date AND "specialProgramSessionDateId" IS NULL LIMIT 1`,
             classId, date
         );
         let sessionId: string;

@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
     const classId = searchParams.get("classId");
     const date = searchParams.get("date");
 
-    if (!classId && !date) {
+    if (!classId) {
         try {
-            const payload = await getCachedAdminAttendancePayload();
+            const payload = await getCachedAdminAttendancePayload(date);
             return NextResponse.json(
                 payload,
-                { headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" } },
+                { headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=60" } },
             );
         } catch (error) {
             console.error("[api/admin/attendance] classes failed:", error);
@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const data = await getAttendanceByDateAndClass(date, classId);
+        const sessionDateId = searchParams.get("sessionDateId");
+        const data = await getAttendanceByDateAndClass(date, classId, sessionDateId);
         return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
         console.error("[api/admin/attendance] detail failed:", error);

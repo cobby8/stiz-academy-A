@@ -4,6 +4,7 @@ import { getPaymentProviderPublicStatus } from "@/lib/payment-ledger";
 import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
 import {
     getAcademySettings,
+    getAttendanceClassOptions,
     getAnnualEvents,
     getAllCoaches,
     getAllFaqs,
@@ -879,15 +880,28 @@ export function getCachedAdminNoticesPayload(options?: AdminListPayloadOptions) 
     )();
 }
 
-export const getCachedAdminAttendancePayload = unstable_cache(
-    async () => {
-        const classes = await getClasses();
+function attendancePayloadDateKey(date?: string | null) {
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
 
-        return { classes };
-    },
-    ["admin-attendance-page-v1"],
-    { revalidate: 60, tags: ["admin-classes"] },
-);
+export function getCachedAdminAttendancePayload(date?: string | null) {
+    const dateKey = attendancePayloadDateKey(date);
+    return unstable_cache(
+        async () => {
+            const classes = await getAttendanceClassOptions(dateKey);
+
+            return { classes };
+        },
+        ["admin-attendance-page-v2", dateKey],
+        { revalidate: 30, tags: ["admin-classes", "admin-seasonal"] },
+    )();
+}
 
 export const getCachedAdminApplySummaryPayload = unstable_cache(
     async () => {

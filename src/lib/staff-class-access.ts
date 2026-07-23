@@ -174,13 +174,14 @@ export async function requireStaffSeasonalSessionAccess(
           AND matched_o."seasonId" = anchor_o."seasonId"
         )
       )
+     LEFT JOIN "Session" matched_s ON matched_s."specialProgramSessionDateId" = matched_sd.id
      WHERE anchor_sd.id = $1
        AND anchor_o."linkedClassId" IS NOT NULL
-       AND ($2::boolean = true OR matched_o."instructorId" = $3)
+       AND ($2::boolean = true OR matched_s."coachId" = $3 OR (matched_s.id IS NULL AND matched_o."instructorId" = $3))
      LIMIT 1`,
     sessionDateId,
     access.canAccessAllClasses,
-    access.staff.appUserId,
+    access.coachId,
   );
 
   if (!rows[0]) throw new Error("담당 특강 회차에만 접근할 수 있습니다.");

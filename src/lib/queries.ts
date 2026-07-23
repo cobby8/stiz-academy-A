@@ -3685,7 +3685,7 @@ export const getStaffUsers = cache(async () => {
 export const getAllCoaches = cache(async () => {
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, name, role, "userId"
+            `SELECT id, name, role, phone, "userId"
              FROM "Coach"
              ORDER BY "order" ASC, name ASC`
         );
@@ -3693,6 +3693,7 @@ export const getAllCoaches = cache(async () => {
             id: r.id,
             name: r.name,
             role: r.role,
+            phone: r.phone ?? null,
             userId: r.userId ?? r.userid ?? null,
         }));
     } catch (e) {
@@ -3711,6 +3712,7 @@ export const getAllCoaches = cache(async () => {
             id: r.id,
             name: r.name,
             role: r.role,
+            phone: null,
             userId: null,
         }));
     } catch (fallbackError) {

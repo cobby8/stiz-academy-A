@@ -45,6 +45,7 @@ import {
 import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
 import { formatTrialSmsDateTime } from "@/lib/trial-sms-time";
 import { sessionDateForKorea } from "@/lib/seasonal/session-bridge";
+import { linkMatchingCoachProfileToUser } from "@/lib/staff-coach-link";
 
 type AdminActor = Awaited<ReturnType<typeof requireAdmin>>;
 type ApplicationHistoryAction = Extract<ApplicationContactAction, "UPDATED" | "SCHEDULED" | "CANCELLED">;
@@ -6354,14 +6355,24 @@ export async function createStaffUser(data: {
             );
             if (existing.length > 0) throw new Error("이미 등록된 전화번호입니다.");
 
-            await tx.$executeRawUnsafe(
+            const createdRows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
                 `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
-                 VALUES (gen_random_uuid(), $1, $2, $3, $4::"Role", NOW(), NOW())`,
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4::"Role", NOW(), NOW())
+                 RETURNING id`,
                 autoEmail,
                 data.name,
                 cleanPhone,
                 data.role,
             );
+            const createdUserId = createdRows[0]?.id;
+            if (createdUserId) {
+                await linkMatchingCoachProfileToUser(tx, {
+                    userId: createdUserId,
+                    name: data.name,
+                    phone: cleanPhone,
+                    role: data.role,
+                });
+            }
             await tx.$executeRawUnsafe(
                 `UPDATE "StaffPhoneVerification"
                     SET status = 'CONSUMED', "consumedAt" = NOW(),

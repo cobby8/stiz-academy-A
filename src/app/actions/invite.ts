@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { isSmsProviderConfigured } from "@/lib/sms";
 import { sendAuthenticationSms } from "@/lib/message-dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { linkMatchingCoachProfileToUser } from "@/lib/staff-coach-link";
 
 const MAX_OTP_ATTEMPTS = 5;
 const SMS_TIMEOUT_MS = 10_000;
@@ -351,6 +352,7 @@ export async function acceptInvitation(token: string, password: string) {
     );
     if (invitationRecorded !== 1) throw new Error("초대 처리 상태가 변경되었습니다.");
 
+    const createdStaffUserId = authUserId;
     await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
@@ -361,6 +363,12 @@ export async function acceptInvitation(token: string, password: string) {
         invitation.phone,
         invitation.role,
       );
+      await linkMatchingCoachProfileToUser(tx, {
+        userId: createdStaffUserId,
+        name: invitation.name,
+        phone: invitation.phone,
+        role: invitation.role,
+      });
       const accepted = await tx.$executeRawUnsafe(
         `UPDATE "StaffInvitation"
          SET status = 'ACCEPTED', "acceptedAt" = NOW(), "acceptedUserId" = $1, "otpHash" = NULL,

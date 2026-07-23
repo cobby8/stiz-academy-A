@@ -40,6 +40,7 @@ interface CoachItem {
     id: string;
     name: string;
     role: string;
+    phone: string | null;
     userId: string | null;
 }
 
@@ -223,6 +224,8 @@ export default function StaffClient({
         if (inv.status !== "PENDING") return true;
         return new Date(inv.expiresAt) < new Date();
     });
+    const linkedCoachCount = coaches.filter((coach) => coach.userId).length;
+    const unlinkedCoachCount = coaches.length - linkedCoachCount;
 
     // ── 역할 변경 핸들러 ─────────────────────────────────────────────
     function handleRoleChange(userId: string, newRole: string) {
@@ -439,6 +442,41 @@ export default function StaffClient({
             )}
 
             {/* 스태프 목록 테이블 */}
+            {coaches.length > 0 && (
+                <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">코치 프로필</h2>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                문자 발송과 시간표 배정에 쓰는 코치 목록입니다. 앱 사용은 스태프 계정 연결이 필요합니다.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs font-bold">
+                            <span className="rounded-full bg-green-50 px-3 py-1 text-green-700">연결 {linkedCoachCount}</span>
+                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">미연결 {unlinkedCoachCount}</span>
+                        </div>
+                    </div>
+                    <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                        {coaches.map((coach) => (
+                            <div key={coach.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="truncate font-bold text-gray-900 dark:text-white">{coach.name}</span>
+                                        <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">{coach.role}</span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        {coach.phone ? formatPhone(coach.phone) : "전화번호 없음"}
+                                    </p>
+                                </div>
+                                <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${coach.userId ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"}`}>
+                                    {coach.userId ? "앱 연결됨" : "앱 미연결"}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
                 <table className="w-full min-w-[720px]">
                     <thead>
@@ -535,9 +573,21 @@ export default function StaffClient({
                                         <span className={`text-xs px-2 py-0.5 rounded-full ${rc.color}`}>{rc.label}</span>
                                         <span className="text-gray-400">{formatPhone(inv.phone)}</span>
                                     </div>
-                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.color}`}>
-                                        {sc.label}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sc.color}`}>
+                                            {sc.label}
+                                        </span>
+                                        {inv.status === "PENDING" && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleResendInvitation(inv.id, inv.name)}
+                                                disabled={isPending}
+                                                className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50"
+                                            >
+                                                재발송
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}

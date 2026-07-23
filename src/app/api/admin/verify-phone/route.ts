@@ -2,7 +2,7 @@ import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from 
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
-import { sendSms } from "@/lib/sms";
+import { sendAuthenticationSms } from "@/lib/message-dispatch";
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const PROOF_EXPIRY_MS = 10 * 60 * 1000;
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
 
     let sent = false;
     try {
-      sent = await sendSms(
+      sent = await sendAuthenticationSms(
         phone,
         `[STIZ 농구교실] 스태프 인증번호: ${code} (5분 내 입력)`,
       );

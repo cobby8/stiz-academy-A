@@ -3,7 +3,8 @@
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { isSmsProviderConfigured, sendSms } from "@/lib/sms";
+import { isSmsProviderConfigured } from "@/lib/sms";
+import { sendAuthenticationSms } from "@/lib/message-dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const MAX_OTP_ATTEMPTS = 5;
@@ -80,7 +81,7 @@ async function sendSmsWithTimeout(phone: string, body: string) {
   const timeout = new Promise<"TIMEOUT">((resolve) => {
     timer = setTimeout(() => resolve("TIMEOUT"), SMS_TIMEOUT_MS);
   });
-  const result = await Promise.race([sendSms(phone, body), timeout]);
+  const result = await Promise.race([sendAuthenticationSms(phone, body), timeout]);
   if (timer) clearTimeout(timer);
   return result;
 }

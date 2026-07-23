@@ -30,6 +30,14 @@ export type SmsSendResult = {
     ok: boolean;
     to: string;
     reason?: string;
+    provider?: SmsProvider;
+    groupId?: string;
+    messageId?: string;
+    messageType?: "SMS" | "LMS";
+};
+
+export type SmsSendOptions = {
+    messageType?: "SMS" | "LMS";
 };
 
 function normalizeSmsNumber(value: string): string {
@@ -108,6 +116,10 @@ function bizppurioMessageType(body: string): "sms" | "lms" {
     return Buffer.byteLength(body, "utf8") <= 90 ? "sms" : "lms";
 }
 
+export function getSmsMessageType(body: string): "SMS" | "LMS" {
+    return bizppurioMessageType(body).toUpperCase() as "SMS" | "LMS";
+}
+
 async function readJsonSafely(response: Response): Promise<JsonObject | null> {
     try {
         return await response.json();
@@ -147,7 +159,13 @@ async function getBizppurioToken(signal: AbortSignal): Promise<string> {
     return token;
 }
 
-async function sendSolapiSms(recipientNo: string, body: string, signal: AbortSignal): Promise<SmsSendResult> {
+async function sendSolapiSms(
+    recipientNo: string,
+    body: string,
+    signal: AbortSignal,
+    options?: SmsSendOptions,
+): Promise<SmsSendResult> {
+    const messageType = options?.messageType === "LMS" ? "LMS" : getSmsMessageType(body);
     const res = await fetch(SOLAPI_URL, {
         method: "POST",
         signal,
@@ -160,6 +178,8 @@ async function sendSolapiSms(recipientNo: string, body: string, signal: AbortSig
                 to: recipientNo,
                 from: SOLAPI_SENDER,
                 text: body,
+                type: messageType,
+                ...(messageType === "LMS" ? { subject: "STIZ 알림" } : {}),
             },
         }),
     });
@@ -167,17 +187,29 @@ async function sendSolapiSms(recipientNo: string, body: string, signal: AbortSig
     const json = await readJsonSafely(res);
 
     if (res.ok && json?.groupId) {
-        return { ok: true, to: recipientNo };
+        return {
+            ok: true,
+            to: recipientNo,
+            provider: "SOLAPI",
+            groupId: String(json.groupId),
+            messageId: typeof json.messageId === "string" ? json.messageId : undefined,
+            messageType,
+        };
     }
 
     const reason = json?.errorMessage || json?.message || json?.statusCode || JSON.stringify(json);
     console.warn("[SMS] Solapi API failed:", reason);
-    return { ok: false, to: recipientNo, reason: `Solapi failed: ${reason}` };
+    return { ok: false, to: recipientNo, provider: "SOLAPI", reason: `Solapi failed: ${reason}` };
 }
 
-async function sendBizppurioSms(recipientNo: string, body: string, signal: AbortSignal): Promise<SmsSendResult> {
+async function sendBizppurioSms(
+    recipientNo: string,
+    body: string,
+    signal: AbortSignal,
+    options?: SmsSendOptions,
+): Promise<SmsSendResult> {
     const token = await getBizppurioToken(signal);
-    const type = bizppurioMessageType(body);
+    const type = options?.messageType === "LMS" ? "lms" : bizppurioMessageType(body);
     const refkey = `stiz${Date.now().toString(36)}${crypto.randomBytes(8).toString("hex")}`.slice(0, 32);
     const content = type === "sms"
         ? { sms: { message: body } }
@@ -203,28 +235,38 @@ async function sendBizppurioSms(recipientNo: string, body: string, signal: Abort
     const json = await readJsonSafely(res);
 
     if (res.ok && String(json?.code) === "1000") {
-        return { ok: true, to: recipientNo };
+        return {
+            ok: true,
+            to: recipientNo,
+            provider: "BIZPPURIO",
+            messageId: typeof json?.messagekey === "string" ? json.messagekey : refkey,
+            messageType: type.toUpperCase() as "SMS" | "LMS",
+        };
     }
 
     const reason = json?.description || json?.message || json?.code || JSON.stringify(json);
     console.warn("[SMS] Bizppurio API failed:", reason);
-    return { ok: false, to: recipientNo, reason: `Bizppurio failed: ${reason}` };
+    return { ok: false, to: recipientNo, provider: "BIZPPURIO", reason: `Bizppurio failed: ${reason}` };
 }
 
-export async function sendSmsDetailed(to: string, body: string): Promise<SmsSendResult> {
+export async function sendSmsDetailed(
+    to: string,
+    body: string,
+    options?: SmsSendOptions,
+): Promise<SmsSendResult> {
     const recipientNo = normalizeSmsNumber(to);
     const provider = currentSmsProvider();
     const missingReason = smsProviderMissingReason(provider);
 
     if (recipientNo.length < 10 || recipientNo.length > 11) {
-        return { ok: false, to: recipientNo, reason: "Invalid SMS recipient." };
+        return { ok: false, to: recipientNo, provider, reason: "Invalid SMS recipient." };
     }
 
     if (missingReason) {
         // Do not print phone numbers or message bodies. Some messages include login codes or private notes.
         const maskedRecipient = recipientNo.length >= 4 ? `***${recipientNo.slice(-4)}` : "***";
         console.log(`[SMS fallback] provider=${provider} to=${maskedRecipient} bodyLength=${body.length}`);
-        return { ok: false, to: recipientNo, reason: missingReason };
+        return { ok: false, to: recipientNo, provider, reason: missingReason };
     }
 
     const controller = new AbortController();
@@ -232,14 +274,14 @@ export async function sendSmsDetailed(to: string, body: string): Promise<SmsSend
 
     try {
         return provider === "BIZPPURIO"
-            ? await sendBizppurioSms(recipientNo, body, controller.signal)
-            : await sendSolapiSms(recipientNo, body, controller.signal);
+            ? await sendBizppurioSms(recipientNo, body, controller.signal, options)
+            : await sendSolapiSms(recipientNo, body, controller.signal, options);
     } catch (e) {
         const reason = e instanceof Error && e.name === "AbortError"
             ? `SMS request timed out after ${SMS_REQUEST_TIMEOUT_MS}ms`
             : (e as Error).message;
         console.error("[SMS] Send failed:", reason);
-        return { ok: false, to: recipientNo, reason: `SMS request failed: ${reason}` };
+        return { ok: false, to: recipientNo, provider, reason: `SMS request failed: ${reason}` };
     } finally {
         clearTimeout(timeout);
     }

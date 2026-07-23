@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { sendSms } from "@/lib/sms";
+import { sendAuthenticationSms } from "@/lib/message-dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const OTP_TTL_MINUTES = 5;
@@ -148,7 +148,7 @@ export async function sendParentSignupOtp(token: string, requestKey = "unknown")
         reserved, current.id,
       );
     });
-    if (process.env.NODE_ENV !== "test" && !(await sendSms(row!.phone, `[STIZ 농구교실] 회원가입 인증번호: ${code} (5분 이내 입력)`))) {
+    if (process.env.NODE_ENV !== "test" && !(await sendAuthenticationSms(row!.phone, `[STIZ 농구교실] 회원가입 인증번호: ${code} (5분 이내 입력)`))) {
       throw new Error("인증번호 문자 발송에 실패했습니다.");
     }
     await prisma.$executeRawUnsafe(`UPDATE "ParentSignupOtpSend" SET status='SENT' WHERE "verificationId"=$1 AND status='RESERVED'`, row!.id);

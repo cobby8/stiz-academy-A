@@ -985,6 +985,8 @@ model Notification {
 model NotificationDelivery {
   id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   eventType       String // ATTENDANCE_PRESENT, ATTENDANCE_LATE, CLASS_COMPLETED, CLASS_NOTICE
+  trigger         String?
+  audienceScope   String? // INTERNAL, EXTERNAL, SECURITY
   sessionId       String?
   attendanceId    String?
   noticeId        String?
@@ -992,6 +994,16 @@ model NotificationDelivery {
   recipientUserId String?
   recipientPhone  String?
   channel         String // IN_APP, PUSH, SMS
+  requestedChannel String?
+  provider         String?
+  messageType      String?
+  providerMessageId String?
+  providerGroupId  String?
+  providerStatus   String?
+  fallbackUsed     Boolean   @default(false)
+  fallbackChannel  String?
+  unitCost         Decimal?  @db.Decimal(10, 4)
+  currency         String    @default("KRW")
   dedupeKey       String    @unique
   status          String    @default("PENDING") // PENDING, SENT, PARTIAL, FAILED, SKIPPED
   attemptCount    Int       @default(0)
@@ -1009,6 +1021,10 @@ model NotificationDelivery {
   @@index([status, nextAttemptAt, createdAt])
   @@index([sessionId, eventType])
   @@index([recipientUserId, createdAt])
+  @@index([trigger, audienceScope, status, createdAt])
+  @@index([requestedChannel, createdAt])
+  @@index([provider, providerMessageId])
+  @@index([provider, providerGroupId])
 }
 
 model PushSubscription {
@@ -1289,6 +1305,47 @@ model SmsTemplate {
   variables   String? // 사용 가능한 변수 목록 (JSON: ["childName","parentName",...])
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  automationRules MessageAutomationRule[]
+}
+
+// 관리자 메시지 센터에서 이벤트별 자동 발송 여부와 채널 우선순위를 관리한다.
+model MessageAutomationRule {
+  id               String      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  trigger          String      @unique
+  name             String
+  audienceScope    String // INTERNAL, EXTERNAL, SECURITY
+  target           String
+  isActive         Boolean     @default(true)
+  requestedChannel String      @default("SMS") // AUTO, KAKAO_ALIMTALK, RCS, SMS, LMS, PUSH
+  fallbackEnabled  Boolean     @default(true)
+  fallbackChannel  String?     @default("SMS")
+  templateId       String?
+  description      String?
+  createdAt        DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime    @default(now()) @updatedAt @db.Timestamptz(6)
+  template         SmsTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([audienceScope, isActive])
+  @@index([target, isActive])
+  @@index([templateId])
+}
+
+// 내부·외부·보안 영역별로 사용할 발송 채널과 공급자 연결 정보를 관리한다.
+model MessageChannelSetting {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  audienceScope    String // INTERNAL, EXTERNAL, SECURITY
+  channel          String // KAKAO_ALIMTALK, RCS, SMS, LMS, PUSH
+  provider         String   @default("SOLAPI")
+  isEnabled        Boolean  @default(false)
+  priority         Int      @default(100)
+  fallbackChannel  String?
+  senderProfileId  String?
+  configJSON       Json?
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([audienceScope, channel])
+  @@index([audienceScope, isEnabled, priority])
 }
 
 // 방학특강 모집 단위. 한 시즌 안에 여러 특강 상품을 운영한다.

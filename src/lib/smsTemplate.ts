@@ -175,6 +175,20 @@ export async function ensureSmsTemplates(): Promise<void> {
                 trigger, name, target, body, description, variables,
             );
         }
+        // 신규·복원 DB에서도 템플릿과 자동 발송 규칙이 같은 시점에 준비되게 한다.
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "MessageAutomationRule" (
+                id, trigger, name, "audienceScope", target, "isActive",
+                "requestedChannel", "fallbackEnabled", "fallbackChannel",
+                "templateId", description, "createdAt", "updatedAt"
+             )
+             SELECT gen_random_uuid()::text, t.trigger, t.name,
+                    CASE WHEN t.target IN ('ADMIN', 'COACH', 'STAFF') THEN 'INTERNAL' ELSE 'EXTERNAL' END,
+                    t.target, t."isActive", 'SMS', true, 'SMS', t.id, t.description, NOW(), NOW()
+               FROM "SmsTemplate" t
+             ON CONFLICT (trigger) DO UPDATE
+               SET "templateId" = COALESCE("MessageAutomationRule"."templateId", EXCLUDED."templateId")`,
+        ).catch(() => undefined);
         _defaultSmsTemplatesEnsured = true;
     } catch (e) {
         console.error("[ensureSmsTemplates] seed failed:", e);

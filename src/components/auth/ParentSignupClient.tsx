@@ -33,7 +33,7 @@ export default function ParentSignupClient() {
   const searchParams = useSearchParams();
   const socialSignup = searchParams.get("social") === "1";
   const enrollmentHandoff = searchParams.get("enrollmentHandoff") || "";
-  const next = searchParams.get("next") || "/parent";
+  const next = searchParams.get("next") || "/mypage";
   const initialName = searchParams.get("name") || "";
   const initialPhone = (searchParams.get("phone") || "").replace(/[^0-9]/g, "");
   const [step, setStep] = useState<Step>(socialSignup ? "phone" : "method");

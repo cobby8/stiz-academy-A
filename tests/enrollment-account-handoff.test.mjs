@@ -75,9 +75,9 @@ test("OAuth round trip preserves enrollment handoff", () => {
 test("existing password and OAuth login link before entering the parent page", () => {
   assert.match(loginPage, /formData\.set\("enrollmentHandoff", handoff\)/);
   assert.match(loginAction, /await linkEnrollmentAccount\(/);
-  assert.match(loginAction, /destination = "\/parent"/);
+  assert.match(loginAction, /destination = "\/mypage"/);
   assert.match(oauthCallback, /await linkEnrollmentAccount\(/);
-  assert.match(oauthCallback, /enrollmentHandoff \? "\/parent" : next/);
+  assert.match(oauthCallback, /enrollmentHandoff \? "\/mypage" : next/);
 });
 
 test("signup CTA keeps the handoff and opens the parent signup screen", () => {

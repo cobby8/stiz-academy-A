@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
       }
     }
     const url = new URL("/auth/continue", request.url);
-    url.searchParams.set("redirect", enrollmentHandoff ? "/parent" : next);
+    url.searchParams.set("redirect", enrollmentHandoff ? "/mypage" : next);
     return NextResponse.redirect(url);
   }
 

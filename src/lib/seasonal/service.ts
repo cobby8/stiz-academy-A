@@ -140,6 +140,7 @@ function publicOffering(offering: PublicOfferingRow) {
     price: offering.price,
     newApplicantPrice: offering.newApplicantPrice,
     existingApplicantPrice: offering.existingApplicantPrice,
+    shuttleAvailable: offering.shuttleAvailable,
     waitlistEnabled: capacity !== null,
   };
 }

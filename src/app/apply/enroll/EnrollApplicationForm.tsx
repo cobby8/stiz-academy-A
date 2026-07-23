@@ -303,7 +303,7 @@ export default function EnrollApplicationForm({
         : "/signup/parent";
     const loginHref = accountHandoff
         ? `/login?${new URLSearchParams({
-            redirect: "/parent",
+            redirect: "/mypage",
             enrollmentHandoff: accountHandoff.token,
         }).toString()}`
         : "/login";

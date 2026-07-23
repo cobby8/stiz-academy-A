@@ -87,7 +87,7 @@ export async function login(formData: FormData) {
         token: enrollmentHandoff,
         parentUserId: appUsers[0].id,
       });
-      destination = "/parent";
+      destination = "/mypage";
     } catch (linkError) {
       await supabase.auth.signOut();
       return {

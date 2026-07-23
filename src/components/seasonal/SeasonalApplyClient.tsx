@@ -186,7 +186,10 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   const hasPricingMatch = selectedOfferings.length > 0 && selectionPlans.every((plan) => Boolean(plan.offering));
   // 신청자가 고른 회원 구분과 서버의 가격 스냅샷 기준을 화면에서도 동일하게 맞춘다.
   const totalPrice = selectionPlans.reduce((sum, plan) => sum + applicantPrice(plan.offering ?? plan.base, applicantType), 0);
-  const hasMapSelection = selectedIds.some((id) => shuttle[id]?.pickupLocationData || shuttle[id]?.dropoffLocationData);
+  const hasMapSelection = selectionPlans.some(({ base, offering }) => (
+    offering?.shuttleAvailable
+    && (shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData)
+  ));
   const canSubmit = selectedIds.length > 0 && applicantType && form.childName && form.childBirthDate && form.parentName
     && form.parentPhone && selectedWeekdays.length > 0 && hasPricingMatch
     && form.agreedTerms && form.agreedPrivacy && (!hasMapSelection || locationConsent)
@@ -319,7 +322,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
           selectedWeekdays,
           items: selectionPlans.flatMap(({ base, offering }) => offering ? [{
             offeringId: offering.id,
-            shuttle: hasShuttle(shuttle[base.id]) ? {
+            shuttle: offering.shuttleAvailable && hasShuttle(shuttle[base.id]) ? {
               ...shuttle[base.id],
               locationConsent: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? locationConsent : undefined,
               locationConsentVersion: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? SHUTTLE_LOCATION_CONSENT_VERSION : undefined,
@@ -368,6 +371,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
               const selected = selectedIds.includes(item.id);
               const disabled = isFull(item) && !item.waitlistEnabled;
               const priceItem = selected ? matchingOfferingForWeekdays(offerings, item, selectedWeekdays) ?? item : item;
+              const shuttleAvailable = selected && priceItem.shuttleAvailable;
               return (
                 <article key={item.id} className={`rounded-2xl border bg-white p-5 shadow-sm dark:bg-gray-800 ${selected ? "border-brand-orange-500 ring-2 ring-brand-orange-100 dark:border-brand-neon-lime dark:ring-brand-neon-lime/20" : "border-gray-200 dark:border-gray-700"} ${disabled ? "opacity-60" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
@@ -398,7 +402,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                       </ol>
                     </div>
                   )}
-                  {selected && (
+                  {shuttleAvailable && (
                     <div className="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
                       <p className="text-xs font-bold text-gray-600 dark:text-gray-300">셔틀 요청이 있으면 적어주세요</p>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">

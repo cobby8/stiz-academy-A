@@ -54,6 +54,6 @@ test("담당 슬롯이나 담당 코치가 없으면 전체 코치에게 대신 
     );
     assert.match(
         notification,
-        /if \(smsOptions\?\.requireMatchedCoach && coachPhones\.length === 0\)/,
+        /if \(smsOptions\?\.notifyCoaches !== false && smsOptions\?\.requireMatchedCoach && coachPhones\.length === 0\)/,
     );
 });

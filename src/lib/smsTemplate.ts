@@ -163,6 +163,7 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
         '["childName","unpaidCount","totalAmount"]',
     ],
     ["SPECIAL_APPLICATION_RECEIVED_PARENT", "특강 신청 접수", "PARENT", "[STIZ] {{childName}} 학생의 {{seasonTitle}} 특강 신청이 접수되었습니다.\n신청: {{offeringTitle}}\n문의: {{academyPhone}}", "특강 신청 직후 접수 안내", '["childName","seasonTitle","offeringTitle","academyPhone"]'],
+    ["SPECIAL_APPLICATION_NEW_ADMIN", "특강 최초 신청 접수 (관리자)", "ADMIN", "[STIZ] 새 특강 신청\n{{childName}} - {{parentName}}\n특강: {{seasonTitle}} / {{offeringTitle}}", "특강 최초 신청 시 관리자에게 한 번 알림", '["childName","seasonTitle","offeringTitle","parentName","parentPhone"]'],
     ["SPECIAL_APPLICATION_APPROVED_PARENT", "특강 신청 승인", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 승인되었습니다.\n결제 및 계정 안내를 확인해 주세요.\n문의: {{academyPhone}}", "특강 신청 승인 안내", '["childName","seasonTitle","offeringTitle","academyPhone"]'],
     ["SPECIAL_APPLICATION_WAITLISTED_PARENT", "특강 대기 접수", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강은 대기 접수되었습니다.\n대기순번: {{waitlistOrder}}\n자리 발생 시 안내드리겠습니다.", "특강 대기 상태 안내", '["childName","offeringTitle","waitlistOrder","academyPhone"]'],
     ["SPECIAL_APPLICATION_REJECTED_PARENT", "특강 신청 반려", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 승인되지 않았습니다.\n문의: {{academyPhone}}", "특강 신청 반려 안내", '["childName","offeringTitle","academyPhone"]'],
@@ -170,6 +171,18 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
     ["SPECIAL_ACCOUNT_ACTIVATION_PARENT", "특강 보호자 계정 활성화", "PARENT", "[STIZ] {{childName}} 학생의 특강 확인을 위해 보호자 계정을 활성화해 주세요.\n{{activationUrl}}\n이 링크는 다른 사람에게 전달하지 마세요.", "신규 보호자의 일회용 계정 활성화 링크", '["childName","activationUrl"]'],
     ["SPECIAL_PAYMENT_REQUEST_PARENT", "특강 결제 요청", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 결제를 확인해 주세요.\n금액: {{amount}}원\n납부기한: {{dueDate}}\n{{paymentUrl}}", "특강 청구서 결제 안내", '["childName","offeringTitle","amount","dueDate","paymentUrl"]'],
 ];
+
+// 신청 완료 화면과 겹치거나 배정 전 담당자가 불명확한 자동문자는 기본으로 끈다.
+// 보안 OTP와 일정·배정 확정, 결제 등 사용자의 행동이 필요한 문자는 이 목록에 포함하지 않는다.
+export const DEFAULT_DISABLED_SMS_TRIGGERS = new Set([
+    "TRIAL_NEW_COACH",
+    "TRIAL_CONFIRM_PARENT",
+    "TRIAL_ATTENDED_PARENT",
+    "ENROLL_NEW_COACH",
+    "ENROLL_CONFIRM_PARENT",
+    "SPECIAL_APPLICATION_RECEIVED_PARENT",
+    "SPECIAL_APPLICATION_APPROVED_PARENT",
+]);
 
 /**
  * ensureSmsTemplates — 템플릿이 0개면 기본 10개를 INSERT
@@ -184,11 +197,12 @@ export async function ensureSmsTemplates(): Promise<void> {
     try {
         // 기본 템플릿 삽입 — ON CONFLICT 로 이미 있는 trigger는 무시
         for (const [trigger, name, target, body, description, variables] of DEFAULT_TEMPLATES) {
+            const isActive = !DEFAULT_DISABLED_SMS_TRIGGERS.has(trigger);
             await prisma.$executeRawUnsafe(
                 `INSERT INTO "SmsTemplate" (id, trigger, name, target, body, "isActive", description, variables, "createdAt", "updatedAt")
-                 VALUES (gen_random_uuid()::text, $1, $2, $3, $4, true, $5, $6, NOW(), NOW())
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
                  ON CONFLICT (trigger) DO NOTHING`,
-                trigger, name, target, body, description, variables,
+                trigger, name, target, body, isActive, description, variables,
             );
         }
         // 신규·복원 DB에서도 템플릿과 자동 발송 규칙이 같은 시점에 준비되게 한다.

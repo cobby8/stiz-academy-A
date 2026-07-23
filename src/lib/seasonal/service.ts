@@ -6,6 +6,7 @@ import {
   reserveSeasonalParentSms,
   type SeasonalSmsDeliveryResult,
 } from "@/lib/seasonal/notifications";
+import { notifyAdmins } from "@/lib/notification";
 import { prisma } from "@/lib/prisma";
 import { SeasonalError, type SeasonalApplicationInput } from "./contracts";
 import { decideApplicantType, planApplicationItems, totalSnapshot, weekdayInSeoul } from "./planning";
@@ -204,6 +205,31 @@ function applicationResponse(application: Awaited<ReturnType<typeof existingAppl
   };
 }
 
+async function notifyAdminsOfNewSeasonalApplication(
+  application: NonNullable<Awaited<ReturnType<typeof existingApplication>>>,
+  seasonTitle: string,
+) {
+  const offeringTitle = application.items.map((item) => item.titleSnapshot).join(", ");
+  await notifyAdmins(
+    "SPECIAL_APPLICATION",
+    "새 특강 신청",
+    `${application.childName} (${offeringTitle}) - ${application.parentName}`,
+    "/admin/seasonal",
+    {
+      adminTrigger: "SPECIAL_APPLICATION_NEW_ADMIN",
+      notifyCoaches: false,
+      eventId: `seasonal-application:${application.id}:new-admin`,
+      variables: {
+        childName: application.childName,
+        seasonTitle,
+        offeringTitle,
+        parentName: application.parentName,
+        parentPhone: application.parentPhone,
+      },
+    },
+  );
+}
+
 type ReceivedDeliveryRow = { id: string; status: string; errorCode: string | null };
 
 async function recoverReceivedNotification(
@@ -253,7 +279,10 @@ async function duplicateApplicationResponse(
   seasonTitle: string,
 ) {
   const response = applicationResponse(application, true);
-  const notification = await recoverReceivedNotification(application, seasonTitle);
+  const [notification] = await Promise.all([
+    recoverReceivedNotification(application, seasonTitle),
+    notifyAdminsOfNewSeasonalApplication(application, seasonTitle),
+  ]);
   return notification
     ? {
         ...response,
@@ -411,20 +440,23 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const created = committed.application;
     const response = applicationResponse(created, false);
-    const notification: SeasonalSmsDeliveryResult = committed.reservation.status === "PENDING" && committed.reservation.deliveryId
-      ? await dispatchSeasonalParentSms({
-        deliveryId: committed.reservation.deliveryId,
-        trigger: SEASONAL_SMS_TRIGGERS.received,
-        recipientPhone: input.parent.phone,
-        variables: {
-        childName: input.child.name,
-        parentName: input.parent.name,
-        seasonTitle: season.title,
-        offeringTitle: created.items.map((item) => item.titleSnapshot).join(", "),
-        waitlistOrder: created.items.filter((item) => item.waitlistOrder).map((item) => String(item.waitlistOrder)).join(", "),
-        },
-      })
-      : committed.reservation as SeasonalSmsDeliveryResult;
+    const [notification] = await Promise.all([
+      committed.reservation.status === "PENDING" && committed.reservation.deliveryId
+        ? dispatchSeasonalParentSms({
+          deliveryId: committed.reservation.deliveryId,
+          trigger: SEASONAL_SMS_TRIGGERS.received,
+          recipientPhone: input.parent.phone,
+          variables: {
+          childName: input.child.name,
+          parentName: input.parent.name,
+          seasonTitle: season.title,
+          offeringTitle: created.items.map((item) => item.titleSnapshot).join(", "),
+          waitlistOrder: created.items.filter((item) => item.waitlistOrder).map((item) => String(item.waitlistOrder)).join(", "),
+          },
+        })
+        : Promise.resolve(committed.reservation as SeasonalSmsDeliveryResult),
+      notifyAdminsOfNewSeasonalApplication(created, season.title),
+    ]);
     return {
       ...response,
       notification,

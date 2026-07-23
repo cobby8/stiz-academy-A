@@ -583,6 +583,7 @@ export async function notifyAdmins(
         variables?: Record<string, string>; // 템플릿 변수
         slotKeys?: string[];        // 해당 슬롯 키 — 있으면 담당 코치에게만 SMS, 없으면 전체 코치
         requireMatchedCoach?: boolean; // true면 전체 코치 fallback 없이 담당자 미매칭을 실패로 반환
+        notifyCoaches?: boolean;       // false면 관리자 알림만 만들고 코치 조회·SMS는 생략
         eventId?: string;           // 신청/청구 등 원본 ID — SMS 중복 발송 방지와 이력 조회용
         deliveryRunId?: string;     // 재발송 시 같은 eventId 아래 새 시도 기록을 남김
     },
@@ -643,7 +644,9 @@ export async function notifyAdmins(
 
         // Coach SMS 발송: slotKeys가 있으면 해당 슬롯 담당 코치에게만, 없으면 전체 코치에게
         let coachPhones: string[];
-        if (smsOptions?.slotKeys && smsOptions.slotKeys.length > 0) {
+        if (smsOptions?.notifyCoaches === false) {
+            coachPhones = [];
+        } else if (smsOptions?.slotKeys && smsOptions.slotKeys.length > 0) {
             // 슬롯에 배정된 담당 코치의 전화번호만 조회
             coachPhones = await getCoachPhonesBySlotKeys(smsOptions.slotKeys);
         } else if (!smsOptions?.requireMatchedCoach) {
@@ -655,7 +658,7 @@ export async function notifyAdmins(
         } else {
             coachPhones = [];
         }
-        if (smsOptions?.requireMatchedCoach && coachPhones.length === 0) {
+        if (smsOptions?.notifyCoaches !== false && smsOptions?.requireMatchedCoach && coachPhones.length === 0) {
             emptySummary.failed = 1;
             emptySummary.coachFailed = 1;
             emptySummary.errors.push(
@@ -716,7 +719,9 @@ export async function notifyAdmins(
         return {
             ...emptySummary,
             failed: 1,
-            coachFailed: smsOptions?.requireMatchedCoach ? 1 : emptySummary.coachFailed,
+            coachFailed: smsOptions?.notifyCoaches !== false && smsOptions?.requireMatchedCoach
+                ? 1
+                : emptySummary.coachFailed,
             errors: [
                 e instanceof Error
                     ? e.message

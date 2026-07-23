@@ -410,6 +410,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
                 {
                     adminTrigger: "TRIAL_NEW_ADMIN",
                     coachTrigger: "TRIAL_NEW_COACH",
+                    notifyCoaches: false,
                     variables: smsVars,
                     slotKeys: preferredSlotKey ? [preferredSlotKey] : undefined,
                     eventId: trialLeadId,
@@ -946,7 +947,8 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
         const enrollSlotKeys = data.preferredSlotKeys
             ? data.preferredSlotKeys.split(",").map(k => k.trim()).filter(Boolean)
             : undefined;
-        notifyAdmins(
+        const enrollmentApplicationId = rows[0]?.id || "ok";
+        await notifyAdmins(
             "ENROLL_APPLICATION",
             "???섍컯 ?좎껌",
             `${childName} (${data.childGrade || "학년 미입력"}) - ${parentName}`,
@@ -954,19 +956,22 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             {
                 adminTrigger: "ENROLL_NEW_ADMIN",
                 coachTrigger: "ENROLL_NEW_COACH",
+                notifyCoaches: false,
                 variables: smsVars,
                 slotKeys: enrollSlotKeys,
+                eventId: enrollmentApplicationId,
             },
         ).catch(() => {});
 
         // ?숇?紐⑥뿉寃??묒닔 ?뺤씤 SMS 諛쒖넚 (fire-and-forget)
-        sendParentSmsWithAcademyPhone(
+        await sendParentSmsWithAcademyPhone(
             normalizePhone(parentPhone),
             "ENROLL_CONFIRM_PARENT",
             { childName, parentName },
+            { eventType: "ENROLL_APPLICATION", eventId: enrollmentApplicationId },
         ).catch(() => {});
 
-        return { success: true, id: rows[0]?.id || "ok", mode: "created" as const };
+        return { success: true, id: enrollmentApplicationId, mode: "created" as const };
     } catch (e) {
         console.error("[submitEnrollApplication] failed:", e);
         throw new Error("?섍컯 ?좎껌 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.");

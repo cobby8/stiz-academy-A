@@ -162,6 +162,10 @@ type Payload = {
   stats?: { pending?: number; confirmed?: number; unpaid?: number; waitlisted?: number; shuttleUnassigned?: number };
 };
 
+type SeasonalAdminClientProps = {
+  initialData?: Record<string, unknown>;
+};
+
 type BulkItemResult = {
   itemId: string;
   ok: boolean;
@@ -389,14 +393,92 @@ function paymentReviewLabel(value?: string | null) {
   return STATUS_LABEL[value] ?? value;
 }
 
-export default function SeasonalAdminClient() {
+function normalizeSeasons(body: Record<string, unknown>): Season[] {
+  return ((body.seasons ?? []) as Array<Record<string, unknown>>).map((season) => ({
+    ...season,
+    name: season.name ?? season.title ?? "?대쫫 ?녿뒗 ?쒖쫵",
+    enrollmentStartsAt: season.enrollmentStartsAt ?? season.applicationOpensAt,
+    enrollmentEndsAt: season.enrollmentEndsAt ?? season.applicationClosesAt,
+    classes: ((season.classes ?? season.offerings ?? []) as Array<Record<string, unknown>>).map((offering) => {
+      const firstDate = (offering.sessionDates as Array<Record<string, unknown>> | undefined)?.[0];
+      const startsAt = typeof firstDate?.startsAt === "string" ? new Date(firstDate.startsAt) : null;
+      const endsAt = typeof firstDate?.endsAt === "string" ? new Date(firstDate.endsAt) : null;
+      return {
+        ...offering,
+        name: offering.name ?? offering.title ?? "Untitled class",
+        targetGrade: offering.targetGrade ?? offering.targetGrades,
+        dayOfWeek: offering.dayOfWeek ?? (startsAt ? new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(startsAt) : "Schedule TBD"),
+        startTime: offering.startTime ?? (startsAt ? startsAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""),
+        endTime: offering.endTime ?? (endsAt ? endsAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""),
+        confirmedCount: offering.confirmedCount ?? offering.approvedCount ?? 0,
+      } as SeasonalClass;
+    }),
+  })) as Season[];
+}
+
+function normalizeApplications(body: Record<string, unknown>): Application[] {
+  return ((body.applications ?? []) as Array<Record<string, unknown>>).map((application) => {
+    const items = ((application.items ?? []) as Array<Record<string, unknown>>).map((item) => {
+      const offering = item.offering as Record<string, unknown> | undefined;
+      return {
+        ...item,
+        classId: item.classId ?? item.offeringId,
+        className: item.className ?? item.titleSnapshot ?? offering?.title ?? "Untitled class",
+        amount: item.amount ?? item.priceSnapshot,
+        waitlistOrder: item.waitlistOrder ?? null,
+        linkedProgramId: item.linkedProgramId ?? offering?.linkedProgramId ?? null,
+        linkedClassId: item.linkedClassId ?? offering?.linkedClassId ?? null,
+        enrollmentId: item.enrollmentId ?? null,
+        paymentId: item.paymentId ?? null,
+        invoice: (item.invoice ?? null) as InvoiceInfo | null,
+        shuttleRequest: (item.shuttleRequest ?? null) as ShuttleRequest | null,
+      } as ApplicationItem;
+    });
+    const shuttleRequests = [
+      ...(((application.shuttleRequests as unknown[] | undefined) ?? []) as ShuttleRequest[]),
+      ...items.map((item) => item.shuttleRequest).filter(Boolean) as ShuttleRequest[],
+    ];
+    const firstShuttle = shuttleRequests[0];
+    const applicantType = application.applicantType ?? application.memberType ?? application.customerType;
+    const selectedWeekdays = stringList(application.selectedWeekdays ?? application.weekdays ?? application.selectedDays);
+    const importSource = application.importSource ?? application.sourceLabel ?? application.source;
+    const reviewReasons = stringList(application.reviewReasons ?? application.needsReviewReasons ?? application.reviewReason);
+    return {
+      ...application,
+      totalAmount: application.totalAmount ?? application.totalPriceSnapshot,
+      shuttleNeeded: application.shuttleNeeded !== undefined ? Boolean(application.shuttleNeeded) : shuttleRequests.length > 0,
+      shuttleStatus: application.shuttleStatus ?? firstShuttle?.status ?? null,
+      applicantType: typeof applicantType === "string" ? applicantType : null,
+      selectedWeekdays,
+      importSource: typeof importSource === "string" ? importSource : null,
+      imported: Boolean(application.imported ?? application.isImported ?? importSource),
+      reviewReasons,
+      items,
+    } as Application;
+  });
+}
+
+function normalizePayload(body: Record<string, unknown>, includeApplications: boolean, currentApplications: Application[] = []): Payload {
+  return {
+    seasons: normalizeSeasons(body),
+    applications: includeApplications ? normalizeApplications(body) : currentApplications,
+    stats: body.stats as Payload["stats"],
+  };
+}
+
+function normalizeInitialPayload(initialData?: Record<string, unknown>): Payload {
+  if (!initialData) return { seasons: [], applications: [] };
+  return normalizePayload(initialData, false);
+}
+
+export default function SeasonalAdminClient({ initialData }: SeasonalAdminClientProps) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [data, setData] = useState<Payload>({ seasons: [], applications: [] });
-  const [selectedSeasonId, setSelectedSeasonId] = useState("");
+  const [data, setData] = useState<Payload>(() => normalizeInitialPayload(initialData));
+  const [selectedSeasonId, setSelectedSeasonId] = useState(() => normalizeInitialPayload(initialData).seasons[0]?.id ?? "");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [modal, setModal] = useState<"season" | "class" | null>(null);
@@ -506,7 +588,10 @@ export default function SeasonalAdminClient() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (initialData) return;
+    void load();
+  }, [initialData, load]);
   useEffect(() => {
     if (tab === "applications" && !applicationsLoaded && !loading) void load({ includeApplications: true });
   }, [applicationsLoaded, load, loading, tab]);

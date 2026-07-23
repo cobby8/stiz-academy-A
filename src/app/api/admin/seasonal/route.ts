@@ -9,6 +9,7 @@ import { syncOfferingSessionDates } from "@/lib/seasonal/session-bridge";
 import { issueParentAccountClaim } from "@/lib/parent-account-claim";
 import { randomUUID } from "node:crypto";
 import { expireStaleSmsDeliveries } from "@/lib/notification";
+import { getSeasonalAdminOverview, getSeasonalAdminStats } from "@/lib/seasonal/admin-overview";
 import {
   SEASONAL_SMS_TRIGGERS,
   dispatchSeasonalParentSms,
@@ -282,43 +283,6 @@ async function seasonalRoster(request: NextRequest) {
     pagination,
     filters: { seasonId, offeringId, weekday, paymentStatus, shuttleStatus, q: query },
   });
-}
-
-async function seasonalAdminStats() {
-  const rows = await prisma.$queryRawUnsafe<Array<{
-    pending: number | string | null;
-    confirmed: number | string | null;
-    unpaid: number | string | null;
-    waitlisted: number | string | null;
-    shuttleUnassigned: number | string | null;
-  }>>(
-    `SELECT
-        COUNT(DISTINCT app.id) FILTER (WHERE item.status = 'PENDING')::int AS pending,
-        COUNT(DISTINCT app.id) FILTER (WHERE item.status = 'APPROVED')::int AS confirmed,
-        COUNT(DISTINCT app.id) FILTER (
-          WHERE item.status = 'APPROVED'
-            AND NOT (payment.status IN ('PAID','COMPLETED') OR invoice.status IN ('PAID','COMPLETED'))
-        )::int AS unpaid,
-        COUNT(DISTINCT app.id) FILTER (WHERE item.status = 'WAITLISTED' OR app.status = 'PARTIALLY_WAITLISTED')::int AS waitlisted,
-        COUNT(DISTINCT app.id) FILTER (
-          WHERE shuttle.id IS NOT NULL
-            AND (shuttle."assignedRouteId" IS NULL OR shuttle."assignedStopId" IS NULL)
-        )::int AS "shuttleUnassigned"
-       FROM "SpecialProgramApplication" app
-       LEFT JOIN "SpecialProgramApplicationItem" item ON item."applicationId" = app.id
-       LEFT JOIN "Payment" payment ON payment.id = item."paymentId"
-       LEFT JOIN "PaymentInvoice" invoice ON invoice."paymentId" = item."paymentId"
-       LEFT JOIN "SpecialProgramShuttleRequest" shuttle ON shuttle."applicationItemId" = item.id`,
-  );
-  const row = rows[0] ?? {};
-
-  return {
-    pending: Number(row.pending ?? 0),
-    confirmed: Number(row.confirmed ?? 0),
-    unpaid: Number(row.unpaid ?? 0),
-    waitlisted: Number(row.waitlisted ?? 0),
-    shuttleUnassigned: Number(row.shuttleUnassigned ?? 0),
-  };
 }
 
 async function ensureApplicationCapacity(tx: Prisma.TransactionClient, applicationId: string) {
@@ -612,13 +576,14 @@ export async function GET(request: NextRequest) {
     if (request.nextUrl.searchParams.get("view") === "roster") return seasonalRoster(request);
     const seasonId = request.nextUrl.searchParams.get("seasonId") || undefined;
     const includeApplications = request.nextUrl.searchParams.get("includeApplications") === "true";
+    if (!includeApplications) return NextResponse.json(await getSeasonalAdminOverview(seasonId));
     const [seasons, stats] = await Promise.all([
       prisma.specialProgramSeason.findMany({
         where: seasonId ? { id: seasonId } : undefined,
         orderBy: { startsAt: "desc" },
         include: {
           offerings: { orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }], include: { sessionDates: { orderBy: { startsAt: "asc" } }, _count: { select: { applicationItems: true } } } },
-          applications: includeApplications ? {
+          applications: {
             orderBy: { createdAt: "desc" },
             include: {
               items: {
@@ -628,14 +593,12 @@ export async function GET(request: NextRequest) {
                 },
               },
             },
-          } : false,
+          },
         },
       }),
-      seasonalAdminStats(),
+      getSeasonalAdminStats(),
     ]);
-    const applicationRows: AdminApplicationRow[] = includeApplications
-      ? seasons.flatMap((season) => ((season as unknown as { applications?: AdminApplicationRow[] }).applications ?? []))
-      : [];
+    const applicationRows: AdminApplicationRow[] = seasons.flatMap((season) => ((season as unknown as { applications?: AdminApplicationRow[] }).applications ?? []));
     const paymentIds = Array.from(new Set(
       applicationRows.flatMap((application) => application.items.map((item) => item.paymentId).filter(Boolean) as string[]),
     ));

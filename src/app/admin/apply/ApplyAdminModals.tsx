@@ -270,13 +270,20 @@ export default function ApplyAdminModals({
         if (!approveApp) return;
         setBusy(true);
         try {
-            await approveEnrollApplication(approveApp.id, {
+            const result = await approveEnrollApplication(approveApp.id, {
                 classIds,
                 processedNote: note,
             });
             onCloseApprove();
             await onSaved();
-            onFeedback("success", `${approveApp.childName} 수강신청을 승인했습니다.`);
+            if (result.sms.parentFailed || result.sms.adminFailed > 0 || result.sms.coachFailed > 0) {
+                onFeedback(
+                    "error",
+                    `${approveApp.childName} 수강신청은 승인됐지만 일부 문자가 발송되지 않았습니다. ${result.sms.errors[0] || "문자 발송 장부를 확인해주세요."}`,
+                );
+            } else {
+                onFeedback("success", `${approveApp.childName} 수강신청을 승인했고 안내 문자도 발송했습니다.`);
+            }
         } catch {
             onFeedback("error", "승인 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {

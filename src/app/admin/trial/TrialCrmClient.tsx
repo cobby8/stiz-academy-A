@@ -8,6 +8,7 @@ import {
     generateEnrollLink,
     sendTrialCoachNotice,
     resendTrialApplicationSms,
+    resendTrialAttendedSms,
     recordApplicationContact,
 } from "@/app/actions/admin";
 
@@ -855,9 +856,22 @@ export default function TrialCrmClient({
             } else if (newStatus === "CONVERTED") {
                 updates.convertedDate = new Date().toISOString();
             }
-            await updateTrialLead(lead.id, updates);
+            const result = await updateTrialLead(lead.id, updates);
             await loadTrialData();
-            showFeedback("success", `${lead.childName} 상태를 ${STATUS_CONFIG[newStatus]?.label ?? "변경"}으로 바꿨습니다.`);
+            if (result?.attendedSms.attempted && !result.attendedSms.sent) {
+                const needsOperatorCheck = result.attendedSms.message?.includes("자동 재전송")
+                    || result.attendedSms.message?.includes("결과 확인")
+                    || result.attendedSms.message?.includes("처리 중");
+                const smsFailureGuide = needsOperatorCheck
+                    ? result.attendedSms.message
+                    : `${result.attendedSms.message || "문자 발송에 실패했습니다."} 상세 보기에서 '완료 문자 재시도'를 눌러 다시 시도해주세요.`;
+                showFeedback(
+                    "error",
+                    `${lead.childName} 상태는 변경됐지만 문자 발송은 실패했습니다. ${smsFailureGuide}`,
+                );
+            } else {
+                showFeedback("success", `${lead.childName} 상태를 ${STATUS_CONFIG[newStatus]?.label ?? "변경"}으로 바꿨습니다.`);
+            }
         } catch {
             showFeedback("error", "상태 변경 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
@@ -982,6 +996,20 @@ export default function TrialCrmClient({
             showFeedback("success", result.message);
         } catch {
             showFeedback("error", "문자 재발송 중 문제가 생겼습니다. 연락처와 문자 설정을 확인해주세요.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function handleResendAttendedSms(lead: TrialLead) {
+        if (busy) return;
+        setBusy(true);
+        try {
+            const result = await resendTrialAttendedSms(lead.id);
+            await loadTrialData();
+            showFeedback(result.sent ? "success" : "error", result.message);
+        } catch {
+            showFeedback("error", "체험 완료 문자 재시도에 실패했습니다. 연락처와 문자 장부를 확인해주세요.");
         } finally {
             setBusy(false);
         }
@@ -1442,6 +1470,7 @@ export default function TrialCrmClient({
                     }}
                     onCoachNotice={() => void handleSendCoachNotice(showDetailModal)}
                     onResendSms={() => void handleResendApplicationSms(showDetailModal)}
+                    onResendAttendedSms={() => void handleResendAttendedSms(showDetailModal)}
                     onConfirmTrialFee={() => void handleConfirmTrialFee(showDetailModal)}
                     busy={busy}
                 />
@@ -1554,6 +1583,7 @@ function TrialLeadDetailModal({
     onMemo,
     onCoachNotice,
     onResendSms,
+    onResendAttendedSms,
     onConfirmTrialFee,
     busy,
 }: {
@@ -1565,6 +1595,7 @@ function TrialLeadDetailModal({
     onMemo: () => void;
     onCoachNotice: () => void;
     onResendSms: () => void;
+    onResendAttendedSms: () => void;
     onConfirmTrialFee: () => void;
     busy: boolean;
 }) {
@@ -1671,6 +1702,12 @@ function TrialLeadDetailModal({
                         <button type="button" onClick={onResendSms} className={DETAIL_ACTION_CLASS}>
                             <span className="material-symbols-outlined text-base">sms_failed</span>
                             문자 재발송
+                        </button>
+                    )}
+                    {lead.status === "ATTENDED" && (
+                        <button type="button" onClick={onResendAttendedSms} disabled={busy} className={`${DETAIL_ACTION_CLASS} disabled:opacity-50`}>
+                            <span className="material-symbols-outlined text-base">forward_to_inbox</span>
+                            완료 문자 재시도
                         </button>
                     )}
                     <button type="button" onClick={onSchedule} className={DETAIL_ACTION_CLASS}>

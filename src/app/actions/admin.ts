@@ -10,6 +10,7 @@ import {
     notifyParentsOfStudents,
     notifyAllParents,
     sendParentSms,
+    sendParentSmsWithResult,
     sendTrackedSms,
 } from "@/lib/notification";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
@@ -3218,7 +3219,7 @@ export async function sendInvoiceLinksForMonth(year: number, month: number, forc
     }
 }
 
-export async function sendUnpaidReminders(forceResend?: boolean) {
+export async function sendUnpaidReminders() {
     await requireAdmin();
     await ensurePaymentColumns();
     await ensurePaymentInfrastructure();
@@ -3226,9 +3227,7 @@ export async function sendUnpaidReminders(forceResend?: boolean) {
 
     try {
         // 미납 결제 건 조회
-        const condition = forceResend
-            ? `WHERE p.status IN ('PENDING', 'OVERDUE')`
-            : `WHERE p.status IN ('PENDING', 'OVERDUE') AND p."notifiedAt" IS NULL`;
+        const condition = `WHERE p.status IN ('PENDING', 'OVERDUE') AND p."notifiedAt" IS NULL`;
 
         const unpaid = await prisma.$queryRawUnsafe<any[]>(
             `SELECT p.id, p."studentId", p.amount, p.description, p."dueDate"
@@ -3253,65 +3252,92 @@ export async function sendUnpaidReminders(forceResend?: boolean) {
             "/mypage",
         );
 
-        // 학부모에게 미납 알림 SMS 발송 (fire-and-forget)
-        // 학생별로 그룹핑하여 보호자 전화번호로 UNPAID_PARENT 템플릿 발송
-        try {
-            // 학생별 미납 건수/금액 집계
-            const studentUnpaid: Record<string, { count: number; total: number }> = {};
-            for (const u of unpaid) {
-                const sid = u.studentId ?? u.studentid;
-                if (!studentUnpaid[sid]) studentUnpaid[sid] = { count: 0, total: 0 };
-                studentUnpaid[sid].count++;
-                studentUnpaid[sid].total += Number(u.amount);
-            }
-            // 학생+보호자 전화번호 조회
-            const sidList = Object.keys(studentUnpaid);
-            const phList = sidList.map((_: string, i: number) => `$${i + 1}`).join(",");
-            const stuParents = await prisma.$queryRawUnsafe<any[]>(
-                `SELECT s.id, s.name, u.phone
-                 FROM "Student" s JOIN "User" u ON s."parentId" = u.id
-                 WHERE s.id IN (${phList}) AND u.phone IS NOT NULL AND u.phone != ''`,
-                ...sidList,
-            );
-            for (const sp of stuParents) {
-                const info = studentUnpaid[sp.id];
-                if (info && sp.phone) {
-                    sendParentSms(sp.phone, "UNPAID_PARENT", {
-                        childName: sp.name,
-                        unpaidCount: String(info.count),
-                        totalAmount: info.total.toLocaleString("ko-KR"),
-                    }).catch(() => {});
-                }
-            }
-        } catch (e) {
-            console.error("[sendUnpaidReminders SMS] failed:", e);
+        // 한 학생의 미납 건을 문자 한 통으로 묶되, 성공한 문자에 포함된 결제만 발송 완료로 기록한다.
+        const studentUnpaid: Record<string, { count: number; total: number; paymentIds: string[] }> = {};
+        for (const u of unpaid) {
+            const sid = u.studentId ?? u.studentid;
+            if (!studentUnpaid[sid]) studentUnpaid[sid] = { count: 0, total: 0, paymentIds: [] };
+            studentUnpaid[sid].count++;
+            studentUnpaid[sid].total += Number(u.amount);
+            studentUnpaid[sid].paymentIds.push(u.id);
         }
 
-        // notifiedAt 업데이트
-        const ids = unpaid.map((u: any) => u.id);
-        const placeholders = ids.map((_: any, i: number) => `$${i + 1}`).join(",");
-        await prisma.$executeRawUnsafe(
-            `UPDATE "Payment"
-             SET "notifiedAt" = NOW(),
-                 "lastReminderAt" = NOW(),
-                 "reminderCount" = COALESCE("reminderCount", 0) + 1,
-                 "updatedAt" = NOW()
-             WHERE id IN (${placeholders})`,
-            ...ids,
+        const sidList = Object.keys(studentUnpaid);
+        const phList = sidList.map((_: string, i: number) => `$${i + 1}`).join(",");
+        const stuParents = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT s.id, s.name, u.phone
+             FROM "Student" s JOIN "User" u ON s."parentId" = u.id
+             WHERE s.id IN (${phList}) AND u.phone IS NOT NULL AND u.phone != ''`,
+            ...sidList,
         );
-        await prisma.$executeRawUnsafe(
-            `UPDATE "PaymentInvoice"
-             SET "sentAt" = COALESCE("sentAt", NOW()),
-                 "lastReminderAt" = NOW(),
-                 "reminderCount" = "reminderCount" + 1,
-                 status = CASE WHEN status = 'ISSUED' THEN 'SENT' ELSE status END,
-                 "updatedAt" = NOW()
-             WHERE "paymentId" IN (${placeholders})`,
-            ...ids,
-        );
+        const parentByStudent = new Map(stuParents.map((row) => [row.id, row]));
+        const successfulPaymentIds: string[] = [];
+        let successfulSms = 0;
+        const smsErrors: string[] = [];
+
+        for (const [studentId, info] of Object.entries(studentUnpaid)) {
+            const studentParent = parentByStudent.get(studentId);
+            if (!studentParent?.phone) {
+                smsErrors.push(`학생 ID ${studentId}의 학부모 전화번호가 없어 장부 생성 전 발송을 중단했습니다.`);
+                continue;
+            }
+
+            const result = await sendParentSmsWithResult(
+                studentParent.phone,
+                "UNPAID_PARENT",
+                {
+                    childName: studentParent.name,
+                    unpaidCount: String(info.count),
+                    totalAmount: info.total.toLocaleString("ko-KR"),
+                },
+                {
+                    eventType: "UNPAID_REMINDER",
+                    // 결제 ID 조합은 재호출해도 같은 사건 번호가 되어 성공 문자 중복을 막는다.
+                    eventId: `unpaid:${info.paymentIds.slice().sort().join(",")}`,
+                },
+            );
+            if (result.ok) {
+                successfulSms += 1;
+                successfulPaymentIds.push(...info.paymentIds);
+            } else {
+                smsErrors.push(result.reason || `${studentParent.name} 학부모 문자 발송 실패`);
+            }
+        }
+
+        if (successfulPaymentIds.length > 0) {
+            const placeholders = successfulPaymentIds.map((_, i) => `$${i + 1}`).join(",");
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Payment"
+                 SET "notifiedAt" = NOW(),
+                     "lastReminderAt" = NOW(),
+                     "reminderCount" = COALESCE("reminderCount", 0) + 1,
+                     "updatedAt" = NOW()
+                 WHERE id IN (${placeholders})`,
+                ...successfulPaymentIds,
+            );
+            await prisma.$executeRawUnsafe(
+                `UPDATE "PaymentInvoice"
+                 SET "sentAt" = COALESCE("sentAt", NOW()),
+                     "lastReminderAt" = NOW(),
+                     "reminderCount" = COALESCE("reminderCount", 0) + 1,
+                     status = CASE WHEN status = 'ISSUED' THEN 'SENT' ELSE status END,
+                     "updatedAt" = NOW()
+                 WHERE "paymentId" IN (${placeholders})`,
+                ...successfulPaymentIds,
+            );
+        }
 
         revalidateFinanceCaches();
-        return { sent: unpaid.length, message: `${unpaid.length}건 알림 발송 완료` };
+        const failed = unpaid.length - successfulPaymentIds.length;
+        return {
+            sent: successfulPaymentIds.length,
+            failed,
+            smsSent: successfulSms,
+            errors: smsErrors,
+            message: failed > 0
+                ? `${successfulPaymentIds.length}건 발송 성공, ${failed}건 실패(재시도 가능) · ${smsErrors[0] || "학부모 전화번호가 없거나 문자 설정을 확인해주세요."}`
+                : `${successfulPaymentIds.length}건 알림 발송 완료`,
+        };
     } catch (e) {
         console.error("Failed to send unpaid reminders:", e);
         throw new Error("미납 알림 발송 실패");
@@ -3700,8 +3726,11 @@ export async function updateTrialLead(
     const shouldSendAttendedSms =
         data.status === "ATTENDED"
         && previousLead
-        && previousLead.status !== "ATTENDED"
         && !(previousLead.attendedSmsSentAt ?? previousLead.attendedsmssentat);
+    let attendedSmsResult: { attempted: boolean; sent: boolean; message?: string } = {
+        attempted: false,
+        sent: false,
+    };
 
     // 동적 SET절: 컬럼명은 화이트리스트에서만 허용 → SQL 인젝션 불가능, 값은 $N 바인딩
     const setClauses = entries.map(([col], i) => {
@@ -3790,6 +3819,7 @@ export async function updateTrialLead(
         }
 
         if (shouldSendAttendedSms) {
+            attendedSmsResult = { attempted: true, sent: false };
             const leads = await prisma.$queryRawUnsafe<any[]>(
                 `SELECT "childName", "parentName", "parentPhone"
                  FROM "TrialLead" WHERE id = $1 LIMIT 1`,
@@ -3806,21 +3836,42 @@ export async function updateTrialLead(
                 const childName = lead.childName ?? lead.childname ?? "";
                 const parentName = lead.parentName ?? lead.parentname ?? "";
 
-                await sendParentSms(parentPhone, "TRIAL_ATTENDED_PARENT", {
-                    childName,
-                    parentName,
-                    academyPhone,
-                    enrollLink: buildEnrollLink(id),
-                });
-            }
+                const smsResult = await sendParentSmsWithResult(
+                    parentPhone,
+                    "TRIAL_ATTENDED_PARENT",
+                    {
+                        childName,
+                        parentName,
+                        academyPhone,
+                        enrollLink: buildEnrollLink(id),
+                    },
+                    {
+                        eventType: "TRIAL_ATTENDED",
+                        eventId: `trial:${id}:attended`,
+                    },
+                );
+                attendedSmsResult = {
+                    attempted: true,
+                    sent: smsResult.ok,
+                    // 장부 확정 실패처럼 자동 재시도하면 안 되는 경우를 UI가 정확히 안내하도록 원인부터 전달한다.
+                    message: smsResult.ok
+                        ? undefined
+                        : smsResult.reason || "체험 완료 문자는 발송되지 않아 다시 시도할 수 있습니다.",
+                };
 
-            await prisma.$executeRawUnsafe(
-                `UPDATE "TrialLead"
-                 SET "attendedSmsSentAt" = COALESCE("attendedSmsSentAt", NOW()),
-                     "updatedAt" = NOW()
-                 WHERE id = $1`,
-                id,
-            );
+                // 실제 문자 성공(또는 장부상 기존 성공 확인)일 때만 완료 시각을 남긴다.
+                if (smsResult.ok) {
+                    await prisma.$executeRawUnsafe(
+                        `UPDATE "TrialLead"
+                         SET "attendedSmsSentAt" = COALESCE("attendedSmsSentAt", NOW()),
+                             "updatedAt" = NOW()
+                         WHERE id = $1`,
+                        id,
+                    );
+                }
+            } else {
+                attendedSmsResult.message = "학부모 전화번호가 없어 체험 완료 문자를 발송하지 못했습니다.";
+            }
         }
     } catch (e) {
         console.error("Failed to update trial lead:", e);
@@ -3829,6 +3880,21 @@ export async function updateTrialLead(
     revalidatePath("/admin/trial");
     revalidatePath("/admin/apply");
     revalidateTrialAdminCaches();
+    return { attendedSms: attendedSmsResult };
+}
+
+// 상태 변경과 분리된 체험 완료 문자 전용 재시도 액션이다.
+export async function resendTrialAttendedSms(id: string) {
+    const result = await updateTrialLead(id, { status: "ATTENDED" });
+    if (!result?.attendedSms.attempted) {
+        return { sent: true, message: "이미 발송 완료된 체험 완료 문자입니다." };
+    }
+    return {
+        sent: result.attendedSms.sent,
+        message: result.attendedSms.sent
+            ? "체험 완료 문자를 발송했습니다."
+            : result.attendedSms.message || "체험 완료 문자 발송에 실패했습니다. 문자 장부를 확인해주세요.",
+    };
 }
 
 /**
@@ -4429,6 +4495,14 @@ export async function approveEnrollApplication(
     }
 ) {
     await requireAdmin();
+    let smsResult = {
+        parentSent: false,
+        parentFailed: false,
+        adminFailed: 0,
+        coachSent: 0,
+        coachFailed: 0,
+        errors: [] as string[],
+    };
 
     try {
         // 1. 신청서 조회
@@ -4583,7 +4657,7 @@ export async function approveEnrollApplication(
     revalidateApplyAdminCaches();
     revalidateStudentAdminCaches();
 
-    // 학부모에게 수강 확정 SMS 발송 (fire-and-forget, 승인 처리와 분리)
+    // 승인은 이미 완료됐으므로 문자 실패로 되돌리지 않되, 결과는 관리자에게 정확히 돌려준다.
     try {
         const appData = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "parentPhone", "childName", "assignedClassId"
@@ -4621,15 +4695,31 @@ export async function approveEnrollApplication(
             const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
 
             if (parentPhone) {
-                sendParentSms(parentPhone, "ENROLL_APPROVED_PARENT", {
-                    childName: childName || "",
-                    className,
-                    academyPhone,
-                }).catch(() => {});
+                const parentDelivery = await sendParentSmsWithResult(
+                    parentPhone,
+                    "ENROLL_APPROVED_PARENT",
+                    {
+                        childName: childName || "",
+                        className,
+                        academyPhone,
+                    },
+                    {
+                        eventType: "ENROLL_APPROVED",
+                        eventId: `enrollment-application:${applicationId}:approved`,
+                    },
+                );
+                smsResult.parentSent = parentDelivery.ok;
+                smsResult.parentFailed = !parentDelivery.ok;
+                if (!parentDelivery.ok) {
+                    smsResult.errors.push(parentDelivery.reason || "학부모 문자 발송에 실패했습니다.");
+                }
+            } else {
+                smsResult.parentFailed = true;
+                smsResult.errors.push("학부모 전화번호가 없어 문자를 발송하지 못했습니다.");
             }
 
             // 담당 코치에게 수강 확정 알림 SMS (slotKey 기반)
-            notifyAdmins(
+            const staffDelivery = await notifyAdmins(
                 "ENROLL_APPLICATION",
                 "수강 신청 승인",
                 `${childName || ""} — ${className}`,
@@ -4638,13 +4728,27 @@ export async function approveEnrollApplication(
                     coachTrigger: "ENROLL_NEW_COACH",
                     variables: { childName: childName || "", childGrade: "", parentName: "" },
                     slotKeys: approvedSlotKeys.length > 0 ? approvedSlotKeys : undefined,
+                    requireMatchedCoach: true,
+                    eventId: `enrollment-application:${applicationId}:approved`,
                 },
-            ).catch(() => {});
+            );
+            smsResult.coachSent = staffDelivery.coachSent;
+            smsResult.coachFailed = staffDelivery.coachFailed;
+            smsResult.adminFailed = staffDelivery.adminFailed;
+            smsResult.errors.push(...staffDelivery.errors);
         }
     } catch (e) {
         // SMS 실패가 승인 처리를 막으면 안 됨
         console.error("[approveEnrollApplication SMS] failed:", e);
+        smsResult = {
+            ...smsResult,
+            parentFailed: !smsResult.parentSent,
+            adminFailed: Math.max(1, smsResult.adminFailed),
+            coachFailed: Math.max(1, smsResult.coachFailed),
+            errors: [...smsResult.errors, "문자 대상 조회 또는 발송 준비 중 오류가 발생했습니다."],
+        };
     }
+    return { approved: true, sms: smsResult };
 }
 
 /**

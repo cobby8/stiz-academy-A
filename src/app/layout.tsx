@@ -8,6 +8,7 @@ import DeferredFontStyles from "@/components/DeferredFontStyles";
 import PwaUpdater from "@/components/PwaUpdater";
 import ThemeColorUpdater from "@/components/ThemeColorUpdater";
 import { buildPublicMetadata } from "@/lib/publicMetadata";
+import StandaloneBackButton from "@/components/StandaloneBackButton";
 
 export const metadata: Metadata = {
     ...buildPublicMetadata({
@@ -75,6 +76,7 @@ export default async function RootLayout({
                     <MetaPixel />
                     <ThemeColorUpdater />
                     <PwaUpdater />
+                    <StandaloneBackButton />
                     {children}
                 </ThemeProvider>
             </body>

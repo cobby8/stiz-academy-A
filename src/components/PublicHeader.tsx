@@ -19,6 +19,7 @@ import Image from "next/image";
 import { ThemeToggle } from "./ThemeToggle";
 import FontFreeIcon from "./ui/FontFreeIcon";
 import type { AppRole } from "@/lib/auth-routes";
+import AppBackButton from "@/components/AppBackButton";
 
 const MOBILE_ACCOUNT_FALLBACK_ACTION_CLASS = [
   "flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold",
@@ -217,19 +218,22 @@ export default function PublicHeader({
       >
         <div className="max-w-6xl mx-auto px-4 py-3 md:py-4 flex items-center justify-between">
           {/* 로고 + 지점명 */}
-          <Link href="/" className="flex items-center gap-2 sm:gap-3">
-            <Image
-              src="/stiz-logo.png"
-              alt="STIZ"
-              width={180}
-              height={45}
-              className="h-10 sm:h-12 w-auto object-contain dark:brightness-0 dark:invert"
-              priority
-            />
-            <span className="font-extrabold text-lg sm:text-xl text-brand-navy-900 dark:text-white">
-              다산점
-            </span>
-          </Link>
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <AppBackButton fallbackHref="/" size="sm" />
+            <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <Image
+                src="/stiz-logo.png"
+                alt="STIZ"
+                width={180}
+                height={45}
+                className="h-10 sm:h-12 w-auto object-contain dark:brightness-0 dark:invert"
+                priority
+              />
+              <span className="hidden font-extrabold text-lg text-brand-navy-900 dark:text-white sm:inline sm:text-xl">
+                다산점
+              </span>
+            </Link>
+          </div>
 
           {/* ===== 데스크탑 네비게이션 ===== */}
           {/* 순서: 학원 소개 | 수업 안내 v | 소식/안내 v | 수업찾기 | [신청하기] */}

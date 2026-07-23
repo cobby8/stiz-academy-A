@@ -8,6 +8,7 @@ import { useEffect, useState, useMemo } from "react";
 import { logout } from "@/app/actions/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+import AppBackButton from "@/components/AppBackButton";
 
 const LazyBackupButtons = dynamic(() => import("./AdminBackupButtons"), {
     ssr: false,
@@ -278,6 +279,7 @@ export default function AdminShellClient({
                         >
                             <FontFreeIcon name="menu" size={22} />
                         </button>
+                        <AppBackButton fallbackHref="/admin" />
                         <h2 className="truncate font-bold text-gray-700 dark:text-gray-200">관리자 시스템</h2>
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-2 md:gap-4">

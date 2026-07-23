@@ -5,6 +5,7 @@ import StaffBottomNav from "./StaffBottomNav";
 import StaffInstallPrompt from "./StaffInstallPrompt";
 import StaffProfileMenu from "./StaffProfileMenu";
 import StaffHomeLink from "./StaffHomeLink";
+import AppBackButton from "@/components/AppBackButton";
 
 export const metadata: Metadata = {
   title: "STIZ 선생님",
@@ -27,7 +28,10 @@ export default async function StaffLayout({ children }: { children: ReactNode })
     <div className="min-h-screen bg-surface-warm pb-[calc(5.75rem+env(safe-area-inset-bottom))] dark:bg-gray-950">
       <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl dark:border-gray-800 dark:bg-gray-950/90">
         <div className="mx-auto flex min-h-11 max-w-lg items-center justify-between gap-3">
-          <StaffHomeLink />
+          <div className="flex min-w-0 items-center gap-2">
+            <AppBackButton fallbackHref="/staff" />
+            <StaffHomeLink />
+          </div>
           <StaffProfileMenu staffName={staff.appUserName} staffRole={staff.appUserRole} />
         </div>
       </header>

@@ -260,21 +260,21 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
     const parentName = data.parentName?.trim() || "미입력";
     const parentPhone = data.parentPhone?.trim();
 
-    if (!data.trialDate) throw new Error("泥댄뿕?섏뾽 ?щ쭩?쇱쓣 ?좏깮?댁＜?몄슂.");
-    if (!data.trialDay) throw new Error("?붿씪???좏깮?댁＜?몄슂.");
-    if (!data.trialPeriod) throw new Error("援먯떆瑜??좏깮?댁＜?몄슂.");
-    if (!childName) throw new Error("?꾩씠 ?대쫫???낅젰?댁＜?몄슂.");
-    if (!data.childGender) throw new Error("?깅퀎???좏깮?댁＜?몄슂.");
-    if (!data.childSchool?.trim()) throw new Error("?숆탳瑜??낅젰?댁＜?몄슂.");
-    if (!data.childGrade) throw new Error("?숇뀈???좏깮?댁＜?몄슂.");
-    if (!parentPhone) throw new Error("?숇?紐??곕씫泥섎? ?낅젰?댁＜?몄슂.");
-    if (!data.source) throw new Error("?좎껌寃쎈줈瑜??좏깮?댁＜?몄슂.");
-    if (!data.trialFeeConfirmed) throw new Error("泥댄뿕?섏뾽 鍮꾩슜 ?뺤씤??泥댄겕?댁＜?몄슂.");
+    if (!data.trialDate) throw new Error("체험수업 희망일을 선택해주세요.");
+    if (!data.trialDay) throw new Error("요일을 선택해주세요.");
+    if (!data.trialPeriod) throw new Error("교시를 선택해주세요.");
+    if (!childName) throw new Error("아이 이름을 입력해주세요.");
+    if (!data.childGender) throw new Error("성별을 선택해주세요.");
+    if (!data.childSchool?.trim()) throw new Error("학교를 입력해주세요.");
+    if (!data.childGrade) throw new Error("학년을 선택해주세요.");
+    if (!parentPhone) throw new Error("학부모 연락처를 입력해주세요.");
+    if (!data.source) throw new Error("신청경로를 선택해주세요.");
+    if (!data.trialFeeConfirmed) throw new Error("체험수업 비용 확인을 체크해주세요.");
 
     // ?꾪솕踰덊샇 ?뺤떇 寃利?(?レ옄留?異붿텧 ??11?먮━ ?뺤씤)
     const phoneDigits = parentPhone.replace(/\D/g, "");
     if (phoneDigits.length < 10 || phoneDigits.length > 11) {
-        throw new Error("?щ컮瑜??꾪솕踰덊샇瑜??낅젰?댁＜?몄슂.");
+        throw new Error("올바른 전화번호를 입력해주세요.");
     }
 
     // DDL ensure ???뚯씠釉?而щ읆???놁쑝硫??먮룞 ?앹꽦
@@ -435,7 +435,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
         await Promise.allSettled([
             notifyAdmins(
                 "TRIAL_APPLICATION",
-                "??泥댄뿕?섏뾽 ?좎껌",
+                "체험수업 신청",
                 `${childName} (${data.childGrade || "학년 미입력"}) - ${parentName}`,
                 "/admin/trial",
                 {
@@ -460,7 +460,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
         return { success: true, id: trialLeadId, mode: "created" as const };
     } catch (e) {
         console.error("[submitTrialApplication] failed:", e);
-        throw new Error("?좎껌 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.");
+        throw new Error("신청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     }
 }
 
@@ -799,30 +799,30 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
     const shuttleLocationConsentVersion = data.shuttleNeeded ? SHUTTLE_LOCATION_CONSENT_VERSION : null;
     const shuttleLocationConsentAt = data.shuttleNeeded ? new Date() : null;
 
-    if (!childName) throw new Error("?꾩씠 ?대쫫???낅젰?댁＜?몄슂.");
-    if (!data.childBirthDate) throw new Error("?꾩씠 ?앸뀈?붿씪???낅젰?댁＜?몄슂.");
-    if (!data.childPhone?.trim()) throw new Error("?섍컯???꾪솕踰덊샇瑜??낅젰?댁＜?몄슂.");
-    if (!parentName) throw new Error("蹂댄샇???대쫫???낅젰?댁＜?몄슂.");
-    if (!parentPhone) throw new Error("蹂댄샇???곕씫泥섎? ?낅젰?댁＜?몄슂.");
-    if (!data.childSchool?.trim()) throw new Error("?숆탳紐낆쓣 ?낅젰?댁＜?몄슂.");
-    if (!data.enrollmentMonths?.trim()) throw new Error("?섍컯?좎껌 ?붿쓣 ?좏깮?댁＜?몄슂.");
-    if (!data.referralSource) throw new Error("媛?낃꼍濡쒕? ?좏깮?댁＜?몄슂.");
+    if (!childName) throw new Error("아이 이름을 입력해주세요.");
+    if (!data.childBirthDate) throw new Error("아이 생년월일을 입력해주세요.");
+    if (!data.childPhone?.trim()) throw new Error("학생 전화번호를 입력해주세요.");
+    if (!parentName) throw new Error("보호자 이름을 입력해주세요.");
+    if (!parentPhone) throw new Error("보호자 연락처를 입력해주세요.");
+    if (!data.childSchool?.trim()) throw new Error("학교명을 입력해주세요.");
+    if (!data.enrollmentMonths?.trim()) throw new Error("수강신청 월을 선택해주세요.");
+    if (!data.referralSource) throw new Error("가입경로를 선택해주세요.");
     if (data.shuttleNeeded && (!data.shuttlePickup?.trim() || !data.shuttleTime || !data.shuttleDropoff?.trim())) {
-        throw new Error("?뷀? ?묒듅???좏깮??寃쎌슦 ?묒듅 ?μ냼, ?щ쭩 ?쒓컙, ?섏감 ?μ냼瑜?紐⑤몢 ?낅젰?댁＜?몄슂.");
+        throw new Error("셔틀 탑승을 선택한 경우 탑승 장소, 희망 시간, 하차 장소를 모두 입력해주세요.");
     }
     if (data.shuttleNeeded && !data.shuttleNoticeConfirmed) {
-        throw new Error("?뷀? 二쇱쓽?ы빆???뺤씤?댁＜?몄슂.");
+        throw new Error("셔틀 주의사항을 확인해주세요.");
     }
     if (!data.agreedTerms || !data.agreedPrivacy) {
-        throw new Error("?댁슜?쎄?怨?媛쒖씤?뺣낫 ?섏쭛/?댁슜??紐⑤몢 ?숈쓽?댁＜?몄슂.");
+        throw new Error("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
     }
     if (!data.applicationNoticeConfirmed) {
-        throw new Error("?섍컯?좎껌?뺤젙 ?덈궡瑜??뺤씤?댁＜?몄슂.");
+        throw new Error("수강신청 확정 안내를 확인해주세요.");
     }
 
     const phoneDigits = parentPhone.replace(/\D/g, "");
     if (phoneDigits.length < 10 || phoneDigits.length > 11) {
-        throw new Error("?щ컮瑜??꾪솕踰덊샇瑜??낅젰?댁＜?몄슂.");
+        throw new Error("올바른 전화번호를 입력해주세요.");
     }
 
     // DDL ensure ???뚯씠釉붿씠 ?놁쑝硫??먮룞 ?앹꽦
@@ -1168,7 +1168,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
         const enrollmentApplicationId = rows[0]?.id || "ok";
         await notifyAdmins(
             "ENROLL_APPLICATION",
-            "???섍컯 ?좎껌",
+            "수강 신청",
             `${childName} (${data.childGrade || "학년 미입력"}) - ${parentName}`,
             "/admin/apply",
             {
@@ -1203,7 +1203,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
         };
     } catch (e) {
         console.error("[submitEnrollApplication] failed:", e);
-        throw new Error("?섍컯 ?좎껌 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.");
+        throw new Error("수강 신청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     }
 }
 

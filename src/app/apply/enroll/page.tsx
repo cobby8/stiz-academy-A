@@ -1,9 +1,3 @@
-/**
- * 수강 신청 페이지 — 서버 컴포넌트
- *
- * searchParams.trialId가 있으면 체험 데이터를 자동 채움하고,
- * 빈자리 슬롯 목록을 조회하여 클라이언트 폼에 전달한다.
- */
 import { redirect } from "next/navigation";
 import { getAcademySettings } from "@/lib/queries";
 import { getAvailableTrialSlots, getTrialLeadForEnrollByAccessCode } from "@/app/actions/public";
@@ -13,9 +7,10 @@ import EnrollApplicationForm from "./EnrollApplicationForm";
 import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
+
 export const metadata = buildPublicMetadata({
     title: "수강 신청 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 다산점 수강 신청. 간단한 정보 입력으로 우리 아이의 농구 여정을 시작하세요.",
+    description: "스티즈 농구교실 다산점 수강 신청. 간단한 정보 입력으로 우리 아이의 농구 수업을 시작하세요.",
     path: "/apply/enroll",
     imageAlt: "STIZ 농구교실 다산점 수강 신청 미리보기",
 });
@@ -28,14 +23,12 @@ export default async function EnrollApplyPage({
     const params = await searchParams;
     const accessCode = params.access || null;
 
-    // 체험 데이터 + 빈자리 슬롯 + 학원 설정을 병렬 조회 (성능 최적화)
     const [trialData, slots, settings] = await Promise.all([
         accessCode ? getTrialLeadForEnrollByAccessCode(accessCode) : Promise.resolve(null),
         getAvailableTrialSlots(),
         getAcademySettings() as Promise<any>,
     ]);
 
-    // 구글폼 모드일 때: 자체 폼 대신 구글폼 URL 또는 /apply로 리다이렉트
     if (!settings?.useBuiltInEnrollForm) {
         redirect(settings?.enrollFormUrl || "/apply");
     }
@@ -44,17 +37,16 @@ export default async function EnrollApplyPage({
 
     return (
         <PublicPageLayout>
-            {/* 히어로 섹션 — 공개 페이지 표준 패턴 (체험 폼과 동일 구조) */}
-            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 text-white py-12 md:py-16">
-                <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-0 top-0 w-72 h-72 border-[20px] border-white/5 dark:border-brand-neon-cobalt/10 rounded-full translate-x-1/3 -translate-y-1/3 transition-colors duration-300" />
-                    <div className="absolute left-0 bottom-0 w-48 h-48 border-[15px] border-brand-orange-500/10 dark:border-brand-neon-lime/10 rounded-full -translate-x-1/4 translate-y-1/4 transition-colors duration-300" />
+            <section className="relative overflow-hidden bg-gradient-to-br from-brand-navy-900 via-brand-navy-800 to-brand-navy-900 py-12 text-white md:py-16">
+                <div className="pointer-events-none absolute inset-0">
+                    <div className="absolute right-0 top-0 h-72 w-72 translate-x-1/3 -translate-y-1/3 rounded-full border-[20px] border-white/5 transition-colors duration-300 dark:border-brand-neon-cobalt/10" />
+                    <div className="absolute bottom-0 left-0 h-48 w-48 -translate-x-1/4 translate-y-1/4 rounded-full border-[15px] border-brand-orange-500/10 transition-colors duration-300 dark:border-brand-neon-lime/10" />
                 </div>
-                <div className="max-w-3xl mx-auto px-6 relative">
+                <div className="relative mx-auto max-w-3xl px-6">
                     <AnimateOnScroll>
-                        <p className="text-brand-orange-500 dark:text-brand-neon-lime text-sm font-bold uppercase tracking-widest mb-3">ENROLLMENT</p>
-                        <h1 className="text-3xl md:text-4xl font-black mb-3 break-keep">수강 신청</h1>
-                        <p className="text-blue-200 text-base max-w-xl">
+                        <p className="mb-3 text-sm font-bold uppercase tracking-widest text-brand-orange-500 dark:text-brand-neon-lime">ENROLLMENT</p>
+                        <h1 className="mb-3 break-keep text-3xl font-black md:text-4xl">수강 신청</h1>
+                        <p className="max-w-xl text-base text-blue-200">
                             {trialData
                                 ? "체험수업 정보가 자동으로 채워졌습니다. 확인 후 추가 정보를 입력해주세요."
                                 : "간단한 정보를 입력하고 원하는 수업 시간을 선택하세요."}
@@ -63,9 +55,8 @@ export default async function EnrollApplyPage({
                 </div>
             </section>
 
-            {/* 수강 신청 폼 — 클라이언트 컴포넌트 */}
-            <section className="py-8 md:py-12 bg-gray-50 dark:bg-gray-900">
-                <div className="max-w-2xl mx-auto px-4">
+            <section className="bg-gray-50 py-8 dark:bg-gray-900 md:py-12">
+                <div className="mx-auto max-w-2xl px-4">
                     <EnrollApplicationForm
                         availableSlots={slots}
                         contactPhone={phone}

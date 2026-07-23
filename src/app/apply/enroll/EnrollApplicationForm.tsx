@@ -1,25 +1,14 @@
-﻿"use client";
-
-/**
- * ?섍컯 ?좎껌 ????4?④퀎 ?ㅽ뀦 ??(紐⑤컮???쇱뒪??
- *
- * Step 1: ?꾩씠 ?뺣낫 (?대쫫, ?깅퀎, ?앸뀈?붿씪, ?숈깮 ?꾪솕踰덊샇, ?숆탳紐?
- * Step 2: 蹂댄샇???뺣낫 (?대쫫, ?곕씫泥? 二쇱냼)
- * Step 3: ?섍컯 ?뺣낫 (?섍컯 ?? ?щ쭩 ?섏뾽, ?뷀?, 媛?낃꼍濡? ?붿껌?ы빆)
- * Step 4: ?뺤씤 + ?숈쓽 (?낅젰 ?뺣낫 ?붿빟, ?댁슜?쎄?, 媛쒖씤?뺣낫 ?숈쓽, honeypot)
- *
- * trialData媛 ?덉쑝硫?泥댄뿕 ?곗씠?곕? ?먮룞 梨꾩? (?섏젙 媛??
- */
+"use client";
 
 import { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import {
     findExistingEnrollApplicationForEdit,
     submitEnrollApplication,
     type AvailableSlot,
     type TrialLeadForEnroll,
 } from "@/app/actions/public";
-import Link from "next/link";
 import { trackMetaEvent } from "@/components/MetaPixel";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
 import type { MapLocationData } from "@/components/maps/LocationPickerModal";
@@ -28,12 +17,11 @@ import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 const EnrollApplicationLaterSteps = dynamic(() => import("./EnrollApplicationLaterSteps"), {
     loading: () => (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-            ?ㅼ쓬 ?④퀎瑜?遺덈윭?ㅻ뒗 以?..
+            다음 단계를 불러오는 중...
         </div>
     ),
 });
 
-// ?? Props ??????????????????????????????????????????????????????????????????
 interface Props {
     availableSlots: AvailableSlot[];
     contactPhone: string;
@@ -49,7 +37,6 @@ interface AccountHandoff {
     alreadyLinked?: boolean;
 }
 
-// ?? ???곗씠???????????????????????????????????????????????????????????????
 interface FormData {
     childName: string;
     childBirthDate: string;
@@ -62,14 +49,14 @@ interface FormData {
     parentRelation: string;
     address: string;
     enrollmentMonths: string[];
-    preferredSlotKeys: string[];  // 蹂듭닔 ?좏깮 媛??["Mon-4", "Wed-6"]
-    basketballExp: string;        // ?띻뎄 寃쏀뿕
-    shuttleChoice: string;        // "?묒듅" | "誘명깙??
+    preferredSlotKeys: string[];
+    basketballExp: string;
+    shuttleChoice: string;
     shuttleNeeded: boolean;
     shuttlePickup: string;
     shuttlePickupLocationData?: MapLocationData;
-    shuttleTime: string;          // ?뷀? ?щ쭩 ?쒓컙
-    shuttleDropoff: string;       // ?뷀? ?섏감 ?μ냼
+    shuttleTime: string;
+    shuttleDropoff: string;
     shuttleDropoffLocationData?: MapLocationData;
     shuttleLocationConsent: boolean;
     referralSource: string;
@@ -81,17 +68,11 @@ interface FormData {
     honeypot: string;
 }
 
-// ?? ?ㅽ뀦 ?쇰꺼 (4?④퀎) ???????????????????????????????????????????????????????
 const STEP_LABELS = ["아이 정보", "보호자", "수강 정보", "확인/동의"];
 const TOTAL_STEPS = 4;
+const GRADE_OPTIONS = ["6세", "7세", "초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3", "고1", "고2", "고3", "성인"];
 
-export default function EnrollApplicationForm({
-    availableSlots,
-    contactPhone,
-    trialData,
-    accessCode,
-}: Props) {
-    // 泥댄뿕 ?곗씠?곌? ?덉쑝硫?珥덇린媛믪쑝濡?梨꾩? (?ъ슜?먭? ?섏젙 媛??
+export default function EnrollApplicationForm({ availableSlots, contactPhone, trialData, accessCode }: Props) {
     const preferredTrialSlot = trialData?.preferredSlotKey && availableSlots.some((slot) => slot.slotKey === trialData.preferredSlotKey)
         ? trialData.preferredSlotKey
         : "";
@@ -140,46 +121,43 @@ export default function EnrollApplicationForm({
         setError("");
     };
 
-    // ?? Step 1 ?좏슚??寃?? ?꾩씠 ?뺣낫 ???????????????????????????????????????
     const validateStep1 = (): boolean => {
-        if (!form.childName.trim()) { setError("?꾩씠 ?대쫫???낅젰?댁＜?몄슂."); return false; }
-        if (!form.childBirthDate) { setError("?꾩씠 ?앸뀈?붿씪???좏깮?댁＜?몄슂."); return false; }
-        if (!form.childGender) { setError("?깅퀎???좏깮?댁＜?몄슂."); return false; }
-        if (!form.childSchool.trim()) { setError("?숆탳紐낆쓣 ?낅젰?댁＜?몄슂."); return false; }
-        if (!form.childPhone.trim()) { setError("?섍컯???꾪솕踰덊샇瑜??낅젰?댁＜?몄슂."); return false; }
+        if (!form.childName.trim()) { setError("아이 이름을 입력해주세요."); return false; }
+        if (!form.childBirthDate) { setError("아이 생년월일을 선택해주세요."); return false; }
+        if (!form.childGender) { setError("성별을 선택해주세요."); return false; }
+        if (!form.childGrade) { setError("학년을 선택해주세요."); return false; }
+        if (!form.childSchool.trim()) { setError("학교명을 입력해주세요."); return false; }
+        if (!form.childPhone.trim()) { setError("학생 전화번호를 입력해주세요."); return false; }
         return true;
     };
 
-    // ?? Step 2 ?좏슚??寃?? 蹂댄샇???뺣낫 ?????????????????????????????????????
     const validateStep2 = (): boolean => {
-        if (!form.parentName.trim()) { setError("蹂댄샇???대쫫???낅젰?댁＜?몄슂."); return false; }
-        if (!form.parentPhone.trim()) { setError("蹂댄샇???곕씫泥섎? ?낅젰?댁＜?몄슂."); return false; }
+        if (!form.parentName.trim()) { setError("보호자 이름을 입력해주세요."); return false; }
+        if (!form.parentPhone.trim()) { setError("보호자 연락처를 입력해주세요."); return false; }
         const digits = form.parentPhone.replace(/\D/g, "");
         if (digits.length < 10 || digits.length > 11) {
-            setError("?щ컮瑜??꾪솕踰덊샇瑜??낅젰?댁＜?몄슂. (?? 010-1234-5678)");
+            setError("올바른 전화번호를 입력해주세요. 예: 010-1234-5678");
             return false;
         }
         return true;
     };
 
-    // ?? Step 3 ?좏슚??寃?? ?섍컯 ?뺣낫 ???????????????????????????????????????
     const validateStep3 = (): boolean => {
-        if (form.enrollmentMonths.length === 0) { setError("?섍컯?좎껌 ?붿쓣 ?좏깮?댁＜?몄슂."); return false; }
-        if (!form.referralSource) { setError("媛?낃꼍濡쒕? ?좏깮?댁＜?몄슂."); return false; }
-        if (!form.shuttleChoice) { setError("?뷀??묒듅 ?щ?瑜??좏깮?댁＜?몄슂."); return false; }
+        if (form.enrollmentMonths.length === 0) { setError("수강신청 월을 선택해주세요."); return false; }
+        if (!form.referralSource) { setError("가입경로를 선택해주세요."); return false; }
+        if (!form.shuttleChoice) { setError("셔틀 탑승 여부를 선택해주세요."); return false; }
         if (form.shuttleChoice === "탑승") {
-            if (!form.shuttlePickup.trim()) { setError("?뷀? ?묒듅 ?μ냼瑜??낅젰?댁＜?몄슂."); return false; }
+            if (!form.shuttlePickup.trim()) { setError("셔틀 탑승 장소를 입력해주세요."); return false; }
             if (!form.shuttlePickupLocationData) { setError("셔틀 탑승 위치를 지도에서 선택해주세요."); return false; }
-            if (!form.shuttleTime) { setError("?뷀? ?щ쭩 ?쒓컙???낅젰?댁＜?몄슂."); return false; }
-            if (!form.shuttleDropoff.trim()) { setError("?뷀? ?섏감 ?μ냼瑜??낅젰?댁＜?몄슂."); return false; }
+            if (!form.shuttleTime) { setError("셔틀 희망 시간을 입력해주세요."); return false; }
+            if (!form.shuttleDropoff.trim()) { setError("셔틀 하차 장소를 입력해주세요."); return false; }
             if (!form.shuttleDropoffLocationData) { setError("셔틀 하차 위치를 지도에서 선택해주세요."); return false; }
             if (!form.shuttleLocationConsent) { setError("셔틀 위치정보 수집·이용에 동의해주세요."); return false; }
-            if (!form.shuttleNoticeConfirmed) { setError("?뷀? 二쇱쓽?ы빆???뺤씤?댁＜?몄슂."); return false; }
+            if (!form.shuttleNoticeConfirmed) { setError("셔틀 주의사항을 확인해주세요."); return false; }
         }
         return true;
     };
 
-    // ?? ?ㅼ쓬 ?④퀎 ????????????????????????????????????????????????????????????
     const loadExistingApplication = async () => {
         const existing = await findExistingEnrollApplicationForEdit({
             accessCode,
@@ -234,35 +212,28 @@ export default function EnrollApplicationForm({
         if (step === 3 && !validateStep3()) return;
         if (step === 2) await loadExistingApplication();
         setError("");
-        setStep((s) => Math.min(s + 1, TOTAL_STEPS));
+        setStep((current) => Math.min(current + 1, TOTAL_STEPS));
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    // ?? ?댁쟾 ?④퀎 ????????????????????????????????????????????????????????????
     const goBack = () => {
         setError("");
-        setStep((s) => Math.max(s - 1, 1));
+        setStep((current) => Math.max(current - 1, 1));
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    // ?? ?щ’ ?좏깮 ?좉? (蹂듭닔 ?좏깮 媛?? ?????????????????????????????????????
     const toggleSlot = (slotKey: string) => {
         const keys = form.preferredSlotKeys;
-        if (keys.includes(slotKey)) {
-            update("preferredSlotKeys", keys.filter((k) => k !== slotKey));
-        } else {
-            update("preferredSlotKeys", [...keys, slotKey]);
-        }
+        update("preferredSlotKeys", keys.includes(slotKey) ? keys.filter((key) => key !== slotKey) : [...keys, slotKey]);
     };
 
-    // ?? ?쒖텧 ?????????????????????????????????????????????????????????????????
     const handleSubmit = () => {
         if (!form.agreedTerms || !form.agreedPrivacy) {
-            setError("?댁슜?쎄?怨?媛쒖씤?뺣낫 ?섏쭛/?댁슜??紐⑤몢 ?숈쓽?댁＜?몄슂.");
+            setError("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
             return;
         }
         if (!form.applicationNoticeConfirmed) {
-            setError("?섍컯?좎껌?뺤젙 ?덈궡瑜??뺤씤?댁＜?몄슂.");
+            setError("수강신청 확정 안내를 확인해주세요.");
             return;
         }
         startTransition(async () => {
@@ -290,9 +261,7 @@ export default function EnrollApplicationForm({
                     shuttleDropoff: form.shuttleDropoff || undefined,
                     shuttleDropoffLocationData: form.shuttleChoice === "탑승" ? form.shuttleDropoffLocationData : undefined,
                     shuttleLocationConsent: form.shuttleChoice === "탑승" && form.shuttleLocationConsent,
-                    shuttleLocationConsentVersion: form.shuttleChoice === "탑승"
-                        ? SHUTTLE_LOCATION_CONSENT_VERSION
-                        : undefined,
+                    shuttleLocationConsentVersion: form.shuttleChoice === "탑승" ? SHUTTLE_LOCATION_CONSENT_VERSION : undefined,
                     referralSource: form.referralSource || undefined,
                     memo: form.memo || undefined,
                     agreedTerms: form.agreedTerms,
@@ -302,11 +271,7 @@ export default function EnrollApplicationForm({
                     honeypot: form.honeypot,
                 });
                 setCompletionMode(result.mode === "updated" ? "updated" : result.mode === "existing" ? "existing" : "created");
-                setAccountHandoff(
-                    "accountHandoff" in result && result.accountHandoff
-                        ? result.accountHandoff as AccountHandoff
-                        : null,
-                );
+                setAccountHandoff("accountHandoff" in result && result.accountHandoff ? result.accountHandoff as AccountHandoff : null);
                 trackMetaEvent("CompleteRegistration", {
                     content_name: "Enrollment application",
                     content_category: "Application",
@@ -314,7 +279,7 @@ export default function EnrollApplicationForm({
                 setCompleted(true);
                 window.scrollTo({ top: 0, behavior: "smooth" });
             } catch (e: unknown) {
-                setError(e instanceof Error ? e.message : "?좎껌 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
+                setError(e instanceof Error ? e.message : "신청 중 오류가 발생했습니다.");
             }
         });
     };
@@ -327,290 +292,143 @@ export default function EnrollApplicationForm({
         }).toString()}`
         : "/signup/parent";
     const loginHref = accountHandoff
-        ? `/login?${new URLSearchParams({
-            redirect: "/mypage",
-            enrollmentHandoff: accountHandoff.token,
-        }).toString()}`
+        ? `/login?${new URLSearchParams({ redirect: "/mypage", enrollmentHandoff: accountHandoff.token }).toString()}`
         : "/login";
 
-    // ?? ?꾨즺 ?붾㈃ ????????????????????????????????????????????????????????????
     if (completed) {
         return (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 text-center">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
+            <div className="rounded-2xl bg-white p-8 text-center shadow-lg dark:bg-gray-800">
+                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
                     <FontFreeIcon name="check_circle" size={40} className="text-green-600" />
                 </div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3">
-                    {completionMode === "updated"
-                        ? "수강신청서 수정 완료!"
-                        : completionMode === "existing"
-                        ? "이미 접수된 수강신청서가 있습니다"
-                        : "수강신청 완료!"}
+                <h2 className="mb-3 text-2xl font-black text-gray-900 dark:text-white">
+                    {completionMode === "updated" ? "수강신청서 수정 완료!" : completionMode === "existing" ? "이미 접수된 수강신청서가 있습니다" : "수강신청 완료!"}
                 </h2>
-                <p className="text-gray-600 dark:text-gray-300 mb-2">?대떦?먭? 鍮좊Ⅸ ?쒓컙 ?댁뿉 ?곕씫?쒕━寃좎뒿?덈떎.</p>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                    臾몄쓽?ы빆???덉쑝?쒕㈃{" "}
-                    <a href={`tel:${contactPhone.replace(/-/g, "")}`} className="text-brand-orange-500 dark:text-brand-neon-lime font-semibold">
-                        {contactPhone}
-                    </a>
-                    ?쇰줈 ?꾪솕?댁＜?몄슂.
+                <p className="mb-2 text-gray-600 dark:text-gray-300">담당자가 빠른 시간 안에 연락드리겠습니다.</p>
+                <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+                    문의사항이 있으시면{" "}
+                    <a href={`tel:${contactPhone.replace(/-/g, "")}`} className="font-semibold text-brand-orange-500 dark:text-brand-neon-lime">{contactPhone}</a>
+                    로 전화해주세요.
                 </p>
                 {accountHandoff && !accountHandoff.alreadyLinked && (
                     <div className="mb-6 rounded-2xl border border-brand-orange-200 bg-orange-50 p-5 text-left dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10">
-                        <div className="flex items-start gap-3">
-                            <span className="material-symbols-outlined shrink-0 text-[28px] text-brand-orange-500 dark:text-brand-neon-lime" aria-hidden="true">
-                                account_circle
-                            </span>
-                            <div>
-                                <h3 className="font-black text-brand-navy-900 dark:text-white">이어서 학부모 계정을 연결해주세요</h3>
-                                <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                                    계정을 연결하면 방금 제출한 신청서를 바로 확인할 수 있습니다. 가입하지 않아도 수강신청은 이미 정상 접수되었습니다.
-                                </p>
-                            </div>
-                        </div>
+                        <h3 className="font-black text-brand-navy-900 dark:text-white">이어서 학부모 계정을 연결해주세요</h3>
+                        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">계정을 연결하면 방금 제출한 신청서를 바로 확인할 수 있습니다. 가입하지 않아도 수강신청은 이미 정상 접수되었습니다.</p>
                         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                            <Link
-                                href={signupHref}
-                                className="flex min-h-12 items-center justify-center rounded-xl bg-brand-orange-500 px-4 text-center font-bold text-white hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                            >
-                                처음이에요 · 회원가입
-                            </Link>
-                            <Link
-                                href={loginHref}
-                                className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 text-center font-bold text-brand-navy-900 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
-                            >
-                                계정이 있어요 · 로그인
-                            </Link>
+                            <Link href={signupHref} className="flex min-h-12 items-center justify-center rounded-xl bg-brand-orange-500 px-4 text-center font-bold text-white hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900">처음이에요 · 회원가입</Link>
+                            <Link href={loginHref} className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 text-center font-bold text-brand-navy-900 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-white">계정이 있어요 · 로그인</Link>
                         </div>
-                        <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
-                            신청서의 보호자 휴대전화와 가입 시 인증한 번호가 일치해야 자동으로 연결됩니다.
-                        </p>
+                        <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">신청서의 보호자 이름과 전화번호가 가입 또는 인증 정보와 일치해야 자동으로 연결됩니다.</p>
                     </div>
                 )}
                 {accountHandoff?.alreadyLinked && (
-                    <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-200">
-                        현재 로그인한 학부모 계정에 신청서가 연결되었습니다.
-                    </div>
+                    <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-200">현재 로그인한 학부모 계정에 신청서가 연결되었습니다.</div>
                 )}
-                <Link
-                    href="/"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-navy-800 transition-colors"
-                >
+                <Link href="/" className="inline-flex items-center gap-2 rounded-xl bg-brand-navy-900 px-6 py-3 font-medium text-white transition-colors hover:bg-brand-navy-800">
                     <FontFreeIcon name="home" size={18} />
-                    ?덉쑝濡??뚯븘媛湲?                </Link>
+                    홈으로 돌아가기
+                </Link>
             </div>
         );
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-            {/* 吏꾪뻾 ?쒖떆以???4?④퀎 */}
-            <div className="bg-gray-50 dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                <div className="flex items-center justify-between max-w-md mx-auto">
-                    {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
-                        <div key={n} className="flex items-center">
-                            {/* ?ㅽ뀦 踰덊샇 ?먰삎 ???꾨즺/?꾩옱/誘몃옒 ?됱긽 遺꾧린 */}
-                            <div
-                                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                                    n < step
-                                        ? "bg-green-500 text-white"
-                                        : n === step
-                                        ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white"
-                                        : "bg-gray-200 text-gray-400"
-                                }`}
-                            >
-                                {n < step ? (
-                                    <FontFreeIcon name="check" size={18} />
-                                ) : (
-                                    n
-                                )}
+        <div className="overflow-hidden rounded-2xl bg-white shadow-lg dark:bg-gray-800">
+            <div className="border-b border-gray-100 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900">
+                <div className="mx-auto flex max-w-md items-center justify-between">
+                    {Array.from({ length: TOTAL_STEPS }, (_, index) => index + 1).map((number) => (
+                        <div key={number} className="flex items-center">
+                            <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-colors ${number < step ? "bg-green-500 text-white" : number === step ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "bg-gray-200 text-gray-400"}`}>
+                                {number < step ? <FontFreeIcon name="check" size={18} /> : number}
                             </div>
-                            {/* ?ㅽ뀦 ?대쫫 ??紐⑤컮?쇱뿉?쒕뒗 ?④? */}
-                            <span className={`ml-1.5 text-xs font-medium hidden sm:inline ${
-                                n === step ? "text-gray-900 dark:text-white" : "text-gray-400"
-                            }`}>
-                                {STEP_LABELS[n - 1]}
-                            </span>
-                            {/* ?곌껐??*/}
-                            {n < TOTAL_STEPS && (
-                                <div className={`w-6 sm:w-8 h-0.5 mx-1.5 ${
-                                    n < step ? "bg-green-500" : "bg-gray-200"
-                                }`} />
-                            )}
+                            <span className={`ml-1.5 hidden text-xs font-medium sm:inline ${number === step ? "text-gray-900 dark:text-white" : "text-gray-400"}`}>{STEP_LABELS[number - 1]}</span>
+                            {number < TOTAL_STEPS && <div className={`mx-1.5 h-0.5 w-6 sm:w-8 ${number < step ? "bg-green-500" : "bg-gray-200"}`} />}
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* 泥댄뿕 ?곗씠???먮룞 梨꾩? ?뚮┝ 諛곕꼫 */}
             {trialData && step === 1 && (
-                <div className="mx-6 mt-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm flex items-center gap-2">
+                <div className="mx-6 mt-4 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
                     <FontFreeIcon name="auto_fix_high" size={18} />
-                    泥댄뿕?섏뾽 ?뺣낫媛 ?먮룞?쇰줈 ?낅젰?섏뿀?듬땲?? ?꾩슂?섎㈃ ?섏젙?????덉뒿?덈떎.
+                    체험수업 정보가 자동으로 입력되었습니다. 필요하면 수정할 수 있습니다.
                 </div>
             )}
 
-            {/* ??蹂몃Ц */}
             <div className="p-6">
-                {/* ?먮윭 硫붿떆吏 */}
                 {error && (
-                    <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
+                    <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                         <FontFreeIcon name="error" size={18} />
                         {error}
                     </div>
                 )}
                 {existingNotice && (
-                    <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-sm font-semibold flex items-center gap-2 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-100">
+                    <div className="mb-4 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
                         <FontFreeIcon name="edit" size={18} />
                         {existingNotice}
                     </div>
                 )}
 
-                {/* ???????????? Step 1: ?꾩씠 ?뺣낫 ???????????? */}
                 {step === 1 && (
                     <div className="space-y-5">
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                             <FontFreeIcon name="child_care" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
-                            ?꾩씠 ?뺣낫
+                            아이 정보
                         </h2>
-
-                        {/* ?꾩씠 ?대쫫 (?꾩닔) */}
+                        <Field label="아이 이름" required value={form.childName} onChange={(value) => update("childName", value)} placeholder="아이 이름" />
+                        <Field label="생년월일" required type="date" value={form.childBirthDate} onChange={(value) => update("childBirthDate", value)} placeholder="연도-월-일" />
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                ?꾩씠 ?대쫫 <span className="text-red-500">*</span>
+                            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                                성별 <span className="text-red-500">*</span>
                             </label>
-                            <input
-                                type="text"
-                                value={form.childName}
-                                onChange={(e) => update("childName", e.target.value)}
-                                placeholder="홍길동"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
-                        </div>
-
-                        {/* ?앸뀈?붿씪 (?꾩닔) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                ?앸뀈?붿씪 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="date"
-                                min="1950-01-01" max="2025-12-31"
-                                value={form.childBirthDate}
-                                onChange={(e) => update("childBirthDate", e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
-                        </div>
-
-                        {/* ?깅퀎 (?꾩닔) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                ?깅퀎 <span className="text-red-500">*</span>
-                            </label>
-                            <div className="flex gap-3">
-                                {["?⑥옄", "?ъ옄"].map((g) => (
-                                    <button
-                                        key={g}
-                                        type="button"
-                                        onClick={() => update("childGender", g)}
-                                        className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors cursor-pointer ${
-                                            form.childGender === g
-                                                ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  text-brand-orange-600 dark:text-brand-neon-lime"
-                                                : "border-gray-300 text-gray-600 dark:text-gray-300 hover:border-gray-400"
-                                        }`}
-                                    >
-                                        {g}
+                            <div className="flex gap-2">
+                                {["남", "여"].map((gender) => (
+                                    <button key={gender} type="button" onClick={() => update("childGender", gender)} className={`flex-1 rounded-xl border py-3 text-sm font-medium transition-colors ${form.childGender === gender ? "border-brand-orange-500 bg-brand-orange-50 text-brand-orange-600 dark:border-brand-neon-lime dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime" : "border-gray-300 text-gray-600 hover:border-gray-400 dark:text-gray-300"}`}>
+                                        {gender}
                                     </button>
                                 ))}
                             </div>
                         </div>
-
-                        {/* ?숆탳紐?(?꾩닔) */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                ?숆탳紐?<span className="text-red-500">*</span>
+                            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                                학년 <span className="text-red-500">*</span>
                             </label>
-                            <input
-                                type="text"
-                                value={form.childSchool}
-                                onChange={(e) => update("childSchool", e.target.value)}
-                                placeholder="?ㅼ궛珥덈벑?숆탳"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
+                            <select value={form.childGrade} onChange={(event) => update("childGrade", event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                                <option value="">선택해주세요</option>
+                                {GRADE_OPTIONS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                            </select>
                         </div>
-
-                        {/* ?섍컯???꾪솕踰덊샇 */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                ?섍컯???꾪솕踰덊샇(?レ옄留? <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="tel"
-                                value={form.childPhone}
-                                onChange={(e) => {
-                                    const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
-                                    let formatted = nums;
-                                    if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
-                                    else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
-                                    update("childPhone", formatted);
-                                }}
-                                placeholder="?レ옄留??낅젰 (?먮룞 蹂?? 010-1234-5678)"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
-                            />
-                            <p className="text-xs text-gray-400 mt-1">?レ옄留??낅젰?섎㈃ ?먮룞?쇰줈 000-0000-0000 ?뺤떇?쇰줈 蹂?섎맗?덈떎</p>
-                        </div>
+                        <Field label="학교명" required value={form.childSchool} onChange={(value) => update("childSchool", value)} placeholder="도농초등학교" />
+                        <Field label="학생 전화번호" required type="tel" value={form.childPhone} onChange={(value) => update("childPhone", formatPhone(value))} placeholder="학생 또는 보호자 연락처" />
                     </div>
                 )}
 
-                {step > 1 && (
-                    <EnrollApplicationLaterSteps
-                        step={step}
-                        form={form}
-                        availableSlots={availableSlots}
-                        update={update}
-                        toggleSlot={toggleSlot}
-                    />
-                )}
-                {/* ?? ?ㅻ퉬寃뚯씠??踰꾪듉 ??????????????????????????????????????????? */}
-                <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100 dark:border-gray-800">
+                <EnrollApplicationLaterSteps step={step} form={form} availableSlots={availableSlots} update={update} toggleSlot={toggleSlot} />
+
+                <div className="mt-8 flex justify-between">
                     {step > 1 ? (
-                        <button
-                            type="button"
-                            onClick={goBack}
-                            className="flex items-center gap-1 px-5 py-3 text-gray-600 hover:text-gray-900 dark:text-white font-medium transition-colors cursor-pointer"
-                        >
+                        <button type="button" onClick={goBack} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-5 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200">
                             <FontFreeIcon name="arrow_back" size={18} />
-                            ?댁쟾
+                            이전
                         </button>
-                    ) : (
-                        <div />
-                    )}
+                    ) : <div />}
 
                     {step < TOTAL_STEPS ? (
-                        <button
-                            type="button"
-                            onClick={goNext}
-                            className="flex items-center gap-1 px-6 py-3 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors cursor-pointer"
-                        >
-                            ?ㅼ쓬
+                        <button type="button" onClick={goNext} className="inline-flex items-center gap-2 rounded-xl bg-brand-orange-500 px-6 py-3 font-bold text-white transition-colors hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900">
+                            다음
                             <FontFreeIcon name="arrow_forward" size={18} />
                         </button>
                     ) : (
-                        <button
-                            type="button"
-                            onClick={handleSubmit}
-                            disabled={isPending}
-                            className="flex items-center gap-2 px-8 py-3 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-bold hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                        >
+                        <button type="button" onClick={handleSubmit} disabled={isPending} className="inline-flex items-center gap-2 rounded-xl bg-brand-orange-500 px-6 py-3 font-bold text-white transition-colors hover:bg-brand-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">
                             {isPending ? (
                                 <>
                                     <FontFreeIcon name="progress_activity" size={18} className="animate-spin" />
-                                    泥섎━ 以?..
+                                    제출 중...
                                 </>
                             ) : (
                                 <>
-                                    <FontFreeIcon name="how_to_reg" size={18} />
-                                    ?섍컯 ?좎껌?섍린
+                                    <FontFreeIcon name="send" size={18} />
+                                    수강신청 제출
                                 </>
                             )}
                         </button>
@@ -619,4 +437,23 @@ export default function EnrollApplicationForm({
             </div>
         </div>
     );
+}
+
+function Field({ label, required, type = "text", value, onChange, placeholder, helper }: { label: string; required?: boolean; type?: string; value: string; onChange: (value: string) => void; placeholder: string; helper?: string }) {
+    return (
+        <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                {label} {required && <span className="text-red-500">*</span>}
+            </label>
+            <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            {helper && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{helper}</p>}
+        </div>
+    );
+}
+
+function formatPhone(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }

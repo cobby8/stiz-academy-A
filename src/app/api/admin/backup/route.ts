@@ -17,9 +17,9 @@ async function safeQuery<T = any>(sql: string): Promise<T[]> {
     }
 }
 
-// GET /api/admin/backup ??download full DB snapshot as JSON
+// GET /api/admin/backup - 전체 DB 스냅샷을 JSON으로 다운로드
 export async function GET() {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 ?ㅼ슫濡쒕뱶 媛??
+    // 원장 권한이 있는 사용자만 백업을 다운로드할 수 있다.
     try {
         await requireOwner();
     } catch {
@@ -79,9 +79,9 @@ export async function GET() {
     }
 }
 
-// POST /api/admin/backup ??restore from JSON backup
+// POST /api/admin/backup - JSON 백업으로 복원
 export async function POST(req: NextRequest) {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 蹂듭썝 媛??
+    // 원장 권한이 있는 사용자만 백업을 복원할 수 있다.
     try {
         await requireOwner();
     } catch {

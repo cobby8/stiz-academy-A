@@ -1,8 +1,8 @@
 ﻿/**
  * POST /api/admin/backup-now
  *
- * 愿由ъ옄媛 ?섎룞?쇰줈 利됱떆 ?대씪?곕뱶 諛깆뾽???앹꽦?⑸땲??
- * /api/cron/backup 怨??숈씪??濡쒖쭅?댁?留?CRON_SECRET ???愿由ъ옄 UI?먯꽌 ?몄텧?⑸땲??
+ * 관리자가 수동으로 즉시 클라우드 백업을 생성한다.
+ * /api/cron/backup과 같은 백업 로직을 사용하지만, CRON_SECRET 대신 원장 권한을 확인한다.
  */
 
 import { NextResponse } from "next/server";
@@ -29,7 +29,7 @@ async function safeQuery<T = any>(sql: string): Promise<T[]> {
 }
 
 export async function POST() {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留??섎룞 諛깆뾽 媛??
+    // 원장 권한이 있는 사용자만 수동 백업을 실행할 수 있다.
     try {
         await requireOwner();
     } catch {
@@ -39,7 +39,7 @@ export async function POST() {
     try {
         const supabase = createAdminClient();
 
-        // 1. 踰꾪궥 ?뺤씤 (?놁쑝硫??앹꽦)
+        // 1. 백업 버킷 확인. 없으면 생성한다.
         const { data: buckets } = await supabase.storage.listBuckets();
         const exists = buckets?.some((b) => b.name === BUCKET);
         if (!exists) {
@@ -47,7 +47,7 @@ export async function POST() {
             if (error) throw new Error(`버킷 생성 실패: ${error.message}`);
         }
 
-        // 2. DB ?꾩껜 ?ㅻ깄???섏쭛
+        // 2. 백업에 포함할 주요 DB 데이터를 조회한다.
         const [academyRows, programs, coaches, classSlotOverrides, customClassSlots, routes, stops] =
             await Promise.all([
                 safeQuery(`SELECT * FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`),
@@ -79,7 +79,7 @@ export async function POST() {
             routes: routesWithStops,
         };
 
-        // 3. Supabase Storage???낅줈??
+        // 3. Supabase Storage에 업로드한다.
         const now = new Date();
         const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
         const filename = `stiz-backup-${kstNow.toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
@@ -91,7 +91,7 @@ export async function POST() {
 
         if (uploadError) throw new Error(`업로드 실패: ${uploadError.message}`);
 
-        // 4. 30???댁긽 ???뚯씪 ??젣
+        // 4. 30일이 지난 오래된 백업 파일을 정리한다.
         const { data: files } = await supabase.storage.from(BUCKET).list("", { limit: 200 });
         const cutoff = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
         const toDelete = (files ?? []).filter((f) => {

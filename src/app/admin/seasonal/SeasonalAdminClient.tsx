@@ -636,7 +636,7 @@ function paymentReviewLabel(value?: string | null) {
 function normalizeSeasons(body: Record<string, unknown>): Season[] {
   return ((body.seasons ?? []) as Array<Record<string, unknown>>).map((season) => ({
     ...season,
-    name: season.name ?? season.title ?? "?대쫫 ?녿뒗 ?쒖쫵",
+    name: season.name ?? season.title ?? "이름 없는 시즌",
     enrollmentStartsAt: season.enrollmentStartsAt ?? season.applicationOpensAt,
     enrollmentEndsAt: season.enrollmentEndsAt ?? season.applicationClosesAt,
     classes: ((season.classes ?? season.offerings ?? []) as Array<Record<string, unknown>>).map((offering) => {

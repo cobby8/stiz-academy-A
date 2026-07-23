@@ -1,13 +1,13 @@
 ﻿/**
  * GET /api/admin/export-seed
  *
- * ?꾩옱 DB??Programs, ClassSlotOverrides, AcademySettings(termsOfService)??
- * prisma/seed-data.ts ??諛붾줈 遺숈뿬?ｌ쓣 ???덈뒗 TypeScript 肄붾뱶濡?蹂?섑빀?덈떎.
+ * 현재 DB의 Programs, ClassSlotOverrides, AcademySettings(termsOfService)를
+ * prisma/seed-data.ts에 붙여 넣을 수 있는 TypeScript 코드로 내보낸다.
  *
- * ?ъ슜踰?
- * 1. 愿由ъ옄 ?섏씠吏 ??"?쒕뱶 ?곗씠???대낫?닿린" ?대┃
- * 2. 異쒕젰??肄붾뱶瑜?prisma/seed-data.ts ??遺숈뿬?ｊ린
- * 3. git commit & push ???댄썑 DB 珥덇린????/api/admin/seed 濡?蹂듦뎄 媛??
+ * 사용법:
+ * 1. 관리자 페이지에서 시드 데이터 내보내기를 실행한다.
+ * 2. 출력된 코드를 prisma/seed-data.ts에 붙여 넣는다.
+ * 3. 커밋/푸시 후 /api/admin/seed로 DB 초기 데이터를 복구할 수 있다.
  */
 
 import { NextResponse } from "next/server";
@@ -29,7 +29,7 @@ function quote(v: unknown): string {
 }
 
 export async function GET() {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留??쒕뱶 ?곗씠???대낫?닿린 媛??
+    // 원장 권한이 있는 사용자만 시드 데이터를 내보낼 수 있다.
     try {
         await requireOwner();
     } catch {

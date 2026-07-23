@@ -1,9 +1,9 @@
 ﻿/**
  * POST /api/admin/seed
  *
- * prisma/seed-data.ts ????λ맂 ?꾨줈洹몃옩 ?곗씠?곕? DB??蹂듭썝?⑸땲??
- * DB媛 鍮꾩뼱?덇굅???곗씠???뚯떎 ??蹂듦뎄?⑹쑝濡??ъ슜?⑸땲??
- * ?대? 議댁옱?섎뒗 ID??upsert(??뼱?곌린)濡?泥섎━?⑸땲??
+ * prisma/seed-data.ts에 저장된 프로그램 데이터를 DB에 복원한다.
+ * DB가 비어 있거나 데이터가 유실됐을 때 복구용으로 사용한다.
+ * 이미 존재하는 ID는 upsert로 갱신한다.
  */
 
 import { NextResponse } from "next/server";
@@ -14,7 +14,7 @@ import { PROGRAMS, CLASS_SLOT_OVERRIDES, TERMS_OF_SERVICE } from "../../../../..
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留??쒕뱶 ?곗씠??蹂듭썝 媛??
+    // 원장 권한이 있는 사용자만 시드 데이터를 복원할 수 있다.
     try {
         await requireOwner();
     } catch {

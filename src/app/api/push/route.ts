@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
-// POST: ?몄떆 援щ룆 ?깅줉
+// POST: 웹 푸시 구독 등록
 export async function POST(req: NextRequest) {
     try {
         const supabase = await createClient();
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
         }
 
-        // ?대찓?쇰줈 User ?뚯씠釉붿뿉??userId 議고쉶
+        // 이메일로 User 테이블의 userId를 조회한다.
         const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT id FROM "User" WHERE email = $1 LIMIT 1`, user.email
         );
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "구독 정보가 없습니다." }, { status: 400 });
         }
 
-        // 援щ룆 ?뺣낫 ???(?대? ?덉쑝硫??낅뜲?댄듃)
+        // 구독 정보를 저장한다. 이미 있으면 현재 사용자 정보로 갱신한다.
         await prisma.$executeRawUnsafe(
             `INSERT INTO "PushSubscription" (id, "userId", endpoint, p256dh, auth, "createdAt")
              VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW())
@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// DELETE: ?몄떆 援щ룆 ?댁젣
+// DELETE: 웹 푸시 구독 해제
 export async function DELETE(req: NextRequest) {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 ?ъ슜?먮쭔 援щ룆 ?댁젣 媛??
+    // 로그인한 사용자만 자신의 구독을 해제할 수 있다.
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

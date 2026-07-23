@@ -1,8 +1,8 @@
 ﻿"use server";
 
 /**
- * 怨듦컻 Server Actions ??濡쒓렇???놁씠 ?묎렐 媛?? * admin.ts? 遺꾨━: requireAdmin() ?놁쓬
- * 泥댄뿕?섏뾽 ?좎껌 ????鍮꾪쉶?먯씠 ?ъ슜?섎뒗 湲곕뒫
+ * 공개 Server Actions: 로그인 없이 접근 가능한 기능입니다.
+ * 체험수업 신청, 수강 신청 등 비회원이 사용하는 흐름을 담당합니다.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -66,7 +66,7 @@ export async function ensureEnrollmentApplicationTable() {
                 "updatedAt" TIMESTAMPTZ DEFAULT NOW()
             )
         `);
-        // ?몃뜳???앹꽦 (?곹깭蹂?trialLeadId/?앹꽦???꾪꽣 理쒖쟻??
+        // 상태, 체험 문의, 생성일 기준 조회 성능을 위한 인덱스입니다.
         await prisma.$executeRawUnsafe(
             `CREATE INDEX IF NOT EXISTS "EnrollmentApplication_status_idx" ON "EnrollmentApplication" (status)`
         );
@@ -110,31 +110,31 @@ export async function ensureEnrollmentApplicationTable() {
     _enrollTableEnsured = true;
 }
 
-// ?? 泥댄뿕?섏뾽 ?좎껌 ?낅젰 ?????????????????????????????????????????????????????
+// 체험수업 신청 입력
 interface TrialApplicationInput {
     existingId?: string;
     trialDate?: string;
     trialDay?: string;
     trialPeriod?: string;
     childName: string;
-    childBirthDate?: string;     // ?댁쟾 ?먯껜 ???명솚
+    childBirthDate?: string;     // 이전 자체 폼 호환
     childGrade: string;
     childGender?: string;
     childSchool?: string;
     basketballExp?: string;
     parentName?: string;
     parentPhone: string;
-    preferredSlotKey?: string;    // ?щ쭩 ?щ’ "Mon-4"
+    preferredSlotKey?: string;    // 희망 수업 "Mon-4"
     hopeNote?: string;
-    source: string;               // 媛??寃쎈줈
+    source: string;               // 유입 경로
     trialFeeConfirmed?: boolean;
     agreedTerms?: boolean;
     agreedPrivacy?: boolean;
-    honeypot?: string;            // ?ㅽ뙵 諛⑹?????鍮덇컪?댁뼱???뺤긽
+    honeypot?: string;            // 스팸 방지용 숨김 필드
 }
 
-// ?? ?꾪솕踰덊샇 ?뺢퇋????????????????????????????????????????????????????????????
-// 010-1234-5678, 01012345678, 010 1234 5678 ???ㅼ뼇???뺥깭瑜?010-1234-5678濡??듭씪
+// 전화번호 정규화
+// 010-1234-5678, 01012345678, 010 1234 5678 등을 010-1234-5678로 통일합니다.
 function normalizePhone(raw: string): string {
     const digits = raw.replace(/\D/g, "");
     if (digits.length === 11 && digits.startsWith("010")) {
@@ -242,17 +242,16 @@ export async function findExistingTrialApplicationForEdit(input: {
 }
 
 /**
- * submitTrialApplication ??泥댄뿕?섏뾽 ?좎껌 (怨듦컻, 鍮꾨줈洹몄씤)
+ * submitTrialApplication - 체험수업 신청을 접수합니다.
  *
- * 寃利??ы빆:
- * 1. honeypot ?꾨뱶媛 鍮꾩뼱?덉뼱????(?ㅽ뙵遊?李⑤떒)
- * 2. ?대쫫, ?꾪솕踰덊샇 ?꾩닔
- * 3. ?쎄? ?숈쓽 ?꾩닔
+ * 검증 사항:
+ * 1. honeypot 필드가 비어 있어야 합니다.
+ * 2. 이름과 전화번호는 필수입니다.
+ * 3. 약관 동의가 필요합니다.
  */
 export async function submitTrialApplication(data: TrialApplicationInput) {
-    // ?ㅽ뙵遊?李⑤떒: honeypot ?꾨뱶??媛믪씠 ?덉쑝硫?遊뉗쑝濡??먮떒
+    // 스팸 방지: 숨김 필드에 값이 있으면 자동 입력으로 보고 조용히 성공 처리합니다.
     if (data.honeypot) {
-        // 遊뉗뿉寃뚮뒗 ?깃났??寃껋쿂??蹂댁뿬以?(遊뉗씠 ?ㅼ떆 ?쒕룄?섏? ?딅룄濡?
         return { success: true, id: "ok" };
     }
 
@@ -271,13 +270,13 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
     if (!data.source) throw new Error("신청경로를 선택해주세요.");
     if (!data.trialFeeConfirmed) throw new Error("체험수업 비용 확인을 체크해주세요.");
 
-    // ?꾪솕踰덊샇 ?뺤떇 寃利?(?レ옄留?異붿텧 ??11?먮━ ?뺤씤)
+    // 전화번호 형식 검증: 숫자만 추출해 10~11자리인지 확인합니다.
     const phoneDigits = parentPhone.replace(/\D/g, "");
     if (phoneDigits.length < 10 || phoneDigits.length > 11) {
         throw new Error("올바른 전화번호를 입력해주세요.");
     }
 
-    // DDL ensure ???뚯씠釉?而щ읆???놁쑝硫??먮룞 ?앹꽦
+    // 필요한 테이블과 컬럼이 없으면 자동으로 준비합니다.
     await ensureTrialLeadTable();
 
     try {
@@ -374,7 +373,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
             throw new Error("신청이 너무 많이 접수되었습니다. 잠시 후 다시 시도해주세요.");
         }
 
-        // TrialLead INSERT ??status='NEW'濡??앹꽦
+        // 새 체험 문의는 NEW 상태로 생성합니다.
         const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
             `INSERT INTO "TrialLead" (
                 id, "childName", "childAge", "childBirthDate", "childGrade", "childGender", "childSchool",
@@ -392,7 +391,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
                 'NEW', NOW(), NOW()
             ) RETURNING id`,
             childName,
-            data.childGrade || null,                              // childAge???숇뀈 ???(湲곗〈 ?명솚)
+            data.childGrade || null,                              // childAge는 기존 호환을 위해 학년을 저장
             data.childBirthDate || null,                          // childBirthDate
             data.childGrade || null,                              // childGrade
             data.childGender || null,                             // childGender
@@ -413,13 +412,13 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
             data.agreedPrivacy ?? false,                          // agreedPrivacy
         );
 
-        // 愿由ъ옄 ?섏씠吏 罹먯떆 臾댄슚??(???좎껌??諛붾줈 蹂댁씠?꾨줉)
+        // 관리자 페이지 캐시를 무효화해 새 신청이 바로 보이게 합니다.
         revalidatePath("/admin/trial");
         revalidatePath("/admin");
         revalidatePath("/admin/apply");
         revalidatePath("/admin/trial");
 
-        // SMS ?쒗뵆由?蹂????愿由ъ옄/肄붿튂/?숇?紐?怨듯넻?쇰줈 ?ъ슜
+        // 관리자, 코치, 학부모 SMS 템플릿에 공통으로 쓰는 변수입니다.
         const smsVars = {
             childName,
             childGrade: data.childGrade || "학년 미입력",
@@ -428,10 +427,10 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
         };
         const trialLeadId = rows[0]?.id || "ok";
 
-        // 愿由ъ옄/?숇?紐?臾몄옄 諛쒖넚? ?좎껌 ?????蹂묐젹 泥섎━?쒕떎.
-        // ?ㅽ뙣?대룄 ?좎껌 ?먯껜???좎??섎ŉ, 諛쒖넚 寃곌낵??NotificationDelivery???④릿??
-        // ?쒗뵆由?湲곕컲 SMS: TRIAL_NEW_ADMIN(愿由ъ옄), TRIAL_NEW_COACH(肄붿튂)
-        // slotKeys: ?щ쭩 ?щ’???덉쑝硫??대떦 ?щ’ ?대떦 肄붿튂?먭쾶留?SMS 諛쒖넚
+        // 관리자와 학부모 문자 발송은 신청 저장과 분리해 처리합니다.
+        // 발송이 실패해도 신청 자체는 유지하고, 결과는 NotificationDelivery에 기록합니다.
+        // 템플릿 기반 SMS: TRIAL_NEW_ADMIN(관리자), TRIAL_NEW_COACH(코치)
+        // slotKeys가 있으면 해당 수업 담당 코치에게만 SMS를 보낼 수 있습니다.
         await Promise.allSettled([
             notifyAdmins(
                 "TRIAL_APPLICATION",
@@ -448,7 +447,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
                 },
             ),
 
-            // ?숇?紐⑥뿉寃??묒닔 ?뺤씤 SMS 諛쒖넚. academyPhone? DB?먯꽌 議고쉶?섏뿬 ?ы븿?쒕떎.
+            // 학부모에게 접수 확인 SMS를 보냅니다. 학원 전화번호는 DB에서 조회해 포함합니다.
             sendParentSmsWithAcademyPhone(
                 normalizedParentPhone,
                 "TRIAL_CONFIRM_PARENT",
@@ -464,12 +463,12 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
     }
 }
 
-// ?? 鍮덉옄由??щ’ 議고쉶 ???????????????????????????????????????????????????????
+// 빈자리 수업 조회
 export interface AvailableSlot {
     slotKey: string;
     dayOfWeek: string;      // "Mon", "Tue", ...
-    dayLabel: string;       // "??, "??, ...
-    className: string;      // ?섏뾽 ?대쫫
+    dayLabel: string;       // "월", "화", ...
+    className: string;      // 수업 이름
     startTime: string;
     endTime: string;
     capacity: number;
@@ -477,7 +476,7 @@ export interface AvailableSlot {
     available: number;      // capacity - enrolled
 }
 
-// ?붿씪 肄붾뱶 ???쒓? ?쇰꺼 留ㅽ븨
+// 요일 코드를 한글 라벨로 매핑합니다.
 const DAY_LABELS: Record<string, string> = {
     Mon: "월",
     Tue: "화",
@@ -489,10 +488,10 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 /**
- * getAvailableTrialSlots ??鍮덉옄由??덈뒗 ?섏뾽 ?щ’ 紐⑸줉 (怨듦컻??
+ * getAvailableTrialSlots - 공개 신청 폼에서 선택 가능한 수업 목록을 반환합니다.
  *
- * Class ?뚯씠釉붿뿉??Enrollment(ACTIVE) ?섎? ?멸퀬,
- * capacity - enrolled > 0 ???щ’留?諛섑솚
+ * Class 테이블에서 활성 등록 인원을 계산하고,
+ * 정원보다 등록 인원이 적은 수업만 노출합니다.
  */
 export async function getAvailableTrialSlots(): Promise<AvailableSlot[]> {
     try {
@@ -539,7 +538,7 @@ export async function getAvailableTrialSlots(): Promise<AvailableSlot[]> {
     }
 }
 
-// ?? ?섍컯 ?좎껌 ?낅젰 ?????????????????????????????????????????????????????????
+// 수강 신청 입력
 export interface EnrollmentShuttleLocationData {
     address: string;
     roadAddress?: string;
@@ -555,7 +554,7 @@ interface EnrollApplicationInput {
     existingId?: string;
     accessCode?: string;         // 만료·활성 검증을 거치는 체험 연동 코드
     childName: string;
-    childBirthDate: string;      // ISO 臾몄옄??"2018-05-15"
+    childBirthDate: string;      // ISO 문자열 "2018-05-15"
     childGender?: string;
     childGrade?: string;
     childSchool?: string;
@@ -564,14 +563,14 @@ interface EnrollApplicationInput {
     parentPhone: string;
     parentRelation?: string;
     address?: string;
-    enrollmentMonths?: string;   // 肄ㅻ쭏 援щ텇 "2026??7??2026??8??
-    preferredSlotKeys?: string;  // 肄ㅻ쭏 援щ텇 "Mon-4,Wed-6"
-    basketballExp?: string;      // ?띻뎄 寃쏀뿕 (?놁쓬/1??誘몃쭔/1~3??3???댁긽)
+    enrollmentMonths?: string;   // 쉼표 구분 "2026년 7월,2026년 8월"
+    preferredSlotKeys?: string;  // 쉼표 구분 "Mon-4,Wed-6"
+    basketballExp?: string;      // 농구 경험
     uniformSize?: string;
     shuttleNeeded?: boolean;
     shuttlePickup?: string;
-    shuttleTime?: string;        // ?뷀? ?щ쭩 ?쒓컙
-    shuttleDropoff?: string;     // ?뷀? ?섏감 ?μ냼
+    shuttleTime?: string;        // 셔틀 희망 시간
+    shuttleDropoff?: string;     // 셔틀 하차 장소
     shuttlePickupLocationData?: EnrollmentShuttleLocationData;
     shuttleDropoffLocationData?: EnrollmentShuttleLocationData;
     shuttleLocationConsent?: boolean;
@@ -583,7 +582,7 @@ interface EnrollApplicationInput {
     agreedPrivacy: boolean;
     applicationNoticeConfirmed?: boolean;
     shuttleNoticeConfirmed?: boolean;
-    honeypot?: string;           // ?ㅽ뙵 諛⑹?????鍮덇컪?댁뼱???뺤긽
+    honeypot?: string;           // 스팸 방지용 숨김 필드
 }
 
 export interface ExistingEnrollApplicationForEdit {
@@ -764,16 +763,16 @@ export async function findExistingEnrollApplicationForEdit(input: {
 }
 
 /**
- * submitEnrollApplication ???섍컯 ?좎껌 (怨듦컻, 鍮꾨줈洹몄씤)
+ * submitEnrollApplication - 수강 신청을 접수합니다.
  *
- * 寃利??ы빆:
- * 1. honeypot ?꾨뱶媛 鍮꾩뼱?덉뼱????(?ㅽ뙵遊?李⑤떒)
- * 2. ?대쫫, ?앸뀈?붿씪, 蹂댄샇?먯씠由? ?꾪솕踰덊샇 ?꾩닔
- * 3. ?쎄? ?숈쓽 ?꾩닔
- * 4. trialLeadId媛 ?덉쑝硫??대떦 TrialLead 議댁옱 ?щ? ?뺤씤
+ * 검증 사항:
+ * 1. honeypot 필드가 비어 있어야 합니다.
+ * 2. 아이 이름, 생년월일, 보호자 이름, 전화번호는 필수입니다.
+ * 3. 약관 동의가 필요합니다.
+ * 4. trialLeadId가 있으면 연결된 체험 문의가 실제로 존재하는지 확인합니다.
  */
 export async function submitEnrollApplication(data: EnrollApplicationInput) {
-    // ?ㅽ뙵遊?李⑤떒: honeypot ?꾨뱶??媛믪씠 ?덉쑝硫?遊뉗쑝濡??먮떒
+    // 스팸 방지: 숨김 필드에 값이 있으면 자동 입력으로 보고 조용히 성공 처리합니다.
     if (data.honeypot) {
         return { success: true, id: "ok" };
     }
@@ -825,7 +824,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
         throw new Error("올바른 전화번호를 입력해주세요.");
     }
 
-    // DDL ensure ???뚯씠釉붿씠 ?놁쑝硫??먮룞 ?앹꽦
+    // 필요한 테이블과 컬럼이 없으면 자동으로 준비합니다.
     await ensureEnrollmentApplicationTable();
 
     let matchedTrialLeadId = await resolveTrialLeadIdFromEnrollmentAccess(data.accessCode);
@@ -1155,9 +1154,9 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             parentPhone: normalizePhone(parentPhone),
         };
 
-        // 愿由ъ옄?먭쾶 ?뚮┝ 諛쒖넚 (fire-and-forget: ?ㅽ뙣?대룄 ?좎껌? ?뺤긽 ?꾨즺)
-        // ?쒗뵆由?湲곕컲 SMS: ENROLL_NEW_ADMIN(愿由ъ옄), ENROLL_NEW_COACH(肄붿튂)
-        // slotKeys: ?щ쭩 ?щ’???덉쑝硫??대떦 ?щ’ ?대떦 肄붿튂?먭쾶留?SMS 諛쒖넚
+        // 관리자에게 알림을 보냅니다. 발송 실패가 신청 저장을 막지는 않습니다.
+        // 템플릿 기반 SMS: ENROLL_NEW_ADMIN(관리자), ENROLL_NEW_COACH(코치)
+        // slotKeys가 있으면 해당 수업 담당 코치에게만 SMS를 보낼 수 있습니다.
         revalidatePath("/admin");
         revalidatePath("/admin/apply");
         revalidatePath("/admin/trial");
@@ -1181,7 +1180,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             },
         ).catch(() => {});
 
-        // ?숇?紐⑥뿉寃??묒닔 ?뺤씤 SMS 諛쒖넚 (fire-and-forget)
+        // 학부모에게 접수 확인 SMS를 보냅니다.
         await sendParentSmsWithAcademyPhone(
             normalizePhone(parentPhone),
             "ENROLL_CONFIRM_PARENT",
@@ -1207,7 +1206,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
     }
 }
 
-// ?? 泥댄뿕 ?곗씠???먮룞 梨꾩???????????????????????????????????????????????????
+// 체험 데이터 자동 채우기
 export interface TrialLeadForEnroll {
     childName: string;
     childBirthDate: string | null;
@@ -1232,14 +1231,14 @@ async function ensureTrialLeadChildPhoneColumn() {
 /**
  * 유효한 수강신청 접근 코드로 체험 정보를 안전하게 자동 입력합니다.
  *
- * 怨듦컻?⑹씠誘濡?愿由ъ옄 硫붾え ??誘쇨컧 ?뺣낫???쒖쇅?섍퀬
- * ?대쫫, ?앸뀈?붿씪, ?숇뀈, ?깅퀎, ?숆탳, ?곕씫泥? ?띻뎄 寃쏀뿕, ?щ쭩 ?섏뾽, 蹂댄샇???뺣낫留?諛섑솚
+ * 공개 함수이므로 관리자 메모 등 민감 정보는 제외하고,
+ * 이름, 생년월일, 학년, 성별, 학교, 연락처, 농구 경험, 희망 수업, 보호자 정보만 반환합니다.
  */
 export async function getTrialLeadForEnrollByAccessCode(accessCode: string): Promise<TrialLeadForEnroll | null> {
     if (!/^[A-Za-z0-9_-]{16}$/.test(accessCode)) return null;
 
     try {
-        // TrialLead ?뚯씠釉붿씠 議댁옱?섎뒗吏 癒쇱? ?뺤씤
+        // TrialLead 테이블이 존재하는지 먼저 확인합니다.
         await ensureTrialLeadTable();
         await ensureTrialLeadChildPhoneColumn();
 
@@ -1283,10 +1282,9 @@ export async function getTrialLeadForEnrollByAccessCode(accessCode: string): Pro
     }
 }
 
-// ?? ?숇?紐?SMS 諛쒖넚 (academyPhone ?먮룞 議고쉶 ?ы븿) ?????????????????????????????
-// ?숇?紐?PARENT ?쒗뵆由우뿉??{{academyPhone}} 蹂?섍? ?ы븿??寃쎌슦媛 留롫떎.
-// AcademySettings.contactPhone??DB?먯꽌 議고쉶?섏뿬 variables???먮룞 異붽??쒕떎.
-// fire-and-forget ?⑦꽩: ?ㅽ뙣?대룄 硫붿씤 濡쒖쭅???곹뼢 ?놁쓬
+// 학부모 SMS 발송: 학원 전화번호를 DB에서 조회해 템플릿 변수에 포함합니다.
+// PARENT 템플릿은 {{academyPhone}} 변수를 사용하는 경우가 많습니다.
+// fire-and-forget 패턴이라 발송 실패가 메인 로직에 영향을 주지 않습니다.
 async function sendParentSmsWithAcademyPhone(
     parentPhone: string,
     trigger: string,
@@ -1294,16 +1292,16 @@ async function sendParentSmsWithAcademyPhone(
     options?: { eventType?: string; eventId?: string },
 ) {
     try {
-        // ?숈썝 ?꾪솕踰덊샇 議고쉶
+        // 학원 전화번호 조회
         const settings = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
         );
         const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
 
-        // 蹂?섏뿉 academyPhone 異붽?
+        // 템플릿 변수에 academyPhone 추가
         const vars = { ...baseVars, academyPhone };
 
-        // sendParentSms ?몄텧 (notification.ts)
+        // notification.ts의 sendParentSms 호출
         const { sendParentSms: sps } = await import("@/lib/notification");
         await sps(parentPhone, trigger, vars, options);
     } catch (e) {

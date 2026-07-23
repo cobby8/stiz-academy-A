@@ -1,9 +1,9 @@
 ﻿/**
  * /api/admin/cloud-backups
  *
- * GET  ??Supabase Storage "backups/" 踰꾪궥???뚯씪 紐⑸줉 諛섑솚
- * POST ???뱀젙 ?뚯씪濡?DB 蹂듭썝 (body: { filename: string })
- * DELETE ???뱀젙 ?뚯씪 ??젣 (body: { filename: string })
+ * GET    Supabase Storage "backups/" 버킷의 파일 목록을 반환한다.
+ * POST   특정 백업 파일로 DB를 복원한다. body: { filename: string }
+ * DELETE 특정 백업 파일을 삭제한다. body: { filename: string }
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 
 const BUCKET = "backups";
 
-// ?? GET: 諛깆뾽 ?뚯씪 紐⑸줉 ??????????????????????????????????????????????????????
+// GET: 백업 파일 목록
 export async function GET() {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 紐⑸줉 議고쉶 媛??
+    // 원장 권한이 있는 사용자만 백업 목록을 조회할 수 있다.
     try {
         await requireOwner();
     } catch {
@@ -31,7 +31,7 @@ export async function GET() {
             .list("", { limit: 200, sortBy: { column: "created_at", order: "desc" } });
 
         if (error) {
-            // 踰꾪궥???놁쑝硫?鍮?諛곗뿴 諛섑솚 (?먮윭 ?꾨떂)
+            // 버킷이 아직 없으면 빈 목록을 반환한다. 오류 상황은 아니다.
             if (error.message.includes("not found") || error.message.includes("does not exist")) {
                 return NextResponse.json({ files: [] });
             }
@@ -51,9 +51,9 @@ export async function GET() {
     }
 }
 
-// ?? POST: ?대씪?곕뱶 諛깆뾽 ?뚯씪濡?DB 蹂듭썝 ?????????????????????????????????????
+// POST: 클라우드 백업 파일로 DB 복원
 export async function POST(req: NextRequest) {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 蹂듭썝 媛??
+    // 원장 권한이 있는 사용자만 백업을 복원할 수 있다.
     try {
         await requireOwner();
     } catch {
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     try {
         const supabase = createAdminClient();
 
-        // ?뚯씪 ?ㅼ슫濡쒕뱶
+        // 백업 파일 다운로드
         const { data, error } = await supabase.storage.from(BUCKET).download(filename);
         if (error) throw new Error(`다운로드 실패: ${error.message}`);
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 
         const results: Record<string, string> = {};
 
-        // AcademySettings 蹂듭썝 (termsOfService ??
+        // AcademySettings 복원
         if (backup.academySettings) {
             const s = backup.academySettings;
             try {
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Programs 蹂듭썝
+        // Programs 복원
         if (Array.isArray(backup.programs)) {
             let ok = 0;
             for (const p of backup.programs) {
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
             results.programs = `${ok}/${backup.programs.length}개`;
         }
 
-        // Coaches 蹂듭썝
+        // Coaches 복원
         if (Array.isArray(backup.coaches)) {
             let ok = 0;
             for (const c of backup.coaches) {
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
             results.coaches = `${ok}/${backup.coaches.length}개`;
         }
 
-        // ClassSlotOverrides 蹂듭썝
+        // ClassSlotOverrides 복원
         if (Array.isArray(backup.classSlotOverrides)) {
             let ok = 0;
             for (const s of backup.classSlotOverrides) {
@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
             results.classSlotOverrides = `${ok}/${backup.classSlotOverrides.length}개`;
         }
 
-        // CustomClassSlots 蹂듭썝
+        // CustomClassSlots 복원
         if (Array.isArray(backup.customClassSlots)) {
             let ok = 0;
             for (const s of backup.customClassSlots) {
@@ -233,9 +233,9 @@ export async function POST(req: NextRequest) {
     }
 }
 
-// ?? DELETE: 諛깆뾽 ?뚯씪 ??젣 ???????????????????????????????????????????????????
+// DELETE: 백업 파일 삭제
 export async function DELETE(req: NextRequest) {
-    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 ??젣 媛??
+    // 원장 권한이 있는 사용자만 백업 파일을 삭제할 수 있다.
     try {
         await requireOwner();
     } catch {

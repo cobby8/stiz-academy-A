@@ -22,6 +22,8 @@ import {
 import Link from "next/link";
 import { trackMetaEvent } from "@/components/MetaPixel";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+import type { MapLocationData } from "@/components/maps/LocationPickerModal";
+import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 
 const EnrollApplicationLaterSteps = dynamic(() => import("./EnrollApplicationLaterSteps"), {
     loading: () => (
@@ -65,8 +67,11 @@ interface FormData {
     shuttleChoice: string;        // "?묒듅" | "誘명깙??
     shuttleNeeded: boolean;
     shuttlePickup: string;
+    shuttlePickupLocationData?: MapLocationData;
     shuttleTime: string;          // ?뷀? ?щ쭩 ?쒓컙
     shuttleDropoff: string;       // ?뷀? ?섏감 ?μ냼
+    shuttleDropoffLocationData?: MapLocationData;
+    shuttleLocationConsent: boolean;
     referralSource: string;
     memo: string;
     agreedTerms: boolean;
@@ -109,8 +114,11 @@ export default function EnrollApplicationForm({
         shuttleChoice: "",
         shuttleNeeded: false,
         shuttlePickup: "",
+        shuttlePickupLocationData: undefined,
         shuttleTime: "",
         shuttleDropoff: "",
+        shuttleDropoffLocationData: undefined,
+        shuttleLocationConsent: false,
         referralSource: trialData?.source || "",
         memo: "",
         agreedTerms: false,
@@ -127,7 +135,7 @@ export default function EnrollApplicationForm({
     const [accountHandoff, setAccountHandoff] = useState<AccountHandoff | null>(null);
     const [isPending, startTransition] = useTransition();
 
-    const update = (field: keyof FormData, value: string | boolean | string[]) => {
+    const update = (field: keyof FormData, value: string | boolean | string[] | MapLocationData | undefined) => {
         setForm((prev) => ({ ...prev, [field]: value }));
         setError("");
     };
@@ -161,8 +169,11 @@ export default function EnrollApplicationForm({
         if (!form.shuttleChoice) { setError("?뷀??묒듅 ?щ?瑜??좏깮?댁＜?몄슂."); return false; }
         if (form.shuttleChoice === "탑승") {
             if (!form.shuttlePickup.trim()) { setError("?뷀? ?묒듅 ?μ냼瑜??낅젰?댁＜?몄슂."); return false; }
+            if (!form.shuttlePickupLocationData) { setError("셔틀 탑승 위치를 지도에서 선택해주세요."); return false; }
             if (!form.shuttleTime) { setError("?뷀? ?щ쭩 ?쒓컙???낅젰?댁＜?몄슂."); return false; }
             if (!form.shuttleDropoff.trim()) { setError("?뷀? ?섏감 ?μ냼瑜??낅젰?댁＜?몄슂."); return false; }
+            if (!form.shuttleDropoffLocationData) { setError("셔틀 하차 위치를 지도에서 선택해주세요."); return false; }
+            if (!form.shuttleLocationConsent) { setError("셔틀 위치정보 수집·이용에 동의해주세요."); return false; }
             if (!form.shuttleNoticeConfirmed) { setError("?뷀? 二쇱쓽?ы빆???뺤씤?댁＜?몄슂."); return false; }
         }
         return true;
@@ -198,8 +209,16 @@ export default function EnrollApplicationForm({
                 shuttleChoice: existing.shuttleNeeded ? "탑승" : "미탑승",
                 shuttleNeeded: existing.shuttleNeeded,
                 shuttlePickup: existing.shuttlePickup || prev.shuttlePickup,
+                shuttlePickupLocationData: existing.shuttlePickupLocationData || undefined,
                 shuttleTime: existing.shuttleTime || prev.shuttleTime,
                 shuttleDropoff: existing.shuttleDropoff || prev.shuttleDropoff,
+                shuttleDropoffLocationData: existing.shuttleDropoffLocationData || undefined,
+                shuttleLocationConsent: Boolean(
+                    existing.shuttlePickupLocationData
+                    && existing.shuttleDropoffLocationData
+                    && existing.shuttleLocationConsent === true
+                    && existing.shuttleLocationConsentVersion === SHUTTLE_LOCATION_CONSENT_VERSION,
+                ),
                 referralSource: existing.referralSource || prev.referralSource,
                 memo: existing.memo || prev.memo,
             }));
@@ -266,8 +285,14 @@ export default function EnrollApplicationForm({
                     basketballExp: form.basketballExp || undefined,
                     shuttleNeeded: form.shuttleChoice === "탑승",
                     shuttlePickup: form.shuttlePickup || undefined,
+                    shuttlePickupLocationData: form.shuttleChoice === "탑승" ? form.shuttlePickupLocationData : undefined,
                     shuttleTime: form.shuttleTime || undefined,
                     shuttleDropoff: form.shuttleDropoff || undefined,
+                    shuttleDropoffLocationData: form.shuttleChoice === "탑승" ? form.shuttleDropoffLocationData : undefined,
+                    shuttleLocationConsent: form.shuttleChoice === "탑승" && form.shuttleLocationConsent,
+                    shuttleLocationConsentVersion: form.shuttleChoice === "탑승"
+                        ? SHUTTLE_LOCATION_CONSENT_VERSION
+                        : undefined,
                     referralSource: form.referralSource || undefined,
                     memo: form.memo || undefined,
                     agreedTerms: form.agreedTerms,

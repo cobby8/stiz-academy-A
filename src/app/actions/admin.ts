@@ -24,6 +24,7 @@ import { publishGalleryPostToInstagram } from "@/lib/instagram";
 import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
 import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings } from "@/lib/queries";
 import { createTrialEnrollShortLink } from "@/lib/enroll-short-link";
+import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { assertSolapiShortSms } from "@/lib/sms-byte-length";
 import { renderSmsTemplate } from "@/lib/smsTemplate";
 import {
@@ -4757,9 +4758,10 @@ export async function approveEnrollApplication(
     };
 
     try {
+        await prisma.$transaction(async (tx) => {
         // 1. 신청서 조회
-        const apps = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT * FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
+        const apps = await tx.$queryRawUnsafe<any[]>(
+            `SELECT * FROM "EnrollmentApplication" WHERE id = $1 FOR UPDATE`,
             applicationId
         );
         if (apps.length === 0) throw new Error("신청서를 찾을 수 없습니다.");
@@ -4770,13 +4772,72 @@ export async function approveEnrollApplication(
             throw new Error(`이미 처리된 신청서입니다. (현재 상태: ${app.status})`);
         }
 
+        const readAppField = (field: string) => app[field] ?? app[field.toLowerCase()] ?? null;
+        const shuttleNeeded = Boolean(readAppField("shuttleNeeded"));
+        const locationPrefixes = ["shuttlePickup", "shuttleDropoff"] as const;
+        const locationFields = [
+            "Address", "RoadAddress", "Latitude", "Longitude", "PlaceId",
+            "Source", "AccuracyMeters", "ConfirmedAt",
+        ] as const;
+        const hasAnyLocationMetadata = locationPrefixes.some((prefix) =>
+            locationFields.some((suffix) => readAppField(`${prefix}${suffix}`) != null)
+        );
+        const consentVersion = readAppField("shuttleLocationConsentVersion");
+        const consentAt = readAppField("shuttleLocationConsentAt");
+        const hasAnyConsentMetadata = consentVersion != null || consentAt != null;
+        const completeLocations = locationPrefixes.every((prefix) => {
+            const address = String(readAppField(`${prefix}Address`) ?? "").trim();
+            const rawLatitude = readAppField(`${prefix}Latitude`);
+            const rawLongitude = readAppField(`${prefix}Longitude`);
+            const latitude = Number(rawLatitude);
+            const longitude = Number(rawLongitude);
+            const source = readAppField(`${prefix}Source`);
+            const confirmedAt = readAppField(`${prefix}ConfirmedAt`);
+            const accuracy = readAppField(`${prefix}AccuracyMeters`);
+            return Boolean(address)
+                && rawLatitude != null
+                && rawLongitude != null
+                && Number.isFinite(latitude)
+                && latitude >= -90
+                && latitude <= 90
+                && Number.isFinite(longitude)
+                && longitude >= -180
+                && longitude <= 180
+                && ["MAP_PIN", "SEARCH", "CURRENT_LOCATION"].includes(source)
+                && confirmedAt != null
+                && !Number.isNaN(new Date(confirmedAt).getTime())
+                && (
+                    accuracy == null
+                    || (
+                        Number.isFinite(Number(accuracy))
+                        && Number(accuracy) >= 0
+                        && Number(accuracy) <= 1_000_000
+                    )
+                );
+        });
+        const hasCompleteCurrentConsent = consentVersion === SHUTTLE_LOCATION_CONSENT_VERSION
+            && consentAt != null
+            && !Number.isNaN(new Date(consentAt).getTime());
+
+        if (!shuttleNeeded && (hasAnyLocationMetadata || hasAnyConsentMetadata)) {
+            throw new Error("셔틀 미이용 신청서에 위치정보가 남아 있습니다. 신청서를 다시 저장해주세요.");
+        }
+        if (
+            shuttleNeeded
+            && (hasAnyLocationMetadata || hasAnyConsentMetadata)
+            && !(completeLocations && hasCompleteCurrentConsent)
+        ) {
+            throw new Error("셔틀 위치 또는 위치정보 동의가 불완전합니다. 신청서를 다시 저장해주세요.");
+        }
+        const shouldCopyShuttleLocations = shuttleNeeded && completeLocations && hasCompleteCurrentConsent;
+
         // 2. 학부모 User 조회/생성 — parentPhone 기준으로 찾기
         // 전화번호로 검색: 동일 번호의 기존 학부모가 있으면 재사용
         const parentPhone = app.parentPhone ?? app.parentphone;
         const parentName = app.parentName ?? app.parentname;
         let parentId: string;
 
-        const existingUsers = await prisma.$queryRawUnsafe<any[]>(
+        const existingUsers = await tx.$queryRawUnsafe<any[]>(
             `SELECT id FROM "User" WHERE phone = $1 AND role = 'PARENT' LIMIT 1`,
             parentPhone
         );
@@ -4786,7 +4847,7 @@ export async function approveEnrollApplication(
             parentId = existingUsers[0].id;
         } else {
             // 없으면 새로 생성 — email은 전화번호 기반 placeholder
-            const newUsers = await prisma.$queryRawUnsafe<any[]>(
+            const newUsers = await tx.$queryRawUnsafe<any[]>(
                 `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
                  VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
                  RETURNING id`,
@@ -4802,7 +4863,7 @@ export async function approveEnrollApplication(
         const childBirthDate = app.childBirthDate ?? app.childbirthdate;
         let studentId: string;
 
-        const existingStudents = await prisma.$queryRawUnsafe<any[]>(
+        const existingStudents = await tx.$queryRawUnsafe<any[]>(
             `SELECT id FROM "Student" WHERE name = $1 AND "parentId" = $2 LIMIT 1`,
             childName, parentId
         );
@@ -4810,7 +4871,7 @@ export async function approveEnrollApplication(
         if (existingStudents.length > 0) {
             // 기존 원생 업데이트 (최신 정보로 갱신)
             studentId = existingStudents[0].id;
-            await prisma.$executeRawUnsafe(
+            await tx.$executeRawUnsafe(
                 `UPDATE "Student" SET
                     gender = COALESCE($1, gender),
                     grade = COALESCE($2, grade),
@@ -4830,7 +4891,7 @@ export async function approveEnrollApplication(
             );
         } else {
             // 새 원생 생성
-            const newStudents = await prisma.$queryRawUnsafe<any[]>(
+            const newStudents = await tx.$queryRawUnsafe<any[]>(
                 `INSERT INTO "Student" (id, name, "birthDate", gender, grade, school, phone, address, "referralSource", "parentId", "enrollDate", "createdAt", "updatedAt")
                  VALUES (gen_random_uuid()::text, $1, $2::timestamptz, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), NOW())
                  RETURNING id`,
@@ -4849,18 +4910,21 @@ export async function approveEnrollApplication(
 
         // 4. Guardian 생성 — 보호자 관계 등록 (ON CONFLICT 무시)
         const parentRelation = app.parentRelation ?? app.parentrelation ?? "부모";
-        await prisma.$executeRawUnsafe(
+        await tx.$executeRawUnsafe(
             `INSERT INTO "Guardian" (id, "studentId", relation, name, phone, "isPrimary", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, true, NOW(), NOW())
-             ON CONFLICT ("studentId") WHERE relation = $2 DO NOTHING`,
+             SELECT gen_random_uuid()::text, $1, $2, $3, $4, true, NOW(), NOW()
+             WHERE NOT EXISTS (
+                 SELECT 1
+                 FROM "Guardian"
+                 WHERE "studentId" = $1
+                   AND relation = $2
+             )`,
             studentId, parentRelation, parentName, parentPhone,
-        ).catch(() => {
-            // Guardian 테이블에 적절한 unique 제약이 없을 수 있으므로 무시
-        });
+        );
 
         // 5. 각 반에 Enrollment 등록 (ON CONFLICT 무시)
         for (const classId of data.classIds) {
-            await prisma.$executeRawUnsafe(
+            await tx.$executeRawUnsafe(
                 `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
                  VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
                  ON CONFLICT ("studentId", "classId") DO NOTHING`,
@@ -4868,8 +4932,49 @@ export async function approveEnrollApplication(
             );
         }
 
+        // 학부모가 지도에서 확인한 탑승·하차 위치는 함께 저장한다.
+        if (shouldCopyShuttleLocations) {
+            const upsertLocation = (
+                kind: "PICKUP" | "DROPOFF",
+                prefix: "shuttlePickup" | "shuttleDropoff",
+            ) => tx.$executeRawUnsafe(
+                `INSERT INTO "StudentShuttleLocation" (
+                    id, "studentId", kind, name, address, "roadAddress",
+                    latitude, longitude, "placeId", source, "accuracyMeters",
+                    "confirmedAt", "consentVersion", "createdAt", "updatedAt"
+                 ) VALUES (
+                    gen_random_uuid()::text, $1, $2, NULL, $3, $4,
+                    $5, $6, $7, $8, $9, $10::timestamptz, $11, NOW(), NOW()
+                 )
+                 ON CONFLICT ("studentId", kind) DO UPDATE SET
+                    address = EXCLUDED.address,
+                    "roadAddress" = EXCLUDED."roadAddress",
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude,
+                    "placeId" = EXCLUDED."placeId",
+                    source = EXCLUDED.source,
+                    "accuracyMeters" = EXCLUDED."accuracyMeters",
+                    "confirmedAt" = EXCLUDED."confirmedAt",
+                    "consentVersion" = EXCLUDED."consentVersion",
+                    "updatedAt" = NOW()`,
+                studentId,
+                kind,
+                readAppField(`${prefix}Address`),
+                readAppField(`${prefix}RoadAddress`),
+                readAppField(`${prefix}Latitude`),
+                readAppField(`${prefix}Longitude`),
+                readAppField(`${prefix}PlaceId`),
+                readAppField(`${prefix}Source`),
+                readAppField(`${prefix}AccuracyMeters`),
+                readAppField(`${prefix}ConfirmedAt`),
+                consentVersion,
+            );
+            await upsertLocation("PICKUP", "shuttlePickup");
+            await upsertLocation("DROPOFF", "shuttleDropoff");
+        }
+
         // 6. 신청서 상태 업데이트
-        await prisma.$executeRawUnsafe(
+        await tx.$executeRawUnsafe(
             `UPDATE "EnrollmentApplication"
              SET status = 'APPROVED',
                  "convertedStudentId" = $1,
@@ -4887,7 +4992,7 @@ export async function approveEnrollApplication(
         // 7. 연결된 TrialLead가 있으면 CONVERTED로 업데이트
         const trialLeadId = app.trialLeadId ?? app.trialleadid;
         if (trialLeadId) {
-            await prisma.$executeRawUnsafe(
+            await tx.$executeRawUnsafe(
                 `UPDATE "TrialLead"
                  SET status = 'CONVERTED',
                      "convertedStudentId" = $1,
@@ -4897,6 +5002,7 @@ export async function approveEnrollApplication(
                 studentId, trialLeadId,
             );
         }
+        }, { timeout: 15_000 });
     } catch (e) {
         console.error("Failed to approve enrollment application:", e);
         throw new Error((e as Error).message || "수강 신청 승인 실패");

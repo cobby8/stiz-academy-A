@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import FontFreeIcon, { type FontFreeIconName } from "@/components/ui/FontFreeIcon";
+import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 
 interface AvailableSlot {
     slotKey: string;
@@ -32,7 +33,10 @@ interface FormData {
     shuttleChoice: string;
     shuttleNeeded: boolean;
     shuttlePickup: string;
+    shuttlePickupLocationData?: MapLocationData;
     shuttleDropoff: string;
+    shuttleDropoffLocationData?: MapLocationData;
+    shuttleLocationConsent: boolean;
     shuttleTime: string;
     referralSource: string;
     memo: string;
@@ -47,7 +51,7 @@ interface EnrollApplicationLaterStepsProps {
     step: number;
     form: FormData;
     availableSlots: AvailableSlot[];
-    update: (field: keyof FormData, value: string | boolean | string[]) => void;
+    update: (field: keyof FormData, value: string | boolean | string[] | MapLocationData | undefined) => void;
     toggleSlot: (slotKey: string) => void;
 }
 
@@ -90,6 +94,7 @@ export default function EnrollApplicationLaterSteps({
     update,
     toggleSlot,
 }: EnrollApplicationLaterStepsProps) {
+    const [locationPicker, setLocationPicker] = useState<"pickup" | "dropoff" | null>(null);
     const enrollmentMonthOptions = getEnrollmentMonthOptions();
     const slotsByDay = DAY_ORDER.reduce<Record<string, AvailableSlot[]>>((acc, day) => {
         const daySlots = availableSlots.filter((slot) => slot.dayOfWeek === day);
@@ -275,8 +280,11 @@ export default function EnrollApplicationLaterSteps({
                                         update("shuttleNeeded", choice === "탑승");
                                         if (choice === "미탑승") {
                                             update("shuttlePickup", "");
+                                            update("shuttlePickupLocationData", undefined);
                                             update("shuttleTime", "");
                                             update("shuttleDropoff", "");
+                                            update("shuttleDropoffLocationData", undefined);
+                                            update("shuttleLocationConsent", false);
                                             update("shuttleNoticeConfirmed", false);
                                         }
                                     }}
@@ -294,18 +302,40 @@ export default function EnrollApplicationLaterSteps({
 
                     {form.shuttleChoice === "탑승" && (
                         <div className="space-y-4 pl-2 border-l-2 border-brand-orange-200 ml-2">
-                            <TextInput
+                            <ShuttleLocationField
                                 label="셔틀 탑승 장소"
                                 value={form.shuttlePickup}
-                                onChange={(value) => update("shuttlePickup", value)}
-                                placeholder="예: 다산 자이 아파트 정문 앞"
+                                selected={Boolean(form.shuttlePickupLocationData)}
+                                onChange={(value) => {
+                                    update("shuttlePickup", value);
+                                    update("shuttlePickupLocationData", undefined);
+                                    update("shuttleLocationConsent", false);
+                                }}
+                                onOpenMap={() => setLocationPicker("pickup")}
                             />
-                            <TextInput
+                            <ShuttleLocationField
                                 label="셔틀 하차 장소"
                                 value={form.shuttleDropoff}
-                                onChange={(value) => update("shuttleDropoff", value)}
-                                placeholder="예: 한강 자이 아파트 후문"
+                                selected={Boolean(form.shuttleDropoffLocationData)}
+                                onChange={(value) => {
+                                    update("shuttleDropoff", value);
+                                    update("shuttleDropoffLocationData", undefined);
+                                    update("shuttleLocationConsent", false);
+                                }}
+                                onOpenMap={() => setLocationPicker("dropoff")}
                             />
+                            <button
+                                type="button"
+                                disabled={!form.shuttlePickupLocationData}
+                                onClick={() => {
+                                    update("shuttleDropoff", form.shuttlePickup);
+                                    update("shuttleDropoffLocationData", form.shuttlePickupLocationData);
+                                    update("shuttleLocationConsent", false);
+                                }}
+                                className="min-h-11 w-full rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-700 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200"
+                            >
+                                탑승 위치를 하차 위치로 사용
+                            </button>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                     셔틀 희망 시간 <span className="text-red-500">*</span>
@@ -317,6 +347,17 @@ export default function EnrollApplicationLaterSteps({
                                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
                                 />
                             </div>
+                            <TermsAccordion
+                                title="셔틀 위치정보 수집·이용 동의"
+                                required
+                                checked={form.shuttleLocationConsent}
+                                onCheck={(value) => update("shuttleLocationConsent", value)}
+                            >
+                                <p className="text-sm leading-6">
+                                    셔틀 노선 배정과 승·하차 안내를 위해 선택한 위치의 주소와 지도 좌표를 수집합니다.
+                                    셔틀을 이용하지 않으면 해당 정보는 저장하지 않습니다.
+                                </p>
+                            </TermsAccordion>
                             <TermsAccordion
                                 title="주의사항 확인 및 동의"
                                 required
@@ -442,6 +483,27 @@ export default function EnrollApplicationLaterSteps({
                     </div>
                 </div>
             )}
+            {locationPicker && (
+                <LocationPickerModal
+                    title={locationPicker === "pickup" ? "셔틀 탑승 위치 선택" : "셔틀 하차 위치 선택"}
+                    initialValue={locationPicker === "pickup"
+                        ? form.shuttlePickupLocationData
+                        : form.shuttleDropoffLocationData}
+                    onClose={() => setLocationPicker(null)}
+                    onConfirm={(location) => {
+                        const text = location.roadAddress || location.address;
+                        if (locationPicker === "pickup") {
+                            update("shuttlePickup", text);
+                            update("shuttlePickupLocationData", location);
+                        } else {
+                            update("shuttleDropoff", text);
+                            update("shuttleDropoffLocationData", location);
+                        }
+                        update("shuttleLocationConsent", false);
+                        setLocationPicker(null);
+                    }}
+                />
+            )}
         </>
     );
 }
@@ -451,6 +513,47 @@ function formatPhone(value: string) {
     if (nums.length > 7) return `${nums.slice(0, 3)}-${nums.slice(3, 7)}-${nums.slice(7)}`;
     if (nums.length > 3) return `${nums.slice(0, 3)}-${nums.slice(3)}`;
     return nums;
+}
+
+function ShuttleLocationField({
+    label,
+    value,
+    selected,
+    onChange,
+    onOpenMap,
+}: {
+    label: string;
+    value: string;
+    selected: boolean;
+    onChange: (value: string) => void;
+    onOpenMap: () => void;
+}) {
+    return (
+        <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                {label} <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder="지도에서 정확한 위치를 선택해주세요"
+                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-brand-neon-lime dark:focus:ring-brand-neon-lime/50"
+                />
+                <button
+                    type="button"
+                    onClick={onOpenMap}
+                    className="min-h-11 shrink-0 rounded-xl border border-brand-orange-500 px-4 text-sm font-bold text-brand-orange-600 dark:border-brand-neon-lime dark:text-brand-neon-lime"
+                >
+                    지도 선택
+                </button>
+            </div>
+            <p className={`mt-1 text-xs ${selected ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
+                {selected ? "지도 위치가 확인되었습니다." : "주소를 직접 수정하면 지도 위치를 다시 선택해야 합니다."}
+            </p>
+        </div>
+    );
 }
 
 function TextInput({

@@ -12,6 +12,7 @@ import { notifyAdmins } from "@/lib/notification";
 import {
     issueEnrollmentAccountHandoff,
 } from "@/lib/enrollment-account-handoff";
+import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 
 async function issueEnrollmentAccountHandoffSafely(enrollmentApplicationId: string) {
     try {
@@ -79,6 +80,24 @@ export async function ensureEnrollmentApplicationTable() {
             ['"enrollmentMonths"', "TEXT"],
             ['"applicationNoticeConfirmed"', "BOOLEAN DEFAULT false"],
             ['"shuttleNoticeConfirmed"', "BOOLEAN DEFAULT false"],
+            ['"shuttlePickupAddress"', "TEXT"],
+            ['"shuttlePickupRoadAddress"', "TEXT"],
+            ['"shuttlePickupLatitude"', "DOUBLE PRECISION"],
+            ['"shuttlePickupLongitude"', "DOUBLE PRECISION"],
+            ['"shuttlePickupPlaceId"', "TEXT"],
+            ['"shuttlePickupSource"', "TEXT"],
+            ['"shuttlePickupAccuracyMeters"', "DOUBLE PRECISION"],
+            ['"shuttlePickupConfirmedAt"', "TIMESTAMPTZ"],
+            ['"shuttleDropoffAddress"', "TEXT"],
+            ['"shuttleDropoffRoadAddress"', "TEXT"],
+            ['"shuttleDropoffLatitude"', "DOUBLE PRECISION"],
+            ['"shuttleDropoffLongitude"', "DOUBLE PRECISION"],
+            ['"shuttleDropoffPlaceId"', "TEXT"],
+            ['"shuttleDropoffSource"', "TEXT"],
+            ['"shuttleDropoffAccuracyMeters"', "DOUBLE PRECISION"],
+            ['"shuttleDropoffConfirmedAt"', "TIMESTAMPTZ"],
+            ['"shuttleLocationConsentVersion"', "TEXT"],
+            ['"shuttleLocationConsentAt"', "TIMESTAMPTZ"],
         ];
         for (const [col, type] of extendedColumns) {
             await prisma.$executeRawUnsafe(
@@ -521,6 +540,17 @@ export async function getAvailableTrialSlots(): Promise<AvailableSlot[]> {
 }
 
 // ?? ?섍컯 ?좎껌 ?낅젰 ?????????????????????????????????????????????????????????
+export interface EnrollmentShuttleLocationData {
+    address: string;
+    roadAddress?: string;
+    latitude: number;
+    longitude: number;
+    placeId?: string;
+    source: "MAP_PIN" | "SEARCH" | "CURRENT_LOCATION";
+    accuracyMeters?: number;
+    confirmedAt?: string;
+}
+
 interface EnrollApplicationInput {
     existingId?: string;
     accessCode?: string;         // 만료·활성 검증을 거치는 체험 연동 코드
@@ -542,6 +572,10 @@ interface EnrollApplicationInput {
     shuttlePickup?: string;
     shuttleTime?: string;        // ?뷀? ?щ쭩 ?쒓컙
     shuttleDropoff?: string;     // ?뷀? ?섏감 ?μ냼
+    shuttlePickupLocationData?: EnrollmentShuttleLocationData;
+    shuttleDropoffLocationData?: EnrollmentShuttleLocationData;
+    shuttleLocationConsent?: boolean;
+    shuttleLocationConsentVersion?: string;
     paymentMethod?: string;
     referralSource?: string;
     memo?: string;
@@ -572,9 +606,72 @@ export interface ExistingEnrollApplicationForEdit {
     shuttlePickup: string | null;
     shuttleTime: string | null;
     shuttleDropoff: string | null;
+    shuttlePickupLocationData: EnrollmentShuttleLocationData | null;
+    shuttleDropoffLocationData: EnrollmentShuttleLocationData | null;
+    shuttleLocationConsent: boolean;
+    shuttleLocationConsentVersion: string | null;
     referralSource: string | null;
     memo: string | null;
     status: string;
+}
+
+function normalizeEnrollmentShuttleLocation(
+    value: EnrollmentShuttleLocationData | undefined,
+    label: string,
+): EnrollmentShuttleLocationData {
+    const address = value?.address?.trim();
+    const latitude = Number(value?.latitude);
+    const longitude = Number(value?.longitude);
+    const accuracyMeters = value?.accuracyMeters == null ? undefined : Number(value.accuracyMeters);
+    const source = value?.source;
+    if (
+        !address
+        || !Number.isFinite(latitude)
+        || !Number.isFinite(longitude)
+        || latitude < -90
+        || latitude > 90
+        || longitude < -180
+        || longitude > 180
+        || !["MAP_PIN", "SEARCH", "CURRENT_LOCATION"].includes(source || "")
+        || (accuracyMeters != null && (!Number.isFinite(accuracyMeters) || accuracyMeters < 0 || accuracyMeters > 1_000_000))
+    ) {
+        throw new Error(`${label} 위치를 지도에서 다시 선택해주세요.`);
+    }
+    return {
+        address,
+        roadAddress: value?.roadAddress?.trim() || undefined,
+        latitude,
+        longitude,
+        placeId: value?.placeId?.trim() || undefined,
+        source: source as EnrollmentShuttleLocationData["source"],
+        accuracyMeters,
+        confirmedAt: new Date().toISOString(),
+    };
+}
+
+function enrollmentLocationFromRow(row: any, prefix: "Pickup" | "Dropoff"): EnrollmentShuttleLocationData | null {
+    const address = rowValue(row, `shuttle${prefix}Address`, `shuttle${prefix.toLowerCase()}address`);
+    const lat = rowValue(row, `shuttle${prefix}Latitude`, `shuttle${prefix.toLowerCase()}latitude`);
+    const lng = rowValue(row, `shuttle${prefix}Longitude`, `shuttle${prefix.toLowerCase()}longitude`);
+    const confirmedAt = rowValue(row, `shuttle${prefix}ConfirmedAt`, `shuttle${prefix.toLowerCase()}confirmedat`);
+    const source = rowValue(row, `shuttle${prefix}Source`, `shuttle${prefix.toLowerCase()}source`);
+    if (
+        !address
+        || lat == null
+        || lng == null
+        || !confirmedAt
+        || !["MAP_PIN", "SEARCH", "CURRENT_LOCATION"].includes(source || "")
+    ) return null;
+    return {
+        address,
+        roadAddress: rowValue(row, `shuttle${prefix}RoadAddress`, `shuttle${prefix.toLowerCase()}roadaddress`) || undefined,
+        latitude: Number(lat),
+        longitude: Number(lng),
+        placeId: rowValue(row, `shuttle${prefix}PlaceId`, `shuttle${prefix.toLowerCase()}placeid`) || undefined,
+        source: source as EnrollmentShuttleLocationData["source"],
+        accuracyMeters: rowValue(row, `shuttle${prefix}AccuracyMeters`, `shuttle${prefix.toLowerCase()}accuracymeters`) ?? undefined,
+        confirmedAt: new Date(confirmedAt).toISOString(),
+    };
 }
 
 async function resolveTrialLeadIdFromEnrollmentAccess(accessCode?: string | null) {
@@ -656,6 +753,10 @@ export async function findExistingEnrollApplicationForEdit(input: {
         shuttlePickup: rowValue(row, "shuttlePickup", "shuttlepickup"),
         shuttleTime: rowValue(row, "shuttleTime", "shuttletime"),
         shuttleDropoff: rowValue(row, "shuttleDropoff", "shuttledropoff"),
+        shuttlePickupLocationData: enrollmentLocationFromRow(row, "Pickup"),
+        shuttleDropoffLocationData: enrollmentLocationFromRow(row, "Dropoff"),
+        shuttleLocationConsent: Boolean(rowValue(row, "shuttleLocationConsentAt", "shuttlelocationconsentat")),
+        shuttleLocationConsentVersion: rowValue(row, "shuttleLocationConsentVersion", "shuttlelocationconsentversion"),
         referralSource: rowValue(row, "referralSource", "referralsource"),
         memo: row.memo ?? null,
         status,
@@ -680,6 +781,23 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
     const childName = data.childName?.trim();
     const parentName = data.parentName?.trim();
     const parentPhone = data.parentPhone?.trim();
+    const shuttlePickupLocation = data.shuttleNeeded
+        ? normalizeEnrollmentShuttleLocation(data.shuttlePickupLocationData, "탑승")
+        : null;
+    const shuttleDropoffLocation = data.shuttleNeeded
+        ? normalizeEnrollmentShuttleLocation(data.shuttleDropoffLocationData, "하차")
+        : null;
+    if (
+        data.shuttleNeeded
+        && (
+            data.shuttleLocationConsent !== true
+            || data.shuttleLocationConsentVersion !== SHUTTLE_LOCATION_CONSENT_VERSION
+        )
+    ) {
+        throw new Error("셔틀 위치정보 이용 동의가 필요합니다.");
+    }
+    const shuttleLocationConsentVersion = data.shuttleNeeded ? SHUTTLE_LOCATION_CONSENT_VERSION : null;
+    const shuttleLocationConsentAt = data.shuttleNeeded ? new Date() : null;
 
     if (!childName) throw new Error("?꾩씠 ?대쫫???낅젰?댁＜?몄슂.");
     if (!data.childBirthDate) throw new Error("?꾩씠 ?앸뀈?붿씪???낅젰?댁＜?몄슂.");
@@ -832,8 +950,26 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                     "agreedPrivacy" = $24,
                     "applicationNoticeConfirmed" = $25,
                     "shuttleNoticeConfirmed" = $26,
+                    "shuttlePickupAddress" = $27,
+                    "shuttlePickupRoadAddress" = $28,
+                    "shuttlePickupLatitude" = $29,
+                    "shuttlePickupLongitude" = $30,
+                    "shuttlePickupPlaceId" = $31,
+                    "shuttlePickupSource" = $32,
+                    "shuttlePickupAccuracyMeters" = $33,
+                    "shuttlePickupConfirmedAt" = $34::timestamptz,
+                    "shuttleDropoffAddress" = $35,
+                    "shuttleDropoffRoadAddress" = $36,
+                    "shuttleDropoffLatitude" = $37,
+                    "shuttleDropoffLongitude" = $38,
+                    "shuttleDropoffPlaceId" = $39,
+                    "shuttleDropoffSource" = $40,
+                    "shuttleDropoffAccuracyMeters" = $41,
+                    "shuttleDropoffConfirmedAt" = $42::timestamptz,
+                    "shuttleLocationConsentVersion" = $43,
+                    "shuttleLocationConsentAt" = $44::timestamptz,
                     "updatedAt" = NOW()
-                  WHERE id = $27`,
+                  WHERE id = $45`,
                 matchedTrialLeadId || null,
                 childName,
                 data.childBirthDate,
@@ -860,6 +996,24 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                 data.agreedPrivacy,
                 data.applicationNoticeConfirmed ?? false,
                 data.shuttleNoticeConfirmed ?? false,
+                shuttlePickupLocation?.address ?? null,
+                shuttlePickupLocation?.roadAddress ?? null,
+                shuttlePickupLocation?.latitude ?? null,
+                shuttlePickupLocation?.longitude ?? null,
+                shuttlePickupLocation?.placeId ?? null,
+                shuttlePickupLocation?.source ?? null,
+                shuttlePickupLocation?.accuracyMeters ?? null,
+                shuttlePickupLocation?.confirmedAt ?? null,
+                shuttleDropoffLocation?.address ?? null,
+                shuttleDropoffLocation?.roadAddress ?? null,
+                shuttleDropoffLocation?.latitude ?? null,
+                shuttleDropoffLocation?.longitude ?? null,
+                shuttleDropoffLocation?.placeId ?? null,
+                shuttleDropoffLocation?.source ?? null,
+                shuttleDropoffLocation?.accuracyMeters ?? null,
+                shuttleDropoffLocation?.confirmedAt ?? null,
+                shuttleLocationConsentVersion,
+                shuttleLocationConsentAt,
                 existingApplication.id,
             );
 
@@ -913,6 +1067,13 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                 "shuttleNeeded", "shuttlePickup", "shuttleTime", "shuttleDropoff",
                 "paymentMethod", "referralSource", memo,
                 "agreedTerms", "agreedPrivacy", "applicationNoticeConfirmed", "shuttleNoticeConfirmed",
+                "shuttlePickupAddress", "shuttlePickupRoadAddress",
+                "shuttlePickupLatitude", "shuttlePickupLongitude", "shuttlePickupPlaceId",
+                "shuttlePickupSource", "shuttlePickupAccuracyMeters", "shuttlePickupConfirmedAt",
+                "shuttleDropoffAddress", "shuttleDropoffRoadAddress",
+                "shuttleDropoffLatitude", "shuttleDropoffLongitude", "shuttleDropoffPlaceId",
+                "shuttleDropoffSource", "shuttleDropoffAccuracyMeters", "shuttleDropoffConfirmedAt",
+                "shuttleLocationConsentVersion", "shuttleLocationConsentAt",
                 status, "createdAt", "updatedAt"
             ) VALUES (
                 gen_random_uuid()::text, $1,
@@ -922,6 +1083,9 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                 $16, $17, $18, $19,
                 $20, $21, $22,
                 $23, $24, $25, $26,
+                $27, $28, $29, $30, $31, $32, $33, $34::timestamptz,
+                $35, $36, $37, $38, $39, $40, $41, $42::timestamptz,
+                $43, $44::timestamptz,
                 'PENDING', NOW(), NOW()
             ) RETURNING id`,
             matchedTrialLeadId || null,         // $1
@@ -950,6 +1114,24 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             data.agreedPrivacy,                 // $24
             data.applicationNoticeConfirmed ?? false, // $25
             data.shuttleNoticeConfirmed ?? false,     // $26
+            shuttlePickupLocation?.address ?? null, // $27
+            shuttlePickupLocation?.roadAddress ?? null, // $28
+            shuttlePickupLocation?.latitude ?? null, // $29
+            shuttlePickupLocation?.longitude ?? null, // $30
+            shuttlePickupLocation?.placeId ?? null, // $31
+            shuttlePickupLocation?.source ?? null, // $32
+            shuttlePickupLocation?.accuracyMeters ?? null, // $33
+            shuttlePickupLocation?.confirmedAt ?? null, // $34
+            shuttleDropoffLocation?.address ?? null, // $35
+            shuttleDropoffLocation?.roadAddress ?? null, // $36
+            shuttleDropoffLocation?.latitude ?? null, // $37
+            shuttleDropoffLocation?.longitude ?? null, // $38
+            shuttleDropoffLocation?.placeId ?? null, // $39
+            shuttleDropoffLocation?.source ?? null, // $40
+            shuttleDropoffLocation?.accuracyMeters ?? null, // $41
+            shuttleDropoffLocation?.confirmedAt ?? null, // $42
+            shuttleLocationConsentVersion, // $43
+            shuttleLocationConsentAt, // $44
         );
 
         if (matchedTrialLeadId && rows[0]?.id) {

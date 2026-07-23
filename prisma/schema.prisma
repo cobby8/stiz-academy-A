@@ -1337,6 +1337,24 @@ model EnrollmentApplication {
   shuttlePickup      String?
   shuttleTime        String? // 셔틀 희망 시간 (예: "15:30")
   shuttleDropoff     String? // 셔틀 하차 장소 (예: "다산자이 정문")
+  shuttlePickupAddress        String?
+  shuttlePickupRoadAddress    String?
+  shuttlePickupLatitude       Float?
+  shuttlePickupLongitude      Float?
+  shuttlePickupPlaceId        String?
+  shuttlePickupSource         String?
+  shuttlePickupAccuracyMeters Float?
+  shuttlePickupConfirmedAt    DateTime? @db.Timestamptz(6)
+  shuttleDropoffAddress        String?
+  shuttleDropoffRoadAddress    String?
+  shuttleDropoffLatitude       Float?
+  shuttleDropoffLongitude      Float?
+  shuttleDropoffPlaceId        String?
+  shuttleDropoffSource         String?
+  shuttleDropoffAccuracyMeters Float?
+  shuttleDropoffConfirmedAt    DateTime? @db.Timestamptz(6)
+  shuttleLocationConsentVersion String?
+  shuttleLocationConsentAt      DateTime? @db.Timestamptz(6)
   paymentMethod      String?
   referralSource     String?
   memo               String?

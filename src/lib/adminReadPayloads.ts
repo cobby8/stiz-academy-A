@@ -1241,16 +1241,17 @@ export const getCachedAdminSmsPayload = unstable_cache(
 
 export const getCachedAdminSchedulePayload = unstable_cache(
     async () => {
-        const [settings, dbScheduleData, coaches, programs] = await Promise.all([
-            getAcademySettings() as Promise<AdminScheduleSettingsPayload>,
+        const [dbScheduleData, coaches, programs] = await Promise.all([
             getScheduleSlotAdminData(),
             getCoaches(),
             getPrograms(),
         ]);
-        const sheetUrl = settings?.googleSheetsScheduleUrl ?? settings?.googlesheetsscheduleurl ?? null;
 
         let scheduleData = dbScheduleData;
+        let sheetUrl: string | null = null;
         if (!scheduleData) {
+            const settings = await getAcademySettings() as AdminScheduleSettingsPayload;
+            sheetUrl = settings?.googleSheetsScheduleUrl ?? settings?.googlesheetsscheduleurl ?? null;
             const [overrides, customSlots, legacySlots] = await Promise.all([
                 getClassSlotOverrides(),
                 getCustomClassSlots(),

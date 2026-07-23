@@ -28,16 +28,20 @@ export async function GET() {
     }
 
     try {
-        const [settings, dbScheduleData, coaches, programs] = await timing.measure("primary-data", () => Promise.all([
-            getAcademySettings() as Promise<AdminScheduleSettings>,
+        const [dbScheduleData, coaches, programs] = await timing.measure("primary-data", () => Promise.all([
             getScheduleSlotAdminData(),
             getCoaches(),
             getPrograms(),
         ]));
-        const sheetUrl = settings?.googleSheetsScheduleUrl ?? settings?.googlesheetsscheduleurl ?? null;
 
         let scheduleData = dbScheduleData;
+        let sheetUrl: string | null = null;
         if (!scheduleData) {
+            const settings = await timing.measure(
+                "legacy-settings",
+                () => getAcademySettings() as Promise<AdminScheduleSettings>,
+            );
+            sheetUrl = settings?.googleSheetsScheduleUrl ?? settings?.googlesheetsscheduleurl ?? null;
             const [overrides, customSlots, legacySlots] = await timing.measure("legacy-fallback-data", () => Promise.all([
                 getClassSlotOverrides(),
                 getCustomClassSlots(),

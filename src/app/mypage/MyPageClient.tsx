@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { markNotificationRead, markAllNotificationsRead, createParentRequest } from "@/app/actions/admin";
+import type { ParentShuttleOverviewItem } from "@/lib/shuttle/parent";
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -177,7 +178,40 @@ const REQUEST_STATUS: Record<string, { label: string; color: string; iconName: s
     REJECTED: { label: "반려", color: "bg-red-100 text-red-700", iconName: "cancel" },
 };
 
-export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [] }: {
+const SHUTTLE_STATUS: Record<ParentShuttleOverviewItem["status"], { label: string; color: string }> = {
+    REQUESTED: { label: "신청 접수", color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200" },
+    PREPARING: { label: "배정 준비 중", color: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-200" },
+    CONFIRMED: { label: "배정 확정", color: "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-200" },
+    COMPLETED: { label: "운행 완료", color: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200" },
+};
+
+const SHUTTLE_DIRECTION = {
+    PICKUP: "등원",
+    DROPOFF: "하원",
+} as const;
+
+const SHUTTLE_RIDE_STATUS: Record<string, string> = {
+    PENDING: "탑승 대기",
+    BOARDED: "탑승",
+    DROPPED_OFF: "하차",
+    NO_SHOW: "미탑승",
+};
+
+function formatShuttleDate(value: string | null): string {
+    if (!value) return "운행일 확인 중";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+}
+
+function formatShuttleTime(value: string | null): string {
+    if (!value) return "시간 확인 중";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
+
+export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [], parentShuttleOverview = [] }: {
     data: MyPageData;
     gallery?: GalleryItem[];
     notices?: NoticeItem[];
@@ -185,6 +219,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
     unreadCount?: number;
     myRequests?: RequestItem[];
     feedbacks?: FeedbackItem[];
+    parentShuttleOverview?: ParentShuttleOverviewItem[];
 }) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -253,6 +288,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
         setPushLoading(false);
     }
     const child = data.children[selectedIdx];
+    const childShuttleOverview = parentShuttleOverview.filter((item) => item.studentId === child.id);
 
     const enrollSummary = child.enrollments
         .map((e) => `${e.className} (${DAY_LABELS[e.dayOfWeek] || e.dayOfWeek} ${e.startTime}~${e.endTime})`)
@@ -317,6 +353,88 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                     </div>
                 </div>
             </div>
+
+            {childShuttleOverview.length > 0 && (
+                <section aria-labelledby="parent-shuttle-heading" className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-blue-900/50 dark:bg-gray-800">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <SymbolIcon name="airport_shuttle" size={20} className="text-blue-600 dark:text-blue-300" />
+                                <h2 id="parent-shuttle-heading" className="font-bold text-gray-900 dark:text-white">셔틀 안내</h2>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{child.name} 학생의 신청 및 배정 현황입니다.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setReqType("SHUTTLE");
+                                setShowRequestForm(true);
+                                setShowRequests(false);
+                                requestAnimationFrame(() => {
+                                    document.getElementById("parent-request-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                });
+                            }}
+                            className="min-h-11 shrink-0 rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-950/40 dark:focus-visible:ring-offset-gray-800"
+                        >
+                            변경 요청
+                        </button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {childShuttleOverview.map((item) => {
+                            const status = SHUTTLE_STATUS[item.status];
+                            const showDetails = item.status === "CONFIRMED" || item.status === "COMPLETED";
+                            return (
+                                <article key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-gray-900/60">
+                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900 dark:text-white">{item.title}</p>
+                                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                                {item.label}{item.direction ? ` · ${SHUTTLE_DIRECTION[item.direction]}` : ""}
+                                            </p>
+                                        </div>
+                                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${status.color}`}>{status.label}</span>
+                                    </div>
+
+                                    <dl className="mt-3 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-2 text-sm">
+                                        <dt className="text-gray-500 dark:text-gray-400">운행일</dt>
+                                        <dd className="font-medium text-gray-800 dark:text-gray-100">
+                                            {item.serviceDate ? <time dateTime={item.serviceDate}>{formatShuttleDate(item.serviceDate)}</time> : "운행일 확인 중"}
+                                        </dd>
+                                        {showDetails && (
+                                            <>
+                                                <dt className="text-gray-500 dark:text-gray-400">노선</dt>
+                                                <dd className="font-medium text-gray-800 dark:text-gray-100">{item.routeName || "노선 확인 중"}</dd>
+                                                <dt className="text-gray-500 dark:text-gray-400">
+                                                    {item.direction === "PICKUP" ? "탑승 장소" : item.direction === "DROPOFF" ? "하차 장소" : "정류장"}
+                                                </dt>
+                                                <dd className="font-medium text-gray-800 dark:text-gray-100">
+                                                    {item.stopName || "정류장 확인 중"}
+                                                    {item.stopAddress && <span className="mt-0.5 block text-xs font-normal text-gray-500 dark:text-gray-400">{item.stopAddress}</span>}
+                                                </dd>
+                                                <dt className="text-gray-500 dark:text-gray-400">예정 시간</dt>
+                                                <dd className="font-medium text-gray-800 dark:text-gray-100">
+                                                    {item.plannedAt ? <time dateTime={item.plannedAt}>{formatShuttleTime(item.plannedAt)}</time> : "시간 확인 중"}
+                                                </dd>
+                                                <dt className="text-gray-500 dark:text-gray-400">차량</dt>
+                                                <dd className="font-medium text-gray-800 dark:text-gray-100">{item.vehicleName || "차량 확인 중"}</dd>
+                                                {item.rideStatus && (
+                                                    <>
+                                                        <dt className="text-gray-500 dark:text-gray-400">탑승 상태</dt>
+                                                        <dd className="font-medium text-gray-800 dark:text-gray-100">
+                                                            {SHUTTLE_RIDE_STATUS[item.rideStatus] || "상태 확인 중"}
+                                                        </dd>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                    </dl>
+                                </article>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
 
             {/* 알림 토글 버튼 — 호버 시 그림자 강화 (디자인 토큰 통일) */}
             <div>
@@ -451,7 +569,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
                 {/* 요청 접수 폼 */}
                 {showRequestForm && (
-                    <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 shadow-sm space-y-4">
+                    <div id="parent-request-form" className="mt-3 scroll-mt-4 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 shadow-sm space-y-4">
                         <h3 className="font-bold text-gray-900 dark:text-white">요청 접수</h3>
 
                         {/* 요청 유형 */}

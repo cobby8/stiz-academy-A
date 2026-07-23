@@ -3,7 +3,7 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, requireOwner } from "@/lib/auth-guard";
+import { requireAdmin, requireOwner, requireVerifiedParent } from "@/lib/auth-guard";
 import {
     createNotificationRecord,
     notifyAdmins,
@@ -1686,40 +1686,61 @@ export async function createParentRequest(data: {
     content: string;
     date?: string | null;
 }) {
-    await requireAdmin();
+    const parent = await requireVerifiedParent();
+    const studentId = data.studentId?.trim();
+    const type = data.type?.trim().toUpperCase();
+    const title = data.title?.trim();
+    const content = data.content?.trim();
+    const allowedTypes = new Set(["ABSENCE", "SHUTTLE", "EARLY_LEAVE", "OTHER"]);
+    if (!studentId || studentId.length > 100) throw new Error("올바른 자녀를 선택해 주세요.");
+    if (!allowedTypes.has(type)) throw new Error("올바른 요청 유형을 선택해 주세요.");
+    if (!title || title.length > 200) throw new Error("요청 제목은 200자 이내로 입력해 주세요.");
+    if (!content || content.length > 2000) throw new Error("요청 내용은 2,000자 이내로 입력해 주세요.");
+    const requestedDate = data.date ? new Date(data.date) : null;
+    if (requestedDate && Number.isNaN(requestedDate.getTime())) throw new Error("올바른 날짜를 입력해 주세요.");
+
+    const ownedStudent = await prisma.student.findFirst({
+        where: { id: studentId, parentId: parent.appUserId },
+        select: { id: true, name: true },
+    });
+    if (!ownedStudent) throw new Error("본인 자녀에 대해서만 요청할 수 있습니다.");
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "ParentRequest" (id, "userId", "studentId", type, title, content, date, status, "createdAt", "updatedAt")
              VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6::timestamptz, 'PENDING', NOW(), NOW())`,
-            data.userId, data.studentId, data.type, data.title, data.content, data.date || null,
+            parent.appUserId, ownedStudent.id, type, title, content, requestedDate,
         );
-
+    } catch (e) {
+        console.error("Failed to create parent request:", e);
+        throw new Error("요청 접수에 실패했습니다.");
+    }
+    try {
         // 관리자(ADMIN)에게 알림
         const admins = await prisma.$queryRawUnsafe<any[]>(
             `SELECT id FROM "User" WHERE role = 'ADMIN'`
         );
         // 해당 원생 이름 조회
         const studentRows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT name FROM "Student" WHERE id = $1`, data.studentId
+            `SELECT name FROM "Student" WHERE id = $1`, ownedStudent.id
         );
         const studentName = studentRows[0]?.name ?? "원생";
         const typeLabels: Record<string, string> = {
             ABSENCE: "결석 신청", SHUTTLE: "셔틀 변경", EARLY_LEAVE: "조퇴 요청", OTHER: "기타 요청"
         };
-        const typeLabel = typeLabels[data.type] || data.type;
+        const typeLabel = typeLabels[type] || type;
 
         for (const admin of admins) {
             await createNotificationRecord({
                 userId: admin.id,
                 type: "REQUEST",
                 title: `${typeLabel} 접수`,
-                message: `${studentName} - ${data.title}`,
+                message: `${studentName} - ${title}`,
                 linkUrl: "/admin/requests",
             });
         }
     } catch (e) {
-        console.error("Failed to create parent request:", e);
-        throw new Error("요청 접수 실패");
+        // 요청은 이미 저장되었으므로 알림 장애를 학부모의 접수 실패로 돌려주지 않는다.
+        console.error("Parent request saved, but admin notification failed:", e);
     }
     revalidatePath("/mypage");
     revalidatePath("/admin");

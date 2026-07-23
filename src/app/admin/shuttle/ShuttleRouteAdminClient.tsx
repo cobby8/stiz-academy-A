@@ -117,13 +117,13 @@ async function request(body: unknown) {
   return result;
 }
 
-export default function ShuttleRouteAdminClient() {
-  const [data, setData] = useState<Payload>(EMPTY_PAYLOAD);
-  const [seasonId, setSeasonId] = useState("");
+export default function ShuttleRouteAdminClient({ initialData }: { initialData?: Payload }) {
+  const [data, setData] = useState<Payload>(initialData ?? EMPTY_PAYLOAD);
+  const [seasonId, setSeasonId] = useState(initialData?.selectedSeasonId ?? initialData?.seasons[0]?.id ?? "");
   const [direction, setDirection] = useState<Direction>("PICKUP");
   const [serviceDate, setServiceDate] = useState("");
   const [selectedRouteId, setSelectedRouteId] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -151,7 +151,10 @@ export default function ShuttleRouteAdminClient() {
     finally { setLoading(false); }
   }, [direction, serviceDate]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (initialData) return;
+    void load();
+  }, [initialData, load]);
 
   useEffect(() => {
     if (!autoRefresh || pending || modal || locationPicker) return;

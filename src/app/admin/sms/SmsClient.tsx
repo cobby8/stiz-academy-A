@@ -342,14 +342,19 @@ function AutomationCard({ rule, disabled, onUpdate }: { rule: AutomationRule; di
 
 function HistoryPanel() {
     const [items, setItems] = useState<DeliveryHistory[]>([]);
-    const [loading, setLoading] = useState(true);
-    useEffect(() => {
+    const [loading, setLoading] = useState(false);
+    const [loaded, setLoaded] = useState(false);
+    const loadHistory = useCallback(() => {
+        setLoading(true);
         fetch("/api/admin/sms/history?limit=50", { cache: "no-store" })
             .then(response => {
                 if (!response.ok) throw new Error("load-failed");
                 return response.json() as Promise<{ deliveries: DeliveryHistory[] }>;
             })
-            .then(data => setItems(data.deliveries ?? []))
+            .then(data => {
+                setItems(data.deliveries ?? []);
+                setLoaded(true);
+            })
             .catch(() => setItems([]))
             .finally(() => setLoading(false));
     }, []);
@@ -360,7 +365,16 @@ function HistoryPanel() {
                 <h2 className="font-extrabold text-gray-900 dark:text-white">최근 발송 이력</h2>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">전화번호는 개인정보 보호를 위해 일부만 표시합니다.</p>
             </div>
-            {loading ? (
+            {!loaded && !loading ? (
+                <div className="p-12 text-center">
+                    <span className="material-symbols-outlined text-4xl text-gray-300">history</span>
+                    <p className="mt-2 font-bold text-gray-700 dark:text-gray-200">발송 이력은 필요할 때만 불러옵니다.</p>
+                    <p className="mt-1 text-sm text-gray-500">최근 결과 확인이 필요할 때 조회하면 관리자 페이지 첫 반응이 더 가벼워집니다.</p>
+                    <button type="button" onClick={loadHistory} className="mt-4 min-h-11 rounded-xl bg-brand-navy-900 px-5 text-sm font-bold text-white">
+                        최근 50건 불러오기
+                    </button>
+                </div>
+            ) : loading ? (
                 <p className="p-10 text-center text-sm text-gray-500">발송 이력을 불러오는 중입니다.</p>
             ) : items.length === 0 ? (
                 <div className="p-12 text-center">

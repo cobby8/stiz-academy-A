@@ -12,6 +12,15 @@ test("메시지 센터는 네 가지 관리 탭을 제공한다", async () => {
     }
 });
 
+test("발송 이력은 버튼을 눌렀을 때만 조회한다", async () => {
+    const source = await readFile(clientPath, "utf8");
+
+    assert.match(source, /const \[loaded, setLoaded\] = useState\(false\)/);
+    assert.match(source, /const loadHistory = useCallback/);
+    assert.match(source, /최근 50건 불러오기/);
+    assert.doesNotMatch(source, /useEffect\(\(\) => \{\s*fetch\("\/api\/admin\/sms\/history\?limit=50"/);
+});
+
 test("자동 발송은 내부·외부·보안 대상을 구분하고 보안 알림을 잠근다", async () => {
     const source = await readFile(clientPath, "utf8");
 

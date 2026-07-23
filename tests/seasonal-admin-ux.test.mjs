@@ -10,6 +10,10 @@ const adminRoute = readFileSync(
   new URL("../src/app/api/admin/seasonal/route.ts", import.meta.url),
   "utf8",
 );
+const adminOverview = readFileSync(
+  new URL("../src/lib/seasonal/admin-overview.ts", import.meta.url),
+  "utf8",
+);
 
 test("special lecture editing preserves schedule and linked operation settings", () => {
   assert.match(adminClient, /initial\?\.sessionDates\?\.length/);
@@ -151,17 +155,24 @@ test("특강 반 담당 선생님은 ID 직접 입력 대신 관리자 선택 �
   assert.match(adminClient, /<select name="instructorId" value=\{selectedInstructorId\}/);
   assert.match(adminClient, /<input type="hidden" name="instructorName"/);
   assert.match(adminClient, /function assignClassInstructor/);
-  assert.match(adminClient, /resource: "offeringInstructor"/);
+  assert.match(adminClient, /resource: "operationalSlotInstructor"/);
   assert.match(adminClient, /onAssignInstructor=\{assignClassInstructor\}/);
   assert.match(adminClient, /assigningInstructorClassId/);
   assert.match(adminClient, /onOpenTodayRoster/);
   assert.match(adminClient, /todayDateInputValue\(\)/);
   assert.match(adminClient, />오늘 출석</);
-  assert.match(adminRoute, /function updateOperationalOfferingInstructor/);
+  assert.match(adminClient, /groupOperationalClasses/);
+  assert.match(adminClient, /주 n회 정보는 수강료 계산용입니다/);
+  assert.match(adminClient, /요일별 운영/);
+  assert.match(adminClient, /수강료 계산 규칙/);
+  assert.match(adminRoute, /function updateOperationalSlotInstructor/);
   assert.match(adminRoute, /linkedClassId\s*:\s*target\.linkedClassId/);
-  assert.match(adminRoute, /resource === "offeringInstructor"/);
-  assert.match(adminRoute, /OFFERING_INSTRUCTOR_UPDATED/);
-  assert.match(adminRoute, /syncOfferingSessionDates\(tx/);
+  assert.match(adminRoute, /resource === "operationalSlotInstructor"/);
+  assert.match(adminRoute, /OPERATIONAL_SLOT_INSTRUCTOR_UPDATED/);
+  assert.match(adminRoute, /sessionDateForKorea/);
+  assert.match(adminOverview, /operationalStats/);
+  assert.match(adminOverview, /unnest\(app\."selectedWeekdays"\)/);
+  assert.match(adminOverview, /session: \{ select: \{ coachId: true \} \}/);
   assert.doesNotMatch(adminClient, /ClassInput name="instructorId" label="담당 강사 ID"/);
 });
 

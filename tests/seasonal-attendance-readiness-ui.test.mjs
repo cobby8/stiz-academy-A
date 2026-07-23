@@ -6,7 +6,8 @@ const client = readFileSync("src/app/admin/seasonal/SeasonalAdminClient.tsx", "u
 
 test("공개 모집 반의 출석 준비 누락을 카드와 폼에서 안내한다", () => {
   assert.match(client, /function missingAttendancePreparation/);
-  assert.match(client, /selected\.status === "PUBLISHED" && klass\.status === "OPEN"/);
+  assert.match(client, /selected\.status === "PUBLISHED" && classStatus === "OPEN"/);
+  assert.match(client, /요일별 담당 선생님/);
   assert.match(client, /출석 준비 미완료/);
   assert.match(client, /빠진 항목: \{attendanceMissing\.join\(" · "\)\}/);
   assert.match(client, /모집 상태로 저장할 수 있지만 수업 시작 전 연결해 주세요/);

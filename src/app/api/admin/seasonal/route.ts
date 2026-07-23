@@ -5,11 +5,11 @@ import { cleanText, SeasonalError } from "@/lib/seasonal/contracts";
 import { ensureInvoiceForPayment, ensurePaymentInfrastructure } from "@/lib/payment-ledger";
 import { Prisma } from "@prisma/client";
 import { classifyAdminAuthError } from "./auth-error";
-import { syncOfferingSessionDates } from "@/lib/seasonal/session-bridge";
+import { sessionDateForKorea, syncOfferingSessionDates } from "@/lib/seasonal/session-bridge";
 import { issueParentAccountClaim } from "@/lib/parent-account-claim";
 import { randomUUID } from "node:crypto";
 import { expireStaleSmsDeliveries } from "@/lib/notification";
-import { getSeasonalAdminOverview, getSeasonalAdminStats } from "@/lib/seasonal/admin-overview";
+import { getSeasonalAdminOverview } from "@/lib/seasonal/admin-overview";
 import {
   SEASONAL_SMS_TRIGGERS,
   dispatchSeasonalParentSms,
@@ -661,6 +661,85 @@ async function updateOperationalOfferingInstructor(
   };
 }
 
+function weekdayNumberFromKey(weekday: string) {
+  const normalized = normalizeSelectedWeekdays([weekday])[0];
+  return normalized ? ROSTER_WEEKDAYS[normalized] : null;
+}
+
+async function updateOperationalSlotInstructor(
+  tx: Prisma.TransactionClient,
+  params: { offeringId: string; weekday: string; instructorId: string | null; instructorName: string | null; actorId: string },
+) {
+  const weekdayNumber = weekdayNumberFromKey(params.weekday);
+  if (!weekdayNumber) throw new SeasonalError("담당 선생님을 배정할 요일을 선택해 주세요.", 400, "WEEKDAY_REQUIRED");
+  const target = await tx.specialProgramOffering.findUnique({ where: { id: params.offeringId } });
+  if (!target) throw new SeasonalError("담당 선생님을 배정할 운영반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
+  if (!target.linkedClassId) throw new SeasonalError("요일별 담당 배정을 하려면 먼저 출석에 연결할 반을 설정해 주세요.", 409, "LINKED_CLASS_REQUIRED");
+
+  const sessionDates = await tx.specialProgramSessionDate.findMany({
+    where: { offering: { seasonId: target.seasonId, linkedClassId: target.linkedClassId } },
+    include: { session: { include: { _count: { select: { attendances: true } } } } },
+    orderBy: { startsAt: "asc" },
+  });
+  const targetDates = sessionDates.filter((sessionDate) => {
+    const day = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", weekday: "short" }).format(sessionDate.startsAt);
+    return WEEKDAY_FROM_EN_SHORT[day] && ROSTER_WEEKDAYS[WEEKDAY_FROM_EN_SHORT[day]] === weekdayNumber;
+  });
+  if (targetDates.length === 0) throw new SeasonalError("선택한 요일의 수업 일정이 없습니다.", 404, "SESSION_DATE_NOT_FOUND");
+
+  const slots = new Map<string, typeof targetDates>();
+  for (const sessionDate of targetDates) {
+    const key = `${sessionDate.startsAt.toISOString()}:${sessionDate.endsAt.toISOString()}`;
+    slots.set(key, [...(slots.get(key) ?? []), sessionDate]);
+  }
+
+  const touchedSessionIds = new Set<string>();
+  for (const slotDates of slots.values()) {
+    const existingSessions = slotDates.map((sessionDate) => sessionDate.session).filter(Boolean);
+    for (const session of existingSessions) {
+      if (!session) continue;
+      if ((session.status !== "PLANNED" || session._count.attendances > 0) && session.coachId !== params.instructorId) {
+        throw new SeasonalError("이미 시작했거나 출석 기록이 있는 회차의 담당 선생님은 변경할 수 없습니다.", 409, "SESSION_DATE_LOCKED");
+      }
+      await tx.session.update({ where: { id: session.id }, data: { coachId: params.instructorId } });
+      touchedSessionIds.add(session.id);
+    }
+    if (existingSessions.length === 0) {
+      const representative = slotDates[0];
+      const session = await tx.session.create({
+        data: {
+          classId: target.linkedClassId,
+          date: sessionDateForKorea(representative.startsAt),
+          sessionKey: `seasonal:${representative.id}`,
+          status: "PLANNED",
+          coachId: params.instructorId,
+          specialProgramSessionDateId: representative.id,
+        },
+      });
+      touchedSessionIds.add(session.id);
+    }
+  }
+
+  await tx.specialProgramAuditLog.create({
+    data: {
+      seasonId: target.seasonId,
+      offeringId: target.id,
+      actorType: "ADMIN",
+      actorId: params.actorId,
+      action: "OPERATIONAL_SLOT_INSTRUCTOR_UPDATED",
+      afterJSON: {
+        linkedClassId: target.linkedClassId,
+        weekday: params.weekday,
+        instructorId: params.instructorId,
+        instructorName: params.instructorName,
+        sessionCount: touchedSessionIds.size,
+      },
+    },
+  });
+
+  return { updatedCount: touchedSessionIds.size };
+}
+
 async function saveSpecialProgramItemAssignment(
   tx: Prisma.TransactionClient,
   params: { itemId: string; offeringId: string; selectedWeekdays: string[]; priceSnapshot: number; actorId: string },
@@ -807,15 +886,8 @@ export async function GET(request: NextRequest) {
     const pageSize = rosterInt(request.nextUrl.searchParams.get("pageSize"), 30, 1, 100);
     const offset = (page - 1) * pageSize;
     const applicationWhere = seasonalApplicationWhere(request.nextUrl.searchParams);
-    const [seasons, stats, applicationRows, totalApplications] = await Promise.all([
-      prisma.specialProgramSeason.findMany({
-        where: seasonId ? { id: seasonId } : undefined,
-        orderBy: { startsAt: "desc" },
-        include: {
-          offerings: { orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }], include: { sessionDates: { orderBy: { startsAt: "asc" } }, _count: { select: { applicationItems: true } } } },
-        },
-      }),
-      getSeasonalAdminStats(),
+    const [overview, applicationRows, totalApplications] = await Promise.all([
+      getSeasonalAdminOverview(seasonId),
       prisma.specialProgramApplication.findMany({
         where: applicationWhere,
         orderBy: { createdAt: "desc" },
@@ -832,6 +904,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.specialProgramApplication.count({ where: applicationWhere }),
     ]);
+    const { seasons, stats } = overview;
     const paymentIds = Array.from(new Set(
       (applicationRows as AdminApplicationRow[]).flatMap((application) => application.items.map((item) => item.paymentId).filter(Boolean) as string[]),
     ));
@@ -1199,6 +1272,17 @@ export async function PATCH(request: NextRequest) {
       const instructorName = instructorId ? cleanText(data.instructorName, 100) || null : null;
       const result = await prisma.$transaction(
         (tx) => updateOperationalOfferingInstructor(tx, { offeringId: id, instructorId, instructorName, actorId: actor.appUserId }),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      return NextResponse.json(result);
+    }
+
+    if (body.resource === "operationalSlotInstructor") {
+      const instructorId = cleanText(data.instructorId, 100) || null;
+      const instructorName = instructorId ? cleanText(data.instructorName, 100) || null : null;
+      const weekday = cleanText(data.weekday, 10) || "";
+      const result = await prisma.$transaction(
+        (tx) => updateOperationalSlotInstructor(tx, { offeringId: id, weekday, instructorId, instructorName, actorId: actor.appUserId }),
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
       return NextResponse.json(result);

@@ -38,7 +38,14 @@ type SeasonalClass = {
     endsAt: string;
     location?: string | null;
     note?: string | null;
+    session?: { coachId?: string | null } | null;
   }>;
+  operationalStats?: {
+    confirmedTotal?: number;
+    heldTotal?: number;
+    waitlistedTotal?: number;
+    weekdays?: Record<string, { confirmed?: number; held?: number; waitlisted?: number }>;
+  };
 };
 
 type ShuttleRequest = {
@@ -234,6 +241,35 @@ type CoachOption = {
   name: string;
 };
 
+type OperationalSlot = {
+  key: string;
+  weekdayKey: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  dateCount: number;
+  instructorId: string;
+  instructorName: string;
+  mixedInstructor: boolean;
+  confirmed: number;
+  held: number;
+  waitlisted: number;
+};
+
+type OperationalClassGroup = {
+  key: string;
+  name: string;
+  baseClass: SeasonalClass;
+  offerings: SeasonalClass[];
+  slots: OperationalSlot[];
+  pricingRules: Array<{ key: string; label: string; price: number; newPrice?: number | null; existingPrice?: number | null }>;
+  capacity: number;
+  confirmedTotal: number;
+  heldTotal: number;
+  waitlistedTotal: number;
+};
+
 type ApplicationsMode = "applications" | "roster";
 
 type Tab = "overview" | "seasons" | "applications";
@@ -361,6 +397,10 @@ function operationalClassKey(offering: SeasonalClass) {
   return offering.linkedClassId || offering.id;
 }
 
+function operationalGroupKey(offering: SeasonalClass) {
+  return offering.linkedClassId ? `class:${offering.linkedClassId}` : `name:${compactOperationalClassName(offering.name)}`;
+}
+
 function compactOperationalClassName(name: string) {
   return name.replace(/\s*주\s*\d+\s*회.*$/u, "").trim() || name;
 }
@@ -380,6 +420,143 @@ function matchingOfferingForWeekdays(offerings: SeasonalClass[], baseOffering: S
   const key = operationalClassKey(baseOffering);
   return offerings.find((offering) => operationalClassKey(offering) === key && seasonalOfferingFrequency(offering) === selectedWeekdays.length)
     ?? baseOffering;
+}
+
+function seoulWeekdayKey(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const short = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", weekday: "short" }).format(date);
+  return ({ Mon: "MON", Tue: "TUE", Wed: "WED", Thu: "THU", Fri: "FRI", Sat: "SAT", Sun: "SUN" } as Record<string, string>)[short] ?? null;
+}
+
+function seoulTime(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+function firstNumber(...values: Array<number | null | undefined>) {
+  return values.find((value): value is number => typeof value === "number" && Number.isFinite(value)) ?? 0;
+}
+
+function coachNameById(coaches: CoachOption[], coachId?: string | null) {
+  return coaches.find((coach) => coach.id === coachId)?.name ?? "";
+}
+
+function groupOperationalClasses(offerings: SeasonalClass[], coaches: CoachOption[]): OperationalClassGroup[] {
+  const groups = new Map<string, SeasonalClass[]>();
+  for (const offering of offerings) {
+    const key = operationalGroupKey(offering);
+    groups.set(key, [...(groups.get(key) ?? []), offering]);
+  }
+
+  return Array.from(groups.entries()).map(([key, groupOfferings]) => {
+    const sortedOfferings = [...groupOfferings].sort((left, right) => {
+      const leftFrequency = seasonalOfferingFrequency(left) ?? 99;
+      const rightFrequency = seasonalOfferingFrequency(right) ?? 99;
+      return leftFrequency - rightFrequency || left.name.localeCompare(right.name);
+    });
+    const baseClass = sortedOfferings[0]!;
+    const slotMap = new Map<string, {
+      weekdayKey: string;
+      startTime: string;
+      endTime: string;
+      location: string;
+      dateKeys: Set<string>;
+      sessionCoachIdsByDate: Map<string, Set<string>>;
+      fallbackCoachIdsByDate: Map<string, Set<string>>;
+    }>();
+    const stats = baseClass.operationalStats ?? {};
+    for (const offering of sortedOfferings) {
+      for (const sessionDate of offering.sessionDates ?? []) {
+        const weekdayKey = seoulWeekdayKey(sessionDate.startsAt);
+        if (!weekdayKey) continue;
+        const startTime = seoulTime(sessionDate.startsAt) || offering.startTime;
+        const endTime = seoulTime(sessionDate.endsAt) || offering.endTime;
+        const slotKey = `${weekdayKey}:${startTime}:${endTime}`;
+        const current = slotMap.get(slotKey) ?? {
+          weekdayKey,
+          startTime,
+          endTime,
+          location: sessionDate.location || offering.location || "",
+          dateKeys: new Set<string>(),
+          sessionCoachIdsByDate: new Map<string, Set<string>>(),
+          fallbackCoachIdsByDate: new Map<string, Set<string>>(),
+        };
+        const dateKey = `${sessionDate.startsAt}:${sessionDate.endsAt}`;
+        current.dateKeys.add(dateKey);
+        const sessionCoachId = sessionDate.session?.coachId || "";
+        const fallbackCoachId = offering.instructorId || "";
+        if (sessionCoachId) {
+          const sessionCoachIds = current.sessionCoachIdsByDate.get(dateKey) ?? new Set<string>();
+          sessionCoachIds.add(sessionCoachId);
+          current.sessionCoachIdsByDate.set(dateKey, sessionCoachIds);
+        } else if (fallbackCoachId) {
+          const fallbackCoachIds = current.fallbackCoachIdsByDate.get(dateKey) ?? new Set<string>();
+          fallbackCoachIds.add(fallbackCoachId);
+          current.fallbackCoachIdsByDate.set(dateKey, fallbackCoachIds);
+        }
+        if (!current.location) current.location = sessionDate.location || offering.location || "";
+        slotMap.set(slotKey, current);
+      }
+    }
+
+    const slots = Array.from(slotMap.entries()).map(([slotKey, slot]) => {
+      const instructorIdSet = new Set<string>();
+      for (const dateKey of slot.dateKeys) {
+        const sessionCoachIds = slot.sessionCoachIdsByDate.get(dateKey);
+        const fallbackCoachIds = slot.fallbackCoachIdsByDate.get(dateKey);
+        for (const coachId of sessionCoachIds?.size ? sessionCoachIds : fallbackCoachIds ?? []) instructorIdSet.add(coachId);
+      }
+      const instructorIds = Array.from(instructorIdSet);
+      const instructorId = instructorIds.length === 1 ? instructorIds[0] : "";
+      const weekdayStats = stats.weekdays?.[slot.weekdayKey] ?? {};
+      return {
+        key: slotKey,
+        weekdayKey: slot.weekdayKey,
+        label: weekdayLabel(slot.weekdayKey),
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        location: slot.location,
+        dateCount: slot.dateKeys.size,
+        instructorId,
+        instructorName: instructorId ? coachNameById(coaches, instructorId) || "담당 선생님" : instructorIds.length > 1 ? "혼합 배정" : "미배정",
+        mixedInstructor: instructorIds.length > 1,
+        confirmed: firstNumber(weekdayStats.confirmed),
+        held: firstNumber(weekdayStats.held),
+        waitlisted: firstNumber(weekdayStats.waitlisted),
+      } satisfies OperationalSlot;
+    }).sort((left, right) => {
+      const leftIndex = WEEKDAY_OPTIONS.findIndex((option) => option.value === left.weekdayKey);
+      const rightIndex = WEEKDAY_OPTIONS.findIndex((option) => option.value === right.weekdayKey);
+      return leftIndex - rightIndex || left.startTime.localeCompare(right.startTime);
+    });
+
+    const pricingRules = sortedOfferings.map((offering) => {
+      const frequency = seasonalOfferingFrequency(offering);
+      return {
+        key: offering.id,
+        label: frequency ? `주 ${frequency}회` : compactOperationalClassName(offering.name),
+        price: offering.price,
+        newPrice: offering.newApplicantPrice,
+        existingPrice: offering.existingApplicantPrice,
+      };
+    });
+
+    return {
+      key,
+      name: compactOperationalClassName(baseClass.name),
+      baseClass,
+      offerings: sortedOfferings,
+      slots,
+      pricingRules,
+      capacity: baseClass.capacity,
+      confirmedTotal: firstNumber(stats.confirmedTotal, sortedOfferings.reduce((sum, offering) => sum + (offering.confirmedCount ?? 0), 0)),
+      heldTotal: firstNumber(stats.heldTotal),
+      waitlistedTotal: firstNumber(stats.waitlistedTotal, sortedOfferings.reduce((sum, offering) => sum + (offering.waitlistCount ?? 0), 0)),
+    } satisfies OperationalClassGroup;
+  });
 }
 
 function recordValue(record: Record<string, unknown>, keys: string[], fallback = "") {
@@ -771,14 +948,14 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     shuttleUnassigned: data.stats?.shuttleUnassigned ?? data.applications.filter((a) => a.shuttleNeeded && a.shuttleStatus !== "ASSIGNED").length,
   };
 
-  function openRosterForClass(klass: SeasonalClass, date = "") {
+  function openRosterForClass(klass: SeasonalClass, options: { date?: string; weekday?: string } = {}) {
     setApplicationsMode("roster");
     setRosterFilters((current) => ({
       ...current,
       seasonId: selectedSeason?.id ?? current.seasonId,
       offeringId: klass.id,
-      weekday: "",
-      date,
+      weekday: options.weekday ?? "",
+      date: options.date ?? "",
       page: 1,
     }));
     setTab("applications");
@@ -1080,23 +1257,24 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     }
   }
 
-  async function assignClassInstructor(klass: SeasonalClass, instructorId: string) {
+  async function assignClassInstructor(klass: SeasonalClass, slot: OperationalSlot, instructorId: string) {
     const selectedCoach = coachOptions.find((coach) => coach.id === instructorId) ?? null;
-    setAssigningInstructorClassId(klass.id);
+    setAssigningInstructorClassId(`${klass.id}:${slot.key}`);
     try {
       await mutate(
         "PATCH",
         {
-          resource: "offeringInstructor",
+          resource: "operationalSlotInstructor",
           id: klass.id,
           data: {
+            weekday: slot.weekdayKey,
             instructorId: instructorId || null,
             instructorName: selectedCoach?.name ?? null,
           },
         },
         selectedCoach
-          ? `${compactOperationalClassName(klass.name)} 담당 선생님을 ${selectedCoach.name} 선생님으로 배정했습니다.`
-          : `${compactOperationalClassName(klass.name)} 담당 선생님 배정을 해제했습니다.`,
+          ? `${compactOperationalClassName(klass.name)} ${slot.label}요일 담당 선생님을 ${selectedCoach.name} 선생님으로 배정했습니다.`
+          : `${compactOperationalClassName(klass.name)} ${slot.label}요일 담당 선생님 배정을 해제했습니다.`,
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "담당 선생님을 변경하지 못했습니다.");
@@ -1119,7 +1297,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       {notice && <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800"><Icon name="check_circle" />{notice}</div>}
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
-        <SeasonsView seasons={data.seasons} selected={selectedSeason} coaches={coachOptions} assigningInstructorClassId={assigningInstructorClassId} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onOpenRoster={(klass) => openRosterForClass(klass)} onOpenTodayRoster={(klass) => openRosterForClass(klass, todayDateInputValue())} onAssignInstructor={assignClassInstructor} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
+        <SeasonsView seasons={data.seasons} selected={selectedSeason} coaches={coachOptions} assigningInstructorClassId={assigningInstructorClassId} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onOpenRoster={(klass, weekday) => openRosterForClass(klass, { weekday })} onOpenTodayRoster={(klass) => openRosterForClass(klass, { date: todayDateInputValue() })} onAssignInstructor={assignClassInstructor} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} pagination={applicationsPagination} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onPage={(page) => { setSelectedItemIds([]); void load({ includeApplications: true, page }); }} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} />}
@@ -1161,26 +1339,30 @@ function SeasonsView({
   onAddClass: () => void;
   onEditSeason: (season: Season) => void;
   onEditClass: (klass: SeasonalClass) => void;
-  onOpenRoster: (klass: SeasonalClass) => void;
+  onOpenRoster: (klass: SeasonalClass, weekday?: string) => void;
   onOpenTodayRoster: (klass: SeasonalClass) => void;
-  onAssignInstructor: (klass: SeasonalClass, instructorId: string) => Promise<void>;
+  onAssignInstructor: (klass: SeasonalClass, slot: OperationalSlot, instructorId: string) => Promise<void>;
   onStatus: (id: string, status: SeasonStatus) => Promise<void>;
 }) {
+  const operationalGroups = selected ? groupOperationalClasses(selected.classes, coaches) : [];
   return (
     <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
       <Panel title="시즌 목록" icon="event_note">
         <div className="space-y-2">
-          {seasons.map((season) => (
-            <button
-              type="button"
-              key={season.id}
-              onClick={() => onSelect(season.id)}
-              className={`w-full rounded-xl border p-3 text-left ${selected?.id === season.id ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]" : "border-gray-200 dark:border-gray-700"}`}
-            >
-              <p className="font-bold">{season.name}</p>
-              <p className="mt-1 text-xs text-gray-500">{STATUS_LABEL[season.status]} · {season.classes.length}개 반</p>
-            </button>
-          ))}
+          {seasons.map((season) => {
+            const groupCount = groupOperationalClasses(season.classes, coaches).length;
+            return (
+              <button
+                type="button"
+                key={season.id}
+                onClick={() => onSelect(season.id)}
+                className={`w-full rounded-xl border p-3 text-left ${selected?.id === season.id ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]" : "border-gray-200 dark:border-gray-700"}`}
+              >
+                <p className="font-bold">{season.name}</p>
+                <p className="mt-1 text-xs text-gray-500">{STATUS_LABEL[season.status]} · 운영반 {groupCount}개</p>
+              </button>
+            );
+          })}
           {!seasons.length && <Empty text="개설된 시즌이 없습니다." />}
         </div>
       </Panel>
@@ -1194,7 +1376,7 @@ function SeasonsView({
             <select aria-label="시즌 상태" value={selected.status} onChange={(event) => void onStatus(selected.id, event.target.value as SeasonStatus)} className="min-h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm dark:border-gray-700 dark:bg-gray-800">
               {["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
             </select>
-            <button type="button" onClick={onAddClass} className="min-h-10 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]">반 추가</button>
+            <button type="button" onClick={onAddClass} className="min-h-10 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]">운영반/요금 추가</button>
           </div>
         )}
       >
@@ -1206,52 +1388,95 @@ function SeasonsView({
               <p><span className="block text-xs text-gray-500">지점</span>{selected.branch || "전체"}</p>
             </div>
             <div className="space-y-3">
-              {selected.classes.map((klass) => {
-                const confirmed = klass.confirmedCount ?? 0;
-                const percent = Math.min(100, klass.capacity ? confirmed / klass.capacity * 100 : 0);
-                const attendanceMissing = selected.status === "PUBLISHED" && klass.status === "OPEN" ? missingAttendancePreparation(klass.linkedClassId, klass.instructorId) : [];
-                const currentCoachMissingFromOptions = Boolean(klass.instructorId && !coaches.some((coach) => coach.id === klass.instructorId));
-                const classStatus = klass.status ?? "";
+              {operationalGroups.map((group) => {
+                const classStatus = group.baseClass.status ?? "";
                 const classStatusLabel = classStatus ? STATUS_LABEL[classStatus] ?? classStatus : "상태 미정";
+                const activeSlots = group.slots.length;
+                const missingSlots = group.slots.filter((slot) => !slot.instructorId || slot.mixedInstructor);
+                const attendanceMissing = selected.status === "PUBLISHED" && classStatus === "OPEN"
+                  ? [
+                      !group.baseClass.linkedClassId?.trim() ? "연결 반" : null,
+                      activeSlots === 0 ? "수업 일정" : null,
+                      missingSlots.length > 0 ? "요일별 담당 선생님" : null,
+                    ].filter((item): item is string => Boolean(item))
+                  : [];
                 return (
-                  <article key={klass.id} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                  <article key={group.key} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-black">{klass.name}</h3>
-                          {klass.shuttleAvailable && <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">셔틀</span>}
+                          <h3 className="text-lg font-black">{group.name}</h3>
+                          {group.baseClass.shuttleAvailable && <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">셔틀</span>}
                           <span className={badge(classStatus)}>{classStatusLabel}</span>
                         </div>
                         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          {klass.dayOfWeek} {klass.startTime}~{klass.endTime} · {klass.targetGrade || "전체 학년"} · {klass.location || selected.branch || "장소 미정"}
+                          {group.baseClass.targetGrade || "전체 학년"} · {group.baseClass.location || selected.branch || "장소 미정"} · 운영 요일 {activeSlots || "미등록"}개
                         </p>
                         <p className="mt-2 text-xs font-bold text-gray-500 dark:text-gray-400">
-                          같은 운영반의 주차별 상품에 함께 반영됩니다.
+                          주 n회 정보는 수강료 계산용입니다. 실제 반은 이 운영반 하나로 관리합니다.
                         </p>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-[180px_120px_auto] xl:min-w-[560px]">
-                        <label className="text-xs font-black text-gray-500 dark:text-gray-400">
-                          담당 선생님
-                          <select
-                            aria-label={`${klass.name} 담당 선생님`}
-                            value={klass.instructorId ?? ""}
-                            disabled={assigningInstructorClassId === klass.id}
-                            onChange={(event) => void onAssignInstructor(klass, event.target.value)}
-                            className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                          >
-                            <option value="">담당자 미정</option>
-                            {currentCoachMissingFromOptions && <option value={klass.instructorId ?? ""}>{klass.instructorName || "현재 담당 선생님"}</option>}
-                            {coaches.map((coach) => <option key={coach.id} value={coach.id}>{coach.name}</option>)}
-                          </select>
-                        </label>
+                      <div className="grid gap-2 sm:grid-cols-[120px_auto] xl:min-w-[440px]">
                         <div className="rounded-lg bg-gray-50 px-3 py-2 text-right dark:bg-gray-800">
-                          <p className="font-black">{klass.price.toLocaleString()}원</p>
-                          <p className="text-xs text-gray-500">확정 {confirmed}/{klass.capacity} · 대기 {klass.waitlistCount ?? 0}</p>
+                          <p className="font-black">확정 {group.confirmedTotal}명</p>
+                          <p className="text-xs text-gray-500">요일 정원 {group.capacity || "미정"}명 · 대기 {group.waitlistedTotal}명</p>
                         </div>
                         <div className="flex flex-wrap gap-2 xl:justify-end">
-                          <button type="button" onClick={() => onOpenRoster(klass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="groups" className="text-lg" />명단</button>
-                          <button type="button" onClick={() => onOpenTodayRoster(klass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="fact_check" className="text-lg" />오늘 출석</button>
-                          <button type="button" onClick={() => onEditClass(klass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="edit" className="text-lg" />수정</button>
+                          <button type="button" onClick={() => onOpenRoster(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="groups" className="text-lg" />전체 명단</button>
+                          <button type="button" onClick={() => onOpenTodayRoster(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="fact_check" className="text-lg" />오늘 출석</button>
+                          <button type="button" onClick={() => onEditClass(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="edit" className="text-lg" />기본정보</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
+                      <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800/80">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h4 className="text-sm font-black">요일별 운영</h4>
+                          <span className="text-xs font-bold text-gray-500">학생별 신청 요일 기준</span>
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          {group.slots.map((slot) => {
+                            const assigningKey = `${group.baseClass.id}:${slot.key}`;
+                            const currentCoachMissingFromOptions = Boolean(slot.instructorId && !coaches.some((coach) => coach.id === slot.instructorId));
+                            return (
+                              <div key={slot.key} className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="font-black">{slot.label}요일</p>
+                                    <p className="text-xs font-bold text-gray-500">{slot.startTime}~{slot.endTime} · {slot.dateCount}회차</p>
+                                    <p className="text-xs text-gray-500">{slot.location || "장소 미정"}</p>
+                                  </div>
+                                  <button type="button" onClick={() => onOpenRoster(group.baseClass, slot.weekdayKey)} className="min-h-8 rounded-lg border border-gray-200 px-2 text-xs font-black dark:border-gray-700">명단 {slot.confirmed}</button>
+                                </div>
+                                <label className="mt-3 block text-xs font-black text-gray-500 dark:text-gray-400">
+                                  담당 선생님
+                                  <select
+                                    aria-label={`${group.name} ${slot.label}요일 담당 선생님`}
+                                    value={slot.instructorId}
+                                    disabled={assigningInstructorClassId === assigningKey}
+                                    onChange={(event) => void onAssignInstructor(group.baseClass, slot, event.target.value)}
+                                    className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                                  >
+                                    <option value="">{slot.mixedInstructor ? "혼합 배정" : "담당자 미정"}</option>
+                                    {currentCoachMissingFromOptions && <option value={slot.instructorId}>{slot.instructorName || "현재 담당 선생님"}</option>}
+                                    {coaches.map((coach) => <option key={coach.id} value={coach.id}>{coach.name}</option>)}
+                                  </select>
+                                </label>
+                              </div>
+                            );
+                          })}
+                          {!group.slots.length && <Empty text="등록된 요일별 수업 일정이 없습니다." />}
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800/80">
+                        <h4 className="text-sm font-black">수강료 계산 규칙</h4>
+                        <div className="mt-2 space-y-2">
+                          {group.pricingRules.map((rule) => (
+                            <div key={rule.key} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-900">
+                              <span className="font-bold">{rule.label}</span>
+                              <span className="font-black">{rule.price.toLocaleString()}원</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -1261,13 +1486,10 @@ function SeasonsView({
                         <p className="mt-1 text-xs">빠진 항목: {attendanceMissing.join(" · ")}</p>
                       </div>
                     )}
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
-                      <div className="h-full rounded-full bg-[var(--brand-accent)]" style={{ width: `${percent}%` }} />
-                    </div>
                   </article>
                 );
               })}
-              {!selected.classes.length && <Empty text="아직 개설된 반이 없습니다. '반 추가'를 눌러 시작하세요." />}
+              {!operationalGroups.length && <Empty text="아직 개설된 운영반이 없습니다. '운영반/요금 추가'를 눌러 시작하세요." />}
             </div>
           </>
         ) : <Empty text="왼쪽에서 시즌을 선택하세요." />}
@@ -1782,22 +2004,32 @@ function ApplicationAssignmentEditor({
   useEffect(() => {
     const nextOfferingId = item?.classId || offerings[0]?.id || "";
     const nextOffering = offerings.find((offering) => offering.id === nextOfferingId);
-    setOfferingId(nextOfferingId);
-    setSelectedWeekdays(normalizeWeekdayKeys(application.selectedWeekdays));
-    setPrice(String(item?.amount ?? assignmentPriceFor(application, nextOffering)));
-    setLocalError("");
-    lastOfferingIdRef.current = nextOfferingId;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setOfferingId(nextOfferingId);
+      setSelectedWeekdays(normalizeWeekdayKeys(application.selectedWeekdays));
+      setPrice(String(item?.amount ?? assignmentPriceFor(application, nextOffering)));
+      setLocalError("");
+      lastOfferingIdRef.current = nextOfferingId;
+    });
+    return () => { cancelled = true; };
   }, [application.id, application.selectedWeekdays, item?.id, item?.amount, item?.classId, offerings]);
 
   useEffect(() => {
     if (locked || !pricingOffering) return;
-    if (pricingOffering.id !== offeringId) {
-      lastOfferingIdRef.current = pricingOffering.id;
-      setOfferingId(pricingOffering.id);
-    } else if (lastOfferingIdRef.current !== offeringId) {
-      lastOfferingIdRef.current = offeringId;
-    }
-    setPrice(String(assignmentPriceFor(application, pricingOffering)));
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (pricingOffering.id !== offeringId) {
+        lastOfferingIdRef.current = pricingOffering.id;
+        setOfferingId(pricingOffering.id);
+      } else if (lastOfferingIdRef.current !== offeringId) {
+        lastOfferingIdRef.current = offeringId;
+      }
+      setPrice(String(assignmentPriceFor(application, pricingOffering)));
+    });
+    return () => { cancelled = true; };
   }, [application, locked, offeringId, pricingOffering]);
 
   const toggleWeekday = (value: string, checked: boolean) => {

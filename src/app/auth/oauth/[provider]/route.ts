@@ -13,6 +13,9 @@ type RouteContext = { params: Promise<{ provider: string }> };
 function loginError(request: NextRequest, message: string) {
   const url = new URL("/signup/parent", request.url);
   url.searchParams.set("error", message);
+  const handoff = request.nextUrl.searchParams.get("handoff")
+    || request.nextUrl.searchParams.get("enrollmentHandoff");
+  if (handoff) url.searchParams.set("enrollmentHandoff", handoff);
   return NextResponse.redirect(url);
 }
 
@@ -26,9 +29,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   const next = safeInternalRedirect(request.nextUrl.searchParams.get("next"));
+  const enrollmentHandoff = request.nextUrl.searchParams.get("handoff")
+    || request.nextUrl.searchParams.get("enrollmentHandoff");
   const callbackUrl = new URL("/auth/callback", publicSiteOrigin(request.nextUrl.origin));
   callbackUrl.searchParams.set("provider", provider);
   callbackUrl.searchParams.set("next", next);
+  if (enrollmentHandoff) callbackUrl.searchParams.set("handoff", enrollmentHandoff);
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({

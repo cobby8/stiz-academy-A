@@ -23,6 +23,7 @@ model User {
   students                Student[]
   coach                   Coach?
   drivenShuttleRoutePlans ShuttleRoutePlan[] @relation("ShuttleRouteDriver")
+  enrollmentApplications EnrollmentApplication[] @relation("EnrollmentApplicationParent")
 }
 
 model ParentAccountClaim {
@@ -1253,6 +1254,9 @@ model EnrollmentApplication {
   // 보호자 정보
   parentName         String
   parentPhone        String
+  parentUserId       String?
+  parentUser         User?     @relation("EnrollmentApplicationParent", fields: [parentUserId], references: [id], onDelete: SetNull)
+  accountHandoffs    EnrollmentAccountHandoff[]
   parentRelation     String? // 부/모/기타
   address            String?
   // 수강 정보
@@ -1287,6 +1291,20 @@ model EnrollmentApplication {
   @@index([trialLeadId])
   @@index([createdAt])
   @@index([status, createdAt])
+  @@index([parentUserId])
+}
+
+model EnrollmentAccountHandoff {
+  id                      String                @id @default(dbgenerated("(gen_random_uuid())::text"))
+  enrollmentApplicationId String
+  tokenHash               String                @unique
+  phoneHash               String
+  expiresAt               DateTime              @db.Timestamptz(6)
+  consumedAt              DateTime?             @db.Timestamptz(6)
+  createdAt               DateTime              @default(now()) @db.Timestamptz(6)
+  enrollmentApplication   EnrollmentApplication @relation(fields: [enrollmentApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([enrollmentApplicationId, expiresAt])
 }
 
 // 체험/수강신청 상담·연락 기록 — 한 신청 건에 여러 연락 이력을 남긴다

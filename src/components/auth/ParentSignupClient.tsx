@@ -32,8 +32,12 @@ async function postJson(path: string, body: object) {
 export default function ParentSignupClient() {
   const searchParams = useSearchParams();
   const socialSignup = searchParams.get("social") === "1";
+  const enrollmentHandoff = searchParams.get("enrollmentHandoff") || "";
+  const next = searchParams.get("next") || "/parent";
+  const initialName = searchParams.get("name") || "";
+  const initialPhone = (searchParams.get("phone") || "").replace(/[^0-9]/g, "");
   const [step, setStep] = useState<Step>(socialSignup ? "phone" : "method");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(initialPhone);
   const [otp, setOtp] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
   const [proof, setProof] = useState("");
@@ -89,6 +93,8 @@ export default function ParentSignupClient() {
       await postJson("/api/auth/parent-signup/complete", {
         challengeToken,
         proof,
+        enrollmentHandoff: enrollmentHandoff || undefined,
+        next,
         username: String(form.get("username") || "").trim(),
         ...(socialSignup ? {} : { password }),
         name: String(form.get("name") || "").trim(),
@@ -107,6 +113,10 @@ export default function ParentSignupClient() {
   }
 
   const progress = step === "method" ? 1 : step === "phone" ? 2 : step === "account" ? 3 : 4;
+  const continueParams = new URLSearchParams({ next });
+  if (enrollmentHandoff) continueParams.set("enrollmentHandoff", enrollmentHandoff);
+  if (initialName) continueParams.set("name", initialName);
+  if (initialPhone) continueParams.set("phone", initialPhone);
 
   return (
     <div className="space-y-6">
@@ -131,9 +141,9 @@ export default function ParentSignupClient() {
           </button>
           <div className="flex items-center gap-3 text-xs text-gray-400"><span className="h-px flex-1 bg-gray-200" />간편가입<span className="h-px flex-1 bg-gray-200" /></div>
           <div className="grid gap-3">
-            <Link href="/auth/oauth/google?intent=parent-signup" className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white font-semibold text-gray-800">Google로 계속</Link>
-            <Link href="/auth/oauth/kakao?intent=parent-signup" className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white font-semibold text-gray-800">카카오로 계속</Link>
-            <Link href="/auth/oauth/naver?intent=parent-signup" className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white font-semibold text-gray-800">네이버로 계속</Link>
+            <Link href={`/auth/oauth/google?intent=parent-signup&${continueParams.toString()}`} className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white font-semibold text-gray-800">Google로 계속</Link>
+            <Link href={`/auth/oauth/kakao?intent=parent-signup&${continueParams.toString()}`} className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white font-semibold text-gray-800">카카오로 계속</Link>
+            <Link href={`/auth/oauth/naver?intent=parent-signup&${continueParams.toString()}`} className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white font-semibold text-gray-800">네이버로 계속</Link>
           </div>
           <p className="text-center text-xs leading-5 text-gray-500">간편가입도 처음 한 번은 안전한 계정 연결을 위해 휴대폰 인증이 필요합니다.</p>
         </>
@@ -143,6 +153,11 @@ export default function ParentSignupClient() {
         <form onSubmit={startPhoneVerification} className="space-y-4">
           <div><h2 className="text-xl font-bold">휴대폰 인증</h2><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">본인 명의로 사용하는 번호를 입력해 주세요.</p></div>
           <label className="block text-sm font-semibold">휴대폰 번호<input className={`${inputClass} mt-2`} type="tel" value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" autoComplete="tel" placeholder="01012345678" minLength={10} maxLength={11} required /></label>
+          {initialPhone && (
+            <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+              수강신청서의 보호자 번호를 불러왔습니다. 이 번호로 본인 인증해야 신청서가 계정에 연결됩니다.
+            </p>
+          )}
           <button disabled={loading} className="min-h-12 w-full rounded-xl bg-brand-orange-500 font-bold text-white disabled:opacity-50">{loading ? "보내는 중..." : "인증번호 받기"}</button>
         </form>
       )}
@@ -159,7 +174,7 @@ export default function ParentSignupClient() {
       {step === "account" && (
         <form onSubmit={completeSignup} className="space-y-4">
           <div><h2 className="text-xl font-bold">계정 정보</h2><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">로그인에 사용할 정보만 입력하면 끝입니다.</p></div>
-          <label className="block text-sm font-semibold">이름<input name="name" className={`${inputClass} mt-2`} autoComplete="name" required /></label>
+          <label className="block text-sm font-semibold">이름<input name="name" defaultValue={initialName} className={`${inputClass} mt-2`} autoComplete="name" required /></label>
           <label className="block text-sm font-semibold">로그인 아이디<input name="username" className={`${inputClass} mt-2`} autoComplete="username" minLength={4} maxLength={20} pattern="[A-Za-z][A-Za-z0-9_]{3,19}" placeholder="영문으로 시작, 영문·숫자·밑줄" required /></label>
           {!socialSignup && <label className="block text-sm font-semibold">비밀번호<input name="password" type="password" className={`${inputClass} mt-2`} autoComplete="new-password" minLength={8} placeholder="8자 이상" required /></label>}
           {!socialSignup && <label className="block text-sm font-semibold">비밀번호 확인<input name="passwordConfirm" type="password" className={`${inputClass} mt-2`} autoComplete="new-password" minLength={8} required /></label>}
@@ -173,7 +188,14 @@ export default function ParentSignupClient() {
       )}
 
       {step === "done" && (
-        <div className="py-6 text-center"><span className="material-symbols-outlined text-5xl text-brand-orange-500" aria-hidden="true">check_circle</span><h2 className="mt-3 text-xl font-bold">가입이 완료됐습니다</h2><p className="mt-2 text-sm text-gray-600">이제 만든 아이디로 로그인해 주세요.</p><Link href="/login" className="mt-6 flex min-h-12 items-center justify-center rounded-xl bg-brand-orange-500 font-bold text-white">로그인하기</Link></div>
+        <div className="py-6 text-center">
+          <span className="material-symbols-outlined text-5xl text-brand-orange-500" aria-hidden="true">check_circle</span>
+          <h2 className="mt-3 text-xl font-bold">가입이 완료됐습니다</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            {enrollmentHandoff ? "수강신청서가 계정에 연결되었습니다. 로그인해서 확인해주세요." : "이제 만든 아이디로 로그인해 주세요."}
+          </p>
+          <Link href={`/login?${new URLSearchParams({ redirect: next }).toString()}`} className="mt-6 flex min-h-12 items-center justify-center rounded-xl bg-brand-orange-500 font-bold text-white">로그인하기</Link>
+        </div>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendAuthenticationSms } from "@/lib/message-dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { linkEnrollmentAccount } from "@/lib/enrollment-account-handoff";
 
 const OTP_TTL_MINUTES = 5;
 const MAX_ATTEMPTS = 5;
@@ -187,6 +188,7 @@ export async function verifyParentSignupOtp(token: string, code: string) {
 
 export async function completeParentSignup(input: {
   token: string; proof: string; username: string; name: string; password?: string;
+  enrollmentHandoff?: string | null;
   consents: { terms: boolean; privacy: boolean; age: boolean };
   authenticatedOAuthUser?: { id: string; email?: string | null; provider?: string | null } | null;
 }) {
@@ -251,6 +253,12 @@ export async function completeParentSignup(input: {
         `INSERT INTO "User" (id,email,username,name,phone,"phoneVerifiedAt","authUserId",role,"createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,NOW(),$1,'PARENT'::"Role",NOW(),NOW())`,
         authUserId, email, row!.username!, row!.name!, row!.phone,
       );
+      if (input.enrollmentHandoff) {
+        await linkEnrollmentAccount(
+          { token: input.enrollmentHandoff, parentUserId: authUserId! },
+          tx,
+        );
+      }
       const consumed = await tx.$executeRawUnsafe(`UPDATE "ParentSignupVerification" SET status='CONSUMED',"consumedAt"=NOW(),"authUserId"=$2,"proofHash"=NULL,"proofExpiresAt"=NULL WHERE id=$1 AND status='PROCESSING' AND "processingAttemptId"=$3`, row!.id, authUserId, attemptId);
       if (consumed !== 1) throw new Error("회원가입 처리 상태가 변경되었습니다.");
     });

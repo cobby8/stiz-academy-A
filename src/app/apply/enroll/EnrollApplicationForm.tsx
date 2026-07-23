@@ -36,7 +36,15 @@ interface Props {
     availableSlots: AvailableSlot[];
     contactPhone: string;
     trialData: TrialLeadForEnroll | null;
-    trialLeadId: string | null;
+    accessCode: string | null;
+}
+
+interface AccountHandoff {
+    token: string;
+    next: string;
+    parentName: string;
+    parentPhone: string;
+    alreadyLinked?: boolean;
 }
 
 // ?? ???곗씠???????????????????????????????????????????????????????????????
@@ -76,7 +84,7 @@ export default function EnrollApplicationForm({
     availableSlots,
     contactPhone,
     trialData,
-    trialLeadId,
+    accessCode,
 }: Props) {
     // 泥댄뿕 ?곗씠?곌? ?덉쑝硫?珥덇린媛믪쑝濡?梨꾩? (?ъ슜?먭? ?섏젙 媛??
     const preferredTrialSlot = trialData?.preferredSlotKey && availableSlots.some((slot) => slot.slotKey === trialData.preferredSlotKey)
@@ -116,6 +124,7 @@ export default function EnrollApplicationForm({
     const [existingApplicationId, setExistingApplicationId] = useState<string | null>(null);
     const [existingNotice, setExistingNotice] = useState("");
     const [completionMode, setCompletionMode] = useState<"created" | "updated" | "existing">("created");
+    const [accountHandoff, setAccountHandoff] = useState<AccountHandoff | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const update = (field: keyof FormData, value: string | boolean | string[]) => {
@@ -162,7 +171,7 @@ export default function EnrollApplicationForm({
     // ?? ?ㅼ쓬 ?④퀎 ????????????????????????????????????????????????????????????
     const loadExistingApplication = async () => {
         const existing = await findExistingEnrollApplicationForEdit({
-            trialLeadId,
+            accessCode,
             childName: form.childName,
             childBirthDate: form.childBirthDate,
             parentPhone: form.parentPhone,
@@ -241,7 +250,7 @@ export default function EnrollApplicationForm({
             try {
                 const result = await submitEnrollApplication({
                     existingId: existingApplicationId || undefined,
-                    trialLeadId: trialLeadId || undefined,
+                    accessCode: accessCode || undefined,
                     childName: form.childName,
                     childBirthDate: form.childBirthDate,
                     childGender: form.childGender || undefined,
@@ -268,6 +277,11 @@ export default function EnrollApplicationForm({
                     honeypot: form.honeypot,
                 });
                 setCompletionMode(result.mode === "updated" ? "updated" : result.mode === "existing" ? "existing" : "created");
+                setAccountHandoff(
+                    "accountHandoff" in result && result.accountHandoff
+                        ? result.accountHandoff as AccountHandoff
+                        : null,
+                );
                 trackMetaEvent("CompleteRegistration", {
                     content_name: "Enrollment application",
                     content_category: "Application",
@@ -279,6 +293,20 @@ export default function EnrollApplicationForm({
             }
         });
     };
+
+    const signupHref = accountHandoff
+        ? `${accountHandoff.next}${accountHandoff.next.includes("?") ? "&" : "?"}${new URLSearchParams({
+            name: accountHandoff.parentName,
+            phone: accountHandoff.parentPhone,
+            enrollmentHandoff: accountHandoff.token,
+        }).toString()}`
+        : "/signup/parent";
+    const loginHref = accountHandoff
+        ? `/login?${new URLSearchParams({
+            redirect: "/parent",
+            enrollmentHandoff: accountHandoff.token,
+        }).toString()}`
+        : "/login";
 
     // ?? ?꾨즺 ?붾㈃ ????????????????????????????????????????????????????????????
     if (completed) {
@@ -302,6 +330,43 @@ export default function EnrollApplicationForm({
                     </a>
                     ?쇰줈 ?꾪솕?댁＜?몄슂.
                 </p>
+                {accountHandoff && !accountHandoff.alreadyLinked && (
+                    <div className="mb-6 rounded-2xl border border-brand-orange-200 bg-orange-50 p-5 text-left dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10">
+                        <div className="flex items-start gap-3">
+                            <span className="material-symbols-outlined shrink-0 text-[28px] text-brand-orange-500 dark:text-brand-neon-lime" aria-hidden="true">
+                                account_circle
+                            </span>
+                            <div>
+                                <h3 className="font-black text-brand-navy-900 dark:text-white">이어서 학부모 계정을 연결해주세요</h3>
+                                <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
+                                    계정을 연결하면 방금 제출한 신청서를 바로 확인할 수 있습니다. 가입하지 않아도 수강신청은 이미 정상 접수되었습니다.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                            <Link
+                                href={signupHref}
+                                className="flex min-h-12 items-center justify-center rounded-xl bg-brand-orange-500 px-4 text-center font-bold text-white hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                            >
+                                처음이에요 · 회원가입
+                            </Link>
+                            <Link
+                                href={loginHref}
+                                className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 text-center font-bold text-brand-navy-900 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                            >
+                                계정이 있어요 · 로그인
+                            </Link>
+                        </div>
+                        <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                            신청서의 보호자 휴대전화와 가입 시 인증한 번호가 일치해야 자동으로 연결됩니다.
+                        </p>
+                    </div>
+                )}
+                {accountHandoff?.alreadyLinked && (
+                    <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-200">
+                        현재 로그인한 학부모 계정에 신청서가 연결되었습니다.
+                    </div>
+                )}
                 <Link
                     href="/"
                     className="inline-flex items-center gap-2 px-6 py-3 bg-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-navy-800 transition-colors"

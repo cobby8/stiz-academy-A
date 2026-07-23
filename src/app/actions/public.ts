@@ -9,6 +9,18 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { ensureTrialLeadTable } from "@/app/actions/admin";
 import { notifyAdmins } from "@/lib/notification";
+import {
+    issueEnrollmentAccountHandoff,
+} from "@/lib/enrollment-account-handoff";
+
+async function issueEnrollmentAccountHandoffSafely(enrollmentApplicationId: string) {
+    try {
+        return await issueEnrollmentAccountHandoff(enrollmentApplicationId);
+    } catch (error) {
+        console.error("[enrollment handoff] issue failed:", error);
+        return null;
+    }
+}
 
 // ?? EnrollmentApplication DDL ensure (idempotent) ???????????????????????????
 let _enrollTableEnsured = false;
@@ -511,7 +523,7 @@ export async function getAvailableTrialSlots(): Promise<AvailableSlot[]> {
 // ?? ?섍컯 ?좎껌 ?낅젰 ?????????????????????????????????????????????????????????
 interface EnrollApplicationInput {
     existingId?: string;
-    trialLeadId?: string;        // 泥댄뿕 嫄곗튇 寃쎌슦 TrialLead ID
+    accessCode?: string;         // 만료·활성 검증을 거치는 체험 연동 코드
     childName: string;
     childBirthDate: string;      // ISO 臾몄옄??"2018-05-15"
     childGender?: string;
@@ -565,19 +577,35 @@ export interface ExistingEnrollApplicationForEdit {
     status: string;
 }
 
+async function resolveTrialLeadIdFromEnrollmentAccess(accessCode?: string | null) {
+    if (!accessCode || !/^[A-Za-z0-9_-]{16}$/.test(accessCode)) return null;
+
+    const rows = await prisma.$queryRawUnsafe<Array<{ trialLeadId: string }>>(
+        `SELECT "trialLeadId"
+           FROM "EnrollmentShortLink"
+          WHERE code = $1
+            AND "isActive" = true
+            AND "expiresAt" > NOW()
+          LIMIT 1`,
+        accessCode,
+    );
+    return rows[0]?.trialLeadId ?? null;
+}
+
 export async function findExistingEnrollApplicationForEdit(input: {
-    trialLeadId?: string | null;
+    accessCode?: string | null;
     childName?: string;
     childBirthDate?: string;
     parentPhone?: string;
 }): Promise<ExistingEnrollApplicationForEdit | null> {
     const childName = input.childName?.trim();
     const phoneDigits = input.parentPhone?.replace(/\D/g, "") || "";
-    if (!input.trialLeadId && (!childName || phoneDigits.length < 10 || phoneDigits.length > 11)) return null;
+    if (!input.accessCode && (!childName || phoneDigits.length < 10 || phoneDigits.length > 11)) return null;
 
     await ensureEnrollmentApplicationTable();
+    const trialLeadId = await resolveTrialLeadIdFromEnrollmentAccess(input.accessCode);
 
-    const rows = input.trialLeadId
+    const rows = trialLeadId
         ? await prisma.$queryRawUnsafe<any[]>(
             `SELECT *
                FROM "EnrollmentApplication"
@@ -585,7 +613,7 @@ export async function findExistingEnrollApplicationForEdit(input: {
                 AND status IN ('PENDING', 'APPROVED')
               ORDER BY "updatedAt" DESC, "createdAt" DESC
               LIMIT 1`,
-            input.trialLeadId,
+            trialLeadId,
         )
         : await prisma.$queryRawUnsafe<any[]>(
             `SELECT *
@@ -682,23 +710,7 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
     // DDL ensure ???뚯씠釉붿씠 ?놁쑝硫??먮룞 ?앹꽦
     await ensureEnrollmentApplicationTable();
 
-    let matchedTrialLeadId = data.trialLeadId || null;
-
-    // trialLeadId媛 ?덉쑝硫?議댁옱 ?щ? ?뺤씤
-    if (data.trialLeadId) {
-        try {
-            const lead = await prisma.$queryRawUnsafe<{ id: string }[]>(
-                `SELECT id FROM "TrialLead" WHERE id = $1 LIMIT 1`,
-                data.trialLeadId
-            );
-            if (lead.length === 0) {
-                // 議댁옱?섏? ?딅뒗 trialLeadId??null濡?泥섎━ (?먮윭 ???臾댁떆)
-                matchedTrialLeadId = null;
-            }
-        } catch {
-            matchedTrialLeadId = null;
-        }
-    }
+    let matchedTrialLeadId = await resolveTrialLeadIdFromEnrollmentAccess(data.accessCode);
 
     if (!matchedTrialLeadId) {
         try {
@@ -776,7 +788,19 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
 
         const existingApplication = existingRows[0];
         if (existingApplication?.status === "APPROVED") {
-            return { success: true, id: existingApplication.id, mode: "existing" as const, duplicate: true };
+            const handoff = await issueEnrollmentAccountHandoffSafely(existingApplication.id);
+            return {
+                success: true,
+                id: existingApplication.id,
+                mode: "existing" as const,
+                duplicate: true,
+                accountHandoff: handoff ? {
+                    token: handoff,
+                    next: "/signup/parent",
+                    parentName,
+                    parentPhone: normalizedParentPhone,
+                } : undefined,
+            };
         }
 
         if (existingApplication?.id) {
@@ -854,7 +878,19 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             revalidatePath("/admin");
             revalidatePath("/admin/apply");
             revalidatePath("/admin/trial");
-            return { success: true, id: existingApplication.id, mode: "updated" as const, duplicate: true };
+            const handoff = await issueEnrollmentAccountHandoffSafely(existingApplication.id);
+            return {
+                success: true,
+                id: existingApplication.id,
+                mode: "updated" as const,
+                duplicate: true,
+                accountHandoff: handoff ? {
+                    token: handoff,
+                    next: "/signup/parent",
+                    parentName,
+                    parentPhone: normalizedParentPhone,
+                } : undefined,
+            };
         }
 
         const recentSubmissions = await prisma.$queryRawUnsafe<{ count: number }[]>(
@@ -971,7 +1007,18 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             { eventType: "ENROLL_APPLICATION", eventId: enrollmentApplicationId },
         ).catch(() => {});
 
-        return { success: true, id: enrollmentApplicationId, mode: "created" as const };
+        const handoff = await issueEnrollmentAccountHandoffSafely(enrollmentApplicationId);
+        return {
+            success: true,
+            id: enrollmentApplicationId,
+            mode: "created" as const,
+            accountHandoff: handoff ? {
+                token: handoff,
+                next: "/signup/parent",
+                parentName,
+                parentPhone: normalizePhone(parentPhone),
+            } : undefined,
+        };
     } catch (e) {
         console.error("[submitEnrollApplication] failed:", e);
         throw new Error("?섍컯 ?좎껌 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.");
@@ -1001,13 +1048,13 @@ async function ensureTrialLeadChildPhoneColumn() {
 }
 
 /**
- * getTrialLeadForEnroll ??泥댄뿕 嫄곗튇 ?щ엺???곗씠?곕? ?섍컯 ?쇱뿉 ?먮룞 梨꾩?
+ * 유효한 수강신청 접근 코드로 체험 정보를 안전하게 자동 입력합니다.
  *
  * 怨듦컻?⑹씠誘濡?愿由ъ옄 硫붾え ??誘쇨컧 ?뺣낫???쒖쇅?섍퀬
  * ?대쫫, ?앸뀈?붿씪, ?숇뀈, ?깅퀎, ?숆탳, ?곕씫泥? ?띻뎄 寃쏀뿕, ?щ쭩 ?섏뾽, 蹂댄샇???뺣낫留?諛섑솚
  */
-export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadForEnroll | null> {
-    if (!trialId) return null;
+export async function getTrialLeadForEnrollByAccessCode(accessCode: string): Promise<TrialLeadForEnroll | null> {
+    if (!/^[A-Za-z0-9_-]{16}$/.test(accessCode)) return null;
 
     try {
         // TrialLead ?뚯씠釉붿씠 議댁옱?섎뒗吏 癒쇱? ?뺤씤
@@ -1015,13 +1062,18 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
         await ensureTrialLeadChildPhoneColumn();
 
         const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT "childName", "childBirthDate", "childGrade", "childGender",
-                    "childSchool", "childPhone", "basketballExp", "preferredSlotKey",
-                    "parentName", "parentPhone", source
-             FROM "TrialLead"
-             WHERE id = $1
+            `SELECT t."childName", t."childBirthDate", t."childGrade", t."childGender",
+                    t."childSchool", t."childPhone", t."basketballExp",
+                    COALESCE(c."slotKey", t."preferredSlotKey") AS "preferredSlotKey",
+                    t."parentName", t."parentPhone", t.source
+             FROM "EnrollmentShortLink" l
+             JOIN "TrialLead" t ON t.id = l."trialLeadId"
+             LEFT JOIN "Class" c ON c.id = t."scheduledClassId"
+             WHERE l.code = $1
+               AND l."isActive" = true
+               AND l."expiresAt" > NOW()
              LIMIT 1`,
-            trialId
+            accessCode
         );
 
         if (rows.length === 0) return null;
@@ -1044,7 +1096,7 @@ export async function getTrialLeadForEnroll(trialId: string): Promise<TrialLeadF
             source: r.source ?? "WEBSITE",
         };
     } catch (e) {
-        console.error("[getTrialLeadForEnroll] failed:", e);
+        console.error("[getTrialLeadForEnrollByAccessCode] failed:", e);
         return null;
     }
 }

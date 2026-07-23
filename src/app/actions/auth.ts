@@ -9,6 +9,7 @@ import {
   resolveRedirectForRole,
   type AppRole,
 } from "@/lib/auth-routes";
+import { linkEnrollmentAccount } from "@/lib/enrollment-account-handoff";
 
 async function getRoleForAuthUser(user?: { id?: string | null; email?: string | null }): Promise<AppRole | null> {
   if (!user?.id && !user?.email) return null;
@@ -32,6 +33,7 @@ export async function login(formData: FormData) {
   const password = String(formData.get("password") || "");
   const redirectTo = formData.get("redirectTo") as string | null;
   const loginContext = formData.get("loginContext");
+  const enrollmentHandoff = String(formData.get("enrollmentHandoff") || "");
 
   if (!identifier || !password) {
     return { error: "이메일과 비밀번호를 입력해주세요." };
@@ -63,9 +65,38 @@ export async function login(formData: FormData) {
 
   // 실제 권한은 DB 역할만 신뢰합니다. DB에 없는 계정은 안전한 학부모로 제한합니다.
   const role = (await getRoleForAuthUser(data.user)) || "PARENT";
-  const destination = resolveRedirectForRole(role, redirectTo, {
+  let destination = resolveRedirectForRole(role, redirectTo, {
     preferRoleHome: loginContext === "staff" && redirectTo === "/staff",
   });
+
+  if (enrollmentHandoff) {
+    const appUsers = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM "User"
+        WHERE ("authUserId" = $1 OR ("authUserId" IS NULL AND id = $1))
+          AND role = 'PARENT'
+        ORDER BY CASE WHEN "authUserId" = $1 THEN 0 ELSE 1 END
+        LIMIT 1`,
+      data.user.id,
+    );
+    if (!appUsers[0]) {
+      await supabase.auth.signOut();
+      return { error: "학부모 계정으로 로그인해 주세요." };
+    }
+    try {
+      await linkEnrollmentAccount({
+        token: enrollmentHandoff,
+        parentUserId: appUsers[0].id,
+      });
+      destination = "/parent";
+    } catch (linkError) {
+      await supabase.auth.signOut();
+      return {
+        error: linkError instanceof Error
+          ? linkError.message
+          : "수강신청서를 계정에 연결하지 못했습니다.",
+      };
+    }
+  }
 
   // Metadata is only a UI/navigation hint. DB remains the permission source,
   // so a metadata sync failure must not turn a successful login into a failure.

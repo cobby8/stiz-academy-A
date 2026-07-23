@@ -18,9 +18,9 @@ export async function GET(
         });
     }
 
-    // 문자에는 내부 ID가 보이지 않습니다. 1차에서는 기존 신청서 자동 채움과
-    // 호환되도록 검증된 링크만 서버에서 trialId로 변환합니다.
-    destination.searchParams.set("trialId", shortLink.trialLeadId);
+    // 내부 체험신청 ID는 주소에 노출하지 않습니다.
+    // 신청서 서버가 동일한 접근 코드의 만료·활성 상태를 다시 검증합니다.
+    destination.searchParams.set("access", shortLink.code);
     return NextResponse.redirect(destination, {
         headers: { "Cache-Control": "no-store" },
     });

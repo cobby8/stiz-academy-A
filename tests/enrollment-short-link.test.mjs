@@ -23,14 +23,15 @@ test("short enrollment links use an opaque 96-bit code and expire", () => {
   assert.match(helper, /shortUrl: link\.url/);
 });
 
-test("SMS short URL hides the trial ID and the server restores the existing form contract", () => {
+test("SMS short URL hides the trial ID and keeps the opaque access code", () => {
   assert.match(
     helper,
     /process\.env\.SHORT_LINK_BASE_URL[\s\S]*?process\.env\.NEXT_PUBLIC_SITE_URL/,
   );
   assert.match(helper, /\/e\/\$\{code\}/);
   assert.doesNotMatch(helper, /trialId=\$\{/);
-  assert.match(route, /searchParams\.set\("trialId", shortLink\.trialLeadId\)/);
+  assert.match(route, /searchParams\.set\("access", shortLink\.code\)/);
+  assert.doesNotMatch(route, /searchParams\.set\("trialId"/);
 });
 
 test("database protects the link table from public roles", () => {

@@ -13,6 +13,11 @@ export async function POST(request: Request) {
     username: String(body.username || ""),
     name: String(body.name || ""),
     password: typeof body.password === "string" ? body.password : undefined,
+    enrollmentHandoff: typeof body.handoff === "string"
+      ? body.handoff
+      : typeof body.enrollmentHandoff === "string"
+        ? body.enrollmentHandoff
+        : null,
     consents: {
       terms: Boolean((body.consents as Record<string, unknown> | undefined)?.terms),
       privacy: Boolean((body.consents as Record<string, unknown> | undefined)?.privacy),

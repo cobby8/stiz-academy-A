@@ -6,7 +6,7 @@
  */
 import { redirect } from "next/navigation";
 import { getAcademySettings } from "@/lib/queries";
-import { getAvailableTrialSlots, getTrialLeadForEnroll } from "@/app/actions/public";
+import { getAvailableTrialSlots, getTrialLeadForEnrollByAccessCode } from "@/app/actions/public";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import EnrollApplicationForm from "./EnrollApplicationForm";
@@ -23,14 +23,14 @@ export const metadata = buildPublicMetadata({
 export default async function EnrollApplyPage({
     searchParams,
 }: {
-    searchParams: Promise<{ trialId?: string }>;
+    searchParams: Promise<{ access?: string; link?: string }>;
 }) {
     const params = await searchParams;
-    const trialId = params.trialId || null;
+    const accessCode = params.access || null;
 
     // 체험 데이터 + 빈자리 슬롯 + 학원 설정을 병렬 조회 (성능 최적화)
     const [trialData, slots, settings] = await Promise.all([
-        trialId ? getTrialLeadForEnroll(trialId) : Promise.resolve(null),
+        accessCode ? getTrialLeadForEnrollByAccessCode(accessCode) : Promise.resolve(null),
         getAvailableTrialSlots(),
         getAcademySettings() as Promise<any>,
     ]);
@@ -70,7 +70,7 @@ export default async function EnrollApplyPage({
                         availableSlots={slots}
                         contactPhone={phone}
                         trialData={trialData}
-                        trialLeadId={trialId}
+                        accessCode={accessCode}
                     />
                 </div>
             </section>

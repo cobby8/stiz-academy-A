@@ -31,6 +31,9 @@ function LoginContent() {
     if (requestedPath?.startsWith("/") && !requestedPath.startsWith("//")) {
       formData.set("redirectTo", requestedPath);
     }
+    const searchParams = new URLSearchParams(window.location.search);
+    const handoff = searchParams.get("handoff") || searchParams.get("enrollmentHandoff");
+    if (handoff) formData.set("enrollmentHandoff", handoff);
 
     try {
       const action = mode === "login" ? login : signup;

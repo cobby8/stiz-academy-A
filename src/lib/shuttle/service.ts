@@ -1326,7 +1326,7 @@ export async function updatePassengerRideStatus(actor: StaffActor, routeId: stri
   return prisma.$transaction(async (tx) => {
     const route = await tx.shuttleRoutePlan.findUnique({
       where: { id: routeId },
-      select: { id: true, driverUserId: true, direction: true, status: true },
+      select: { id: true, driverUserId: true, direction: true, status: true, serviceDate: true },
     });
     if (!route || route.status !== ShuttleRoutePlanStatus.CONFIRMED) {
       throw new ShuttleServiceError("확정된 운행 노선만 체크할 수 있습니다.", 404, "CONFIRMED_ROUTE_NOT_FOUND");
@@ -1336,6 +1336,9 @@ export async function updatePassengerRideStatus(actor: StaffActor, routeId: stri
     }
     if (actor.appUserRole === "INSTRUCTOR") {
       throw new ShuttleServiceError("셔틀 체크 권한이 없습니다.", 403, "SHUTTLE_CHECK_FORBIDDEN");
+    }
+    if (!route.serviceDate || Number.isNaN(route.serviceDate.getTime()) || koreaDateOnly(route.serviceDate) !== koreaDateOnly()) {
+      throw new ShuttleServiceError("탑승 상태는 운행 당일에만 처리할 수 있습니다.", 409, "SHUTTLE_RIDE_STATUS_NOT_SERVICE_DATE");
     }
     assertRideStatusMatchesDirection(route.direction, status);
     const before = await tx.shuttleRoutePassenger.findFirst({ where: { id: passengerId, routePlanId: routeId } });

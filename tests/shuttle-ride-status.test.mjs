@@ -25,6 +25,8 @@ test("shuttle passengers keep live ride status", () => {
 test("staff API validates and saves passenger ride status", () => {
   assert.match(serviceSource, /export async function updatePassengerRideStatus/);
   assert.match(serviceSource, /DRIVER_ROUTE_FORBIDDEN/);
+  assert.match(serviceSource, /SHUTTLE_RIDE_STATUS_NOT_SERVICE_DATE/);
+  assert.match(serviceSource, /koreaDateOnly\(route\.serviceDate\) !== koreaDateOnly\(\)/);
   assert.match(serviceSource, /PASSENGER_RIDE_STATUS_UPDATED/);
   assert.match(apiSource, /export async function PATCH/);
   assert.match(apiSource, /updatePassengerRideStatus\(staff, routeId, passengerId, body\.status\)/);
@@ -38,7 +40,7 @@ test("driver shuttle page can check passengers and update summary immediately", 
   assert.match(staffDashboardClientSource, /체크 대기/);
   assert.match(staffDashboardClientSource, /체크 완료/);
   assert.match(staffDashboardClientSource, /summarizeRideStatuses/);
-  assert.match(staffDashboardClientSource, /handleStatusChange\(passenger\.id, status\)/);
+  assert.match(staffDashboardClientSource, /onStatusChange\(passenger\.id, status\)/);
   assert.match(staffButtonsSource, /fetch\("\/api\/staff\/shuttle"/);
   assert.match(staffButtonsSource, /onStatusChange\(nextStatus\)/);
   assert.match(staffButtonsSource, /onStatusChange\(previous\)/);
@@ -47,6 +49,30 @@ test("driver shuttle page can check passengers and update summary immediately", 
   assert.match(staffButtonsSource, /BOARDED/);
   assert.match(staffButtonsSource, /DROPPED_OFF/);
   assert.match(staffButtonsSource, /NO_SHOW/);
+});
+
+test("driver shuttle page separates today and upcoming routes and refreshes safely", () => {
+  assert.match(apiSource, /export async function GET/);
+  assert.match(apiSource, /getStaffShuttleDashboard\(staff\)/);
+  assert.match(apiSource, /SHUTTLE_DASHBOARD_FORBIDDEN/);
+  assert.match(staffDashboardClientSource, /splitRoutesByDate/);
+  assert.match(staffDashboardClientSource, /오늘 운행/);
+  assert.match(staffDashboardClientSource, /예정된 운행/);
+  assert.match(staffDashboardClientSource, /운행 당일에 탑승 상태를 체크할 수 있습니다/);
+  assert.match(staffDashboardClientSource, /canCheckRideStatus/);
+  assert.match(staffDashboardClientSource, /일정 확인 필요/);
+  assert.match(staffDashboardClientSource, /needsReviewRoutes/);
+  assert.match(staffDashboardClientSource, /refreshInFlightRef/);
+  assert.match(staffDashboardClientSource, /pendingMutationsRef/);
+  assert.match(staffDashboardClientSource, /mutationVersionAtStart/);
+  assert.match(staffDashboardClientSource, /refreshMessage\.tone === "error"/);
+  assert.match(staffButtonsSource, /onMutationStateChange\?\.\(true\)/);
+  assert.match(staffButtonsSource, /onMutationStateChange\?\.\(false\)/);
+  assert.match(staffDashboardClientSource, /SHUTTLE_AUTO_REFRESH_MS = 60_000/);
+  assert.match(staffDashboardClientSource, /document\.visibilityState === "visible"/);
+  assert.match(staffDashboardClientSource, /visibilitychange/);
+  assert.match(staffDashboardClientSource, /새로고침/);
+  assert.match(staffDashboardClientSource, /cache: "no-store"/);
 });
 
 test("admin route screen shows ride status for each passenger", () => {

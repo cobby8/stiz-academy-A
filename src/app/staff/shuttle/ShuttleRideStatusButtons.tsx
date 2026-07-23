@@ -18,12 +18,14 @@ export default function ShuttleRideStatusButtons({
   direction,
   status,
   onStatusChange,
+  onMutationStateChange,
 }: {
   routeId: string;
   passengerId: string;
   direction: Direction;
   status: RideStatus;
   onStatusChange: (status: RideStatus) => void;
+  onMutationStateChange?: (isPending: boolean) => void;
 }) {
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -32,6 +34,7 @@ export default function ShuttleRideStatusButtons({
   function update(nextStatus: RideStatus) {
     const previous = status;
     onStatusChange(nextStatus);
+    onMutationStateChange?.(true);
     setMessage("저장 중...");
     startTransition(async () => {
       try {
@@ -46,6 +49,8 @@ export default function ShuttleRideStatusButtons({
       } catch (error) {
         onStatusChange(previous);
         setMessage(error instanceof Error ? error.message : "상태를 저장하지 못했습니다.");
+      } finally {
+        onMutationStateChange?.(false);
       }
     });
   }

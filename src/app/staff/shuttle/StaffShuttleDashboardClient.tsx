@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShuttleRideStatusButtons from "./ShuttleRideStatusButtons";
 
 type Direction = "PICKUP" | "DROPOFF";
@@ -34,10 +34,14 @@ type Route = {
 };
 
 type Dashboard = {
+  todayKey: string;
   routes: Route[];
 };
 
+type RefreshMessage = { tone: "success" | "error"; text: string } | null;
+
 const DONE_STATUSES = new Set<RideStatus>(["BOARDED", "DROPPED_OFF"]);
+const SHUTTLE_AUTO_REFRESH_MS = 60_000;
 
 export default function StaffShuttleDashboardClient({
   dashboard,
@@ -46,13 +50,87 @@ export default function StaffShuttleDashboardClient({
   dashboard: Dashboard;
   canManageShuttle: boolean;
 }) {
+  const [currentDashboard, setCurrentDashboard] = useState(dashboard);
   const [rideStatuses, setRideStatuses] = useState<Record<string, RideStatus>>(() => initialRideStatuses(dashboard.routes));
-  const routeCount = dashboard.routes.length;
-  const passengerCount = dashboard.routes.reduce((sum, route) => sum + route.passengerCount, 0);
-  const statusSummary = useMemo(() => summarizeRideStatuses(dashboard.routes, rideStatuses), [dashboard.routes, rideStatuses]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<RefreshMessage>(null);
+  const refreshInFlightRef = useRef(false);
+  const refreshAfterInFlightRef = useRef(false);
+  const mutationVersionRef = useRef(0);
+  const pendingMutationsRef = useRef(0);
+  const { todayRoutes, upcomingRoutes, needsReviewRoutes } = useMemo(
+    () => splitRoutesByDate(currentDashboard.routes, currentDashboard.todayKey),
+    [currentDashboard],
+  );
+  const passengerCount = todayRoutes.reduce((sum, route) => sum + route.passengerCount, 0);
+  const statusSummary = useMemo(() => summarizeRideStatuses(todayRoutes, rideStatuses), [todayRoutes, rideStatuses]);
+
+  const refreshDashboard = useCallback(async (announce = false) => {
+    if (refreshInFlightRef.current) {
+      if (announce) {
+        setIsRefreshing(true);
+        setRefreshMessage(null);
+      }
+      return;
+    }
+    refreshInFlightRef.current = true;
+    const mutationVersionAtStart = mutationVersionRef.current;
+    if (announce) {
+      setIsRefreshing(true);
+      setRefreshMessage(null);
+    }
+    try {
+      const response = await fetch("/api/staff/shuttle", { method: "GET", cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.dashboard) throw new Error(body.error || "운행 정보를 불러오지 못했습니다.");
+      const nextDashboard = body.dashboard as Dashboard;
+      setCurrentDashboard(nextDashboard);
+      if (pendingMutationsRef.current === 0 && mutationVersionRef.current === mutationVersionAtStart) {
+        setRideStatuses(initialRideStatuses(nextDashboard.routes));
+      }
+      if (announce) setRefreshMessage({ tone: "success", text: "최신 운행 정보를 불러왔습니다." });
+    } catch (error) {
+      if (announce) {
+        setRefreshMessage({
+          tone: "error",
+          text: error instanceof Error ? error.message : "운행 정보를 불러오지 못했습니다.",
+        });
+      }
+    } finally {
+      refreshInFlightRef.current = false;
+      setIsRefreshing(false);
+      if (refreshAfterInFlightRef.current && pendingMutationsRef.current === 0) {
+        refreshAfterInFlightRef.current = false;
+        window.setTimeout(() => void refreshDashboard(), 0);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshDashboard();
+    }, SHUTTLE_AUTO_REFRESH_MS);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshDashboard();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshDashboard]);
 
   function handleStatusChange(passengerId: string, status: RideStatus) {
+    mutationVersionRef.current += 1;
     setRideStatuses((current) => ({ ...current, [passengerId]: status }));
+  }
+
+  function handleMutationStateChange(isPending: boolean) {
+    pendingMutationsRef.current = Math.max(0, pendingMutationsRef.current + (isPending ? 1 : -1));
+    if (!isPending && pendingMutationsRef.current === 0) {
+      if (refreshInFlightRef.current) refreshAfterInFlightRef.current = true;
+      else void refreshDashboard();
+    }
   }
 
   return (
@@ -73,8 +151,8 @@ export default function StaffShuttleDashboardClient({
       </section>
 
       <section className="mt-4 grid grid-cols-2 gap-3">
-        <StatusCard label="운행 상태" value={routeCount ? "확정" : "대기"} />
-        <StatusCard label="오늘 노선" value={`${routeCount}개 · ${passengerCount}명`} />
+        <StatusCard label="운행 상태" value={todayRoutes.length ? "확정" : "대기"} />
+        <StatusCard label="오늘 노선" value={`${todayRoutes.length}개 · ${passengerCount}명`} />
       </section>
 
       <section className="mt-3 grid grid-cols-3 gap-2">
@@ -83,9 +161,97 @@ export default function StaffShuttleDashboardClient({
         <StatusCard label="미탑승" value={`${statusSummary.noShow}명`} tone={statusSummary.noShow ? "danger" : "neutral"} compact />
       </section>
 
-      <section className="mt-4 space-y-3">
-        {dashboard.routes.length ? dashboard.routes.map((route) => (
-          <article key={route.id} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <section className="mt-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-black text-gray-900 dark:text-white">오늘 운행</h2>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">화면이 열려 있을 때 1분마다 자동으로 갱신됩니다.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void refreshDashboard(true)}
+          disabled={isRefreshing}
+          className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl bg-white px-3 text-xs font-black text-gray-700 shadow-sm disabled:opacity-60 dark:bg-gray-900 dark:text-gray-200"
+        >
+          <span className={`material-symbols-outlined text-lg ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true">refresh</span>
+          {isRefreshing ? "불러오는 중" : "새로고침"}
+        </button>
+      </section>
+      {refreshMessage && (
+        <p className={`mt-2 text-xs font-bold ${refreshMessage.tone === "error" ? "text-red-600 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"}`} role={refreshMessage.tone === "error" ? "alert" : "status"}>
+          {refreshMessage.text}
+        </p>
+      )}
+
+      <section className="mt-3 space-y-3">
+        {todayRoutes.length ? todayRoutes.map((route) => (
+          <RouteCard key={route.id} route={route} rideStatuses={rideStatuses} onStatusChange={handleStatusChange} onMutationStateChange={handleMutationStateChange} canCheckRideStatus />
+        )) : (
+          <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <span className="material-symbols-outlined text-4xl text-gray-400" aria-hidden="true">event_busy</span>
+            <h2 className="mt-3 font-black text-gray-900 dark:text-white">오늘 확정된 운행이 없습니다</h2>
+            <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
+              관리자가 오늘 노선을 확정하면 여기에 표시됩니다.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {upcomingRoutes.length > 0 && (
+        <section className="mt-6">
+          <div>
+            <h2 className="font-black text-gray-900 dark:text-white">예정된 운행</h2>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">미리 확인할 수 있는 미래 확정 노선입니다.</p>
+          </div>
+          <div className="mt-3 space-y-3">
+            {upcomingRoutes.map((route) => (
+              <RouteCard key={route.id} route={route} rideStatuses={rideStatuses} onStatusChange={handleStatusChange} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {needsReviewRoutes.length > 0 && (
+        <section className="mt-6">
+          <div>
+            <h2 className="font-black text-gray-900 dark:text-white">일정 확인 필요</h2>
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">운행 날짜가 지정되지 않아 탑승 상태를 처리할 수 없는 노선입니다.</p>
+          </div>
+          <div className="mt-3 space-y-3">
+            {needsReviewRoutes.map((route) => (
+              <RouteCard key={route.id} route={route} rideStatuses={rideStatuses} onStatusChange={handleStatusChange} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {canManageShuttle && (
+        <Link
+          href="/admin/shuttle"
+          className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] shadow-sm"
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">settings</span>
+          관리자 셔틀 설정으로 이동
+        </Link>
+      )}
+    </main>
+  );
+}
+
+function RouteCard({
+  route,
+  rideStatuses,
+  onStatusChange,
+  onMutationStateChange,
+  canCheckRideStatus = false,
+}: {
+  route: Route;
+  rideStatuses: Record<string, RideStatus>;
+  onStatusChange: (passengerId: string, status: RideStatus) => void;
+  onMutationStateChange?: (isPending: boolean) => void;
+  canCheckRideStatus?: boolean;
+}) {
+  return (
+    <article className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-black text-[var(--brand-accent)]">
@@ -130,13 +296,18 @@ export default function StaffShuttleDashboardClient({
                                   </span>
                                   <RideStatusPill status={rideStatus} />
                                 </div>
-                                <ShuttleRideStatusButtons
-                                  routeId={route.id}
-                                  passengerId={passenger.id}
-                                  direction={route.direction}
-                                  status={rideStatus}
-                                  onStatusChange={(status) => handleStatusChange(passenger.id, status)}
-                                />
+                                {canCheckRideStatus ? (
+                                  <ShuttleRideStatusButtons
+                                    routeId={route.id}
+                                    passengerId={passenger.id}
+                                    direction={route.direction}
+                                    status={rideStatus}
+                                    onStatusChange={(status) => onStatusChange(passenger.id, status)}
+                                    onMutationStateChange={onMutationStateChange}
+                                  />
+                                ) : (
+                                  <p className="mt-2 text-[11px] font-bold text-gray-400">운행 당일에 탑승 상태를 체크할 수 있습니다.</p>
+                                )}
                               </div>
                             );
                           })}
@@ -148,28 +319,27 @@ export default function StaffShuttleDashboardClient({
               })}
             </ol>
           </article>
-        )) : (
-          <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <span className="material-symbols-outlined text-4xl text-gray-400" aria-hidden="true">event_busy</span>
-            <h2 className="mt-3 font-black text-gray-900 dark:text-white">확정된 운행이 없습니다</h2>
-            <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
-              관리자가 노선을 만들고 기사를 배정한 뒤 확정하면 여기에 표시됩니다.
-            </p>
-          </div>
-        )}
-      </section>
-
-      {canManageShuttle && (
-        <Link
-          href="/admin/shuttle"
-          className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] shadow-sm"
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">settings</span>
-          관리자 셔틀 설정으로 이동
-        </Link>
-      )}
-    </main>
   );
+}
+
+function splitRoutesByDate(routes: Route[], todayKey: string) {
+  const todayRoutes: Route[] = [];
+  const upcomingRoutes: Route[] = [];
+  const needsReviewRoutes: Route[] = [];
+  for (const route of routes) {
+    const serviceDateKey = routeDateKey(route.serviceDate);
+    if (!serviceDateKey) needsReviewRoutes.push(route);
+    else if (serviceDateKey === todayKey) todayRoutes.push(route);
+    else if (serviceDateKey > todayKey) upcomingRoutes.push(route);
+    else needsReviewRoutes.push(route);
+  }
+  return { todayRoutes, upcomingRoutes, needsReviewRoutes };
+}
+
+function routeDateKey(value?: string | Date | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 }
 
 function initialRideStatuses(routes: Route[]) {

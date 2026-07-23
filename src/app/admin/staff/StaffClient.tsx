@@ -497,7 +497,10 @@ export default function StaffClient({
                         ) : (
                             staffUsers.map((user) => {
                                 const rc = ROLE_CONFIG[user.role] || ROLE_CONFIG.PARENT;
-                                const isInstructor = user.role === "INSTRUCTOR";
+                                const canLinkCoach =
+                                    user.role === "ADMIN" ||
+                                    user.role === "VICE_ADMIN" ||
+                                    user.role === "INSTRUCTOR";
                                 return (
                                     <tr key={user.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-900">
                                         <td className="px-6 py-4">
@@ -526,7 +529,7 @@ export default function StaffClient({
                                             </select>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {isInstructor ? (
+                                            {canLinkCoach ? (
                                                 <select
                                                     value={user.coachId || ""}
                                                     onChange={(e) => handleCoachLink(user.id, e.target.value)}

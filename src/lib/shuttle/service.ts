@@ -4,6 +4,7 @@ import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { chooseActiveShuttleAssignment } from "./assignment";
 import { optimizeWaypointOrderWithTmap, TmapApiError, type TmapWaypoint } from "./tmap";
+import { notifyShuttlePassengerNoShow, notifyShuttleRouteConfirmed } from "./notifications";
 
 export class ShuttleServiceError extends Error {
   constructor(
@@ -1160,7 +1161,7 @@ export async function reorderStops(actor: Actor, routeId: string, input: Record<
 }
 
 export async function confirmRoute(actor: Actor, routeId: string) {
-  return prisma.$transaction(async (tx) => {
+  const route = await prisma.$transaction(async (tx) => {
     const before = await draftRoute(tx, routeId);
     if (!before.vehicleId) throw new ShuttleServiceError("노선을 확정하려면 차량을 배정해 주세요.", 409, "VEHICLE_REQUIRED");
     if (!before.driverUserId) throw new ShuttleServiceError("노선을 확정하려면 셔틀 기사를 배정해 주세요.", 409, "DRIVER_REQUIRED");
@@ -1186,6 +1187,8 @@ export async function confirmRoute(actor: Actor, routeId: string) {
     await audit(tx, actor, "ROUTE_CONFIRMED", { routePlanId: routeId }, before, route);
     return route;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  await notifyShuttleRouteConfirmed(route.id);
+  return route;
 }
 
 export async function archiveRoute(actor: Actor, routeId: string) {
@@ -1331,7 +1334,7 @@ function assertRideStatusMatchesDirection(direction: ShuttleRouteDirection, stat
 
 export async function updatePassengerRideStatus(actor: StaffActor, routeId: string, passengerId: string, statusValue: unknown) {
   const status = parseRideStatus(statusValue);
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const route = await tx.shuttleRoutePlan.findUnique({
       where: { id: routeId },
       select: { id: true, driverUserId: true, direction: true, status: true, serviceDate: true },
@@ -1360,6 +1363,8 @@ export async function updatePassengerRideStatus(actor: StaffActor, routeId: stri
       },
     });
     await audit(tx, actor, "PASSENGER_RIDE_STATUS_UPDATED", { routePlanId: routeId, shuttleRequestId: passenger.shuttleRequestId }, before, passenger);
-    return passenger;
+    return { passenger, shouldNotifyNoShow: before.rideStatus !== "NO_SHOW" && status === "NO_SHOW" };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  if (result.shouldNotifyNoShow) await notifyShuttlePassengerNoShow(routeId, passengerId);
+  return result.passenger;
 }

@@ -170,6 +170,22 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
     ["SPECIAL_APPLICATION_CANCELLED_PARENT", "특강 신청 취소", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 취소되었습니다.\n문의: {{academyPhone}}", "특강 신청 취소 안내", '["childName","offeringTitle","academyPhone"]'],
     ["SPECIAL_ACCOUNT_ACTIVATION_PARENT", "특강 보호자 계정 활성화", "PARENT", "[STIZ] {{childName}} 학생의 특강 확인을 위해 보호자 계정을 활성화해 주세요.\n{{activationUrl}}\n이 링크는 다른 사람에게 전달하지 마세요.", "신규 보호자의 일회용 계정 활성화 링크", '["childName","activationUrl"]'],
     ["SPECIAL_PAYMENT_REQUEST_PARENT", "특강 결제 요청", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 결제를 확인해 주세요.\n금액: {{amount}}원\n납부기한: {{dueDate}}\n{{paymentUrl}}", "특강 청구서 결제 안내", '["childName","offeringTitle","amount","dueDate","paymentUrl"]'],
+    [
+        "SHUTTLE_ROUTE_CONFIRMED_PARENT",
+        "셔틀 노선 배정 확정 (학부모)",
+        "PARENT",
+        "[STIZ] {{학생명}} 셔틀 {{운행방향}} 안내\n{{운행일}} {{예정시간}} / {{정류장}}",
+        "셔틀 노선 배정이 확정되거나 확정 정보가 변경되면 학부모에게 안내",
+        '["학생명","운행방향","운행일","예정시간","정류장"]',
+    ],
+    [
+        "SHUTTLE_NO_SHOW_PARENT",
+        "셔틀 미탑승 안내 (학부모)",
+        "PARENT",
+        "[STIZ] {{학생명}} 학생이 오늘 {{운행방향}} 셔틀에 미탑승 처리되었습니다. 확인 부탁드립니다.",
+        "기사가 학생을 미탑승 처리하면 학부모에게 즉시 안내",
+        '["학생명","운행방향"]',
+    ],
 ];
 
 // 신청 완료 화면과 겹치거나 배정 전 담당자가 불명확한 자동문자는 기본으로 끈다.
@@ -246,7 +262,8 @@ export async function ensureSmsTemplates(): Promise<void> {
 // body 문자열 안의 {{key}}를 variables 객체의 값으로 교체
 // 매칭되지 않는 변수는 빈 문자열로 대체 (에러 방지)
 export function renderTemplate(body: string, variables: Record<string, string>): string {
-    return body.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] || "");
+    // 한글 키도 영문 키와 동일하게 치환하고, 값이 없는 변수는 발송문에 남기지 않는다.
+    return body.replace(/\{\{([\p{L}\p{N}_]+)\}\}/gu, (_, key) => variables[key] || "");
 }
 
 export type SmsTemplateRenderResult =

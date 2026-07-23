@@ -319,6 +319,38 @@ function assignmentPriceFor(application: Application, offering?: SeasonalClass) 
   return offering.price ?? 0;
 }
 
+function seasonalOfferingFrequency(offering?: Pick<SeasonalClass, "name" | "code"> | null) {
+  if (!offering) return null;
+  const matched = `${offering.name ?? ""} ${offering.code ?? ""}`.match(/주\s*(\d+)\s*회|-(\d)(?:\D|$)/i);
+  const value = matched ? Number(matched[1] ?? matched[2]) : NaN;
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function operationalClassKey(offering: SeasonalClass) {
+  return offering.linkedClassId || offering.id;
+}
+
+function compactOperationalClassName(name: string) {
+  return name.replace(/\s*주\s*\d+\s*회.*$/u, "").trim() || name;
+}
+
+function operationalOfferingOptions(offerings: SeasonalClass[]) {
+  const seen = new Set<string>();
+  return offerings.filter((offering) => {
+    const key = operationalClassKey(offering);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map((offering) => ({ ...offering, name: compactOperationalClassName(offering.name) }));
+}
+
+function matchingOfferingForWeekdays(offerings: SeasonalClass[], baseOffering: SeasonalClass | undefined, selectedWeekdays: string[]) {
+  if (!baseOffering || selectedWeekdays.length === 0) return baseOffering;
+  const key = operationalClassKey(baseOffering);
+  return offerings.find((offering) => operationalClassKey(offering) === key && seasonalOfferingFrequency(offering) === selectedWeekdays.length)
+    ?? baseOffering;
+}
+
 function recordValue(record: Record<string, unknown>, keys: string[], fallback = "") {
   for (const key of keys) {
     const value = record[key];
@@ -820,7 +852,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       const failureMessage = failed[0]?.message ? ` 첫 실패 사유: ${failed[0].message}` : "";
       setSelectedItemIds(retryIds);
       setNotice(`${targetLabel} 상태 처리 성공 ${succeeded}개 / 처리 실패 ${failed.length}개 / 안내 실패 ${notificationsFailed}개.${failureMessage}`);
-      await load();
+      await load({ includeApplications: true });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "일괄 처리를 완료하지 못했습니다.");
     } finally {
@@ -854,7 +886,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       const failureMessage = failed[0]?.message ? ` 첫 실패 사유: ${failed[0].message}` : "";
       setSelectedItemIds(retryIds);
       setNotice(`수강·청구 처리 성공 ${succeeded}개 / 처리 실패 ${failed.length}개 / 안내 실패 ${notificationsFailed}개.${failureMessage}`);
-      await load();
+      await load({ includeApplications: true });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "수강·청구 생성을 완료하지 못했습니다.");
     } finally {
@@ -1181,7 +1213,7 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
   onSelect: (application: Application) => void;
 }) {
   const selectedSeason = seasons.find((season) => season.id === filters.seasonId);
-  const offerings = selectedSeason?.classes ?? seasons.flatMap((season) => season.classes);
+  const offerings = operationalOfferingOptions(selectedSeason?.classes ?? seasons.flatMap((season) => season.classes));
   const changeFilter = (key: keyof typeof filters, value: string | number) => onFilters((current) => ({
     ...current,
     [key]: value,
@@ -1237,16 +1269,16 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
     anchor.click();
     URL.revokeObjectURL(href);
   };
-  const printTitle = [selectedSeason?.name, offerings.find((offering) => offering.id === filters.offeringId)?.name, filters.weekday].filter(Boolean).join(" · ") || "방학특강 확정 명단";
+  const printTitle = [selectedSeason?.name, offerings.find((offering) => offering.id === filters.offeringId)?.name, filters.weekday ? `${filters.weekday}요일` : ""].filter(Boolean).join(" · ") || "방학특강 요일별 출석부";
 
-  return <Panel title="반별 확정 명단" icon="groups" action={<div className="print:hidden flex gap-2">
+  return <Panel title="요일별 출석부" icon="fact_check" action={<div className="print:hidden flex gap-2">
     <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-black dark:border-gray-700"><Icon name="print" />인쇄</button>
     <button type="button" onClick={() => void downloadCsv().catch((caught) => window.alert(caught instanceof Error ? caught.message : "CSV 다운로드에 실패했습니다."))} className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]"><Icon name="download" />CSV</button>
   </div>}>
     <style>{`@media print { @page { size: A4 landscape; margin: 12mm; } body * { visibility: hidden !important; } .seasonal-roster-print, .seasonal-roster-print * { visibility: visible !important; } .seasonal-roster-print { position: absolute; inset: 0; width: 100%; color: #000 !important; } .roster-desktop { display: block !important; } .roster-mobile, .print\\:hidden { display: none !important; } .seasonal-roster-print table { width: 100%; border-collapse: collapse; font-size: 10pt; } .seasonal-roster-print th, .seasonal-roster-print td { border: 1px solid #777; padding: 6px; } .seasonal-roster-print thead { display: table-header-group; } }`}</style>
     <div className="print:hidden grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
       <select aria-label="명단 시즌" value={filters.seasonId} onChange={(event) => changeFilter("seasonId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 시즌</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select>
-      <select aria-label="명단 반" value={filters.offeringId} onChange={(event) => changeFilter("offeringId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 반</option>{offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}</select>
+      <select aria-label="명단 반" value={filters.offeringId} onChange={(event) => changeFilter("offeringId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 운영 반</option>{offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}</select>
       <select aria-label="명단 요일" value={filters.weekday} onChange={(event) => changeFilter("weekday", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 요일</option>{["월","화","수","목","금","토","일"].map((day) => <option key={day} value={day}>{day}요일</option>)}</select>
       <select aria-label="명단 결제" value={filters.paymentStatus} onChange={(event) => changeFilter("paymentStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 결제</option><option value="PAID">결제 완료</option><option value="UNPAID">미결제</option><option value="PAYMENT_PENDING">결제 대기</option></select>
       <select aria-label="명단 셔틀" value={filters.shuttleStatus} onChange={(event) => changeFilter("shuttleStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 셔틀</option><option value="NOT_USED">미이용</option><option value="REQUESTED">요청</option><option value="UNASSIGNED">미배정</option><option value="ASSIGNED">배정 완료</option></select>
@@ -1255,9 +1287,9 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
     <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-emerald-50 p-3 text-emerald-800"><strong className="block text-xl">{roster.stats.confirmed}</strong><span className="text-xs font-bold">확정</span></div><div className="rounded-xl bg-amber-50 p-3 text-amber-800"><strong className="block text-xl">{roster.stats.unpaid}</strong><span className="text-xs font-bold">미결제</span></div><div className="rounded-xl bg-blue-50 p-3 text-blue-800"><strong className="block text-xl">{roster.stats.shuttle}</strong><span className="text-xs font-bold">셔틀</span></div></div>
     {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
     {loading ? <Loading /> : <section className="seasonal-roster-print mt-4" aria-label="반별 확정 명단 결과">
-      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p><p className="text-xs">보호자 연락처는 개인정보 보호를 위해 마스킹되었습니다.</p></div>
-      <div className="roster-desktop hidden overflow-x-auto md:block"><table className="w-full min-w-[840px] text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="px-3 py-3">번호</th><th className="px-3 py-3">반·일정</th><th className="px-3 py-3">학생</th><th className="px-3 py-3">보호자</th><th className="px-3 py-3">결제</th><th className="px-3 py-3">셔틀</th><th className="hidden px-3 py-3 print:table-cell">출석</th><th className="hidden px-3 py-3 print:table-cell">메모</th></tr></thead><tbody className="divide-y divide-gray-100">{roster.rows.map((row, index) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-3 py-3">{(roster.pagination.page - 1) * roster.pagination.pageSize + index + 1}</td><td className="px-3 py-3"><p className="font-bold">{row.offeringName}</p><p className="text-xs text-gray-500">{[row.weekday, row.scheduleLabel].filter(Boolean).join(" · ") || "일정 미정"}</p></td><td className="px-3 py-3"><button type="button" onClick={() => openApplication(row.applicationId)} className="font-black hover:underline print:pointer-events-none">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></td><td className="px-3 py-3"><p>{maskRosterName(row.parentName)}</p><p className="text-xs">{maskRosterPhone(row.parentPhone)}</p></td><td className="px-3 py-3"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></td><td className="px-3 py-3"><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></td><td className="hidden print:table-cell">□</td><td className="hidden print:table-cell"> </td></tr>)}{!roster.rows.length && <tr><td colSpan={8}><Empty text="조건에 맞는 확정 명단이 없습니다." /></td></tr>}</tbody></table></div>
-      <div className="roster-mobile space-y-3 md:hidden">{roster.rows.map((row) => <article key={row.id} className="rounded-xl border border-gray-200 p-4"><div className="flex items-start justify-between gap-2"><div><button type="button" onClick={() => openApplication(row.applicationId)} className="min-h-11 font-black hover:underline">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></div><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></div><p className="mt-2 text-sm font-bold">{row.offeringName} · {row.weekday}</p><div className="mt-2 flex flex-wrap gap-2"><span className="text-xs">보호자 {maskRosterName(row.parentName)} · {maskRosterPhone(row.parentPhone)}</span><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></div><button type="button" onClick={() => openApplication(row.applicationId)} className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 font-bold">신청 상세</button></article>)}</div>
+      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p><p className="text-xs">요일은 학생이 신청한 참여 요일 기준입니다.</p></div>
+      <div className="roster-desktop hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="px-3 py-3">번호</th><th className="px-3 py-3">요일</th><th className="px-3 py-3">운영 반</th><th className="px-3 py-3">학생</th><th className="px-3 py-3">결제</th><th className="px-3 py-3">셔틀</th><th className="px-3 py-3">출석</th><th className="px-3 py-3">메모</th></tr></thead><tbody className="divide-y divide-gray-100">{roster.rows.map((row, index) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-3 py-3">{(roster.pagination.page - 1) * roster.pagination.pageSize + index + 1}</td><td className="px-3 py-3 font-black">{row.weekday || "미정"}</td><td className="px-3 py-3 font-bold">{row.offeringName}</td><td className="px-3 py-3"><button type="button" onClick={() => openApplication(row.applicationId)} className="font-black hover:underline print:pointer-events-none">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></td><td className="px-3 py-3"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></td><td className="px-3 py-3"><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></td><td className="px-3 py-3">□</td><td className="px-3 py-3"> </td></tr>)}{!roster.rows.length && <tr><td colSpan={8}><Empty text="조건에 맞는 출석부 명단이 없습니다." /></td></tr>}</tbody></table></div>
+      <div className="roster-mobile space-y-3 md:hidden">{roster.rows.map((row) => <article key={row.id} className="rounded-xl border border-gray-200 p-4"><div className="flex items-start justify-between gap-2"><div><button type="button" onClick={() => openApplication(row.applicationId)} className="min-h-11 font-black hover:underline">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></div><span className="rounded-full bg-[var(--brand-accent-soft)] px-2.5 py-1 text-xs font-black text-[var(--brand-accent)]">{row.weekday || "요일 미정"}</span></div><p className="mt-2 text-sm font-bold">{row.offeringName}</p><div className="mt-2 flex flex-wrap gap-2"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></div><button type="button" onClick={() => openApplication(row.applicationId)} className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 font-bold">신청 상세</button></article>)}</div>
     </section>}
     {roster.pagination.totalPages > 1 && <nav className="print:hidden mt-4 flex items-center justify-center gap-3" aria-label="명단 페이지"><button type="button" disabled={filters.page <= 1} onClick={() => changeFilter("page", filters.page - 1)} className="min-h-10 rounded-lg border px-3 disabled:opacity-40">이전</button><span className="text-sm font-bold">{filters.page} / {roster.pagination.totalPages}</span><button type="button" disabled={filters.page >= roster.pagination.totalPages} onClick={() => changeFilter("page", filters.page + 1)} className="min-h-10 rounded-lg border px-3 disabled:opacity-40">다음</button></nav>}
   </Panel>;
@@ -1449,6 +1481,10 @@ function ApplicationAssignmentEditor({
   const [offeringId, setOfferingId] = useState(initialOfferingId);
   const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>(() => normalizeWeekdayKeys(application.selectedWeekdays));
   const selectedOffering = useMemo(() => offerings.find((offering) => offering.id === offeringId), [offeringId, offerings]);
+  const pricingOffering = useMemo(
+    () => matchingOfferingForWeekdays(offerings, selectedOffering, selectedWeekdays),
+    [offerings, selectedOffering, selectedWeekdays],
+  );
   const [price, setPrice] = useState(() => String(item?.amount ?? assignmentPriceFor(application, selectedOffering)));
   const [localError, setLocalError] = useState("");
   const lastOfferingIdRef = useRef(initialOfferingId);
@@ -1465,10 +1501,15 @@ function ApplicationAssignmentEditor({
   }, [application.id, application.selectedWeekdays, item?.id, item?.amount, item?.classId, offerings]);
 
   useEffect(() => {
-    if (lastOfferingIdRef.current === offeringId) return;
-    lastOfferingIdRef.current = offeringId;
-    setPrice(String(assignmentPriceFor(application, selectedOffering)));
-  }, [application, offeringId, selectedOffering]);
+    if (locked || !pricingOffering) return;
+    if (pricingOffering.id !== offeringId) {
+      lastOfferingIdRef.current = pricingOffering.id;
+      setOfferingId(pricingOffering.id);
+    } else if (lastOfferingIdRef.current !== offeringId) {
+      lastOfferingIdRef.current = offeringId;
+    }
+    setPrice(String(assignmentPriceFor(application, pricingOffering)));
+  }, [application, locked, offeringId, pricingOffering]);
 
   const toggleWeekday = (value: string, checked: boolean) => {
     setSelectedWeekdays((current) => {
@@ -1502,7 +1543,7 @@ function ApplicationAssignmentEditor({
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div>
         <h4 className="font-black text-gray-950 dark:text-white">{item ? "수업 정보" : "반 지정 필요"}</h4>
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{locked ? "수강·청구 연결 후에는 이 화면에서 반 정보를 바꿀 수 없습니다." : "반, 참여 요일, 금액을 확인하고 저장합니다."}</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{locked ? "수강·청구 연결 후에는 이 화면에서 반 정보를 바꿀 수 없습니다." : "운영 반과 참여 요일을 고르면 금액은 자동으로 맞춰집니다."}</p>
       </div>
       <button type="submit" disabled={saving || locked || offerings.length === 0} className="min-h-9 rounded-lg bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "저장 중…" : "저장"}</button>
     </div>
@@ -1515,10 +1556,11 @@ function ApplicationAssignmentEditor({
         </select>
       </label>
       <label className="text-xs font-black text-gray-600 dark:text-gray-300">
-        금액
-        <input value={price} disabled={saving || locked} onChange={(event) => setPrice(event.target.value)} inputMode="numeric" type="number" min={1} className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+        자동 금액
+        <input value={price} readOnly disabled={saving || locked} inputMode="numeric" type="number" min={1} className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
       </label>
     </div>
+    {!locked && <p className="mt-2 text-xs font-bold text-gray-500 dark:text-gray-400">저장 시 {applicantTypeLabel(application.applicantType)} · 주 {selectedWeekdays.length || "-"}회 기준으로 청구 금액을 다시 계산합니다.</p>}
     <fieldset className="mt-3">
       <legend className="text-xs font-black text-gray-600 dark:text-gray-300">참여 요일</legend>
       <div className="mt-2 flex flex-wrap gap-1.5">

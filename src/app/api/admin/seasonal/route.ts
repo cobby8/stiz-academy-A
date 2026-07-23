@@ -58,7 +58,12 @@ const ITEM_NOTIFICATION_TRIGGER: Partial<Record<string, SeasonalSmsTrigger>> = {
 };
 
 const WEEKDAY_KEYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+type WeekdayKey = (typeof WEEKDAY_KEYS)[number];
+const WEEKDAY_FROM_EN_SHORT: Record<string, WeekdayKey> = {
+  Mon: "MON", Tue: "TUE", Wed: "WED", Thu: "THU", Fri: "FRI", Sat: "SAT", Sun: "SUN",
+};
 const ASSIGNMENT_REVIEW_REASONS = new Set(["MISSING_WEEKDAYS", "MISSING_TUITION", "SHUTTLE_REQUEST_PENDING_ITEM"]);
+const APPROVED_SEAT_STATUSES = ["APPROVED"];
 
 function notificationNeedsWarning(result: SeasonalSmsDeliveryResult | null | undefined) {
   return Boolean(result && (result.status === "FAILED" || result.errorCode === "TEMPLATE_DISABLED_OR_MISSING"));
@@ -205,12 +210,23 @@ async function seasonalRoster(request: NextRequest) {
     ELSE 'PAYMENT_PENDING' END`;
   const filterSql = `
     ($1::text IS NULL OR app."seasonId" = $1)
-    AND ($2::text IS NULL OR item."offeringId" = $2)
-    AND ($3::int IS NULL OR EXISTS (
-      -- 신청 당시 선택값이 아니라 실제 편성된 수업일의 서울 기준 요일로 반을 찾습니다.
-      SELECT 1 FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = item."offeringId"
-        AND EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int = $3
+    AND ($2::text IS NULL OR EXISTS (
+      SELECT 1 FROM "SpecialProgramOffering" filter_offering
+       WHERE filter_offering.id = $2
+         AND (
+           item."offeringId" = filter_offering.id
+           OR (
+             filter_offering."linkedClassId" IS NOT NULL
+             AND offering."linkedClassId" = filter_offering."linkedClassId"
+             AND offering."seasonId" = filter_offering."seasonId"
+           )
+         )
     ))
+    AND ($3::int IS NULL OR COALESCE(cardinality(app."selectedWeekdays"), 0) = 0 OR
+      CASE $3::int
+        WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+        WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+      END = ANY(app."selectedWeekdays"))
     AND ($4::text IS NULL OR ${paymentStatusSql} = $4)
     AND ($5::text IS NULL OR CASE
       WHEN $5 = 'REQUESTED' THEN shuttle.id IS NOT NULL
@@ -225,26 +241,41 @@ async function seasonalRoster(request: NextRequest) {
   const [rows, totals] = await Promise.all([
     prisma.$queryRawUnsafe<SeasonalRosterRow[]>(`
       SELECT item.id AS "itemId", app.id AS "applicationId", app."seasonId", season.title AS "seasonTitle",
-             item."offeringId", offering.title AS "offeringTitle", app."childName", app."childGrade", app."childSchool",
+             item."offeringId", COALESCE(linked_class.name, offering.title) AS "offeringTitle", app."childName", app."childGrade", app."childSchool",
              app."parentName", app."parentPhone", item."priceSnapshot", item.status AS "itemStatus", item."createdAt",
              ${paymentStatusSql} AS "paymentStatus", invoice."invoiceNo",
              (shuttle.id IS NOT NULL) AS "shuttleRequested",
              (shuttle.id IS NOT NULL AND (shuttle."assignedRouteId" IS NULL OR shuttle."assignedStopId" IS NULL)) AS "shuttleUnassigned",
-             COALESCE((SELECT array_agg(session_day ORDER BY session_day)
-                         FROM (
-                           -- 같은 요일에 여러 회차가 있어도 명단에는 요일을 한 번만 표시합니다.
-                           SELECT DISTINCT EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int AS session_day
-                             FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = item."offeringId"
-                         ) actual_session_days), ARRAY[]::int[]) AS weekdays
+             CASE WHEN COALESCE(cardinality(app."selectedWeekdays"), 0) > 0 THEN
+               COALESCE((SELECT array_agg(day_num ORDER BY day_num)
+                           FROM (
+                             SELECT DISTINCT CASE selected.day_key
+                               WHEN 'MON' THEN 1 WHEN 'TUE' THEN 2 WHEN 'WED' THEN 3 WHEN 'THU' THEN 4
+                               WHEN 'FRI' THEN 5 WHEN 'SAT' THEN 6 WHEN 'SUN' THEN 7 ELSE NULL
+                             END AS day_num
+                               FROM unnest(app."selectedWeekdays") AS selected(day_key)
+                           ) selected_days WHERE day_num IS NOT NULL), ARRAY[]::int[])
+             ELSE
+               COALESCE((SELECT array_agg(session_day ORDER BY session_day)
+                           FROM (
+                             SELECT DISTINCT EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int AS session_day
+                               FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = item."offeringId"
+                           ) actual_session_days), ARRAY[]::int[])
+             END AS weekdays
         FROM "SpecialProgramApplicationItem" item
         JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
         JOIN "SpecialProgramSeason" season ON season.id = app."seasonId"
         JOIN "SpecialProgramOffering" offering ON offering.id = item."offeringId"
+        LEFT JOIN "Class" linked_class ON linked_class.id = offering."linkedClassId"
         LEFT JOIN "Payment" payment ON payment.id = item."paymentId"
         LEFT JOIN "PaymentInvoice" invoice ON invoice."paymentId" = item."paymentId"
         LEFT JOIN "SpecialProgramShuttleRequest" shuttle ON shuttle."applicationItemId" = item.id
        WHERE item.status = 'APPROVED' AND ${filterSql}
-       ORDER BY item."createdAt" DESC, item.id DESC LIMIT $7 OFFSET $8`, ...queryParams, pageSize, offset),
+       ORDER BY COALESCE((SELECT MIN(CASE selected.day_key
+                  WHEN 'MON' THEN 1 WHEN 'TUE' THEN 2 WHEN 'WED' THEN 3 WHEN 'THU' THEN 4
+                  WHEN 'FRI' THEN 5 WHEN 'SAT' THEN 6 WHEN 'SUN' THEN 7 ELSE NULL
+                END) FROM unnest(app."selectedWeekdays") AS selected(day_key)), 8),
+                offering."displayOrder", app."childName", item.id LIMIT $7 OFFSET $8`, ...queryParams, pageSize, offset),
     prisma.$queryRawUnsafe<Array<SeasonalRosterStats>>(`
       SELECT COUNT(*) FILTER (WHERE item.status = 'APPROVED')::int AS "confirmedSeats",
              COUNT(*) FILTER (WHERE item.status IN ('PENDING','APPROVED'))::int AS "heldSeats",
@@ -254,6 +285,7 @@ async function seasonalRoster(request: NextRequest) {
              COUNT(*) FILTER (WHERE item.status = 'APPROVED')::int AS total
         FROM "SpecialProgramApplicationItem" item
         JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+        JOIN "SpecialProgramOffering" offering ON offering.id = item."offeringId"
         LEFT JOIN "Payment" payment ON payment.id = item."paymentId"
         LEFT JOIN "PaymentInvoice" invoice ON invoice."paymentId" = item."paymentId"
         LEFT JOIN "SpecialProgramShuttleRequest" shuttle ON shuttle."applicationItemId" = item.id
@@ -288,19 +320,17 @@ async function seasonalRoster(request: NextRequest) {
 async function ensureApplicationCapacity(tx: Prisma.TransactionClient, applicationId: string) {
   const items = await tx.specialProgramApplicationItem.findMany({
     where: { applicationId },
-    select: { id: true, offeringId: true },
+    include: { application: { select: { selectedWeekdays: true } } },
     orderBy: { offeringId: "asc" },
   });
   for (const item of items) {
-    await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${item.offeringId} FOR UPDATE`;
-    const [offering, occupied] = await Promise.all([
-      tx.specialProgramOffering.findUnique({ where: { id: item.offeringId } }),
-      tx.specialProgramApplicationItem.count({
-        where: { offeringId: item.offeringId, status: { in: ["PENDING", "APPROVED"] } },
-      }),
-    ]);
-    if (!offering) throw new SeasonalError("승인할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
-    if (offering.capacity !== null && occupied > offering.capacity) throw new SeasonalError("정원이 가득 차 신청을 승인할 수 없습니다.", 409, "CAPACITY_FULL");
+    if (item.status === "APPROVED") {
+      await ensureSpecialProgramOperationalCapacity(tx, {
+        offeringId: item.offeringId,
+        selectedWeekdays: item.application.selectedWeekdays,
+        excludeItemId: item.id,
+      });
+    }
   }
 }
 
@@ -338,14 +368,12 @@ async function updateSpecialProgramItemStatus(
     throw new SeasonalError("검토 필요 사유를 먼저 확인하고 검토 완료 처리해 주세요.", 409, "APPLICATION_REVIEW_REQUIRED");
   }
 
-  await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${before.offeringId} FOR UPDATE`;
-  if (["PENDING", "APPROVED"].includes(params.status)) {
-    const [offering, occupied] = await Promise.all([
-      tx.specialProgramOffering.findUnique({ where: { id: before.offeringId } }),
-      tx.specialProgramApplicationItem.count({ where: { offeringId: before.offeringId, id: { not: params.itemId }, status: { in: ["PENDING", "APPROVED"] } } }),
-    ]);
-    if (!offering) throw new SeasonalError("승인할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
-    if (offering.capacity !== null && occupied >= offering.capacity) throw new SeasonalError("정원이 가득 차 승인할 수 없습니다.", 409, "CAPACITY_FULL");
+  if (params.status === "APPROVED") {
+    await ensureSpecialProgramOperationalCapacity(tx, {
+      offeringId: before.offeringId,
+      selectedWeekdays: before.application.selectedWeekdays,
+      excludeItemId: params.itemId,
+    });
   }
 
   let waitlistOrder = before.waitlistOrder;
@@ -418,21 +446,97 @@ function defaultSpecialProgramPrice(
   return offering.price;
 }
 
-async function ensureSpecialProgramOfferingCapacity(tx: Prisma.TransactionClient, offeringId: string, excludeItemId?: string) {
-  await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id = ${offeringId} FOR UPDATE`;
-  const [offering, occupied] = await Promise.all([
-    tx.specialProgramOffering.findUnique({ where: { id: offeringId } }),
-    tx.specialProgramApplicationItem.count({
-      where: {
-        offeringId,
-        status: { in: ["PENDING", "APPROVED"] },
-        ...(excludeItemId ? { id: { not: excludeItemId } } : {}),
-      },
-    }),
-  ]);
-  if (!offering) throw new SeasonalError("배정할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
-  if (offering.capacity !== null && occupied >= offering.capacity) throw new SeasonalError("정원이 가득 찬 반에는 배정할 수 없습니다.", 409, "CAPACITY_FULL");
-  return offering;
+function seasonalOfferingFrequency(offering: { title?: string | null; code?: string | null }) {
+  const source = `${offering.title ?? ""} ${offering.code ?? ""}`;
+  const matched = source.match(/주\s*(\d+)\s*회|-(\d)(?:\D|$)/i);
+  const value = matched ? Number(matched[1] ?? matched[2]) : NaN;
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+async function offeringSessionWeekdays(tx: Prisma.TransactionClient, offeringId: string) {
+  const dates = await tx.specialProgramSessionDate.findMany({
+    where: { offeringId },
+    select: { startsAt: true },
+  });
+  const days = dates
+    .map((date) => {
+      const short = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", weekday: "short" }).format(date.startsAt);
+      return WEEKDAY_FROM_EN_SHORT[short] ?? null;
+    })
+    .filter((day): day is WeekdayKey => Boolean(day));
+  return Array.from(new Set(days));
+}
+
+async function resolveSpecialProgramAssignment(
+  tx: Prisma.TransactionClient,
+  params: { offeringId: string; selectedWeekdays: string[]; applicationSeasonId: string; applicantType?: string | null },
+) {
+  const target = await tx.specialProgramOffering.findUnique({ where: { id: params.offeringId } });
+  if (!target || target.seasonId !== params.applicationSeasonId) {
+    throw new SeasonalError("같은 시즌의 특강 반을 선택해 주세요.", 400, "OFFERING_NOT_FOUND");
+  }
+  const selectedCount = params.selectedWeekdays.length;
+  const scopeWhere = target.linkedClassId
+    ? { seasonId: target.seasonId, linkedClassId: target.linkedClassId }
+    : { id: target.id };
+  const candidates = await tx.specialProgramOffering.findMany({
+    where: scopeWhere,
+    orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+  });
+  const offering = candidates.find((candidate) => seasonalOfferingFrequency(candidate) === selectedCount) ?? target;
+  return {
+    offering,
+    priceSnapshot: defaultSpecialProgramPrice(offering, params.applicantType),
+  };
+}
+
+async function ensureSpecialProgramOperationalCapacity(
+  tx: Prisma.TransactionClient,
+  params: { offeringId: string; selectedWeekdays?: string[] | null; excludeItemId?: string; statuses?: string[] },
+) {
+  const target = await tx.specialProgramOffering.findUnique({ where: { id: params.offeringId } });
+  if (!target) throw new SeasonalError("배정할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
+  const scopeWhere = target.linkedClassId
+    ? { seasonId: target.seasonId, linkedClassId: target.linkedClassId }
+    : { id: target.id };
+  const scopedOfferings = await tx.specialProgramOffering.findMany({
+    where: scopeWhere,
+    select: { id: true },
+    orderBy: { id: "asc" },
+  });
+  const scopedOfferingIds = scopedOfferings.map((offering) => offering.id);
+  if (scopedOfferingIds.length > 0) {
+    await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id IN (${Prisma.join(scopedOfferingIds)}) ORDER BY id FOR UPDATE`;
+  }
+
+  const selectedWeekdays = normalizeSelectedWeekdays(params.selectedWeekdays ?? []);
+  const effectiveWeekdays = selectedWeekdays.length > 0 ? selectedWeekdays : await offeringSessionWeekdays(tx, target.id);
+  if (target.capacity === null || effectiveWeekdays.length === 0) return target;
+
+  const statuses = params.statuses?.length ? params.statuses : APPROVED_SEAT_STATUSES;
+  for (const weekday of effectiveWeekdays) {
+    const rows = await tx.$queryRaw<Array<{ occupied: bigint }>>(Prisma.sql`
+      SELECT COUNT(DISTINCT item.id)::bigint AS occupied
+        FROM "SpecialProgramApplicationItem" item
+        JOIN "SpecialProgramOffering" candidate ON candidate.id = item."offeringId"
+        JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+       WHERE item.status IN (${Prisma.join(statuses)})
+         ${params.excludeItemId ? Prisma.sql`AND item.id <> ${params.excludeItemId}` : Prisma.empty}
+         ${target.linkedClassId
+           ? Prisma.sql`AND candidate."seasonId" = ${target.seasonId} AND candidate."linkedClassId" = ${target.linkedClassId}`
+           : Prisma.sql`AND candidate.id = ${target.id}`}
+         AND (
+           COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+           OR ${weekday} = ANY(app."selectedWeekdays")
+         )
+    `);
+    const occupied = Number(rows[0]?.occupied ?? 0);
+    if (occupied >= target.capacity) {
+      const dayLabel = ["월", "화", "수", "목", "금", "토", "일"][WEEKDAY_KEYS.indexOf(weekday as WeekdayKey)] ?? weekday;
+      throw new SeasonalError(`${dayLabel}요일 정원이 가득 차 승인할 수 없습니다.`, 409, "CAPACITY_FULL");
+    }
+  }
+  return target;
 }
 
 async function refreshApplicationSummary(tx: Prisma.TransactionClient, applicationId: string, actorId: string) {
@@ -463,17 +567,28 @@ async function saveSpecialProgramItemAssignment(
   if (before.enrollmentId || before.paymentId) {
     throw new SeasonalError("이미 수강 등록이나 청구서가 연결된 신청은 먼저 연결을 정리한 뒤 변경해 주세요.", 409, "ITEM_ALREADY_CONVERTED");
   }
-  const offering = await tx.specialProgramOffering.findUnique({ where: { id: params.offeringId } });
-  if (!offering || offering.seasonId !== before.application.seasonId) throw new SeasonalError("같은 시즌의 특강 반을 선택해 주세요.", 400, "OFFERING_NOT_FOUND");
+  const assignment = await resolveSpecialProgramAssignment(tx, {
+    offeringId: params.offeringId,
+    selectedWeekdays: params.selectedWeekdays,
+    applicationSeasonId: before.application.seasonId,
+    applicantType: before.application.applicantType,
+  });
+  const offering = assignment.offering;
   const duplicated = await tx.specialProgramApplicationItem.findFirst({
-    where: { applicationId: before.applicationId, offeringId: params.offeringId, id: { not: before.id } },
+    where: { applicationId: before.applicationId, offeringId: offering.id, id: { not: before.id } },
     select: { id: true },
   });
   if (duplicated) throw new SeasonalError("이미 같은 반으로 등록된 신청 항목이 있습니다.", 409, "OFFERING_ALREADY_ASSIGNED");
-  if (["PENDING", "APPROVED"].includes(before.status)) await ensureSpecialProgramOfferingCapacity(tx, params.offeringId, before.id);
+  if (before.status === "APPROVED") {
+    await ensureSpecialProgramOperationalCapacity(tx, {
+      offeringId: offering.id,
+      selectedWeekdays: params.selectedWeekdays,
+      excludeItemId: before.id,
+    });
+  }
   let waitlistOrder = before.waitlistOrder;
-  if (before.status === "WAITLISTED" && before.offeringId !== params.offeringId) {
-    const last = await tx.specialProgramApplicationItem.aggregate({ where: { offeringId: params.offeringId, status: "WAITLISTED" }, _max: { waitlistOrder: true } });
+  if (before.status === "WAITLISTED" && before.offeringId !== offering.id) {
+    const last = await tx.specialProgramApplicationItem.aggregate({ where: { offeringId: offering.id, status: "WAITLISTED" }, _max: { waitlistOrder: true } });
     waitlistOrder = (last._max.waitlistOrder || 0) + 1;
   }
   const item = await tx.specialProgramApplicationItem.update({
@@ -481,7 +596,7 @@ async function saveSpecialProgramItemAssignment(
     data: {
       offeringId: offering.id,
       titleSnapshot: offering.title,
-      priceSnapshot: params.priceSnapshot,
+      priceSnapshot: assignment.priceSnapshot,
       waitlistOrder: before.status === "WAITLISTED" ? waitlistOrder : null,
       conversionStatus: "NOT_STARTED",
       conversionError: null,
@@ -522,8 +637,13 @@ async function createSpecialProgramApplicationItem(
     include: { items: { select: { offeringId: true } } },
   });
   if (!application) throw new SeasonalError("신청서를 찾을 수 없습니다.", 404, "APPLICATION_NOT_FOUND");
-  const offering = await ensureSpecialProgramOfferingCapacity(tx, params.offeringId);
-  if (offering.seasonId !== application.seasonId) throw new SeasonalError("같은 시즌의 특강 반을 선택해 주세요.", 400, "OFFERING_NOT_FOUND");
+  const assignment = await resolveSpecialProgramAssignment(tx, {
+    offeringId: params.offeringId,
+    selectedWeekdays: params.selectedWeekdays,
+    applicationSeasonId: application.seasonId,
+    applicantType: application.applicantType,
+  });
+  const offering = assignment.offering;
   if (application.items.some((item) => item.offeringId === offering.id)) {
     throw new SeasonalError("이미 같은 반으로 등록된 신청 항목이 있습니다.", 409, "OFFERING_ALREADY_ASSIGNED");
   }
@@ -532,7 +652,7 @@ async function createSpecialProgramApplicationItem(
       applicationId: application.id,
       offeringId: offering.id,
       titleSnapshot: offering.title,
-      priceSnapshot: params.priceSnapshot,
+      priceSnapshot: assignment.priceSnapshot,
       status: "PENDING",
     },
   });

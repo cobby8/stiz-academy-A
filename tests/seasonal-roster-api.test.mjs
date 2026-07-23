@@ -11,7 +11,7 @@ test("기존 GET 응답을 유지하면서 view=roster만 별도 분기한다", 
 
 test("확정 명단은 승인된 신청 항목을 기준으로 페이지를 나눈다", () => {
   assert.match(route, /WHERE item\.status = 'APPROVED'/);
-  assert.match(route, /ORDER BY item\."createdAt" DESC, item\.id DESC LIMIT \$7 OFFSET \$8/);
+  assert.match(route, /ORDER BY COALESCE\(\(SELECT MIN\(CASE selected\.day_key/);
   assert.match(route, /pageSize.*25.*1.*100/);
 });
 
@@ -22,10 +22,11 @@ test("시즌 반 요일 결제 셔틀 검색 필터를 서버에서 처리한다
   assert.match(route, /AT TIME ZONE 'Asia\/Seoul'/);
 });
 
-test("반별 명단 요일은 신청서 합집합이 아니라 실제 반 회차를 사용한다", () => {
+test("반별 명단 요일은 실제 운영 반과 학생 신청 요일을 사용한다", () => {
   const roster = route.slice(route.indexOf("async function seasonalRoster"), route.indexOf("async function ensureApplicationCapacity"));
-  assert.match(roster, /FROM "SpecialProgramSessionDate" sd WHERE sd\."offeringId" = item\."offeringId"/);
-  assert.doesNotMatch(roster, /unnest\(app\."selectedWeekdays"\)/);
+  assert.match(roster, /filter_offering\."linkedClassId" IS NOT NULL/);
+  assert.match(roster, /ANY\(app\."selectedWeekdays"\)/);
+  assert.match(roster, /unnest\(app\."selectedWeekdays"\) AS selected\(day_key\)/);
 });
 
 test("검색과 결제·셔틀 필터는 운영 의미로 정규화한다", () => {

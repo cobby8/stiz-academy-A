@@ -13,7 +13,7 @@ export const metadata = {
 export default async function GalleryPage() {
     // DB에서 갤러리 게시물과 학원 설정을 병렬로 가져온다
     const [posts, settings] = await Promise.all([
-        getGalleryPosts({ limit: 50, publicOnly: true }),
+        getGalleryPosts({ limit: 36, publicOnly: true }),
         getAcademySettings() as Promise<any>,
     ]);
 

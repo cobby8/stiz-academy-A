@@ -158,7 +158,6 @@ export default function GalleryAdminClient({
     setLoading(true);
     setLoadError(false);
     try {
-      await fetch("/api/admin/gallery/refresh", { method: "POST", cache: "no-store" });
       const response = await fetch("/api/admin/gallery", { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load gallery data.");
       const data = (await response.json()) as GalleryPayload;

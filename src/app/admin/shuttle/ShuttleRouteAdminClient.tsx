@@ -127,7 +127,7 @@ export default function ShuttleRouteAdminClient() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [modal, setModal] = useState<"vehicle" | "route" | "assign" | "confirm" | null>(null);
   const [assignRequest, setAssignRequest] = useState<ShuttleRequest | null>(null);
   const [locationPicker, setLocationPicker] = useState<LocationPickerTarget | null>(null);
@@ -155,7 +155,10 @@ export default function ShuttleRouteAdminClient() {
 
   useEffect(() => {
     if (!autoRefresh || pending || modal || locationPicker) return;
-    const timer = window.setInterval(() => { void load(seasonId, direction, serviceDate); }, 30000);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void load(seasonId, direction, serviceDate);
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [autoRefresh, direction, load, locationPicker, modal, pending, seasonId, serviceDate]);
 

@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import GalleryLightboxController, { type GalleryLightboxItem } from "./GalleryLightboxController";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
@@ -11,8 +14,14 @@ type GalleryPost = {
     className: string | null;
 };
 
+const INITIAL_VISIBLE_ITEMS = 24;
+const VISIBLE_ITEM_INCREMENT = 24;
+
 export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] }) {
-    const items = getGalleryItems(posts);
+    const items = useMemo(() => getGalleryItems(posts), [posts]);
+    const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS);
+    const visibleItems = items.slice(0, visibleCount);
+    const hasMoreItems = visibleCount < items.length;
 
     // 빈 갤러리 — 아이콘 + 안내 메시지 표시
     if (items.length === 0) {
@@ -29,7 +38,7 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
         <>
             {/* 갤러리 그리드 — 반응형 2/3/4열 */}
             <div data-gallery-root className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-                {items.map((item, index) => (
+                {visibleItems.map((item, index) => (
                     <button
                         key={`${item.postId}-${item.mediaIdx}`}
                         type="button"
@@ -83,7 +92,19 @@ export default function GalleryPublicClient({ posts }: { posts: GalleryPost[] })
                 ))}
             </div>
 
-            <GalleryLightboxController items={items} />
+            {hasMoreItems && (
+                <div className="mt-10 flex justify-center">
+                    <button
+                        type="button"
+                        onClick={() => setVisibleCount((current) => Math.min(current + VISIBLE_ITEM_INCREMENT, items.length))}
+                        className="min-h-11 rounded-full border border-brand-orange-200 bg-white px-6 text-sm font-black text-brand-orange-600 shadow-sm transition hover:border-brand-orange-500 hover:bg-orange-50 dark:border-gray-700 dark:bg-gray-800 dark:text-brand-neon-lime"
+                    >
+                        더 보기
+                    </button>
+                </div>
+            )}
+
+            <GalleryLightboxController items={visibleItems} />
         </>
     );
 }

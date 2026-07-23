@@ -1772,6 +1772,42 @@ model StaffInvitationAuthAttempt {
   @@index([authUserId])
 }
 
+model StaffPhoneVerification {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  ownerId        String
+  phoneHash      String
+  currentSendId  String?
+  otpHash        String?
+  otpExpiresAt   DateTime? @db.Timestamptz(6)
+  attempts       Int       @default(0)
+  lockedAt       DateTime? @db.Timestamptz(6)
+  lastSentAt     DateTime? @db.Timestamptz(6)
+  status         String    @default("PENDING")
+  proofHash      String?
+  proofExpiresAt DateTime? @db.Timestamptz(6)
+  consumedAt     DateTime? @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  sends          StaffPhoneVerificationSend[]
+
+  @@unique([ownerId, phoneHash])
+  @@index([ownerId, status])
+  @@index([phoneHash, status])
+}
+
+model StaffPhoneVerificationSend {
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  verificationId String
+  ownerId        String
+  phoneHash      String
+  status         String
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  verification   StaffPhoneVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
+  @@index([phoneHash, createdAt])
+}
+
 enum Role {
   ADMIN
   VICE_ADMIN

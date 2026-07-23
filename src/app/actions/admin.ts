@@ -1,5 +1,6 @@
 "use server";
 
+import { createHmac, timingSafeEqual } from "crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireOwner } from "@/lib/auth-guard";
@@ -5599,42 +5600,82 @@ export async function createStaffUser(data: {
     name: string;
     phone: string; // 필수 — 인증 완료된 전화번호
     role: "ADMIN" | "VICE_ADMIN" | "INSTRUCTOR" | "DRIVER";
+    verificationProof: string;
 }) {
-    await requireOwner();
+    const owner = await requireOwner();
     await ensureStaffColumns();
 
     // 전화번호에서 하이픈 제거 후 이메일 자동 생성
-    const cleanPhone = data.phone.replace(/-/g, "");
+    const cleanPhone = data.phone.replace(/\D/g, "");
     const autoEmail = `${cleanPhone}@staff.local`;
 
     try {
-        // 전화번호 중복 확인 (같은 번호로 이미 등록된 스태프가 있는지)
-        const existingPhone = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "User" WHERE phone = $1 LIMIT 1`,
-            cleanPhone,
-        );
-        if (existingPhone.length > 0) {
-            throw new Error("이미 등록된 전화번호입니다.");
+        const verificationSecret =
+            process.env.STAFF_PHONE_VERIFICATION_SECRET?.trim()
+            || process.env.SOLAPI_API_SECRET?.trim();
+        if (!verificationSecret || !data.verificationProof) {
+            throw new Error("전화번호 인증 정보가 없습니다. 다시 인증해 주세요.");
         }
+        const phoneHash = createHmac("sha256", verificationSecret)
+            .update(`phone:${cleanPhone}`)
+            .digest("hex");
+        const suppliedProofHash = createHmac("sha256", verificationSecret)
+            .update(`proof:${data.verificationProof}`)
+            .digest("hex");
 
-        // 자동생성 이메일 중복 확인 (혹시 모를 충돌 방지)
-        const existingEmail = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
-            autoEmail,
-        );
-        if (existingEmail.length > 0) {
-            throw new Error("이미 등록된 전화번호입니다.");
-        }
+        await prisma.$transaction(async (tx) => {
+            // 인증 확인·증표 소비·직원 생성을 한 거래로 묶어 재사용을 막는다.
+            await tx.$executeRawUnsafe(
+                `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+                `staff-phone-number:${phoneHash}`,
+            );
+            const [verification] = await tx.$queryRawUnsafe<Array<{
+                id: string;
+                proofHash: string | null;
+            }>>(
+                `SELECT id, "proofHash"
+                   FROM "StaffPhoneVerification"
+                  WHERE "ownerId" = $1 AND "phoneHash" = $2
+                    AND status = 'VERIFIED'
+                    AND "proofExpiresAt" > NOW()
+                    AND "consumedAt" IS NULL
+                  FOR UPDATE`,
+                owner.id,
+                phoneHash,
+            );
+            const expected = Buffer.from(verification?.proofHash || "", "hex");
+            const supplied = Buffer.from(suppliedProofHash, "hex");
+            if (
+                !verification ||
+                expected.length !== supplied.length ||
+                !timingSafeEqual(expected, supplied)
+            ) {
+                throw new Error("전화번호 인증이 만료되었거나 이미 사용되었습니다. 다시 인증해 주세요.");
+            }
 
-        // User 레코드 생성 — email은 phone@staff.local 자동 생성
-        await prisma.$executeRawUnsafe(
-            `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
-             VALUES (gen_random_uuid(), $1, $2, $3, $4::"Role", NOW(), NOW())`,
-            autoEmail,
-            data.name,
-            cleanPhone,
-            data.role,
-        );
+            const existing = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+                `SELECT id FROM "User" WHERE phone = $1 OR email = $2 LIMIT 1 FOR UPDATE`,
+                cleanPhone,
+                autoEmail,
+            );
+            if (existing.length > 0) throw new Error("이미 등록된 전화번호입니다.");
+
+            await tx.$executeRawUnsafe(
+                `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4::"Role", NOW(), NOW())`,
+                autoEmail,
+                data.name,
+                cleanPhone,
+                data.role,
+            );
+            await tx.$executeRawUnsafe(
+                `UPDATE "StaffPhoneVerification"
+                    SET status = 'CONSUMED', "consumedAt" = NOW(),
+                        "proofHash" = NULL, "updatedAt" = NOW()
+                  WHERE id = $1`,
+                verification.id,
+            );
+        });
     } catch (e) {
         console.error("[createStaffUser] failed:", e);
         throw new Error((e as Error).message || "스태프 생성 실패");

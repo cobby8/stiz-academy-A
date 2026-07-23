@@ -28,6 +28,7 @@ export default function AddStaffModal({
     });
     const [verifyStep, setVerifyStep] = useState<"input" | "sent" | "verified">("input");
     const [verifyCode, setVerifyCode] = useState("");
+    const [verificationProof, setVerificationProof] = useState("");
     const [verifyMsg, setVerifyMsg] = useState<{ text: string; ok: boolean } | null>(null);
     const [verifyLoading, setVerifyLoading] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -38,6 +39,7 @@ export default function AddStaffModal({
         if (verifyStep !== "input") {
             setVerifyStep("input");
             setVerifyCode("");
+            setVerificationProof("");
             setVerifyMsg(null);
         }
     }
@@ -83,6 +85,7 @@ export default function AddStaffModal({
             });
             const data = await res.json();
             if (res.ok && data.verified) {
+                setVerificationProof(data.proof || "");
                 setVerifyStep("verified");
                 setVerifyMsg({ text: "전화번호가 인증되었습니다.", ok: true });
             } else {
@@ -105,6 +108,7 @@ export default function AddStaffModal({
                     name: form.name.trim(),
                     phone: form.phone.trim(),
                     role: form.role,
+                    verificationProof,
                 });
                 onSuccess();
             } catch (error) {
@@ -164,7 +168,7 @@ export default function AddStaffModal({
                     )}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">역할 *</label>
-                        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })} className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500">
+                        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as typeof form.role })} className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-brand-navy-500 focus:border-brand-navy-500">
                             <option value="INSTRUCTOR">코치/강사</option>
                             <option value="DRIVER">셔틀 기사</option>
                             <option value="VICE_ADMIN">부원장</option>

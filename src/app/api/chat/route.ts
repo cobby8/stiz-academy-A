@@ -563,6 +563,56 @@ const getCachedSlotGrades = unstable_cache(
 );
 
 // --- 시스템 프롬프트 조립 ---
+type ChatContextNeeds = {
+  programs: boolean;
+  classes: boolean;
+  annualEvents: boolean;
+  coaches: boolean;
+  coachSlots: boolean;
+  shuttle: boolean;
+  notices: boolean;
+  faq: boolean;
+  slotGrades: boolean;
+};
+
+const EMPTY_SLOT_GRADES = { sheetSlots: [], customSlots: [] };
+
+function includesAny(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function inferChatContextNeeds(messages: Array<{ role: string; content: string }>): ChatContextNeeds {
+  const text = messages
+    .slice(-4)
+    .map((message) => message.content)
+    .join(" ")
+    .toLowerCase();
+
+  const asksProgram = includesAny(text, [
+    "프로그램", "수업", "반", "클래스", "시간", "시간표", "일정", "교시", "가격", "비용", "수강료", "회비", "추천", "학년", "초등", "중등", "유치",
+  ]);
+  const asksGrade = includesAny(text, ["학년", "초등", "중등", "유치", "몇 학년", "정원", "마감", "자리"]);
+  const asksCoach = includesAny(text, ["코치", "강사", "선생", "담당"]);
+  const asksShuttle = includesAny(text, ["셔틀", "차량", "버스", "노선", "정류", "픽업", "하원", "등원"]);
+  const asksNotice = includesAny(text, ["공지", "소식", "특강", "방학", "이벤트", "휴원", "휴강"]);
+  const asksAnnual = includesAny(text, ["연간", "행사", "방학", "휴원", "휴강", "일정표", "캘린더"]);
+  const asksFaq = includesAny(text, ["faq", "자주", "문의", "환불", "규정", "약관", "이용", "취소", "준비물", "주차"]);
+  const asksApplication = includesAny(text, ["체험", "신청", "등록", "입학", "상담"]);
+  const hasSpecificIntent = asksProgram || asksGrade || asksCoach || asksShuttle || asksNotice || asksAnnual || asksFaq || asksApplication;
+
+  return {
+    programs: asksProgram || asksGrade || asksApplication || !hasSpecificIntent,
+    classes: asksProgram || asksGrade || asksCoach || asksApplication,
+    annualEvents: asksAnnual,
+    coaches: asksCoach,
+    coachSlots: asksCoach,
+    shuttle: asksShuttle,
+    notices: asksNotice,
+    faq: asksFaq || !hasSpecificIntent,
+    slotGrades: asksGrade || asksProgram,
+  };
+}
+
 function buildSystemPrompt(
   programs: any[],
   classes: any[],
@@ -930,19 +980,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // DB에서 모든 데이터를 동시 조회 (5분 캐시)
+    // 질문 의도에 맞는 DB 컨텍스트만 조회한다. 기본 설정은 신청 버튼 URL 때문에 항상 필요하다.
+    const contextNeeds = inferChatContextNeeds(messages);
     const [programs, classes, settings, annualEvents, coaches, coachSlots, routes, stops, notices, faq, slotGrades] = await Promise.all([
-      getCachedPrograms(),
-      getCachedClasses(),
+      contextNeeds.programs ? getCachedPrograms() : Promise.resolve([]),
+      contextNeeds.classes ? getCachedClasses() : Promise.resolve([]),
       getCachedSettings(),
-      getCachedAnnualEvents(),
-      getCachedCoaches(),
-      getCachedCoachSlots(),
-      getCachedRoutes(),
-      getCachedStops(),
-      getCachedNotices(),
-      getCachedFaq(),
-      getCachedSlotGrades(),
+      contextNeeds.annualEvents ? getCachedAnnualEvents() : Promise.resolve([]),
+      contextNeeds.coaches ? getCachedCoaches() : Promise.resolve([]),
+      contextNeeds.coachSlots ? getCachedCoachSlots() : Promise.resolve({}),
+      contextNeeds.shuttle ? getCachedRoutes() : Promise.resolve([]),
+      contextNeeds.shuttle ? getCachedStops() : Promise.resolve([]),
+      contextNeeds.notices ? getCachedNotices() : Promise.resolve([]),
+      contextNeeds.faq ? getCachedFaq() : Promise.resolve([]),
+      contextNeeds.slotGrades ? getCachedSlotGrades() : Promise.resolve(EMPTY_SLOT_GRADES),
     ]);
 
     // 시스템 프롬프트 조립 (고정 부분 + DB 동적 데이터)

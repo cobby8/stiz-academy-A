@@ -4,13 +4,15 @@ import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SimulatorClient from "./SimulatorClient";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 // 공개 페이지이므로 5분 ISR 캐싱 (schedule 페이지와 동일)
 export const revalidate = 300;
-export const metadata = {
+export const metadata = buildPublicMetadata({
     title: "우리 아이 수업 찾기 | STIZ 농구교실 다산점",
-    description: "학년과 원하는 요일/시간을 입력하면 등록 가능한 수업을 자동으로 추천해드립니다.",
-};
+    description: "학년과 원하는 요일, 시간을 입력하면 등록 가능한 농구 수업을 자동으로 추천해드립니다.",
+    path: "/simulator",
+});
 
 export default async function SimulatorPage() {
     // schedule/page.tsx와 동일하게 DB 시간표를 우선 사용하고, 없을 때만 시트 캐시로 fallback

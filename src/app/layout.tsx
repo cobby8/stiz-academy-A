@@ -7,10 +7,14 @@ import MetaPixel from "@/components/MetaPixel";
 import DeferredFontStyles from "@/components/DeferredFontStyles";
 import PwaUpdater from "@/components/PwaUpdater";
 import ThemeColorUpdater from "@/components/ThemeColorUpdater";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const metadata: Metadata = {
-    title: "스티즈농구교실 다산점 | 스마트 학원 관리",
-    description: "우리아이 농구교실 스티즈농구교실 다산점의 스마트 출결/결제 관리 시스템입니다.",
+    ...buildPublicMetadata({
+        title: "STIZ 농구교실 다산점 | 다산신도시 No.1 농구 전문 학원",
+        description: "유아·초등·중등 수준별 맞춤 농구 수업, 전문 코치진, 셔틀 안내와 체험수업 신청까지 한 번에 확인하세요.",
+        path: "/",
+    }),
     // PWA manifest 연결 - 홈 화면 추가 시 앱처럼 동작하게 해줌
     manifest: "/manifest.json",
     // iOS Safari용 PWA 설정 (Apple은 manifest를 완전히 지원하지 않아 별도 메타 태그 필요)
@@ -18,21 +22,6 @@ export const metadata: Metadata = {
         capable: true,
         statusBarStyle: "black-translucent",
         title: "스티즈농구",
-    },
-    // Open Graph: 카카오톡/페이스북 등에서 링크 공유 시 미리보기 카드에 표시되는 정보
-    openGraph: {
-        title: "STIZ 농구교실 다산점",
-        description: "다산신도시 No.1 농구 전문 학원",
-        url: "https://stiz-dasan.kr",
-        siteName: "STIZ 농구교실 다산점",
-        locale: "ko_KR",
-        type: "website",
-    },
-    // Twitter(X) 카드: 트위터에서 링크 공유 시 큰 이미지 카드로 표시
-    twitter: {
-        card: "summary_large_image",
-        title: "STIZ 농구교실 다산점",
-        description: "다산신도시 No.1 농구 전문 학원",
     },
 };
 

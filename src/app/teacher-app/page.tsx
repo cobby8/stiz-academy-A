@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import StaffAppInstallClient from "./StaffAppInstallClient";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const metadata: Metadata = {
-  title: "STIZ 선생님 앱 설치",
-  description: "수업과 학생 관리를 위한 STIZ 선생님 앱을 홈 화면에 설치하세요.",
+  ...buildPublicMetadata({
+    title: "STIZ 선생님 앱 설치",
+    description: "수업과 학생 관리를 위한 STIZ 선생님 앱을 홈 화면에 설치하세요.",
+    path: "/teacher-app",
+  }),
   manifest: "/manifest-staff.json",
   appleWebApp: {
     capable: true,

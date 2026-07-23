@@ -10,12 +10,15 @@ import { getAvailableTrialSlots, getTrialLeadForEnroll } from "@/app/actions/pub
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import EnrollApplicationForm from "./EnrollApplicationForm";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
-export const metadata = {
+export const metadata = buildPublicMetadata({
     title: "수강 신청 | STIZ 농구교실 다산점",
     description: "스티즈 농구교실 다산점 수강 신청. 간단한 정보 입력으로 우리 아이의 농구 여정을 시작하세요.",
-};
+    path: "/apply/enroll",
+    imageAlt: "STIZ 농구교실 다산점 수강 신청 미리보기",
+});
 
 export default async function EnrollApplyPage({
     searchParams,

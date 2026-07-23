@@ -10,15 +10,16 @@ import { getPublicFaqs } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import FaqClient from "./FaqClient";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 // ISR 60초 — apply 페이지와 동일한 캐싱 정책
 export const revalidate = 60;
 
-export const metadata = {
+export const metadata = buildPublicMetadata({
   title: "자주 묻는 질문 | STIZ 농구교실 다산점",
-  description:
-    "스티즈 농구교실 다산점 자주 묻는 질문. 체험수업, 수강료, 보강, 준비물 등 궁금한 점을 확인하세요.",
-};
+  description: "체험수업, 수강료, 보강, 준비물 등 스티즈 농구교실 다산점 FAQ를 확인하세요.",
+  path: "/faq",
+});
 
 export default async function FaqPage() {
   // DB에서 공개 FAQ 조회

@@ -38,6 +38,7 @@ import {
     type ApplicationContactAction,
     type ApplicationContactTargetType,
 } from "@/lib/application-contact-logs";
+import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
 
 type AdminActor = Awaited<ReturnType<typeof requireAdmin>>;
 type ApplicationHistoryAction = Extract<ApplicationContactAction, "UPDATED" | "SCHEDULED" | "CANCELLED">;
@@ -5076,8 +5077,11 @@ export async function recordApplicationContact(input: {
  * 관리자가 체험 완료된 학부모에게 보낼 링크를 복사하는 용도
  */
 function buildEnrollLink(trialLeadId: string): string {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:4000");
+    const baseUrl = (
+        process.env.NEXT_PUBLIC_SITE_URL?.trim()
+        || process.env.NEXT_PUBLIC_BASE_URL?.trim()
+        || PUBLIC_SITE_URL
+    ).replace(/\/+$/, "");
 
     return `${baseUrl}/apply/enroll?trialId=${trialLeadId}`;
 }

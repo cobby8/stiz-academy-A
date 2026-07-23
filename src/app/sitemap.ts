@@ -1,9 +1,10 @@
 import { MetadataRoute } from "next";
+import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
 
 // sitemap.xml 자동 생성 - 검색엔진(구글/네이버)이 사이트 구조를 파악하는 데 사용
 // Next.js가 빌드 시 이 함수를 실행하여 /sitemap.xml 경로로 제공함
 export default function sitemap(): MetadataRoute.Sitemap {
-    const baseUrl = "https://stiz-dasan.kr";
+    const baseUrl = PUBLIC_SITE_URL;
 
     return [
         // 메인 페이지 - 가장 높은 우선순위

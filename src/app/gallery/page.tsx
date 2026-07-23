@@ -3,12 +3,14 @@ import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import CTABanner from "@/components/landing/CTABanner";
 import GalleryPublicClient from "./GalleryPublicClient";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
-export const metadata = {
+export const metadata = buildPublicMetadata({
     title: "포토갤러리 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 수업 사진과 영상을 확인하세요.",
-};
+    description: "스티즈 농구교실 다산점의 수업 사진과 활동 영상을 확인하세요.",
+    path: "/gallery",
+});
 
 export default async function GalleryPage() {
     // DB에서 갤러리 게시물과 학원 설정을 병렬로 가져온다

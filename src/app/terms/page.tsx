@@ -3,13 +3,15 @@ import PublicPageLayout from "@/components/PublicPageLayout";
 import SectionLayout from "@/components/ui/SectionLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import ProgramAccordionTerms from "@/app/programs/ProgramAccordionTerms";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 // 이용약관은 자주 바뀌지 않으므로 5분 ISR
 export const revalidate = 300;
-export const metadata = {
+export const metadata = buildPublicMetadata({
   title: "이용약관 | STIZ 농구교실 다산점",
-  description: "STIZ 농구교실 다산점 이용약관. 수강 규정, 환불 정책, 보강 안내 등.",
-};
+  description: "STIZ 농구교실 다산점 이용약관과 수강 규정, 환불 정책, 보강 안내를 확인하세요.",
+  path: "/terms",
+});
 
 export default async function TermsPage() {
   // DB에서 이용약관 텍스트를 가져온다

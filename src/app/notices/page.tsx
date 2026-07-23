@@ -6,12 +6,14 @@ import CTABanner from "@/components/landing/CTABanner";
 import Link from "next/link";
 import { isImageAttachment, stripHtmlForPreview } from "@/lib/noticeContent";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
-export const metadata = {
+export const metadata = buildPublicMetadata({
     title: "공지사항 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 공지사항을 확인하세요.",
-};
+    description: "스티즈 농구교실 다산점의 공지사항과 학원 소식을 확인하세요.",
+    path: "/notices",
+});
 
 export default async function NoticesPage() {
     // DB에서 공지사항과 학원 설정을 병렬로 가져온다

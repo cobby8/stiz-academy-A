@@ -15,14 +15,16 @@ import LandingPageClient from "./LandingPageClient";
 import ChatBotButton from "@/components/chat/ChatBotButton";
 // 가이드 투어: 메인 페이지에서도 플로팅 버튼 표시
 import GuideTourLazyTrigger from "@/components/guide-tour/GuideTourLazyTrigger";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
 
-export const metadata = {
+export const metadata = buildPublicMetadata({
   title: "STIZ 농구교실 다산점 | 다산신도시 No.1 농구 전문 학원",
   description:
     "다산신도시 스티즈 농구교실입니다. 유아·초등·중등 수준별 맞춤 클래스, 전문 코치진, 셔틀 운행. 체험 수업 신청 및 수강 문의.",
-};
+  path: "/",
+});
 
 export default async function Home() {
   let settings: any = null;

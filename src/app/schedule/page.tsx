@@ -5,11 +5,16 @@ import PublicPageLayout from "@/components/PublicPageLayout";
 import ScheduleClient from "./ScheduleClient";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import CTABanner from "@/components/landing/CTABanner";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 // searchParams 없음 → ISR 정적 캐싱 (5분) 활성화
 // 프로그램 필터는 ScheduleClient(클라이언트)에서 useSearchParams()로 처리
 export const revalidate = 300;
-export const metadata = { title: "수업시간표 | STIZ 농구교실 다산점", description: "스티즈 농구교실 다산점 요일별 수업 시간표. 프로그램별 클래스 시간 및 담당 코치 확인." };
+export const metadata = buildPublicMetadata({
+    title: "수업시간표 | STIZ 농구교실 다산점",
+    description: "스티즈 농구교실 다산점 요일별 수업 시간표와 프로그램별 클래스 시간을 확인하세요.",
+    path: "/schedule",
+});
 
 export default async function SchedulePage() {
     const [settings, dbScheduleData, programs] = await Promise.all([

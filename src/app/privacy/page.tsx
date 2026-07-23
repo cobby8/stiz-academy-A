@@ -3,14 +3,15 @@ import { DEFAULT_PRIVACY_POLICY } from "@/lib/defaultPolicies";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import SectionLayout from "@/components/ui/SectionLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 // 개인정보 처리방침은 자주 바뀌지 않으므로 5분 ISR (terms 페이지와 동일)
 export const revalidate = 300;
-export const metadata = {
+export const metadata = buildPublicMetadata({
   title: "개인정보 처리방침 | STIZ 농구교실 다산점",
-  description:
-    "STIZ 농구교실 다산점 개인정보 처리방침. 개인정보보호법 제30조에 따른 고지.",
-};
+  description: "STIZ 농구교실 다산점 개인정보 처리방침을 확인하세요.",
+  path: "/privacy",
+});
 
 function parsePrivacyPolicy(policyText: string) {
   const blocks = policyText

@@ -8,12 +8,15 @@ import { getAvailableTrialSlots } from "@/app/actions/public";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import TrialApplicationForm from "./TrialApplicationForm";
+import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
-export const metadata = {
+export const metadata = buildPublicMetadata({
     title: "체험수업 신청 | STIZ 농구교실 다산점",
     description: "스티즈 농구교실 다산점 체험수업을 신청하세요. 빈자리가 있는 수업을 선택할 수 있습니다.",
-};
+    path: "/apply/trial",
+    imageAlt: "STIZ 농구교실 다산점 체험수업 신청 미리보기",
+});
 
 export default async function TrialApplyPage() {
     // 빈자리 슬롯 + 학원 설정(연락처 등)을 병렬 조회

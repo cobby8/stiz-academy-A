@@ -103,6 +103,7 @@ interface ClassPlacementPreview {
 type LocationPickerTarget = { request: ShuttleRequest; kind: "pickup" | "dropoff" } | { student: ClassCandidateStudent; kind: "pickup" | "dropoff" };
 
 const EMPTY_PAYLOAD: Payload = { seasons: [], vehicles: [], drivers: [], routes: [], unassignedRequests: [] };
+const SHUTTLE_AUTO_REFRESH_MS = 60_000;
 const STATUS_LABEL: Record<RouteStatus, string> = { DRAFT: "작성 중", CONFIRMED: "확정", COMPLETED: "운행완료", ARCHIVED: "보관" };
 
 function formatDate(value?: string | null) {
@@ -161,7 +162,7 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void load(seasonId, direction, serviceDate);
-    }, 30000);
+    }, SHUTTLE_AUTO_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [autoRefresh, direction, load, locationPicker, modal, pending, seasonId, serviceDate]);
 
@@ -350,12 +351,14 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
     {notice && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">{notice}</p>}
 
     <section aria-label="새로고침 설정" className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm font-bold text-gray-600 dark:text-gray-300">기사 앱 체크 현황은 30초마다 자동으로 반영됩니다.</p>
+      <p className="text-sm font-bold text-gray-600 dark:text-gray-300">기사 앱 체크 현황은 필요할 때 직접 불러오거나 1분 자동 새로고침으로 확인합니다.</p>
+      <p className="text-xs font-bold text-gray-500 dark:text-gray-400">기본은 수동 새로고침이며, 자동 새로고침을 켜면 1분마다 확인합니다.</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => void load(seasonId, direction, serviceDate)} disabled={loading || pending} className="min-h-10 rounded-lg border border-gray-300 px-4 text-sm font-black disabled:opacity-40 dark:border-gray-600">새 상태 불러오기</button>
         <label className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-gray-100 px-3 text-sm font-black dark:bg-gray-900">
           <input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} className="h-4 w-4" />
-          30초 자동 새로고침
+          <span className="sr-only">1분 자동 새로고침</span>
+          1분 자동 새로고침
         </label>
       </div>
     </section>

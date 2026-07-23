@@ -16,7 +16,6 @@
  */
 
 import Link from "next/link";
-import Image from "next/image";
 
 // Phase 2 신규 컴포넌트들
 import TrustBadges from "@/components/landing/TrustBadges";
@@ -28,6 +27,7 @@ import CTABanner from "@/components/landing/CTABanner";
 import SectionLayout from "@/components/ui/SectionLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { isDurableGalleryMediaUrl, parseGalleryMediaJSON } from "@/lib/galleryMedia";
 
 type GalleryPost = {
   id: string;
@@ -53,22 +53,10 @@ type HomeNotice = {
 
 function getGalleryMediaItems(posts: GalleryPost[]): GalleryMediaItem[] {
   return posts.flatMap((post) => {
-    try {
-      const media = JSON.parse(post.mediaJSON);
-      if (!Array.isArray(media)) return [];
-
-      return media
-        .filter((item): item is { url: string; type?: string } => {
-          return typeof item?.url === "string" && item.url.trim().length > 0;
-        })
-        .map((item, index) => ({
-          url: item.url,
-          type: item.type === "video" ? "video" : "image",
-          alt: post.title || post.caption || `Gallery media ${index + 1}`,
-        }));
-    } catch {
-      return [];
-    }
+    return parseGalleryMediaJSON(post.mediaJSON).map((item, index) => ({
+      ...item,
+      alt: post.title || post.caption || `Gallery media ${index + 1}`,
+    }));
   });
 }
 
@@ -140,9 +128,10 @@ export default function LandingPageClient({
 }) {
   const settings = initialSettings || {};
   const phone = settings.contactPhone || "010-0000-0000";
-  const galleryMediaItems = getGalleryMediaItems(galleryPosts).slice(0, 8);
+  const galleryMediaItems = getGalleryMediaItems(galleryPosts)
+    .filter((item) => item.type === "image" && isDurableGalleryMediaUrl(item.url))
+    .slice(0, 8);
   const displayImages = galleryMediaItems
-    .filter((item) => item.type === "image")
     .map((item) => item.url);
 
   return (
@@ -287,12 +276,12 @@ export default function LandingPageClient({
                     key={i}
                     className="aspect-square relative rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 group"
                   >
-                    <Image
+                    <img
                       src={url}
                       alt={`학원 활동 사진 ${i + 1}`}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      loading={i < 4 ? "eager" : "lazy"}
+                      decoding="async"
+                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                     {/* 호버 시 반투명 오버레이 */}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />

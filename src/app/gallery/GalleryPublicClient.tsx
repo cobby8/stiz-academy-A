@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import GalleryLightboxController, { type GalleryLightboxItem } from "./GalleryLightboxController";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+import { isDurableGalleryMediaUrl, parseGalleryMediaJSON } from "@/lib/galleryMedia";
 
-type MediaItem = { url: string; type: "image" | "video" };
 type GalleryPost = {
     id: string;
     title: string | null;
@@ -113,13 +113,10 @@ function getGalleryItems(posts: GalleryPost[]): GalleryLightboxItem[] {
     const items: GalleryLightboxItem[] = [];
 
     posts.forEach((post) => {
-        let media: MediaItem[] = [];
-        try {
-            media = JSON.parse(post.mediaJSON);
-        } catch {}
+        const media = parseGalleryMediaJSON(post.mediaJSON);
 
         media.forEach((item, mediaIdx) => {
-            if (typeof item?.url !== "string" || item.url.trim().length === 0) return;
+            if (!isDurableGalleryMediaUrl(item.url)) return;
 
             const createdAt = new Date(post.createdAt);
             items.push({

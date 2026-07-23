@@ -36,7 +36,7 @@ export default async function Home() {
     [settings, testimonials, galleryPosts, notices] = await Promise.all([
       getAcademySettings(),
       getPublicTestimonials(),
-      getGalleryPosts({ limit: 12, publicOnly: true }),
+      getGalleryPosts({ limit: 24, publicOnly: true }),
       getNotices({ limit: 4, publicOnly: true }),
     ]);
   } catch (e) {

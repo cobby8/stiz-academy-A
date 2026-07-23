@@ -2,6 +2,8 @@ function readEnv(name) {
   return typeof process.env[name] === "string" ? process.env[name].trim() : "";
 }
 
+const DEFAULT_PUBLIC_SITE_URL = "https://www.stiz-dasan.kr";
+
 function inferTossKeyMode(key) {
   if (key.startsWith("test_")) return "test";
   if (key.startsWith("live_")) return "live";
@@ -23,36 +25,52 @@ function makeUrl(origin, path, invoiceId) {
 const scope = (readEnv("RELEASE_ENV_SCOPE") || readEnv("VERCEL_ENV") || "local").toLowerCase();
 const clientKey = readEnv("NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY") || readEnv("TOSS_PAYMENTS_CLIENT_KEY");
 const secretKey = readEnv("TOSS_PAYMENTS_SECRET_KEY");
-const siteUrl = readEnv("NEXT_PUBLIC_SITE_URL");
+const configuredSiteUrl = readEnv("NEXT_PUBLIC_SITE_URL");
+const siteUrl = configuredSiteUrl || DEFAULT_PUBLIC_SITE_URL;
 const errors = [];
 const warnings = [];
 
-if (!clientKey) errors.push("토스 공개키가 필요합니다.");
-if (!secretKey) errors.push("토스 서버키가 필요합니다.");
+if (!clientKey) {
+  errors.push("토스 공개키가 필요합니다. NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY 또는 TOSS_PAYMENTS_CLIENT_KEY를 설정하세요.");
+}
+if (!secretKey) {
+  errors.push("토스 서버키가 필요합니다. TOSS_PAYMENTS_SECRET_KEY를 설정하세요.");
+}
 
 const clientMode = inferTossKeyMode(clientKey);
 const secretMode = inferTossKeyMode(secretKey);
 const keyPairReady = Boolean(clientKey && secretKey && clientMode !== "unknown" && clientMode === secretMode);
 
-if (clientKey && clientMode === "unknown") errors.push("토스 공개키 종류를 확인할 수 없습니다. test_ 또는 live_ 키를 사용해 주세요.");
-if (secretKey && secretMode === "unknown") errors.push("토스 서버키 종류를 확인할 수 없습니다. test_ 또는 live_ 키를 사용해 주세요.");
-if (clientKey && secretKey && clientMode !== secretMode) errors.push("토스 공개키와 서버키의 테스트/실거래 종류가 서로 다릅니다.");
-if (scope === "production" && keyPairReady && clientMode === "test") errors.push("운영 배포에는 토스 실거래 키가 필요합니다.");
-if (scope === "preview" && keyPairReady && clientMode === "live") warnings.push("미리보기 환경에서 실거래 키를 사용 중입니다.");
+if (clientKey && clientMode === "unknown") {
+  errors.push("토스 공개키 형식을 확인할 수 없습니다. test_ 또는 live_ 키를 사용하세요.");
+}
+if (secretKey && secretMode === "unknown") {
+  errors.push("토스 서버키 형식을 확인할 수 없습니다. test_ 또는 live_ 키를 사용하세요.");
+}
+if (clientKey && secretKey && clientMode !== secretMode) {
+  errors.push("토스 공개키와 서버키의 테스트/실거래 종류가 서로 다릅니다.");
+}
+if (scope === "production" && keyPairReady && clientMode === "test") {
+  errors.push("운영 배포에는 토스 실거래 키가 필요합니다.");
+}
+if (scope === "preview" && keyPairReady && clientMode === "live") {
+  warnings.push("미리보기 환경에서 실거래 키를 사용 중입니다.");
+}
+if (!configuredSiteUrl) {
+  warnings.push(`NEXT_PUBLIC_SITE_URL이 없어 기본 운영 주소(${DEFAULT_PUBLIC_SITE_URL})로 URL을 점검합니다.`);
+}
 
 let origin = "";
-if (!siteUrl) {
-  errors.push("사이트 주소가 필요합니다.");
-} else {
-  try {
-    origin = new URL(siteUrl).origin;
-    if (!/^https?:\/\//i.test(origin)) errors.push("사이트 주소는 http 또는 https 주소여야 합니다.");
-    if (scope === "production" && (!origin.startsWith("https://") || /localhost/i.test(origin))) {
-      errors.push("운영 사이트 주소는 localhost가 아닌 https 주소여야 합니다.");
-    }
-  } catch {
-    errors.push("사이트 주소 형식이 올바르지 않습니다.");
+try {
+  origin = new URL(siteUrl).origin;
+  if (!/^https?:\/\//i.test(origin)) {
+    errors.push("사이트 주소는 http 또는 https 주소여야 합니다.");
   }
+  if (scope === "production" && (!origin.startsWith("https://") || /localhost/i.test(origin))) {
+    errors.push("운영 사이트 주소는 localhost가 아닌 https 주소여야 합니다.");
+  }
+} catch {
+  errors.push("사이트 주소 형식이 올바르지 않습니다.");
 }
 
 console.log("[토스 결제 점검]");

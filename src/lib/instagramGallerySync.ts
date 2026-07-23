@@ -5,6 +5,11 @@ import {
   toGalleryMediaJSON,
   type InstagramRemoteMedia,
 } from "@/lib/instagram";
+import {
+  isDurableGalleryMediaUrl,
+  parseGalleryMediaJSON,
+  type GalleryMediaItem,
+} from "@/lib/galleryMedia";
 
 export type InstagramGallerySyncResult = {
   ok: boolean;
@@ -22,11 +27,6 @@ type InstagramGalleryInsert = {
   externalId: string;
   externalUrl: string | null;
   publishedAt: string | null;
-};
-
-type GalleryMediaItem = {
-  url: string;
-  type: "image" | "video";
 };
 
 let galleryInstagramColumnsEnsured = false;
@@ -76,18 +76,6 @@ function toInsertRow(media: InstagramRemoteMedia): InstagramGalleryInsert | null
 
 function safePathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80) || "media";
-}
-
-function parseGalleryMediaItems(mediaJSON: string): GalleryMediaItem[] {
-  try {
-    const parsed = JSON.parse(mediaJSON);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is GalleryMediaItem => {
-      return typeof item?.url === "string" && (item.type === "image" || item.type === "video");
-    });
-  } catch {
-    return [];
-  }
 }
 
 async function compressImageForInstagramArchive(buffer: Buffer) {
@@ -158,7 +146,7 @@ async function archiveInstagramImage({
 }
 
 async function archiveInstagramMediaJSON(mediaJSON: string, externalId: string) {
-  const items = parseGalleryMediaItems(mediaJSON);
+  const items = parseGalleryMediaJSON(mediaJSON);
   if (items.length === 0) return mediaJSON;
 
   const archivedItems: GalleryMediaItem[] = [];
@@ -168,7 +156,7 @@ async function archiveInstagramMediaJSON(mediaJSON: string, externalId: string) 
       continue;
     }
 
-    if (item.url.includes(".supabase.co/storage/") || item.url.includes(".supabase.in/storage/")) {
+    if (isDurableGalleryMediaUrl(item.url)) {
       archivedItems.push(item);
       continue;
     }

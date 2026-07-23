@@ -1,6 +1,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
 
 export type LedgerPaymentStatus = "PENDING" | "OVERDUE" | "PAID" | "REFUNDED" | "CANCELED";
 export type LedgerInvoiceStatus = "ISSUED" | "SENT" | "OVERDUE" | "PAID" | "CANCELED";
@@ -812,10 +813,11 @@ export function getPaymentProviderConfig() {
 export function getPaymentProviderPublicStatus() {
     const config = getPaymentProviderConfig();
     const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "";
+    const siteUrl = configuredSiteUrl || PUBLIC_SITE_URL;
     const siteOrigin = (() => {
-        if (!configuredSiteUrl || !/^https?:\/\//i.test(configuredSiteUrl)) return null;
+        if (!siteUrl || !/^https?:\/\//i.test(siteUrl)) return null;
         try {
-            return new URL(configuredSiteUrl).origin;
+            return new URL(siteUrl).origin;
         } catch {
             return null;
         }
@@ -835,7 +837,7 @@ export function getPaymentProviderPublicStatus() {
         secretKeyMode: config.secretKeyMode,
         keyMode,
         keyPairReady: config.keyPairReady,
-        siteUrlConfigured: Boolean(configuredSiteUrl),
+        siteUrlConfigured: Boolean(siteOrigin),
         siteUrlValid: Boolean(siteOrigin),
         successUrlPreview: siteOrigin ? makePaymentReturnUrl(siteOrigin, "/payments/success", "invoice-id") : null,
         failUrlPreview: siteOrigin ? makePaymentReturnUrl(siteOrigin, "/payments/fail", "invoice-id") : null,

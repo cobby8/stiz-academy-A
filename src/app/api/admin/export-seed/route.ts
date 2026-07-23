@@ -60,10 +60,10 @@ export async function GET() {
             `/**`,
             ` * 시드 데이터 - 프로그램 목록 영구 보존용`,
             ` *`,
-            ` * ?좑툘 ???뚯씪???꾨줈洹몃옩 ?곗씠?곕? 湲곕줉???먯꽭??`,
-            ` *    DB ?곗씠???뚯떎 ??/api/admin/seed POST 濡?蹂듦뎄?⑸땲??`,
+            ` * 이 파일은 프로그램 데이터를 기록합니다.`,
+            ` * DB 데이터가 필요할 때 /api/admin/seed POST로 복구합니다.`,
             ` *`,
-            ` * 留덉?留??대낫?닿린: ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`,
+            ` * 마지막 내보내기: ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`,
             ` */`,
             ``,
             `export interface SeedProgram {`,
@@ -120,7 +120,7 @@ export async function GET() {
 
         lines.push(`];`);
         lines.push(``);
-        lines.push(`/** ?댁슜?쎄? (AcademySettings.termsOfService) */`);
+        lines.push(`/** 이용약관 (AcademySettings.termsOfService) */`);
         lines.push(`export const TERMS_OF_SERVICE: string | null = ${quote(terms)};`);
         lines.push(``);
 
@@ -133,6 +133,6 @@ export async function GET() {
             },
         });
     } catch (e) {
-        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }

@@ -67,7 +67,7 @@ export async function POST() {
         }
         results.programs = `${restored}/${PROGRAMS.length}개 복원됨`;
     } else {
-        results.programs = "seed-data.ts ???꾨줈洹몃옩 ?곗씠?곌? ?놁뒿?덈떎";
+        results.programs = "seed-data.ts에 프로그램 데이터가 없습니다.";
     }
 
     // Restore ClassSlotOverrides
@@ -103,7 +103,7 @@ export async function POST() {
         }
         results.classSlotOverrides = `${restored}/${CLASS_SLOT_OVERRIDES.length}개 복원됨`;
     } else {
-        results.classSlotOverrides = "seed-data.ts ???щ’ ?곗씠?곌? ?놁뒿?덈떎";
+        results.classSlotOverrides = "seed-data.ts에 수업 시간표 데이터가 없습니다.";
     }
 
     // Restore Terms of Service
@@ -120,10 +120,10 @@ export async function POST() {
             results.termsOfService = "이용약관 복원됨";
         } catch (e) {
             console.error("[seed] termsOfService failed:", e);
-            results.termsOfService = `?ㅽ뙣: ${e}`;
+            results.termsOfService = `실패: ${e}`;
         }
     } else {
-        results.termsOfService = "seed-data.ts ???댁슜?쎄? ?곗씠?곌? ?놁뒿?덈떎";
+        results.termsOfService = "seed-data.ts에 이용약관 데이터가 없습니다.";
     }
 
     return NextResponse.json({ success: true, results, seedFile: "prisma/seed-data.ts" });

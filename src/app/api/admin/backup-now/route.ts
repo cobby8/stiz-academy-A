@@ -44,7 +44,7 @@ export async function POST() {
         const exists = buckets?.some((b) => b.name === BUCKET);
         if (!exists) {
             const { error } = await supabase.storage.createBucket(BUCKET, { public: false });
-            if (error) throw new Error(`踰꾪궥 ?앹꽦 ?ㅽ뙣: ${error.message}`);
+            if (error) throw new Error(`버킷 생성 실패: ${error.message}`);
         }
 
         // 2. DB ?꾩껜 ?ㅻ깄???섏쭛
@@ -89,7 +89,7 @@ export async function POST() {
             .from(BUCKET)
             .upload(filename, body, { contentType: "application/json", upsert: true });
 
-        if (uploadError) throw new Error(`?낅줈???ㅽ뙣: ${uploadError.message}`);
+        if (uploadError) throw new Error(`업로드 실패: ${uploadError.message}`);
 
         // 4. 30???댁긽 ???뚯씪 ??젣
         const { data: files } = await supabase.storage.from(BUCKET).list("", { limit: 200 });
@@ -114,6 +114,6 @@ export async function POST() {
         });
     } catch (e) {
         console.error("[backup-now] failed:", e);
-        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }

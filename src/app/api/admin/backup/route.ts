@@ -75,7 +75,7 @@ export async function GET() {
         });
     } catch (e) {
         console.error("[backup GET] failed:", e);
-        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }
 
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] Program "${p.name}" failed:`, e);
             }
         }
-        results.programs = `${restored}/${backup.programs.length}媛?蹂듭썝`;
+        results.programs = `${restored}/${backup.programs.length}개 복원`;
     }
 
     // Restore Coaches
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] Coach "${c.name}" failed:`, e);
             }
         }
-        results.coaches = `${restored}/${backup.coaches.length}媛?蹂듭썝`;
+        results.coaches = `${restored}/${backup.coaches.length}개 복원`;
     }
 
     // Restore ClassSlotOverrides
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] Slot "${s.slotKey}" failed:`, e);
             }
         }
-        results.classSlotOverrides = `${restored}/${backup.classSlotOverrides.length}媛?蹂듭썝`;
+        results.classSlotOverrides = `${restored}/${backup.classSlotOverrides.length}개 복원`;
     }
 
     // Restore CustomClassSlots
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] CustomSlot failed:`, e);
             }
         }
-        results.customClassSlots = `${restored}/${backup.customClassSlots.length}媛?蹂듭썝`;
+        results.customClassSlots = `${restored}/${backup.customClassSlots.length}개 복원`;
     }
 
     return NextResponse.json({

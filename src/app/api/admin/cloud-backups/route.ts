@@ -47,7 +47,7 @@ export async function GET() {
         return NextResponse.json({ files: result });
     } catch (e) {
         console.error("[cloud-backups GET] failed:", e);
-        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }
 
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
         if (!filename) throw new Error("filename required");
     } catch (e) {
         console.error("[cloud-backups POST] parse error:", e);
-        return NextResponse.json({ error: "?섎せ???붿껌?낅땲??" }, { status: 400 });
+        return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
     }
 
     try {
@@ -75,13 +75,13 @@ export async function POST(req: NextRequest) {
 
         // ?뚯씪 ?ㅼ슫濡쒕뱶
         const { data, error } = await supabase.storage.from(BUCKET).download(filename);
-        if (error) throw new Error(`?ㅼ슫濡쒕뱶 ?ㅽ뙣: ${error.message}`);
+        if (error) throw new Error(`다운로드 실패: ${error.message}`);
 
         const text = await data.text();
         const backup = JSON.parse(text);
 
         if (!backup?._meta?.version) {
-            return NextResponse.json({ error: "?좏슚?섏? ?딆? 諛깆뾽 ?뚯씪" }, { status: 400 });
+            return NextResponse.json({ error: "유효하지 않은 백업 파일입니다." }, { status: 400 });
         }
 
         const results: Record<string, string> = {};
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
                 );
                 results.academySettings = "복원됨";
             } catch (e) {
-                results.academySettings = `?ㅽ뙣: ${(e as Error).message}`;
+                results.academySettings = `실패: ${(e as Error).message}`;
             }
         }
 
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
         });
     } catch (e) {
         console.error("[cloud-backups POST] restore failed:", e);
-        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }
 
@@ -249,7 +249,7 @@ export async function DELETE(req: NextRequest) {
         if (!filename) throw new Error("filename required");
     } catch (e) {
         console.error("[cloud-backups DELETE] parse error:", e);
-        return NextResponse.json({ error: "?섎せ???붿껌?낅땲??" }, { status: 400 });
+        return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
     }
 
     try {
@@ -259,6 +259,6 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ success: true, deleted: filename });
     } catch (e) {
         console.error("[cloud-backups DELETE] failed:", e);
-        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
+        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
     }
 }

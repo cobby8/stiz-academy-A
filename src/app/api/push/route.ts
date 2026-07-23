@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-            return NextResponse.json({ error: "濡쒓렇???꾩슂" }, { status: 401 });
+            return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
         }
 
         // ?대찓?쇰줈 User ?뚯씠釉붿뿉??userId 議고쉶
@@ -16,13 +16,13 @@ export async function POST(req: NextRequest) {
             `SELECT id FROM "User" WHERE email = $1 LIMIT 1`, user.email
         );
         if (!rows[0]) {
-            return NextResponse.json({ error: "?ъ슜???놁쓬" }, { status: 404 });
+            return NextResponse.json({ error: "사용자를 찾을 수 없습니다." }, { status: 404 });
         }
         const userId = rows[0].id;
 
         const { subscription } = await req.json();
         if (!subscription?.endpoint) {
-            return NextResponse.json({ error: "援щ룆 ?뺣낫 ?놁쓬" }, { status: 400 });
+            return NextResponse.json({ error: "구독 정보가 없습니다." }, { status: 400 });
         }
 
         // 援щ룆 ?뺣낫 ???(?대? ?덉쑝硫??낅뜲?댄듃)
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
     } catch (e) {
         console.error("Push subscribe error:", e);
-        return NextResponse.json({ error: "援щ룆 ?ㅽ뙣" }, { status: 500 });
+        return NextResponse.json({ error: "구독 처리에 실패했습니다." }, { status: 500 });
     }
 }
 
@@ -49,7 +49,7 @@ export async function DELETE(req: NextRequest) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "?몄쬆 ?꾩슂" }, { status: 401 });
+        return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
     }
 
     try {
@@ -63,7 +63,7 @@ export async function DELETE(req: NextRequest) {
 
         const { endpoint } = await req.json();
         if (!endpoint) {
-            return NextResponse.json({ error: "endpoint ?꾩슂" }, { status: 400 });
+            return NextResponse.json({ error: "endpoint가 필요합니다." }, { status: 400 });
         }
 
         await prisma.$executeRawUnsafe(
@@ -73,6 +73,6 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ ok: true });
     } catch (e) {
         console.error("Push unsubscribe error:", e);
-        return NextResponse.json({ error: "援щ룆 ?댁젣 ?ㅽ뙣" }, { status: 500 });
+        return NextResponse.json({ error: "구독 해제에 실패했습니다." }, { status: 500 });
     }
 }

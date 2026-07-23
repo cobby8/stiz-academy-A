@@ -160,7 +160,7 @@ function buildGuardiansJSON(
   // 蹂댄샇??: 愿怨??먮뒗 ?꾪솕踰덊샇 以??섎굹?쇰룄 ?덉쑝硫?異붽?
   if (g2Relation || g2Phone) {
     guardians.push({
-      relation: g2Relation || "蹂댄샇??",
+      relation: g2Relation || "보호자",
       phone: g2Phone || "",
     });
   }
@@ -168,7 +168,7 @@ function buildGuardiansJSON(
   // 蹂댄샇??: 愿怨??먮뒗 ?꾪솕踰덊샇 以??섎굹?쇰룄 ?덉쑝硫?異붽?
   if (g3Relation || g3Phone) {
     guardians.push({
-      relation: g3Relation || "蹂댄샇??",
+      relation: g3Relation || "보호자",
       phone: g3Phone || "",
     });
   }
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json(
-        { error: "?뚯씪???꾩넚?섏? ?딆븯?듬땲??" },
+        { error: "파일이 전송되지 않았습니다." },
         { status: 400 }
       );
     }
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
     const fileName = file.name.toLowerCase();
     if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
       return NextResponse.json(
-        { error: "?묒? ?뚯씪(.xlsx, .xls)留??낅줈?쒗븷 ???덉뒿?덈떎." },
+        { error: "엑셀 파일(.xlsx, .xls)만 업로드할 수 있습니다." },
         { status: 400 }
       );
     }
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
     const MAX_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: "?뚯씪 ?ш린媛 10MB瑜?珥덇낵?⑸땲??" },
+        { error: "파일 크기가 10MB를 초과합니다." },
         { status: 400 }
       );
     }
@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
       return NextResponse.json(
-        { error: "?묒? ?뚯씪???쒗듃媛 ?놁뒿?덈떎." },
+        { error: "엑셀 파일에 시트가 없습니다." },
         { status: 400 }
       );
     }
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
 
     if (rawRows.length === 0) {
       return NextResponse.json(
-        { error: "?묒? ?뚯씪???곗씠?곌? ?놁뒿?덈떎." },
+        { error: "엑셀 파일에 데이터가 없습니다." },
         { status: 400 }
       );
     }
@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
           reason:
             err instanceof Error
               ? err.message
-              : "?????녿뒗 ?ㅻ쪟濡??뚯떛 ?ㅽ뙣",
+              : "알 수 없는 오류로 파싱에 실패했습니다.",
         });
       }
     }
@@ -338,13 +338,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (err) {
     // ?꾩껜 泥섎━ ?ㅽ뙣 (?뚯씪 ?쎄린 ?ㅽ뙣, xlsx ?뚯떛 ?ㅽ뙣 ??
-    console.error("[parse-excel] ?묒? ?뚯떛 ?ㅽ뙣:", err);
+    console.error("[parse-excel] 엑셀 파싱 실패:", err);
     return NextResponse.json(
       {
         error:
           err instanceof Error
-            ? `?묒? ?뚯씪 泥섎━ 以??ㅻ쪟: ${err.message}`
-            : "?묒? ?뚯씪 泥섎━ 以??????녿뒗 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.",
+            ? `엑셀 파일 처리 중 오류: ${err.message}`
+            : "엑셀 파일 처리 중 알 수 없는 오류가 발생했습니다.",
       },
       { status: 500 }
     );

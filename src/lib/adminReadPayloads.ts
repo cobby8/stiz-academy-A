@@ -387,18 +387,27 @@ export function getCachedAdminStudentsPayload(limit?: number) {
 
     return unstable_cache(
         async () => {
-            const [students, classes, sheetImportSummary] = await Promise.all([
+            const [students, classes] = await Promise.all([
                 getStudents(normalizedLimit),
                 getClasses(),
-                getStudentSheetImportSummary(),
             ]);
 
-            return { students, classes, sheetImportSummary, partial: Boolean(normalizedLimit) };
+            return { students, classes, partial: Boolean(normalizedLimit) };
         },
-        [`admin-students-v2-${normalizedLimit ?? "all"}`],
-        { revalidate: 60, tags: ["admin-students", "admin-classes", "admin-student-imports"] },
+        [`admin-students-v3-${normalizedLimit ?? "all"}`],
+        { revalidate: 60, tags: ["admin-students", "admin-classes"] },
     )();
 }
+
+export const getCachedAdminStudentImportSummaryPayload = unstable_cache(
+    async () => {
+        const sheetImportSummary = await getStudentSheetImportSummary();
+
+        return { sheetImportSummary };
+    },
+    ["admin-students-import-summary-v1"],
+    { revalidate: 60, tags: ["admin-student-imports"] },
+);
 
 async function getStudentSheetImportSummary() {
     try {

@@ -1001,6 +1001,8 @@ export default function StudentManagementClient({
     const [currentRosterReport, setCurrentRosterReport] = useState<CurrentRosterReport | null>(null);
     const [currentRosterLoading, setCurrentRosterLoading] = useState(false);
     const [currentRosterError, setCurrentRosterError] = useState<string | null>(null);
+    const [sheetImportSummaryLoading, setSheetImportSummaryLoading] = useState(false);
+    const [sheetImportSummaryError, setSheetImportSummaryError] = useState<string | null>(null);
     const [reconcilePreview, setReconcilePreview] = useState<ReconcilePreview | null>(null);
     const [reconcileLoading, setReconcileLoading] = useState(false);
     const [reconcileApplying, setReconcileApplying] = useState(false);
@@ -1045,12 +1047,10 @@ export default function StudentManagementClient({
             const data = (await response.json()) as {
                 students?: Student[];
                 classes?: ClassItem[];
-                sheetImportSummary?: SheetImportSummary;
             };
 
             setStudents(data.students ?? []);
             setClasses(data.classes ?? []);
-            setSheetImportSummary(data.sheetImportSummary ?? null);
             setAllStudentsLoaded(true);
         } catch (error) {
             console.error("Failed to load students:", error);
@@ -1060,6 +1060,34 @@ export default function StudentManagementClient({
             else setDataLoading(false);
         }
     }, []);
+
+    const loadSheetImportSummary = useCallback(async () => {
+        if (sheetImportSummaryLoading) return;
+
+        setSheetImportSummaryLoading(true);
+        setSheetImportSummaryError(null);
+
+        try {
+            const response = await fetch("/api/admin/students/import-summary", {
+                cache: "no-store",
+            });
+            const data = (await response.json()) as {
+                sheetImportSummary?: SheetImportSummary;
+                error?: string;
+            };
+
+            if (!response.ok) {
+                throw new Error(data.error || "시트 이관 요약을 불러오지 못했습니다.");
+            }
+
+            setSheetImportSummary(data.sheetImportSummary ?? null);
+            setShowImportTools(true);
+        } catch (error) {
+            setSheetImportSummaryError(error instanceof Error ? error.message : "시트 이관 요약을 불러오지 못했습니다.");
+        } finally {
+            setSheetImportSummaryLoading(false);
+        }
+    }, [sheetImportSummaryLoading]);
 
     const requestFullStudentLoad = useCallback(() => {
         if (allStudentsLoaded || backgroundLoading) return;
@@ -1570,6 +1598,29 @@ export default function StudentManagementClient({
 
     return (
         <div className="max-w-5xl mx-auto">
+            {!sheetImportSummary && (
+                <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">운영 데이터 점검</p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            원생 목록은 먼저 빠르게 열고, 시트 이관 요약은 필요할 때만 불러옵니다.
+                        </p>
+                        {sheetImportSummaryError && (
+                            <p className="mt-2 text-xs font-semibold text-red-600 dark:text-red-300">
+                                {sheetImportSummaryError}
+                            </p>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => void loadSheetImportSummary()}
+                        disabled={sheetImportSummaryLoading}
+                        className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                        {sheetImportSummaryLoading ? "불러오는 중" : "점검 불러오기"}
+                    </button>
+                </div>
+            )}
             {sheetImportSummary && (
                 <div className="mb-5 rounded-xl border border-lime-300/40 bg-white p-4 shadow-sm dark:border-lime-300/30 dark:bg-gray-900">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

@@ -1,27 +1,27 @@
-/**
+﻿/**
  * /api/admin/cloud-backups
  *
- * GET  → Supabase Storage "backups/" 버킷의 파일 목록 반환
- * POST → 특정 파일로 DB 복원 (body: { filename: string })
- * DELETE → 특정 파일 삭제 (body: { filename: string })
+ * GET  ??Supabase Storage "backups/" 踰꾪궥???뚯씪 紐⑸줉 諛섑솚
+ * POST ???뱀젙 ?뚯씪濡?DB 蹂듭썝 (body: { filename: string })
+ * DELETE ???뱀젙 ?뚯씪 ??젣 (body: { filename: string })
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { requireOwner } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 const BUCKET = "backups";
 
-// ── GET: 백업 파일 목록 ──────────────────────────────────────────────────────
+// ?? GET: 諛깆뾽 ?뚯씪 紐⑸줉 ??????????????????????????????????????????????????????
 export async function GET() {
-    // 인증 체크: 로그인한 관리자만 백업 목록 조회 가능
-    const authSupabase = await createClient();
-    const { data: { user } } = await authSupabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 紐⑸줉 議고쉶 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     try {
@@ -31,7 +31,7 @@ export async function GET() {
             .list("", { limit: 200, sortBy: { column: "created_at", order: "desc" } });
 
         if (error) {
-            // 버킷이 없으면 빈 배열 반환 (에러 아님)
+            // 踰꾪궥???놁쑝硫?鍮?諛곗뿴 諛섑솚 (?먮윭 ?꾨떂)
             if (error.message.includes("not found") || error.message.includes("does not exist")) {
                 return NextResponse.json({ files: [] });
             }
@@ -47,17 +47,17 @@ export async function GET() {
         return NextResponse.json({ files: result });
     } catch (e) {
         console.error("[cloud-backups GET] failed:", e);
-        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
+        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
     }
 }
 
-// ── POST: 클라우드 백업 파일로 DB 복원 ─────────────────────────────────────
+// ?? POST: ?대씪?곕뱶 諛깆뾽 ?뚯씪濡?DB 蹂듭썝 ?????????????????????????????????????
 export async function POST(req: NextRequest) {
-    // 인증 체크: 로그인한 관리자만 백업 복원 가능
-    const authSupabase = await createClient();
-    const { data: { user } } = await authSupabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 蹂듭썝 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     let filename: string;
@@ -67,26 +67,26 @@ export async function POST(req: NextRequest) {
         if (!filename) throw new Error("filename required");
     } catch (e) {
         console.error("[cloud-backups POST] parse error:", e);
-        return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
+        return NextResponse.json({ error: "?섎せ???붿껌?낅땲??" }, { status: 400 });
     }
 
     try {
         const supabase = createAdminClient();
 
-        // 파일 다운로드
+        // ?뚯씪 ?ㅼ슫濡쒕뱶
         const { data, error } = await supabase.storage.from(BUCKET).download(filename);
-        if (error) throw new Error(`다운로드 실패: ${error.message}`);
+        if (error) throw new Error(`?ㅼ슫濡쒕뱶 ?ㅽ뙣: ${error.message}`);
 
         const text = await data.text();
         const backup = JSON.parse(text);
 
         if (!backup?._meta?.version) {
-            return NextResponse.json({ error: "유효하지 않은 백업 파일" }, { status: 400 });
+            return NextResponse.json({ error: "?좏슚?섏? ?딆? 諛깆뾽 ?뚯씪" }, { status: 400 });
         }
 
         const results: Record<string, string> = {};
 
-        // AcademySettings 복원 (termsOfService 등)
+        // AcademySettings 蹂듭썝 (termsOfService ??
         if (backup.academySettings) {
             const s = backup.academySettings;
             try {
@@ -100,11 +100,11 @@ export async function POST(req: NextRequest) {
                 );
                 results.academySettings = "복원됨";
             } catch (e) {
-                results.academySettings = `실패: ${(e as Error).message}`;
+                results.academySettings = `?ㅽ뙣: ${(e as Error).message}`;
             }
         }
 
-        // Programs 복원
+        // Programs 蹂듭썝
         if (Array.isArray(backup.programs)) {
             let ok = 0;
             for (const p of backup.programs) {
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
             results.programs = `${ok}/${backup.programs.length}개`;
         }
 
-        // Coaches 복원
+        // Coaches 蹂듭썝
         if (Array.isArray(backup.coaches)) {
             let ok = 0;
             for (const c of backup.coaches) {
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
             results.coaches = `${ok}/${backup.coaches.length}개`;
         }
 
-        // ClassSlotOverrides 복원
+        // ClassSlotOverrides 蹂듭썝
         if (Array.isArray(backup.classSlotOverrides)) {
             let ok = 0;
             for (const s of backup.classSlotOverrides) {
@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
             results.classSlotOverrides = `${ok}/${backup.classSlotOverrides.length}개`;
         }
 
-        // CustomClassSlots 복원
+        // CustomClassSlots 蹂듭썝
         if (Array.isArray(backup.customClassSlots)) {
             let ok = 0;
             for (const s of backup.customClassSlots) {
@@ -229,17 +229,17 @@ export async function POST(req: NextRequest) {
         });
     } catch (e) {
         console.error("[cloud-backups POST] restore failed:", e);
-        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
+        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
     }
 }
 
-// ── DELETE: 백업 파일 삭제 ───────────────────────────────────────────────────
+// ?? DELETE: 諛깆뾽 ?뚯씪 ??젣 ???????????????????????????????????????????????????
 export async function DELETE(req: NextRequest) {
-    // 인증 체크: 로그인한 관리자만 백업 삭제 가능
-    const authSupabase = await createClient();
-    const { data: { user } } = await authSupabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 ??젣 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     let filename: string;
@@ -249,7 +249,7 @@ export async function DELETE(req: NextRequest) {
         if (!filename) throw new Error("filename required");
     } catch (e) {
         console.error("[cloud-backups DELETE] parse error:", e);
-        return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
+        return NextResponse.json({ error: "?섎せ???붿껌?낅땲??" }, { status: 400 });
     }
 
     try {
@@ -259,6 +259,6 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ success: true, deleted: filename });
     } catch (e) {
         console.error("[cloud-backups DELETE] failed:", e);
-        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
+        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
     }
 }

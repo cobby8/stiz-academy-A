@@ -1,24 +1,24 @@
-/**
+﻿/**
  * POST /api/admin/seed
  *
- * prisma/seed-data.ts 에 저장된 프로그램 데이터를 DB에 복원합니다.
- * DB가 비어있거나 데이터 소실 시 복구용으로 사용합니다.
- * 이미 존재하는 ID는 upsert(덮어쓰기)로 처리됩니다.
+ * prisma/seed-data.ts ????λ맂 ?꾨줈洹몃옩 ?곗씠?곕? DB??蹂듭썝?⑸땲??
+ * DB媛 鍮꾩뼱?덇굅???곗씠???뚯떎 ??蹂듦뎄?⑹쑝濡??ъ슜?⑸땲??
+ * ?대? 議댁옱?섎뒗 ID??upsert(??뼱?곌린)濡?泥섎━?⑸땲??
  */
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { requireOwner } from "@/lib/auth-guard";
 import { PROGRAMS, CLASS_SLOT_OVERRIDES, TERMS_OF_SERVICE } from "../../../../../prisma/seed-data";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-    // 인증 체크: 로그인한 관리자만 시드 데이터 복원 가능
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留??쒕뱶 ?곗씠??蹂듭썝 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     const results: Record<string, string> = {};
@@ -67,7 +67,7 @@ export async function POST() {
         }
         results.programs = `${restored}/${PROGRAMS.length}개 복원됨`;
     } else {
-        results.programs = "seed-data.ts 에 프로그램 데이터가 없습니다";
+        results.programs = "seed-data.ts ???꾨줈洹몃옩 ?곗씠?곌? ?놁뒿?덈떎";
     }
 
     // Restore ClassSlotOverrides
@@ -103,7 +103,7 @@ export async function POST() {
         }
         results.classSlotOverrides = `${restored}/${CLASS_SLOT_OVERRIDES.length}개 복원됨`;
     } else {
-        results.classSlotOverrides = "seed-data.ts 에 슬롯 데이터가 없습니다";
+        results.classSlotOverrides = "seed-data.ts ???щ’ ?곗씠?곌? ?놁뒿?덈떎";
     }
 
     // Restore Terms of Service
@@ -120,10 +120,10 @@ export async function POST() {
             results.termsOfService = "이용약관 복원됨";
         } catch (e) {
             console.error("[seed] termsOfService failed:", e);
-            results.termsOfService = `실패: ${e}`;
+            results.termsOfService = `?ㅽ뙣: ${e}`;
         }
     } else {
-        results.termsOfService = "seed-data.ts 에 이용약관 데이터가 없습니다";
+        results.termsOfService = "seed-data.ts ???댁슜?쎄? ?곗씠?곌? ?놁뒿?덈떎";
     }
 
     return NextResponse.json({ success: true, results, seedFile: "prisma/seed-data.ts" });

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const adminAction = readFileSync(new URL("../src/app/actions/admin.ts", import.meta.url), "utf8");
 const trialClient = readFileSync(new URL("../src/app/admin/trial/TrialCrmClient.tsx", import.meta.url), "utf8");
 const trialModals = readFileSync(new URL("../src/app/admin/trial/TrialCrmModals.tsx", import.meta.url), "utf8");
+const applyPage = readFileSync(new URL("../src/app/admin/apply/page.tsx", import.meta.url), "utf8");
 const applyClient = readFileSync(new URL("../src/app/admin/apply/ApplyAdminClient.tsx", import.meta.url), "utf8");
 const applyModals = readFileSync(new URL("../src/app/admin/apply/ApplyAdminModals.tsx", import.meta.url), "utf8");
 const applySourceStatsRoute = readFileSync(new URL("../src/app/api/admin/apply/source-stats/route.ts", import.meta.url), "utf8");
@@ -23,6 +24,12 @@ test("체험 신청 목록과 상세 모달은 접수/희망/확정 일정을 �
   assert.match(trialClient, /CLOSED_TRIAL_STATUSES = new Set\(\["CONVERTED", "LOST", "CANCELLED"\]\)/);
   assert.match(trialClient, /CANCELLED:\s*\{\s*label:\s*"취소"/);
   assert.match(queries, /CANCELLED:\s*statusMap\["CANCELLED"\]/);
+});
+
+test("관리자 신청 첫 화면은 기본 체험 탭 데이터만 서버에서 먼저 가져온다", () => {
+  assert.match(applyPage, /getCachedAdminTrialPayload\(\{ limit: 50, offset: 0 \}\)/);
+  assert.doesNotMatch(applyPage, /getCachedAdminApplySummaryPayload/);
+  assert.doesNotMatch(applyPage, /initialStats=\{/);
 });
 
 test("체험 신청은 수정, 일정 변경, 취소 모달로 관리할 수 있다", () => {

@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { requireOwner } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +17,13 @@ async function safeQuery<T = any>(sql: string): Promise<T[]> {
     }
 }
 
-// GET /api/admin/backup — download full DB snapshot as JSON
+// GET /api/admin/backup ??download full DB snapshot as JSON
 export async function GET() {
-    // 인증 체크: 로그인한 관리자만 백업 다운로드 가능
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 ?ㅼ슫濡쒕뱶 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     try {
@@ -75,17 +75,17 @@ export async function GET() {
         });
     } catch (e) {
         console.error("[backup GET] failed:", e);
-        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
+        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
     }
 }
 
-// POST /api/admin/backup — restore from JSON backup
+// POST /api/admin/backup ??restore from JSON backup
 export async function POST(req: NextRequest) {
-    // 인증 체크: 로그인한 관리자만 백업 복원 가능
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留?諛깆뾽 蹂듭썝 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     let backup: any;
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] Program "${p.name}" failed:`, e);
             }
         }
-        results.programs = `${restored}/${backup.programs.length}개 복원`;
+        results.programs = `${restored}/${backup.programs.length}媛?蹂듭썝`;
     }
 
     // Restore Coaches
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] Coach "${c.name}" failed:`, e);
             }
         }
-        results.coaches = `${restored}/${backup.coaches.length}개 복원`;
+        results.coaches = `${restored}/${backup.coaches.length}媛?蹂듭썝`;
     }
 
     // Restore ClassSlotOverrides
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] Slot "${s.slotKey}" failed:`, e);
             }
         }
-        results.classSlotOverrides = `${restored}/${backup.classSlotOverrides.length}개 복원`;
+        results.classSlotOverrides = `${restored}/${backup.classSlotOverrides.length}媛?蹂듭썝`;
     }
 
     // Restore CustomClassSlots
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
                 console.error(`[backup restore] CustomSlot failed:`, e);
             }
         }
-        results.customClassSlots = `${restored}/${backup.customClassSlots.length}개 복원`;
+        results.customClassSlots = `${restored}/${backup.customClassSlots.length}媛?蹂듭썝`;
     }
 
     return NextResponse.json({

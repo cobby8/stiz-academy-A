@@ -1,19 +1,20 @@
-"use client";
+﻿"use client";
 
 /**
- * 수강 신청 폼 — 4단계 스텝 폼 (모바일 퍼스트)
+ * ?섍컯 ?좎껌 ????4?④퀎 ?ㅽ뀦 ??(紐⑤컮???쇱뒪??
  *
- * Step 1: 아이 정보 (이름, 성별, 생년월일, 학생 전화번호, 학교명)
- * Step 2: 보호자 정보 (이름, 연락처, 주소)
- * Step 3: 수강 정보 (수강 월, 희망 수업, 셔틀, 가입경로, 요청사항)
- * Step 4: 확인 + 동의 (입력 정보 요약, 이용약관, 개인정보 동의, honeypot)
+ * Step 1: ?꾩씠 ?뺣낫 (?대쫫, ?깅퀎, ?앸뀈?붿씪, ?숈깮 ?꾪솕踰덊샇, ?숆탳紐?
+ * Step 2: 蹂댄샇???뺣낫 (?대쫫, ?곕씫泥? 二쇱냼)
+ * Step 3: ?섍컯 ?뺣낫 (?섍컯 ?? ?щ쭩 ?섏뾽, ?뷀?, 媛?낃꼍濡? ?붿껌?ы빆)
+ * Step 4: ?뺤씤 + ?숈쓽 (?낅젰 ?뺣낫 ?붿빟, ?댁슜?쎄?, 媛쒖씤?뺣낫 ?숈쓽, honeypot)
  *
- * trialData가 있으면 체험 데이터를 자동 채움 (수정 가능)
+ * trialData媛 ?덉쑝硫?泥댄뿕 ?곗씠?곕? ?먮룞 梨꾩? (?섏젙 媛??
  */
 
 import { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import {
+    findExistingEnrollApplicationForEdit,
     submitEnrollApplication,
     type AvailableSlot,
     type TrialLeadForEnroll,
@@ -25,20 +26,20 @@ import FontFreeIcon from "@/components/ui/FontFreeIcon";
 const EnrollApplicationLaterSteps = dynamic(() => import("./EnrollApplicationLaterSteps"), {
     loading: () => (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-            다음 단계를 불러오는 중...
+            ?ㅼ쓬 ?④퀎瑜?遺덈윭?ㅻ뒗 以?..
         </div>
     ),
 });
 
-// ── Props 타입 ───────────────────────────────────────────────────────────────
+// ?? Props ??????????????????????????????????????????????????????????????????
 interface Props {
     availableSlots: AvailableSlot[];
     contactPhone: string;
-    trialData: TrialLeadForEnroll | null;  // 체험 거친 경우 자동 채움 데이터
-    trialLeadId: string | null;            // TrialLead ID (DB 연결용)
+    trialData: TrialLeadForEnroll | null;
+    trialLeadId: string | null;
 }
 
-// ── 폼 데이터 타입 ──────────────────────────────────────────────────────────
+// ?? ???곗씠???????????????????????????????????????????????????????????????
 interface FormData {
     childName: string;
     childBirthDate: string;
@@ -51,13 +52,13 @@ interface FormData {
     parentRelation: string;
     address: string;
     enrollmentMonths: string[];
-    preferredSlotKeys: string[];  // 복수 선택 가능 ["Mon-4", "Wed-6"]
-    basketballExp: string;        // 농구 경험
-    shuttleChoice: string;        // "탑승" | "미탑승"
+    preferredSlotKeys: string[];  // 蹂듭닔 ?좏깮 媛??["Mon-4", "Wed-6"]
+    basketballExp: string;        // ?띻뎄 寃쏀뿕
+    shuttleChoice: string;        // "?묒듅" | "誘명깙??
     shuttleNeeded: boolean;
     shuttlePickup: string;
-    shuttleTime: string;          // 셔틀 희망 시간
-    shuttleDropoff: string;       // 셔틀 하차 장소
+    shuttleTime: string;          // ?뷀? ?щ쭩 ?쒓컙
+    shuttleDropoff: string;       // ?뷀? ?섏감 ?μ냼
     referralSource: string;
     memo: string;
     agreedTerms: boolean;
@@ -67,7 +68,7 @@ interface FormData {
     honeypot: string;
 }
 
-// ── 스텝 라벨 (4단계) ───────────────────────────────────────────────────────
+// ?? ?ㅽ뀦 ?쇰꺼 (4?④퀎) ???????????????????????????????????????????????????????
 const STEP_LABELS = ["아이 정보", "보호자", "수강 정보", "확인/동의"];
 const TOTAL_STEPS = 4;
 
@@ -77,7 +78,7 @@ export default function EnrollApplicationForm({
     trialData,
     trialLeadId,
 }: Props) {
-    // 체험 데이터가 있으면 초기값으로 채움 (사용자가 수정 가능)
+    // 泥댄뿕 ?곗씠?곌? ?덉쑝硫?珥덇린媛믪쑝濡?梨꾩? (?ъ슜?먭? ?섏젙 媛??
     const preferredTrialSlot = trialData?.preferredSlotKey && availableSlots.some((slot) => slot.slotKey === trialData.preferredSlotKey)
         ? trialData.preferredSlotKey
         : "";
@@ -112,68 +113,111 @@ export default function EnrollApplicationForm({
     });
     const [error, setError] = useState("");
     const [completed, setCompleted] = useState(false);
+    const [existingApplicationId, setExistingApplicationId] = useState<string | null>(null);
+    const [existingNotice, setExistingNotice] = useState("");
+    const [completionMode, setCompletionMode] = useState<"created" | "updated" | "existing">("created");
     const [isPending, startTransition] = useTransition();
 
-    // 폼 필드 변경 핸들러
     const update = (field: keyof FormData, value: string | boolean | string[]) => {
         setForm((prev) => ({ ...prev, [field]: value }));
         setError("");
     };
 
-    // ── Step 1 유효성 검사: 아이 정보 ───────────────────────────────────────
+    // ?? Step 1 ?좏슚??寃?? ?꾩씠 ?뺣낫 ???????????????????????????????????????
     const validateStep1 = (): boolean => {
-        if (!form.childName.trim()) { setError("아이 이름을 입력해주세요."); return false; }
-        if (!form.childBirthDate) { setError("아이 생년월일을 선택해주세요."); return false; }
-        if (!form.childGender) { setError("성별을 선택해주세요."); return false; }
-        if (!form.childSchool.trim()) { setError("학교명을 입력해주세요."); return false; }
-        if (!form.childPhone.trim()) { setError("수강생 전화번호를 입력해주세요."); return false; }
+        if (!form.childName.trim()) { setError("?꾩씠 ?대쫫???낅젰?댁＜?몄슂."); return false; }
+        if (!form.childBirthDate) { setError("?꾩씠 ?앸뀈?붿씪???좏깮?댁＜?몄슂."); return false; }
+        if (!form.childGender) { setError("?깅퀎???좏깮?댁＜?몄슂."); return false; }
+        if (!form.childSchool.trim()) { setError("?숆탳紐낆쓣 ?낅젰?댁＜?몄슂."); return false; }
+        if (!form.childPhone.trim()) { setError("?섍컯???꾪솕踰덊샇瑜??낅젰?댁＜?몄슂."); return false; }
         return true;
     };
 
-    // ── Step 2 유효성 검사: 보호자 정보 ─────────────────────────────────────
+    // ?? Step 2 ?좏슚??寃?? 蹂댄샇???뺣낫 ?????????????????????????????????????
     const validateStep2 = (): boolean => {
-        if (!form.parentName.trim()) { setError("보호자 이름을 입력해주세요."); return false; }
-        if (!form.parentPhone.trim()) { setError("보호자 연락처를 입력해주세요."); return false; }
+        if (!form.parentName.trim()) { setError("蹂댄샇???대쫫???낅젰?댁＜?몄슂."); return false; }
+        if (!form.parentPhone.trim()) { setError("蹂댄샇???곕씫泥섎? ?낅젰?댁＜?몄슂."); return false; }
         const digits = form.parentPhone.replace(/\D/g, "");
         if (digits.length < 10 || digits.length > 11) {
-            setError("올바른 전화번호를 입력해주세요. (예: 010-1234-5678)");
+            setError("?щ컮瑜??꾪솕踰덊샇瑜??낅젰?댁＜?몄슂. (?? 010-1234-5678)");
             return false;
         }
         return true;
     };
 
-    // ── Step 3 유효성 검사: 수강 정보 ───────────────────────────────────────
+    // ?? Step 3 ?좏슚??寃?? ?섍컯 ?뺣낫 ???????????????????????????????????????
     const validateStep3 = (): boolean => {
-        if (form.enrollmentMonths.length === 0) { setError("수강신청 월을 선택해주세요."); return false; }
-        if (!form.referralSource) { setError("가입경로를 선택해주세요."); return false; }
-        if (!form.shuttleChoice) { setError("셔틀탑승 여부를 선택해주세요."); return false; }
+        if (form.enrollmentMonths.length === 0) { setError("?섍컯?좎껌 ?붿쓣 ?좏깮?댁＜?몄슂."); return false; }
+        if (!form.referralSource) { setError("媛?낃꼍濡쒕? ?좏깮?댁＜?몄슂."); return false; }
+        if (!form.shuttleChoice) { setError("?뷀??묒듅 ?щ?瑜??좏깮?댁＜?몄슂."); return false; }
         if (form.shuttleChoice === "탑승") {
-            if (!form.shuttlePickup.trim()) { setError("셔틀 탑승 장소를 입력해주세요."); return false; }
-            if (!form.shuttleTime) { setError("셔틀 희망 시간을 입력해주세요."); return false; }
-            if (!form.shuttleDropoff.trim()) { setError("셔틀 하차 장소를 입력해주세요."); return false; }
-            if (!form.shuttleNoticeConfirmed) { setError("셔틀 주의사항을 확인해주세요."); return false; }
+            if (!form.shuttlePickup.trim()) { setError("?뷀? ?묒듅 ?μ냼瑜??낅젰?댁＜?몄슂."); return false; }
+            if (!form.shuttleTime) { setError("?뷀? ?щ쭩 ?쒓컙???낅젰?댁＜?몄슂."); return false; }
+            if (!form.shuttleDropoff.trim()) { setError("?뷀? ?섏감 ?μ냼瑜??낅젰?댁＜?몄슂."); return false; }
+            if (!form.shuttleNoticeConfirmed) { setError("?뷀? 二쇱쓽?ы빆???뺤씤?댁＜?몄슂."); return false; }
         }
         return true;
     };
 
-    // ── 다음 단계 ────────────────────────────────────────────────────────────
-    const goNext = () => {
+    // ?? ?ㅼ쓬 ?④퀎 ????????????????????????????????????????????????????????????
+    const loadExistingApplication = async () => {
+        const existing = await findExistingEnrollApplicationForEdit({
+            trialLeadId,
+            childName: form.childName,
+            childBirthDate: form.childBirthDate,
+            parentPhone: form.parentPhone,
+        });
+        if (!existing || existing.id === existingApplicationId) return;
+
+        setExistingApplicationId(existing.id);
+        if (existing.editable) {
+            setForm((prev) => ({
+                ...prev,
+                childName: existing.childName || prev.childName,
+                childBirthDate: existing.childBirthDate || prev.childBirthDate,
+                childGender: existing.childGender || prev.childGender,
+                childGrade: existing.childGrade || prev.childGrade,
+                childSchool: existing.childSchool || prev.childSchool,
+                childPhone: existing.childPhone || prev.childPhone,
+                parentName: existing.parentName || prev.parentName,
+                parentPhone: existing.parentPhone || prev.parentPhone,
+                parentRelation: existing.parentRelation || prev.parentRelation,
+                address: existing.address || prev.address,
+                enrollmentMonths: existing.enrollmentMonths.length > 0 ? existing.enrollmentMonths : prev.enrollmentMonths,
+                preferredSlotKeys: existing.preferredSlotKeys.length > 0 ? existing.preferredSlotKeys : prev.preferredSlotKeys,
+                basketballExp: existing.basketballExp || prev.basketballExp,
+                shuttleChoice: existing.shuttleNeeded ? "탑승" : "미탑승",
+                shuttleNeeded: existing.shuttleNeeded,
+                shuttlePickup: existing.shuttlePickup || prev.shuttlePickup,
+                shuttleTime: existing.shuttleTime || prev.shuttleTime,
+                shuttleDropoff: existing.shuttleDropoff || prev.shuttleDropoff,
+                referralSource: existing.referralSource || prev.referralSource,
+                memo: existing.memo || prev.memo,
+            }));
+            setExistingNotice("기존 수강신청서를 불러왔습니다. 필요한 부분만 수정해서 다시 제출해주세요.");
+        } else {
+            setExistingNotice("이미 승인된 수강신청서가 있습니다. 변경이 필요하면 학원으로 문의해주세요.");
+        }
+    };
+
+    const goNext = async () => {
         if (step === 1 && !validateStep1()) return;
         if (step === 2 && !validateStep2()) return;
         if (step === 3 && !validateStep3()) return;
+        if (step === 2) await loadExistingApplication();
         setError("");
         setStep((s) => Math.min(s + 1, TOTAL_STEPS));
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    // ── 이전 단계 ────────────────────────────────────────────────────────────
+    // ?? ?댁쟾 ?④퀎 ????????????????????????????????????????????????????????????
     const goBack = () => {
         setError("");
         setStep((s) => Math.max(s - 1, 1));
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    // ── 슬롯 선택 토글 (복수 선택 가능) ─────────────────────────────────────
+    // ?? ?щ’ ?좏깮 ?좉? (蹂듭닔 ?좏깮 媛?? ?????????????????????????????????????
     const toggleSlot = (slotKey: string) => {
         const keys = form.preferredSlotKeys;
         if (keys.includes(slotKey)) {
@@ -183,19 +227,20 @@ export default function EnrollApplicationForm({
         }
     };
 
-    // ── 제출 ─────────────────────────────────────────────────────────────────
+    // ?? ?쒖텧 ?????????????????????????????????????????????????????????????????
     const handleSubmit = () => {
         if (!form.agreedTerms || !form.agreedPrivacy) {
-            setError("이용약관과 개인정보 수집/이용에 모두 동의해주세요.");
+            setError("?댁슜?쎄?怨?媛쒖씤?뺣낫 ?섏쭛/?댁슜??紐⑤몢 ?숈쓽?댁＜?몄슂.");
             return;
         }
         if (!form.applicationNoticeConfirmed) {
-            setError("수강신청확정 안내를 확인해주세요.");
+            setError("?섍컯?좎껌?뺤젙 ?덈궡瑜??뺤씤?댁＜?몄슂.");
             return;
         }
         startTransition(async () => {
             try {
-                await submitEnrollApplication({
+                const result = await submitEnrollApplication({
+                    existingId: existingApplicationId || undefined,
                     trialLeadId: trialLeadId || undefined,
                     childName: form.childName,
                     childBirthDate: form.childBirthDate,
@@ -222,6 +267,7 @@ export default function EnrollApplicationForm({
                     shuttleNoticeConfirmed: form.shuttleNoticeConfirmed,
                     honeypot: form.honeypot,
                 });
+                setCompletionMode(result.mode === "updated" ? "updated" : result.mode === "existing" ? "existing" : "created");
                 trackMetaEvent("CompleteRegistration", {
                     content_name: "Enrollment application",
                     content_category: "Application",
@@ -229,46 +275,51 @@ export default function EnrollApplicationForm({
                 setCompleted(true);
                 window.scrollTo({ top: 0, behavior: "smooth" });
             } catch (e: unknown) {
-                setError(e instanceof Error ? e.message : "신청 중 오류가 발생했습니다.");
+                setError(e instanceof Error ? e.message : "?좎껌 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.");
             }
         });
     };
 
-    // ── 완료 화면 ────────────────────────────────────────────────────────────
+    // ?? ?꾨즺 ?붾㈃ ????????????????????????????????????????????????????????????
     if (completed) {
         return (
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 text-center">
                 <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
                     <FontFreeIcon name="check_circle" size={40} className="text-green-600" />
                 </div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3">수강 신청이 완료되었습니다!</h2>
-                <p className="text-gray-600 dark:text-gray-300 mb-2">담당자가 빠른 시간 내에 연락드리겠습니다.</p>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3">
+                    {completionMode === "updated"
+                        ? "수강신청서 수정 완료!"
+                        : completionMode === "existing"
+                        ? "이미 접수된 수강신청서가 있습니다"
+                        : "수강신청 완료!"}
+                </h2>
+                <p className="text-gray-600 dark:text-gray-300 mb-2">?대떦?먭? 鍮좊Ⅸ ?쒓컙 ?댁뿉 ?곕씫?쒕━寃좎뒿?덈떎.</p>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-                    문의사항이 있으시면{" "}
+                    臾몄쓽?ы빆???덉쑝?쒕㈃{" "}
                     <a href={`tel:${contactPhone.replace(/-/g, "")}`} className="text-brand-orange-500 dark:text-brand-neon-lime font-semibold">
                         {contactPhone}
                     </a>
-                    으로 전화해주세요.
+                    ?쇰줈 ?꾪솕?댁＜?몄슂.
                 </p>
                 <Link
                     href="/"
                     className="inline-flex items-center gap-2 px-6 py-3 bg-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-navy-800 transition-colors"
                 >
                     <FontFreeIcon name="home" size={18} />
-                    홈으로 돌아가기
-                </Link>
+                    ?덉쑝濡??뚯븘媛湲?                </Link>
             </div>
         );
     }
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-            {/* 진행 표시줄 — 4단계 */}
+            {/* 吏꾪뻾 ?쒖떆以???4?④퀎 */}
             <div className="bg-gray-50 dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center justify-between max-w-md mx-auto">
                     {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
                         <div key={n} className="flex items-center">
-                            {/* 스텝 번호 원형 — 완료/현재/미래 색상 분기 */}
+                            {/* ?ㅽ뀦 踰덊샇 ?먰삎 ???꾨즺/?꾩옱/誘몃옒 ?됱긽 遺꾧린 */}
                             <div
                                 className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                                     n < step
@@ -284,13 +335,13 @@ export default function EnrollApplicationForm({
                                     n
                                 )}
                             </div>
-                            {/* 스텝 이름 — 모바일에서는 숨김 */}
+                            {/* ?ㅽ뀦 ?대쫫 ??紐⑤컮?쇱뿉?쒕뒗 ?④? */}
                             <span className={`ml-1.5 text-xs font-medium hidden sm:inline ${
                                 n === step ? "text-gray-900 dark:text-white" : "text-gray-400"
                             }`}>
                                 {STEP_LABELS[n - 1]}
                             </span>
-                            {/* 연결선 */}
+                            {/* ?곌껐??*/}
                             {n < TOTAL_STEPS && (
                                 <div className={`w-6 sm:w-8 h-0.5 mx-1.5 ${
                                     n < step ? "bg-green-500" : "bg-gray-200"
@@ -301,36 +352,42 @@ export default function EnrollApplicationForm({
                 </div>
             </div>
 
-            {/* 체험 데이터 자동 채움 알림 배너 */}
+            {/* 泥댄뿕 ?곗씠???먮룞 梨꾩? ?뚮┝ 諛곕꼫 */}
             {trialData && step === 1 && (
                 <div className="mx-6 mt-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm flex items-center gap-2">
                     <FontFreeIcon name="auto_fix_high" size={18} />
-                    체험수업 정보가 자동으로 입력되었습니다. 필요하면 수정할 수 있습니다.
+                    泥댄뿕?섏뾽 ?뺣낫媛 ?먮룞?쇰줈 ?낅젰?섏뿀?듬땲?? ?꾩슂?섎㈃ ?섏젙?????덉뒿?덈떎.
                 </div>
             )}
 
-            {/* 폼 본문 */}
+            {/* ??蹂몃Ц */}
             <div className="p-6">
-                {/* 에러 메시지 */}
+                {/* ?먮윭 硫붿떆吏 */}
                 {error && (
                     <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
                         <FontFreeIcon name="error" size={18} />
                         {error}
                     </div>
                 )}
+                {existingNotice && (
+                    <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-sm font-semibold flex items-center gap-2 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-100">
+                        <FontFreeIcon name="edit" size={18} />
+                        {existingNotice}
+                    </div>
+                )}
 
-                {/* ──────────── Step 1: 아이 정보 ──────────── */}
+                {/* ???????????? Step 1: ?꾩씠 ?뺣낫 ???????????? */}
                 {step === 1 && (
                     <div className="space-y-5">
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             <FontFreeIcon name="child_care" size={20} className="text-brand-orange-500 dark:text-brand-neon-lime" />
-                            아이 정보
+                            ?꾩씠 ?뺣낫
                         </h2>
 
-                        {/* 아이 이름 (필수) */}
+                        {/* ?꾩씠 ?대쫫 (?꾩닔) */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                아이 이름 <span className="text-red-500">*</span>
+                                ?꾩씠 ?대쫫 <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
@@ -341,10 +398,10 @@ export default function EnrollApplicationForm({
                             />
                         </div>
 
-                        {/* 생년월일 (필수) */}
+                        {/* ?앸뀈?붿씪 (?꾩닔) */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                생년월일 <span className="text-red-500">*</span>
+                                ?앸뀈?붿씪 <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="date"
@@ -355,13 +412,13 @@ export default function EnrollApplicationForm({
                             />
                         </div>
 
-                        {/* 성별 (필수) */}
+                        {/* ?깅퀎 (?꾩닔) */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                성별 <span className="text-red-500">*</span>
+                                ?깅퀎 <span className="text-red-500">*</span>
                             </label>
                             <div className="flex gap-3">
-                                {["남자", "여자"].map((g) => (
+                                {["?⑥옄", "?ъ옄"].map((g) => (
                                     <button
                                         key={g}
                                         type="button"
@@ -378,40 +435,39 @@ export default function EnrollApplicationForm({
                             </div>
                         </div>
 
-                        {/* 학교명 (필수) */}
+                        {/* ?숆탳紐?(?꾩닔) */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                학교명 <span className="text-red-500">*</span>
+                                ?숆탳紐?<span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="text"
                                 value={form.childSchool}
                                 onChange={(e) => update("childSchool", e.target.value)}
-                                placeholder="다산초등학교"
+                                placeholder="?ㅼ궛珥덈벑?숆탳"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
                             />
                         </div>
 
-                        {/* 수강생 전화번호 */}
+                        {/* ?섍컯???꾪솕踰덊샇 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                수강생 전화번호(숫자만) <span className="text-red-500">*</span>
+                                ?섍컯???꾪솕踰덊샇(?レ옄留? <span className="text-red-500">*</span>
                             </label>
                             <input
                                 type="tel"
                                 value={form.childPhone}
                                 onChange={(e) => {
-                                    // 숫자만 추출 후 000-0000-0000 자동 포맷팅
                                     const nums = e.target.value.replace(/\D/g, "").slice(0, 11);
                                     let formatted = nums;
                                     if (nums.length > 7) formatted = `${nums.slice(0,3)}-${nums.slice(3,7)}-${nums.slice(7)}`;
                                     else if (nums.length > 3) formatted = `${nums.slice(0,3)}-${nums.slice(3)}`;
                                     update("childPhone", formatted);
                                 }}
-                                placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
+                                placeholder="?レ옄留??낅젰 (?먮룞 蹂?? 010-1234-5678)"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:border-brand-orange-500 dark:border-brand-neon-lime outline-none transition-colors text-gray-900 dark:text-white"
                             />
-                            <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
+                            <p className="text-xs text-gray-400 mt-1">?レ옄留??낅젰?섎㈃ ?먮룞?쇰줈 000-0000-0000 ?뺤떇?쇰줈 蹂?섎맗?덈떎</p>
                         </div>
                     </div>
                 )}
@@ -425,7 +481,7 @@ export default function EnrollApplicationForm({
                         toggleSlot={toggleSlot}
                     />
                 )}
-                {/* ── 네비게이션 버튼 ─────────────────────────────────────────── */}
+                {/* ?? ?ㅻ퉬寃뚯씠??踰꾪듉 ??????????????????????????????????????????? */}
                 <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-100 dark:border-gray-800">
                     {step > 1 ? (
                         <button
@@ -434,7 +490,7 @@ export default function EnrollApplicationForm({
                             className="flex items-center gap-1 px-5 py-3 text-gray-600 hover:text-gray-900 dark:text-white font-medium transition-colors cursor-pointer"
                         >
                             <FontFreeIcon name="arrow_back" size={18} />
-                            이전
+                            ?댁쟾
                         </button>
                     ) : (
                         <div />
@@ -446,7 +502,7 @@ export default function EnrollApplicationForm({
                             onClick={goNext}
                             className="flex items-center gap-1 px-6 py-3 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors cursor-pointer"
                         >
-                            다음
+                            ?ㅼ쓬
                             <FontFreeIcon name="arrow_forward" size={18} />
                         </button>
                     ) : (
@@ -459,12 +515,12 @@ export default function EnrollApplicationForm({
                             {isPending ? (
                                 <>
                                     <FontFreeIcon name="progress_activity" size={18} className="animate-spin" />
-                                    처리 중...
+                                    泥섎━ 以?..
                                 </>
                             ) : (
                                 <>
                                     <FontFreeIcon name="how_to_reg" size={18} />
-                                    수강 신청하기
+                                    ?섍컯 ?좎껌?섍린
                                 </>
                             )}
                         </button>

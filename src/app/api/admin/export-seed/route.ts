@@ -1,18 +1,18 @@
-/**
+﻿/**
  * GET /api/admin/export-seed
  *
- * 현재 DB의 Programs, ClassSlotOverrides, AcademySettings(termsOfService)을
- * prisma/seed-data.ts 에 바로 붙여넣을 수 있는 TypeScript 코드로 변환합니다.
+ * ?꾩옱 DB??Programs, ClassSlotOverrides, AcademySettings(termsOfService)??
+ * prisma/seed-data.ts ??諛붾줈 遺숈뿬?ｌ쓣 ???덈뒗 TypeScript 肄붾뱶濡?蹂?섑빀?덈떎.
  *
- * 사용법:
- * 1. 관리자 페이지 → "시드 데이터 내보내기" 클릭
- * 2. 출력된 코드를 prisma/seed-data.ts 에 붙여넣기
- * 3. git commit & push → 이후 DB 초기화 시 /api/admin/seed 로 복구 가능
+ * ?ъ슜踰?
+ * 1. 愿由ъ옄 ?섏씠吏 ??"?쒕뱶 ?곗씠???대낫?닿린" ?대┃
+ * 2. 異쒕젰??肄붾뱶瑜?prisma/seed-data.ts ??遺숈뿬?ｊ린
+ * 3. git commit & push ???댄썑 DB 珥덇린????/api/admin/seed 濡?蹂듦뎄 媛??
  */
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { requireOwner } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +29,11 @@ function quote(v: unknown): string {
 }
 
 export async function GET() {
-    // 인증 체크: 로그인한 관리자만 시드 데이터 내보내기 가능
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留??쒕뱶 ?곗씠???대낫?닿린 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     try {
@@ -58,12 +58,12 @@ export async function GET() {
 
         const lines: string[] = [
             `/**`,
-            ` * 시드 데이터 — 프로그램 목록 영구 보존용`,
+            ` * 시드 데이터 - 프로그램 목록 영구 보존용`,
             ` *`,
-            ` * ⚠️ 이 파일에 프로그램 데이터를 기록해 두세요.`,
-            ` *    DB 데이터 소실 시 /api/admin/seed POST 로 복구합니다.`,
+            ` * ?좑툘 ???뚯씪???꾨줈洹몃옩 ?곗씠?곕? 湲곕줉???먯꽭??`,
+            ` *    DB ?곗씠???뚯떎 ??/api/admin/seed POST 濡?蹂듦뎄?⑸땲??`,
             ` *`,
-            ` * 마지막 내보내기: ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`,
+            ` * 留덉?留??대낫?닿린: ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`,
             ` */`,
             ``,
             `export interface SeedProgram {`,
@@ -120,7 +120,7 @@ export async function GET() {
 
         lines.push(`];`);
         lines.push(``);
-        lines.push(`/** 이용약관 (AcademySettings.termsOfService) */`);
+        lines.push(`/** ?댁슜?쎄? (AcademySettings.termsOfService) */`);
         lines.push(`export const TERMS_OF_SERVICE: string | null = ${quote(terms)};`);
         lines.push(``);
 
@@ -133,6 +133,6 @@ export async function GET() {
             },
         });
     } catch (e) {
-        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
+        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
     }
 }

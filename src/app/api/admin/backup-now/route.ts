@@ -1,14 +1,14 @@
-/**
+﻿/**
  * POST /api/admin/backup-now
  *
- * 관리자가 수동으로 즉시 클라우드 백업을 생성합니다.
- * /api/cron/backup 과 동일한 로직이지만 CRON_SECRET 대신 관리자 UI에서 호출합니다.
+ * 愿由ъ옄媛 ?섎룞?쇰줈 利됱떆 ?대씪?곕뱶 諛깆뾽???앹꽦?⑸땲??
+ * /api/cron/backup 怨??숈씪??濡쒖쭅?댁?留?CRON_SECRET ???愿由ъ옄 UI?먯꽌 ?몄텧?⑸땲??
  */
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { requireOwner } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,25 +29,25 @@ async function safeQuery<T = any>(sql: string): Promise<T[]> {
 }
 
 export async function POST() {
-    // 인증 체크: 로그인한 관리자만 수동 백업 가능
-    const authSupabase = await createClient();
-    const { data: { user } } = await authSupabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "인증 필요" }, { status: 401 });
+    // ?몄쬆 泥댄겕: 濡쒓렇?명븳 愿由ъ옄留??섎룞 諛깆뾽 媛??
+    try {
+        await requireOwner();
+    } catch {
+        return NextResponse.json({ error: "원장 권한이 필요합니다." }, { status: 403 });
     }
 
     try {
         const supabase = createAdminClient();
 
-        // 1. 버킷 확인 (없으면 생성)
+        // 1. 踰꾪궥 ?뺤씤 (?놁쑝硫??앹꽦)
         const { data: buckets } = await supabase.storage.listBuckets();
         const exists = buckets?.some((b) => b.name === BUCKET);
         if (!exists) {
             const { error } = await supabase.storage.createBucket(BUCKET, { public: false });
-            if (error) throw new Error(`버킷 생성 실패: ${error.message}`);
+            if (error) throw new Error(`踰꾪궥 ?앹꽦 ?ㅽ뙣: ${error.message}`);
         }
 
-        // 2. DB 전체 스냅샷 수집
+        // 2. DB ?꾩껜 ?ㅻ깄???섏쭛
         const [academyRows, programs, coaches, classSlotOverrides, customClassSlots, routes, stops] =
             await Promise.all([
                 safeQuery(`SELECT * FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`),
@@ -79,7 +79,7 @@ export async function POST() {
             routes: routesWithStops,
         };
 
-        // 3. Supabase Storage에 업로드
+        // 3. Supabase Storage???낅줈??
         const now = new Date();
         const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
         const filename = `stiz-backup-${kstNow.toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
@@ -89,9 +89,9 @@ export async function POST() {
             .from(BUCKET)
             .upload(filename, body, { contentType: "application/json", upsert: true });
 
-        if (uploadError) throw new Error(`업로드 실패: ${uploadError.message}`);
+        if (uploadError) throw new Error(`?낅줈???ㅽ뙣: ${uploadError.message}`);
 
-        // 4. 30일 이상 된 파일 삭제
+        // 4. 30???댁긽 ???뚯씪 ??젣
         const { data: files } = await supabase.storage.from(BUCKET).list("", { limit: 200 });
         const cutoff = new Date(Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000);
         const toDelete = (files ?? []).filter((f) => {
@@ -114,6 +114,6 @@ export async function POST() {
         });
     } catch (e) {
         console.error("[backup-now] failed:", e);
-        return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
+        return NextResponse.json({ error: "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." }, { status: 500 });
     }
 }

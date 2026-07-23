@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { defaultPathForRole, type AppRole } from "@/lib/auth-routes";
@@ -36,12 +35,30 @@ type AccountControlsProps = {
 };
 
 function useAccountState(initialRole: AppRole | null = null) {
-  const router = useRouter();
   const [appRole, setAppRole] = useState<AppRole | null>(initialRole);
 
   useEffect(() => {
     setAppRole(initialRole);
   }, [initialRole]);
+
+  const refreshAccountRole = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/account-role", { cache: "no-store" });
+      if (!response.ok) {
+        setAppRole(null);
+        return;
+      }
+
+      const data = (await response.json().catch(() => ({}))) as { role?: AppRole | null };
+      setAppRole(data.role ?? null);
+    } catch {
+      setAppRole(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshAccountRole();
+  }, [refreshAccountRole]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -57,12 +74,12 @@ function useAccountState(initialRole: AppRole | null = null) {
       // 로그인 또는 계정 갱신 시 metadata를 쓰지 않고 Server Component를
       // 새로 고쳐 DB에서 확인한 역할을 다시 전달받는다.
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-        router.refresh();
+        void refreshAccountRole();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [refreshAccountRole]);
 
   const accountHref = appRole ? defaultPathForRole(appRole) : "/login";
   const accountLabel =

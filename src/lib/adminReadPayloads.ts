@@ -52,10 +52,16 @@ const ADMIN_LIST_PAGE_SIZE = 50;
 const ADMIN_LIST_MAX_PAGE_SIZE = 100;
 const ADMIN_GALLERY_PAGE_SIZE = 24;
 const ADMIN_NOTICES_PAGE_SIZE = 30;
+const ADMIN_REQUESTS_PAGE_SIZE = 30;
+const ADMIN_REQUEST_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "REJECTED"] as const;
 
 type AdminListPayloadOptions = {
     limit?: number;
     offset?: number;
+};
+
+type AdminRequestsPayloadOptions = AdminListPayloadOptions & {
+    statusFilter?: string;
 };
 
 function normalizeAdminListPayloadOptions(options?: AdminListPayloadOptions) {
@@ -1147,15 +1153,69 @@ export const getCachedAdminStaffPayload = unstable_cache(
     { revalidate: 60, tags: ["admin-staff", "admin-coaches"] },
 );
 
-export const getCachedAdminRequestsPayload = unstable_cache(
-    async () => {
-        const requests = await getAllRequests();
+async function getAdminRequestStatusCounts() {
+    const emptyCounts = {
+        ALL: 0,
+        PENDING: 0,
+        CONFIRMED: 0,
+        COMPLETED: 0,
+        REJECTED: 0,
+    };
 
-        return { requests };
-    },
-    ["admin-requests-page-v1"],
-    { revalidate: 30, tags: ["admin-requests"] },
-);
+    try {
+        const rows = await prisma.$queryRawUnsafe<Array<{ status: string | null; count: number | string }>>(
+            `SELECT status, COUNT(*)::int AS count FROM "ParentRequest" GROUP BY status`,
+        );
+
+        return rows.reduce((counts, row) => {
+            const status = row.status ?? "";
+            const count = Number(row.count ?? 0);
+            counts.ALL += count;
+            if (ADMIN_REQUEST_STATUSES.includes(status as (typeof ADMIN_REQUEST_STATUSES)[number])) {
+                counts[status as keyof typeof emptyCounts] = count;
+            }
+            return counts;
+        }, { ...emptyCounts });
+    } catch (error) {
+        console.error("[getAdminRequestStatusCounts] failed:", error);
+        return emptyCounts;
+    }
+}
+
+export function getCachedAdminRequestsPayload(options?: AdminRequestsPayloadOptions) {
+    const { limit, offset } = normalizeAdminListPayloadOptions({
+        limit: options?.limit ?? ADMIN_REQUESTS_PAGE_SIZE,
+        offset: options?.offset,
+    });
+    const statusFilter = ADMIN_REQUEST_STATUSES.includes(options?.statusFilter as (typeof ADMIN_REQUEST_STATUSES)[number])
+        ? options?.statusFilter
+        : undefined;
+
+    return unstable_cache(
+        async () => {
+            const [requests, counts] = await Promise.all([
+                getAllRequests({ statusFilter, limit, offset }),
+                getAdminRequestStatusCounts(),
+            ]);
+            const total = statusFilter ? counts[statusFilter as keyof typeof counts] : counts.ALL;
+
+            return {
+                requests,
+                counts,
+                statusFilter: statusFilter ?? "ALL",
+                pagination: buildListPagination({
+                    limit,
+                    offset,
+                    returned: requests.length,
+                    total,
+                    hasMore: offset + requests.length < total,
+                }),
+            };
+        },
+        ["admin-requests-page-v2", statusFilter ?? "ALL", String(limit), String(offset)],
+        { revalidate: 30, tags: ["admin-requests"] },
+    )();
+}
 
 export const getCachedAdminSettingsPayload = unstable_cache(
     async () => {

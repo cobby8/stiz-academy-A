@@ -4,7 +4,15 @@ import { getCachedAdminRequestsPayload } from "@/lib/adminReadPayloads";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+const REQUEST_STATUSES = new Set(["PENDING", "CONFIRMED", "COMPLETED", "REJECTED"]);
+
+function readPositiveNumber(value: string | null) {
+    if (!value) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+}
+
+export async function GET(request: Request) {
     try {
         await requireAdmin();
     } catch {
@@ -12,7 +20,13 @@ export async function GET() {
     }
 
     try {
-        const payload = await getCachedAdminRequestsPayload();
+        const { searchParams } = new URL(request.url);
+        const status = searchParams.get("status");
+        const payload = await getCachedAdminRequestsPayload({
+            statusFilter: status && REQUEST_STATUSES.has(status) ? status : undefined,
+            limit: readPositiveNumber(searchParams.get("limit")),
+            offset: readPositiveNumber(searchParams.get("offset")),
+        });
 
         return NextResponse.json(
             payload,

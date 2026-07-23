@@ -4,7 +4,7 @@ import { getCachedAdminRequestsPayload } from "@/lib/adminReadPayloads";
 export const revalidate = 30;
 
 export default async function RequestsPage() {
-    const { requests } = await getCachedAdminRequestsPayload();
+    const { requests, counts, pagination, statusFilter } = await getCachedAdminRequestsPayload();
 
-    return <RequestsAdminClient requests={requests} />;
+    return <RequestsAdminClient requests={requests} counts={counts} pagination={pagination} statusFilter={statusFilter} />;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { updateRequestStatus, deleteParentRequest } from "@/app/actions/admin";
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -56,6 +56,35 @@ type RequestData = {
 
 type RequestsPayload = {
     requests: RequestData[];
+    counts?: RequestCounts;
+    pagination?: RequestPagination;
+    statusFilter?: string;
+};
+
+type RequestCounts = {
+    ALL: number;
+    PENDING: number;
+    CONFIRMED: number;
+    COMPLETED: number;
+    REJECTED: number;
+};
+
+type RequestPagination = {
+    limit: number;
+    offset: number;
+    returned: number;
+    total: number;
+    hasMore: boolean;
+    nextOffset: number | null;
+    partial?: boolean;
+};
+
+const DEFAULT_REQUEST_COUNTS: RequestCounts = {
+    ALL: 0,
+    PENDING: 0,
+    CONFIRMED: 0,
+    COMPLETED: 0,
+    REJECTED: 0,
 };
 
 function RequestsLoadingFallback() {
@@ -112,50 +141,84 @@ function RequestsErrorState({ onRetry }: { onRetry: () => void }) {
     );
 }
 
-export default function RequestsAdminClient({ requests: initialRequests }: { requests?: RequestData[] }) {
+export default function RequestsAdminClient({
+    requests: initialRequests,
+    counts: initialCounts,
+    pagination: initialPagination,
+    statusFilter: initialStatusFilter = "ALL",
+}: {
+    requests?: RequestData[];
+    counts?: RequestCounts;
+    pagination?: RequestPagination;
+    statusFilter?: string;
+}) {
     const hasInitialData = initialRequests !== undefined;
     const [requests, setRequests] = useState<RequestData[]>(initialRequests ?? []);
+    const [counts, setCounts] = useState<RequestCounts>(initialCounts ?? DEFAULT_REQUEST_COUNTS);
+    const [pagination, setPagination] = useState<RequestPagination | undefined>(initialPagination);
     const [loading, setLoading] = useState(!hasInitialData);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [loadError, setLoadError] = useState(false);
-    const [filter, setFilter] = useState<string>("ALL");
+    const [filter, setFilter] = useState<string>(initialStatusFilter);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
     const [isPending, startTransition] = useTransition();
+    const requestedInitialLoad = useRef(false);
 
-    const loadRequests = useCallback(async () => {
-        setLoading(true);
+    const loadRequests = useCallback(async ({
+        status = filter,
+        offset = 0,
+        append = false,
+    }: {
+        status?: string;
+        offset?: number;
+        append?: boolean;
+    } = {}) => {
+        if (append) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
         setLoadError(false);
         try {
-            const response = await fetch("/api/admin/requests", { cache: "no-store" });
+            const params = new URLSearchParams({
+                limit: String(pagination?.limit ?? 30),
+                offset: String(offset),
+            });
+            if (status && status !== "ALL") {
+                params.set("status", status);
+            }
+            const response = await fetch(`/api/admin/requests?${params.toString()}`, { cache: "no-store" });
             if (!response.ok) {
                 throw new Error("Failed to load requests.");
             }
             const data = (await response.json()) as RequestsPayload;
-            setRequests(data.requests);
+            setRequests((current) => {
+                if (!append) return data.requests;
+                const seen = new Set(current.map((request) => request.id));
+                return [...current, ...data.requests.filter((request) => !seen.has(request.id))];
+            });
+            if (data.counts) setCounts(data.counts);
+            if (data.pagination) setPagination(data.pagination);
         } catch (error) {
             console.error("Failed to load requests:", error);
             setLoadError(true);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
-    }, []);
+    }, [filter, pagination?.limit]);
 
     useEffect(() => {
-        if (hasInitialData) return;
+        if (hasInitialData || requestedInitialLoad.current) return;
+        requestedInitialLoad.current = true;
         void loadRequests();
     }, [hasInitialData, loadRequests]);
 
     // 필터 적용
-    const filtered = filter === "ALL" ? requests : requests.filter(r => r.status === filter);
+    const filtered = requests;
 
     // 상태별 카운트
-    const counts = {
-        ALL: requests.length,
-        PENDING: requests.filter(r => r.status === "PENDING").length,
-        CONFIRMED: requests.filter(r => r.status === "CONFIRMED").length,
-        COMPLETED: requests.filter(r => r.status === "COMPLETED").length,
-    };
-
     if (loading && requests.length === 0) {
         return <RequestsLoadingFallback />;
     }
@@ -180,7 +243,10 @@ export default function RequestsAdminClient({ requests: initialRequests }: { req
                     { value: "COMPLETED", label: "처리완료" },
                 ].map(f => (
                     <button key={f.value}
-                        onClick={() => setFilter(f.value)}
+                        onClick={() => {
+                            setFilter(f.value);
+                            void loadRequests({ status: f.value, offset: 0 });
+                        }}
                         className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
                             filter === f.value
                                 ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white"
@@ -277,7 +343,7 @@ export default function RequestsAdminClient({ requests: initialRequests }: { req
                                                         disabled={isPending}
                                                         onClick={() => startTransition(async () => {
                                                             await updateRequestStatus(req.id, s.value, adminNotes[req.id] ?? req.adminNote ?? undefined);
-                                                            await loadRequests();
+                                                            await loadRequests({ status: filter, offset: 0 });
                                                         })}
                                                         className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition hover:shadow-sm ${s.color}`}
                                                     >
@@ -292,7 +358,7 @@ export default function RequestsAdminClient({ requests: initialRequests }: { req
                                                         startTransition(async () => {
                                                             await deleteParentRequest(req.id);
                                                             setExpandedId(null);
-                                                            await loadRequests();
+                                                            await loadRequests({ status: filter, offset: 0 });
                                                         });
                                                     }
                                                 }}
@@ -306,6 +372,22 @@ export default function RequestsAdminClient({ requests: initialRequests }: { req
                             </div>
                         );
                     })}
+                    {pagination?.hasMore && (
+                        <div className="pt-2 text-center">
+                            <button
+                                type="button"
+                                disabled={loadingMore}
+                                onClick={() => void loadRequests({
+                                    status: filter,
+                                    offset: pagination.nextOffset ?? requests.length,
+                                    append: true,
+                                })}
+                                className="rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                            >
+                                {loadingMore ? "불러오는 중..." : `더 보기 (${requests.length}/${pagination.total})`}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

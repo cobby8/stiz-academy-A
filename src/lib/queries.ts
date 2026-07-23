@@ -1783,7 +1783,16 @@ export const getMyRequests = cache(async (userId: string) => {
 });
 
 // 관리자용: 전체 요청 목록 (최신순)
-export const getAllRequests = cache(async (statusFilter?: string) => {
+export const getAllRequests = cache(async (options?: string | { statusFilter?: string; limit?: number; offset?: number }) => {
+    const statusFilter = typeof options === "string" ? options : options?.statusFilter;
+    const limit =
+        typeof options === "object" && typeof options.limit === "number" && Number.isFinite(options.limit) && options.limit > 0
+            ? Math.min(Math.floor(options.limit), 100)
+            : 30;
+    const offset =
+        typeof options === "object" && typeof options.offset === "number" && Number.isFinite(options.offset) && options.offset > 0
+            ? Math.floor(options.offset)
+            : 0;
     try {
         // statusFilter 유무에 따라 WHERE절 포함 여부를 분기
         // $queryRawUnsafe의 $1 파라미터 바인딩으로 SQL 인젝션 방지
@@ -1797,14 +1806,18 @@ export const getAllRequests = cache(async (statusFilter?: string) => {
         const orderClause = `ORDER BY
                 CASE r.status WHEN 'PENDING' THEN 0 WHEN 'CONFIRMED' THEN 1 ELSE 2 END,
                 r."createdAt" DESC
-             LIMIT 100`;
+             LIMIT ${statusFilter ? "$2" : "$1"} OFFSET ${statusFilter ? "$3" : "$2"}`;
         const rows = statusFilter
             ? await prisma.$queryRawUnsafe<any[]>(
                 `${baseQuery} WHERE r.status = $1 ${orderClause}`,
-                statusFilter
+                statusFilter,
+                limit,
+                offset
               )
             : await prisma.$queryRawUnsafe<any[]>(
-                `${baseQuery} ${orderClause}`
+                `${baseQuery} ${orderClause}`,
+                limit,
+                offset
               );
         return rows.map((r: any) => ({
             id: r.id,

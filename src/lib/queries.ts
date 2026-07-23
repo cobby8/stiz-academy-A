@@ -214,7 +214,14 @@ export const getStudents = cache(async (limit?: number) => {
                 : null;
         // 학생 목록 조회: 서브쿼리로 수강(Enrollment+Class) 정보를 JSON 배열로 포함
         const rows = await prisma.$queryRawUnsafe<any[]>(
-            `WITH enrollment_json AS (
+            `WITH selected_students AS (
+                SELECT s.id, s.name, s."birthDate", s.gender, s."parentId",
+                       s.phone, s.school, s.grade, s.address, s."enrollDate",
+                       s."createdAt", s."updatedAt"
+                FROM "Student" s
+                ORDER BY s.name ASC${normalizedLimit ? ` LIMIT ${normalizedLimit}` : ""}
+             ),
+             enrollment_json AS (
                 SELECT
                     e."studentId",
                     json_agg(
@@ -230,6 +237,7 @@ export const getStudents = cache(async (limit?: number) => {
                         ORDER BY e."createdAt" DESC
                     ) AS enrollments
                 FROM "Enrollment" e
+                JOIN selected_students ss ON ss.id = e."studentId"
                 JOIN "Class" c ON e."classId" = c.id
                 GROUP BY e."studentId"
              ),
@@ -238,6 +246,24 @@ export const getStudents = cache(async (limit?: number) => {
                 FROM "StudentSheetImportBatch"
                 WHERE status = 'COMPLETED'
                 ORDER BY "createdAt" DESC
+                LIMIT 1
+             ),
+             selected_month AS (
+                SELECT parsed."monthNumber"
+                FROM (
+                    SELECT (
+                        string_to_array(
+                            trim(both ',' from regexp_replace(COALESCE(r."registrationMonth", ''), '[^0-9]+', ',', 'g')),
+                            ','
+                        )
+                    )[2]::int AS "monthNumber"
+                    FROM "StudentRegistrationLedger" r
+                    JOIN latest_batch lb ON lb.id = r."batchId"
+                    WHERE r."studentId" IS NOT NULL
+                ) parsed
+                WHERE parsed."monthNumber" IS NOT NULL
+                GROUP BY parsed."monthNumber"
+                ORDER BY parsed."monthNumber" DESC
                 LIMIT 1
              ),
              ledger AS (
@@ -250,16 +276,9 @@ export const getStudents = cache(async (limit?: number) => {
                         )
                     )[2]::int AS "monthNumber"
                 FROM "StudentRegistrationLedger" r
+                JOIN selected_students ss ON ss.id = r."studentId"
                 JOIN latest_batch lb ON lb.id = r."batchId"
                 WHERE r."studentId" IS NOT NULL
-             ),
-             selected_month AS (
-                SELECT l."monthNumber"
-                FROM ledger l
-                WHERE l."monthNumber" IS NOT NULL
-                GROUP BY l."monthNumber"
-                ORDER BY l."monthNumber" DESC
-                LIMIT 1
              ),
              student_month_status AS (
                 SELECT
@@ -288,11 +307,11 @@ export const getStudents = cache(async (limit?: number) => {
                     u.name AS parent_name, u.phone AS parent_phone, u.email AS parent_email,
                     COALESCE(ej.enrollments, '[]'::json) AS enrollments,
                     css.status AS current_status
-             FROM "Student" s
+             FROM selected_students s
              LEFT JOIN "User" u ON s."parentId" = u.id
              LEFT JOIN enrollment_json ej ON ej."studentId" = s.id
              LEFT JOIN current_student_status css ON css."studentId" = s.id
-             ORDER BY s.name ASC${normalizedLimit ? ` LIMIT ${normalizedLimit}` : ""}`
+             ORDER BY s.name ASC`
         );
         return rows.map((r: any) => ({
             id: r.id,

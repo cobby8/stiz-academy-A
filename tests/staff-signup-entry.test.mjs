@@ -10,7 +10,7 @@ const loginSource = await readFile("src/app/login/page.tsx", "utf8");
 const smsSource = await readFile("src/lib/sms.ts", "utf8");
 
 test("staff invitation returns a usable personal link even when SMS fails", () => {
-  assert.match(adminActionSource, /const smsResult = baseUrl[\s\S]*?await sendSmsDetailed/);
+  assert.match(adminActionSource, /const smsResult = baseUrl[\s\S]*?await sendFailClosedTrackedSms/);
   assert.match(adminActionSource, /return \{[\s\S]*?token,[\s\S]*?inviteUrl,[\s\S]*?smsSent: smsResult\.ok/);
   assert.match(adminActionSource, /NEXT_PUBLIC_SITE_URL[\s\S]*?NEXT_PUBLIC_BASE_URL[\s\S]*?VERCEL_URL/);
   assert.match(adminActionSource, /data\.role !== "INSTRUCTOR" && data\.role !== "DRIVER"/);

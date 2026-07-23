@@ -76,9 +76,9 @@ test("confirmed routes can be completed only after every passenger is checked", 
 test("admin shuttle screen refreshes live driver check status", () => {
   assert.match(adminClientSource, /autoRefresh/);
   assert.match(adminClientSource, /window\.setInterval/);
-  assert.match(adminClientSource, /30000/);
+  assert.match(adminClientSource, /SHUTTLE_AUTO_REFRESH_MS = 60_000/);
   assert.match(adminClientSource, /새 상태 불러오기/);
-  assert.match(adminClientSource, /30초 자동 새로고침/);
+  assert.match(adminClientSource, /1분 자동 새로고침/);
 });
 
 test("admin can confirm shuttle request pickup or dropoff pins before assignment", () => {

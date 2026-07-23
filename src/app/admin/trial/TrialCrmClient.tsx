@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import AdminModal from "@/components/admin/AdminModal";
 import {
     updateTrialLead,
-    generateEnrollLink,
+    sendPostTrialEnrollGuide,
     sendTrialCoachNotice,
     resendTrialApplicationSms,
     resendTrialAttendedSms,
@@ -907,39 +907,26 @@ export default function TrialCrmClient({
         }
     }
 
-    async function copyEnrollLinkToClipboard(enrollLink: string) {
-        try {
-            await navigator.clipboard.writeText(enrollLink);
-            return true;
-        } catch {
-            window.prompt("수강신청서 링크를 복사해 학부모에게 보내주세요.", enrollLink);
-            return false;
-        }
-    }
-
     async function handleConfirmEnrollGuide() {
         if (busy || !enrollGuideConfirm) return;
         const { lead, convertAfterConfirm } = enrollGuideConfirm;
         setBusy(true);
         try {
-            if (convertAfterConfirm) {
-                await updateTrialLead(lead.id, {
-                    status: "CONVERTED",
-                    convertedDate: new Date().toISOString(),
-                });
-            }
-            const enrollLink = await generateEnrollLink(lead.id);
-            const copied = await copyEnrollLinkToClipboard(enrollLink);
+            const result = await sendPostTrialEnrollGuide(lead.id, {
+                convert: convertAfterConfirm,
+            });
             setEnrollGuideConfirm(null);
             await loadTrialData();
-            showFeedback(
-                "success",
-                copied
-                    ? `${lead.childName} 수강신청서 링크를 복사했습니다. 카톡이나 문자에 붙여넣어 보내주세요.`
-                    : `${lead.childName} 수강신청서 링크를 확인했습니다. 열린 창의 링크를 복사해 보내주세요.`,
-            );
+            if (result.sent) {
+                showFeedback("success", `${lead.childName} 보호자에게 수강신청 안내 문자를 발송했습니다.`);
+            } else {
+                showFeedback(
+                    "error",
+                    `${convertAfterConfirm ? "등록전환은 완료됐지만 " : ""}수강신청 안내 문자를 발송하지 못했습니다. ${result.message || "문자 발송 내역을 확인해주세요."}`,
+                );
+            }
         } catch {
-            showFeedback("error", "수강신청서 링크 준비 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+            showFeedback("error", "수강신청 안내 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -1540,8 +1527,8 @@ function EnrollGuideConfirmModal({
                             수강신청서를 전송하시겠습니까?
                         </h2>
                         <p className="mt-2 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
-                            {lead.childName} 보호자에게 보낼 수강신청서 링크를 준비합니다.
-                            문자 발송 설정 전까지는 확인을 누르면 링크가 복사됩니다.
+                            {lead.childName} 보호자에게 수강신청서 링크를 문자로 발송합니다.
+                            같은 신청 건은 중복 발송되지 않습니다.
                         </p>
                     </div>
                 </div>
@@ -1554,7 +1541,7 @@ function EnrollGuideConfirmModal({
                     <div className="mt-2 flex items-center justify-between gap-3">
                         <span className="font-bold text-gray-500 dark:text-gray-400">처리</span>
                         <span className="font-black text-gray-900 dark:text-white">
-                            {convertAfterConfirm ? "등록전환 + 링크 복사" : "링크 복사"}
+                            {convertAfterConfirm ? "등록전환 + 문자 발송" : "문자 발송"}
                         </span>
                     </div>
                 </div>
@@ -1574,7 +1561,7 @@ function EnrollGuideConfirmModal({
                         disabled={busy}
                         className="min-h-11 rounded-xl bg-brand-orange-500 px-4 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-300"
                     >
-                        {busy ? "준비 중..." : "확인"}
+                        {busy ? "발송 중..." : "확인"}
                     </button>
                 </div>
             </div>

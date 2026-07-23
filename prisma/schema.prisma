@@ -1152,10 +1152,27 @@ model TrialLead {
   agreedPrivacy      Boolean   @default(false) // 개인정보 수집/이용 동의 여부
   createdAt          DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  enrollmentShortLinks EnrollmentShortLink[]
 
   @@index([status])
   @@index([createdAt])
   @@index([status, createdAt])
+}
+
+// 체험 완료 후 수강신청서로 안전하게 연결하는 만료형 짧은 링크
+model EnrollmentShortLink {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  code        String    @unique
+  trialLeadId String
+  targetPath  String    @default("/apply/enroll")
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime  @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  trialLead   TrialLead @relation(fields: [trialLeadId], references: [id], onDelete: Cascade)
+
+  @@index([trialLeadId, isActive, expiresAt])
+  @@index([expiresAt])
 }
 
 // 대기자 관리 — 반 정원 초과 시 대기열에 등록, 자리 생기면 제안/수락/거절 처리

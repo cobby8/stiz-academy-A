@@ -22,6 +22,9 @@ import {
 import { publishGalleryPostToInstagram } from "@/lib/instagram";
 import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
 import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings } from "@/lib/queries";
+import { createTrialEnrollShortLink } from "@/lib/enroll-short-link";
+import { assertSolapiShortSms } from "@/lib/sms-byte-length";
+import { renderSmsTemplate } from "@/lib/smsTemplate";
 import {
     ensureInvoiceForPayment,
     ensureInvoicesForMonth,
@@ -5217,7 +5220,16 @@ export async function generateEnrollLink(trialLeadId: string): Promise<string> {
 // ── SMS 수동 발송 (관리자 전용) ──────────────────────────────────────────────
 // 관리자가 코치 또는 직접 입력한 번호로 문자를 보내는 기능
 
-export async function sendPostTrialEnrollGuide(trialLeadId: string): Promise<{ enrollLink: string }> {
+export type PostTrialEnrollGuideResult = {
+    enrollLink: string;
+    sent: boolean;
+    message?: string;
+};
+
+export async function sendPostTrialEnrollGuide(
+    trialLeadId: string,
+    options?: { convert?: boolean },
+): Promise<PostTrialEnrollGuideResult> {
     await requireAdmin();
     await ensureTrialLeadTable();
 
@@ -5233,40 +5245,86 @@ export async function sendPostTrialEnrollGuide(trialLeadId: string): Promise<{ e
     }
 
     const lead = leads[0];
-    const parentPhone = lead.parentPhone ?? lead.parentphone;
-    if (!parentPhone) {
-        throw new Error("학부모 연락처가 없어 안내 문자를 보낼 수 없습니다.");
+    if (options?.convert) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "TrialLead"
+             SET status = 'CONVERTED',
+                 "convertedDate" = COALESCE("convertedDate", NOW()),
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            trialLeadId,
+        );
     }
 
-    const settings = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
-    );
-    const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
-    const enrollLink = buildEnrollLink(trialLeadId);
+    const parentPhone = lead.parentPhone ?? lead.parentphone;
+
+    try {
+    const { shortUrl: enrollLink } = await createTrialEnrollShortLink(trialLeadId);
     const childName = lead.childName ?? lead.childname ?? "";
     const parentName = lead.parentName ?? lead.parentname ?? "";
+    const templateVariables = { childName, parentName, enrollLink };
+    const renderedMessage = await renderSmsTemplate("TRIAL_ENROLL_GUIDE_PARENT", templateVariables);
+    if (!renderedMessage) {
+        return {
+            enrollLink,
+            sent: false,
+            message: "수강신청 안내 문자 템플릿을 사용할 수 없습니다.",
+        };
+    }
+    try {
+        assertSolapiShortSms(renderedMessage);
+    } catch {
+        return {
+            enrollLink,
+            sent: false,
+            message: "단문 기준을 초과해 발송하지 않았습니다. 문자 템플릿이나 짧은 링크 주소를 확인해주세요.",
+        };
+    }
 
-    await sendParentSms(parentPhone, "TRIAL_ENROLL_GUIDE_PARENT", {
-        childName,
-        parentName,
-        academyPhone,
-        enrollLink,
-    });
-
-    await prisma.$executeRawUnsafe(
-        `UPDATE "TrialLead"
-         SET "postTrialConsultedAt" = COALESCE("postTrialConsultedAt", NOW()),
-             "enrollGuideSentAt" = NOW(),
-             "updatedAt" = NOW()
-         WHERE id = $1`,
-        trialLeadId,
+    const smsResult = await sendParentSmsWithResult(
+        parentPhone || "",
+        "TRIAL_ENROLL_GUIDE_PARENT",
+        templateVariables,
+        {
+            eventType: "TRIAL_ENROLL_GUIDE",
+            eventId: `trial:${trialLeadId}:enroll-guide`,
+            forceSms: true,
+        },
     );
+
+    if (smsResult.ok) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "TrialLead"
+             SET "postTrialConsultedAt" = COALESCE("postTrialConsultedAt", NOW()),
+                 "enrollGuideSentAt" = COALESCE("enrollGuideSentAt", NOW()),
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            trialLeadId,
+        );
+    }
 
     revalidatePath("/admin/trial");
     revalidatePath("/admin/apply");
     revalidateTrialAdminCaches();
 
-    return { enrollLink };
+    return {
+        enrollLink,
+        sent: smsResult.ok,
+        message: smsResult.ok
+            ? undefined
+            : smsResult.reason || "수강신청 안내 문자 발송에 실패했습니다.",
+    };
+    } catch (smsError) {
+        console.error("[sendPostTrialEnrollGuide SMS] failed:", smsError);
+        revalidatePath("/admin/trial");
+        revalidatePath("/admin/apply");
+        revalidateTrialAdminCaches();
+        return {
+            enrollLink: "",
+            sent: false,
+            message: "수강신청 안내 문자 준비 중 오류가 발생했습니다.",
+        };
+    }
 }
 
 type TrialApplicationSmsResendResult = {
@@ -5775,7 +5833,7 @@ export async function resetSmsTemplate(id: string) {
             ENROLL_APPROVED_COACH: "[STIZ] 수강 신청이 승인되었습니다.\n학생: {{childName}} ({{childGrade}})\n배정 반: {{className}}",
             TRIAL_CONFIRM_PARENT: "[STIZ] {{childName}} 체험수업 신청이 접수되었습니다.\n일정 확정 시 다시 안내드리겠습니다.\n문의: {{academyPhone}}",
             TRIAL_SCHEDULED_PARENT: "[STIZ] {{childName}} 체험수업 일정이 확정되었습니다.\n일시: {{scheduledDate}}\n반: {{className}}\n문의: {{academyPhone}}",
-            TRIAL_ENROLL_GUIDE_PARENT: "[STIZ] {{childName}} 학생 체험수업 상담 감사드립니다.\n정규 수강신청서는 아래 링크에서 작성해주세요.\n{{enrollLink}}\n작성 후 확인되는 대로 입학 안내를 도와드리겠습니다.\n문의: {{academyPhone}}",
+            TRIAL_ENROLL_GUIDE_PARENT: "스티즈 수강신청서\n링크에서 작성해주세요 :)\n{{enrollLink}}",
             ENROLL_CONFIRM_PARENT: "[STIZ] {{childName}} 수강 신청이 접수되었습니다.\n승인 후 안내드리겠습니다.\n문의: {{academyPhone}}",
             ENROLL_APPROVED_PARENT: "[STIZ] {{childName}} 수강이 확정되었습니다.\n배정 반: {{className}}\n상세 안내는 별도 연락드리겠습니다.",
             INVOICE_PARENT: "[STIZ] {{month}}월 수강료 안내\n{{childName}}: {{amount}}원\n납부기한: {{dueDate}}",

@@ -165,7 +165,7 @@ async function sendSolapiSms(
     signal: AbortSignal,
     options?: SmsSendOptions,
 ): Promise<SmsSendResult> {
-    const messageType = options?.messageType === "LMS" ? "LMS" : getSmsMessageType(body);
+    const messageType = options?.messageType ?? getSmsMessageType(body);
     const res = await fetch(SOLAPI_URL, {
         method: "POST",
         signal,
@@ -209,7 +209,9 @@ async function sendBizppurioSms(
     options?: SmsSendOptions,
 ): Promise<SmsSendResult> {
     const token = await getBizppurioToken(signal);
-    const type = options?.messageType === "LMS" ? "lms" : bizppurioMessageType(body);
+    const type = options?.messageType
+        ? options.messageType.toLowerCase() as "sms" | "lms"
+        : bizppurioMessageType(body);
     const refkey = `stiz${Date.now().toString(36)}${crypto.randomBytes(8).toString("hex")}`.slice(0, 32);
     const content = type === "sms"
         ? { sms: { message: body } }

@@ -31,6 +31,7 @@ type SmsDeliveryOptions = {
     recipientUserId?: string | null;
     requestedChannel?: MessageChannel;
     audienceScope?: "INTERNAL" | "EXTERNAL" | "SECURITY";
+    forceSms?: boolean;
 };
 
 type AutomationPolicy = {
@@ -291,6 +292,7 @@ async function sendSmsForNotification(input: SmsDeliveryOptions): Promise<SmsSen
         requestedChannel,
         fallbackEnabled: policy.fallbackEnabled,
         fallbackChannel: policy.fallbackChannel,
+        forceSms: input.forceSms,
         // 승인된 알림톡 변수 계약이 연결되기 전에는 기존 SMS/LMS로만 안전하게 대체한다.
         alimtalk: undefined,
     });
@@ -764,7 +766,7 @@ export async function sendParentSmsWithResult(
     parentPhone: string,
     trigger: string,
     variables: Record<string, string>,
-    options: { eventType: string; eventId: string; deliveryRunId?: string },
+    options: { eventType: string; eventId: string; deliveryRunId?: string; forceSms?: boolean },
 ): Promise<SmsSendResult> {
     const recipientNo = normalizeSmsPhone(parentPhone);
     try {

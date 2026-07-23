@@ -24,6 +24,7 @@ export type MessageDispatchInput = {
     requestedChannel?: MessageChannel;
     fallbackEnabled?: boolean;
     fallbackChannel?: "SMS" | "LMS" | null;
+    forceSms?: boolean;
     alimtalk?: {
         templateId: string;
         variables?: Record<string, string>;
@@ -156,7 +157,11 @@ async function sendTextFallback(
     const result = await sendSmsDetailed(
         input.to,
         input.body,
-        textChannel === "LMS" ? { messageType: "LMS" } : undefined,
+        textChannel === "LMS"
+            ? { messageType: "LMS" }
+            : input.forceSms
+                ? { messageType: "SMS" }
+                : undefined,
     );
     const actualChannel = result.messageType ?? getSmsMessageType(input.body);
     return {

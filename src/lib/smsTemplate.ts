@@ -116,11 +116,11 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
     ],
     [
         "TRIAL_ENROLL_GUIDE_PARENT",
-        "체험 후 입학 안내 (학부모)",
+        "수강신청서 안내 (학부모)",
         "PARENT",
-        "[STIZ] {{childName}} 학생 체험수업 상담 감사드립니다.\n정규 수강신청서는 아래 링크에서 작성해주세요.\n{{enrollLink}}\n작성 후 확인되는 대로 입학 안내를 도와드리겠습니다.\n문의: {{academyPhone}}",
-        "체험완료 후 유선상담을 마치고 관리자가 입학/수강신청 안내를 발송할 때 사용",
-        '["childName","parentName","academyPhone","enrollLink"]',
+        "스티즈 수강신청서\n링크에서 작성해주세요 :)\n{{enrollLink}}",
+        "체험완료 후 관리자가 등록전환하면 학부모에게 자동 발송",
+        '["enrollLink"]',
     ],
     [
         "ENROLL_CONFIRM_PARENT",
@@ -205,6 +205,23 @@ export async function ensureSmsTemplates(): Promise<void> {
                 trigger, name, target, body, isActive, description, variables,
             );
         }
+        // 기존 운영 DB에 남은 기본 장문만 새 단문으로 교체한다.
+        // 관리자가 직접 수정한 문구는 덮어쓰지 않는다.
+        await prisma.$executeRawUnsafe(
+            `UPDATE "SmsTemplate"
+                SET name = $1,
+                    body = $2,
+                    description = $3,
+                    variables = $4,
+                    "updatedAt" = NOW()
+              WHERE trigger = 'TRIAL_ENROLL_GUIDE_PARENT'
+                AND body = $5`,
+            "수강신청서 안내 (학부모)",
+            "스티즈 수강신청서\n링크에서 작성해주세요 :)\n{{enrollLink}}",
+            "체험완료 후 관리자가 등록전환하면 학부모에게 자동 발송",
+            '["enrollLink"]',
+            "[STIZ] {{childName}} 학생 체험수업 상담 감사드립니다.\n정규 수강신청서는 아래 링크에서 작성해주세요.\n{{enrollLink}}\n작성 후 확인되는 대로 입학 안내를 도와드리겠습니다.\n문의: {{academyPhone}}",
+        );
         // 신규·복원 DB에서도 템플릿과 자동 발송 규칙이 같은 시점에 준비되게 한다.
         await prisma.$executeRawUnsafe(
             `INSERT INTO "MessageAutomationRule" (

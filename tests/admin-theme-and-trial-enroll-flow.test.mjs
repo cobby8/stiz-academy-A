@@ -5,6 +5,7 @@ import test from "node:test";
 const adminShell = readFileSync(new URL("../src/app/admin/AdminShellClient.tsx", import.meta.url), "utf8");
 const themeToggle = readFileSync(new URL("../src/components/ThemeToggle.tsx", import.meta.url), "utf8");
 const publicActions = readFileSync(new URL("../src/app/actions/public.ts", import.meta.url), "utf8");
+const adminAction = readFileSync(new URL("../src/app/actions/admin.ts", import.meta.url), "utf8");
 const enrollForm = readFileSync(new URL("../src/app/apply/enroll/EnrollApplicationForm.tsx", import.meta.url), "utf8");
 const trialClient = readFileSync(new URL("../src/app/admin/trial/TrialCrmClient.tsx", import.meta.url), "utf8");
 
@@ -43,14 +44,15 @@ test("체험 신청 정보는 수강신청서 자동 채움으로 이어진다",
   assert.match(enrollForm, /basketballExp: trialData\?\.basketballExp \|\| ""/);
 });
 
-test("등록전환 상태 변경은 확인 모달에서 수강신청서 링크 복사로 처리한다", () => {
-  assert.match(trialClient, /generateEnrollLink/);
+test("등록전환 상태 변경은 확인 모달에서 수강신청서 문자를 자동 발송한다", () => {
+  assert.match(trialClient, /sendPostTrialEnrollGuide/);
+  assert.match(adminAction, /\[sendPostTrialEnrollGuide SMS\] failed:[\s\S]*?수강신청 안내 문자 준비 중 오류가 발생했습니다/);
   assert.match(trialClient, /type EnrollGuideConfirmState/);
   assert.match(trialClient, /newStatus === "CONVERTED" && lead\.status !== "CONVERTED"/);
   assert.match(trialClient, /setEnrollGuideConfirm\(\{ lead, convertAfterConfirm: true \}\)/);
   assert.match(trialClient, /function EnrollGuideConfirmModal/);
   assert.match(trialClient, /수강신청서를 전송하시겠습니까/);
-  assert.match(trialClient, /navigator\.clipboard\.writeText\(enrollLink\)/);
-  assert.match(trialClient, /updateTrialLead\(lead\.id,\s*\{[\s\S]*status: "CONVERTED"[\s\S]*convertedDate:/);
-  assert.doesNotMatch(trialClient, /sendPostTrialEnrollGuide/);
+  assert.match(trialClient, /sendPostTrialEnrollGuide\(lead\.id,[\s\S]*convert: convertAfterConfirm/);
+  assert.match(trialClient, /등록전환은 완료됐지만/);
+  assert.doesNotMatch(trialClient, /navigator\.clipboard\.writeText\(enrollLink\)/);
 });

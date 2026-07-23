@@ -45,7 +45,9 @@ test("legacy SMS public contracts remain available", () => {
 });
 
 test("an explicitly requested LMS or LMS fallback can force the provider message type", () => {
-  assert.match(dispatch, /textChannel === "LMS" \? \{ messageType: "LMS" \}/);
-  assert.match(sms, /options\?\.messageType === "LMS"/);
+  assert.match(dispatch, /textChannel === "LMS"[\s\S]*?\{ messageType: "LMS" \}/);
+  assert.match(dispatch, /input\.forceSms[\s\S]*?\{ messageType: "SMS" \}/);
+  assert.match(sms, /options\?\.messageType \?\? getSmsMessageType\(body\)/);
+  assert.match(sms, /options\.messageType\.toLowerCase\(\)/);
   assert.match(sms, /type: messageType/);
 });

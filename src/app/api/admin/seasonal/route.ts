@@ -179,6 +179,33 @@ function rosterInt(value: string | null, fallback: number, min: number, max: num
   return Number.isInteger(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 }
 
+function seasonalApplicationWhere(params: URLSearchParams) {
+  const seasonId = cleanText(params.get("seasonId"), 100) || null;
+  const status = cleanText(params.get("status"), 30)?.toUpperCase() || null;
+  const query = cleanText(params.get("q"), 100) || null;
+  const where: Prisma.SpecialProgramApplicationWhereInput = {};
+
+  if (seasonId) where.seasonId = seasonId;
+  if (status && status !== "ALL") {
+    const statusOr = [
+      ...(APPLICATION_STATUSES.has(status) ? [{ status }] : []),
+      ...(ITEM_STATUSES.has(status) ? [{ items: { some: { status } } }] : []),
+    ];
+    if (statusOr.length > 0) where.OR = statusOr;
+  }
+  if (query) {
+    const searchOr = [
+      { childName: { contains: query, mode: "insensitive" as const } },
+      { childSchool: { contains: query, mode: "insensitive" as const } },
+      { parentName: { contains: query, mode: "insensitive" as const } },
+      { parentPhone: { contains: query } },
+    ];
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: searchOr }];
+  }
+
+  return where;
+}
+
 function maskedPhone(value: string) {
   const digits = value.replace(/\D/g, "");
   if (digits.length < 7) return "***";
@@ -720,30 +747,37 @@ export async function GET(request: NextRequest) {
     const seasonId = request.nextUrl.searchParams.get("seasonId") || undefined;
     const includeApplications = request.nextUrl.searchParams.get("includeApplications") === "true";
     if (!includeApplications) return NextResponse.json(await getSeasonalAdminOverview(seasonId));
-    const [seasons, stats] = await Promise.all([
+    const page = rosterInt(request.nextUrl.searchParams.get("page"), 1, 1, 1_000_000);
+    const pageSize = rosterInt(request.nextUrl.searchParams.get("pageSize"), 30, 1, 100);
+    const offset = (page - 1) * pageSize;
+    const applicationWhere = seasonalApplicationWhere(request.nextUrl.searchParams);
+    const [seasons, stats, applicationRows, totalApplications] = await Promise.all([
       prisma.specialProgramSeason.findMany({
         where: seasonId ? { id: seasonId } : undefined,
         orderBy: { startsAt: "desc" },
         include: {
           offerings: { orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }], include: { sessionDates: { orderBy: { startsAt: "asc" } }, _count: { select: { applicationItems: true } } } },
-          applications: {
-            orderBy: { createdAt: "desc" },
+        },
+      }),
+      getSeasonalAdminStats(),
+      prisma.specialProgramApplication.findMany({
+        where: applicationWhere,
+        orderBy: { createdAt: "desc" },
+        skip: offset,
+        take: pageSize,
+        include: {
+          items: {
             include: {
-              items: {
-                include: {
-                  offering: { select: { title: true, code: true, linkedProgramId: true, linkedClassId: true } },
-                  shuttleRequest: true,
-                },
-              },
+              offering: { select: { title: true, code: true, linkedProgramId: true, linkedClassId: true } },
+              shuttleRequest: true,
             },
           },
         },
       }),
-      getSeasonalAdminStats(),
+      prisma.specialProgramApplication.count({ where: applicationWhere }),
     ]);
-    const applicationRows: AdminApplicationRow[] = seasons.flatMap((season) => ((season as unknown as { applications?: AdminApplicationRow[] }).applications ?? []));
     const paymentIds = Array.from(new Set(
-      applicationRows.flatMap((application) => application.items.map((item) => item.paymentId).filter(Boolean) as string[]),
+      (applicationRows as AdminApplicationRow[]).flatMap((application) => application.items.map((item) => item.paymentId).filter(Boolean) as string[]),
     ));
     const invoiceRows = paymentIds.length
       ? await prisma.paymentInvoice.findMany({
@@ -761,7 +795,7 @@ export async function GET(request: NextRequest) {
         )
       : [];
     const activationByPaymentId = new Map(activationRows.map((row) => [row.paymentId, row.activationRequired]));
-    const visibleEventIds = applicationRows.flatMap((application) => {
+    const visibleEventIds = (applicationRows as AdminApplicationRow[]).flatMap((application) => {
       const applicationId = String(application.id);
       const applicationEvents = Object.values(SEASONAL_SMS_TRIGGERS).map((trigger) => deliveryEventId(applicationId, null, trigger));
       const itemEvents = application.items.flatMap((item) => Object.values(SEASONAL_SMS_TRIGGERS)
@@ -780,7 +814,7 @@ export async function GET(request: NextRequest) {
       : [];
     const deliverySummaries = latestDeliverySummaries(deliveryRows);
     const statusTriggers = Object.values(ITEM_NOTIFICATION_TRIGGER).filter((trigger): trigger is SeasonalSmsTrigger => Boolean(trigger));
-    const applications = applicationRows.map((application) => ({
+    const applications = (applicationRows as AdminApplicationRow[]).map((application) => ({
       ...application,
       notificationSummary: newestNotification([
         deliverySummaries.get(deliveryEventId(String(application.id), null, SEASONAL_SMS_TRIGGERS.received)),
@@ -808,6 +842,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       seasons,
       applications,
+      applicationsPagination: {
+        page,
+        pageSize,
+        total: totalApplications,
+        totalPages: Math.max(1, Math.ceil(totalApplications / pageSize)),
+        hasMore: offset + applications.length < totalApplications,
+      },
       stats,
     });
   } catch (error) { return respondError(error); }

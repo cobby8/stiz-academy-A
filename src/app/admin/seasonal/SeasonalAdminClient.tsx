@@ -160,6 +160,15 @@ type Payload = {
   seasons: Season[];
   applications: Application[];
   stats?: { pending?: number; confirmed?: number; unpaid?: number; waitlisted?: number; shuttleUnassigned?: number };
+  applicationsPagination?: ApplicationsPagination;
+};
+
+type ApplicationsPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasMore?: boolean;
 };
 
 type SeasonalAdminClientProps = {
@@ -526,6 +535,13 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [applicationsPagination, setApplicationsPagination] = useState<ApplicationsPagination>({
+    page: 1,
+    pageSize: 30,
+    total: 0,
+    totalPages: 1,
+    hasMore: false,
+  });
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -534,6 +550,8 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
   const [editingClass, setEditingClass] = useState<SeasonalClass | null>(null);
   const [convertingItemId, setConvertingItemId] = useState("");
   const updatingItemIdsRef = useRef(new Set<string>());
+  const requestedInitialLoad = useRef(false);
+  const applicationsQueryKeyRef = useRef("");
   const [updatingItemIds, setUpdatingItemIds] = useState<Set<string>>(() => new Set());
   const [itemUpdateErrors, setItemUpdateErrors] = useState<Record<string, string>>({});
   const [assigningKey, setAssigningKey] = useState("");
@@ -556,11 +574,25 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     if (requestedTab && TABS.some((item) => item.key === requestedTab)) setTab(requestedTab as Tab);
   }, []);
 
-  const load = useCallback(async (options?: { includeApplications?: boolean }) => {
+  const load = useCallback(async (options?: { includeApplications?: boolean; page?: number; search?: string; status?: string }) => {
     const includeApplications = options?.includeApplications === true;
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/admin/seasonal${includeApplications ? "?includeApplications=true" : ""}`, { cache: "no-store" });
+      const params = new URLSearchParams();
+      let applicationsQueryKey = "";
+      if (includeApplications) {
+        const requestedPage = options?.page ?? applicationsPagination.page;
+        const nextSearch = options?.search ?? search;
+        const nextStatus = options?.status ?? statusFilter;
+        applicationsQueryKey = `${requestedPage}|${nextSearch.trim()}|${nextStatus}`;
+        params.set("includeApplications", "true");
+        params.set("page", String(requestedPage));
+        params.set("pageSize", String(applicationsPagination.pageSize));
+        if (nextSearch.trim()) params.set("q", nextSearch.trim());
+        if (nextStatus !== "ALL") params.set("status", nextStatus);
+      }
+      const query = params.toString();
+      const response = await fetch(`/api/admin/seasonal${query ? `?${query}` : ""}`, { cache: "no-store" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "방학특강 정보를 불러오지 못했습니다.");
       const seasons: Season[] = (body.seasons ?? []).map((season: Record<string, unknown>) => ({
@@ -629,16 +661,25 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       }));
       if (includeApplications) {
         setApplicationsLoaded(true);
+        applicationsQueryKeyRef.current = applicationsQueryKey;
+        setApplicationsPagination(body.applicationsPagination ?? {
+          page: options?.page ?? 1,
+          pageSize: applicationsPagination.pageSize,
+          total: applications.length,
+          totalPages: 1,
+          hasMore: false,
+        });
         setSelectedApplication((current) => current ? applications.find((application) => application.id === current.id) ?? current : null);
       }
       setSelectedSeasonId((current) => current || seasons[0]?.id || "");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "방학특강 정보를 불러오지 못했습니다.");
     } finally { setLoading(false); }
-  }, []);
+  }, [applicationsPagination.page, applicationsPagination.pageSize, search, statusFilter]);
 
   useEffect(() => {
-    if (initialData) return;
+    if (initialData || requestedInitialLoad.current) return;
+    requestedInitialLoad.current = true;
     void load();
   }, [initialData, load]);
 
@@ -660,6 +701,17 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
   useEffect(() => {
     if (tab === "applications" && !applicationsLoaded && !loading) void load({ includeApplications: true });
   }, [applicationsLoaded, load, loading, tab]);
+
+  useEffect(() => {
+    if (tab !== "applications" || !applicationsLoaded || applicationsMode !== "applications") return;
+    const queryKey = `1|${search.trim()}|${statusFilter}`;
+    if (applicationsQueryKeyRef.current === queryKey) return;
+    const timer = window.setTimeout(() => {
+      setSelectedItemIds([]);
+      void load({ includeApplications: true, page: 1, search, status: statusFilter });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [applicationsLoaded, applicationsMode, load, search, statusFilter, tab]);
 
   useEffect(() => {
     if (tab !== "applications" || applicationsMode !== "roster") return;
@@ -687,14 +739,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
   }, [applicationsMode, rosterFilters, tab]);
 
   const selectedSeason = data.seasons.find((season) => season.id === selectedSeasonId) ?? data.seasons[0];
-  const filteredApplications = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return data.applications.filter((application) => {
-      const matchesText = !query || [application.childName, application.parentName, application.parentPhone, application.childSchool].some((value) => value?.toLowerCase().includes(query));
-      const matchesStatus = statusFilter === "ALL" || application.items.some((item) => item.status === statusFilter) || application.status === statusFilter;
-      return matchesText && matchesStatus;
-    });
-  }, [data.applications, search, statusFilter]);
+  const filteredApplications = data.applications;
   const visibleItemIds = useMemo(() => filteredApplications.flatMap((application) => application.items.map((item) => item.id)), [filteredApplications]);
   const visibleItemIdSet = useMemo(() => new Set(visibleItemIds), [visibleItemIds]);
   const selectedItemIdSet = useMemo(() => new Set(selectedItemIds), [selectedItemIds]);
@@ -1030,7 +1075,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
         <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
-      ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
+      ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} pagination={applicationsPagination} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onPage={(page) => { setSelectedItemIds([]); void load({ includeApplications: true, page }); }} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
@@ -1063,6 +1108,7 @@ function ApplicationsView({
   seasons,
   search,
   status,
+  pagination,
   selectedItemIdSet,
   selectedItemCount,
   selectedApplicationCount,
@@ -1078,6 +1124,7 @@ function ApplicationsView({
   onRosterFilters,
   onSearch,
   onStatus,
+  onPage,
   onSelect,
   onToggleApplication,
   onToggleAll,
@@ -1089,6 +1136,7 @@ function ApplicationsView({
   seasons: Season[];
   search: string;
   status: string;
+  pagination: ApplicationsPagination;
   selectedItemIdSet: Set<string>;
   selectedItemCount: number;
   selectedApplicationCount: number;
@@ -1104,6 +1152,7 @@ function ApplicationsView({
   onRosterFilters: Dispatch<SetStateAction<RosterFilters>>;
   onSearch: (value: string) => void;
   onStatus: (value: string) => void;
+  onPage: (page: number) => void;
   onSelect: (application: Application) => void;
   onToggleApplication: (application: Application, checked: boolean) => void;
   onToggleAll: (checked: boolean) => void;
@@ -1231,6 +1280,33 @@ function ApplicationsView({
         </tbody>
       </table>
     </div>
+    {pagination.totalPages > 1 && (
+      <nav className="mt-4 flex flex-col gap-2 text-sm font-bold sm:flex-row sm:items-center sm:justify-between" aria-label="신청 목록 페이지">
+        <span className="text-gray-500">
+          {pagination.total.toLocaleString()}건 중 {(pagination.page - 1) * pagination.pageSize + 1}-
+          {Math.min(pagination.page * pagination.pageSize, pagination.total).toLocaleString()}건
+        </span>
+        <div className="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            disabled={pagination.page <= 1}
+            onClick={() => onPage(pagination.page - 1)}
+            className="min-h-10 rounded-lg border border-gray-200 px-3 disabled:opacity-40 dark:border-gray-700"
+          >
+            이전
+          </button>
+          <span className="px-2">{pagination.page} / {pagination.totalPages}</span>
+          <button
+            type="button"
+            disabled={pagination.page >= pagination.totalPages}
+            onClick={() => onPage(pagination.page + 1)}
+            className="min-h-10 rounded-lg border border-gray-200 px-3 disabled:opacity-40 dark:border-gray-700"
+          >
+            다음
+          </button>
+        </div>
+      </nav>
+    )}
   </Panel>}
   </div>;
 }

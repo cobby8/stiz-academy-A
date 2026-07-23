@@ -414,6 +414,7 @@ export default function SeasonalAdminClient() {
   const [bulkProcessingStatus, setBulkProcessingStatus] = useState<ItemStatus | "">("");
   const [bulkConverting, setBulkConverting] = useState(false);
   const [applicationsMode, setApplicationsMode] = useState<ApplicationsMode>("applications");
+  const [applicationsLoaded, setApplicationsLoaded] = useState(false);
   const [roster, setRoster] = useState<RosterPayload>({ rows: [], stats: { confirmed: 0, unpaid: 0, shuttle: 0 }, pagination: { page: 1, pageSize: 100, total: 0, totalPages: 1 } });
   const [rosterFilters, setRosterFilters] = useState({ seasonId: "", offeringId: "", weekday: "", paymentStatus: "", shuttleStatus: "", q: "", page: 1 });
   const [rosterLoading, setRosterLoading] = useState(false);
@@ -424,10 +425,11 @@ export default function SeasonalAdminClient() {
     if (requestedTab && TABS.some((item) => item.key === requestedTab)) setTab(requestedTab as Tab);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { includeApplications?: boolean }) => {
+    const includeApplications = options?.includeApplications === true;
     setLoading(true); setError("");
     try {
-      const response = await fetch("/api/admin/seasonal?includeApplications=true", { cache: "no-store" });
+      const response = await fetch(`/api/admin/seasonal${includeApplications ? "?includeApplications=true" : ""}`, { cache: "no-store" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "방학특강 정보를 불러오지 못했습니다.");
       const seasons: Season[] = (body.seasons ?? []).map((season: Record<string, unknown>) => ({
@@ -450,7 +452,7 @@ export default function SeasonalAdminClient() {
           } as SeasonalClass;
         }),
       })) as Season[];
-      const applications: Application[] = (body.applications ?? []).map((application: Record<string, unknown>) => {
+      const applications: Application[] = includeApplications ? (body.applications ?? []).map((application: Record<string, unknown>) => {
         const items = ((application.items ?? []) as Array<Record<string, unknown>>).map((item) => {
           const offering = item.offering as Record<string, unknown> | undefined;
           return {
@@ -488,17 +490,26 @@ export default function SeasonalAdminClient() {
           reviewReasons,
           items,
         } as Application;
-      });
-      const payload: Payload = { seasons, applications, stats: body.stats };
-      setData(payload);
-      setSelectedApplication((current) => current ? applications.find((application) => application.id === current.id) ?? current : null);
-      setSelectedSeasonId((current) => current || payload.seasons[0]?.id || "");
+      }) : [];
+      setData((current) => ({
+        seasons,
+        applications: includeApplications ? applications : current.applications,
+        stats: body.stats,
+      }));
+      if (includeApplications) {
+        setApplicationsLoaded(true);
+        setSelectedApplication((current) => current ? applications.find((application) => application.id === current.id) ?? current : null);
+      }
+      setSelectedSeasonId((current) => current || seasons[0]?.id || "");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "방학특강 정보를 불러오지 못했습니다.");
     } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (tab === "applications" && !applicationsLoaded && !loading) void load({ includeApplications: true });
+  }, [applicationsLoaded, load, loading, tab]);
 
   useEffect(() => {
     if (tab !== "applications" || applicationsMode !== "roster") return;
@@ -563,7 +574,7 @@ export default function SeasonalAdminClient() {
     const response = await fetch("/api/admin/seasonal", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "요청을 처리하지 못했습니다.");
-    setNotice(success); await load(); return result;
+    setNotice(success); await load({ includeApplications: applicationsLoaded || tab === "applications" }); return result;
   }
 
   async function updateItem(itemId: string, status: ItemStatus) {

@@ -5,7 +5,6 @@
  * public.ts (비로그인 신청)에서도 관리자 알림을 보낼 수 있도록.
  */
 
-import { createHmac } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -22,6 +21,7 @@ import {
     finalizeMessageDelivery,
     finalizeMessageDeliveryBatch,
     hashMessageBody,
+    hashMessageRecipientPhone,
     reserveMessageDelivery,
     reserveMessageDeliveryBatch,
     type MessageLedgerSource,
@@ -46,17 +46,21 @@ type SmsDeliveryOptions = {
 
 type AutomationPolicy = {
     enabled: boolean;
+    // requestedChannel은 관리자가 원래 선택한 채널이며 감사 이력에서 바꾸지 않는다.
     requestedChannel: MessageChannel;
+    // deliveryChannel은 이번 호출에서 실제로 먼저 시도할 채널이다.
+    deliveryChannel: MessageChannel;
     fallbackEnabled: boolean;
     fallbackChannel: "SMS" | "LMS" | null;
+    preselectedFallback: boolean;
 };
 
 export async function getAutomationPolicy(input: SmsDeliveryOptions): Promise<AutomationPolicy> {
     if (input.source === "SECURITY") {
-        return { enabled: true, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
+        return { enabled: true, requestedChannel: "SMS", deliveryChannel: "SMS", fallbackEnabled: false, fallbackChannel: null, preselectedFallback: false };
     }
     if (!input.trigger) {
-        return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
+        return { enabled: false, requestedChannel: "SMS", deliveryChannel: "SMS", fallbackEnabled: false, fallbackChannel: null, preselectedFallback: false };
     }
     try {
         const rows = await prisma.$queryRawUnsafe<Array<{
@@ -81,11 +85,14 @@ export async function getAutomationPolicy(input: SmsDeliveryOptions): Promise<Au
             input.trigger,
         );
         if (!rows.length) {
-            return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
+            return { enabled: false, requestedChannel: "SMS", deliveryChannel: "SMS", fallbackEnabled: false, fallbackChannel: null, preselectedFallback: false };
         }
-        const requested = rows[0].requestedChannel === "KAKAO_ALIMTALK"
+        const configuredRequested = rows[0].requestedChannel === "KAKAO_ALIMTALK"
             ? "ALIMTALK"
             : rows[0].requestedChannel;
+        const requestedChannel = ["AUTO", "SMS", "LMS", "ALIMTALK", "RCS"].includes(configuredRequested)
+            ? configuredRequested as MessageChannel
+            : "SMS";
         const configuredChannelEnabled = rows[0].channelEnabled === true;
         const validFallback = rows[0].fallbackEnabled
             && rows[0].fallbackChannelEnabled === true
@@ -93,21 +100,33 @@ export async function getAutomationPolicy(input: SmsDeliveryOptions): Promise<Au
             ? rows[0].fallbackChannel
             : null;
         if (!configuredChannelEnabled && !validFallback) {
-            return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
+            return { enabled: false, requestedChannel, deliveryChannel: requestedChannel, fallbackEnabled: false, fallbackChannel: null, preselectedFallback: false };
         }
-        const requestedChannel = configuredChannelEnabled ? requested : validFallback!;
         return {
             enabled: rows[0].isActive,
-            requestedChannel: ["AUTO", "SMS", "LMS", "ALIMTALK", "RCS"].includes(requestedChannel)
-                ? requestedChannel as MessageChannel
-                : "SMS",
-            fallbackEnabled: validFallback !== null,
+            requestedChannel,
+            // 기본 채널이 꺼져 있으면 해당 공급자를 호출하지 않고 검증된 대체 채널부터 보낸다.
+            deliveryChannel: configuredChannelEnabled ? requestedChannel : validFallback!,
+            fallbackEnabled: configuredChannelEnabled && validFallback !== null,
             fallbackChannel: validFallback,
+            preselectedFallback: !configuredChannelEnabled,
         };
     } catch {
         // 코드가 먼저 배포되고 마이그레이션이 뒤따르는 짧은 구간에도 기존 SMS는 유지한다.
-        return { enabled: false, requestedChannel: "SMS", fallbackEnabled: false, fallbackChannel: null };
+        return { enabled: false, requestedChannel: "SMS", deliveryChannel: "SMS", fallbackEnabled: false, fallbackChannel: null, preselectedFallback: false };
     }
+}
+
+function applyAutomationPolicyAudit(
+    result: MessageDispatchResult,
+    policy: AutomationPolicy,
+): MessageDispatchResult {
+    return {
+        ...result,
+        // 공급자 호출 채널과 별개로 관리자가 원래 요청한 채널을 보존한다.
+        requestedChannel: policy.requestedChannel,
+        fallbackUsed: policy.preselectedFallback || result.fallbackUsed,
+    };
 }
 
 function messageAudience(role: SmsAudience): MessageAudience {
@@ -124,9 +143,7 @@ function normalizeSmsPhone(phone: string) {
 
 function smsDedupeKey(input: SmsDeliveryOptions) {
     const recipientNo = normalizeSmsPhone(input.recipientPhone);
-    const privacySecret = process.env.MESSAGE_PRIVACY_HMAC_SECRET;
-    if (!privacySecret) throw new Error("MESSAGE_PRIVACY_HMAC_SECRET is required");
-    const recipientHash = createHmac("sha256", privacySecret).update(recipientNo).digest("hex");
+    const recipientHash = hashMessageRecipientPhone(recipientNo);
     const scope = input.deliveryRunId
         ? `${input.eventId || "manual"}:${input.deliveryRunId}`
         : input.eventId || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -386,17 +403,18 @@ async function sendSmsForNotification(input: SmsDeliveryOptions): Promise<SmsSen
         };
     }
 
-    const result = await sendMessageDetailed({
+    const dispatchResult = await sendMessageDetailed({
         to: recipientNo,
         body: input.body,
         audience: messageAudience(input.recipientRole),
-        requestedChannel,
+        requestedChannel: policy.deliveryChannel,
         fallbackEnabled: policy.fallbackEnabled,
         fallbackChannel: policy.fallbackChannel,
         forceSms: input.forceSms,
         // 승인된 알림톡 변수 계약이 연결되기 전에는 기존 SMS/LMS로만 안전하게 대체한다.
         alimtalk: undefined,
     });
+    const result = applyAutomationPolicyAudit(dispatchResult, policy);
     const finalized = await finishLedgerSmsDelivery(deliveryId, result);
     if (!finalized) {
         // 공급자 호출 뒤 결과 장부를 확정하지 못하면 자동 재전송하지 않고 운영 확인 대상으로 남긴다.
@@ -452,15 +470,8 @@ export function classifySmsDeliveryLease(input: { status: string; lockedAt?: Dat
 
 export type SmsLedgerDb = Pick<Prisma.TransactionClient, "$queryRawUnsafe" | "$executeRawUnsafe">;
 
-function notificationPrivacySecret() {
-    const value = process.env.NOTIFICATION_PRIVACY_SECRET || process.env.PARENT_ACCOUNT_CLAIM_SECRET || process.env.INVITE_OTP_SECRET;
-    if (value) return value;
-    if (process.env.NODE_ENV === "production") throw new Error("NOTIFICATION_PRIVACY_SECRET_MISSING");
-    return "development-only-notification-privacy-secret";
-}
-
 function privateRecipientHash(phone: string) {
-    return createHmac("sha256", notificationPrivacySecret()).update(normalizeSmsPhone(phone)).digest("hex");
+    return hashMessageRecipientPhone(phone);
 }
 
 function safeSmsErrorCode(result: SmsSendResult) {
@@ -617,14 +628,15 @@ export async function dispatchReservedSmsDelivery(input: {
         });
         return { ok: false, status: "FAILED", deliveryId: input.deliveryId, errorCode: "DELIVERY_LEDGER_UNAVAILABLE" };
     }
-    const result = await sendMessageDetailed({
+    const dispatchResult = await sendMessageDetailed({
         to: recipientNo,
         body: input.body,
         audience: delivery.audienceScope === "INTERNAL" ? "INTERNAL" : "EXTERNAL",
-        requestedChannel: policy.requestedChannel,
+        requestedChannel: policy.deliveryChannel,
         fallbackEnabled: policy.fallbackEnabled,
         fallbackChannel: policy.fallbackChannel,
     });
+    const result = applyAutomationPolicyAudit(dispatchResult, policy);
     const errorCode = safeSmsErrorCode(result);
     try {
         await finalizeMessageDelivery({

@@ -12,6 +12,11 @@ function isPresent(name) {
   return typeof process.env[name] === "string" && process.env[name].trim().length > 0;
 }
 
+function hasStrongMessagePrivacySecret() {
+  const value = process.env.MESSAGE_PRIVACY_HMAC_SECRET?.trim() || "";
+  return Buffer.byteLength(value, "utf8") >= 32;
+}
+
 function currentSmsProvider() {
   const provider = (process.env.SMS_PROVIDER || "").trim().toUpperCase();
   if (provider === "BIZPPURIO" || provider === "BIZ_PPURIO" || provider === "PPURIO") return "BIZPPURIO";
@@ -62,6 +67,10 @@ function checkEnvironment() {
     "INVITE_OTP_SECRET",
     "TOSS_PAYMENTS_SECRET_KEY",
   ]);
+
+  if (!hasStrongMessagePrivacySecret()) {
+    missing.push("MESSAGE_PRIVACY_HMAC_SECRET (32바이트 이상의 무작위 서버 비밀값)");
+  }
 
   requireSmsEnvironment(missing);
 

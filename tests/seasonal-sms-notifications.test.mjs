@@ -45,7 +45,7 @@ test("발송 장부에는 원문 전화번호와 본문 또는 비밀 URL을 저
   assert.match(claimBlock, /"recipientPhone"[\s\S]*?NULL/);
   assert.match(claimBlock, /recipientHash/);
   assert.doesNotMatch(claimBlock, /bodyLength|input\.body|activationUrl|paymentUrl/);
-  assert.match(notification, /createHmac\("sha256"/);
+  assert.match(notification, /hashMessageRecipientPhone/);
   assert.match(notification, /SMS_PROVIDER_FAILED/);
 });
 

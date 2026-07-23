@@ -4,15 +4,20 @@ import { prisma } from "@/lib/prisma";
 export type MessageLedgerSource = "AUTO" | "MANUAL" | "SECURITY";
 
 function privacySecret() {
-  const value =
+  const value = process.env.MESSAGE_PRIVACY_HMAC_SECRET?.trim();
+  if (value && Buffer.byteLength(value, "utf8") >= 32) return value;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("MESSAGE_PRIVACY_HMAC_SECRET_INVALID");
+  }
+  const developmentValue =
+    value ||
     process.env.NOTIFICATION_PRIVACY_SECRET?.trim() ||
     process.env.PARENT_ACCOUNT_CLAIM_SECRET?.trim() ||
-    process.env.INVITE_OTP_SECRET?.trim();
-  if (value) return value;
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("NOTIFICATION_PRIVACY_SECRET_MISSING");
-  }
-  return "development-only-notification-privacy-secret";
+    process.env.INVITE_OTP_SECRET?.trim() ||
+    "development-only-notification-privacy-secret";
+  return Buffer.byteLength(developmentValue, "utf8") >= 32
+    ? developmentValue
+    : "development-only-notification-privacy-secret";
 }
 
 export function normalizeMessagePhone(phone: string) {

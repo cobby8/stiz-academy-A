@@ -3772,6 +3772,25 @@ export async function updateTrialLead(
         attempted: false,
         sent: false,
     };
+    const scheduledSmsResult: {
+        attempted: boolean;
+        parentSent: boolean;
+        parentFailed: boolean;
+        adminSent: number;
+        adminFailed: number;
+        coachSent: number;
+        coachFailed: number;
+        errors: string[];
+    } = {
+        attempted: false,
+        parentSent: false,
+        parentFailed: false,
+        adminSent: 0,
+        adminFailed: 0,
+        coachSent: 0,
+        coachFailed: 0,
+        errors: [],
+    };
 
     // 동적 SET절: 컬럼명은 화이트리스트에서만 허용 → SQL 인젝션 불가능, 값은 $N 바인딩
     const setClauses = entries.map(([col], i) => {
@@ -3800,9 +3819,11 @@ export async function updateTrialLead(
 
         // SCHEDULED로 변경되면 학부모에게 체험 일정 확정 SMS 발송
         if (data.status === "SCHEDULED") {
+            scheduledSmsResult.attempted = true;
+            try {
             // 해당 리드의 학부모 전화번호와 변수 조회
             const leads = await prisma.$queryRawUnsafe<any[]>(
-                `SELECT "childName", "parentPhone", "scheduledDate", "scheduledClassId"
+                `SELECT "childName", "childGrade", "parentPhone", "scheduledDate", "scheduledClassId"
                  FROM "TrialLead" WHERE id = $1 LIMIT 1`,
                 id,
             );
@@ -3810,6 +3831,7 @@ export async function updateTrialLead(
                 const lead = leads[0];
                 const parentPhone = lead.parentPhone ?? lead.parentphone;
                 const childName = lead.childName ?? lead.childname;
+                const childGrade = lead.childGrade ?? lead.childgrade ?? "";
                 const scheduledDate = lead.scheduledDate ?? lead.scheduleddate;
                 const classId = lead.scheduledClassId ?? lead.scheduledclassid;
 
@@ -3832,28 +3854,77 @@ export async function updateTrialLead(
 
                 // 날짜 포맷팅
                 const dateStr = formatTrialSmsDateTime(scheduledDate);
+                // 같은 반·일시를 다시 저장해도 공급자에게 중복 요청하지 않는 일정 사건 번호다.
+                // 반이나 시간이 실제로 변경되면 새 사건으로 처리되어 변경 안내는 정상 발송된다.
+                const scheduledEventId = [
+                    "trial",
+                    id,
+                    "scheduled",
+                    new Date(scheduledDate).toISOString(),
+                    classId || "no-class",
+                ].join(":");
 
                 if (parentPhone) {
-                    sendParentSms(parentPhone, "TRIAL_SCHEDULED_PARENT", {
-                        childName: childName || "",
-                        scheduledDate: dateStr,
-                        className,
-                        academyPhone,
-                    }).catch(() => {});
+                    const parentDelivery = await sendParentSmsWithResult(
+                        parentPhone,
+                        "TRIAL_SCHEDULED_PARENT",
+                        {
+                            childName: childName || "",
+                            scheduledDate: dateStr,
+                            className,
+                            academyPhone,
+                        },
+                        {
+                            eventType: "TRIAL_SCHEDULED",
+                            eventId: scheduledEventId,
+                        },
+                    );
+                    scheduledSmsResult.parentSent = parentDelivery.ok;
+                    scheduledSmsResult.parentFailed = !parentDelivery.ok;
+                    if (!parentDelivery.ok) {
+                        scheduledSmsResult.errors.push(
+                            parentDelivery.reason || "학부모 일정 확정 문자 발송에 실패했습니다.",
+                        );
+                    }
+                } else {
+                    scheduledSmsResult.parentFailed = true;
+                    scheduledSmsResult.errors.push("학부모 전화번호가 없어 일정 확정 문자를 발송하지 못했습니다.");
                 }
 
                 // 담당 코치에게 체험 일정 확정 알림 SMS (slotKey 기반)
-                notifyAdmins(
+                const staffDelivery = await notifyAdmins(
                     "TRIAL_APPLICATION",
                     "체험수업 일정 확정",
                     `${childName || ""} — ${className} (${dateStr})`,
                     "/admin/trial",
                     {
-                        coachTrigger: "TRIAL_NEW_COACH",
-                        variables: { childName: childName || "", childGrade: "", parentName: "" },
+                        coachTrigger: "TRIAL_SCHEDULED_COACH",
+                        variables: {
+                            childName: childName || "",
+                            childGrade,
+                            scheduledDate: dateStr,
+                            className,
+                        },
                         slotKeys: classSlotKey ? [classSlotKey] : undefined,
+                        // 담당 슬롯이나 담당 코치가 없을 때 전체 코치에게 개인정보가 퍼지는 것을 막는다.
+                        requireMatchedCoach: true,
+                        eventId: scheduledEventId,
                     },
-                ).catch(() => {});
+                );
+                scheduledSmsResult.adminSent = staffDelivery.adminSent;
+                scheduledSmsResult.adminFailed = staffDelivery.adminFailed;
+                scheduledSmsResult.coachSent = staffDelivery.coachSent;
+                scheduledSmsResult.coachFailed = staffDelivery.coachFailed;
+                scheduledSmsResult.errors.push(...staffDelivery.errors);
+            } else {
+                scheduledSmsResult.errors.push("일정이 저장되었지만 체험 신청 정보를 다시 불러오지 못했습니다.");
+            }
+            } catch (smsError) {
+                console.error("[updateTrialLead scheduled SMS] failed:", smsError);
+                scheduledSmsResult.parentFailed = true;
+                scheduledSmsResult.adminFailed = Math.max(1, scheduledSmsResult.adminFailed);
+                scheduledSmsResult.coachFailed = Math.max(1, scheduledSmsResult.coachFailed);
+                scheduledSmsResult.errors.push("일정은 저장됐지만 문자 발송 준비 중 오류가 발생했습니다.");
             }
         }
 
@@ -3919,7 +3990,10 @@ export async function updateTrialLead(
     revalidatePath("/admin/trial");
     revalidatePath("/admin/apply");
     revalidateTrialAdminCaches();
-    return { attendedSms: attendedSmsResult };
+    return {
+        attendedSms: attendedSmsResult,
+        scheduledSms: scheduledSmsResult,
+    };
 }
 
 // 상태 변경과 분리된 체험 완료 문자 전용 재시도 액션이다.
@@ -4699,7 +4773,7 @@ export async function approveEnrollApplication(
     // 승인은 이미 완료됐으므로 문자 실패로 되돌리지 않되, 결과는 관리자에게 정확히 돌려준다.
     try {
         const appData = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT "parentPhone", "childName", "assignedClassId"
+            `SELECT "parentPhone", "childName", "childGrade", "assignedClassId"
              FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
             applicationId,
         );
@@ -4707,6 +4781,7 @@ export async function approveEnrollApplication(
             const a = appData[0];
             const parentPhone = a.parentPhone ?? a.parentphone;
             const childName = a.childName ?? a.childname;
+            const childGrade = a.childGrade ?? a.childgrade ?? "";
             const assignedClassId = a.assignedClassId ?? a.assignedclassid;
 
             // 배정 반 이름 + slotKey 조회 (담당 코치 SMS용)
@@ -4764,8 +4839,8 @@ export async function approveEnrollApplication(
                 `${childName || ""} — ${className}`,
                 "/admin/apply",
                 {
-                    coachTrigger: "ENROLL_NEW_COACH",
-                    variables: { childName: childName || "", childGrade: "", parentName: "" },
+                    coachTrigger: "ENROLL_APPROVED_COACH",
+                    variables: { childName: childName || "", childGrade, className },
                     slotKeys: approvedSlotKeys.length > 0 ? approvedSlotKeys : undefined,
                     requireMatchedCoach: true,
                     eventId: `enrollment-application:${applicationId}:approved`,
@@ -5693,9 +5768,11 @@ export async function resetSmsTemplate(id: string) {
         const defaultBodies: Record<string, string> = {
             TRIAL_NEW_ADMIN: "[STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}}) - {{parentName}}",
             TRIAL_NEW_COACH: "[STIZ] 새 체험수업 신청\n{{childName}} ({{childGrade}})",
+            TRIAL_SCHEDULED_COACH: "[STIZ] 체험수업 일정이 확정되었습니다.\n학생: {{childName}} ({{childGrade}})\n일시: {{scheduledDate}}\n반: {{className}}",
             TRIAL_COACH_NOTICE: "[STIZ] 체험수업 알림\n학생: {{childName}} {{childGrade}} {{childSchool}}\n일정: {{trialDate}}\n수업: {{className}} {{scheduleLabel}}\n희망: {{preferredSlotKey}}\n학부모: {{parentName}} {{parentPhone}}\n메모: {{memo}}",
             ENROLL_NEW_ADMIN: "[STIZ] 새 수강 신청\n{{childName}} ({{childGrade}}) - {{parentName}}",
             ENROLL_NEW_COACH: "[STIZ] 새 수강 신청\n{{childName}} ({{childGrade}})",
+            ENROLL_APPROVED_COACH: "[STIZ] 수강 신청이 승인되었습니다.\n학생: {{childName}} ({{childGrade}})\n배정 반: {{className}}",
             TRIAL_CONFIRM_PARENT: "[STIZ] {{childName}} 체험수업 신청이 접수되었습니다.\n일정 확정 시 다시 안내드리겠습니다.\n문의: {{academyPhone}}",
             TRIAL_SCHEDULED_PARENT: "[STIZ] {{childName}} 체험수업 일정이 확정되었습니다.\n일시: {{scheduledDate}}\n반: {{className}}\n문의: {{academyPhone}}",
             TRIAL_ENROLL_GUIDE_PARENT: "[STIZ] {{childName}} 학생 체험수업 상담 감사드립니다.\n정규 수강신청서는 아래 링크에서 작성해주세요.\n{{enrollLink}}\n작성 후 확인되는 대로 입학 안내를 도와드리겠습니다.\n문의: {{academyPhone}}",

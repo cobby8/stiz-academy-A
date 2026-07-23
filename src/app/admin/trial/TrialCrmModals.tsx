@@ -52,13 +52,19 @@ export default function TrialCrmModals({
 }: TrialCrmModalsProps) {
     const [busy, setBusy] = useState(false);
 
-    async function runAction(action: () => Promise<unknown>, onDone: () => void, successMessage: string) {
+    async function runAction(
+        action: () => Promise<unknown>,
+        onDone: () => void,
+        successMessage: string,
+        resultMessage?: (result: unknown) => { type: "success" | "error"; message: string } | null,
+    ) {
         setBusy(true);
         try {
-            await action();
+            const result = await action();
             onDone();
             await onSaved();
-            onFeedback("success", successMessage);
+            const feedback = resultMessage?.(result);
+            onFeedback(feedback?.type ?? "success", feedback?.message ?? successMessage);
         } catch {
             onFeedback("error", "처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
@@ -107,6 +113,16 @@ export default function TrialCrmModals({
                             }),
                             onCloseSchedule,
                             "체험 일정을 저장했습니다.",
+                            (result) => {
+                                const scheduledSms = (
+                                    result as Awaited<ReturnType<typeof updateTrialLead>>
+                                )?.scheduledSms;
+                                if (!scheduledSms?.attempted || scheduledSms.errors.length === 0) return null;
+                                return {
+                                    type: "error",
+                                    message: `일정은 저장됐지만 일부 문자가 발송되지 않았습니다. ${scheduledSms.errors[0]}`,
+                                };
+                            },
                         )
                     }
                     busy={busy}

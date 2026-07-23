@@ -99,6 +99,14 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
         '["childName","scheduledDate","className","academyPhone"]',
     ],
     [
+        "TRIAL_SCHEDULED_COACH",
+        "체험 일정 확정 (담당 강사)",
+        "COACH",
+        "[STIZ] 체험수업 일정이 확정되었습니다.\n학생: {{childName}} ({{childGrade}})\n일시: {{scheduledDate}}\n반: {{className}}",
+        "관리자가 체험 일정을 확정하면 담당 강사에게 확정 일시와 반을 안내",
+        '["childName","childGrade","scheduledDate","className"]',
+    ],
+    [
         "TRIAL_ATTENDED_PARENT",
         "체험 완료 감사 안내 (학부모)",
         "PARENT",
@@ -129,6 +137,14 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
         "[STIZ] {{childName}} 수강이 확정되었습니다.\n배정 반: {{className}}\n상세 안내는 별도 연락드리겠습니다.",
         "관리자가 수강 신청을 승인하면 학부모에게 발송",
         '["childName","className","academyPhone"]',
+    ],
+    [
+        "ENROLL_APPROVED_COACH",
+        "수강 승인 (담당 강사)",
+        "COACH",
+        "[STIZ] 수강 신청이 승인되었습니다.\n학생: {{childName}} ({{childGrade}})\n배정 반: {{className}}",
+        "관리자가 수강 신청을 승인하면 담당 강사에게 승인 사실과 배정 반을 안내",
+        '["childName","childGrade","className"]',
     ],
     [
         "INVOICE_PARENT",

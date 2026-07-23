@@ -9,8 +9,9 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> },
 ) {
+    let admin: Awaited<ReturnType<typeof requireAdmin>>;
     try {
-        await requireAdmin();
+        admin = await requireAdmin();
     } catch {
         return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
@@ -22,20 +23,6 @@ export async function PATCH(
         fallbackChannel?: unknown;
     } | null;
     if (!body) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-
-    const current = await prisma.$queryRawUnsafe<Array<{
-        audienceScope: string;
-        trigger: string;
-        templateId: string | null;
-    }>>(
-        `SELECT "audienceScope", trigger, "templateId"
-           FROM "MessageAutomationRule" WHERE id = $1 LIMIT 1`,
-        id,
-    );
-    if (!current.length) return NextResponse.json({ error: "Automation not found" }, { status: 404 });
-    if (current[0].audienceScope === "SECURITY") {
-        return NextResponse.json({ error: "Security messages cannot be changed" }, { status: 409 });
-    }
 
     const sets: string[] = [];
     const values: unknown[] = [];
@@ -61,13 +48,42 @@ export async function PATCH(
     }
     if (!sets.length) return NextResponse.json({ ok: true });
 
-    values.push(id);
-    await prisma.$transaction(async (tx) => {
+    const [auditInfrastructure] = await prisma.$queryRawUnsafe<Array<{ available: boolean }>>(
+        `SELECT to_regclass('public."MessageSettingAuditLog"') IS NOT NULL AS available`,
+    ).catch(() => [{ available: false }]);
+    if (!auditInfrastructure.available) {
+        return NextResponse.json(
+            { error: "Message settings migration is required" },
+            { status: 503 },
+        );
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+        const current = await tx.$queryRawUnsafe<Array<{
+            audienceScope: string;
+            trigger: string;
+            templateId: string | null;
+            isActive: boolean;
+            requestedChannel: string | null;
+            fallbackEnabled: boolean;
+            fallbackChannel: string | null;
+        }>>(
+            `SELECT "audienceScope", trigger, "templateId", "isActive",
+                    "requestedChannel", "fallbackEnabled", "fallbackChannel"
+               FROM "MessageAutomationRule"
+              WHERE id = $1
+              FOR UPDATE`,
+            id,
+        );
+        if (!current.length) return "NOT_FOUND" as const;
+        if (current[0].audienceScope === "SECURITY") return "SECURITY" as const;
+
+        const updateValues = [...values, id];
         await tx.$executeRawUnsafe(
             `UPDATE "MessageAutomationRule"
                 SET ${sets.join(", ")}, "updatedAt" = NOW()
-              WHERE id = $${values.length}`,
-            ...values,
+              WHERE id = $${updateValues.length}`,
+            ...updateValues,
         );
         if (typeof body.isActive === "boolean" && current[0].templateId) {
             await tx.$executeRawUnsafe(
@@ -76,7 +92,53 @@ export async function PATCH(
                 current[0].templateId,
             );
         }
+
+        const [after] = await tx.$queryRawUnsafe<Array<{
+            audienceScope: string;
+            trigger: string;
+            templateId: string | null;
+            isActive: boolean;
+            requestedChannel: string | null;
+            fallbackEnabled: boolean;
+            fallbackChannel: string | null;
+        }>>(
+            `SELECT "audienceScope", trigger, "templateId", "isActive",
+                    "requestedChannel", "fallbackEnabled", "fallbackChannel"
+               FROM "MessageAutomationRule" WHERE id = $1`,
+            id,
+        );
+        if (!after) throw new Error("Automation update verification failed");
+        const safePolicy = (rule: typeof current[number]) => ({
+            audienceScope: rule.audienceScope,
+            trigger: rule.trigger,
+            templateId: rule.templateId,
+            isActive: rule.isActive,
+            requestedChannel: rule.requestedChannel,
+            fallbackEnabled: rule.fallbackEnabled,
+            fallbackChannel: rule.fallbackChannel,
+        });
+        await tx.$executeRawUnsafe(
+            `INSERT INTO "MessageSettingAuditLog" (
+                id, "settingType", "settingId", action, "actorUserId", "actorName",
+                "beforeJSON", "afterJSON", "createdAt"
+             ) VALUES (
+                gen_random_uuid()::text, 'AUTOMATION_RULE', $1, 'UPDATE', $2, $3,
+                $4::jsonb, $5::jsonb, NOW()
+             )`,
+            id,
+            admin.appUserId,
+            admin.appUserName,
+            JSON.stringify(safePolicy(current[0])),
+            JSON.stringify(safePolicy(after)),
+        );
+        return "UPDATED" as const;
     });
+    if (result === "NOT_FOUND") {
+        return NextResponse.json({ error: "Automation not found" }, { status: 404 });
+    }
+    if (result === "SECURITY") {
+        return NextResponse.json({ error: "Security messages cannot be changed" }, { status: 409 });
+    }
 
     return NextResponse.json({ ok: true });
 }

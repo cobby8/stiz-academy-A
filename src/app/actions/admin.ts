@@ -1,6 +1,6 @@
 "use server";
 
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireOwner } from "@/lib/auth-guard";
@@ -5723,6 +5723,15 @@ import {
     SAMPLE_VARIABLES,
 } from "@/lib/smsTemplate";
 
+async function requireMessageSettingAuditInfrastructure() {
+    const [availability] = await prisma.$queryRawUnsafe<Array<{ available: boolean }>>(
+        `SELECT to_regclass('public."MessageSettingAuditLog"') IS NOT NULL AS available`,
+    ).catch(() => [{ available: false }]);
+    if (!availability.available) {
+        throw new Error("문자 설정 DB 업데이트가 필요합니다.");
+    }
+}
+
 /**
  * updateSmsTemplate — 템플릿 본문/활성 상태 수정
  *
@@ -5732,7 +5741,8 @@ export async function updateSmsTemplate(
     id: string,
     data: { body?: string; isActive?: boolean },
 ) {
-    await requireAdmin();
+    const admin = await requireAdmin();
+    await requireMessageSettingAuditInfrastructure();
     await ensureSmsTemplates();
 
     // 수정할 필드가 없으면 무시
@@ -5753,16 +5763,27 @@ export async function updateSmsTemplate(
     sets.push(`"updatedAt" = NOW()`);
 
     try {
-        const [availability] = await prisma.$queryRawUnsafe<Array<{ available: boolean }>>(
-            `SELECT to_regclass('public."MessageAutomationRule"') IS NOT NULL AS available`,
-        ).catch(() => [{ available: false }]);
+        const [availability] = await prisma.$queryRawUnsafe<Array<{ automationAvailable: boolean }>>(
+            `SELECT to_regclass('public."MessageAutomationRule"') IS NOT NULL AS "automationAvailable"`,
+        ).catch(() => [{ automationAvailable: false }]);
         const updateTemplate = async (tx: typeof prisma) => {
+            const [before] = await tx.$queryRawUnsafe<Array<{
+                trigger: string;
+                body: string;
+                isActive: boolean;
+                updatedAt: Date;
+            }>>(
+                `SELECT trigger, body, "isActive", "updatedAt"
+                   FROM "SmsTemplate" WHERE id = $1 FOR UPDATE`,
+                id,
+            );
+            if (!before) throw new Error("템플릿을 찾을 수 없습니다.");
             await tx.$executeRawUnsafe(
                 `UPDATE "SmsTemplate" SET ${sets.join(", ")} WHERE id = $${idx}`,
                 ...values,
                 id,
             );
-            if (typeof data.isActive === "boolean" && availability.available) {
+            if (typeof data.isActive === "boolean" && availability.automationAvailable) {
                 // 자동 발송 탭과 템플릿 탭이 서로 다른 상태를 보이지 않도록 같은 거래에서 갱신한다.
                 await tx.$executeRawUnsafe(
                     `UPDATE "MessageAutomationRule"
@@ -5772,14 +5793,42 @@ export async function updateSmsTemplate(
                     id,
                 );
             }
+            const [after] = await tx.$queryRawUnsafe<Array<{
+                trigger: string;
+                body: string;
+                isActive: boolean;
+                updatedAt: Date;
+            }>>(
+                `SELECT trigger, body, "isActive", "updatedAt"
+                   FROM "SmsTemplate" WHERE id = $1`,
+                id,
+            );
+            if (!after) throw new Error("템플릿 변경 결과를 확인할 수 없습니다.");
+            const safeMetadata = (template: typeof before) => ({
+                trigger: template.trigger,
+                bodyHash: createHash("sha256").update(template.body).digest("hex"),
+                isActive: template.isActive,
+                updatedAt: template.updatedAt.toISOString(),
+            });
+            await tx.$executeRawUnsafe(
+                `INSERT INTO "MessageSettingAuditLog" (
+                    id, "settingType", "settingId", action, "actorUserId", "actorName",
+                    "beforeJSON", "afterJSON", "createdAt"
+                 ) VALUES (
+                    gen_random_uuid()::text, 'TEMPLATE', $1, 'UPDATE', $2, $3,
+                    $4::jsonb, $5::jsonb, NOW()
+                 )`,
+                id,
+                admin.appUserId,
+                admin.appUserName,
+                JSON.stringify(safeMetadata(before)),
+                JSON.stringify(safeMetadata(after)),
+            );
         };
-        if (availability.available) {
-            await prisma.$transaction(async (tx) => updateTemplate(tx as typeof prisma));
-        } else {
-            await updateTemplate(prisma);
-        }
+        await prisma.$transaction(async (tx) => updateTemplate(tx as typeof prisma));
     } catch (e) {
         console.error("[updateSmsTemplate] failed:", e);
+        if ((e as Error).message === "문자 설정 DB 업데이트가 필요합니다.") throw e;
         throw new Error("템플릿 수정 실패");
     }
 
@@ -5807,7 +5856,8 @@ export async function autoConvertSmsKeywords(body: string): Promise<{ converted:
  * resetSmsTemplate — 기본 템플릿으로 초기화
  */
 export async function resetSmsTemplate(id: string) {
-    await requireAdmin();
+    const admin = await requireAdmin();
+    await requireMessageSettingAuditInfrastructure();
     await ensureSmsTemplates();
 
     try {
@@ -5843,16 +5893,27 @@ export async function resetSmsTemplate(id: string) {
         const defaultBody = defaultBodies[trigger];
         if (!defaultBody) throw new Error("기본 템플릿을 찾을 수 없습니다.");
 
-        const [availability] = await prisma.$queryRawUnsafe<Array<{ available: boolean }>>(
-            `SELECT to_regclass('public."MessageAutomationRule"') IS NOT NULL AS available`,
-        ).catch(() => [{ available: false }]);
+        const [availability] = await prisma.$queryRawUnsafe<Array<{ automationAvailable: boolean }>>(
+            `SELECT to_regclass('public."MessageAutomationRule"') IS NOT NULL AS "automationAvailable"`,
+        ).catch(() => [{ automationAvailable: false }]);
         const resetTemplate = async (tx: typeof prisma) => {
+            const [before] = await tx.$queryRawUnsafe<Array<{
+                trigger: string;
+                body: string;
+                isActive: boolean;
+                updatedAt: Date;
+            }>>(
+                `SELECT trigger, body, "isActive", "updatedAt"
+                   FROM "SmsTemplate" WHERE id = $1 FOR UPDATE`,
+                id,
+            );
+            if (!before) throw new Error("템플릿을 찾을 수 없습니다.");
             await tx.$executeRawUnsafe(
                 `UPDATE "SmsTemplate" SET body = $1, "isActive" = true, "updatedAt" = NOW() WHERE id = $2`,
                 defaultBody,
                 id,
             );
-            if (availability.available) {
+            if (availability.automationAvailable) {
                 await tx.$executeRawUnsafe(
                     `UPDATE "MessageAutomationRule"
                         SET "isActive" = true, "updatedAt" = NOW()
@@ -5860,12 +5921,39 @@ export async function resetSmsTemplate(id: string) {
                     id,
                 );
             }
+            const [after] = await tx.$queryRawUnsafe<Array<{
+                trigger: string;
+                body: string;
+                isActive: boolean;
+                updatedAt: Date;
+            }>>(
+                `SELECT trigger, body, "isActive", "updatedAt"
+                   FROM "SmsTemplate" WHERE id = $1`,
+                id,
+            );
+            if (!after) throw new Error("템플릿 초기화 결과를 확인할 수 없습니다.");
+            const safeMetadata = (template: typeof before) => ({
+                trigger: template.trigger,
+                bodyHash: createHash("sha256").update(template.body).digest("hex"),
+                isActive: template.isActive,
+                updatedAt: template.updatedAt.toISOString(),
+            });
+            await tx.$executeRawUnsafe(
+                `INSERT INTO "MessageSettingAuditLog" (
+                    id, "settingType", "settingId", action, "actorUserId", "actorName",
+                    reason, "beforeJSON", "afterJSON", "createdAt"
+                 ) VALUES (
+                    gen_random_uuid()::text, 'TEMPLATE', $1, 'RESET', $2, $3,
+                    'RESET_TO_DEFAULT', $4::jsonb, $5::jsonb, NOW()
+                 )`,
+                id,
+                admin.appUserId,
+                admin.appUserName,
+                JSON.stringify(safeMetadata(before)),
+                JSON.stringify(safeMetadata(after)),
+            );
         };
-        if (availability.available) {
-            await prisma.$transaction(async (tx) => resetTemplate(tx as typeof prisma));
-        } else {
-            await resetTemplate(prisma);
-        }
+        await prisma.$transaction(async (tx) => resetTemplate(tx as typeof prisma));
     } catch (e) {
         console.error("[resetSmsTemplate] failed:", e);
         throw new Error((e as Error).message || "템플릿 초기화 실패");

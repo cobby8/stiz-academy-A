@@ -985,6 +985,18 @@ model Notification {
 // 알림 채널별 발송 상태와 중복 방지 키를 보관하는 발송 장부
 model NotificationDelivery {
   id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  batchId         String?
+  source          String? // AUTO, MANUAL, SECURITY
+  actorUserId     String?
+  actorName       String?
+  purpose         String?
+  reason          String?
+  templateId      String?
+  templateVersion String?
+  bodyHash        String?
+  recipientPhoneHash String?
+  recipientPhoneLast4 String?
+  stableEventKey  String?
   eventType       String // ATTENDANCE_PRESENT, ATTENDANCE_LATE, CLASS_COMPLETED, CLASS_NOTICE
   trigger         String?
   audienceScope   String? // INTERNAL, EXTERNAL, SECURITY
@@ -1017,8 +1029,14 @@ model NotificationDelivery {
   errorCode       String?
   createdAt       DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  batch           MessageDeliveryBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+  @@index([batchId, status, createdAt])
+  @@index([source, status, createdAt])
+  @@index([recipientPhoneHash, createdAt])
+  @@index([recipientPhoneLast4, createdAt])
+  @@index([stableEventKey, createdAt])
   @@index([status, nextAttemptAt, createdAt])
   @@index([sessionId, eventType])
   @@index([recipientUserId, createdAt])
@@ -1026,6 +1044,55 @@ model NotificationDelivery {
   @@index([requestedChannel, createdAt])
   @@index([provider, providerMessageId])
   @@index([provider, providerGroupId])
+}
+
+// 관리자 문자센터에서 한 번 요청한 자동/수동 발송 묶음입니다.
+model MessageDeliveryBatch {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  source           String // AUTO, MANUAL, SECURITY
+  audienceScope    String? // INTERNAL, EXTERNAL, SECURITY
+  trigger          String?
+  actorUserId      String?
+  actorName        String?
+  purpose          String
+  reason           String?
+  templateId       String?
+  templateVersion  String?
+  bodyHash         String?
+  stableEventKey   String?
+  requestedChannel String?
+  status           String   @default("PENDING") // PENDING, PROCESSING, SENT, PARTIAL, FAILED, CANCELLED
+  totalCount       Int      @default(0)
+  successCount     Int      @default(0)
+  failureCount     Int      @default(0)
+  metadataJSON     Json?
+  completedAt      DateTime? @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  deliveries       NotificationDelivery[]
+
+  @@index([source, status, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([trigger, createdAt])
+  @@index([stableEventKey, createdAt])
+}
+
+// 문자 자동화·채널·템플릿 설정 변경의 관리자 감사 기록입니다.
+model MessageSettingAuditLog {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  settingType  String // AUTOMATION_RULE, CHANNEL, TEMPLATE
+  settingId    String?
+  action       String // CREATE, UPDATE, RESET, DELETE
+  actorUserId  String?
+  actorName    String?
+  reason       String?
+  beforeJSON   Json?
+  afterJSON    Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([settingType, settingId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([createdAt])
 }
 
 model PushSubscription {

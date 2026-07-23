@@ -926,8 +926,9 @@ export async function getMyPageData(userEmail: string) {
 }
 
 // ── 갤러리 조회 ──────────────────────────────────────────────────────────────
-export const getGalleryPosts = cache(async (options?: { limit?: number; publicOnly?: boolean }) => {
+export const getGalleryPosts = cache(async (options?: { limit?: number; offset?: number; publicOnly?: boolean }) => {
     const limit = options?.limit ?? 50;
+    const offset = options?.offset ?? 0;
     const publicFilter = options?.publicOnly ? `WHERE g."isPublic" = true` : "";
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
@@ -938,8 +939,9 @@ export const getGalleryPosts = cache(async (options?: { limit?: number; publicOn
              LEFT JOIN "Class" c ON g."classId" = c.id
              ${publicFilter}
              ORDER BY g."createdAt" DESC
-             LIMIT $1`,
-            limit
+             LIMIT $1 OFFSET $2`,
+            limit,
+            offset,
         );
         return rows.map((r: any) => ({
             id: r.id,

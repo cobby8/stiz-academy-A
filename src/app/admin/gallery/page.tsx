@@ -4,7 +4,7 @@ import { getCachedAdminGalleryPayload } from "@/lib/adminReadPayloads";
 export const revalidate = 30;
 
 export default async function AdminGalleryPage() {
-    const { posts, classes, instagramStatus, socialDrafts } = await getCachedAdminGalleryPayload();
+    const { posts, classes, instagramStatus, socialDrafts, pagination } = await getCachedAdminGalleryPayload();
 
     return (
         <GalleryAdminClient
@@ -12,6 +12,7 @@ export default async function AdminGalleryPage() {
             classes={classes}
             instagramStatus={instagramStatus}
             socialDrafts={socialDrafts}
+            pagination={pagination}
         />
     );
 }

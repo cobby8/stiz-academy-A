@@ -17,7 +17,7 @@ const GalleryPostFormModal = dynamic(() => import("./GalleryPostFormModal"), {
   loading: () => null,
 });
 
-const VISIBLE_POST_INCREMENT = 12;
+const GALLERY_PAGE_SIZE = 24;
 
 type MediaItem = { url: string; type: "image" | "video" };
 type GalleryPost = {
@@ -43,6 +43,20 @@ type GalleryPayload = {
   classes: ClassInfo[];
   instagramStatus: InstagramStatus;
   socialDrafts: SocialPostDraft[];
+  pagination: GalleryPagination;
+};
+type GalleryPostsPagePayload = {
+  posts: GalleryPost[];
+  pagination: GalleryPagination;
+};
+type GalleryPagination = {
+  limit: number;
+  offset: number;
+  returned: number;
+  total: number;
+  hasMore: boolean;
+  nextOffset: number | null;
+  partial: boolean;
 };
 
 function normalizeInstagramProfileUrl(url: string) {
@@ -132,11 +146,13 @@ export default function GalleryAdminClient({
   classes: initialClasses,
   instagramStatus: initialInstagramStatus,
   socialDrafts: initialSocialDrafts,
+  pagination: initialPagination,
 }: {
   posts?: GalleryPost[];
   classes?: ClassInfo[];
   instagramStatus?: InstagramStatus;
   socialDrafts?: SocialPostDraft[];
+  pagination?: GalleryPagination;
 }) {
   const [isPending, startTransition] = useTransition();
   const hasInitialData = initialPosts !== undefined && initialClasses !== undefined;
@@ -144,28 +160,29 @@ export default function GalleryAdminClient({
   const [classes, setClasses] = useState<ClassInfo[]>(initialClasses ?? []);
   const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | undefined>(initialInstagramStatus);
   const [drafts, setDrafts] = useState<SocialPostDraft[]>(initialSocialDrafts ?? []);
+  const [pagination, setPagination] = useState<GalleryPagination | undefined>(initialPagination);
   const [loading, setLoading] = useState(!hasInitialData);
   const [loadError, setLoadError] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingPost, setEditingPost] = useState<GalleryPost | null>(null);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
   const [draftBusy, setDraftBusy] = useState<{ id: string; action: "save" | "publish" | "reject" } | null>(null);
   const [pageMessage, setPageMessage] = useState<{ ok: boolean; message: string } | null>(null);
-  const [visiblePostCount, setVisiblePostCount] = useState(VISIBLE_POST_INCREMENT);
 
   const loadGallery = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const response = await fetch("/api/admin/gallery", { cache: "no-store" });
+      const response = await fetch(`/api/admin/gallery?limit=${GALLERY_PAGE_SIZE}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load gallery data.");
       const data = (await response.json()) as GalleryPayload;
       setPosts(data.posts);
       setClasses(data.classes);
       setInstagramStatus(data.instagramStatus);
       setDrafts(data.socialDrafts);
-      setVisiblePostCount(VISIBLE_POST_INCREMENT);
+      setPagination(data.pagination);
     } catch (error) {
       console.error("Failed to load gallery data:", error);
       setLoadError(true);
@@ -180,8 +197,32 @@ export default function GalleryAdminClient({
 
   const instagramReady = Boolean(instagramStatus?.hasAccessToken && instagramStatus.hasBusinessAccountId);
   const instagramProfileUrl = normalizeInstagramProfileUrl(instagramStatus?.profileUrl || "");
-  const visiblePosts = posts.slice(0, visiblePostCount);
-  const hasMorePosts = visiblePostCount < posts.length;
+  const hasMorePosts = Boolean(pagination?.hasMore);
+
+  async function loadMorePosts() {
+    if (loadingMore || !pagination?.hasMore || pagination.nextOffset === null) return;
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({
+        postsOnly: "1",
+        limit: String(pagination.limit || GALLERY_PAGE_SIZE),
+        offset: String(pagination.nextOffset),
+      });
+      const response = await fetch(`/api/admin/gallery?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to load more gallery posts.");
+      const data = (await response.json()) as GalleryPostsPagePayload;
+      setPosts((current) => {
+        const seen = new Set(current.map((post) => post.id));
+        return [...current, ...data.posts.filter((post) => !seen.has(post.id))];
+      });
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error("Failed to load more gallery posts:", error);
+      setPageMessage({ ok: false, message: "갤러리 게시물을 더 불러오지 못했습니다." });
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   function closeForm() {
     setShowForm(false);
@@ -552,7 +593,7 @@ export default function GalleryAdminClient({
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {visiblePosts.map((post) => {
+            {posts.map((post) => {
               const media = parseMedia(post.mediaJSON);
               const firstImage = media.find((item) => item.type === "image");
               return (
@@ -627,10 +668,11 @@ export default function GalleryAdminClient({
             <div className="mt-5 flex justify-center">
               <button
                 type="button"
-                onClick={() => setVisiblePostCount((count) => count + VISIBLE_POST_INCREMENT)}
+                onClick={loadMorePosts}
+                disabled={loadingMore}
                 className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
               >
-                더 보기 {Math.min(visiblePostCount, posts.length)}/{posts.length}
+                {loadingMore ? "불러오는 중..." : `더 보기 ${posts.length}/${pagination?.total ?? posts.length}`}
               </button>
             </div>
           )}

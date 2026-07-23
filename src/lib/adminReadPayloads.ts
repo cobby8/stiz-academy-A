@@ -50,6 +50,7 @@ import { readPendingSocialPostDrafts } from "@/lib/socialDrafts";
 const DASHBOARD_MONTHS = 6;
 const ADMIN_LIST_PAGE_SIZE = 50;
 const ADMIN_LIST_MAX_PAGE_SIZE = 100;
+const ADMIN_GALLERY_PAGE_SIZE = 24;
 
 type AdminListPayloadOptions = {
     limit?: number;
@@ -692,27 +693,88 @@ export const getCachedAdminSmsTemplatesPayload = unstable_cache(
     { revalidate: 60, tags: ["admin-sms-templates"] },
 );
 
-export const getCachedAdminGalleryPayload = unstable_cache(
-    async () => {
-        const [posts, classes, settings, socialDrafts] = await Promise.all([
-            getGalleryPosts({ limit: 100 }),
-            getClasses(),
-            getAcademySettings(),
-            readPendingSocialPostDrafts(30),
-        ]);
-        const settingsData = settings as GallerySettingsPayload | null;
-        const instagramStatus = {
-            profileUrl: settingsData?.instagramUrl ?? "",
-            businessAccountId: settingsData?.instagramBusinessAccountId ?? "",
-            autoPublishEnabled: settingsData?.instagramAutoPublishEnabled === true,
-            ...getInstagramRuntimeStatus(settingsData?.instagramBusinessAccountId),
-        };
+async function getAdminGalleryPostCount() {
+    try {
+        const rows = await prisma.$queryRawUnsafe<{ count: number | string }[]>(
+            `SELECT COUNT(*)::int AS count FROM "GalleryPost"`,
+        );
+        return Number(rows[0]?.count ?? 0);
+    } catch (error) {
+        console.error("[getAdminGalleryPostCount] failed:", error);
+        return 0;
+    }
+}
 
-        return { posts, classes, instagramStatus, socialDrafts };
-    },
-    ["admin-gallery-page-v1"],
-    { revalidate: 60, tags: ["admin-gallery", "admin-classes", "academy-settings"] },
-);
+export function getCachedAdminGalleryPostsPagePayload(options?: AdminListPayloadOptions) {
+    const { limit, offset } = normalizeAdminListPayloadOptions({
+        limit: options?.limit ?? ADMIN_GALLERY_PAGE_SIZE,
+        offset: options?.offset,
+    });
+
+    return unstable_cache(
+        async () => {
+            const [posts, total] = await Promise.all([
+                getGalleryPosts({ limit, offset }),
+                getAdminGalleryPostCount(),
+            ]);
+
+            return {
+                posts,
+                pagination: buildListPagination({
+                    limit,
+                    offset,
+                    returned: posts.length,
+                    total,
+                    hasMore: offset + posts.length < total,
+                }),
+            };
+        },
+        ["admin-gallery-posts", String(limit), String(offset)],
+        { revalidate: 30, tags: ["admin-gallery"] },
+    )();
+}
+
+export function getCachedAdminGalleryPayload(options?: AdminListPayloadOptions) {
+    const { limit, offset } = normalizeAdminListPayloadOptions({
+        limit: options?.limit ?? ADMIN_GALLERY_PAGE_SIZE,
+        offset: options?.offset,
+    });
+
+    return unstable_cache(
+        async () => {
+            const [posts, classes, settings, socialDrafts, total] = await Promise.all([
+                getGalleryPosts({ limit, offset }),
+                getClasses(),
+                getAcademySettings(),
+                readPendingSocialPostDrafts(30),
+                getAdminGalleryPostCount(),
+            ]);
+            const settingsData = settings as GallerySettingsPayload | null;
+            const instagramStatus = {
+                profileUrl: settingsData?.instagramUrl ?? "",
+                businessAccountId: settingsData?.instagramBusinessAccountId ?? "",
+                autoPublishEnabled: settingsData?.instagramAutoPublishEnabled === true,
+                ...getInstagramRuntimeStatus(settingsData?.instagramBusinessAccountId),
+            };
+
+            return {
+                posts,
+                classes,
+                instagramStatus,
+                socialDrafts,
+                pagination: buildListPagination({
+                    limit,
+                    offset,
+                    returned: posts.length,
+                    total,
+                    hasMore: offset + posts.length < total,
+                }),
+            };
+        },
+        ["admin-gallery-page-v2", String(limit), String(offset)],
+        { revalidate: 60, tags: ["admin-gallery", "admin-classes", "academy-settings"] },
+    )();
+}
 
 export function getCachedAdminFinancePayload(year: number, month: number) {
     return unstable_cache(

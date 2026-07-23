@@ -605,6 +605,62 @@ async function refreshApplicationSummary(tx: Prisma.TransactionClient, applicati
   });
 }
 
+async function updateOperationalOfferingInstructor(
+  tx: Prisma.TransactionClient,
+  params: { offeringId: string; instructorId: string | null; instructorName: string | null; actorId: string },
+) {
+  const target = await tx.specialProgramOffering.findUnique({ where: { id: params.offeringId } });
+  if (!target) throw new SeasonalError("담당 선생님을 배정할 특강 반을 찾을 수 없습니다.", 404, "OFFERING_NOT_FOUND");
+
+  const scopeWhere = target.linkedClassId
+    ? { seasonId: target.seasonId, linkedClassId: target.linkedClassId }
+    : { id: target.id };
+  const offerings = await tx.specialProgramOffering.findMany({
+    where: scopeWhere,
+    include: {
+      sessionDates: {
+        orderBy: { startsAt: "asc" },
+        select: { id: true, startsAt: true, endsAt: true, location: true, note: true },
+      },
+    },
+    orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+  });
+
+  const updated = [];
+  for (const offering of offerings) {
+    const saved = await tx.specialProgramOffering.update({
+      where: { id: offering.id },
+      data: {
+        instructorId: params.instructorId,
+        instructorName: params.instructorName,
+      },
+    });
+    await syncOfferingSessionDates(tx, {
+      offeringId: offering.id,
+      linkedClassId: offering.linkedClassId,
+      instructorId: params.instructorId,
+      dates: offering.sessionDates,
+    });
+    await tx.specialProgramAuditLog.create({
+      data: {
+        seasonId: offering.seasonId,
+        offeringId: offering.id,
+        actorType: "ADMIN",
+        actorId: params.actorId,
+        action: "OFFERING_INSTRUCTOR_UPDATED",
+        beforeJSON: { instructorId: offering.instructorId, instructorName: offering.instructorName },
+        afterJSON: { instructorId: params.instructorId, instructorName: params.instructorName },
+      },
+    });
+    updated.push(saved);
+  }
+
+  return {
+    offering: updated.find((offering) => offering.id === target.id) ?? updated[0] ?? target,
+    updatedCount: updated.length,
+  };
+}
+
 async function saveSpecialProgramItemAssignment(
   tx: Prisma.TransactionClient,
   params: { itemId: string; offeringId: string; selectedWeekdays: string[]; priceSnapshot: number; actorId: string },
@@ -1136,6 +1192,16 @@ export async function PATCH(request: NextRequest) {
       const season = await prisma.specialProgramSeason.update({ where: { id }, data: update });
       await prisma.specialProgramAuditLog.create({ data: { seasonId: id, actorType: "ADMIN", actorId: actor.appUserId, action: "SEASON_UPDATED", beforeJSON: before, afterJSON: season } });
       return NextResponse.json({ season });
+    }
+
+    if (body.resource === "offeringInstructor") {
+      const instructorId = cleanText(data.instructorId, 100) || null;
+      const instructorName = instructorId ? cleanText(data.instructorName, 100) || null : null;
+      const result = await prisma.$transaction(
+        (tx) => updateOperationalOfferingInstructor(tx, { offeringId: id, instructorId, instructorName, actorId: actor.appUserId }),
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      return NextResponse.json(result);
     }
 
     if (body.resource === "offering") {

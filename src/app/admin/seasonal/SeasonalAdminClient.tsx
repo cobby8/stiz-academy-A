@@ -286,6 +286,12 @@ function formatDateTime(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+function todayDateInputValue() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function getItemInvoiceHref(item: Pick<ApplicationItem, "invoice">) {
   if (item.invoice?.accountActivationRequired) return null;
   if (item.invoice?.checkoutUrl) return item.invoice.checkoutUrl;
@@ -568,6 +574,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
   const [rosterLoading, setRosterLoading] = useState(false);
   const [rosterError, setRosterError] = useState("");
   const [coachOptions, setCoachOptions] = useState<CoachOption[]>([]);
+  const [assigningInstructorClassId, setAssigningInstructorClassId] = useState("");
 
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get("tab");
@@ -763,6 +770,19 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     waitlisted: data.stats?.waitlisted ?? data.applications.filter((a) => a.items.some((i) => i.status === "WAITLISTED")).length,
     shuttleUnassigned: data.stats?.shuttleUnassigned ?? data.applications.filter((a) => a.shuttleNeeded && a.shuttleStatus !== "ASSIGNED").length,
   };
+
+  function openRosterForClass(klass: SeasonalClass, date = "") {
+    setApplicationsMode("roster");
+    setRosterFilters((current) => ({
+      ...current,
+      seasonId: selectedSeason?.id ?? current.seasonId,
+      offeringId: klass.id,
+      weekday: "",
+      date,
+      page: 1,
+    }));
+    setTab("applications");
+  }
 
   async function mutate(method: "POST" | "PATCH", body: Record<string, unknown>, success: string) {
     setError(""); setNotice("");
@@ -1060,6 +1080,31 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     }
   }
 
+  async function assignClassInstructor(klass: SeasonalClass, instructorId: string) {
+    const selectedCoach = coachOptions.find((coach) => coach.id === instructorId) ?? null;
+    setAssigningInstructorClassId(klass.id);
+    try {
+      await mutate(
+        "PATCH",
+        {
+          resource: "offeringInstructor",
+          id: klass.id,
+          data: {
+            instructorId: instructorId || null,
+            instructorName: selectedCoach?.name ?? null,
+          },
+        },
+        selectedCoach
+          ? `${compactOperationalClassName(klass.name)} 담당 선생님을 ${selectedCoach.name} 선생님으로 배정했습니다.`
+          : `${compactOperationalClassName(klass.name)} 담당 선생님 배정을 해제했습니다.`,
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "담당 선생님을 변경하지 못했습니다.");
+    } finally {
+      setAssigningInstructorClassId("");
+    }
+  }
+
   return (
     <main className="mx-auto min-w-0 max-w-7xl space-y-6 overflow-x-clip pb-20">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -1074,7 +1119,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       {notice && <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800"><Icon name="check_circle" />{notice}</div>}
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
-        <SeasonsView seasons={data.seasons} selected={selectedSeason} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
+        <SeasonsView seasons={data.seasons} selected={selectedSeason} coaches={coachOptions} assigningInstructorClassId={assigningInstructorClassId} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onOpenRoster={(klass) => openRosterForClass(klass)} onOpenTodayRoster={(klass) => openRosterForClass(klass, todayDateInputValue())} onAssignInstructor={assignClassInstructor} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} pagination={applicationsPagination} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onPage={(page) => { setSelectedItemIds([]); void load({ includeApplications: true, page }); }} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} />}
@@ -1094,12 +1139,141 @@ function Overview({ stats, seasons, applications, onNavigate }: { stats: Record<
     <section className="grid gap-3 sm:grid-cols-3"><NextCard icon="payments" title="결제 관리" text="신청 상세에서 청구서 생성과 결제 링크 복사를 확인합니다." /><NextCard icon="directions_bus" title="차량 배차" text="셔틀 신청 여부와 승하차 위치를 신청 상세에서 확인합니다." /><NextCard icon="analytics" title="운영 통계" text="모집·승인·미납·대기 요약을 상단 카드로 확인합니다." /></section></div>;
 }
 
-function SeasonsView({ seasons, selected, onSelect, onAddClass, onEditSeason, onEditClass, onStatus }: { seasons: Season[]; selected?: Season; onSelect: (id: string) => void; onAddClass: () => void; onEditSeason: (season: Season) => void; onEditClass: (klass: SeasonalClass) => void; onStatus: (id: string, status: SeasonStatus) => Promise<void> }) {
-  return <div className="grid gap-5 lg:grid-cols-[280px_1fr]"><Panel title="시즌 목록" icon="event_note"><div className="space-y-2">{seasons.map((season) => <button type="button" key={season.id} onClick={() => onSelect(season.id)} className={`w-full rounded-xl border p-3 text-left ${selected?.id === season.id ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]" : "border-gray-200 dark:border-gray-700"}`}><p className="font-bold">{season.name}</p><p className="mt-1 text-xs text-gray-500">{STATUS_LABEL[season.status]} · {season.classes.length}개 반</p></button>)}{!seasons.length && <Empty text="개설된 시즌이 없습니다." />}</div></Panel>
-    <Panel title={selected?.name ?? "시즌을 선택하세요"} icon="view_week" action={selected && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => onEditSeason(selected)} className="min-h-10 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700">시즌 수정</button><select aria-label="시즌 상태" value={selected.status} onChange={(event) => void onStatus(selected.id, event.target.value as SeasonStatus)} className="min-h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm dark:border-gray-700 dark:bg-gray-800">{["DRAFT","PUBLISHED","CLOSED","ARCHIVED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}</select><button type="button" onClick={onAddClass} className="min-h-10 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]">반 추가</button></div>}>
-      {selected ? <><div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-3 dark:bg-gray-800"><p><span className="block text-xs text-gray-500">모집 기간</span>{formatDate(selected.enrollmentStartsAt)} ~ {formatDate(selected.enrollmentEndsAt)}</p><p><span className="block text-xs text-gray-500">운영 기간</span>{formatDate(selected.startsAt)} ~ {formatDate(selected.endsAt)}</p><p><span className="block text-xs text-gray-500">지점</span>{selected.branch || "전체"}</p></div><div className="space-y-3">{selected.classes.map((klass) => { const confirmed = klass.confirmedCount ?? 0; const percent = Math.min(100, klass.capacity ? confirmed / klass.capacity * 100 : 0); const attendanceMissing = selected.status === "PUBLISHED" && klass.status === "OPEN" ? missingAttendancePreparation(klass.linkedClassId, klass.instructorId) : []; return <article key={klass.id} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700"><div className="flex flex-col justify-between gap-3 sm:flex-row"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-black">{klass.name}</h3>{klass.shuttleAvailable && <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">셔틀</span>}</div><p className="mt-1 text-sm text-gray-500">{klass.dayOfWeek} {klass.startTime}~{klass.endTime} · {klass.targetGrade || "전체 학년"} · {klass.instructorName || "담당자 미정"}</p></div><div className="text-right"><p className="font-black">{klass.price.toLocaleString()}원</p><p className="text-xs text-gray-500">확정 {confirmed}/{klass.capacity} · 대기 {klass.waitlistCount ?? 0}</p></div></div>{attendanceMissing.length > 0 && <div role="status" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"><p className="flex items-center gap-2 font-black"><Icon name="warning" />출석 준비 미완료</p><p className="mt-1 text-xs">빠진 항목: {attendanceMissing.join(" · ")}</p></div>}<div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700"><div className="h-full rounded-full bg-[var(--brand-accent)]" style={{ width: `${percent}%` }} /></div></article>; })}{!selected.classes.length && <Empty text="아직 개설된 반이 없습니다. '반 추가'를 눌러 시작하세요." />}</div></> : <Empty text="왼쪽에서 시즌을 선택하세요." />}
-      {selected && selected.classes.length > 0 && <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4 dark:border-gray-800">{selected.classes.map((klass) => <button type="button" key={klass.id} onClick={() => onEditClass(klass)} className="min-h-10 rounded-lg border border-gray-200 px-3 text-xs font-bold dark:border-gray-700">{klass.name} 수정</button>)}</div>}
-    </Panel></div>;
+function SeasonsView({
+  seasons,
+  selected,
+  coaches,
+  assigningInstructorClassId,
+  onSelect,
+  onAddClass,
+  onEditSeason,
+  onEditClass,
+  onOpenRoster,
+  onOpenTodayRoster,
+  onAssignInstructor,
+  onStatus,
+}: {
+  seasons: Season[];
+  selected?: Season;
+  coaches: CoachOption[];
+  assigningInstructorClassId: string;
+  onSelect: (id: string) => void;
+  onAddClass: () => void;
+  onEditSeason: (season: Season) => void;
+  onEditClass: (klass: SeasonalClass) => void;
+  onOpenRoster: (klass: SeasonalClass) => void;
+  onOpenTodayRoster: (klass: SeasonalClass) => void;
+  onAssignInstructor: (klass: SeasonalClass, instructorId: string) => Promise<void>;
+  onStatus: (id: string, status: SeasonStatus) => Promise<void>;
+}) {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+      <Panel title="시즌 목록" icon="event_note">
+        <div className="space-y-2">
+          {seasons.map((season) => (
+            <button
+              type="button"
+              key={season.id}
+              onClick={() => onSelect(season.id)}
+              className={`w-full rounded-xl border p-3 text-left ${selected?.id === season.id ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]" : "border-gray-200 dark:border-gray-700"}`}
+            >
+              <p className="font-bold">{season.name}</p>
+              <p className="mt-1 text-xs text-gray-500">{STATUS_LABEL[season.status]} · {season.classes.length}개 반</p>
+            </button>
+          ))}
+          {!seasons.length && <Empty text="개설된 시즌이 없습니다." />}
+        </div>
+      </Panel>
+
+      <Panel
+        title={selected?.name ?? "시즌을 선택하세요"}
+        icon="view_week"
+        action={selected && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onEditSeason(selected)} className="min-h-10 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700">시즌 수정</button>
+            <select aria-label="시즌 상태" value={selected.status} onChange={(event) => void onStatus(selected.id, event.target.value as SeasonStatus)} className="min-h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+              {["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
+            </select>
+            <button type="button" onClick={onAddClass} className="min-h-10 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]">반 추가</button>
+          </div>
+        )}
+      >
+        {selected ? (
+          <>
+            <div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-3 dark:bg-gray-800">
+              <p><span className="block text-xs text-gray-500">모집 기간</span>{formatDate(selected.enrollmentStartsAt)} ~ {formatDate(selected.enrollmentEndsAt)}</p>
+              <p><span className="block text-xs text-gray-500">운영 기간</span>{formatDate(selected.startsAt)} ~ {formatDate(selected.endsAt)}</p>
+              <p><span className="block text-xs text-gray-500">지점</span>{selected.branch || "전체"}</p>
+            </div>
+            <div className="space-y-3">
+              {selected.classes.map((klass) => {
+                const confirmed = klass.confirmedCount ?? 0;
+                const percent = Math.min(100, klass.capacity ? confirmed / klass.capacity * 100 : 0);
+                const attendanceMissing = selected.status === "PUBLISHED" && klass.status === "OPEN" ? missingAttendancePreparation(klass.linkedClassId, klass.instructorId) : [];
+                const currentCoachMissingFromOptions = Boolean(klass.instructorId && !coaches.some((coach) => coach.id === klass.instructorId));
+                const classStatus = klass.status ?? "";
+                const classStatusLabel = classStatus ? STATUS_LABEL[classStatus] ?? classStatus : "상태 미정";
+                return (
+                  <article key={klass.id} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-black">{klass.name}</h3>
+                          {klass.shuttleAvailable && <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">셔틀</span>}
+                          <span className={badge(classStatus)}>{classStatusLabel}</span>
+                        </div>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          {klass.dayOfWeek} {klass.startTime}~{klass.endTime} · {klass.targetGrade || "전체 학년"} · {klass.location || selected.branch || "장소 미정"}
+                        </p>
+                        <p className="mt-2 text-xs font-bold text-gray-500 dark:text-gray-400">
+                          같은 운영반의 주차별 상품에 함께 반영됩니다.
+                        </p>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-[180px_120px_auto] xl:min-w-[560px]">
+                        <label className="text-xs font-black text-gray-500 dark:text-gray-400">
+                          담당 선생님
+                          <select
+                            aria-label={`${klass.name} 담당 선생님`}
+                            value={klass.instructorId ?? ""}
+                            disabled={assigningInstructorClassId === klass.id}
+                            onChange={(event) => void onAssignInstructor(klass, event.target.value)}
+                            className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                          >
+                            <option value="">담당자 미정</option>
+                            {currentCoachMissingFromOptions && <option value={klass.instructorId ?? ""}>{klass.instructorName || "현재 담당 선생님"}</option>}
+                            {coaches.map((coach) => <option key={coach.id} value={coach.id}>{coach.name}</option>)}
+                          </select>
+                        </label>
+                        <div className="rounded-lg bg-gray-50 px-3 py-2 text-right dark:bg-gray-800">
+                          <p className="font-black">{klass.price.toLocaleString()}원</p>
+                          <p className="text-xs text-gray-500">확정 {confirmed}/{klass.capacity} · 대기 {klass.waitlistCount ?? 0}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 xl:justify-end">
+                          <button type="button" onClick={() => onOpenRoster(klass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="groups" className="text-lg" />명단</button>
+                          <button type="button" onClick={() => onOpenTodayRoster(klass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="fact_check" className="text-lg" />오늘 출석</button>
+                          <button type="button" onClick={() => onEditClass(klass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="edit" className="text-lg" />수정</button>
+                        </div>
+                      </div>
+                    </div>
+                    {attendanceMissing.length > 0 && (
+                      <div role="status" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                        <p className="flex items-center gap-2 font-black"><Icon name="warning" />출석 준비 미완료</p>
+                        <p className="mt-1 text-xs">빠진 항목: {attendanceMissing.join(" · ")}</p>
+                      </div>
+                    )}
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+                      <div className="h-full rounded-full bg-[var(--brand-accent)]" style={{ width: `${percent}%` }} />
+                    </div>
+                  </article>
+                );
+              })}
+              {!selected.classes.length && <Empty text="아직 개설된 반이 없습니다. '반 추가'를 눌러 시작하세요." />}
+            </div>
+          </>
+        ) : <Empty text="왼쪽에서 시즌을 선택하세요." />}
+      </Panel>
+    </div>
+  );
 }
 
 function ApplicationsView({

@@ -9,6 +9,7 @@ import { formatWon, normalizeProgram, programClasses, type SeasonalClass, type S
 type LoadState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting" | "done" | "error";
 type ApplicantType = "NEW" | "EXISTING";
+type SeasonalWeekday = SeasonalClass["weekdays"][number];
 
 type FormState = {
   childName: string;
@@ -43,6 +44,38 @@ function offeringWeekdays(item: SeasonalClass) {
   return Object.entries(weekdayByLabel)
     .filter(([label]) => item.dayLabel.includes(label))
     .map(([, weekday]) => weekday);
+}
+
+const WEEKDAY_OPTIONS: Array<{ value: SeasonalWeekday; label: string }> = [
+  { value: "MON", label: "월" },
+  { value: "TUE", label: "화" },
+  { value: "WED", label: "수" },
+  { value: "THU", label: "목" },
+  { value: "FRI", label: "금" },
+  { value: "SAT", label: "토" },
+  { value: "SUN", label: "일" },
+];
+
+function seasonalOfferingFrequency(item: Pick<SeasonalClass, "name" | "code">) {
+  const matched = `${item.name ?? ""} ${item.code ?? ""}`.match(/주\s*(\d+)\s*회|-(\d)(?:\D|$)/i);
+  const value = matched ? Number(matched[1] ?? matched[2]) : NaN;
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function operationalClassKey(item: Pick<SeasonalClass, "id" | "linkedClassId">) {
+  return item.linkedClassId || item.id;
+}
+
+function matchingOfferingForWeekdays(
+  offerings: SeasonalClass[],
+  base: SeasonalClass,
+  selectedWeekdays: SeasonalWeekday[],
+) {
+  if (selectedWeekdays.length === 0) return null;
+  const candidates = offerings.filter((item) => operationalClassKey(item) === operationalClassKey(base));
+  const frequencyCandidates = candidates.filter((item) => seasonalOfferingFrequency(item) !== null);
+  if (frequencyCandidates.length === 0) return base;
+  return frequencyCandidates.find((item) => seasonalOfferingFrequency(item) === selectedWeekdays.length) ?? null;
 }
 
 type SubmitResult = {
@@ -111,6 +144,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   const [state, setState] = useState<LoadState>("loading");
   const [program, setProgram] = useState<SeasonalProgram | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedWeekdayKeys, setSelectedWeekdayKeys] = useState<SeasonalWeekday[]>([]);
   const [applicantType, setApplicantType] = useState<ApplicantType | "">("");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [shuttle, setShuttle] = useState<Record<string, ShuttleDraft>>({});
@@ -143,15 +177,24 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
 
   const offerings = useMemo(() => program ? programClasses(program) : [], [program]);
   const selectedOfferings = offerings.filter((item) => selectedIds.includes(item.id));
-  const selectedWeekdays = Array.from(new Set(selectedOfferings.flatMap(offeringWeekdays)));
+  const availableWeekdays = Array.from(new Set(selectedOfferings.flatMap(offeringWeekdays)));
+  const selectedWeekdays = selectedWeekdayKeys.filter((weekday) => availableWeekdays.includes(weekday));
+  const selectionPlans = selectedOfferings.map((item) => ({
+    base: item,
+    offering: matchingOfferingForWeekdays(offerings, item, selectedWeekdays),
+  }));
+  const hasPricingMatch = selectedOfferings.length > 0 && selectionPlans.every((plan) => Boolean(plan.offering));
   // 신청자가 고른 회원 구분과 서버의 가격 스냅샷 기준을 화면에서도 동일하게 맞춘다.
-  const totalPrice = selectedOfferings.reduce((sum, item) => sum + applicantPrice(item, applicantType), 0);
+  const totalPrice = selectionPlans.reduce((sum, plan) => sum + applicantPrice(plan.offering ?? plan.base, applicantType), 0);
   const hasMapSelection = selectedIds.some((id) => shuttle[id]?.pickupLocationData || shuttle[id]?.dropoffLocationData);
   const canSubmit = selectedIds.length > 0 && applicantType && form.childName && form.childBirthDate && form.parentName
-    && form.parentPhone && form.agreedTerms && form.agreedPrivacy && (!hasMapSelection || locationConsent)
+    && form.parentPhone && selectedWeekdays.length > 0 && hasPricingMatch
+    && form.agreedTerms && form.agreedPrivacy && (!hasMapSelection || locationConsent)
     && submitState !== "submitting";
   const incompleteItems = [
     selectedIds.length === 0 ? "신청할 수업" : "",
+    selectedIds.length > 0 && selectedWeekdays.length === 0 ? "참여 요일" : "",
+    selectedIds.length > 0 && selectedWeekdays.length > 0 && !hasPricingMatch ? "요일 수에 맞는 수강료" : "",
     !applicantType ? "회원 구분" : "",
     !form.childName || !form.childBirthDate ? "학생 필수 정보" : "",
     !form.parentName || !form.parentPhone ? "보호자 필수 정보" : "",
@@ -166,9 +209,25 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
 
   function toggleOffering(item: SeasonalClass) {
     if (isFull(item) && !item.waitlistEnabled) return;
-    setSelectedIds((current) => current.includes(item.id)
-      ? current.filter((id) => id !== item.id)
-      : [...current, item.id]);
+    setSelectedIds((current) => {
+      if (current.includes(item.id)) {
+        setSelectedWeekdayKeys([]);
+        return [];
+      }
+      const frequency = seasonalOfferingFrequency(item);
+      const weekdays = offeringWeekdays(item);
+      setSelectedWeekdayKeys(frequency ? weekdays.slice(0, frequency) : []);
+      return [item.id];
+    });
+  }
+
+  function toggleWeekday(weekday: SeasonalWeekday) {
+    setSelectedWeekdayKeys((current) => {
+      const next = current.includes(weekday)
+        ? current.filter((item) => item !== weekday)
+        : [...current, weekday];
+      return WEEKDAY_OPTIONS.map((option) => option.value).filter((item) => next.includes(item));
+    });
   }
 
   function updateShuttle(offeringId: string, key: keyof ShuttleDraft, value: string) {
@@ -258,14 +317,14 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
           agreedTerms: form.agreedTerms,
           agreedPrivacy: form.agreedPrivacy,
           selectedWeekdays,
-          items: selectedIds.map((offeringId) => ({
-            offeringId,
-            shuttle: hasShuttle(shuttle[offeringId]) ? {
-              ...shuttle[offeringId],
-              locationConsent: Boolean(shuttle[offeringId]?.pickupLocationData || shuttle[offeringId]?.dropoffLocationData) ? locationConsent : undefined,
-              locationConsentVersion: Boolean(shuttle[offeringId]?.pickupLocationData || shuttle[offeringId]?.dropoffLocationData) ? SHUTTLE_LOCATION_CONSENT_VERSION : undefined,
+          items: selectionPlans.flatMap(({ base, offering }) => offering ? [{
+            offeringId: offering.id,
+            shuttle: hasShuttle(shuttle[base.id]) ? {
+              ...shuttle[base.id],
+              locationConsent: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? locationConsent : undefined,
+              locationConsentVersion: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? SHUTTLE_LOCATION_CONSENT_VERSION : undefined,
             } : undefined,
-          })),
+          }] : []),
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -302,12 +361,13 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
         <section className="space-y-3">
           <div>
             <h2 className="text-xl font-black text-gray-900 dark:text-white">수업 선택</h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">신청할 수업을 한 개 이상 선택해 주세요.</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">신청할 반을 선택한 뒤 실제 참여할 요일을 골라주세요.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {offerings.map((item) => {
               const selected = selectedIds.includes(item.id);
               const disabled = isFull(item) && !item.waitlistEnabled;
+              const priceItem = selected ? matchingOfferingForWeekdays(offerings, item, selectedWeekdays) ?? item : item;
               return (
                 <article key={item.id} className={`rounded-2xl border bg-white p-5 shadow-sm dark:bg-gray-800 ${selected ? "border-brand-orange-500 ring-2 ring-brand-orange-100 dark:border-brand-neon-lime dark:ring-brand-neon-lime/20" : "border-gray-200 dark:border-gray-700"} ${disabled ? "opacity-60" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
@@ -328,7 +388,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                     <Pair label="시간" value={`${item.startTime}~${item.endTime}`} />
                     <Pair label="대상" value={item.targetGrade || "전체"} />
                     <Pair label="잔여" value={remainingText(item)} />
-                    <Pair label="수강료" value={formatWon(applicantPrice(item, applicantType))} />
+                    <Pair label="수강료" value={formatWon(applicantPrice(priceItem, applicantType))} />
                   </dl>
                   {item.sessionDates.length > 0 && (
                     <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
@@ -354,6 +414,35 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
               );
             })}
           </div>
+          {selectedOfferings.length > 0 && (
+            <fieldset className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <legend className="px-1 text-sm font-black text-gray-900 dark:text-white">참여 요일 *</legend>
+              <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">선택한 요일 수에 맞춰 주2·주3·주5 수강료가 자동 적용됩니다.</p>
+              <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-7">
+                {WEEKDAY_OPTIONS.map((option) => {
+                  const enabled = availableWeekdays.includes(option.value);
+                  const checked = selectedWeekdays.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={!enabled}
+                      onClick={() => toggleWeekday(option.value)}
+                      className={`min-h-11 rounded-xl border text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-35 ${checked ? "border-brand-orange-500 bg-brand-orange-500 text-white dark:border-brand-neon-lime dark:bg-brand-neon-lime dark:text-brand-navy-900" : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-200"}`}
+                      aria-pressed={checked}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {!hasPricingMatch && selectedWeekdays.length > 0 && (
+                <p role="alert" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                  선택한 {selectedWeekdays.length}개 요일에 맞는 수강료가 아직 설정되지 않았습니다.
+                </p>
+              )}
+            </fieldset>
+          )}
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
@@ -413,14 +502,17 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
             <div className="space-y-2">
               {selectedOfferings.length === 0 ? (
                 <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-gray-900 dark:text-gray-400">선택한 수업이 없습니다.</p>
-              ) : selectedOfferings.map((item) => (
-                <div key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
-                  <p className="font-bold text-gray-900 dark:text-white">{item.name}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.dayLabel} {item.startTime}~{item.endTime} · {formatWon(applicantPrice(item, applicantType))}</p>
+              ) : selectionPlans.map((plan) => {
+                const item = plan.offering ?? plan.base;
+                return (
+                <div key={plan.base.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
+                  <p className="font-bold text-gray-900 dark:text-white">{plan.base.name}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{selectedWeekdays.map((weekday) => WEEKDAY_OPTIONS.find((option) => option.value === weekday)?.label).filter(Boolean).join("·") || "요일 미선택"} · {item.startTime}~{item.endTime} · {formatWon(applicantPrice(item, applicantType))}</p>
                   {item.sessionDates.length > 1 && <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">총 {item.sessionDates.length}회 · {item.sessionDates.map((session) => `${session.dateLabel}(${session.dayLabel})`).join(", ")}</p>}
                   {isFull(item) && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
                 </div>
-              ))}
+                );
+              })}
             </div>
             <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
               <p className="text-sm text-gray-500 dark:text-gray-400">예상 합계</p>

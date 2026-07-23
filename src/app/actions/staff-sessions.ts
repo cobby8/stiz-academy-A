@@ -31,8 +31,21 @@ async function isSessionRosterStudent(classId: string, sessionDateId: string | n
   const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
     `SELECT app.id FROM "SpecialProgramApplicationItem" i
      JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
-     JOIN "SpecialProgramSessionDate" sd ON sd."offeringId" = i."offeringId"
-     WHERE sd.id = $1 AND app."convertedStudentId" = $2
+     JOIN "SpecialProgramSessionDate" anchor_sd ON anchor_sd.id = $1
+     JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+     JOIN "SpecialProgramSessionDate" sd
+       ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+     JOIN "SpecialProgramOffering" o
+       ON o.id = sd."offeringId"
+      AND (
+        o.id = anchor_o.id
+        OR (
+          anchor_o."linkedClassId" IS NOT NULL
+          AND o."linkedClassId" = anchor_o."linkedClassId"
+          AND o."seasonId" = anchor_o."seasonId"
+        )
+      )
+     WHERE i."offeringId" = o.id AND app."convertedStudentId" = $2
        AND i.status = 'APPROVED'
        AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
        AND (
@@ -52,7 +65,20 @@ async function getSessionParentRecipients(session: { classId: string; sessionDat
   if (!session.sessionDateId) return getClassParentRecipients(session.classId, studentIds);
   return prisma.$queryRawUnsafe<ParentRecipient[]>(
     `SELECT DISTINCT st.id AS "studentId", st.name AS "studentName", st."parentId" AS "userId"
-     FROM "SpecialProgramSessionDate" sd
+     FROM "SpecialProgramSessionDate" anchor_sd
+     JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+     JOIN "SpecialProgramSessionDate" sd
+       ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+     JOIN "SpecialProgramOffering" o
+       ON o.id = sd."offeringId"
+      AND (
+        o.id = anchor_o.id
+        OR (
+          anchor_o."linkedClassId" IS NOT NULL
+          AND o."linkedClassId" = anchor_o."linkedClassId"
+          AND o."seasonId" = anchor_o."seasonId"
+        )
+      )
      JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = sd."offeringId"
        AND i.status = 'APPROVED'
        AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
@@ -65,7 +91,7 @@ async function getSessionParentRecipients(session: { classId: string; sessionDat
          END = ANY(app."selectedWeekdays")
        )
      JOIN "Student" st ON st.id = app."convertedStudentId"
-     WHERE sd.id = $1 AND ($2::text[] IS NULL OR st.id = ANY($2::text[])) AND st."parentId" IS NOT NULL`,
+     WHERE anchor_sd.id = $1 AND ($2::text[] IS NULL OR st.id = ANY($2::text[])) AND st."parentId" IS NOT NULL`,
     session.sessionDateId, studentIds?.length ? studentIds : null,
   );
 }
@@ -189,14 +215,27 @@ export async function completeClassSession(input: { sessionId: string }) {
   if (session.status !== "IN_PROGRESS") return { ok: false as const, message: "시작한 수업만 종료할 수 있습니다." };
 
   const missing = session.sessionDateId
-    ? await prisma.$queryRawUnsafe<{ count: bigint }[]>(
+      ? await prisma.$queryRawUnsafe<{ count: bigint }[]>(
         `SELECT COUNT(DISTINCT app."convertedStudentId")::bigint AS count
-         FROM "SpecialProgramSessionDate" sd
+         FROM "SpecialProgramSessionDate" anchor_sd
+         JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+         JOIN "SpecialProgramSessionDate" sd
+           ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+         JOIN "SpecialProgramOffering" o
+           ON o.id = sd."offeringId"
+          AND (
+            o.id = anchor_o.id
+            OR (
+              anchor_o."linkedClassId" IS NOT NULL
+              AND o."linkedClassId" = anchor_o."linkedClassId"
+              AND o."seasonId" = anchor_o."seasonId"
+            )
+          )
          JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = sd."offeringId"
            AND i.status = 'APPROVED'
            AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
          JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
-         WHERE sd.id = $1 AND app."convertedStudentId" IS NOT NULL
+         WHERE anchor_sd.id = $1 AND app."convertedStudentId" IS NOT NULL
            AND (
              COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
              OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int

@@ -197,6 +197,8 @@ async function seasonalRoster(request: NextRequest) {
   const weekdayRaw = cleanText(params.get("weekday"), 10)?.toUpperCase() || null;
   const weekday = weekdayRaw ? (ROSTER_WEEKDAYS[weekdayRaw] ?? Number(weekdayRaw)) : null;
   if (weekday !== null && (!Number.isInteger(weekday) || weekday < 1 || weekday > 7)) throw new SeasonalError("요일 필터를 확인해 주세요.", 400, "INVALID_WEEKDAY");
+  const rosterDate = cleanText(params.get("date"), 20) || null;
+  if (rosterDate && !/^\d{4}-\d{2}-\d{2}$/.test(rosterDate)) throw new SeasonalError("출석 날짜를 확인해 주세요.", 400, "INVALID_ROSTER_DATE");
   const paymentStatus = cleanText(params.get("paymentStatus"), 30)?.toUpperCase() || null;
   const shuttleStatus = cleanText(params.get("shuttleStatus"), 30)?.toUpperCase() || null;
   const query = cleanText(params.get("q"), 100) || null;
@@ -227,6 +229,27 @@ async function seasonalRoster(request: NextRequest) {
         WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
         WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
       END = ANY(app."selectedWeekdays"))
+    AND ($7::date IS NULL OR EXISTS (
+      SELECT 1
+        FROM "SpecialProgramSessionDate" date_sd
+        JOIN "SpecialProgramOffering" date_offering ON date_offering.id = date_sd."offeringId"
+       WHERE (
+         date_offering.id = item."offeringId"
+         OR (
+           date_offering."linkedClassId" IS NOT NULL
+           AND offering."linkedClassId" = date_offering."linkedClassId"
+           AND offering."seasonId" = date_offering."seasonId"
+         )
+       )
+         AND (date_sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $7::date
+         AND (
+           COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+           OR CASE EXTRACT(ISODOW FROM date_sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+             WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+             WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+           END = ANY(app."selectedWeekdays")
+         )
+    ))
     AND ($4::text IS NULL OR ${paymentStatusSql} = $4)
     AND ($5::text IS NULL OR CASE
       WHEN $5 = 'REQUESTED' THEN shuttle.id IS NOT NULL
@@ -237,7 +260,7 @@ async function seasonalRoster(request: NextRequest) {
     AND ($6::text IS NULL OR app."childName" ILIKE '%' || $6 || '%' OR app."parentName" ILIKE '%' || $6 || '%'
       OR (regexp_replace($6, '[^0-9]', '', 'g') <> '' AND app."parentPhone" LIKE '%' || regexp_replace($6, '[^0-9]', '', 'g') || '%')
       OR COALESCE(app."childSchool", '') ILIKE '%' || $6 || '%')`;
-  const queryParams = [seasonId, offeringId, weekday, paymentStatus, shuttleStatus, query];
+  const queryParams = [seasonId, offeringId, weekday, paymentStatus, shuttleStatus, query, rosterDate];
   const [rows, totals] = await Promise.all([
     prisma.$queryRawUnsafe<SeasonalRosterRow[]>(`
       SELECT item.id AS "itemId", app.id AS "applicationId", app."seasonId", season.title AS "seasonTitle",
@@ -275,7 +298,7 @@ async function seasonalRoster(request: NextRequest) {
                   WHEN 'MON' THEN 1 WHEN 'TUE' THEN 2 WHEN 'WED' THEN 3 WHEN 'THU' THEN 4
                   WHEN 'FRI' THEN 5 WHEN 'SAT' THEN 6 WHEN 'SUN' THEN 7 ELSE NULL
                 END) FROM unnest(app."selectedWeekdays") AS selected(day_key)), 8),
-                offering."displayOrder", app."childName", item.id LIMIT $7 OFFSET $8`, ...queryParams, pageSize, offset),
+                offering."displayOrder", app."childName", item.id LIMIT $8 OFFSET $9`, ...queryParams, pageSize, offset),
     prisma.$queryRawUnsafe<Array<SeasonalRosterStats>>(`
       SELECT COUNT(*) FILTER (WHERE item.status = 'APPROVED')::int AS "confirmedSeats",
              COUNT(*) FILTER (WHERE item.status IN ('PENDING','APPROVED'))::int AS "heldSeats",
@@ -313,7 +336,7 @@ async function seasonalRoster(request: NextRequest) {
     roster: { rows: rosterRows, stats, pagination },
     stats,
     pagination,
-    filters: { seasonId, offeringId, weekday, paymentStatus, shuttleStatus, q: query },
+    filters: { seasonId, offeringId, weekday, date: rosterDate, paymentStatus, shuttleStatus, q: query },
   });
 }
 

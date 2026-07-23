@@ -10,7 +10,9 @@ export type SeasonalSessionDate = {
 
 export type SeasonalClass = {
   id: string;
+  code?: string;
   name: string;
+  linkedClassId?: string | null;
   dayLabel: string;
   dateLabel?: string;
   startTime: string;
@@ -107,7 +109,10 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
     return weekdayByLabel[label as keyof typeof weekdayByLabel] ? [weekdayByLabel[label as keyof typeof weekdayByLabel]] : [];
   })));
   return {
-    id: String(row.id ?? ""), name: String(row.title ?? row.name ?? "특강반"),
+    id: String(row.id ?? ""),
+    code: stringOrUndefined(row.code),
+    name: String(row.title ?? row.name ?? "특강반"),
+    linkedClassId: stringOrUndefined(row.linkedClassId) ?? null,
     dayLabel: String(row.dayLabel ?? (starts ? new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(starts) : "일정")),
     dateLabel: starts ? new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(starts) : undefined,
     startTime: String(row.startTime ?? (starts ? starts.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : "")),

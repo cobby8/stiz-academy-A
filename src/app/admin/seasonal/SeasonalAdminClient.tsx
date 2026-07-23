@@ -209,6 +209,22 @@ type RosterPayload = {
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
 };
 
+type RosterFilters = {
+  seasonId: string;
+  offeringId: string;
+  weekday: string;
+  date: string;
+  paymentStatus: string;
+  shuttleStatus: string;
+  q: string;
+  page: number;
+};
+
+type CoachOption = {
+  id: string;
+  name: string;
+};
+
 type ApplicationsMode = "applications" | "roster";
 
 type Tab = "overview" | "seasons" | "applications";
@@ -530,9 +546,10 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
   const [applicationsMode, setApplicationsMode] = useState<ApplicationsMode>("applications");
   const [applicationsLoaded, setApplicationsLoaded] = useState(false);
   const [roster, setRoster] = useState<RosterPayload>({ rows: [], stats: { confirmed: 0, unpaid: 0, shuttle: 0 }, pagination: { page: 1, pageSize: 100, total: 0, totalPages: 1 } });
-  const [rosterFilters, setRosterFilters] = useState({ seasonId: "", offeringId: "", weekday: "", paymentStatus: "", shuttleStatus: "", q: "", page: 1 });
+  const [rosterFilters, setRosterFilters] = useState<RosterFilters>({ seasonId: "", offeringId: "", weekday: "", date: "", paymentStatus: "", shuttleStatus: "", q: "", page: 1 });
   const [rosterLoading, setRosterLoading] = useState(false);
   const [rosterError, setRosterError] = useState("");
+  const [coachOptions, setCoachOptions] = useState<CoachOption[]>([]);
 
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get("tab");
@@ -624,6 +641,22 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     if (initialData) return;
     void load();
   }, [initialData, load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadCoachOptions = async () => {
+      try {
+        const response = await fetch("/api/admin/coach-options", { cache: "no-store" });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !Array.isArray(body.coaches)) return;
+        if (!cancelled) setCoachOptions(body.coaches.filter((coach: CoachOption) => coach?.id && coach?.name));
+      } catch {
+        if (!cancelled) setCoachOptions([]);
+      }
+    };
+    void loadCoachOptions();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     if (tab === "applications" && !applicationsLoaded && !loading) void load({ includeApplications: true });
   }, [applicationsLoaded, load, loading, tab]);
@@ -1001,7 +1034,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
-      {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
+      {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} coaches={coachOptions} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
   );
 }
@@ -1064,11 +1097,11 @@ function ApplicationsView({
   bulkConverting: boolean;
   mode: ApplicationsMode;
   roster: RosterPayload;
-  rosterFilters: { seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number };
+  rosterFilters: RosterFilters;
   rosterLoading: boolean;
   rosterError: string;
   onMode: (mode: ApplicationsMode) => void;
-  onRosterFilters: Dispatch<SetStateAction<{ seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number }>>;
+  onRosterFilters: Dispatch<SetStateAction<RosterFilters>>;
   onSearch: (value: string) => void;
   onStatus: (value: string) => void;
   onSelect: (application: Application) => void;
@@ -1206,10 +1239,10 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
   seasons: Season[];
   applications: Application[];
   roster: RosterPayload;
-  filters: { seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number };
+  filters: RosterFilters;
   loading: boolean;
   error: string;
-  onFilters: Dispatch<SetStateAction<{ seasonId: string; offeringId: string; weekday: string; paymentStatus: string; shuttleStatus: string; q: string; page: number }>>;
+  onFilters: Dispatch<SetStateAction<RosterFilters>>;
   onSelect: (application: Application) => void;
 }) {
   const selectedSeason = seasons.find((season) => season.id === filters.seasonId);
@@ -1269,16 +1302,22 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
     anchor.click();
     URL.revokeObjectURL(href);
   };
-  const printTitle = [selectedSeason?.name, offerings.find((offering) => offering.id === filters.offeringId)?.name, filters.weekday ? `${filters.weekday}요일` : ""].filter(Boolean).join(" · ") || "방학특강 요일별 출석부";
+  const printTitle = [
+    selectedSeason?.name,
+    filters.date ? formatDate(filters.date) : "",
+    offerings.find((offering) => offering.id === filters.offeringId)?.name,
+    filters.weekday ? `${filters.weekday}요일` : "",
+  ].filter(Boolean).join(" · ") || "방학특강 일자별 출석부";
 
-  return <Panel title="요일별 출석부" icon="fact_check" action={<div className="print:hidden flex gap-2">
+  return <Panel title="일자별 출석부" icon="fact_check" action={<div className="print:hidden flex gap-2">
     <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-black dark:border-gray-700"><Icon name="print" />인쇄</button>
     <button type="button" onClick={() => void downloadCsv().catch((caught) => window.alert(caught instanceof Error ? caught.message : "CSV 다운로드에 실패했습니다."))} className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]"><Icon name="download" />CSV</button>
   </div>}>
     <style>{`@media print { @page { size: A4 landscape; margin: 12mm; } body * { visibility: hidden !important; } .seasonal-roster-print, .seasonal-roster-print * { visibility: visible !important; } .seasonal-roster-print { position: absolute; inset: 0; width: 100%; color: #000 !important; } .roster-desktop { display: block !important; } .roster-mobile, .print\\:hidden { display: none !important; } .seasonal-roster-print table { width: 100%; border-collapse: collapse; font-size: 10pt; } .seasonal-roster-print th, .seasonal-roster-print td { border: 1px solid #777; padding: 6px; } .seasonal-roster-print thead { display: table-header-group; } }`}</style>
-    <div className="print:hidden grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="print:hidden grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
       <select aria-label="명단 시즌" value={filters.seasonId} onChange={(event) => changeFilter("seasonId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 시즌</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select>
       <select aria-label="명단 반" value={filters.offeringId} onChange={(event) => changeFilter("offeringId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 운영 반</option>{offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}</select>
+      <input aria-label="명단 출석일" type="date" value={filters.date} onChange={(event) => changeFilter("date", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 font-bold dark:border-gray-700 dark:bg-gray-800" />
       <select aria-label="명단 요일" value={filters.weekday} onChange={(event) => changeFilter("weekday", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 요일</option>{["월","화","수","목","금","토","일"].map((day) => <option key={day} value={day}>{day}요일</option>)}</select>
       <select aria-label="명단 결제" value={filters.paymentStatus} onChange={(event) => changeFilter("paymentStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 결제</option><option value="PAID">결제 완료</option><option value="UNPAID">미결제</option><option value="PAYMENT_PENDING">결제 대기</option></select>
       <select aria-label="명단 셔틀" value={filters.shuttleStatus} onChange={(event) => changeFilter("shuttleStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 셔틀</option><option value="NOT_USED">미이용</option><option value="REQUESTED">요청</option><option value="UNASSIGNED">미배정</option><option value="ASSIGNED">배정 완료</option></select>
@@ -1287,7 +1326,7 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
     <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-emerald-50 p-3 text-emerald-800"><strong className="block text-xl">{roster.stats.confirmed}</strong><span className="text-xs font-bold">확정</span></div><div className="rounded-xl bg-amber-50 p-3 text-amber-800"><strong className="block text-xl">{roster.stats.unpaid}</strong><span className="text-xs font-bold">미결제</span></div><div className="rounded-xl bg-blue-50 p-3 text-blue-800"><strong className="block text-xl">{roster.stats.shuttle}</strong><span className="text-xs font-bold">셔틀</span></div></div>
     {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
     {loading ? <Loading /> : <section className="seasonal-roster-print mt-4" aria-label="반별 확정 명단 결과">
-      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p><p className="text-xs">요일은 학생이 신청한 참여 요일 기준입니다.</p></div>
+      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p><p className="text-xs">출석일을 선택하면 해당 날짜에 실제 수업이 있는 신청자만 표시됩니다.</p></div>
       <div className="roster-desktop hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="px-3 py-3">번호</th><th className="px-3 py-3">요일</th><th className="px-3 py-3">운영 반</th><th className="px-3 py-3">학생</th><th className="px-3 py-3">결제</th><th className="px-3 py-3">셔틀</th><th className="px-3 py-3">출석</th><th className="px-3 py-3">메모</th></tr></thead><tbody className="divide-y divide-gray-100">{roster.rows.map((row, index) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-3 py-3">{(roster.pagination.page - 1) * roster.pagination.pageSize + index + 1}</td><td className="px-3 py-3 font-black">{row.weekday || "미정"}</td><td className="px-3 py-3 font-bold">{row.offeringName}</td><td className="px-3 py-3"><button type="button" onClick={() => openApplication(row.applicationId)} className="font-black hover:underline print:pointer-events-none">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></td><td className="px-3 py-3"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></td><td className="px-3 py-3"><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></td><td className="px-3 py-3">□</td><td className="px-3 py-3"> </td></tr>)}{!roster.rows.length && <tr><td colSpan={8}><Empty text="조건에 맞는 출석부 명단이 없습니다." /></td></tr>}</tbody></table></div>
       <div className="roster-mobile space-y-3 md:hidden">{roster.rows.map((row) => <article key={row.id} className="rounded-xl border border-gray-200 p-4"><div className="flex items-start justify-between gap-2"><div><button type="button" onClick={() => openApplication(row.applicationId)} className="min-h-11 font-black hover:underline">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></div><span className="rounded-full bg-[var(--brand-accent-soft)] px-2.5 py-1 text-xs font-black text-[var(--brand-accent)]">{row.weekday || "요일 미정"}</span></div><p className="mt-2 text-sm font-bold">{row.offeringName}</p><div className="mt-2 flex flex-wrap gap-2"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></div><button type="button" onClick={() => openApplication(row.applicationId)} className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 font-bold">신청 상세</button></article>)}</div>
     </section>}
@@ -1938,9 +1977,10 @@ function SeasonForm({ initial, onClose, onSubmit }: { initial?: Season | null; o
   return <FormModal title="새 방학특강 시즌" onClose={onClose} onSubmit={onSubmit} fields={[{name:"title",label:"시즌명",placeholder:"예: 2026 여름방학 특강",required:true,defaultValue:initial?.name},{name:"slug",label:"홈페이지 주소",placeholder:"예: 2026-summer",required:true,defaultValue:initial?.slug},{name:"applicationOpensAt",label:"모집 시작일",type:"date",required:true,defaultValue:dateInputValue(initial?.enrollmentStartsAt)},{name:"applicationClosesAt",label:"모집 종료일",type:"date",required:true,defaultValue:dateInputValue(initial?.enrollmentEndsAt)},{name:"startsAt",label:"수업 시작일",type:"date",required:true,defaultValue:dateInputValue(initial?.startsAt)},{name:"endsAt",label:"수업 종료일",type:"date",required:true,defaultValue:dateInputValue(initial?.endsAt)}]} />;
 }
 
-function ClassForm({ seasonId, initial, onClose, onSubmit }: { seasonId: string; initial?: SeasonalClass | null; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
+function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId: string; initial?: SeasonalClass | null; coaches: CoachOption[]; onClose: () => void; onSubmit: (payload: Record<string, unknown>) => Promise<void> }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [selectedInstructorId, setSelectedInstructorId] = useState(initial?.instructorId ?? "");
   const [attendanceReadiness, setAttendanceReadiness] = useState({
     status: initial?.status ?? "DRAFT",
     instructorId: initial?.instructorId ?? "",
@@ -1980,6 +2020,8 @@ function ClassForm({ seasonId, initial, onClose, onSubmit }: { seasonId: string;
   }
 
   const inputClass = "mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white";
+  const selectedCoach = coaches.find((coach) => coach.id === selectedInstructorId);
+  const currentCoachMissingFromOptions = Boolean(selectedInstructorId && !selectedCoach);
   const attendanceMissing = ["OPEN", "CLOSED"].includes(attendanceReadiness.status)
     ? missingAttendancePreparation(attendanceReadiness.linkedClassId, attendanceReadiness.instructorId)
     : [];
@@ -1994,8 +2036,17 @@ function ClassForm({ seasonId, initial, onClose, onSubmit }: { seasonId: string;
       <ClassInput name="price" label="기본 수강료" type="number" required defaultValue={initial?.price} />
       <ClassInput name="newApplicantPrice" label="신규 회원 수강료" type="number" defaultValue={initial?.newApplicantPrice} />
       <ClassInput name="existingApplicantPrice" label="기존 회원 수강료" type="number" defaultValue={initial?.existingApplicantPrice} />
-      <ClassInput name="instructorName" label="담당 선생님" defaultValue={initial?.instructorName} placeholder="미정이면 비워두세요" />
-      <ClassInput name="instructorId" label="담당 강사 ID" defaultValue={initial?.instructorId} placeholder="강사 계정 ID (선택)" onChange={(value) => setAttendanceReadiness((current) => ({ ...current, instructorId: value }))} />
+      <label className="text-sm font-bold text-gray-700 dark:text-gray-200">담당 선생님
+        <select name="instructorId" value={selectedInstructorId} onChange={(event) => {
+          setSelectedInstructorId(event.target.value);
+          setAttendanceReadiness((current) => ({ ...current, instructorId: event.target.value }));
+        }} className={inputClass}>
+          <option value="">담당자 미정</option>
+          {currentCoachMissingFromOptions && <option value={selectedInstructorId}>{initial?.instructorName || "현재 담당 선생님"}</option>}
+          {coaches.map((coach) => <option key={coach.id} value={coach.id}>{coach.name}</option>)}
+        </select>
+        <input type="hidden" name="instructorName" value={selectedCoach?.name ?? (currentCoachMissingFromOptions ? initial?.instructorName ?? "" : "")} />
+      </label>
       <ClassInput name="linkedProgramId" label="연결 프로그램 ID" defaultValue={initial?.linkedProgramId} placeholder="기존 프로그램 ID (선택)" />
       <ClassInput name="linkedClassId" label="연결 정규 반 ID" defaultValue={initial?.linkedClassId} placeholder="수강·출석에 연결할 반 ID" onChange={(value) => setAttendanceReadiness((current) => ({ ...current, linkedClassId: value }))} />
       <label className="text-sm font-bold text-gray-700 dark:text-gray-200">공개 상태<select name="status" value={attendanceReadiness.status} onChange={(event) => setAttendanceReadiness((current) => ({ ...current, status: event.target.value as NonNullable<SeasonalClass["status"]> }))} className={inputClass}><option value="DRAFT">작성 중</option><option value="OPEN">모집 중</option><option value="CLOSED">모집 마감</option><option value="CANCELLED">취소</option></select></label>

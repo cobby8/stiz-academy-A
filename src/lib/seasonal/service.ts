@@ -8,8 +8,8 @@ import {
 } from "@/lib/seasonal/notifications";
 import { notifyAdmins } from "@/lib/notification";
 import { prisma } from "@/lib/prisma";
-import { SeasonalError, type SeasonalApplicationInput } from "./contracts";
-import { decideApplicantType, planApplicationItems, totalSnapshot, weekdayInSeoul } from "./planning";
+import { SeasonalError, type SeasonalApplicationInput, type SeasonalWeekday } from "./contracts";
+import { decideApplicantType, resolveOfferingPrice, totalSnapshot, weekdayInSeoul } from "./planning";
 
 const OCCUPYING_ITEM_STATUSES = ["PENDING", "APPROVED"];
 const ACTIVE_APPLICATION_ITEM_STATUSES = ["PENDING", "APPROVED", "WAITLISTED"];
@@ -19,6 +19,9 @@ type PublicOfferingRow = Prisma.SpecialProgramOfferingGetPayload<{
 type PublicSeasonRow = Prisma.SpecialProgramSeasonGetPayload<{
   include: { offerings: { include: { sessionDates: true; _count: { select: { applicationItems: true } } } } };
 }>;
+type AssignmentOffering = Prisma.SpecialProgramOfferingGetPayload<{
+  include: { sessionDates: { select: { startsAt: true } } };
+}>;
 
 function publicStatus(season: { status: string; applicationOpensAt: Date; applicationClosesAt: Date; endsAt: Date }) {
   const now = new Date();
@@ -26,6 +29,71 @@ function publicStatus(season: { status: string; applicationOpensAt: Date; applic
   if (now < season.applicationOpensAt) return "UPCOMING";
   if (now > season.applicationClosesAt) return "CLOSED";
   return "OPEN";
+}
+
+function seasonalOfferingFrequency(offering: Pick<AssignmentOffering, "title" | "code">) {
+  const matched = `${offering.title ?? ""} ${offering.code ?? ""}`.match(/주\s*(\d+)\s*회|-(\d)(?:\D|$)/i);
+  const value = matched ? Number(matched[1] ?? matched[2]) : NaN;
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function offeringScopeWhere(offering: Pick<AssignmentOffering, "id" | "seasonId" | "linkedClassId">) {
+  return offering.linkedClassId
+    ? { seasonId: offering.seasonId, linkedClassId: offering.linkedClassId }
+    : { id: offering.id };
+}
+
+async function resolvePublicOfferingAssignment(
+  tx: Prisma.TransactionClient,
+  target: AssignmentOffering,
+  selectedWeekdays: SeasonalWeekday[],
+  applicantType: "NEW" | "EXISTING",
+) {
+  const candidates = await tx.specialProgramOffering.findMany({
+    where: { ...offeringScopeWhere(target), status: "OPEN" },
+    include: { sessionDates: { select: { startsAt: true } } },
+    orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+  });
+  const frequencyCandidates = candidates.filter((candidate) => seasonalOfferingFrequency(candidate) !== null);
+  const offering = frequencyCandidates.length
+    ? frequencyCandidates.find((candidate) => seasonalOfferingFrequency(candidate) === selectedWeekdays.length)
+    : target;
+  if (!offering) {
+    throw new SeasonalError(
+      `선택한 ${selectedWeekdays.length}개 요일에 맞는 수강료가 설정되지 않았습니다.`,
+      409,
+      "OFFERING_FREQUENCY_NOT_CONFIGURED",
+    );
+  }
+  return {
+    offering,
+    scopeOfferings: candidates.length ? candidates : [target],
+    priceSnapshot: resolveOfferingPrice(offering, applicantType),
+  };
+}
+
+async function isOperationalOfferingFull(
+  tx: Prisma.TransactionClient,
+  offering: AssignmentOffering,
+  scopeOfferingIds: string[],
+  selectedWeekdays: SeasonalWeekday[],
+) {
+  if (offering.capacity === null) return false;
+  for (const weekday of selectedWeekdays) {
+    const rows = await tx.$queryRaw<Array<{ occupied: number }>>`
+      SELECT COUNT(DISTINCT item.id)::int AS occupied
+        FROM "SpecialProgramApplicationItem" item
+        JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+       WHERE item."offeringId" IN (${Prisma.join(scopeOfferingIds)})
+         AND item.status IN (${Prisma.join(OCCUPYING_ITEM_STATUSES)})
+         AND (
+           COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
+           OR ${weekday} = ANY(app."selectedWeekdays")
+         )
+    `;
+    if (Number(rows[0]?.occupied ?? 0) >= offering.capacity) return true;
+  }
+  return false;
 }
 
 function publicOffering(offering: PublicOfferingRow) {
@@ -43,6 +111,8 @@ function publicOffering(offering: PublicOfferingRow) {
     : "";
   return {
     id: offering.id,
+    code: offering.code,
+    linkedClassId: offering.linkedClassId,
     name: offering.title,
     dayLabel: startsAt ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(startsAt) : "일정 미정",
     dateLabel: startsAt ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(startsAt) : undefined,
@@ -320,38 +390,51 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       if (offerings.length !== ids.length || offerings.some((offering) => offering.status !== "OPEN")) {
         throw new SeasonalError("마감되었거나 존재하지 않는 특강이 포함되어 있습니다.", 409, "OFFERING_UNAVAILABLE");
       }
-      // 특강 행 잠금 안에서 확인하므로 같은 특강으로 동시에 들어온 요청도 순서대로 판정된다.
-      if (await findActiveDuplicate(tx, ids, fingerprint)) throw duplicateApplicationError();
-      const availableWeekdays = new Set(offerings.flatMap((offering) => offering.sessionDates.map((session) => weekdayInSeoul(session.startsAt))));
+      const assignments: Array<Awaited<ReturnType<typeof resolvePublicOfferingAssignment>>> = [];
+      for (const offering of offerings) {
+        assignments.push(await resolvePublicOfferingAssignment(tx, offering, input.selectedWeekdays, applicantDecision.pricingType));
+      }
+      const scopedOfferingIds = Array.from(new Set(assignments.flatMap((assignment) => assignment.scopeOfferings.map((offering) => offering.id))));
+      if (scopedOfferingIds.length > ids.length) {
+        await tx.$queryRaw`SELECT id FROM "SpecialProgramOffering" WHERE id IN (${Prisma.join(scopedOfferingIds)}) ORDER BY id FOR UPDATE`;
+      }
+
+      // 특강 행 잠금 안에서 확인하므로 같은 운영 반으로 동시에 들어온 요청도 순서대로 판정된다.
+      if (await findActiveDuplicate(tx, scopedOfferingIds, fingerprint)) throw duplicateApplicationError();
+      const availableWeekdays = new Set(assignments.flatMap((assignment) =>
+        assignment.scopeOfferings.flatMap((offering) => offering.sessionDates.map((session) => weekdayInSeoul(session.startsAt))),
+      ));
       const invalidWeekdays = input.selectedWeekdays.filter((weekday) => !availableWeekdays.has(weekday));
       if (invalidWeekdays.length > 0) {
         throw new SeasonalError("선택한 요일과 실제 특강 일정이 일치하지 않습니다.", 409, "WEEKDAY_NOT_OFFERED");
       }
 
-      const counts = await tx.specialProgramApplicationItem.groupBy({
-        by: ["offeringId"],
-        where: { offeringId: { in: ids }, status: { in: OCCUPYING_ITEM_STATUSES } },
-        _count: { _all: true },
-      });
-      const occupied = new Map(counts.map((row) => [row.offeringId, row._count._all]));
       const waitlistMax = await tx.specialProgramApplicationItem.groupBy({
         by: ["offeringId"],
-        where: { offeringId: { in: ids }, status: "WAITLISTED" },
+        where: { offeringId: { in: scopedOfferingIds }, status: "WAITLISTED" },
         _max: { waitlistOrder: true },
       });
       const maxOrders = new Map(waitlistMax.map((row) => [row.offeringId, row._max.waitlistOrder || 0]));
-      const byId = new Map(offerings.map((offering) => [offering.id, offering]));
-      const placement = planApplicationItems(
-        input.items.map((requested) => byId.get(requested.offeringId)!),
-        occupied,
-        maxOrders,
-        applicantDecision.pricingType,
-      );
-      const itemPlans = input.items.map((requested, index) => ({
-        requested,
-        offering: byId.get(requested.offeringId)!,
-        ...placement[index],
-      }));
+      const itemPlans = [];
+      for (let index = 0; index < input.items.length; index += 1) {
+        const assignment = assignments[index];
+        if (!assignment) throw new SeasonalError("신청할 특강 반 정보를 확인해 주세요.", 400, "OFFERING_ASSIGNMENT_MISSING");
+        const full = await isOperationalOfferingFull(
+          tx,
+          assignment.offering,
+          assignment.scopeOfferings.map((offering) => offering.id),
+          input.selectedWeekdays,
+        );
+        itemPlans.push({
+          requested: input.items[index],
+          offering: assignment.offering,
+          offeringId: assignment.offering.id,
+          priceSnapshot: assignment.priceSnapshot,
+          titleSnapshot: assignment.offering.title,
+          status: full ? "WAITLISTED" : "PENDING",
+          waitlistOrder: full ? (maxOrders.get(assignment.offering.id) || 0) + 1 : null,
+        });
+      }
       const totalPriceSnapshot = totalSnapshot(itemPlans);
       const status = itemPlans.some((item) => item.status === "WAITLISTED") ? "PARTIALLY_WAITLISTED" : "PENDING";
 
@@ -394,8 +477,9 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
 
       // 중첩 생성에서는 applicationId를 알기 전이므로 셔틀 요청은 항목 생성 후 저장한다.
       for (const item of application.items) {
-        const requested = input.items.find((candidate) => candidate.offeringId === item.offeringId);
-        if (!requested?.shuttle || !byId.get(item.offeringId)?.shuttleAvailable) continue;
+        const plan = itemPlans.find((candidate) => candidate.offering.id === item.offeringId);
+        const requested = plan?.requested;
+        if (!requested?.shuttle || !plan?.offering.shuttleAvailable) continue;
         const pickup = requested.shuttle.pickupLocationData;
         const dropoff = requested.shuttle.dropoffLocationData;
         const confirmedAt = pickup || dropoff ? new Date() : undefined;

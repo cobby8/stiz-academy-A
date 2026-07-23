@@ -15,7 +15,8 @@ const migration = readFileSync(
 
 test("public seasonal pages hide open offerings until capacity is confirmed", () => {
   assert.match(service, /capacity: \{ not: null \}/);
-  assert.doesNotMatch(service, /offering\.capacity === null/);
+  const publicOfferingSource = service.slice(service.indexOf("function publicOffering"), service.indexOf("function publicSeason"));
+  assert.doesNotMatch(publicOfferingSource, /offering\.capacity === null/);
   assert.doesNotMatch(service, /capacity: byId\.get/);
   assert.match(service, /const remaining = capacity === null \? null/);
   assert.match(service, /waitlistEnabled: capacity !== null/);

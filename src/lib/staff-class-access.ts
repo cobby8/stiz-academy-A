@@ -158,13 +158,25 @@ export async function requireStaffSeasonalSessionAccess(
 
   const access = context ?? (await getStaffClassAccessContext());
   const rows = await prisma.$queryRawUnsafe<StaffSeasonalAccessRow[]>(
-    `SELECT sd.id AS "sessionDateId", o.id AS "offeringId",
-            o."linkedClassId", o.title
-     FROM "SpecialProgramSessionDate" sd
-     JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
-     WHERE sd.id = $1
-       AND o."linkedClassId" IS NOT NULL
-       AND ($2::boolean = true OR o."instructorId" = $3)
+    `SELECT anchor_sd.id AS "sessionDateId", anchor_o.id AS "offeringId",
+            anchor_o."linkedClassId", anchor_o.title
+     FROM "SpecialProgramSessionDate" anchor_sd
+     JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+     LEFT JOIN "SpecialProgramSessionDate" matched_sd
+       ON matched_sd."startsAt" = anchor_sd."startsAt" AND matched_sd."endsAt" = anchor_sd."endsAt"
+     LEFT JOIN "SpecialProgramOffering" matched_o
+       ON matched_o.id = matched_sd."offeringId"
+      AND (
+        matched_o.id = anchor_o.id
+        OR (
+          anchor_o."linkedClassId" IS NOT NULL
+          AND matched_o."linkedClassId" = anchor_o."linkedClassId"
+          AND matched_o."seasonId" = anchor_o."seasonId"
+        )
+      )
+     WHERE anchor_sd.id = $1
+       AND anchor_o."linkedClassId" IS NOT NULL
+       AND ($2::boolean = true OR matched_o."instructorId" = $3)
      LIMIT 1`,
     sessionDateId,
     access.canAccessAllClasses,

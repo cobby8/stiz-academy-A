@@ -98,36 +98,48 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
   );
 
   const seasonalRows = await prisma.$queryRawUnsafe<TodayClassRow[]>(
-    `SELECT c.id, o.title AS name,
-            to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "startTime",
-            to_char(sd."endsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "endTime",
-            COALESCE(sd.location, o.location, c.location) AS location,
-            COUNT(DISTINCT a."convertedStudentId")::int AS "studentCount",
+    `WITH occurrence AS (
+       SELECT c.id,
+              c.name,
+              sd."startsAt",
+              sd."endsAt",
+              COALESCE(MIN(sd.location), MIN(o.location), c.location) AS location,
+              (ARRAY_AGG(sd.id ORDER BY CASE WHEN existing_s.id IS NULL THEN 1 ELSE 0 END, sd.id))[1] AS "sessionDateId",
+              COUNT(DISTINCT a."convertedStudentId")::int AS "studentCount"
+         FROM "SpecialProgramSessionDate" sd
+         JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+         JOIN "Class" c ON c.id = o."linkedClassId"
+         LEFT JOIN "Session" existing_s ON existing_s."specialProgramSessionDateId" = sd.id
+         LEFT JOIN "SpecialProgramApplicationItem" i
+           ON i."offeringId" = o.id AND i.status = 'APPROVED'
+             AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+         LEFT JOIN "SpecialProgramApplication" a
+           ON a.id = i."applicationId" AND a."convertedStudentId" IS NOT NULL
+            AND (
+              COALESCE(cardinality(a."selectedWeekdays"), 0) = 0
+              OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
+                WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
+                WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
+              END = ANY(a."selectedWeekdays")
+            )
+        WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
+          AND ($2::boolean = true OR o."instructorId" = $3)
+        GROUP BY c.id, c.name, c.location, sd."startsAt", sd."endsAt"
+     )
+     SELECT occurrence.id,
+            occurrence.name,
+            to_char(occurrence."startsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "startTime",
+            to_char(occurrence."endsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI') AS "endTime",
+            occurrence.location,
+            occurrence."studentCount",
             s.id AS "sessionId", s.status AS "sessionStatus",
             s."plannedContent", s."startedAt",
             'SEASONAL' AS kind,
-            ('seasonal:' || sd.id) AS "scheduleKey",
-            sd.id AS "sessionDateId"
-     FROM "SpecialProgramSessionDate" sd
-     JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
-     JOIN "Class" c ON c.id = o."linkedClassId"
-     LEFT JOIN "SpecialProgramApplicationItem" i
-       ON i."offeringId" = o.id AND i.status = 'APPROVED'
-         AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
-     LEFT JOIN "SpecialProgramApplication" a
-       ON a.id = i."applicationId" AND a."convertedStudentId" IS NOT NULL
-        AND (
-          COALESCE(cardinality(a."selectedWeekdays"), 0) = 0
-          OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
-            WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
-            WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
-          END = ANY(a."selectedWeekdays")
-        )
-     LEFT JOIN "Session" s ON s."specialProgramSessionDateId" = sd.id
-     WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
-       AND ($2::boolean = true OR o."instructorId" = $3)
-     GROUP BY c.id, o.id, sd.id, s.id
-     ORDER BY sd."startsAt", o.title`,
+            ('seasonal:' || occurrence."sessionDateId") AS "scheduleKey",
+            occurrence."sessionDateId"
+       FROM occurrence
+       LEFT JOIN "Session" s ON s."specialProgramSessionDateId" = occurrence."sessionDateId"
+      ORDER BY occurrence."startsAt", occurrence.name`,
     dateKey,
     access.canAccessAllClasses,
     access.staff.appUserId,
@@ -154,10 +166,10 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
 
 export async function getStaffSessionDetail(sessionId: string): Promise<StaffSessionDetail | null> {
   const rows = await prisma.$queryRawUnsafe<Array<SessionDetailRow & { sessionDateId: string | null }>>(
-    `SELECT s.id, s."classId", COALESCE(o.title, c.name) AS "className",
+    `SELECT s.id, s."classId", COALESCE(c.name, anchor_o.title) AS "className",
             COALESCE(to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI'), c."startTime") AS "startTime",
             COALESCE(to_char(sd."endsAt" AT TIME ZONE 'Asia/Seoul', 'HH24:MI'), c."endTime") AS "endTime",
-            COALESCE(sd.location, o.location, c.location) AS location,
+            COALESCE(sd.location, anchor_o.location, c.location) AS location,
             s.status, s."plannedContent", s.content, s.notes, s."photosJSON",
             s."startedAt", s."endedAt",
             s."specialProgramSessionDateId" AS "sessionDateId",
@@ -168,7 +180,19 @@ export async function getStaffSessionDetail(sessionId: string): Promise<StaffSes
      FROM "Session" s
      JOIN "Class" c ON c.id = s."classId"
      LEFT JOIN "SpecialProgramSessionDate" sd ON sd.id = s."specialProgramSessionDateId"
-     LEFT JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+     LEFT JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = sd."offeringId"
+     LEFT JOIN "SpecialProgramSessionDate" matched_sd
+       ON matched_sd."startsAt" = sd."startsAt" AND matched_sd."endsAt" = sd."endsAt"
+     LEFT JOIN "SpecialProgramOffering" o
+       ON o.id = matched_sd."offeringId"
+      AND (
+        o.id = anchor_o.id
+        OR (
+          anchor_o."linkedClassId" IS NOT NULL
+          AND o."linkedClassId" = anchor_o."linkedClassId"
+          AND o."seasonId" = anchor_o."seasonId"
+        )
+      )
      LEFT JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id
        AND i.status = 'APPROVED'
        AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
@@ -183,7 +207,7 @@ export async function getStaffSessionDetail(sessionId: string): Promise<StaffSes
        )
      LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
      WHERE s.id = $1
-     GROUP BY s.id, c.id, sd.id, o.id
+     GROUP BY s.id, c.id, sd.id, anchor_o.id
      LIMIT 1`,
     sessionId,
   );
@@ -226,8 +250,21 @@ export async function getStaffSessionStudents(
     >(
       `SELECT DISTINCT st.id, st.name, att.status, att.note AS "attendanceNote", att."arrivedAt"
        FROM "Session" s
-       JOIN "SpecialProgramSessionDate" sd ON sd.id = s."specialProgramSessionDateId"
-       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = sd."offeringId"
+       JOIN "SpecialProgramSessionDate" anchor_sd ON anchor_sd.id = s."specialProgramSessionDateId"
+       JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+       JOIN "SpecialProgramSessionDate" sd
+         ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+       JOIN "SpecialProgramOffering" o
+         ON o.id = sd."offeringId"
+        AND (
+          o.id = anchor_o.id
+          OR (
+            anchor_o."linkedClassId" IS NOT NULL
+            AND o."linkedClassId" = anchor_o."linkedClassId"
+            AND o."seasonId" = anchor_o."seasonId"
+          )
+        )
+       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id
          AND i.status = 'APPROVED'
          AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
        JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"

@@ -9,9 +9,14 @@ const admin = readFileSync("src/app/admin/seasonal/SeasonalAdminClient.tsx", "ut
 const staffQueries = readFileSync("src/lib/staff-session-queries.ts", "utf8");
 const staffAccess = readFileSync("src/lib/staff-class-access.ts", "utf8");
 
-test("특강 회차와 출석 Session을 일대일로 연결한다", () => {
+test("특강 출석 Session은 운영반과 시간 기준으로 하나만 만든다", () => {
   assert.match(schema, /specialProgramSessionDateId\s+String\?\s+@unique/);
   assert.match(schema, /onDelete: Restrict/);
+  assert.match(bridge, /function findOperationalSession/);
+  assert.match(bridge, /sd\."startsAt" = \$2/);
+  assert.match(bridge, /sd\."endsAt" = \$3/);
+  assert.match(bridge, /o\."linkedClassId" = \$1/);
+  assert.match(bridge, /o\."seasonId" = current_o\."seasonId"/);
   assert.match(bridge, /sessionKey: `seasonal:\$\{sessionDate\.id\}`/);
   assert.match(bridge, /status: "PLANNED"/);
 });
@@ -47,7 +52,19 @@ test("미연결 특강은 출석 Session을 만들거나 강사 화면에 노출
   assert.match(bridge, /else if \(previous\?\.session\)/);
   assert.match(bridge, /await tx\.session\.delete/);
   assert.match(staffQueries, /JOIN "Class" c ON c\.id = o\."linkedClassId"/);
-  assert.match(staffAccess, /o\."linkedClassId" IS NOT NULL/);
+  assert.match(staffAccess, /anchor_o\."linkedClassId" IS NOT NULL/);
+});
+
+test("강사 홈의 특강 대표 회차는 이미 생성된 출석 Session을 우선한다", () => {
+  assert.match(staffQueries, /LEFT JOIN "Session" existing_s ON existing_s\."specialProgramSessionDateId" = sd\.id/);
+  assert.match(staffQueries, /ARRAY_AGG\(sd\.id ORDER BY CASE WHEN existing_s\.id IS NULL THEN 1 ELSE 0 END, sd\.id\)\)\[1\] AS "sessionDateId"/);
+});
+
+test("선생님 특강 권한은 같은 운영반과 시간대의 배정 정보를 함께 본다", () => {
+  assert.match(staffAccess, /matched_sd\."startsAt" = anchor_sd\."startsAt"/);
+  assert.match(staffAccess, /matched_o\."linkedClassId" = anchor_o\."linkedClassId"/);
+  assert.match(staffAccess, /matched_o\."seasonId" = anchor_o\."seasonId"/);
+  assert.match(staffAccess, /matched_o\."instructorId" = \$3/);
 });
 
 test("진행 전 빈 출석 세션만 특강과 함께 안전하게 삭제한다", () => {

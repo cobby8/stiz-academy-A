@@ -43,10 +43,20 @@ export type NoticeData = {
     createdAt: Date | string;
 };
 type ClassInfo = { id: string; name: string; program?: { name: string } | null };
+type NoticePagination = {
+    limit: number;
+    offset: number;
+    returned: number;
+    total: number;
+    hasMore: boolean;
+    nextOffset: number | null;
+    partial?: boolean;
+};
 
 type NoticesPayload = {
     notices: NoticeData[];
-    classes: ClassInfo[];
+    classes?: ClassInfo[];
+    pagination?: NoticePagination;
 };
 
 function SymbolIcon({
@@ -126,15 +136,19 @@ function NoticesErrorState({ onRetry }: { onRetry: () => void }) {
 export default function NoticesAdminClient({
     notices: initialNotices,
     classes: initialClasses,
+    pagination: initialPagination,
 }: {
     notices?: NoticeData[];
     classes?: ClassInfo[];
+    pagination?: NoticePagination;
 }) {
     const [isPending, startTransition] = useTransition();
     const hasInitialData = initialNotices !== undefined && initialClasses !== undefined;
     const [notices, setNotices] = useState<NoticeData[]>(initialNotices ?? []);
     const [classes, setClasses] = useState<ClassInfo[]>(initialClasses ?? []);
+    const [pagination, setPagination] = useState<NoticePagination | null>(initialPagination ?? null);
     const [loading, setLoading] = useState(!hasInitialData);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [loadError, setLoadError] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
@@ -153,13 +167,16 @@ export default function NoticesAdminClient({
         setLoading(true);
         setLoadError(false);
         try {
-            const response = await fetch("/api/admin/notices", { cache: "no-store" });
+            const response = await fetch("/api/admin/notices?limit=30", { cache: "no-store" });
             if (!response.ok) {
                 throw new Error("Failed to load notices.");
             }
             const data = (await response.json()) as NoticesPayload;
             setNotices(data.notices);
-            setClasses(data.classes);
+            if (data.classes) {
+                setClasses(data.classes);
+            }
+            setPagination(data.pagination ?? null);
         } catch (error) {
             console.error("Failed to load notices:", error);
             setLoadError(true);
@@ -167,6 +184,35 @@ export default function NoticesAdminClient({
             setLoading(false);
         }
     }, []);
+
+    const loadMoreNotices = useCallback(async () => {
+        if (!pagination?.hasMore || pagination.nextOffset === null || loadingMore) return;
+        setLoadingMore(true);
+        setLoadError(false);
+        try {
+            const params = new URLSearchParams({
+                noticesOnly: "1",
+                limit: String(pagination.limit),
+                offset: String(pagination.nextOffset),
+            });
+            const response = await fetch(`/api/admin/notices?${params.toString()}`, { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load more notices.");
+            }
+            const data = (await response.json()) as NoticesPayload;
+            setNotices(prev => {
+                const seen = new Set(prev.map(notice => notice.id));
+                const nextItems = data.notices.filter(notice => !seen.has(notice.id));
+                return [...prev, ...nextItems];
+            });
+            setPagination(data.pagination ?? null);
+        } catch (error) {
+            console.error("Failed to load more notices:", error);
+            setLoadError(true);
+        } finally {
+            setLoadingMore(false);
+        }
+    }, [loadingMore, pagination]);
 
     useEffect(() => {
         if (hasInitialData) return;
@@ -445,6 +491,19 @@ export default function NoticesAdminClient({
                             </div>
                         );
                     })}
+                    {pagination?.hasMore && (
+                        <div className="flex justify-center pt-3">
+                            <button
+                                type="button"
+                                onClick={loadMoreNotices}
+                                disabled={loadingMore}
+                                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:text-brand-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:text-brand-neon-lime"
+                            >
+                                <SymbolIcon name={loadingMore ? "progress_activity" : "expand_more"} size={18} />
+                                {loadingMore ? "불러오는 중..." : `더 보기 (${Math.max(pagination.total - notices.length, 0)}개 남음)`}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

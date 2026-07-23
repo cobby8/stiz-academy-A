@@ -51,6 +51,7 @@ const DASHBOARD_MONTHS = 6;
 const ADMIN_LIST_PAGE_SIZE = 50;
 const ADMIN_LIST_MAX_PAGE_SIZE = 100;
 const ADMIN_GALLERY_PAGE_SIZE = 24;
+const ADMIN_NOTICES_PAGE_SIZE = 30;
 
 type AdminListPayloadOptions = {
     limit?: number;
@@ -776,6 +777,18 @@ export function getCachedAdminGalleryPayload(options?: AdminListPayloadOptions) 
     )();
 }
 
+async function getAdminNoticeCount() {
+    try {
+        const rows = await prisma.$queryRawUnsafe<Array<{ count: number | string }>>(
+            `SELECT COUNT(*)::int AS count FROM "Notice"`,
+        );
+        return Number(rows[0]?.count ?? 0);
+    } catch (error) {
+        console.error("[getAdminNoticeCount] failed:", error);
+        return 0;
+    }
+}
+
 export function getCachedAdminFinancePayload(year: number, month: number) {
     return unstable_cache(
         async () => {
@@ -791,18 +804,65 @@ export function getCachedAdminFinancePayload(year: number, month: number) {
     )();
 }
 
-export const getCachedAdminNoticesPayload = unstable_cache(
-    async () => {
-        const [notices, classes] = await Promise.all([
-            getNotices({ limit: 100 }),
-            getClasses(),
-        ]);
+export function getCachedAdminNoticesPagePayload(options?: AdminListPayloadOptions) {
+    const { limit, offset } = normalizeAdminListPayloadOptions({
+        limit: options?.limit ?? ADMIN_NOTICES_PAGE_SIZE,
+        offset: options?.offset,
+    });
 
-        return { notices, classes };
-    },
-    ["admin-notices-page-v1"],
-    { revalidate: 60, tags: ["admin-notices", "admin-classes"] },
-);
+    return unstable_cache(
+        async () => {
+            const [notices, total] = await Promise.all([
+                getNotices({ limit, offset }),
+                getAdminNoticeCount(),
+            ]);
+
+            return {
+                notices,
+                pagination: buildListPagination({
+                    limit,
+                    offset,
+                    returned: notices.length,
+                    total,
+                    hasMore: offset + notices.length < total,
+                }),
+            };
+        },
+        ["admin-notices-items", String(limit), String(offset)],
+        { revalidate: 30, tags: ["admin-notices"] },
+    )();
+}
+
+export function getCachedAdminNoticesPayload(options?: AdminListPayloadOptions) {
+    const { limit, offset } = normalizeAdminListPayloadOptions({
+        limit: options?.limit ?? ADMIN_NOTICES_PAGE_SIZE,
+        offset: options?.offset,
+    });
+
+    return unstable_cache(
+        async () => {
+            const [notices, classes, total] = await Promise.all([
+                getNotices({ limit, offset }),
+                getClasses(),
+                getAdminNoticeCount(),
+            ]);
+
+            return {
+                notices,
+                classes,
+                pagination: buildListPagination({
+                    limit,
+                    offset,
+                    returned: notices.length,
+                    total,
+                    hasMore: offset + notices.length < total,
+                }),
+            };
+        },
+        ["admin-notices-page-v2", String(limit), String(offset)],
+        { revalidate: 60, tags: ["admin-notices", "admin-classes"] },
+    )();
+}
 
 export const getCachedAdminAttendancePayload = unstable_cache(
     async () => {

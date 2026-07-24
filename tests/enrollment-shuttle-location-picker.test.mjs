@@ -34,8 +34,12 @@ test("직접 주소 수정과 미탑승 전환은 기존 좌표를 폐기한다"
 });
 
 test("확인 화면에는 주소만 표시하고 위경도 숫자는 노출하지 않는다", () => {
-  const summary = steps.slice(steps.indexOf('{step === 4'));
-  assert.match(summary, /value=\{form\.shuttlePickup\}/);
-  assert.match(summary, /value=\{form\.shuttleDropoff\}/);
+  const summary = steps.slice(
+    steps.indexOf('{step === 4'),
+    steps.indexOf("{locationPicker &&"),
+  );
+  assert.match(summary, /label="탑승\/하차"/);
+  assert.match(summary, /form\.shuttlePickup/);
+  assert.match(summary, /form\.shuttleDropoff/);
   assert.doesNotMatch(summary, /latitude|longitude|accuracyMeters/);
 });

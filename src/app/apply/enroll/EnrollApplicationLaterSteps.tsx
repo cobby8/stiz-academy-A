@@ -340,7 +340,7 @@ function ShuttleLocationField({ label, value, selected, onChange, onOpenMap }: {
             </label>
             <div className="flex gap-2">
                 <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="주소 또는 건물명을 입력하거나 지도로 선택" className="min-w-0 flex-1 rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-                <button type="button" onClick={onOpenMap} className="shrink-0 rounded-xl border border-brand-orange-200 px-3 py-2 text-sm font-bold text-brand-orange-600 hover:bg-brand-orange-50 dark:border-brand-neon-lime/40 dark:text-brand-neon-lime dark:hover:bg-brand-neon-lime/10">
+                <button type="button" onClick={onOpenMap} className="min-h-11 shrink-0 rounded-xl border border-brand-orange-200 px-3 py-2 text-sm font-bold text-brand-orange-600 hover:bg-brand-orange-50 dark:border-brand-neon-lime/40 dark:text-brand-neon-lime dark:hover:bg-brand-neon-lime/10">
                     지도
                 </button>
             </div>

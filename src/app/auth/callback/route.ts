@@ -7,13 +7,32 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { linkEnrollmentAccount } from "@/lib/enrollment-account-handoff";
 
+type OAuthIntent = "login" | "parent-signup";
+
 function signupRedirect(request: NextRequest, error?: string) {
   const url = new URL("/signup/parent", request.url);
   url.searchParams.set("social", "1");
+  const next = safeInternalRedirect(request.nextUrl.searchParams.get("next"));
+  url.searchParams.set("next", next);
   const handoff = request.nextUrl.searchParams.get("handoff")
     || request.nextUrl.searchParams.get("enrollmentHandoff");
   if (handoff) url.searchParams.set("enrollmentHandoff", handoff);
   if (error) url.searchParams.set("error", error);
+  return NextResponse.redirect(url);
+}
+
+function authFailureRedirect(request: NextRequest, error: string) {
+  const intent: OAuthIntent =
+    request.nextUrl.searchParams.get("intent") === "login" ? "login" : "parent-signup";
+  if (intent !== "login") return signupRedirect(request, error);
+
+  const url = new URL("/login", request.url);
+  const next = safeInternalRedirect(request.nextUrl.searchParams.get("next"));
+  url.searchParams.set("error", error);
+  if (next !== "/mypage") url.searchParams.set("redirect", next);
+  const handoff = request.nextUrl.searchParams.get("handoff")
+    || request.nextUrl.searchParams.get("enrollmentHandoff");
+  if (handoff) url.searchParams.set("enrollmentHandoff", handoff);
   return NextResponse.redirect(url);
 }
 
@@ -25,19 +44,19 @@ export async function GET(request: NextRequest) {
     || request.nextUrl.searchParams.get("enrollmentHandoff");
 
   if (!code || !provider) {
-    return signupRedirect(request, "간편가입 인증 정보가 올바르지 않습니다. 다시 시도해 주세요.");
+    return authFailureRedirect(request, "간편가입 인증 정보가 올바르지 않습니다. 다시 시도해 주세요.");
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    return signupRedirect(request, "간편가입 인증 시간이 만료되었거나 취소되었습니다.");
+    return authFailureRedirect(request, "간편가입 인증 시간이 만료되었거나 취소되었습니다.");
   }
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return signupRedirect(request, "간편가입 정보를 확인하지 못했습니다.");
+  if (!user) return authFailureRedirect(request, "간편가입 정보를 확인하지 못했습니다.");
 
   // Authorization is based on the application DB, never OAuth user metadata.
   // A social session alone is intentionally insufficient for parent access.
@@ -62,7 +81,7 @@ export async function GET(request: NextRequest) {
         });
       } catch (linkError) {
         await supabase.auth.signOut();
-        return signupRedirect(
+        return authFailureRedirect(
           request,
           linkError instanceof Error
             ? linkError.message

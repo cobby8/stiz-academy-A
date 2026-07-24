@@ -14,10 +14,27 @@
 
 ## 공급자 콘솔
 
-1. Supabase Auth의 Site URL과 Redirect URL에 `${NEXT_PUBLIC_SITE_URL}/auth/callback`을 등록한다.
-2. Google OAuth Web Client와 Kakao Login을 Supabase Auth에 연결한다.
-3. Kakao는 프로필과 이메일 동의를 활성화한다.
-4. Naver는 Supabase Custom OAuth Provider 이름을 `naver`로 구성하고 실제 로그인·콜백 PoC를 통과한 뒤 기능 플래그를 켠다.
+1. Supabase Auth의 URL Configuration을 먼저 맞춘다.
+   - Site URL: 운영 주소. 예: `https://stiz-dasan.kr`
+   - Redirect URLs: `${NEXT_PUBLIC_SITE_URL}/auth/callback`
+   - 로컬 테스트가 필요하면 `http://localhost:4000/auth/callback`도 추가한다.
+   - Vercel Preview를 테스트할 때만 Vercel preview wildcard를 별도로 추가한다.
+2. Google OAuth Web Client를 만든 뒤 Supabase Auth Provider의 Google에 Client ID와 Secret을 입력하고 활성화한다.
+   - Google Authorized JavaScript origin: 운영 origin. 예: `https://stiz-dasan.kr`
+   - Google Authorized redirect URI: Supabase Google provider 화면에 표시되는 callback URL
+   - 필수 scope: `openid`, email, profile
+3. Kakao Developers에서 Kakao Login을 켜고 Supabase Auth Provider의 Kakao에 REST API Key와 Client Secret을 입력하고 활성화한다.
+   - Kakao Redirect URI: Supabase Kakao provider 화면에 표시되는 callback URL
+   - Kakao 동의항목: 프로필과 이메일을 활성화한다.
+   - OpenID Connect를 사용할 수 있으면 활성화한다.
+4. Naver는 Supabase Custom OAuth Provider로 등록한다. 실제 로그인·콜백 PoC를 통과한 뒤 `SUPABASE_NAVER_PROVIDER_ENABLED=true`를 켠다.
+   - Supabase provider identifier: `custom:naver`
+   - Authorization URL: `https://nid.naver.com/oauth2.0/authorize`
+   - Token URL: `https://nid.naver.com/oauth2.0/token`
+   - UserInfo URL: `https://openapi.naver.com/v1/nid/me`
+   - Naver Callback URL: Supabase Custom OAuth Provider 생성 화면에 표시되는 read-only Callback URL
+
+키와 Secret은 문서나 코드에 저장하지 않는다. Google, Kakao, Naver 콘솔에서 발급한 값은 Supabase Dashboard와 Vercel Environment Variables에만 입력한다.
 
 ## 배포 순서
 

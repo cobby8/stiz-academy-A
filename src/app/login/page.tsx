@@ -12,8 +12,20 @@ function LoginContent() {
   const pathname = usePathname();
   const isStaffMode =
     pathname === "/staff/login" || searchParams.get("mode") === "staff";
+  const socialLoginParams = new URLSearchParams();
+  const redirect = searchParams.get("redirect");
+  const handoff = searchParams.get("handoff") || searchParams.get("enrollmentHandoff");
+  socialLoginParams.set("intent", "login");
+  if (redirect) socialLoginParams.set("next", redirect);
+  if (handoff) socialLoginParams.set("enrollmentHandoff", handoff);
+  const socialLoginQuery = socialLoginParams.toString();
+  const parentSocialLoginOptions = [
+    { provider: "google", label: "Google로 로그인", tone: "border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-950 dark:text-white dark:hover:bg-gray-900" },
+    { provider: "kakao", label: "카카오로 로그인", tone: "border-[#FEE500] bg-[#FEE500] text-[#191919] hover:bg-[#f7dc00]" },
+    { provider: "naver", label: "네이버로 로그인", tone: "border-[#03C75A] bg-[#03C75A] text-white hover:bg-[#02b350]" },
+  ];
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(searchParams.get("error"));
   const [loading, setLoading] = useState(false);
   // 비밀번호 보기/숨기기 토글 상태
   const [showPassword, setShowPassword] = useState(false);
@@ -318,6 +330,30 @@ function LoginContent() {
               </span>
             </button>
           </form>
+
+          {!isStaffMode && mode === "login" && (
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center gap-3 text-xs font-semibold text-gray-400 dark:text-gray-500">
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                간편 로그인
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+              </div>
+              <div className="grid gap-2">
+                {parentSocialLoginOptions.map((option) => (
+                  <Link
+                    key={option.provider}
+                    href={`/auth/oauth/${option.provider}?${socialLoginQuery}`}
+                    className={`flex min-h-11 items-center justify-center rounded-xl border px-4 text-sm font-bold transition ${option.tone}`}
+                  >
+                    {option.label}
+                  </Link>
+                ))}
+              </div>
+              <p className="text-center text-xs leading-5 text-gray-500 dark:text-gray-400">
+                처음 이용하는 학부모님은 휴대폰 인증 후 계정이 연결됩니다.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 하단 링크 — 기존 구조 유지 */}

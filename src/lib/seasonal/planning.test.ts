@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { decideApplicantType, planApplicationItems, resolveOfferingPrice, totalSnapshot, weekdayInSeoul } from "./planning.ts";
+import { decideApplicantType, hasSeasonalShuttleSelection, planApplicationItems, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning.ts";
 
 test("server prices are copied to immutable application snapshots", () => {
   const plans = planApplicationItems(
@@ -10,7 +10,58 @@ test("server prices are copied to immutable application snapshots", () => {
     new Map(),
   );
   assert.equal(plans[0].priceSnapshot, 120000);
+  assert.equal(plans[0].tuitionPriceSnapshot, 120000);
+  assert.equal(plans[0].shuttleFeeSnapshot, 0);
   assert.equal(totalSnapshot(plans), 120000);
+});
+
+test("shuttle fee is charged once per selected offering and preserved separately", () => {
+  const offering = {
+    id: "camp-a",
+    capacity: 10,
+    price: 150000,
+    shuttleAvailable: true,
+    shuttleFee: 15000,
+    title: "특강",
+  };
+  assert.equal(resolveShuttleFee(offering, true), 15000);
+  const plan = planApplicationItems(
+    [offering],
+    new Map(),
+    new Map(),
+    "EXISTING",
+    new Set(["camp-a"]),
+  )[0];
+  assert.equal(plan.tuitionPriceSnapshot, 150000);
+  assert.equal(plan.shuttleFeeSnapshot, 15000);
+  assert.equal(plan.priceSnapshot, 165000);
+});
+
+test("shuttle fee is not charged when shuttle is unavailable or not selected", () => {
+  assert.equal(resolveShuttleFee({ id: "a", capacity: 10, price: 1, shuttleAvailable: false, shuttleFee: 15000, title: "A" }, true), 0);
+  assert.equal(resolveShuttleFee({ id: "b", capacity: 10, price: 1, shuttleAvailable: true, shuttleFee: 15000, title: "B" }, false), 0);
+});
+
+test("an empty shuttle payload is not treated as a shuttle selection", () => {
+  assert.equal(hasSeasonalShuttleSelection(undefined), false);
+  assert.equal(hasSeasonalShuttleSelection({}), false);
+  assert.equal(hasSeasonalShuttleSelection({ pickupTime: "09:00" }), false);
+  assert.equal(hasSeasonalShuttleSelection({ pickupLocation: "다산역" }), true);
+  assert.equal(hasSeasonalShuttleSelection({ dropoffLocationData: { address: "학교 앞" } }), true);
+});
+
+test("repeating the same price plan produces the same idempotent snapshot", () => {
+  const offering = {
+    id: "camp-a",
+    capacity: 10,
+    price: 180000,
+    shuttleAvailable: true,
+    shuttleFee: 15000,
+    title: "특강",
+  };
+  const first = planApplicationItems([offering], new Map(), new Map(), "NEW", new Set(["camp-a"]));
+  const retry = planApplicationItems([offering], new Map(), new Map(), "NEW", new Set(["camp-a"]));
+  assert.deepEqual(first, retry);
 });
 
 test("applicant-specific prices are selected on the server and preserved in the snapshot", () => {

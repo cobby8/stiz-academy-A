@@ -29,6 +29,7 @@ type SeasonalClass = {
   newApplicantPrice?: number | null;
   existingApplicantPrice?: number | null;
   shuttleAvailable?: boolean;
+  shuttleFee?: number | null;
   status?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
   linkedProgramId?: string | null;
   linkedClassId?: string | null;
@@ -263,7 +264,7 @@ type OperationalClassGroup = {
   baseClass: SeasonalClass;
   offerings: SeasonalClass[];
   slots: OperationalSlot[];
-  pricingRules: Array<{ key: string; label: string; price: number; newPrice?: number | null; existingPrice?: number | null }>;
+  pricingRules: Array<{ key: string; label: string; price: number; newPrice?: number | null; existingPrice?: number | null; shuttleFee?: number | null }>;
   capacity: number;
   confirmedTotal: number;
   heldTotal: number;
@@ -541,6 +542,7 @@ function groupOperationalClasses(offerings: SeasonalClass[], coaches: CoachOptio
         price: offering.price,
         newPrice: offering.newApplicantPrice,
         existingPrice: offering.existingApplicantPrice,
+        shuttleFee: offering.shuttleFee,
       };
     });
 
@@ -712,7 +714,7 @@ function normalizeInitialPayload(initialData?: Record<string, unknown>): Payload
 }
 
 export default function SeasonalAdminClient({ initialData }: SeasonalAdminClientProps) {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("seasons");
   const [data, setData] = useState<Payload>(() => normalizeInitialPayload(initialData));
   const [selectedSeasonId, setSelectedSeasonId] = useState(() => normalizeInitialPayload(initialData).seasons[0]?.id ?? "");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
@@ -1344,7 +1346,12 @@ function SeasonsView({
   onAssignInstructor: (klass: SeasonalClass, slot: OperationalSlot, instructorId: string) => Promise<void>;
   onStatus: (id: string, status: SeasonStatus) => Promise<void>;
 }) {
+  const [showInactive, setShowInactive] = useState(false);
   const operationalGroups = selected ? groupOperationalClasses(selected.classes, coaches) : [];
+  const inactiveGroups = operationalGroups.filter((group) => group.offerings.every((offering) => offering.status === "CANCELLED"));
+  const visibleGroups = showInactive
+    ? operationalGroups
+    : operationalGroups.filter((group) => !inactiveGroups.includes(group));
   return (
     <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
       <Panel title="시즌 목록" icon="event_note">
@@ -1388,7 +1395,15 @@ function SeasonsView({
               <p><span className="block text-xs text-gray-500">지점</span>{selected.branch || "전체"}</p>
             </div>
             <div className="space-y-3">
-              {operationalGroups.map((group) => {
+              {inactiveGroups.length > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-800">
+                  <span className="font-bold">취소된 운영 반 {inactiveGroups.length}개{showInactive ? "를 함께 표시합니다." : "를 숨겼습니다."}</span>
+                  <button type="button" onClick={() => setShowInactive((current) => !current)} className="min-h-9 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black dark:border-gray-600 dark:bg-gray-900">
+                    {showInactive ? "운영 반만 보기" : "취소 반 보기"}
+                  </button>
+                </div>
+              )}
+              {visibleGroups.map((group) => {
                 const classStatus = group.baseClass.status ?? "";
                 const classStatusLabel = classStatus ? STATUS_LABEL[classStatus] ?? classStatus : "상태 미정";
                 const activeSlots = group.slots.length;
@@ -1472,9 +1487,15 @@ function SeasonsView({
                         <h4 className="text-sm font-black">수강료 계산 규칙</h4>
                         <div className="mt-2 space-y-2">
                           {group.pricingRules.map((rule) => (
-                            <div key={rule.key} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-900">
-                              <span className="font-bold">{rule.label}</span>
-                              <span className="font-black">{rule.price.toLocaleString()}원</span>
+                            <div key={rule.key} className="rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-900">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black">{rule.label}</span>
+                                {group.baseClass.shuttleAvailable && <span className="text-xs font-bold text-blue-700 dark:text-blue-300">셔틀 +{(rule.shuttleFee ?? 0).toLocaleString()}원</span>}
+                              </div>
+                              <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+                                <span className="text-gray-500">기존 {(rule.existingPrice ?? rule.price).toLocaleString()}원</span>
+                                <span className="font-bold text-[var(--brand-accent)]">신규 {(rule.newPrice ?? rule.price).toLocaleString()}원</span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -2480,6 +2501,7 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
     const capacity = String(payload.capacity ?? "").trim();
     const newApplicantPrice = String(payload.newApplicantPrice ?? "").trim();
     const existingApplicantPrice = String(payload.existingApplicantPrice ?? "").trim();
+    const shuttleFee = String(payload.shuttleFee ?? "").trim();
     try {
       await onSubmit({
         ...payload,
@@ -2488,6 +2510,7 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
         price: Number(payload.price),
         newApplicantPrice: newApplicantPrice ? Number(newApplicantPrice) : null,
         existingApplicantPrice: existingApplicantPrice ? Number(existingApplicantPrice) : null,
+        shuttleFee: shuttleFee ? Number(shuttleFee) : 0,
         shuttleAvailable: payload.shuttleAvailable === "on",
         sessionDates: sessionDates.map((row) => ({
           ...row,
@@ -2518,6 +2541,7 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
       <ClassInput name="price" label="기본 수강료" type="number" required defaultValue={initial?.price} />
       <ClassInput name="newApplicantPrice" label="신규 회원 수강료" type="number" defaultValue={initial?.newApplicantPrice} />
       <ClassInput name="existingApplicantPrice" label="기존 회원 수강료" type="number" defaultValue={initial?.existingApplicantPrice} />
+      <ClassInput name="shuttleFee" label="셔틀비" type="number" defaultValue={initial?.shuttleFee ?? 0} />
       <label className="text-sm font-bold text-gray-700 dark:text-gray-200">담당 선생님
         <select name="instructorId" value={selectedInstructorId} onChange={(event) => {
           setSelectedInstructorId(event.target.value);

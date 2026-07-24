@@ -28,6 +28,7 @@ type FormState = {
 };
 
 type ShuttleDraft = {
+  enabled: boolean;
   pickupLocation: string;
   pickupTime: string;
   dropoffLocation: string;
@@ -106,10 +107,12 @@ function makeIdempotencyKey() {
 }
 
 function hasShuttle(draft?: ShuttleDraft) {
-  return Boolean(draft && (
-    draft.pickupLocation.trim() || draft.pickupTime.trim() || draft.dropoffLocation.trim() || draft.note.trim()
-    || draft.pickupLocationData || draft.dropoffLocationData
-  ));
+  return draft?.enabled === true;
+}
+
+function hasShuttleLocation(draft?: ShuttleDraft) {
+  return Boolean(draft?.pickupLocation.trim() || draft?.dropoffLocation.trim()
+    || draft?.pickupLocationData || draft?.dropoffLocationData);
 }
 
 function isFull(item: SeasonalClass) {
@@ -124,7 +127,7 @@ function remainingText(item: SeasonalClass) {
 }
 
 function emptyShuttle(): ShuttleDraft {
-  return { pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "" };
+  return { enabled: false, pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "" };
 }
 
 function statusText(status: string) {
@@ -185,13 +188,21 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   }));
   const hasPricingMatch = selectedOfferings.length > 0 && selectionPlans.every((plan) => Boolean(plan.offering));
   // 신청자가 고른 회원 구분과 서버의 가격 스냅샷 기준을 화면에서도 동일하게 맞춘다.
-  const totalPrice = selectionPlans.reduce((sum, plan) => sum + applicantPrice(plan.offering ?? plan.base, applicantType), 0);
+  const tuitionTotal = selectionPlans.reduce((sum, plan) => sum + applicantPrice(plan.offering ?? plan.base, applicantType), 0);
+  const shuttleTotal = selectionPlans.reduce((sum, { base, offering }) => (
+    sum + (offering?.shuttleAvailable && hasShuttle(shuttle[base.id]) && hasShuttleLocation(shuttle[base.id]) ? offering.shuttleFee ?? 0 : 0)
+  ), 0);
+  const totalPrice = tuitionTotal + shuttleTotal;
   const hasMapSelection = selectionPlans.some(({ base, offering }) => (
     offering?.shuttleAvailable
     && (shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData)
   ));
+  const incompleteShuttlePlans = selectionPlans.filter(({ base, offering }) => (
+    offering?.shuttleAvailable && hasShuttle(shuttle[base.id]) && !hasShuttleLocation(shuttle[base.id])
+  ));
   const canSubmit = selectedIds.length > 0 && applicantType && form.childName && form.childBirthDate && form.parentName
     && form.parentPhone && selectedWeekdays.length > 0 && hasPricingMatch
+    && incompleteShuttlePlans.length === 0
     && form.agreedTerms && form.agreedPrivacy && (!hasMapSelection || locationConsent)
     && submitState !== "submitting";
   const incompleteItems = [
@@ -201,6 +212,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
     !applicantType ? "회원 구분" : "",
     !form.childName || !form.childBirthDate ? "학생 필수 정보" : "",
     !form.parentName || !form.parentPhone ? "보호자 필수 정보" : "",
+    incompleteShuttlePlans.length > 0 ? "셔틀 탑승 또는 하차 위치" : "",
     !form.agreedTerms ? "운영·환불 규정 동의" : "",
     !form.agreedPrivacy ? "개인정보 수집 동의" : "",
     hasMapSelection && !locationConsent ? "셔틀 위치정보 동의" : "",
@@ -233,7 +245,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
     });
   }
 
-  function updateShuttle(offeringId: string, key: keyof ShuttleDraft, value: string) {
+  function updateShuttle<K extends keyof ShuttleDraft>(offeringId: string, key: K, value: ShuttleDraft[K]) {
     setShuttle((current) => ({
       ...current,
       [offeringId]: { ...(current[offeringId] ?? emptyShuttle()), [key]: value },
@@ -322,8 +334,13 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
           selectedWeekdays,
           items: selectionPlans.flatMap(({ base, offering }) => offering ? [{
             offeringId: offering.id,
-            shuttle: offering.shuttleAvailable && hasShuttle(shuttle[base.id]) ? {
-              ...shuttle[base.id],
+            shuttle: offering.shuttleAvailable && hasShuttle(shuttle[base.id]) && hasShuttleLocation(shuttle[base.id]) ? {
+              pickupLocation: shuttle[base.id]?.pickupLocation,
+              pickupTime: shuttle[base.id]?.pickupTime,
+              dropoffLocation: shuttle[base.id]?.dropoffLocation,
+              note: shuttle[base.id]?.note,
+              pickupLocationData: shuttle[base.id]?.pickupLocationData,
+              dropoffLocationData: shuttle[base.id]?.dropoffLocationData,
               locationConsent: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? locationConsent : undefined,
               locationConsentVersion: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? SHUTTLE_LOCATION_CONSENT_VERSION : undefined,
             } : undefined,
@@ -404,14 +421,26 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                   )}
                   {shuttleAvailable && (
                     <div className="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
-                      <p className="text-xs font-bold text-gray-600 dark:text-gray-300">셔틀 요청이 있으면 적어주세요</p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black dark:border-gray-700 dark:bg-gray-800">
+                        <span>셔틀 이용 신청</span>
+                        <span className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
+                          {formatWon(priceItem.shuttleFee ?? 0)} 추가
+                          <input
+                            type="checkbox"
+                            checked={shuttle[item.id]?.enabled === true}
+                            onChange={(event) => updateShuttle(item.id, "enabled", event.target.checked)}
+                            className="size-5"
+                          />
+                        </span>
+                      </label>
+                      {shuttle[item.id]?.enabled && <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <LocationField label="탑승 위치" value={shuttle[item.id]?.pickupLocation ?? ""} mapValue={shuttle[item.id]?.pickupLocationData} onChange={(value) => updateLocationText(item.id, "pickup", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "pickup" })} />
                         <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
                         <LocationField label="하차 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} mapValue={shuttle[item.id]?.dropoffLocationData} onChange={(value) => updateLocationText(item.id, "dropoff", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "dropoff" })} />
                         <TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} />
                         <button type="button" onClick={() => copyPickupToDropoff(item.id)} disabled={!shuttle[item.id]?.pickupLocation} className="min-h-11 rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-700 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200 sm:col-span-2">탑승 위치를 하차 위치로 사용</button>
-                      </div>
+                        {!hasShuttleLocation(shuttle[item.id]) && <p role="alert" className="text-xs font-bold text-amber-700 dark:text-amber-300 sm:col-span-2">셔틀 신청에는 탑승 위치 또는 하차 위치가 반드시 필요합니다.</p>}
+                      </div>}
                     </div>
                   )}
                 </article>
@@ -511,7 +540,11 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                 return (
                 <div key={plan.base.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
                   <p className="font-bold text-gray-900 dark:text-white">{plan.base.name}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{selectedWeekdays.map((weekday) => WEEKDAY_OPTIONS.find((option) => option.value === weekday)?.label).filter(Boolean).join("·") || "요일 미선택"} · {item.startTime}~{item.endTime} · {formatWon(applicantPrice(item, applicantType))}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{selectedWeekdays.map((weekday) => WEEKDAY_OPTIONS.find((option) => option.value === weekday)?.label).filter(Boolean).join("·") || "요일 미선택"} · {item.startTime}~{item.endTime}</p>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold">
+                    <span>수강료 {formatWon(applicantPrice(item, applicantType))}</span>
+                    {hasShuttle(shuttle[plan.base.id]) && hasShuttleLocation(shuttle[plan.base.id]) && <span className="text-blue-700 dark:text-blue-300">셔틀비 +{formatWon(item.shuttleFee ?? 0)}</span>}
+                  </div>
                   {item.sessionDates.length > 1 && <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">총 {item.sessionDates.length}회 · {item.sessionDates.map((session) => `${session.dateLabel}(${session.dayLabel})`).join(", ")}</p>}
                   {isFull(item) && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
                 </div>
@@ -519,7 +552,11 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
               })}
             </div>
             <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
-              <p className="text-sm text-gray-500 dark:text-gray-400">예상 합계</p>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between"><dt className="text-gray-500 dark:text-gray-400">수강료</dt><dd className="font-bold">{formatWon(tuitionTotal)}</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500 dark:text-gray-400">셔틀비</dt><dd className="font-bold text-blue-700 dark:text-blue-300">{shuttleTotal ? `+${formatWon(shuttleTotal)}` : formatWon(0)}</dd></div>
+              </dl>
+              <p className="mt-3 text-sm font-bold text-gray-700 dark:text-gray-200">최종 예상금액</p>
               <p className="mt-1 text-2xl font-black text-brand-navy-900 dark:text-white">{formatWon(totalPrice)}</p>
             </div>
             <CheckBox label="방학특강 운영 안내와 환불 규정을 확인했습니다." checked={form.agreedTerms} onChange={(checked) => update("agreedTerms", checked)} />

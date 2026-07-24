@@ -1506,6 +1506,7 @@ model SpecialProgramOffering {
   newApplicantPrice Int?
   existingApplicantPrice Int?
   shuttleAvailable Boolean @default(false)
+  shuttleFee Int @default(0)
   status String @default("DRAFT")
   displayOrder Int @default(0)
   linkedProgramId String?
@@ -1585,6 +1586,8 @@ model SpecialProgramApplicationItem {
   applicationId String
   offeringId String
   priceSnapshot Int
+  tuitionPriceSnapshot Int @default(0)
+  shuttleFeeSnapshot Int @default(0)
   titleSnapshot String
   status String @default("PENDING")
   applicantFingerprint String?

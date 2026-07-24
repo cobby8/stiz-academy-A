@@ -496,6 +496,13 @@ function defaultSpecialProgramPrice(
   return offering.price;
 }
 
+function specialProgramShuttleFee(
+  offering: { shuttleAvailable: boolean; shuttleFee: number },
+  hasShuttleRequest: boolean,
+) {
+  return hasShuttleRequest && offering.shuttleAvailable ? offering.shuttleFee : 0;
+}
+
 function seasonalOfferingFrequency(offering: { title?: string | null; code?: string | null }) {
   const source = `${offering.title ?? ""} ${offering.code ?? ""}`;
   const matched = source.match(/주\s*(\d+)\s*회|-(\d)(?:\D|$)/i);
@@ -746,7 +753,7 @@ async function saveSpecialProgramItemAssignment(
 ) {
   const before = await tx.specialProgramApplicationItem.findUnique({
     where: { id: params.itemId },
-    include: { application: true, offering: true },
+    include: { application: true, offering: true, shuttleRequest: true },
   });
   if (!before) throw new SeasonalError("신청 반을 찾을 수 없습니다.", 404, "APPLICATION_ITEM_NOT_FOUND");
   if (before.enrollmentId || before.paymentId) {
@@ -781,7 +788,9 @@ async function saveSpecialProgramItemAssignment(
     data: {
       offeringId: offering.id,
       titleSnapshot: offering.title,
-      priceSnapshot: assignment.priceSnapshot,
+      tuitionPriceSnapshot: assignment.priceSnapshot,
+      shuttleFeeSnapshot: specialProgramShuttleFee(offering, Boolean(before.shuttleRequest)),
+      priceSnapshot: assignment.priceSnapshot + specialProgramShuttleFee(offering, Boolean(before.shuttleRequest)),
       waitlistOrder: before.status === "WAITLISTED" ? waitlistOrder : null,
       conversionStatus: "NOT_STARTED",
       conversionError: null,
@@ -838,6 +847,8 @@ async function createSpecialProgramApplicationItem(
       offeringId: offering.id,
       titleSnapshot: offering.title,
       priceSnapshot: assignment.priceSnapshot,
+      tuitionPriceSnapshot: assignment.priceSnapshot,
+      shuttleFeeSnapshot: 0,
       status: "PENDING",
     },
   });
@@ -1017,7 +1028,7 @@ export async function POST(request: NextRequest) {
       if (status === "OPEN" && capacity === null) throw new SeasonalError("정원이 정해지지 않은 반은 공개할 수 없습니다.", 409, "CAPACITY_REQUIRED");
       if (status === "OPEN" && sessionDates.length === 0) throw new SeasonalError("모집 중인 반은 수업 일정을 한 개 이상 등록해야 합니다.", 409, "SESSION_DATE_REQUIRED");
       const offering = await prisma.$transaction(async (tx) => {
-        const created = await tx.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId, instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId } });
+        const created = await tx.specialProgramOffering.create({ data: { seasonId, code, title, description: cleanText(data.description, 5000), targetGrades: cleanText(data.targetGrades, 200), instructorId, instructorName: cleanText(data.instructorName, 100), location: cleanText(data.location, 150), capacity, price, newApplicantPrice: optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격"), existingApplicantPrice: optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격"), shuttleAvailable: Boolean(data.shuttleAvailable), shuttleFee: nonNegativeInt(data.shuttleFee ?? 0, "셔틀비"), status, displayOrder: Number.isInteger(data.displayOrder) ? data.displayOrder : 0, linkedProgramId: cleanText(data.linkedProgramId, 100), linkedClassId } });
         await syncOfferingSessionDates(tx, { offeringId: created.id, linkedClassId, instructorId, dates: sessionDates });
         return tx.specialProgramOffering.findUniqueOrThrow({ where: { id: created.id }, include: { sessionDates: { orderBy: { startsAt: "asc" } } } });
       });
@@ -1302,6 +1313,7 @@ export async function PATCH(request: NextRequest) {
       if (data.price !== undefined) update.price = nonNegativeInt(data.price, "가격");
       if (data.newApplicantPrice !== undefined) update.newApplicantPrice = optionalNonNegativeInt(data.newApplicantPrice, "신규 회원 가격");
       if (data.existingApplicantPrice !== undefined) update.existingApplicantPrice = optionalNonNegativeInt(data.existingApplicantPrice, "기존 회원 가격");
+      if (data.shuttleFee !== undefined) update.shuttleFee = nonNegativeInt(data.shuttleFee, "셔틀비");
       if (data.status !== undefined) { if (!OFFERING_STATUSES.has(data.status)) throw new SeasonalError("특강 상태가 올바르지 않습니다."); update.status = data.status; }
       const nextStatus = (update.status as string | undefined) ?? before.status;
       const nextCapacity = (update.capacity === undefined ? before.capacity : update.capacity) as number | null;

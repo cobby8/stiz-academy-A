@@ -27,6 +27,7 @@ export type SeasonalClass = {
   newApplicantPrice?: number | null;
   existingApplicantPrice?: number | null;
   shuttleAvailable: boolean;
+  shuttleFee?: number | null;
   waitlistEnabled?: boolean;
   sessionDates: SeasonalSessionDate[];
   weekdays: Array<"MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN">;
@@ -124,6 +125,7 @@ function normalizeOffering(row: ApiRecord): SeasonalClass {
     newApplicantPrice: nullableNumber(row.newApplicantPrice),
     existingApplicantPrice: nullableNumber(row.existingApplicantPrice),
     shuttleAvailable: row.shuttleAvailable === true,
+    shuttleFee: nullableNumber(row.shuttleFee),
     waitlistEnabled: row.waitlistEnabled === false ? false : true,
     sessionDates: dates.flatMap((date) => {
       if (!date.startsAt || !date.endsAt) return [];

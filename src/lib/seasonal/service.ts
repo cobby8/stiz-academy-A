@@ -9,7 +9,7 @@ import {
 import { notifyAdmins } from "@/lib/notification";
 import { prisma } from "@/lib/prisma";
 import { SeasonalError, type SeasonalApplicationInput, type SeasonalWeekday } from "./contracts";
-import { decideApplicantType, resolveOfferingPrice, totalSnapshot, weekdayInSeoul } from "./planning";
+import { decideApplicantType, hasSeasonalShuttleSelection, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning";
 
 const OCCUPYING_ITEM_STATUSES = ["PENDING", "APPROVED"];
 const ACTIVE_APPLICATION_ITEM_STATUSES = ["PENDING", "APPROVED", "WAITLISTED"];
@@ -141,6 +141,7 @@ function publicOffering(offering: PublicOfferingRow) {
     newApplicantPrice: offering.newApplicantPrice,
     existingApplicantPrice: offering.existingApplicantPrice,
     shuttleAvailable: offering.shuttleAvailable,
+    shuttleFee: offering.shuttleFee,
     waitlistEnabled: capacity !== null,
   };
 }
@@ -271,6 +272,8 @@ function applicationResponse(application: Awaited<ReturnType<typeof existingAppl
       offeringId: item.offeringId,
       status: item.status,
       priceSnapshot: item.priceSnapshot,
+      tuitionPriceSnapshot: item.tuitionPriceSnapshot,
+      shuttleFeeSnapshot: item.shuttleFeeSnapshot,
       waitlistOrder: item.waitlistOrder,
     })),
   };
@@ -391,8 +394,11 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       if (offerings.length !== ids.length || offerings.some((offering) => offering.status !== "OPEN")) {
         throw new SeasonalError("마감되었거나 존재하지 않는 특강이 포함되어 있습니다.", 409, "OFFERING_UNAVAILABLE");
       }
+      const offeringById = new Map(offerings.map((offering) => [offering.id, offering]));
       const assignments: Array<Awaited<ReturnType<typeof resolvePublicOfferingAssignment>>> = [];
-      for (const offering of offerings) {
+      for (const requested of input.items) {
+        const offering = offeringById.get(requested.offeringId);
+        if (!offering) throw new SeasonalError("신청한 특강 정보를 확인해 주세요.", 400, "OFFERING_ASSIGNMENT_MISSING");
         assignments.push(await resolvePublicOfferingAssignment(tx, offering, input.selectedWeekdays, applicantDecision.pricingType));
       }
       const scopedOfferingIds = Array.from(new Set(assignments.flatMap((assignment) => assignment.scopeOfferings.map((offering) => offering.id))));
@@ -426,11 +432,17 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
           assignment.scopeOfferings.map((offering) => offering.id),
           input.selectedWeekdays,
         );
+        const shuttleFeeSnapshot = resolveShuttleFee(
+          assignment.offering,
+          hasSeasonalShuttleSelection(input.items[index]?.shuttle),
+        );
         itemPlans.push({
           requested: input.items[index],
           offering: assignment.offering,
           offeringId: assignment.offering.id,
-          priceSnapshot: assignment.priceSnapshot,
+          tuitionPriceSnapshot: assignment.priceSnapshot,
+          shuttleFeeSnapshot,
+          priceSnapshot: assignment.priceSnapshot + shuttleFeeSnapshot,
           titleSnapshot: assignment.offering.title,
           status: full ? "WAITLISTED" : "PENDING",
           waitlistOrder: full ? (maxOrders.get(assignment.offering.id) || 0) + 1 : null,
@@ -466,6 +478,8 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
             create: itemPlans.map((plan) => ({
               offeringId: plan.offering.id,
               priceSnapshot: plan.priceSnapshot,
+              tuitionPriceSnapshot: plan.tuitionPriceSnapshot,
+              shuttleFeeSnapshot: plan.shuttleFeeSnapshot,
               titleSnapshot: plan.offering.title,
               status: plan.status,
               applicantFingerprint: fingerprint,
@@ -480,7 +494,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
       for (const item of application.items) {
         const plan = itemPlans.find((candidate) => candidate.offering.id === item.offeringId);
         const requested = plan?.requested;
-        if (!requested?.shuttle || !plan?.offering.shuttleAvailable) continue;
+        if (!hasSeasonalShuttleSelection(requested?.shuttle) || !requested?.shuttle || !plan?.offering.shuttleAvailable) continue;
         const pickup = requested.shuttle.pickupLocationData;
         const dropoff = requested.shuttle.dropoffLocationData;
         const confirmedAt = pickup || dropoff ? new Date() : undefined;

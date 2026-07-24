@@ -13,6 +13,8 @@ export type CapacityOffering = {
   price: number;
   newApplicantPrice?: number | null;
   existingApplicantPrice?: number | null;
+  shuttleAvailable?: boolean;
+  shuttleFee?: number;
   title: string;
 };
 
@@ -38,6 +40,26 @@ export function resolveOfferingPrice(offering: CapacityOffering, applicantType?:
   return offering.price;
 }
 
+export function resolveShuttleFee(offering: CapacityOffering, shuttleRequested: boolean) {
+  if (!shuttleRequested || !offering.shuttleAvailable) return 0;
+  return Math.max(0, offering.shuttleFee ?? 0);
+}
+
+export function hasSeasonalShuttleSelection(shuttle: {
+  pickupLocation?: string;
+  pickupTime?: string;
+  dropoffLocation?: string;
+  pickupLocationData?: unknown;
+  dropoffLocationData?: unknown;
+} | undefined) {
+  return Boolean(
+    shuttle?.pickupLocation
+    || shuttle?.dropoffLocation
+    || shuttle?.pickupLocationData
+    || shuttle?.dropoffLocationData,
+  );
+}
+
 export function decideApplicantType(claimedType: ApplicantType | undefined, existingStudent: boolean): ApplicantTypeDecision {
   const serverType: ApplicantType = existingStudent ? "EXISTING" : "NEW";
   if (!claimedType) {
@@ -54,12 +76,17 @@ export function planApplicationItems(
   occupiedByOffering: ReadonlyMap<string, number>,
   maxWaitlistOrderByOffering: ReadonlyMap<string, number>,
   applicantType?: ApplicantType,
+  shuttleRequestedByOffering: ReadonlySet<string> = new Set(),
 ) {
   return offerings.map((offering) => {
     const full = offering.capacity !== null && (occupiedByOffering.get(offering.id) || 0) >= offering.capacity;
+    const tuitionPriceSnapshot = resolveOfferingPrice(offering, applicantType);
+    const shuttleFeeSnapshot = resolveShuttleFee(offering, shuttleRequestedByOffering.has(offering.id));
     return {
       offeringId: offering.id,
-      priceSnapshot: resolveOfferingPrice(offering, applicantType),
+      tuitionPriceSnapshot,
+      shuttleFeeSnapshot,
+      priceSnapshot: tuitionPriceSnapshot + shuttleFeeSnapshot,
       titleSnapshot: offering.title,
       status: full ? "WAITLISTED" : "PENDING",
       waitlistOrder: full ? (maxWaitlistOrderByOffering.get(offering.id) || 0) + 1 : null,

@@ -25,10 +25,11 @@ export default async function AuthContinuePage({ searchParams }: ContinuePagePro
       Array<{ role: string; username: string | null; phoneVerifiedAt: Date | null }>
     >(
       `SELECT role, username, "phoneVerifiedAt" FROM "User"
-       WHERE "authUserId" = $1 OR id = $1
-       ORDER BY CASE WHEN "authUserId" = $1 THEN 0 ELSE 1 END
+       WHERE "authUserId" = $1 OR id = $1 OR LOWER(email) = LOWER($2)
+       ORDER BY CASE WHEN "authUserId" = $1 THEN 0 WHEN id = $1 THEN 1 ELSE 2 END
        LIMIT 1`,
       user.id,
+      user.email || "",
     );
     const role = parseAppRole(rows[0]?.role);
     const params = await searchParams;

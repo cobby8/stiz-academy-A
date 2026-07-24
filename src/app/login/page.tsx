@@ -86,11 +86,11 @@ function LoginContent() {
             />
           </div>
           <h1 className="text-2xl font-bold text-brand-navy-900 dark:text-white">
-            {isStaffMode ? "STIZ 선생님 로그인" : "STIZ 로그인"}
+            {isStaffMode ? "STIZ 관리자/선생님 로그인" : "STIZ 로그인"}
           </h1>
           <p className="text-brand-navy-700 dark:text-gray-300 mt-1">
             {isStaffMode
-              ? "초대받아 만든 선생님 계정으로 로그인해 주세요."
+              ? "관리자·선생님 계정 이메일로 로그인해 주세요."
               : "계정 권한에 맞는 화면으로 이동합니다"}
           </p>
         </div>
@@ -139,7 +139,7 @@ function LoginContent() {
                 </span>
                 <div>
                   <p className="font-bold">처음 이용하시나요?</p>
-                  <p className="mt-1 leading-6">원장님이 보내드린 <strong>개인 초대 링크</strong>에서 먼저 가입해 주세요. 이 화면에서는 선생님 계정을 새로 만들 수 없습니다.</p>
+                  <p className="mt-1 leading-6">원장님이 보내드린 <strong>개인 초대 링크</strong>에서 먼저 가입해 주세요. 이 화면에서는 관리자·선생님 계정을 새로 만들 수 없습니다.</p>
                 </div>
               </div>
               <Link
@@ -189,7 +189,7 @@ function LoginContent() {
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
               >
-                {isStaffMode ? "이메일" : "로그인 아이디 또는 기존 이메일"}
+                {isStaffMode ? "관리자/선생님 이메일" : "로그인 아이디 또는 기존 이메일"}
               </label>
               <input
                 id="email"
@@ -197,7 +197,7 @@ function LoginContent() {
                 type={isStaffMode ? "email" : "text"}
                 required
                 autoComplete={isStaffMode ? "email" : "username"}
-                placeholder={isStaffMode ? "example@email.com" : "로그인 아이디"}
+                placeholder={isStaffMode ? "admin@stiz.kr" : "로그인 아이디"}
                 className="w-full px-4 py-2.5 border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 rounded-lg focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-gray-600 dark:bg-gray-950 dark:text-white dark:placeholder:text-gray-500 outline-none transition-colors"
               />
             </div>

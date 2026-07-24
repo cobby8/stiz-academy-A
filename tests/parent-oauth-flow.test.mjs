@@ -48,6 +48,8 @@ test("OAuth callback requires application membership and phone verification", ()
 
 test("authenticated identities cannot bypass parent phone onboarding", () => {
   assert.match(continuePage, /parseAppRole/);
+  assert.match(continuePage, /LOWER\(email\) = LOWER\(\$2\)/);
+  assert.match(continuePage, /user\.email \|\| ""/);
   assert.match(continuePage, /role === "PARENT" && rows\[0\]\?\.username !== null && !rows\[0\]\?\.phoneVerifiedAt/);
   assert.match(continuePage, /\/signup\/parent/);
 });

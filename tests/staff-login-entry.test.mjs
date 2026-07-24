@@ -28,6 +28,14 @@ test("미인증 staff 요청은 /staff/login으로 보내고 로그인 후 원�
   assert.match(loginSource, /\(isStaffMode \? ["']\/staff["'] : null\)/);
 });
 
+test("미인증 admin 요청은 관리자/선생님 로그인 모드로 보내고 이메일 로그인을 안내한다", () => {
+  assert.match(middlewareSource, /if \(isAdminPath\) \{\s*url\.searchParams\.set\(["']mode["'], ["']staff["']\)/s);
+  assert.match(middlewareSource, /isStaffModeLogin/);
+  assert.match(loginSource, /STIZ 관리자\/선생님 로그인/);
+  assert.match(loginSource, /관리자\/선생님 이메일/);
+  assert.match(loginSource, /admin@stiz\.kr/);
+});
+
 test("보호 경로의 검색 조건을 로그인 후에도 보존하고 로그인 URL에는 중복하지 않는다", () => {
   assert.match(
     middlewareSource,
@@ -35,6 +43,6 @@ test("보호 경로의 검색 조건을 로그인 후에도 보존하고 로그�
   );
   assert.match(
     middlewareSource,
-    /url\.pathname = pathname\.startsWith\(["']\/staff["']\) \? ["']\/staff\/login["'] : ["']\/login["'];\s*url\.search = ["']["'];\s*url\.searchParams\.set\(["']redirect["'], requestedPath\)/s,
+    /url\.pathname = pathname\.startsWith\(["']\/staff["']\) \? ["']\/staff\/login["'] : ["']\/login["'];\s*url\.search = ["']["'];[\s\S]*url\.searchParams\.set\(["']redirect["'], requestedPath\)/,
   );
 });

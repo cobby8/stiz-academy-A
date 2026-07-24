@@ -37,6 +37,8 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isStaffLogin = pathname === "/staff/login";
+  const isStaffModeLogin =
+    isStaffLogin || (pathname === "/login" && request.nextUrl.searchParams.get("mode") === "staff");
   const isStaffInstall = pathname === "/staff/install";
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
   const isStaffPath = pathname === "/staff" || pathname.startsWith("/staff/");
@@ -49,6 +51,9 @@ export async function updateSession(request: NextRequest) {
     const requestedPath = `${pathname}${request.nextUrl.search}`;
     url.pathname = pathname.startsWith("/staff") ? "/staff/login" : "/login";
     url.search = "";
+    if (isAdminPath) {
+      url.searchParams.set("mode", "staff");
+    }
     url.searchParams.set("redirect", requestedPath);
     return NextResponse.redirect(url);
   }
@@ -60,7 +65,7 @@ export async function updateSession(request: NextRequest) {
     const requestedPath = request.nextUrl.searchParams.get("redirect");
     url.pathname = "/auth/continue";
     url.search = "";
-    if (isStaffLogin) {
+    if (isStaffModeLogin) {
       url.searchParams.set("context", "staff");
     }
     if (requestedPath) {

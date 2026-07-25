@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { weekdayInSeoul } from "@/lib/seasonal/planning";
 
 // 방학특강 출석 라이브러리 — 모든 쿼리는 PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe 사용.
 // 출석은 학생(Student) 전환 여부와 무관하게 SpecialProgramEnrollmentDate 행에 직접 기록한다.
@@ -7,7 +8,22 @@ export const SEASONAL_ATTENDANCE_STATUSES = ["PRESENT", "LATE", "ABSENT", "EXCUS
 export type SeasonalAttendanceStatus = (typeof SEASONAL_ATTENDANCE_STATUSES)[number];
 const VALID_ATTENDANCE = new Set<string>(SEASONAL_ATTENDANCE_STATUSES);
 
-const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+// 신청 요일 키(MON~SUN)를 한글 한 글자로 바꾸는 표. 화면 뱃지(예: "월·수")에 사용한다.
+const WEEKDAY_KO_BY_KEY: Record<string, string> = {
+  MON: "월", TUE: "화", WED: "수", THU: "목", FRI: "금", SAT: "토", SUN: "일",
+};
+
+// DB의 selectedWeekdays(TEXT[])를 안전하게 문자열 배열로 정리한다. (null·잘못된 값 방어)
+function weekdayKeys(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v).trim().toUpperCase()).filter((v) => v in WEEKDAY_KO_BY_KEY);
+}
+
+// ["MON","WED"] → "월·수". 값이 없으면 null을 돌려 화면에서 뱃지를 숨긴다.
+function weekdayLabel(keys: string[]): string | null {
+  if (keys.length === 0) return null;
+  return keys.map((k) => WEEKDAY_KO_BY_KEY[k]).join("·");
+}
 
 function seoulParts(value: Date | string) {
   const d = typeof value === "string" ? new Date(value) : value;
@@ -16,15 +32,36 @@ function seoulParts(value: Date | string) {
     hour: "2-digit", minute: "2-digit", hour12: false, weekday: "short",
   });
   const parts = Object.fromEntries(fmt.formatToParts(d).map((p) => [p.type, p.value]));
+  // 요일 키는 기존 KST 유틸(weekdayInSeoul)을 재사용해 서울시간 기준으로 계산한다.
+  const weekdayKey = weekdayInSeoul(d);
   return {
     dateLabel: `${Number(parts.month)}/${Number(parts.day)}`,
-    dayLabel: (parts.weekday || "").replace("요일", ""),
+    // 한글 요일 라벨도 서울시간 기준 요일 키에서 뽑아 Intl 로케일 차이에 흔들리지 않게 한다.
+    dayLabel: WEEKDAY_KO_BY_KEY[weekdayKey] ?? (parts.weekday || "").replace("요일", ""),
+    weekdayKey,
     timeLabel: `${parts.hour}:${parts.minute}`,
     ymd: `${parts.year}-${parts.month}-${parts.day}`,
   };
 }
 
 function num(v: unknown) { return v == null ? 0 : Number(v); }
+
+// 특강(반) 전체 승인 학생 수 — 날짜별 명단과 같은 기준(승인된 신청항목 + 취소 아닌 정규 배정)으로 센다.
+// 학생마다 신청 요일이 달라 "이 날 명단 인원"은 이 값보다 작을 수 있다. 그걸 화면에서 설명하기 위한 값.
+async function countApprovedStudents(offeringId: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ total: unknown }>>(
+    `SELECT COUNT(DISTINCT e."applicationItemId") AS total
+       FROM "SpecialProgramEnrollmentDate" e
+       JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
+       JOIN "SpecialProgramApplicationItem" it ON it.id = e."applicationItemId"
+      WHERE sd."offeringId" = $1
+        AND e.status <> 'CANCELLED'
+        AND e.kind = 'REGULAR'
+        AND it.status = 'APPROVED'`,
+    offeringId,
+  );
+  return num(rows[0]?.total);
+}
 
 // 1) 화면 부트스트랩: 시즌 + 특강(offering) 목록
 export async function getSeasonalAttendanceBootstrap() {
@@ -82,6 +119,9 @@ export async function getOfferingDateBoard(offeringId: string) {
     offeringId,
   );
 
+  // 반 전체 승인 인원(요일 무관)을 함께 조회해 "13명 중 이 날 6명" 안내를 만들 수 있게 한다.
+  const totalApprovedStudents = await countApprovedStudents(offeringId);
+
   const todayYmd = seoulParts(new Date()).ymd;
   const dates = rows.map((r, idx) => {
     const p = seoulParts(r.startsAt);
@@ -94,7 +134,8 @@ export async function getOfferingDateBoard(offeringId: string) {
     else state = "PLANNED";
     return {
       sessionDateId: r.id, round: idx + 1,
-      dateLabel: p.dateLabel, dayLabel: p.dayLabel, startTime: p.timeLabel, endTime: end.timeLabel,
+      dateLabel: p.dateLabel, dayLabel: p.dayLabel, weekdayKey: p.weekdayKey,
+      startTime: p.timeLabel, endTime: end.timeLabel,
       ymd: p.ymd, location: r.location ?? null,
       capacity, scheduled, makeup: num(r.makeup),
       present: num(r.present), late: num(r.late), absent: num(r.absent), excused: num(r.excused),
@@ -102,7 +143,12 @@ export async function getOfferingDateBoard(offeringId: string) {
     };
   });
   return {
-    offering: { id: offering.id, title: offering.title, capacity, instructorName: offering.instructorName ?? null },
+    offering: {
+      id: offering.id, title: offering.title, capacity,
+      instructorName: offering.instructorName ?? null,
+      totalApprovedStudents, // 반 전체 승인 학생 수(요일 무관)
+    },
+    totalApprovedStudents,
     dates,
   };
 }
@@ -120,9 +166,14 @@ export async function getDateRoster(sessionDateId: string) {
   const meta = info[0];
   if (!meta) return { date: null, rows: [] };
 
+  // 명단 기준: 승인된 신청항목(it.status='APPROVED') + 취소되지 않은 좌석.
+  // 승인 시 좌석이 자동 생성되므로, 나중에 거절/취소로 바뀌어도 좌석은 남는다(삭제 경로 없음).
+  // 신청항목 상태를 같이 걸러야 그 학생이 출석부에서 빠지고, 위 countApprovedStudents 와 기준이 일치한다.
+  // 보강(kind='MAKEUP') 좌석도 결석한 정규 좌석과 같은 신청항목을 가리키므로 승인 상태면 그대로 표시된다.
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT e.id AS "enrollmentDateId", e.kind, e.status, e."attendanceStatus", e."arrivedAt", e."attendanceNote",
             it.id AS "itemId", a."childName", a."childGrade", a."childSchool", a."parentName", a."parentPhone",
+            a."selectedWeekdays",
             mk."absentSessionDateId", absd."startsAt" AS "originStartsAt"
        FROM "SpecialProgramEnrollmentDate" e
        JOIN "SpecialProgramApplicationItem" it ON it.id = e."applicationItemId"
@@ -130,26 +181,37 @@ export async function getDateRoster(sessionDateId: string) {
        LEFT JOIN "SpecialProgramMakeup" mk ON mk.id = e."makeupId"
        LEFT JOIN "SpecialProgramSessionDate" absd ON absd.id = mk."absentSessionDateId"
       WHERE e."sessionDateId" = $1 AND e.status <> 'CANCELLED'
+        AND it.status = 'APPROVED'
       ORDER BY (e.kind = 'MAKEUP') ASC, a."childName" ASC`,
     sessionDateId,
   );
 
   const p = seoulParts(meta.startsAt);
   const end = seoulParts(meta.endsAt);
+  // 이 반의 전체 승인 인원 — 명단 인원(요일이 맞는 학생만)과 비교해 오해를 막는 안내에 쓴다.
+  const totalApprovedStudents = await countApprovedStudents(meta.offeringId);
   return {
     date: {
       sessionDateId: meta.id, offeringId: meta.offeringId, offeringTitle: meta.offeringTitle,
-      dateLabel: p.dateLabel, dayLabel: p.dayLabel, startTime: p.timeLabel, endTime: end.timeLabel,
+      dateLabel: p.dateLabel, dayLabel: p.dayLabel, weekdayKey: p.weekdayKey,
+      startTime: p.timeLabel, endTime: end.timeLabel,
       location: meta.location ?? null, capacity: meta.capacity == null ? null : Number(meta.capacity),
       instructorName: meta.instructorName ?? null,
+      totalApprovedStudents,
     },
-    rows: rows.map((r) => ({
-      enrollmentDateId: r.enrollmentDateId, kind: r.kind, enrollmentStatus: r.status,
-      attendanceStatus: r.attendanceStatus ?? null, arrivedAt: r.arrivedAt ?? null, attendanceNote: r.attendanceNote ?? null,
-      itemId: r.itemId, childName: r.childName, childGrade: r.childGrade ?? null, childSchool: r.childSchool ?? null,
-      parentName: r.parentName, parentPhone: r.parentPhone,
-      originAbsence: r.absentSessionDateId ? seoulParts(r.originStartsAt).dateLabel : null,
-    })),
+    totalApprovedStudents,
+    rows: rows.map((r) => {
+      const selectedWeekdays = weekdayKeys(r.selectedWeekdays);
+      return {
+        enrollmentDateId: r.enrollmentDateId, kind: r.kind, enrollmentStatus: r.status,
+        attendanceStatus: r.attendanceStatus ?? null, arrivedAt: r.arrivedAt ?? null, attendanceNote: r.attendanceNote ?? null,
+        itemId: r.itemId, childName: r.childName, childGrade: r.childGrade ?? null, childSchool: r.childSchool ?? null,
+        parentName: r.parentName, parentPhone: r.parentPhone,
+        selectedWeekdays, // 학생이 신청한 요일 키 목록 (예: ["MON","WED"])
+        selectedWeekdayLabel: weekdayLabel(selectedWeekdays), // 화면용 라벨 (예: "월·수")
+        originAbsence: r.absentSessionDateId ? seoulParts(r.originStartsAt).dateLabel : null,
+      };
+    }),
   };
 }
 

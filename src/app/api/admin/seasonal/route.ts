@@ -10,6 +10,7 @@ import { issueParentAccountClaim } from "@/lib/parent-account-claim";
 import { randomUUID } from "node:crypto";
 import { expireStaleSmsDeliveries } from "@/lib/notification";
 import { getSeasonalAdminOverview } from "@/lib/seasonal/admin-overview";
+import { syncEnrollmentDatesForItemSafe } from "@/lib/seasonal/enrollment-dates";
 import {
   SEASONAL_SMS_TRIGGERS,
   dispatchSeasonalParentSms,
@@ -1207,6 +1208,8 @@ export async function PATCH(request: NextRequest) {
             (tx) => updateSpecialProgramItemStatus(tx, { itemId, status, actorId: actor.appUserId }),
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           );
+          // 승인 확정 후(트랜잭션 커밋 뒤) 날짜별 출석 슬롯을 채운다. 실패해도 승인은 유지된다.
+          if (changed.item.status === "APPROVED") await syncEnrollmentDatesForItemSafe(itemId);
           const notification = await notifyItemStatus(changed);
           results.push({
             itemId,
@@ -1460,6 +1463,8 @@ export async function PATCH(request: NextRequest) {
         (tx) => updateSpecialProgramItemStatus(tx, { itemId: id, status, actorId: actor.appUserId, enrollmentId: data.enrollmentId, paymentId: data.paymentId }),
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
+      // 승인 확정 후(트랜잭션 커밋 뒤) 날짜별 출석 슬롯을 채운다. 실패해도 승인은 유지된다.
+      if (changed.item.status === "APPROVED") await syncEnrollmentDatesForItemSafe(id);
       const notification = await notifyItemStatus(changed);
       return NextResponse.json({
         item: changed.item,

@@ -932,6 +932,30 @@ export default function TrialCrmClient({
         }
     }
 
+    async function handleConvertWithoutSms() {
+        if (busy || !enrollGuideConfirm) return;
+        const { lead } = enrollGuideConfirm;
+        setBusy(true);
+        try {
+            // 최초 전환일 보존: 문자 발송 경로는 서버에서 COALESCE("convertedDate", NOW()) 로 처음 값을 지킨다.
+            // 여기서는 이미 전환일이 있으면 convertedDate 를 아예 보내지 않아 같은 결과(덮어쓰기 방지)를 만든다.
+            const updates: { status: string; convertedDate?: string } = { status: "CONVERTED" };
+            if (!lead.convertedDate) updates.convertedDate = new Date().toISOString();
+            // 이력 기록: 문자 없이 처리한 전환이라는 사실이 상담 이력에 남아야 나중에 추적이 된다.
+            await updateTrialLead(lead.id, updates, {
+                action: "UPDATED",
+                note: "등록전환 처리 (문자 미발송)",
+            });
+            setEnrollGuideConfirm(null);
+            await loadTrialData();
+            showFeedback("success", `${lead.childName} 등록전환 완료 (문자 미발송).`);
+        } catch {
+            showFeedback("error", "등록전환 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
     function handleSendEnrollGuide(lead: TrialLead) {
         if (busy) return;
         setEnrollGuideConfirm({ lead, convertAfterConfirm: false });
@@ -1493,6 +1517,7 @@ export default function TrialCrmClient({
                         if (!busy) setEnrollGuideConfirm(null);
                     }}
                     onConfirm={() => void handleConfirmEnrollGuide()}
+                    onConfirmNoSms={() => void handleConvertWithoutSms()}
                 />
             )}
         </div>
@@ -1505,12 +1530,14 @@ function EnrollGuideConfirmModal({
     busy,
     onClose,
     onConfirm,
+    onConfirmNoSms,
 }: {
     lead: TrialLead;
     convertAfterConfirm: boolean;
     busy: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    onConfirmNoSms?: () => void;
 }) {
     return (
         <AdminModal onClose={busy ? () => undefined : onClose} titleId="trial-enroll-guide-confirm-title" panelClassName="max-w-md">
@@ -1546,22 +1573,32 @@ function EnrollGuideConfirmModal({
                     </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={busy}
-                        className="min-h-11 rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
-                    >
-                        취소
-                    </button>
+                <div className="mt-6 space-y-2">
                     <button
                         type="button"
                         onClick={onConfirm}
                         disabled={busy}
-                        className="min-h-11 rounded-xl bg-brand-orange-500 px-4 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-300"
+                        className="min-h-11 w-full rounded-xl bg-brand-orange-500 px-4 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-300"
                     >
-                        {busy ? "발송 중..." : "확인"}
+                        {busy ? "처리 중..." : convertAfterConfirm ? "등록전환 + 문자 발송" : "문자 발송"}
+                    </button>
+                    {convertAfterConfirm && onConfirmNoSms && (
+                        <button
+                            type="button"
+                            onClick={onConfirmNoSms}
+                            disabled={busy}
+                            className="min-h-11 w-full rounded-xl border border-brand-orange-300 px-4 text-sm font-black text-brand-orange-600 transition hover:bg-brand-orange-50 disabled:opacity-50 dark:border-brand-neon-lime/40 dark:text-brand-neon-lime dark:hover:bg-brand-neon-lime/10"
+                        >
+                            {busy ? "처리 중..." : "문자 없이 전환만"}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={busy}
+                        className="min-h-11 w-full rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                    >
+                        취소
                     </button>
                 </div>
             </div>

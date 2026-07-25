@@ -1,32 +1,65 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-const TABS: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
-  { href: "/admin/seasonal", label: "신청·반 관리", match: (p) => p === "/admin/seasonal" || (p.startsWith("/admin/seasonal/") && !p.startsWith("/admin/seasonal/attendance")) },
-  { href: "/admin/seasonal/attendance", label: "출석·보강", match: (p) => p.startsWith("/admin/seasonal/attendance") },
-  { href: "/admin/shuttle", label: "셔틀 노선", match: (p) => p.startsWith("/admin/shuttle") },
+const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> = [
+  { key: "overview", href: "/admin/seasonal?tab=overview", label: "운영 현황", icon: "dashboard" },
+  { key: "seasons", href: "/admin/seasonal?tab=seasons", label: "시즌·반", icon: "calendar_month" },
+  { key: "applications", href: "/admin/seasonal?tab=applications", label: "신청 관리", icon: "assignment_ind" },
+  { key: "attendance", href: "/admin/seasonal/attendance", label: "출석 관리", icon: "fact_check" },
+  { key: "makeup", href: "/admin/seasonal/attendance?view=makeup", label: "보강 관리", icon: "cached" },
+  { key: "shuttle", href: "/admin/shuttle", label: "셔틀 노선", icon: "directions_bus" },
 ];
 
-export default function SeasonalSectionTabs() {
-  const pathname = usePathname();
+// 활성 탭 판정 — 경로(pathname) + ?view 쿼리 조합. 기존 판정 결과와 동일하다.
+function resolveActiveKey(pathname: string, view: string | null): string {
+  if (pathname.startsWith("/admin/shuttle")) return "shuttle";
+  if (pathname.startsWith("/admin/seasonal/attendance")) return view === "makeup" ? "makeup" : "attendance";
+  return "";
+}
+
+// 탭 바 UI만 담당(순수 렌더). 활성 키는 바깥에서 넘겨받는다.
+function TabsView({ active }: { active: string }) {
   return (
     <div className="mx-auto max-w-6xl px-4 pt-4">
-      <div className="flex gap-1 overflow-x-auto border-b-2 border-gray-200 dark:border-gray-700">
-        {TABS.map((t) => {
-          const active = t.match(pathname);
+      <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-1.5 dark:border-gray-700 dark:bg-gray-900" aria-label="방학특강 메뉴">
+        {ITEMS.map((it) => {
+          const on = it.key === active;
           return (
+            // Link = 클라이언트 사이드 이동. <a>와 달리 페이지 전체를 새로고침하지 않는다.
             <Link
-              key={t.href}
-              href={t.href}
-              className={`-mb-0.5 whitespace-nowrap border-b-[3px] px-4 py-2 text-sm font-black transition ${active ? "border-[var(--brand-accent)] text-[var(--brand-accent)]" : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+              key={it.key}
+              href={it.href}
+              className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold ${on ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"}`}
             >
-              {t.label}
+              <span className="material-symbols-outlined text-xl">{it.icon}</span>
+              {it.label}
             </Link>
           );
         })}
-      </div>
+      </nav>
     </div>
+  );
+}
+
+// useSearchParams()를 쓰는 부분만 분리 — Suspense 경계 안에 두기 위함.
+function TabsWithSearchParams() {
+  const pathname = usePathname();
+  // 첫 렌더부터 ?view 값을 알 수 있어 "출석 관리 → 보강 관리" 깜빡임이 없다.
+  const view = useSearchParams().get("view");
+  return <TabsView active={resolveActiveKey(pathname, view)} />;
+}
+
+// 방학특강 섹션 공통 탭 바 — 출석/보강/셔틀 페이지 상단에 표시. (신청·반 관리 페이지는 자체 nav 사용)
+export default function SeasonalSectionTabs() {
+  const pathname = usePathname();
+  return (
+    // 페이지 파일을 건드리지 않도록 Suspense 경계를 이 컴포넌트 안에서 처리한다.
+    // fallback은 쿼리를 뺀 경로만으로 판정 → 레이아웃이 동일해 시각적 흔들림이 없다.
+    <Suspense fallback={<TabsView active={resolveActiveKey(pathname, null)} />}>
+      <TabsWithSearchParams />
+    </Suspense>
   );
 }

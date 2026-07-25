@@ -8,7 +8,8 @@ type Offering = {
 };
 type Season = { id: string; title: string; status: string };
 type BoardDate = {
-  sessionDateId: string; round: number; dateLabel: string; dayLabel: string; startTime: string; endTime: string;
+  sessionDateId: string; round: number; dateLabel: string; dayLabel: string; weekdayKey?: string;
+  startTime: string; endTime: string;
   ymd: string; location: string | null; capacity: number | null; scheduled: number; makeup: number;
   present: number; late: number; absent: number; excused: number; unchecked: number; checked: number;
   state: "DONE" | "LIVE" | "PLANNED";
@@ -17,6 +18,8 @@ type RosterRow = {
   enrollmentDateId: string; kind: string; enrollmentStatus: string; attendanceStatus: string | null;
   arrivedAt: string | null; attendanceNote: string | null; itemId: string; childName: string;
   childGrade: string | null; childSchool: string | null; parentName: string; parentPhone: string; originAbsence: string | null;
+  // 학생이 신청한 요일 (예: ["MON","WED"] / "월·수") — 날짜별 명단 인원 차이를 설명하기 위한 정보
+  selectedWeekdays?: string[]; selectedWeekdayLabel?: string | null;
 };
 
 const ATT = [
@@ -42,6 +45,9 @@ async function postJSON(body: any) {
 
 export default function SeasonalAttendanceClient({ initial }: { initial: { seasons: Season[]; offerings: Offering[] } }) {
   const [tab, setTab] = useState<"attendance" | "makeup">("attendance");
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "makeup") setTab("makeup");
+  }, []);
   const [seasonId, setSeasonId] = useState<string>(initial.seasons[0]?.id ?? "");
   const offeringsInSeason = useMemo(
     () => initial.offerings.filter((o) => !seasonId || o.seasonId === seasonId),
@@ -147,15 +153,6 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
         </select>
       </div>
 
-      <div className="mb-4 flex gap-1 border-b-2 border-gray-200 dark:border-gray-700">
-        {([["attendance", "📋 출석 관리"], ["makeup", "🔄 보강 관리"]] as const).map(([k, label]) => (
-          <button key={k} onClick={() => setTab(k)}
-            className={`-mb-0.5 border-b-[3px] px-4 py-2 text-sm font-black ${tab === k ? "border-[var(--brand-accent)] text-[var(--brand-accent)]" : "border-transparent text-gray-500"}`}>
-            {label}{k === "makeup" && makeups.pending?.length ? <span className="ml-1 rounded-full bg-red-600 px-1.5 text-xs text-white">{makeups.pending.length}</span> : null}
-          </button>
-        ))}
-      </div>
-
       {err && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">{err}</div>}
 
       {tab === "attendance" && (
@@ -208,12 +205,21 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
             })}
           </div>
           <p className="mt-2 px-1 text-[11px] font-bold text-gray-500">※ 정원은 해당 날짜에 오는 인원(정규+보강생) 기준입니다.</p>
+          {/* 날짜별 인원이 반 전체보다 적은 이유를 안내 — 누락으로 오해하지 않도록 */}
+          <p className="mt-0.5 px-1 text-[11px] font-bold text-gray-500">※ 학생마다 신청한 요일이 달라 날짜별 인원이 다를 수 있습니다.</p>
 
           {rosterMeta && (
             <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
               <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
                 <span className="text-sm font-black">{rosterMeta.dateLabel} ({rosterMeta.dayLabel}) 명단</span>
-                <span className="text-xs font-bold text-gray-500">· {rosterMeta.startTime}~{rosterMeta.endTime} · {roster.length}명</span>
+                <span className="text-xs font-bold text-gray-500">
+                  · {rosterMeta.startTime}~{rosterMeta.endTime}
+                  {/* 반 전체 인원과 이 날 수강 인원을 함께 표시해 "학생 누락" 오해를 방지한다 */}
+                  {typeof rosterMeta.totalApprovedStudents === "number"
+                    ? ` · 반 전체 ${rosterMeta.totalApprovedStudents}명 중 이 날(${rosterMeta.dayLabel}) 수강 ${roster.length}명`
+                    : ` · ${roster.length}명`}
+                  {` · 정원 ${rosterMeta.capacity ?? offering?.capacity ?? 12}`}
+                </span>
               </div>
               <table className="w-full text-sm">
                 <thead><tr className="text-[11px] uppercase text-gray-500">
@@ -224,7 +230,17 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
                     const cur = ATT.find((a) => a.key === r.attendanceStatus);
                     return (
                       <tr key={r.enrollmentDateId} className={`border-t border-gray-100 dark:border-gray-700 ${r.kind === "MAKEUP" ? "bg-violet-50 dark:bg-violet-950/40" : r.attendanceStatus === "ABSENT" ? "bg-red-50 dark:bg-red-950/40" : ""}`}>
-                        <td className="p-2 text-center font-bold">{r.childName}{r.kind === "MAKEUP" && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-black text-violet-700 dark:bg-violet-900 dark:text-violet-200">보강생</span>}</td>
+                        <td className="p-2 text-center font-bold">
+                          {r.childName}{r.kind === "MAKEUP" && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-black text-violet-700 dark:bg-violet-900 dark:text-violet-200">보강생</span>}
+                          {/* 학생이 신청한 요일 뱃지 — 왜 이 학생이 특정 날짜에만 보이는지 알 수 있게 한다 */}
+                          {r.selectedWeekdayLabel && (
+                            <div className="mt-0.5">
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-black text-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                                신청 {r.selectedWeekdayLabel}
+                              </span>
+                            </div>
+                          )}
+                        </td>
                         <td className="p-2 text-center text-gray-600 dark:text-gray-300">{r.childGrade || "-"}</td>
                         <td className="p-2 text-center text-xs text-gray-500">{r.kind === "MAKEUP" && r.originAbsence ? `← ${r.originAbsence} 결석분` : "-"}</td>
                         <td className="p-2">

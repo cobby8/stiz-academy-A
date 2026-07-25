@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getAccessibleClassIds, getStaffClassAccessContext } from "@/lib/staff-class-access";
+import { resolveStaffBillingGuard } from "@/lib/staff-billing-policy";
 import { normalizePhoneNumber } from "@/lib/staff-contacts";
 
 export type StaffStudentListItem = { id: string; name: string; school: string | null; grade: string | null; studentPhone: string | null; parentName: string; parentPhone: string | null; classNames: string[] };
-export type StaffBillingListItem = { id: string; studentName: string; className: string; title: string; amount: number; status: string; dueDate: Date; paidDate: Date | null; invoiceNo: string | null; confirmationStatus: string | null };
+export type StaffBillingListItem = { id: string; classId: string; paymentClassId: string | null; studentName: string; className: string; title: string; amount: number; invoiceAmount: number; amountMismatch: boolean; studentMismatch: boolean; status: string; dueDate: Date; paidDate: Date | null; invoiceNo: string | null; confirmationStatus: string | null; confirmable: boolean; blockReason: string | null };
+type StaffBillingRow = Omit<StaffBillingListItem, "confirmable" | "blockReason">;
 type StudentRow = Omit<StaffStudentListItem, "classNames"> & { classNames: string[] | null };
 
 /** 담당 수업을 먼저 확정한 뒤 그 수업의 활성 수강생만 조회합니다. */
@@ -29,20 +31,41 @@ export async function getStaffBilling(): Promise<StaffBillingListItem[]> {
   const classIds = await getAccessibleClassIds(access);
   if (!classIds.length) return [];
 
-  // 현재 Payment와 PaymentInvoice에는 classId/enrollmentId가 없습니다.
-  // 학생의 Enrollment로 우회 연결하면 다른 수업료·셔틀·유니폼 청구까지 노출될 수 있어
-  // 수업 귀속 컬럼이 추가되기 전에는 안전하게 아무 청구도 반환하지 않습니다.
-  return prisma.$queryRawUnsafe<StaffBillingListItem[]>(
-    `SELECT p.id,s.name AS "studentName",c.name AS "className",
-            COALESCE(NULLIF(p.description,''),'수강료') AS title,p.amount,p.status,p."dueDate",p."paidDate",p."invoiceNo",
-            r.status AS "confirmationStatus"
-       FROM "Payment" p
-       JOIN "Student" s ON s.id=p."studentId"
-       JOIN "Class" c ON c.id=p."classId"
-       JOIN "PaymentInvoice" i ON i."paymentId"=p.id AND i."classId"=p."classId"
-       LEFT JOIN LATERAL (SELECT status FROM "StaffPaymentConfirmationRequest" r WHERE r."paymentId"=p.id ORDER BY r."createdAt" DESC LIMIT 1) r ON true
-      WHERE p."classId"=ANY($1::text[])
-        AND EXISTS (SELECT 1 FROM "Enrollment" e WHERE e."studentId"=p."studentId" AND e."classId"=p."classId" AND e.status='ACTIVE')
-      ORDER BY CASE WHEN p.status IN ('OVERDUE','PENDING') THEN 0 ELSE 1 END,p."dueDate" DESC,s.name`, classIds,
+  // 반 연결은 두 갈래입니다. Payment."classId"가 있으면 그 값을 신뢰하고,
+  // 비어 있는 과거 청구는 학생의 활성 수강(Enrollment)으로 잇되 정규 월 수강료만 허용합니다.
+  // (셔틀·유니폼·특강 청구가 반 정보 없이 새어 나오는 것을 막기 위한 제한입니다.)
+  // 한 학생이 여러 반을 들으면 같은 청구가 반마다 잡히므로 DISTINCT ON으로 1건만 남깁니다.
+  const rows = await prisma.$queryRawUnsafe<StaffBillingRow[]>(
+    `SELECT * FROM (
+       SELECT DISTINCT ON (p.id)
+              p.id,e."classId",p."classId" AS "paymentClassId",
+              s.name AS "studentName",c.name AS "className",
+              COALESCE(NULLIF(i.title,''),NULLIF(p.description,''),'수강료') AS title,
+              p.amount,i.amount AS "invoiceAmount",
+              (i.amount <> p.amount) AS "amountMismatch",
+              (i."studentId" <> p."studentId") AS "studentMismatch",
+              p.status,p."dueDate",p."paidDate",p."invoiceNo",
+              r.status AS "confirmationStatus"
+         FROM "Payment" p
+         JOIN "PaymentInvoice" i ON i."paymentId"=p.id
+         JOIN "Student" s ON s.id=p."studentId"
+         JOIN "Enrollment" e ON e."studentId"=p."studentId" AND e.status='ACTIVE' AND e."classId"=ANY($1::text[])
+         JOIN "Class" c ON c.id=e."classId"
+         LEFT JOIN LATERAL (SELECT status FROM "StaffPaymentConfirmationRequest" r WHERE r."paymentId"=p.id ORDER BY r."createdAt" DESC LIMIT 1) r ON true
+        WHERE (p."classId"=e."classId" OR (p."classId" IS NULL AND p.type='MONTHLY'))
+          AND p.status IN ('PENDING','OVERDUE','PAID')
+          AND i.status <> 'CANCELED'
+        ORDER BY p.id,(p."classId" IS NULL),c.name
+     ) b
+     ORDER BY CASE WHEN b.status IN ('OVERDUE','PENDING') THEN 0 ELSE 1 END,b."dueDate" DESC,b."studentName"`, classIds,
   );
+
+  return rows.map((row) => ({
+    ...row,
+    ...resolveStaffBillingGuard({
+      paymentClassId: row.paymentClassId,
+      amountMismatch: row.amountMismatch,
+      studentMismatch: row.studentMismatch,
+    }),
+  }));
 }

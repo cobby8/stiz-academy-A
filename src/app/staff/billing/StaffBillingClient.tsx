@@ -66,7 +66,9 @@ export default function StaffBillingClient({ bills }: { bills: StaffBillingListI
           <div className="flex justify-between gap-3"><div><h2 className="font-black">{bill.studentName}</h2><p className="text-sm text-gray-500">{bill.className} · {bill.title}</p></div><span className="h-fit rounded-full bg-gray-100 px-2 py-1 text-xs font-bold dark:bg-gray-800">{labels[bill.status] ?? bill.status}</span></div>
           <p className="mt-4 text-xl font-black">{bill.amount.toLocaleString("ko-KR")}원</p>
           <p className="text-xs text-gray-500">납부 기한 {new Intl.DateTimeFormat("ko-KR").format(new Date(bill.dueDate))}</p>
-          {bill.confirmationStatus === "PENDING" ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-200">관리자 확인 대기 중</p> : ["PENDING", "OVERDUE"].includes(bill.status) && <button type="button" onClick={() => { setTarget(bill); setMessage(""); }} className="mt-3 min-h-12 w-full rounded-xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)]">납부 확인 요청</button>}
+          {bill.amountMismatch && <p className="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">청구서에는 {bill.invoiceAmount.toLocaleString("ko-KR")}원으로 되어 있습니다.</p>}
+          {/* 문제가 있는 청구도 목록에서는 보여 주고, 수납 확인 버튼만 사유와 함께 막습니다. */}
+          {bill.confirmationStatus === "PENDING" ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-200">관리자 확인 대기 중</p> : ["PENDING", "OVERDUE"].includes(bill.status) && (bill.confirmable ? <button type="button" onClick={() => { setTarget(bill); setMessage(""); }} className="mt-3 min-h-12 w-full rounded-xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)]">납부 확인 요청</button> : <p className="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-200"><span className="material-symbols-outlined shrink-0 text-lg" aria-hidden="true">warning</span>{bill.blockReason}</p>)}
         </article>
       ))}
       {target && (

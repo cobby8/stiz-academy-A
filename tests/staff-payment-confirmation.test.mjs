@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 const action=readFileSync(new URL("../src/app/actions/staff-billing.ts",import.meta.url),"utf8");
 const query=readFileSync(new URL("../src/lib/staff-portal-queries.ts",import.meta.url),"utf8");
 const sql=readFileSync(new URL("../prisma/sql/add_g5_staff_payment_confirmations.sql",import.meta.url),"utf8");
-test("교사는 명시적으로 담당 반에 귀속된 청구만 조회한다",()=>{assert.match(query,/p\."classId"=ANY/);assert.match(query,/e\.status='ACTIVE'/);assert.match(query,/i\."classId"=p\."classId"/);});
+test("교사는 담당 반 범위의 청구만 조회한다",()=>{assert.match(query,/e\."classId"=ANY\(\$1::text\[\]\)/);assert.match(query,/e\.status='ACTIVE'/);assert.match(query,/p\."classId"=e\."classId" OR \(p\."classId" IS NULL AND p\.type='MONTHLY'\)/);});
+test("한 학생이 여러 반을 들어도 청구는 1건만 나온다",()=>{assert.match(query,/DISTINCT ON \(p\.id\)/);});
+test("요청 조회는 금액·반을 조인 조건에 넣지 않아 불일치 시에도 원인을 알 수 있다",()=>{const requestPart=action.split("export async function reviewStaffPaymentConfirmation")[0];assert.doesNotMatch(requestPart,/i\."paymentId"=p\.id AND i\."classId"=p\."classId"/);assert.match(requestPart,/resolveStaffBillingGuard/);});
 test("교사 요청은 직접 결제 상태를 바꾸지 않는다",()=>{const requestPart=action.split("export async function reviewStaffPaymentConfirmation")[0];assert.doesNotMatch(requestPart,/SET status='PAID'/);assert.match(requestPart,/requireStaffStudentAccess/);});
 
 const migration = readFileSync(new URL("../prisma/sql/add_g5_staff_payment_confirmations.sql", import.meta.url), "utf8");

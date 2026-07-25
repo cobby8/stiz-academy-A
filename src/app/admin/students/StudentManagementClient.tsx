@@ -196,6 +196,10 @@ type ReconcileSample = {
     slotKey: string;
     currentStatus?: string | null;
     targetStatus?: string | null;
+    /** 퇴원 후보 전용 — 마지막으로 시트에 등장한 달 */
+    lastSeenMonth?: string | null;
+    /** 퇴원 후보 전용 — 이미 지나간 미등장 개월 수 */
+    monthsMissing?: number | null;
 };
 
 type ReconcilePreview = {
@@ -207,10 +211,14 @@ type ReconcilePreview = {
     unresolvedLedgerRows: number;
     missingClassSlots: number;
     outsideScopeActiveStudents: number;
+    withdrawCandidates: number;
+    withdrawCandidateStudents: number;
+    maxPauseMonths: number;
     samples: {
         missing: ReconcileSample[];
         reactivations: ReconcileSample[];
         pauseExtras: ReconcileSample[];
+        withdrawCandidates: ReconcileSample[];
     };
 };
 
@@ -621,10 +629,12 @@ function ReconcilePreviewBox({
     preview,
     applying,
     onApply,
+    onApplyWithdrawals,
 }: {
     preview: ReconcilePreview;
     applying: boolean;
     onApply: () => void;
+    onApplyWithdrawals: () => void;
 }) {
     const actionCount =
         preview.missingEnrollments + preview.reactivations + preview.pauseExtras;
@@ -660,6 +670,43 @@ function ReconcilePreviewBox({
                     {applying ? "적용 중" : actionCount === 0 ? "적용할 변경 없음" : "시트 기준 적용"}
                 </button>
             </div>
+
+            {/*
+              퇴원 후보는 위의 "시트 기준 적용"에 절대 포함되지 않는다.
+              반 명단에서 사라지고 청구가 끊기는 되돌리기 어려운 처리라, 명단을 눈으로 확인한 뒤
+              아래 전용 버튼으로만 확정하도록 분리했다.
+            */}
+            {preview.withdrawCandidates > 0 && (
+                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+                    <p className="font-bold">
+                        퇴원 후보 {preview.withdrawCandidateStudents}명 ({preview.withdrawCandidates}건)
+                    </p>
+                    <p className="mt-1">
+                        약관상 휴원 한도({preview.maxPauseMonths}개월)를 넘겨 시트에서 사라진 학생입니다.
+                        아래 버튼을 누르기 전까지는 <strong>아무것도 바뀌지 않습니다.</strong> 퇴원 후에도 다시 시트에 나타나면
+                        &ldquo;시트 기준 적용&rdquo;으로 자동 복원됩니다.
+                    </p>
+                    <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                        {preview.samples.withdrawCandidates.map((row) => (
+                            <p key={`withdraw-${row.studentId}-${row.slotKey}`}>
+                                {row.studentName} · {formatSlotLabel(row.slotKey)} · 마지막 등장 {row.lastSeenMonth ?? "-"}
+                                {typeof row.monthsMissing === "number" ? ` (${row.monthsMissing}개월 미등장)` : ""}
+                                {row.currentStatus ? ` · 현재 ${row.currentStatus}` : ""}
+                            </p>
+                        ))}
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                        <button
+                            type="button"
+                            onClick={onApplyWithdrawals}
+                            disabled={applying}
+                            className="rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {applying ? "적용 중" : `퇴원 후보 ${preview.withdrawCandidateStudents}명 퇴원 처리`}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1187,8 +1234,14 @@ export default function StudentManagementClient({
         }
     }, [ensureStudentOptions]);
 
-    const applyReconcile = useCallback(async () => {
-        if (!confirm("최신 시트 원장을 기준으로 수강 등록 상태를 맞출까요? 삭제는 하지 않고 상태만 정리합니다.")) {
+    // applyWithdrawals = true 일 때만 퇴원 후보까지 확정한다. 기본값은 예전과 완전히 동일한 동작.
+    const applyReconcile = useCallback(async (options?: { applyWithdrawals?: boolean }) => {
+        const applyWithdrawals = options?.applyWithdrawals === true;
+        const message = applyWithdrawals
+            ? "휴원 한도를 넘겨 사라진 학생을 퇴원 처리할까요? 반 명단에서 빠지고 청구가 중단됩니다. (시트에 다시 나타나면 복원됩니다)"
+            : "최신 시트 원장을 기준으로 수강 등록 상태를 맞출까요? 삭제는 하지 않고 상태만 정리합니다.";
+
+        if (!confirm(message)) {
             return;
         }
 
@@ -1199,6 +1252,8 @@ export default function StudentManagementClient({
             const response = await fetch("/api/admin/import-students/reconcile", {
                 method: "POST",
                 cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ applyWithdrawals }),
             });
             const data = await response.json();
 
@@ -1754,6 +1809,7 @@ export default function StudentManagementClient({
                                             preview={reconcilePreview}
                                             applying={reconcileApplying}
                                             onApply={() => void applyReconcile()}
+                                            onApplyWithdrawals={() => void applyReconcile({ applyWithdrawals: true })}
                                         />
                                     )}
                                 </div>

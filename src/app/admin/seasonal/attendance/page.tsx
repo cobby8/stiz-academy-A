@@ -1,4 +1,5 @@
 import SeasonalAttendanceClient from "./SeasonalAttendanceClient";
+import SeasonalSectionTabs from "../SeasonalSectionTabs";
 import { getSeasonalAttendanceBootstrap } from "@/lib/seasonal/attendance";
 
 export const dynamic = "force-dynamic";
@@ -12,5 +13,10 @@ export default async function SeasonalAttendancePage() {
       targetGrades: string | null; instructorName: string | null; dateCount: number; enrolledSlots: number;
     }>;
   };
-  return <SeasonalAttendanceClient initial={initial} />;
+  return (
+    <>
+      <SeasonalSectionTabs />
+      <SeasonalAttendanceClient initial={initial} />
+    </>
+  );
 }

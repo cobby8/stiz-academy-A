@@ -1,11 +1,15 @@
 import SeasonalAttendanceClient from "./SeasonalAttendanceClient";
 import SeasonalSectionTabs from "../SeasonalSectionTabs";
-import { getSeasonalAttendanceBootstrap } from "@/lib/seasonal/attendance";
+import { countPendingMakeups, getSeasonalAttendanceBootstrap } from "@/lib/seasonal/attendance";
 
 export const dynamic = "force-dynamic";
 
 export default async function SeasonalAttendancePage() {
-  const bootstrap = await getSeasonalAttendanceBootstrap();
+  // 부트스트랩과 대기 건수는 서로 무관하므로 병렬로 조회한다(응답 지연 최소화).
+  const [bootstrap, makeupPending] = await Promise.all([
+    getSeasonalAttendanceBootstrap(),
+    countPendingMakeups(),
+  ]);
   const initial = JSON.parse(JSON.stringify(bootstrap)) as {
     seasons: Array<{ id: string; title: string; status: string }>;
     offerings: Array<{
@@ -15,7 +19,7 @@ export default async function SeasonalAttendancePage() {
   };
   return (
     <>
-      <SeasonalSectionTabs />
+      <SeasonalSectionTabs makeupPending={makeupPending} />
       <SeasonalAttendanceClient initial={initial} />
     </>
   );

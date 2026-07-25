@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Offering = {
@@ -44,6 +45,8 @@ async function postJSON(body: any) {
 }
 
 export default function SeasonalAttendanceClient({ initial }: { initial: { seasons: Season[]; offerings: Offering[] } }) {
+  // router.refresh()는 서버 컴포넌트(상단 탭의 보강 대기 뱃지)를 다시 그리게 한다. 화면 상태는 유지된다.
+  const router = useRouter();
   const [tab, setTab] = useState<"attendance" | "makeup">("attendance");
   useEffect(() => {
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "makeup") setTab("makeup");
@@ -128,7 +131,12 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
     } catch (e) { setErr((e as Error).message); }
   }
   async function decide(id: string, decision: string) {
-    try { await postJSON({ action: "makeup-decide", makeupId: id, decision }); void loadMakeups(); void loadBoard(offeringId); }
+    try {
+      await postJSON({ action: "makeup-decide", makeupId: id, decision });
+      void loadMakeups(); void loadBoard(offeringId);
+      // 승인·거절하면 대기 건수가 줄어드므로 상단 탭 뱃지도 즉시 갱신한다.
+      router.refresh();
+    }
     catch (e) { setErr((e as Error).message); }
   }
 

@@ -92,6 +92,21 @@ export async function getSeasonalAttendanceBootstrap() {
   };
 }
 
+// 1-1) 상단 탭 "보강 관리" 빨간 뱃지용 — 승인 대기(REQUESTED) 보강 신청 건수만 센다.
+// 목록 전체(listMakeups)를 부르면 무거우므로 COUNT만 조회한다. 조회 전용(DB 변경 없음).
+// 보관(ARCHIVED) 시즌은 더 이상 처리할 수 없는 건이라 제외 → 뱃지가 영구히 남는 것을 방지한다.
+export async function countPendingMakeups(): Promise<number> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ total: unknown }>>(
+    `SELECT COUNT(*) AS total
+       FROM "SpecialProgramMakeup" m
+       JOIN "SpecialProgramOffering" o ON o.id = m."offeringId"
+       JOIN "SpecialProgramSeason" s ON s.id = o."seasonId"
+      WHERE m.status = 'REQUESTED'
+        AND s.status <> 'ARCHIVED'`,
+  );
+  return num(rows[0]?.total);
+}
+
 // 2) 특강 회차(날짜)별 보드 — 정원/출결 요약
 export async function getOfferingDateBoard(offeringId: string) {
   const offeringRows = await prisma.$queryRawUnsafe<any[]>(

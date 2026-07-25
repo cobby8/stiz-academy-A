@@ -310,16 +310,17 @@ type ProgramData = {
     priceDaily?: number | null;
     shuttleFeeOverride?: number | null;
     imageUrl?: string | null;
+    runsShuttle?: boolean;
 };
 
 export async function createProgram(data: ProgramData) {
     await requireAdmin();
-    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl } = data;
+    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl, runsShuttle } = data;
     // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
         await prisma.$executeRawUnsafe(
-            `INSERT INTO "Program" (id, "name", "targetAge", "weeklyFrequency", "description", "price", "days", "priceWeek1", "priceWeek2", "priceWeek3", "priceDaily", "shuttleFeeOverride", "imageUrl", "order", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+            `INSERT INTO "Program" (id, "name", "targetAge", "weeklyFrequency", "description", "price", "days", "priceWeek1", "priceWeek2", "priceWeek3", "priceDaily", "shuttleFeeOverride", "imageUrl", "runsShuttle", "order", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
                (SELECT COALESCE(MAX("order"), -1) + 1 FROM "Program"), now(), now())`,
             name,
             targetAge ?? null,
@@ -333,6 +334,7 @@ export async function createProgram(data: ProgramData) {
             priceDaily ?? null,
             shuttleFeeOverride ?? null,
             imageUrl ?? null,
+            runsShuttle ?? true,
         );
     } catch (e) {
         console.error("Failed to create program:", e);
@@ -346,7 +348,7 @@ export async function createProgram(data: ProgramData) {
 
 export async function updateProgram(id: string, data: ProgramData) {
     await requireAdmin();
-    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl } = data;
+    const { name, targetAge, weeklyFrequency, description, price, days, priceWeek1, priceWeek2, priceWeek3, priceDaily, shuttleFeeOverride, imageUrl, runsShuttle } = data;
     // $executeRawUnsafe: simple query protocol → PgBouncer transaction mode 호환
     try {
         await prisma.$executeRawUnsafe(
@@ -363,8 +365,9 @@ export async function updateProgram(id: string, data: ProgramData) {
                "priceDaily" = $10,
                "shuttleFeeOverride" = $11,
                "imageUrl" = $12,
+               "runsShuttle" = $13,
                "updatedAt" = now()
-             WHERE id = $13`,
+             WHERE id = $14`,
             name,
             targetAge ?? null,
             weeklyFrequency ?? null,
@@ -377,6 +380,7 @@ export async function updateProgram(id: string, data: ProgramData) {
             priceDaily ?? null,
             shuttleFeeOverride ?? null,
             imageUrl ?? null,
+            runsShuttle ?? true,
             id,
         );
     } catch (e) {
@@ -408,17 +412,28 @@ export async function reorderPrograms(orderedIds: string[]) {
 
 export async function deleteProgram(id: string) {
     await requireAdmin();
+    // ★ 소프트 삭제: 회원의 수강·세션·출석 이력을 그대로 보존하기 위해 실제 행을 지우지 않는다.
+    //   Enrollment/Session 이 Class 를, Class 가 Program 을 RESTRICT 로 참조하므로 하드 삭제는
+    //   이력이 있는 프로그램에서 항상 실패한다(그래서 기존엔 "삭제가 안 됨"). deletedAt 만 세팅해
+    //   목록·공개 카탈로그에서 감추고, 이력 화면은 id 로 프로그램 이름을 계속 조회할 수 있게 한다.
     // $executeRawUnsafe: PgBouncer transaction mode 호환 (Prisma ORM 메서드 사용 불가)
     try {
-        await prisma.$executeRawUnsafe(`DELETE FROM "Class" WHERE "programId" = $1`, id);
-        await prisma.$executeRawUnsafe(`DELETE FROM "Program" WHERE id = $1`, id);
+        const affected = await prisma.$executeRawUnsafe(
+            `UPDATE "Program" SET "deletedAt" = now(), "updatedAt" = now()
+              WHERE id = $1 AND "deletedAt" IS NULL`,
+            id,
+        );
+        if (!affected) {
+            // 이미 삭제됐거나 없는 id — 조용히 통과(멱등)
+            console.warn("deleteProgram: no active program for id", id);
+        }
         revalidatePath("/admin/programs");
         revalidatePath("/programs");
         revalidatePath("/schedule");
         revalidateProgramAdminCaches();
     } catch (e) {
         console.error("Failed to delete program:", e);
-        throw new Error("Failed to delete program");
+        throw new Error("프로그램 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
     }
 }
 

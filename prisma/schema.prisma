@@ -127,6 +127,8 @@ model Program {
   shuttleFeeOverride Int?
   weeklyFrequency    String?
   imageUrl           String?
+  runsShuttle        Boolean             @default(true)
+  deletedAt          DateTime?
   classes            Class[]
   slotOverrides      ClassSlotOverride[]
   customClassSlots   CustomClassSlot[]

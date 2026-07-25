@@ -134,10 +134,14 @@ export const getPrograms = cache(async () => {
     // Use $queryRawUnsafe (simple query protocol) for PgBouncer transaction mode compatibility
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
+            // deletedAt IS NULL: 소프트 삭제된 프로그램은 관리자 목록·공개 카탈로그에서 제외.
+            //   (이력 화면은 별도로 id 조인해 이름을 조회하므로 삭제돼도 이름은 계속 보인다)
             `SELECT id, name, "targetAge", frequency, "weeklyFrequency", description,
                     price, "order", days, "priceWeek1", "priceWeek2", "priceWeek3",
-                    "priceDaily", "shuttleFeeOverride", "imageUrl", "createdAt", "updatedAt"
-             FROM "Program" ORDER BY "order" ASC, "createdAt" DESC`
+                    "priceDaily", "shuttleFeeOverride", "imageUrl", "runsShuttle", "createdAt", "updatedAt"
+             FROM "Program"
+             WHERE "deletedAt" IS NULL
+             ORDER BY "order" ASC, "createdAt" DESC`
         );
         return rows.map((r: any) => ({
             ...r,
@@ -148,6 +152,7 @@ export const getPrograms = cache(async () => {
             priceWeek3: r.priceWeek3 != null ? Number(r.priceWeek3) : null,
             priceDaily: r.priceDaily != null ? Number(r.priceDaily) : null,
             shuttleFeeOverride: r.shuttleFeeOverride != null ? Number(r.shuttleFeeOverride) : null,
+            runsShuttle: r.runsShuttle !== false, // null/undefined 는 운행(true)로 간주
             imageUrl: r.imageUrl ?? r.imageurl ?? null,
         }));
     } catch (e) {
@@ -1367,6 +1372,7 @@ export const getDashboardExtendedStats = cache(async () => {
                  FROM "Program" p
                  LEFT JOIN "Class" c ON c."programId" = p.id
                  LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
+                 WHERE p."deletedAt" IS NULL
                  GROUP BY p.id, p.name, p."order"
                  ORDER BY p."order" ASC`
             ),

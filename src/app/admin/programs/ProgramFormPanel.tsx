@@ -39,6 +39,7 @@ interface Program {
     priceDaily: number | null;
     shuttleFeeOverride: number | null;
     imageUrl: string | null;
+    runsShuttle?: boolean;
 }
 
 interface ProgramForm {
@@ -51,6 +52,7 @@ interface ProgramForm {
     priceWeek2: string;
     priceWeek3: string;
     priceDaily: string;
+    runsShuttle: boolean;
     shuttleFeeMode: "auto" | "manual";
     shuttleFeeManual: string;
     imageUrl: string;
@@ -72,6 +74,7 @@ function emptyForm(): ProgramForm {
         priceWeek2: "",
         priceWeek3: "",
         priceDaily: "",
+        runsShuttle: true,
         shuttleFeeMode: "auto",
         shuttleFeeManual: "",
         imageUrl: "",
@@ -98,6 +101,7 @@ function programToForm(p: Program): ProgramForm {
         priceWeek2: p.priceWeek2 != null ? String(p.priceWeek2) : "",
         priceWeek3: p.priceWeek3 != null ? String(p.priceWeek3) : "",
         priceDaily: p.priceDaily != null ? String(p.priceDaily) : "",
+        runsShuttle: p.runsShuttle !== false, // 미지정(기존 데이터)은 운행으로 간주
         shuttleFeeMode,
         shuttleFeeManual,
         imageUrl: p.imageUrl ?? "",
@@ -111,9 +115,12 @@ function formToData(form: ProgramForm) {
     const priceDaily = form.priceDaily ? parseInt(form.priceDaily) : null;
     const fallbackPrice = priceWeek1 ?? priceWeek2 ?? priceWeek3 ?? priceDaily ?? parseInt(form.price) ?? 0;
     const weekend = isWeekendOnly(form.days);
+    // 주말 전용은 예전처럼 셔틀 미운행을 강제하고, 그 외에는 토글(runsShuttle)로 결정한다.
+    const runsShuttle = form.runsShuttle && !weekend;
 
     let shuttleFeeOverride: number | null;
-    if (weekend) {
+    if (!runsShuttle) {
+        // 셔틀 미운행 → 셔틀비 0 (부과 안 함). 주말/토글 OFF 공통 처리.
         shuttleFeeOverride = 0;
     } else if (form.shuttleFeeMode === "manual" && form.shuttleFeeManual) {
         shuttleFeeOverride = parseInt(form.shuttleFeeManual) || null;
@@ -139,6 +146,7 @@ function formToData(form: ProgramForm) {
         priceWeek3,
         priceDaily,
         shuttleFeeOverride,
+        runsShuttle,
         imageUrl: form.imageUrl.trim() || null,
     };
 }
@@ -192,6 +200,8 @@ function ProgramFormFields({
 }) {
     const p = (patch: Partial<ProgramForm>) => onChange({ ...form, ...patch });
     const weekend = isWeekendOnly(form.days);
+    // 셔틀 운행 여부: 주말 전용은 강제 미운행, 그 외에는 토글로 결정
+    const shuttleOn = form.runsShuttle && !weekend;
     const hasAnyPrice = form.priceWeek1 || form.priceWeek2 || form.priceWeek3 || form.priceDaily;
 
     return (
@@ -243,7 +253,7 @@ function ProgramFormFields({
                             <tr>
                                 <th className="px-4 py-2.5 text-left font-semibold text-gray-700 dark:text-gray-200 w-28">수업 빈도</th>
                                 <th className="px-4 py-2.5 text-left font-semibold text-gray-700 dark:text-gray-200">월 수강료</th>
-                                {!weekend && (
+                                {shuttleOn && (
                                     <th className="px-4 py-2.5 text-left font-semibold text-gray-700 dark:text-gray-200 w-36">셔틀비 (자동)</th>
                                 )}
                             </tr>
@@ -274,7 +284,7 @@ function ProgramFormFields({
                                                 <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 pl-1">{Number(val).toLocaleString()}원</p>
                                             )}
                                         </td>
-                                        {!weekend && (
+                                        {shuttleOn && (
                                             <td className="px-4 py-2.5">
                                                 {form.shuttleFeeMode === "auto" ? (
                                                     <span className="text-xs text-blue-600 font-medium">
@@ -293,7 +303,40 @@ function ProgramFormFields({
                 </div>
             </div>
 
-            {!weekend && (
+            {/* 셔틀 운행 여부 — 셔틀을 운행하지 않는 반도 있으므로 프로그램마다 직접 결정 */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    셔틀버스
+                </label>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-gray-50 dark:bg-gray-900">
+                    <label className={`flex items-center justify-between gap-3 ${weekend ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}>
+                        <span className="text-sm text-gray-700 dark:text-gray-200">
+                            <strong>셔틀 운행</strong>
+                            <span className="text-gray-400 ml-2 text-xs">
+                                {weekend ? "주말 수업은 셔틀을 운행하지 않습니다" : "이 프로그램의 셔틀버스 운행 여부"}
+                            </span>
+                        </span>
+                        <span className="relative inline-flex shrink-0">
+                            <input
+                                type="checkbox"
+                                className="peer sr-only"
+                                checked={shuttleOn}
+                                disabled={weekend}
+                                onChange={(e) => p({ runsShuttle: e.target.checked })}
+                            />
+                            <span className="h-6 w-11 rounded-full bg-gray-300 dark:bg-gray-600 peer-checked:bg-brand-orange-500 dark:peer-checked:bg-brand-neon-lime transition-colors" />
+                            <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                        </span>
+                    </label>
+                    {!shuttleOn && (
+                        <p className="mt-3 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            🚫 셔틀 미운행 — 이 프로그램은 셔틀비가 부과되지 않고, 셔틀 노선에도 포함되지 않습니다.
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            {shuttleOn && (
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                         셔틀비 설정

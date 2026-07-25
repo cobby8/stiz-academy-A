@@ -52,6 +52,7 @@ interface Program {
     priceDaily: number | null;
     shuttleFeeOverride: number | null;
     imageUrl: string | null;
+    runsShuttle?: boolean;
 }
 
 type ProgramsPayload = {
@@ -464,8 +465,8 @@ function ProgramCardInline({
                         {weekend && (
                             <span className="text-xs text-orange-600 font-medium">🚌 셔틀 운행 없음</span>
                         )}
-                        {!weekend && program.shuttleFeeOverride === 0 && (
-                            <span className="text-xs text-gray-400">셔틀 없음</span>
+                        {!weekend && (program.runsShuttle === false || program.shuttleFeeOverride === 0) && (
+                            <span className="text-xs text-gray-500 font-medium">🚫 셔틀 미운행</span>
                         )}
                     </div>
                 ) : (

@@ -33,6 +33,10 @@ type ShuttleLocationKind = "pickup" | "dropoff";
 type StudentShuttleLocationKind = "PICKUP" | "DROPOFF";
 
 const SHUTTLE_RIDE_STATUSES = new Set<ShuttleRideStatus>(["PENDING", "BOARDED", "DROPPED_OFF", "NO_SHOW"]);
+// 셔틀 배정 후보에서 빼야 하는 "종료된" 상태값.
+// 허용 목록(예: 'REQUESTED'만)으로 좁히면 다른 방향 노선에 배정돼 status가 'ASSIGNED'로 바뀐
+// 학생까지 사라지므로, 반드시 제외 방식으로 거른다. (학부모 조회 parent.ts와 동일 기준)
+const CLOSED_SHUTTLE_STATUSES = ["CANCELLED", "REJECTED"];
 const ACADEMY_LATITUDE_ENV = "SHUTTLE_ACADEMY_LATITUDE";
 const ACADEMY_LONGITUDE_ENV = "SHUTTLE_ACADEMY_LONGITUDE";
 const ACADEMY_NAME_ENV = "SHUTTLE_ACADEMY_NAME";
@@ -377,7 +381,11 @@ export async function getShuttleDashboard(
     selectedSeasonId
       ? prisma.specialProgramShuttleRequest.findMany({
           where: {
-            application: { seasonId: selectedSeasonId },
+            // 취소·거절된 셔틀 신청은 미배정 후보에서 제외한다(노선 편성 시 태우면 안 되는 학생).
+            status: { notIn: CLOSED_SHUTTLE_STATUSES },
+            // 신청서 자체가 취소되거나 해당 수강 항목이 취소된 경우도 후보에서 뺀다.
+            application: { seasonId: selectedSeasonId, status: { notIn: CLOSED_SHUTTLE_STATUSES } },
+            applicationItem: { status: { notIn: CLOSED_SHUTTLE_STATUSES } },
             routePassengers: {
               none: {
                 routePlan: {

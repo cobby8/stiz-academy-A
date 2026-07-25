@@ -307,16 +307,19 @@ export default function BillingTemplateClient({
                         </div>
                         {/* 납부기한일 */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">매월 납부기한일</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">납부기한</label>
+                            {/*
+                              납부기한은 이용약관("수강일 전까지")에 따라 자동 계산되므로
+                              더 이상 템플릿마다 다르게 지정하지 않는다. 값은 옛 데이터 호환용으로만 남긴다.
+                            */}
                             <input
-                                type="number"
-                                min={1}
-                                max={28}
-                                value={dueDay}
-                                onChange={(e) => setDueDay(parseInt(e.target.value) || 10)}
-                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                type="text"
+                                readOnly
+                                disabled
+                                value="약관 기준 자동 (수강 개시일 전날 = 전월 말일)"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
                             />
-                            <p className="text-xs text-gray-400 mt-1">1~28일 (29~31일은 월에 따라 불안정)</p>
+                            <p className="text-xs text-gray-400 mt-1">예: 8월 수강료 → 7월 31일까지</p>
                         </div>
                         {/* 연결 프로그램 */}
                         <div>
@@ -396,7 +399,7 @@ export default function BillingTemplateClient({
                                             {formatAmount(tpl.amount)}
                                         </td>
                                         <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">
-                                            매월 {tpl.dueDay}일
+                                            약관 기준 (전월 말일)
                                         </td>
                                         <td className="px-5 py-3.5">
                                             <button

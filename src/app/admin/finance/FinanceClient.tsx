@@ -136,6 +136,7 @@ type MonthlyInvoicePreview = {
         type: string;
         amount: number;
         dueDay: number;
+        dueDate: string;
         existingPaymentId: string | null;
         existingStatus: string | null;
         existingAmount: number | null;
@@ -156,6 +157,7 @@ type MonthlyInvoicePreview = {
         type: string;
         amount: number;
         dueDay: number;
+        dueDate: string;
         existingPaymentId: string | null;
         existingStatus: string | null;
         existingAmount: number | null;
@@ -1210,7 +1212,8 @@ export default function FinanceClient({
                                                                 </p>
                                                             )}
                                                         </td>
-                                                        <td className="px-3 py-2 align-middle text-gray-600 dark:text-gray-300">매월 {item.dueDay}일</td>
+                                                        {/* 납부기한은 약관 기준(수강 개시일 전날 = 전월 말일)으로 계산된 실제 날짜를 보여준다 */}
+                                                        <td className="px-3 py-2 align-middle text-gray-600 dark:text-gray-300">{item.dueDate}</td>
                                                         <td className="px-3 py-2 align-middle">
                                                             <p className="font-semibold text-gray-800 dark:text-gray-100">{item.parentName ?? "학부모 미지정"}</p>
                                                             <p className="text-xs text-gray-500 dark:text-gray-400">{item.parentPhone || item.parentEmail || "연락처 확인 필요"}</p>

@@ -37,6 +37,7 @@ import {
     recordPaymentAudit,
     syncInvoiceStatusesForMonth,
 } from "@/lib/payment-ledger";
+import { monthlyBillingDueDate } from "@/lib/billing-due-date";
 import {
     APPLICATION_CONTACT_ACTIONS,
     ensureApplicationContactLogInfrastructure,
@@ -2998,7 +2999,10 @@ type MonthlyInvoicePreviewSample = {
     templateName: string;
     type: string;
     amount: number;
+    /** @deprecated 템플릿에 저장된 옛 설정값(매월 N일). 납부기한 계산에는 더 이상 쓰지 않는다. */
     dueDay: number;
+    /** 실제 적용될 납부기한(YYYY-MM-DD) — 약관 기준 전월 말일 */
+    dueDate: string;
     existingPaymentId: string | null;
     existingStatus: string | null;
     existingAmount: number | null;
@@ -3178,6 +3182,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
                 ...sample,
                 amount: Number(sample.amount ?? 0),
                 dueDay: Number(sample.dueDay ?? 10),
+                dueDate: monthlyBillingDueDate(year, month), // 화면에는 실제 적용될 기한을 보여준다
                 existingAmount: sample.existingAmount == null ? null : Number(sample.existingAmount),
                 action: sample.action,
             })),
@@ -3185,6 +3190,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
                 ...sample,
                 amount: Number(sample.amount ?? 0),
                 dueDay: Number(sample.dueDay ?? 10),
+                dueDate: monthlyBillingDueDate(year, month),
                 existingAmount: sample.existingAmount == null ? null : Number(sample.existingAmount),
                 action: sample.action,
             })),
@@ -3222,7 +3228,9 @@ export async function generateMonthlyInvoices(year: number, month: number) {
                 "classId",
                 amount,
                 'PENDING',
-                make_date($1::int, $2::int, "dueDay"::int)::timestamp,
+                -- 납부기한: 약관 "수강일 전까지" → 수강 개시일(그 달 1일) 전날 = 전월 말일.
+                -- 예전에는 템플릿의 "dueDay"(기본 10)로 그 달 10일에 넣었는데, 이는 수강 시작 후라 약관과 어긋났다.
+                $3::timestamp,
                 type,
                 description,
                 $2,
@@ -3235,6 +3243,7 @@ export async function generateMonthlyInvoices(year: number, month: number) {
             `,
             year,
             month,
+            monthlyBillingDueDate(year, month),
         );
 
         const invoiceResult = await ensureInvoicesForMonth(year, month);

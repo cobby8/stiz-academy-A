@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShuttleRideStatusButtons from "./ShuttleRideStatusButtons";
+import { confirmedTimeLabel } from "@/lib/shuttle/time";
 
 type Direction = "PICKUP" | "DROPOFF";
 type RideStatus = "PENDING" | "BOARDED" | "DROPPED_OFF" | "NO_SHOW";
@@ -20,6 +21,8 @@ type Stop = {
   roadAddress?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
+  // 관리자가 노선을 짜며 확정한 실제 도착 시각. 학부모에게 문자로 나가는 값과 같다.
+  plannedAt?: string | Date | null;
   passengers: Passenger[];
 };
 
@@ -269,6 +272,9 @@ function RouteCard({
             <ol className="mt-4 space-y-3">
               {route.stops.map((stop, index) => {
                 const url = mapUrl(stop.latitude, stop.longitude, stop.name);
+                // 관리자가 확정한 시각(UTC 저장)을 한국시간으로 바꿔 기사에게 보여준다.
+                const plannedTime = confirmedTimeLabel(stop.plannedAt);
+                const hasPlannedTime = plannedTime !== "시간 미정";
                 return (
                   <li key={stop.id} className="rounded-2xl bg-gray-50 p-3 dark:bg-gray-950">
                     <div className="flex items-start gap-3">
@@ -277,6 +283,10 @@ function RouteCard({
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <h3 className="break-words text-sm font-black text-gray-900 dark:text-white">{stop.name}</h3>
+                            <p className={`mt-1 inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-black ${hasPlannedTime ? "bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white" : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200"}`}>
+                              <span className="material-symbols-outlined text-sm" aria-hidden="true">schedule</span>
+                              확정 시간 {plannedTime}
+                            </p>
                             <p className="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-gray-400">{stop.roadAddress || stop.address}</p>
                           </div>
                           {url && (

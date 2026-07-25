@@ -208,7 +208,8 @@ function formatShuttleTime(value: string | null): string {
     if (!value) return "시간 확인 중";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    // 확정 시간은 UTC로 내려온다. 기기 설정과 무관하게 항상 한국시간으로 보여준다.
+    return date.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" });
 }
 
 export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [], parentShuttleOverview = [] }: {
@@ -412,7 +413,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                                     {item.stopName || "정류장 확인 중"}
                                                     {item.stopAddress && <span className="mt-0.5 block text-xs font-normal text-gray-500 dark:text-gray-400">{item.stopAddress}</span>}
                                                 </dd>
-                                                <dt className="text-gray-500 dark:text-gray-400">예정 시간</dt>
+                                                <dt className="text-gray-500 dark:text-gray-400">확정 시간</dt>
                                                 <dd className="font-medium text-gray-800 dark:text-gray-100">
                                                     {item.plannedAt ? <time dateTime={item.plannedAt}>{formatShuttleTime(item.plannedAt)}</time> : "시간 확인 중"}
                                                 </dd>

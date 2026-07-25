@@ -241,7 +241,7 @@ export default function EnrollApplicationLaterSteps({ step, form, availableSlots
                                 }}
                                 onOpenMap={() => setLocationPicker("dropoff")}
                             />
-                            <TextInput label="셔틀 희망 시간" required value={form.shuttleTime} onChange={(value) => update("shuttleTime", value)} placeholder="예: 수업 시작 20분 전, 16:30 전후" />
+                            <TextInput label="셔틀 희망 시간" required value={form.shuttleTime} onChange={(value) => update("shuttleTime", value)} placeholder="예: 수업 시작 20분 전, 16:30 전후" helper="참고용입니다. 실제 탑승시간은 배차 확정 후 안내됩니다." />
                             <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
                                 <input type="checkbox" checked={form.shuttleLocationConsent} onChange={(event) => update("shuttleLocationConsent", event.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500 dark:text-brand-neon-lime" />
                                 <span>셔틀 배차와 노선 계산을 위해 탑승·하차 위치 좌표를 저장하는 데 동의합니다.</span>

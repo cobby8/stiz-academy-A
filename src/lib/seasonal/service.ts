@@ -239,6 +239,8 @@ function duplicateApplicationError() {
   );
 }
 
+// 기존회원 할인은 "지금 학원에 다니는 원생"에게만 적용한다.
+// 이름 + 생년월일 + 학부모 연락처가 모두 맞고, 그 위에 현재 유효한 수강 등록까지 있어야 EXISTING으로 본다.
 async function hasMatchingExistingStudent(input: SeasonalApplicationInput) {
   const birthDate = new Date(input.child.birthDate);
   const rows = await prisma.$queryRaw<{ exists: boolean }[]>`
@@ -247,6 +249,10 @@ async function hasMatchingExistingStudent(input: SeasonalApplicationInput) {
         FROM "Student" student
         JOIN "User" parent ON parent.id = student."parentId"
        WHERE student.name = ${input.child.name}
+         -- "Student"."birthDate"는 timestamp(naive) 컬럼이다.
+         -- 첫 AT TIME ZONE 'UTC'는 naive 값을 UTC 순간으로 "해석"하고, 두 번째가 KST로 "변환"한다.
+         -- 시간대 이중 적용이 아니라 정상적인 2단계 변환이므로 절대 단순화하지 말 것.
+         -- (저장 형식이 00:00 / 15:00로 섞여 있어도 두 형식 모두 이 식으로 같은 날짜가 나온다.)
          AND ((student."birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date = (${birthDate}::timestamptz AT TIME ZONE 'Asia/Seoul')::date
          AND (
            regexp_replace(COALESCE(parent.phone, ''), '[^0-9]', '', 'g') = ${input.parent.phone}
@@ -255,6 +261,28 @@ async function hasMatchingExistingStudent(input: SeasonalApplicationInput) {
               WHERE guardian."studentId" = student.id
                 AND regexp_replace(COALESCE(guardian.phone, ''), '[^0-9]', '', 'g') = ${input.parent.phone}
            )
+         )
+         -- 현재 정규반에 재원 중인지 확인한다. 휴원(PAUSED)·퇴원(WITHDRAWN)·과거 이력자는 기존회원 할인 대상이 아니다.
+         -- 반 이동 시 예전 반 등록이 PAUSED로 남으므로 "학생 단위 ACTIVE 1건 이상"으로 판정한다.
+         AND EXISTS (
+           SELECT 1
+             FROM "Enrollment" enrollment
+             JOIN "Class" class ON class.id = enrollment."classId"
+            WHERE enrollment."studentId" = student.id
+              AND enrollment.status = 'ACTIVE'
+              -- 방학특강 승인 전환은 특강 반에도 ACTIVE 등록을 만든다(admin/seasonal route).
+              -- 특강만 수강한 학생은 정규반 수강생이 아니므로 할인 대상에서 제외한다.
+              -- 주의: 연결 반은 정규반일 수도 있다(관리자 입력 항목이 "연결 정규 반 ID"다).
+              -- 그래서 "특강에 연결됨"만으로 제외하면 그 정규반 원생 전원이 할인을 잃는다.
+              -- 정규반은 항상 실제 요일(Mon~Sun)을 가지므로, 특강 전용 반(dayOfWeek='Seasonal')이면서
+              -- 특강에 연결된 경우에만 제외해 정상 원생의 할인이 사라지지 않도록 한다.
+              AND NOT (
+                class."dayOfWeek" = 'Seasonal'
+                AND EXISTS (
+                  SELECT 1 FROM "SpecialProgramOffering" offering
+                   WHERE offering."linkedClassId" = class.id
+                )
+              )
          )
     ) AS exists
   `;

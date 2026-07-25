@@ -907,6 +907,23 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </div>
             </Link>
 
+            {/* 방학특강 보강 신청 바로가기 */}
+            <Link
+                href="/mypage/seasonal"
+                className="block bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition mb-4"
+            >
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">sports_basketball</span>
+                        <div>
+                            <p className="font-bold text-brand-navy-900">방학특강 보강 신청</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">결석한 특강 수업을 다른 날짜로 보강 신청하세요</p>
+                        </div>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                </div>
+            </Link>
+
             {/* 학습 피드백 섹션 - 코치가 작성한 자녀 피드백 표시 */}
             {feedbacks.length > 0 && (
                 <div>

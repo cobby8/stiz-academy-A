@@ -11,6 +11,7 @@ const teachingItems = [
 ] as const;
 
 const shuttleItem = { href: "/staff/shuttle", label: "셔틀", icon: "airport_shuttle", exact: false } as const;
+const seasonalItem = { href: "/staff/seasonal", label: "특강", icon: "sports_basketball", exact: false } as const;
 
 export default function StaffBottomNav({ staffRole }: { staffRole: StaffRole }) {
   const pathname = usePathname();
@@ -20,9 +21,9 @@ export default function StaffBottomNav({ staffRole }: { staffRole: StaffRole }) 
   const items = staffRole === "DRIVER"
     ? [shuttleItem]
     : staffRole === "ADMIN" || staffRole === "VICE_ADMIN"
-      ? [...teachingItems, shuttleItem]
-      : teachingItems;
-  const gridClass = items.length === 4 ? "grid-cols-4" : items.length === 1 ? "grid-cols-1" : "grid-cols-3";
+      ? [...teachingItems, seasonalItem, shuttleItem]
+      : [...teachingItems, seasonalItem];
+  const gridClass = items.length >= 5 ? "grid-cols-5" : items.length === 4 ? "grid-cols-4" : items.length === 1 ? "grid-cols-1" : "grid-cols-3";
 
   return <nav aria-label="교사용 주요 메뉴" className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200/80 bg-white/95 px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2 shadow-lg backdrop-blur-xl dark:border-gray-800 dark:bg-gray-950/95">
     <div className={`mx-auto grid max-w-lg ${gridClass} gap-2`}>{items.map((item) => {

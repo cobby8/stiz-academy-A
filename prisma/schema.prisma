@@ -2007,3 +2007,60 @@ enum ShuttleRoutePlanStatus {
   COMPLETED
   ARCHIVED
 }
+
+
+// ── 방학특강 출석·보강 개편 (2026-07) ──────────────────────────────
+// 방학특강 수강일 — 학생(신청항목)이 오기로 한 특정 회차(날짜). 날짜별 명단·정원·보강의 단일 기준.
+model SpecialProgramEnrollmentDate {
+  id                String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  applicationItemId String   // SpecialProgramApplicationItem.id (정규 수강 항목)
+  offeringId        String   // 스코프/조회 편의
+  sessionDateId     String   // SpecialProgramSessionDate.id (어느 특정 날짜)
+  studentId         String?  // 전환된 Student.id (있으면)
+  kind              String   @default("REGULAR") // REGULAR | MAKEUP
+  status            String   @default("SCHEDULED") // SCHEDULED | CANCELLED | MOVED
+  makeupId          String?  // 이 행이 보강으로 생성됐다면 SpecialProgramMakeup.id
+  attendanceStatus          String?  // null(미확인) | PRESENT | LATE | ABSENT | EXCUSED
+  arrivedAt                 DateTime? @db.Timestamptz(6)
+  attendanceNote            String?
+  attendanceCheckedAt       DateTime? @db.Timestamptz(6)
+  attendanceCheckedByUserId String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([applicationItemId, sessionDateId])
+  @@index([sessionDateId, status])
+  @@index([offeringId])
+  @@index([studentId])
+  @@index([makeupId])
+}
+
+// 방학특강 보강 — 결석(absentSessionDate) ↔ 보강대상(특강 다른 날짜 SEASONAL / 정규수업 REGULAR).
+// 학부모 신청(REQUESTED) → 관리자 승인(APPROVED/SCHEDULED). 규칙: 결석일+2개월 이내, 보강≤결석, 정원 12 미만.
+model SpecialProgramMakeup {
+  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  applicationItemId   String    // 결석한 원 수강 항목
+  studentId           String?
+  offeringId          String
+  absentSessionDateId String    // 결석한 특강 날짜
+  targetType          String    @default("SEASONAL") // SEASONAL | REGULAR
+  targetSessionDateId String?   // (SEASONAL) 보강 대상 특강 날짜
+  targetClassId       String?   // (REGULAR) 정규수업 반
+  targetSessionId     String?   // (REGULAR) 정규수업 세션(있으면)
+  targetDate          DateTime? @db.Timestamptz(6) // (REGULAR) 정규수업 날짜
+  status              String    @default("REQUESTED") // REQUESTED | APPROVED | SCHEDULED | ATTENDED | CANCELLED | REJECTED | NO_SHOW
+  requestedBy         String    @default("PARENT") // PARENT | ADMIN
+  requestedByUserId   String?
+  approvedByUserId    String?
+  requestedAt         DateTime  @default(now()) @db.Timestamptz(6)
+  decidedAt           DateTime? @db.Timestamptz(6)
+  note                String?
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([offeringId, status])
+  @@index([absentSessionDateId])
+  @@index([applicationItemId])
+  @@index([studentId])
+  @@index([status, requestedAt])
+}

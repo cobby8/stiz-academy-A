@@ -123,6 +123,12 @@ type ApplicationItem = {
   scheduleLabel?: string | null;
   status: ItemStatus;
   amount?: number;
+  /** 할인 전 수강료 */
+  tuitionPriceSnapshot?: number | null;
+  /** 형제할인 금액(양수로 저장된다) */
+  siblingDiscountSnapshot?: number | null;
+  discountReasonSnapshot?: string | null;
+  shuttleFeeSnapshot?: number | null;
   waitlistOrder?: number | null;
   linkedProgramId?: string | null;
   linkedClassId?: string | null;
@@ -2122,6 +2128,21 @@ function ApplicationAssignmentEditor({
   </form>;
 }
 
+// 최종 금액만 보이면 "왜 이 금액인지" 알 수 없어서, 할인이 붙은 항목은 계산 과정을 한 줄로 펼쳐 보여준다.
+// 셔틀비는 할인 대상이 아니라는 점이 화면에서도 드러나야 한다.
+function ItemPriceBreakdown({ item }: { item: ApplicationItem }) {
+  const discount = item.siblingDiscountSnapshot ?? 0;
+  if (discount <= 0) return null;
+  const tuition = item.tuitionPriceSnapshot ?? 0;
+  const shuttle = item.shuttleFeeSnapshot ?? 0;
+  return (
+    <p className="mt-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+      수강료 {tuition.toLocaleString()}원 · 형제할인 −{discount.toLocaleString()}원
+      {shuttle > 0 ? ` · 셔틀비(할인 없음) +${shuttle.toLocaleString()}원` : ""}
+    </p>
+  );
+}
+
 function ApplicationItemCard({
   application,
   offerings,
@@ -2159,6 +2180,7 @@ function ApplicationItemCard({
       <div>
         <p className="font-black text-gray-950 dark:text-white">{item.className}</p>
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.scheduleLabel || "일정 미정"} · {(item.amount ?? 0).toLocaleString()}원</p>
+        <ItemPriceBreakdown item={item} />
         {item.waitlistOrder && <p className="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">대기 {item.waitlistOrder}번</p>}
       </div>
       <span className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>

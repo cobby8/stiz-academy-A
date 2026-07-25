@@ -11,6 +11,8 @@ import { randomUUID } from "node:crypto";
 import { expireStaleSmsDeliveries } from "@/lib/notification";
 import { getSeasonalAdminOverview } from "@/lib/seasonal/admin-overview";
 import { resyncEnrollmentDatesForApplicationSafe, syncEnrollmentDatesForItemSafe } from "@/lib/seasonal/enrollment-dates";
+import { resolveOfferingPrice, resolveShuttleFee, type ApplicantType } from "@/lib/seasonal/planning";
+import { syncSeasonSiblingDiscounts } from "@/lib/seasonal/sibling-discount-sync";
 import {
   SEASONAL_SMS_TRIGGERS,
   dispatchSeasonalParentSms,
@@ -488,20 +490,10 @@ function normalizeSelectedWeekdays(value: unknown) {
   return Array.from(new Set(days)).sort((left, right) => left - right).map((day) => WEEKDAY_KEYS[day - 1]);
 }
 
-function defaultSpecialProgramPrice(
-  offering: { price: number; newApplicantPrice: number | null; existingApplicantPrice: number | null },
-  applicantType?: string | null,
-) {
-  if (applicantType === "EXISTING" && offering.existingApplicantPrice !== null) return offering.existingApplicantPrice;
-  if (applicantType === "NEW" && offering.newApplicantPrice !== null) return offering.newApplicantPrice;
-  return offering.price;
-}
-
-function specialProgramShuttleFee(
-  offering: { shuttleAvailable: boolean; shuttleFee: number },
-  hasShuttleRequest: boolean,
-) {
-  return hasShuttleRequest && offering.shuttleAvailable ? offering.shuttleFee : 0;
+// 관리자 재배정 금액은 공개 신청과 같은 함수(resolveOfferingPrice / resolveShuttleFee)를 쓴다.
+// 예전에는 여기에 같은 계산이 한 벌 더 있어서, 한쪽만 고치면 반 재배정 순간 금액 규칙이 갈라졌다.
+function seasonalApplicantType(value?: string | null): ApplicantType | undefined {
+  return value === "EXISTING" || value === "NEW" ? value : undefined;
 }
 
 function seasonalOfferingFrequency(offering: { title?: string | null; code?: string | null }) {
@@ -544,7 +536,8 @@ async function resolveSpecialProgramAssignment(
   const offering = candidates.find((candidate) => seasonalOfferingFrequency(candidate) === selectedCount) ?? target;
   return {
     offering,
-    priceSnapshot: defaultSpecialProgramPrice(offering, params.applicantType),
+    // 할인 전 수강료(기존회원가 반영까지). 형제할인은 저장 뒤 syncSeasonSiblingDiscounts가 따로 얹는다.
+    priceSnapshot: resolveOfferingPrice(offering, seasonalApplicantType(params.applicantType)),
   };
 }
 
@@ -784,19 +777,28 @@ async function saveSpecialProgramItemAssignment(
     const last = await tx.specialProgramApplicationItem.aggregate({ where: { offeringId: offering.id, status: "WAITLISTED" }, _max: { waitlistOrder: true } });
     waitlistOrder = (last._max.waitlistOrder || 0) + 1;
   }
-  const item = await tx.specialProgramApplicationItem.update({
+  const shuttleFeeSnapshot = resolveShuttleFee(offering, Boolean(before.shuttleRequest));
+  await tx.specialProgramApplicationItem.update({
     where: { id: before.id },
     data: {
       offeringId: offering.id,
       titleSnapshot: offering.title,
       tuitionPriceSnapshot: assignment.priceSnapshot,
-      shuttleFeeSnapshot: specialProgramShuttleFee(offering, Boolean(before.shuttleRequest)),
-      priceSnapshot: assignment.priceSnapshot + specialProgramShuttleFee(offering, Boolean(before.shuttleRequest)),
+      shuttleFeeSnapshot,
+      // 할인은 아래 syncSeasonSiblingDiscounts가 "할인 전 수강료"에서 다시 계산해 덮어쓴다.
+      // 여기서는 일단 할인 없는 금액으로 맞춰 두어 DB 제약(최종금액 = 수강료 - 할인 + 셔틀비)을 항상 만족시킨다.
+      siblingDiscountSnapshot: 0,
+      discountReasonSnapshot: null,
+      priceSnapshot: assignment.priceSnapshot + shuttleFeeSnapshot,
       waitlistOrder: before.status === "WAITLISTED" ? waitlistOrder : null,
       conversionStatus: "NOT_STARTED",
       conversionError: null,
     },
   });
+  // 반을 옮기면 수강료 자체가 바뀌므로 형제할인도 반드시 다시 계산해야 한다.
+  // (이 호출이 빠지면 관리자가 반을 재배정하는 순간 할인이 조용히 사라진다.)
+  await syncSeasonSiblingDiscounts(tx, before.application.seasonId);
+  const item = await tx.specialProgramApplicationItem.findUniqueOrThrow({ where: { id: before.id } });
   const reviewReasons = before.application.reviewReasons.filter((reason) => !ASSIGNMENT_REVIEW_REASONS.has(reason));
   await tx.specialProgramApplication.update({
     where: { id: before.applicationId },
@@ -842,17 +844,22 @@ async function createSpecialProgramApplicationItem(
   if (application.items.some((item) => item.offeringId === offering.id)) {
     throw new SeasonalError("이미 같은 반으로 등록된 신청 항목이 있습니다.", 409, "OFFERING_ALREADY_ASSIGNED");
   }
-  const item = await tx.specialProgramApplicationItem.create({
+  const created = await tx.specialProgramApplicationItem.create({
     data: {
       applicationId: application.id,
       offeringId: offering.id,
       titleSnapshot: offering.title,
       priceSnapshot: assignment.priceSnapshot,
       tuitionPriceSnapshot: assignment.priceSnapshot,
+      siblingDiscountSnapshot: 0,
+      discountReasonSnapshot: null,
       shuttleFeeSnapshot: 0,
       status: "PENDING",
     },
   });
+  // 관리자가 항목을 새로 만들 때도 형제할인 기준으로 금액을 다시 맞춘다.
+  await syncSeasonSiblingDiscounts(tx, application.seasonId);
+  const item = await tx.specialProgramApplicationItem.findUniqueOrThrow({ where: { id: created.id } });
   const reviewReasons = application.reviewReasons.filter((reason) => !ASSIGNMENT_REVIEW_REASONS.has(reason));
   await tx.specialProgramApplication.update({
     where: { id: application.id },

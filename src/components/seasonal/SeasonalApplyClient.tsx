@@ -82,7 +82,15 @@ function matchingOfferingForWeekdays(
 type SubmitResult = {
   applicationId?: string;
   duplicate?: boolean;
-  items?: Array<{ offeringId: string; status: string; waitlistOrder?: number | null }>;
+  items?: Array<{
+    offeringId: string;
+    status: string;
+    waitlistOrder?: number | null;
+    priceSnapshot?: number | null;
+    tuitionPriceSnapshot?: number | null;
+    siblingDiscountSnapshot?: number | null;
+    shuttleFeeSnapshot?: number | null;
+  }>;
 };
 
 const EMPTY_FORM: FormState = {
@@ -558,6 +566,11 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
               </dl>
               <p className="mt-3 text-sm font-bold text-gray-700 dark:text-gray-200">최종 예상금액</p>
               <p className="mt-1 text-2xl font-black text-brand-navy-900 dark:text-white">{formatWon(totalPrice)}</p>
+              {/* 형제 여부는 등록된 보호자 연락처로 서버가 확인한다. 화면에서 미리 단정하면 실제 청구액과 어긋나므로
+                  여기서는 안내만 하고, 실제 할인 금액은 접수 완료 화면에서 서버가 확정한 값으로 보여준다. */}
+              <p className="mt-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                형제·자매가 함께 신청하면 수강료 10%가 자동 할인됩니다. (셔틀비 제외 · 접수 후 금액에 반영)
+              </p>
             </div>
             <CheckBox label="방학특강 운영 안내와 환불 규정을 확인했습니다." checked={form.agreedTerms} onChange={(checked) => update("agreedTerms", checked)} />
             <CheckBox label="신청과 상담을 위한 개인정보 수집·이용에 동의합니다." checked={form.agreedPrivacy} onChange={(checked) => update("agreedPrivacy", checked)} />
@@ -617,7 +630,15 @@ function DoneView({ slug, result, offerings, message }: { slug: string; result: 
                 <p className="font-bold text-gray-900 dark:text-white">{byId.get(item.offeringId)?.name ?? "선택 수업"}</p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {statusText(item.status)}{item.waitlistOrder ? ` · 대기 ${item.waitlistOrder}번` : ""}
+                  {typeof item.priceSnapshot === "number" ? ` · ${formatWon(item.priceSnapshot)}` : ""}
                 </p>
+                {/* 서버가 확정한 형제할인 금액을 그대로 보여준다(화면에서 다시 계산하지 않는다). */}
+                {(item.siblingDiscountSnapshot ?? 0) > 0 && (
+                  <p className="mt-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    수강료 {formatWon(item.tuitionPriceSnapshot ?? 0)} · 형제할인 −{formatWon(item.siblingDiscountSnapshot ?? 0)}
+                    {(item.shuttleFeeSnapshot ?? 0) > 0 ? ` · 셔틀비 +${formatWon(item.shuttleFeeSnapshot ?? 0)}` : ""}
+                  </p>
+                )}
               </div>
             ))}
           </div>

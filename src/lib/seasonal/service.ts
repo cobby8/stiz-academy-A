@@ -10,6 +10,7 @@ import { notifyAdmins } from "@/lib/notification";
 import { prisma } from "@/lib/prisma";
 import { SeasonalError, type SeasonalApplicationInput, type SeasonalWeekday } from "./contracts";
 import { decideApplicantType, hasSeasonalShuttleSelection, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning";
+import { syncSeasonSiblingDiscounts } from "./sibling-discount-sync";
 
 const OCCUPYING_ITEM_STATUSES = ["PENDING", "APPROVED"];
 const ACTIVE_APPLICATION_ITEM_STATUSES = ["PENDING", "APPROVED", "WAITLISTED"];
@@ -301,6 +302,9 @@ function applicationResponse(application: Awaited<ReturnType<typeof existingAppl
       status: item.status,
       priceSnapshot: item.priceSnapshot,
       tuitionPriceSnapshot: item.tuitionPriceSnapshot,
+      // 형제할인은 학부모 화면에서도 "얼마가 왜 빠졌는지" 보이도록 항목별로 함께 내려준다.
+      siblingDiscountSnapshot: item.siblingDiscountSnapshot,
+      discountReasonSnapshot: item.discountReasonSnapshot,
       shuttleFeeSnapshot: item.shuttleFeeSnapshot,
       waitlistOrder: item.waitlistOrder,
     })),
@@ -555,15 +559,25 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
         });
       }
 
+      // 형제할인은 "형제가 같은 시즌을 같이 신청"해야 생긴다.
+      // 동생이 나중에 신청하면 먼저 신청한 형/누나도 그때 비로소 대상이 되므로,
+      // 신청서를 만든 뒤 시즌 전체를 다시 계산한다(할인 전 수강료에서만 계산하므로 재실행해도 안전).
+      await syncSeasonSiblingDiscounts(tx, season.id);
+      const priced = await tx.specialProgramApplication.findUnique({
+        where: { id: application.id },
+        include: { items: true },
+      });
+      const saved = priced ?? application;
+
       await tx.specialProgramAuditLog.create({
-        data: { seasonId: season.id, applicationId: application.id, actorType: "PUBLIC", action: "APPLICATION_CREATED", afterJSON: { status, totalPriceSnapshot } },
+        data: { seasonId: season.id, applicationId: application.id, actorType: "PUBLIC", action: "APPLICATION_CREATED", afterJSON: { status, totalPriceSnapshot: saved.totalPriceSnapshot } },
       });
       const reservation = await reserveSeasonalParentSms(tx, {
         trigger: SEASONAL_SMS_TRIGGERS.received,
         applicationId: application.id,
         recipientPhone: input.parent.phone,
       });
-      return { application, reservation };
+      return { application: saved, reservation };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const created = committed.application;
     const response = applicationResponse(created, false);

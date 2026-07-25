@@ -1587,6 +1587,8 @@ model SpecialProgramApplicationItem {
   offeringId String
   priceSnapshot Int
   tuitionPriceSnapshot Int @default(0)
+  siblingDiscountSnapshot Int @default(0)
+  discountReasonSnapshot String?
   shuttleFeeSnapshot Int @default(0)
   titleSnapshot String
   status String @default("PENDING")

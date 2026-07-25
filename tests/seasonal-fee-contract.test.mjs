@@ -19,5 +19,7 @@ test("admin offering writes validate a non-negative configurable shuttle fee", (
 
 test("admin reassignment preserves a valid shuttle request and recomputes the final snapshot", () => {
   assert.match(adminRoute, /include:\s*\{\s*application:\s*true,\s*offering:\s*true,\s*shuttleRequest:\s*true\s*\}/);
-  assert.match(adminRoute, /priceSnapshot:\s*assignment\.priceSnapshot \+ specialProgramShuttleFee\(offering,\s*Boolean\(before\.shuttleRequest\)\)/);
+  // 셔틀비 계산은 공개 신청과 같은 resolveShuttleFee로 통일했다(중복 구현 제거).
+  assert.match(adminRoute, /const shuttleFeeSnapshot = resolveShuttleFee\(offering,\s*Boolean\(before\.shuttleRequest\)\)/);
+  assert.match(adminRoute, /priceSnapshot:\s*assignment\.priceSnapshot \+ shuttleFeeSnapshot/);
 });

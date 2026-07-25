@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
+import { loadSeasonalMakeupRooms } from "@/lib/seasonal/makeup-capacity";
 
 // 방학특강 보강 라이브러리. 규칙: 결석일+2개월 이내, 결석 1건당 보강 1건, 정원(특강 12/정규반 capacity) 미만.
 export const MAKEUP_WINDOW_DAYS = 60;
@@ -59,7 +60,6 @@ export async function getMakeupOptions(enrollmentDateId: string) {
   );
   const abs = absRows[0];
   if (!abs) throw new Error("ABSENCE_NOT_FOUND");
-  const capacity = abs.capacity == null ? 999999 : Number(abs.capacity);
 
   const existing = await prisma.$queryRawUnsafe<any[]>(
     `SELECT id, status, "targetType", "targetSessionDateId", "targetClassId", "targetDate"
@@ -69,12 +69,12 @@ export async function getMakeupOptions(enrollmentDateId: string) {
     abs.applicationItemId, abs.absentSessionDateId,
   );
 
-  // 같은 특강 다른 날짜 후보
+  // 같은 특강 다른 날짜 후보.
+  // NOT EXISTS 조건: 그 날 이미 활성 좌석(정규 수강일 포함)이 있으면 후보에서 뺀다.
+  // = "원래 수업이 있는 날"에는 보강을 잡지 않는다(저장 경로 createMakeup 에도 같은 검사가 있다).
   const seasonal = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT sd.id, sd."startsAt", sd."endsAt",
-            COUNT(e2.id) FILTER (WHERE e2.status = 'SCHEDULED') AS filled
+    `SELECT sd.id, sd."startsAt", sd."endsAt"
        FROM "SpecialProgramSessionDate" sd
-       LEFT JOIN "SpecialProgramEnrollmentDate" e2 ON e2."sessionDateId" = sd.id AND e2.status <> 'CANCELLED'
       WHERE sd."offeringId" = $1
         AND sd.id <> $2
         AND sd."startsAt" > $3::timestamptz
@@ -83,11 +83,12 @@ export async function getMakeupOptions(enrollmentDateId: string) {
           SELECT 1 FROM "SpecialProgramEnrollmentDate" e3
            WHERE e3."applicationItemId" = $4 AND e3."sessionDateId" = sd.id AND e3.status <> 'CANCELLED'
         )
-      GROUP BY sd.id, sd."startsAt", sd."endsAt"
-     HAVING COUNT(e2.id) FILTER (WHERE e2.status = 'SCHEDULED') < $5
       ORDER BY sd."startsAt" ASC`,
-    abs.offeringId, abs.absentSessionDateId, abs.absentStartsAt, abs.applicationItemId, capacity,
+    abs.offeringId, abs.absentSessionDateId, abs.absentStartsAt, abs.applicationItemId,
   );
+  // 정원 여유는 승인과 같은 "형제 반 그룹 × 요일" 기준으로 판정한다(makeup-capacity.ts).
+  const seasonalRooms = await loadSeasonalMakeupRooms(abs.offeringId, seasonal.map((row) => row.id));
+  const seasonalAvailable = seasonal.filter((row) => seasonalRooms.get(row.id)?.hasRoom !== false);
 
   // 정규수업(정규반) 후보 — 학년 구성 유사 순
   const classes = await prisma.$queryRawUnsafe<any[]>(
@@ -148,11 +149,15 @@ export async function getMakeupOptions(enrollmentDateId: string) {
     },
     alreadyAssigned: existing[0] ?? null,
     windowEndLabel: seoulLabel(windowEnd),
-    seasonalCandidates: seasonal.map((s) => ({
-      sessionDateId: s.id, label: seoulLabel(s.startsAt), filled: num(s.filled),
-      capacity: abs.capacity == null ? null : Number(abs.capacity),
-      remaining: abs.capacity == null ? null : Number(abs.capacity) - num(s.filled),
-    })),
+    seasonalCandidates: seasonalAvailable.map((s) => {
+      const room = seasonalRooms.get(s.id);
+      return {
+        sessionDateId: s.id, label: seoulLabel(s.startsAt),
+        filled: room ? room.filled : 0,
+        capacity: room ? room.capacity : (abs.capacity == null ? null : Number(abs.capacity)),
+        remaining: room ? room.remaining : null,
+      };
+    }),
     regularCandidates: regular.map((r) => ({
       classId: r.classId, name: r.name, instructor: r.instructor,
       schedule: `${r.dayOfWeek} ${r.startTime}~${r.endTime}`,
@@ -162,6 +167,35 @@ export async function getMakeupOptions(enrollmentDateId: string) {
       gradeDiff: r.gradeDiff == null ? null : Math.round(r.gradeDiff * 10) / 10,
     })),
   };
+}
+
+/**
+ * "그 날은 원래 수업이 있는 날입니다" 가드.
+ * 대상 날짜에 이 학생의 활성 좌석(status <> 'CANCELLED')이 이미 있으면 보강을 만들지 않는다.
+ * - sessionDateId 기준: 특강 보강(같은 회차 자리 충돌 = 유니크키 충돌 지점)
+ * - ymd 기준: 정규수업 보강(같은 날 특강 수업이 있으면 이중 배정)
+ * 관리자·학부모 두 경로가 모두 createMakeup 을 타므로 여기 한 곳만 막으면 양쪽이 막힌다.
+ */
+async function assertTargetDateFree(applicationItemId: string, target: { sessionDateId?: string | null; ymd?: string | null }) {
+  if (target.sessionDateId) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT e.id FROM "SpecialProgramEnrollmentDate" e
+        WHERE e."applicationItemId" = $1 AND e."sessionDateId" = $2 AND e.status <> 'CANCELLED' LIMIT 1`,
+      applicationItemId, target.sessionDateId,
+    );
+    if (rows[0]) throw new Error("TARGET_ALREADY_ENROLLED");
+    return;
+  }
+  if (!target.ymd) return;
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT e.id FROM "SpecialProgramEnrollmentDate" e
+       JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
+      WHERE e."applicationItemId" = $1 AND e.status <> 'CANCELLED'
+        AND to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') = $2
+      LIMIT 1`,
+    applicationItemId, target.ymd,
+  );
+  if (rows[0]) throw new Error("TARGET_ALREADY_ENROLLED");
 }
 
 // 보강 생성 (관리자 직접=SCHEDULED / 학부모 신청=REQUESTED)
@@ -200,18 +234,29 @@ export async function createMakeup(input: {
 
   if (input.targetType === "SEASONAL") {
     if (!input.targetSessionDateId) throw new Error("TARGET_SESSION_DATE_REQUIRED");
-    const okRows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT sd.id, COUNT(e2.id) FILTER (WHERE e2.status='SCHEDULED') AS filled
-         FROM "SpecialProgramSessionDate" sd
-         LEFT JOIN "SpecialProgramEnrollmentDate" e2 ON e2."sessionDateId"=sd.id AND e2.status<>'CANCELLED'
-        WHERE sd.id = $1 AND sd."offeringId" = $2
-        GROUP BY sd.id`,
+    const okRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT sd.id FROM "SpecialProgramSessionDate" sd WHERE sd.id = $1 AND sd."offeringId" = $2 LIMIT 1`,
       input.targetSessionDateId, abs.offeringId,
     );
-    const target = okRows[0];
-    if (!target) throw new Error("TARGET_NOT_IN_OFFERING");
-    const cap = abs.capacity == null ? 999999 : Number(abs.capacity);
-    if (num(target.filled) >= cap) throw new Error("TARGET_FULL");
+    if (!okRows[0]) throw new Error("TARGET_NOT_IN_OFFERING");
+
+    // (1) 원래 수업이 있는 날인지 먼저 막는다(저장 경로 방어 — UI 후보 목록만 믿지 않는다).
+    await assertTargetDateFree(abs.applicationItemId, { sessionDateId: input.targetSessionDateId });
+
+    // (2) 정원은 승인 경로와 같은 "형제 반 그룹 × 요일" 기준으로 본다.
+    const room = (await loadSeasonalMakeupRooms(abs.offeringId, [input.targetSessionDateId])).get(input.targetSessionDateId);
+    if (room && !room.hasRoom) throw new Error("TARGET_FULL");
+    if (room?.overCapacityBaseline) {
+      // 이미 정원을 넘긴 반은 막지 않는다(운영 마비 방지). 대신 흔적을 남겨 나중에 확인할 수 있게 한다.
+      console.warn("[seasonal makeup] 정원을 이미 넘긴 반에 보강을 허용했습니다.", {
+        offeringId: abs.offeringId, targetSessionDateId: input.targetSessionDateId,
+        weekday: room.weekday, capacity: room.capacity,
+        regularOccupied: room.regularOccupied, makeupOccupied: room.makeupOccupied,
+      });
+    }
+  } else if (input.targetDate) {
+    // 정규수업 보강도 같은 날 특강 수업이 있으면 이중 배정이 된다.
+    await assertTargetDateFree(abs.applicationItemId, { ymd: String(input.targetDate).slice(0, 10) });
   }
 
   await prisma.$executeRawUnsafe(
@@ -227,12 +272,28 @@ export async function createMakeup(input: {
   );
 
   if (status === "SCHEDULED" && input.targetType === "SEASONAL") {
-    await ensureSeasonalMakeupSlot(id);
+    try {
+      await ensureSeasonalMakeupSlot(id);
+    } catch (error) {
+      // 좌석을 못 만들면 "배정됐다고 표시되는데 출석부에는 없는" 유령 보강이 된다.
+      // 하드 DELETE 없이 방금 만든 보강만 소프트 취소하고 에러를 그대로 올린다.
+      await prisma.$executeRawUnsafe(
+        `UPDATE "SpecialProgramMakeup" SET status='CANCELLED', "decidedAt"=now(), "updatedAt"=now() WHERE id=$1`, id,
+      );
+      throw error;
+    }
   }
   return { id, status };
 }
 
-// 승인 시 특강 보강 대상 날짜에 수강일(kind=MAKEUP) 생성
+/**
+ * 승인 시 특강 보강 대상 날짜에 수강일(kind=MAKEUP) 생성.
+ *
+ * ⚠️ DO UPDATE 의 WHERE 가 이 함수의 안전장치다.
+ * - 활성 좌석(status <> 'CANCELLED')은 갱신 대상에서 제외 → 정규 수강일을 보강이 덮지 못한다.
+ * - 출결이 찍힌 행(attendanceStatus IS NOT NULL)도 제외 → 출결 기록은 어떤 자동 로직도 건드리지 않는다.
+ * 조건에 걸려 아무 행도 바뀌지 않으면 조용히 넘어가지 않고 에러를 던져 호출부가 되돌리게 한다.
+ */
 async function ensureSeasonalMakeupSlot(makeupId: string) {
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT m.id, m."applicationItemId", m."studentId", m."offeringId", m."targetSessionDateId"
@@ -241,14 +302,22 @@ async function ensureSeasonalMakeupSlot(makeupId: string) {
   );
   const m = rows[0];
   if (!m) return;
-  await prisma.$executeRawUnsafe(
+  const affected = await prisma.$executeRawUnsafe(
     `INSERT INTO "SpecialProgramEnrollmentDate"
        ("applicationItemId","offeringId","sessionDateId","studentId","kind","status","makeupId")
      VALUES ($1,$2,$3,$4,'MAKEUP','SCHEDULED',$5)
      ON CONFLICT ("applicationItemId","sessionDateId") DO UPDATE
-       SET status='SCHEDULED', kind='MAKEUP', "makeupId"=EXCLUDED."makeupId", "updatedAt"=now()`,
+       SET status='SCHEDULED', kind='MAKEUP', "makeupId"=EXCLUDED."makeupId", "updatedAt"=now()
+     WHERE "SpecialProgramEnrollmentDate".status = 'CANCELLED'
+       AND "SpecialProgramEnrollmentDate"."attendanceStatus" IS NULL`,
     m.applicationItemId, m.offeringId, m.targetSessionDateId, m.studentId ?? null, m.id,
   );
+  if (Number(affected) === 0) {
+    console.warn("[seasonal makeup] 보강 좌석을 만들 수 없습니다(이미 활성 좌석 또는 출결 기록 존재).", {
+      makeupId, applicationItemId: m.applicationItemId, targetSessionDateId: m.targetSessionDateId,
+    });
+    throw new Error("TARGET_ALREADY_ENROLLED");
+  }
 }
 
 // 보강 승인/거절/취소/출결확정
@@ -264,7 +333,18 @@ export async function decideMakeup(makeupId: string, action: "APPROVE" | "REJECT
       `UPDATE "SpecialProgramMakeup" SET status='SCHEDULED', "approvedByUserId"=$2, "decidedAt"=now(), "updatedAt"=now() WHERE id=$1`,
       makeupId, userId ?? null,
     );
-    if (m.targetType === "SEASONAL") await ensureSeasonalMakeupSlot(makeupId);
+    if (m.targetType === "SEASONAL") {
+      try {
+        await ensureSeasonalMakeupSlot(makeupId);
+      } catch (error) {
+        // 좌석 생성이 막히면 승인도 되돌린다(원래 상태로 복구). 하드 삭제는 하지 않는다.
+        await prisma.$executeRawUnsafe(
+          `UPDATE "SpecialProgramMakeup" SET status=$2, "approvedByUserId"=NULL, "decidedAt"=NULL, "updatedAt"=now() WHERE id=$1`,
+          makeupId, m.status,
+        );
+        throw error;
+      }
+    }
     return { ok: true, status: "SCHEDULED" };
   }
   if (action === "REJECT" || action === "CANCEL") {
@@ -273,8 +353,11 @@ export async function decideMakeup(makeupId: string, action: "APPROVE" | "REJECT
       `UPDATE "SpecialProgramMakeup" SET status=$2, "approvedByUserId"=$3, "decidedAt"=now(), "updatedAt"=now() WHERE id=$1`,
       makeupId, next, userId ?? null,
     );
+    // 보강 취소로 지울 수 있는 건 "보강으로 만들어졌고 아직 출결이 안 찍힌 좌석"뿐이다.
+    // kind='MAKEUP' 한정이 없으면 예전에 보강이 덮어쓴 정규 수강일까지 같이 취소된다.
     await prisma.$executeRawUnsafe(
-      `UPDATE "SpecialProgramEnrollmentDate" SET status='CANCELLED', "updatedAt"=now() WHERE "makeupId"=$1`, makeupId,
+      `UPDATE "SpecialProgramEnrollmentDate" SET status='CANCELLED', "updatedAt"=now()
+        WHERE "makeupId"=$1 AND kind='MAKEUP' AND "attendanceStatus" IS NULL`, makeupId,
     );
     return { ok: true, status: next };
   }

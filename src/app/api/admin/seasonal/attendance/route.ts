@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
     const map: Record<string, string> = {
       MAKEUP_ALREADY_EXISTS: "이미 보강이 배정된 결석입니다.",
       TARGET_FULL: "선택한 날짜는 정원이 찼습니다.",
+      TARGET_ALREADY_ENROLLED: "그 날은 원래 수업이 있는 날입니다. 다른 날짜를 선택해 주세요.",
       TARGET_NOT_IN_OFFERING: "같은 특강의 날짜만 보강으로 선택할 수 있습니다.",
       TARGET_SESSION_DATE_REQUIRED: "보강 대상 날짜를 선택하세요.",
       ABSENCE_NOT_FOUND: "결석 정보를 찾을 수 없습니다.",

@@ -2,6 +2,7 @@
 
 import { FormEvent, type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminModal from "@/components/admin/AdminModal";
+import SeasonalHeader from "./SeasonalHeader";
 import { createCsv, createSafeCsvFilename, maskPhoneNumber } from "@/lib/seasonal/roster-export";
 import { seoulDateTimeToIso } from "./seasonalDateTime";
 
@@ -1287,10 +1288,10 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
 
   return (
     <main className="mx-auto min-w-0 max-w-7xl space-y-6 overflow-x-clip pb-20">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div><p className="text-sm font-bold text-[var(--brand-accent)]">SEASONAL PROGRAM</p><h1 className="mt-1 text-3xl font-black text-gray-950 dark:text-white">방학특강 운영</h1><p className="mt-2 text-sm text-gray-500 dark:text-gray-400">모집부터 반 편성, 결제와 차량 현황까지 한곳에서 확인합니다.</p></div>
-        <button type="button" onClick={() => { setEditingSeason(null); setModal("season"); }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]"><Icon name="add" />새 시즌 만들기</button>
-      </header>
+      {/* 공통 헤더로 교체. "새 시즌 만들기" 버튼은 action 슬롯으로 옮겼고 onClick 동작은 그대로다. */}
+      <SeasonalHeader
+        action={<button type="button" onClick={() => { setEditingSeason(null); setModal("season"); }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]"><Icon name="add" />새 시즌 만들기</button>}
+      />
 
       <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-1.5 dark:border-gray-700 dark:bg-gray-900" aria-label="방학특강 관리 메뉴">
         {TABS.map((item) => <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold ${tab === item.key ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"}`}><Icon name={item.icon} className="text-xl" />{item.label}</button>)}

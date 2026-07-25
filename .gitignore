@@ -42,3 +42,8 @@ next-env.d.ts
 
 /src/generated/prisma
 .env*.local
+
+# 임시 작업물 / 개인정보 포함 가능 — 절대 커밋 금지
+.tmp/
+.__unlinktest
+/public/uploads/

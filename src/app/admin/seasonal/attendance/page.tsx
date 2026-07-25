@@ -1,5 +1,6 @@
 import SeasonalAttendanceClient from "./SeasonalAttendanceClient";
 import SeasonalSectionTabs from "../SeasonalSectionTabs";
+import SeasonalHeader from "../SeasonalHeader";
 import { countPendingMakeups, getSeasonalAttendanceBootstrap } from "@/lib/seasonal/attendance";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,8 @@ export default async function SeasonalAttendancePage() {
   };
   return (
     <>
+      {/* 렌더 순서 통일: 공통 헤더 → 6개 탭 바 → 본문 */}
+      <SeasonalHeader />
       <SeasonalSectionTabs makeupPending={makeupPending} />
       <SeasonalAttendanceClient initial={initial} />
     </>

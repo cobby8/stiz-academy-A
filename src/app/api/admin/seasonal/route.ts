@@ -10,7 +10,7 @@ import { issueParentAccountClaim } from "@/lib/parent-account-claim";
 import { randomUUID } from "node:crypto";
 import { expireStaleSmsDeliveries } from "@/lib/notification";
 import { getSeasonalAdminOverview } from "@/lib/seasonal/admin-overview";
-import { syncEnrollmentDatesForItemSafe } from "@/lib/seasonal/enrollment-dates";
+import { resyncEnrollmentDatesForApplicationSafe, syncEnrollmentDatesForItemSafe } from "@/lib/seasonal/enrollment-dates";
 import {
   SEASONAL_SMS_TRIGGERS,
   dispatchSeasonalParentSms,
@@ -1453,7 +1453,36 @@ export async function PATCH(request: NextRequest) {
           : createSpecialProgramApplicationItem(tx, { applicationId: id, offeringId, selectedWeekdays, priceSnapshot, actorId: actor.appUserId }),
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
-      return NextResponse.json(result);
+      // 반 이동·요일 변경 확정 후(트랜잭션 커밋 뒤) 출석 슬롯을 새 반·새 요일에 맞춰 다시 맞춘다.
+      // 신청서 단위로 처리해야 형제 항목 슬롯이 낡지 않는다. 실패해도 반 이동은 그대로 유지된다.
+      const enrollmentDatesResync = await resyncEnrollmentDatesForApplicationSafe(result.item.applicationId);
+      if (enrollmentDatesResync && enrollmentDatesResync.blockedByAttendance > 0) {
+        // 출결이 찍혀 예전 반에 남긴 좌석이 있으면 감사로그로 남긴다(이동 자체는 막지 않는다).
+        try {
+          await prisma.specialProgramAuditLog.create({
+            data: {
+              seasonId: result.application.seasonId,
+              offeringId: result.item.offeringId,
+              applicationId: result.item.applicationId,
+              itemId: result.item.id,
+              actorType: "ADMIN",
+              actorId: actor.appUserId,
+              action: "ITEM_ASSIGNMENT_UPDATED",
+              afterJSON: {
+                enrollmentDatesResync: {
+                  inserted: enrollmentDatesResync.inserted,
+                  cancelled: enrollmentDatesResync.cancelled,
+                  revived: enrollmentDatesResync.revived,
+                  blockedByAttendance: enrollmentDatesResync.blockedByAttendance,
+                },
+              },
+            },
+          });
+        } catch (error) {
+          console.error("[admin seasonal] 재동기화 감사로그 기록 실패", error);
+        }
+      }
+      return NextResponse.json({ ...result, enrollmentDatesResync });
     }
 
     if (body.resource === "item") {

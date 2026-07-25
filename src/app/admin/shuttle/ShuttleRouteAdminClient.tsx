@@ -342,10 +342,8 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
   const pickerTitle = locationPicker ? `${"student" in locationPicker ? locationPicker.student.studentName : locationPicker.request.childName || locationPicker.request.studentName || "학생"} ${locationPicker.kind === "pickup" ? "등원" : "하원"} 위치 찍기` : "";
 
   return <main className="min-w-0 space-y-5 p-4 sm:p-6 lg:p-8">
-    <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div><p className="text-sm font-bold text-[var(--brand-accent)]">방학특강 운영</p><h1 className="text-2xl font-black text-gray-950 dark:text-white">셔틀 노선 관리</h1><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">신청 위치를 확인하고 차량별 운행 순서를 확정합니다.</p></div>
-      <div className="flex gap-2"><button type="button" onClick={() => setModal("vehicle")} className="min-h-11 rounded-xl border border-gray-300 bg-white px-4 text-sm font-black dark:border-gray-700 dark:bg-gray-800">차량 등록</button><button type="button" onClick={() => setModal("route")} disabled={!seasonId || !data.vehicles.length || !data.drivers.length} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">노선 만들기</button></div>
-    </header>
+    {/* 제목 블록은 공통 헤더(SeasonalHeader)로 옮겼다. 이 줄에는 셔틀 전용 액션 버튼만 남긴다. */}
+    <div className="flex flex-wrap gap-2 sm:justify-end"><button type="button" onClick={() => setModal("vehicle")} className="min-h-11 rounded-xl border border-gray-300 bg-white px-4 text-sm font-black dark:border-gray-700 dark:bg-gray-800">차량 등록</button><button type="button" onClick={() => setModal("route")} disabled={!seasonId || !data.vehicles.length || !data.drivers.length} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">노선 만들기</button></div>
 
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700 dark:bg-red-950/30 dark:text-red-200">{error}</p>}
     {notice && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">{notice}</p>}

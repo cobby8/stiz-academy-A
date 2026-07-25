@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { SEASONAL_WEEKDAYS, type SeasonalWeekday } from "@/lib/seasonal/contracts";
 import { weekdayInSeoul } from "@/lib/seasonal/planning";
+import { diffEnrollmentDates as diffSlots, type EnrollmentSlotSnapshot as SlotSnapshot } from "./enrollment-dates-diff";
 
 /**
  * 방학특강 정규 수강일(kind='REGULAR') 슬롯 생성 라이브러리.
@@ -160,6 +161,190 @@ export async function syncEnrollmentDatesForItemSafe(applicationItemId: string):
     return await syncEnrollmentDatesForItem(applicationItemId);
   } catch (error) {
     console.error("[seasonal enrollment-dates sync]", applicationItemId, error);
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------------- *
+ * 반 이동·요일 변경 재동기화 (resync)
+ *
+ * 왜 필요한가: 승인 후 관리자가 반을 바꾸거나 요일을 바꾸면 옛 반/옛 요일 좌석이 그대로 남고
+ * 새 반/새 요일 좌석은 생기지 않아, 출석부에 "예전 반에 유령 학생 + 새 반에 없는 학생"이 생긴다.
+ *
+ * 절대 규칙: 출결이 찍힌 행(attendanceStatus IS NOT NULL)은 건드리지 않는다.
+ * 삭제·취소·kind 변경 모두 금지이며, SQL의 WHERE 조건으로 물리적으로 불가능하게 만든다.
+ * 이탈한 좌석은 하드 DELETE 가 아니라 status='CANCELLED' 소프트 취소만 한다.
+ * ------------------------------------------------------------------------- */
+
+// 순수 계산 부분은 DB 의존이 전혀 없는 별도 모듈에 두고 여기서 다시 내보낸다(단위 테스트 용이).
+export { diffEnrollmentDates } from "./enrollment-dates-diff";
+export type { EnrollmentSlotSnapshot, EnrollmentDatesDiff } from "./enrollment-dates-diff";
+
+export type ResyncEnrollmentDatesResult = {
+  applied: boolean;
+  /** 재동기화한 승인 항목 수 */
+  itemCount: number;
+  inserted: number;
+  cancelled: number;
+  revived: number;
+  /** 출결이 있어 거두지 못한 좌석 수 (0이 아니면 감사로그에 남긴다) */
+  blockedByAttendance: number;
+  reason?: "NO_APPROVED_ITEMS";
+};
+
+/** IN 절 플레이스홀더 ($n,$n+1,...) 생성기. */
+function placeholders(count: number, startIndex: number) {
+  return Array.from({ length: count }, (_, index) => `$${startIndex + index}`).join(",");
+}
+
+/**
+ * 신청서(Application) 단위로 정규 수강일 좌석을 다시 맞춘다. 여러 번 실행해도 결과가 같다(멱등).
+ *
+ * ⚠️ 항목(Item) 단위가 아니라 신청서 단위인 이유: `selectedWeekdays` 는 항목이 아니라 신청서에 저장된다.
+ * 한 신청서에 반이 2개면 한쪽 항목만 고쳐도 형제 항목의 좌석까지 낡아버린다.
+ */
+export async function resyncEnrollmentDatesForApplication(applicationId: string): Promise<ResyncEnrollmentDatesResult> {
+  const empty = { applied: false, itemCount: 0, inserted: 0, cancelled: 0, revived: 0, blockedByAttendance: 0 };
+
+  // 1) 이 신청서의 승인 항목 + 신청서 선택 요일 + (전환된 경우) 학생 ID
+  const items = await prisma.$queryRawUnsafe<Array<{
+    id: string; offeringId: string; selectedWeekdays: string[] | null; studentId: string | null;
+  }>>(
+    `SELECT it.id,
+            it."offeringId",
+            app."selectedWeekdays" AS "selectedWeekdays",
+            en."studentId" AS "studentId"
+       FROM "SpecialProgramApplicationItem" it
+       JOIN "SpecialProgramApplication" app ON app.id = it."applicationId"
+       LEFT JOIN "Enrollment" en ON en.id = it."enrollmentId"
+      WHERE it."applicationId" = $1
+        AND it.status = 'APPROVED'`,
+    applicationId,
+  );
+  if (items.length === 0) return { ...empty, reason: "NO_APPROVED_ITEMS" };
+
+  // 2) 관련 특강의 회차 날짜를 한 번에 읽는다.
+  const offeringIds = Array.from(new Set(items.map((item) => item.offeringId)));
+  const sessionRows = await prisma.$queryRawUnsafe<Array<{ id: string; offeringId: string; startsAt: Date | string }>>(
+    `SELECT sd.id, sd."offeringId", sd."startsAt"
+       FROM "SpecialProgramSessionDate" sd
+      WHERE sd."offeringId" IN (${placeholders(offeringIds.length, 1)})
+      ORDER BY sd."startsAt" ASC`,
+    ...offeringIds,
+  );
+  const sessionsByOffering = new Map<string, Array<{ id: string; startsAt: Date | string }>>();
+  for (const row of sessionRows) {
+    const list = sessionsByOffering.get(row.offeringId) ?? [];
+    list.push({ id: row.id, startsAt: row.startsAt });
+    sessionsByOffering.set(row.offeringId, list);
+  }
+
+  // 3) 현재 좌석 스냅샷을 한 번에 읽는다.
+  const itemIds = items.map((item) => item.id);
+  const slotRows = await prisma.$queryRawUnsafe<Array<{
+    applicationItemId: string; sessionDateId: string; kind: string; status: string; attendanceStatus: string | null;
+  }>>(
+    `SELECT e."applicationItemId" AS "applicationItemId", e."sessionDateId" AS "sessionDateId",
+            e.kind, e.status, e."attendanceStatus" AS "attendanceStatus"
+       FROM "SpecialProgramEnrollmentDate" e
+      WHERE e."applicationItemId" IN (${placeholders(itemIds.length, 1)})`,
+    ...itemIds,
+  );
+  const slotsByItem = new Map<string, SlotSnapshot[]>();
+  for (const row of slotRows) {
+    const list = slotsByItem.get(row.applicationItemId) ?? [];
+    list.push({ sessionDateId: row.sessionDateId, kind: row.kind, status: row.status, attendanceStatus: row.attendanceStatus });
+    slotsByItem.set(row.applicationItemId, list);
+  }
+
+  let inserted = 0;
+  let cancelled = 0;
+  let revived = 0;
+  let blockedByAttendance = 0;
+
+  for (const item of items) {
+    const sessions = sessionsByOffering.get(item.offeringId) ?? [];
+    const matched = pickSessionDatesForWeekdays(sessions, item.selectedWeekdays);
+    if (matched.length === 0) {
+      // 목표 날짜를 하나도 못 구한 경우(회차 미등록, 요일 설정 오류 등)에는 아무것도 거두지 않는다.
+      // 여기서 diff 를 그대로 적용하면 기존 좌석이 통째로 취소돼 출석부가 비어버린다.
+      console.warn(
+        "[seasonal enrollment-dates resync] 목표 회차를 찾지 못해 재동기화를 건너뜁니다.",
+        {
+          applicationId, applicationItemId: item.id, offeringId: item.offeringId,
+          selectedWeekdays: item.selectedWeekdays, sessionDateCount: sessions.length,
+        },
+      );
+      continue;
+    }
+    const diff = diffSlots(slotsByItem.get(item.id) ?? [], matched.map((session) => session.id));
+    blockedByAttendance += diff.blockedByAttendance.length;
+
+    // 3-1) 채우기 — 이미 있는 행(보강 포함)은 절대 덮지 않는다.
+    if (diff.toInsert.length > 0) {
+      const params: Array<string | null> = [item.id, item.offeringId, item.studentId ?? null, ...diff.toInsert];
+      const valuesSql = diff.toInsert.map((_, index) => `($1,$2,$${index + 4},$3,'REGULAR','SCHEDULED')`).join(",");
+      const affected = await prisma.$executeRawUnsafe(
+        `INSERT INTO "SpecialProgramEnrollmentDate"
+           ("applicationItemId","offeringId","sessionDateId","studentId","kind","status")
+         VALUES ${valuesSql}
+         ON CONFLICT ("applicationItemId","sessionDateId") DO NOTHING`,
+        ...params,
+      );
+      inserted += Number(affected) || 0;
+    }
+
+    // 3-2) 거두기 — 소프트 취소만. 출결이 있으면 WHERE 에서 아예 제외된다.
+    if (diff.toCancel.length > 0) {
+      const affected = await prisma.$executeRawUnsafe(
+        `UPDATE "SpecialProgramEnrollmentDate"
+            SET status='CANCELLED', "updatedAt"=now()
+          WHERE "applicationItemId" = $1
+            AND kind = 'REGULAR'
+            AND status <> 'CANCELLED'
+            AND "attendanceStatus" IS NULL
+            AND "sessionDateId" IN (${placeholders(diff.toCancel.length, 2)})`,
+        item.id, ...diff.toCancel,
+      );
+      cancelled += Number(affected) || 0;
+    }
+
+    // 3-3) 되살리기 — 예전에 거둔 좌석으로 다시 돌아온 경우.
+    if (diff.toRevive.length > 0) {
+      const affected = await prisma.$executeRawUnsafe(
+        `UPDATE "SpecialProgramEnrollmentDate"
+            SET status='SCHEDULED', "updatedAt"=now()
+          WHERE "applicationItemId" = $1
+            AND kind = 'REGULAR'
+            AND status = 'CANCELLED'
+            AND "attendanceStatus" IS NULL
+            AND "sessionDateId" IN (${placeholders(diff.toRevive.length, 2)})`,
+        item.id, ...diff.toRevive,
+      );
+      revived += Number(affected) || 0;
+    }
+  }
+
+  if (blockedByAttendance > 0) {
+    // 사용자 결정: 출결이 찍힌 학생의 반 이동은 허용한다. 다만 찍힌 날은 예전 반에 남으므로 흔적을 남긴다.
+    console.warn(
+      "[seasonal enrollment-dates resync] 출결이 기록된 좌석은 그대로 두었습니다.",
+      { applicationId, blockedByAttendance },
+    );
+  }
+
+  return { applied: true, itemCount: items.length, inserted, cancelled, revived, blockedByAttendance };
+}
+
+/**
+ * 반 이동 흐름에서 쓰는 안전 래퍼.
+ * 재동기화 실패가 반 이동 자체를 되돌리면 안 되므로 예외를 삼키고 로그만 남긴다.
+ */
+export async function resyncEnrollmentDatesForApplicationSafe(applicationId: string): Promise<ResyncEnrollmentDatesResult | null> {
+  try {
+    return await resyncEnrollmentDatesForApplication(applicationId);
+  } catch (error) {
+    console.error("[seasonal enrollment-dates resync]", applicationId, error);
     return null;
   }
 }

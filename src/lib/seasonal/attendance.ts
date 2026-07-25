@@ -63,6 +63,72 @@ async function countApprovedStudents(offeringId: string) {
   return num(rows[0]?.total);
 }
 
+// 요일 순서 고정 — 아래 집계 쿼리의 VALUES 목록과 화면 표시 순서를 같게 맞춘다.
+const WEEKDAY_ORDER = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+
+// "그 요일에 코트로 실제 들어오는 전체 인원"과 정원.
+// byWeekday 예: { MON: 15, TUE: 11, WED: 13, ... } / capacity: 12
+export type SeasonalCourtOccupancy = {
+  capacity: number | null;      // 운영 정원(= 한 요일에 코트에 들어올 수 있는 최대 인원)
+  offeringCount: number;        // 이 코트를 함께 쓰는 반(형제 반) 개수. 1이면 단독 반.
+  byWeekday: Record<string, number>;
+};
+
+// ── 요일별 "코트 점유 인원" 집계 ────────────────────────────────────────────────
+// 왜 필요한가: 화면의 "정원"은 반(offering) 하나의 숫자가 아니라,
+// route.ts의 승인 검사(ensureSpecialProgramOperationalCapacity, 551~598행)가 쓰는
+// "linkedClass로 묶인 형제 반(주2회·주3회 등)을 전부 합쳐 한 요일에 코트에 들어올 수 있는 최대 인원"이다.
+// 그래서 옆에 표시되는 "반 전체 N명"(반 1개 · 전체 기간)과 축이 달라 13 > 12 같은 모순이 보였다.
+// 여기서는 승인 검사와 **완전히 같은 기준**으로 요일별 실제 점유 인원을 센다.
+//   · 대상: 승인된 신청항목(item.status='APPROVED')
+//   · 범위: linkedClassId가 있으면 같은 시즌·같은 linkedClassId의 형제 반 전체, 없으면 이 반만
+//   · 요일: 학생이 고른 selectedWeekdays에 그 요일이 있으면 점유(요일 미선택 = 전 요일 등원으로 간주)
+// 날짜마다 쿼리를 도는 N+1을 피하려고 7요일을 한 번에 GROUP BY로 집계한다. (SELECT 전용 · DB 변경 없음)
+export async function getCourtOccupancyByWeekday(offeringId: string): Promise<SeasonalCourtOccupancy | null> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ weekday: string; occupied: unknown; offeringCount: unknown; capacity: unknown }>>(
+    `WITH target AS (
+        SELECT id, "seasonId", "linkedClassId", capacity
+          FROM "SpecialProgramOffering"
+         WHERE id = $1
+      ), scope AS (
+        SELECT o.id
+          FROM "SpecialProgramOffering" o
+          CROSS JOIN target t
+         WHERE CASE
+                 WHEN t."linkedClassId" IS NULL THEN o.id = t.id
+                 ELSE o."seasonId" = t."seasonId" AND o."linkedClassId" = t."linkedClassId"
+               END
+      ), seat AS (
+        SELECT item.id AS item_id, app."selectedWeekdays" AS weekdays
+          FROM "SpecialProgramApplicationItem" item
+          JOIN scope ON scope.id = item."offeringId"
+          JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
+         WHERE item.status = 'APPROVED'
+      ), wd(day_key) AS (
+        VALUES ('MON'),('TUE'),('WED'),('THU'),('FRI'),('SAT'),('SUN')
+      )
+      SELECT wd.day_key AS weekday,
+             COUNT(DISTINCT seat.item_id) AS occupied,
+             (SELECT COUNT(*) FROM scope) AS "offeringCount",
+             (SELECT capacity FROM target) AS capacity
+        FROM wd
+        LEFT JOIN seat
+          ON (COALESCE(cardinality(seat.weekdays), 0) = 0 OR wd.day_key = ANY(seat.weekdays))
+       GROUP BY wd.day_key`,
+    offeringId,
+  );
+  if (rows.length === 0) return null;
+  const byWeekday: Record<string, number> = {};
+  for (const key of WEEKDAY_ORDER) byWeekday[key] = 0;
+  for (const row of rows) byWeekday[String(row.weekday)] = num(row.occupied);
+  const capacityRaw = rows[0]?.capacity;
+  return {
+    capacity: capacityRaw == null ? null : Number(capacityRaw),
+    offeringCount: num(rows[0]?.offeringCount),
+    byWeekday,
+  };
+}
+
 // 1) 화면 부트스트랩: 시즌 + 특강(offering) 목록
 export async function getSeasonalAttendanceBootstrap() {
   const seasons = await prisma.$queryRawUnsafe<any[]>(
@@ -134,8 +200,13 @@ export async function getOfferingDateBoard(offeringId: string) {
     offeringId,
   );
 
-  // 반 전체 승인 인원(요일 무관)을 함께 조회해 "13명 중 이 날 6명" 안내를 만들 수 있게 한다.
-  const totalApprovedStudents = await countApprovedStudents(offeringId);
+  // 반 전체 승인 인원(요일 무관)과, 요일별 코트 점유 인원을 함께 조회한다.
+  // 두 값은 기준이 다르므로(반 1개/전체기간 vs 형제 반 합산/하루) 화면에서 구분해 보여준다.
+  // 서로 의존하지 않는 조회라 병렬로 돌려 응답 시간을 늘리지 않는다.
+  const [totalApprovedStudents, courtOccupancy] = await Promise.all([
+    countApprovedStudents(offeringId),
+    getCourtOccupancyByWeekday(offeringId),
+  ]);
 
   const todayYmd = seoulParts(new Date()).ymd;
   const dates = rows.map((r, idx) => {
@@ -153,6 +224,9 @@ export async function getOfferingDateBoard(offeringId: string) {
       startTime: p.timeLabel, endTime: end.timeLabel,
       ymd: p.ymd, location: r.location ?? null,
       capacity, scheduled, makeup: num(r.makeup),
+      // 그날(요일) 코트에 실제로 들어오는 전체 인원 — 형제 반 합산 기준. 정원과 직접 비교할 수 있는 값.
+      courtOccupied: courtOccupancy ? (courtOccupancy.byWeekday[p.weekdayKey] ?? 0) : null,
+      courtCapacity: courtOccupancy?.capacity ?? capacity,
       present: num(r.present), late: num(r.late), absent: num(r.absent), excused: num(r.excused),
       unchecked: num(r.unchecked), checked, state,
     };
@@ -162,8 +236,10 @@ export async function getOfferingDateBoard(offeringId: string) {
       id: offering.id, title: offering.title, capacity,
       instructorName: offering.instructorName ?? null,
       totalApprovedStudents, // 반 전체 승인 학생 수(요일 무관)
+      courtOfferingCount: courtOccupancy?.offeringCount ?? 1, // 이 코트를 함께 쓰는 반 개수
     },
     totalApprovedStudents,
+    courtOccupancy, // 요일별 코트 점유 인원 전체(필요 시 화면에서 재사용)
     dates,
   };
 }
@@ -204,17 +280,27 @@ export async function getDateRoster(sessionDateId: string) {
   const p = seoulParts(meta.startsAt);
   const end = seoulParts(meta.endsAt);
   // 이 반의 전체 승인 인원 — 명단 인원(요일이 맞는 학생만)과 비교해 오해를 막는 안내에 쓴다.
-  const totalApprovedStudents = await countApprovedStudents(meta.offeringId);
+  // 여기에 더해 "그날 코트 전체 인원"도 함께 조회한다(정원과 같은 기준). 병렬 조회로 지연을 늘리지 않는다.
+  const [totalApprovedStudents, courtOccupancy] = await Promise.all([
+    countApprovedStudents(meta.offeringId),
+    getCourtOccupancyByWeekday(meta.offeringId),
+  ]);
+  const capacity = meta.capacity == null ? null : Number(meta.capacity);
   return {
     date: {
       sessionDateId: meta.id, offeringId: meta.offeringId, offeringTitle: meta.offeringTitle,
       dateLabel: p.dateLabel, dayLabel: p.dayLabel, weekdayKey: p.weekdayKey,
       startTime: p.timeLabel, endTime: end.timeLabel,
-      location: meta.location ?? null, capacity: meta.capacity == null ? null : Number(meta.capacity),
+      location: meta.location ?? null, capacity,
       instructorName: meta.instructorName ?? null,
       totalApprovedStudents,
+      // 이 날짜 요일의 코트 전체 인원 / 정원 — 반 명부(totalApprovedStudents)와 기준이 다르다.
+      courtOccupied: courtOccupancy ? (courtOccupancy.byWeekday[p.weekdayKey] ?? 0) : null,
+      courtCapacity: courtOccupancy?.capacity ?? capacity,
+      courtOfferingCount: courtOccupancy?.offeringCount ?? 1,
     },
     totalApprovedStudents,
+    courtOccupancy,
     rows: rows.map((r) => {
       const selectedWeekdays = weekdayKeys(r.selectedWeekdays);
       return {

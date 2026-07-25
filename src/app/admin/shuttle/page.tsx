@@ -1,5 +1,6 @@
 import ShuttleRouteAdminClient from "./ShuttleRouteAdminClient";
 import SeasonalSectionTabs from "../seasonal/SeasonalSectionTabs";
+import SeasonalHeader from "../seasonal/SeasonalHeader";
 import { getShuttleDashboard } from "@/lib/shuttle/service";
 import { countPendingMakeups } from "@/lib/seasonal/attendance";
 
@@ -15,6 +16,8 @@ export default async function ShuttleAdminPage() {
 
   return (
     <>
+      {/* 렌더 순서 통일: 공통 헤더 → 6개 탭 바 → 본문 */}
+      <SeasonalHeader />
       <SeasonalSectionTabs makeupPending={makeupPending} />
       <ShuttleRouteAdminClient initialData={initialData} />
     </>

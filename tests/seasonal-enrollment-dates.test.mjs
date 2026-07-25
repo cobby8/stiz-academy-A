@@ -18,9 +18,19 @@ test("보강 슬롯을 덮어쓰지 않도록 ON CONFLICT DO NOTHING 만 사용�
   assert.doesNotMatch(libCode, /DO UPDATE/);
 });
 
-test("기존 수강일 행을 수정하거나 삭제하지 않는다", () => {
-  assert.doesNotMatch(libCode, /UPDATE "SpecialProgramEnrollmentDate"/);
+test("수강일 행은 절대 하드 삭제하지 않는다", () => {
   assert.doesNotMatch(libCode, /DELETE FROM "SpecialProgramEnrollmentDate"/);
+});
+
+test("수강일 행 UPDATE 는 정규 좌석 + 출결 없음 조건에서만 허용한다", () => {
+  // 재동기화(resync)가 생기면서 UPDATE 가 필요해졌다. 다만 출결이 찍힌 행은 SQL 단계에서 제외돼야 한다.
+  const updates = libCode.match(/UPDATE "SpecialProgramEnrollmentDate"[\s\S]*?`/g) ?? [];
+  assert.ok(updates.length > 0, "재동기화 UPDATE 문이 있어야 한다");
+  for (const statement of updates) {
+    assert.match(statement, /kind = 'REGULAR'/, "정규 좌석만 건드려야 한다");
+    assert.match(statement, /"attendanceStatus" IS NULL/, "출결이 찍힌 좌석은 제외해야 한다");
+    assert.doesNotMatch(statement, /SET status='SCHEDULED', kind=/, "kind 를 바꾸면 안 된다");
+  }
 });
 
 test("PgBouncer 대응으로 raw 쿼리 패턴을 유지한다", () => {
@@ -56,7 +66,7 @@ test("승인 처리 실패를 막기 위해 슬롯 생성 예외는 로그만 �
 });
 
 test("단건 승인과 일괄 승인 경로 모두에서 슬롯 생성을 호출한다", () => {
-  assert.match(route, /import \{ syncEnrollmentDatesForItemSafe \} from "@\/lib\/seasonal\/enrollment-dates"/);
+  assert.match(route, /import \{[^}]*syncEnrollmentDatesForItemSafe[^}]*\} from "@\/lib\/seasonal\/enrollment-dates"/);
   const calls = route.match(/await syncEnrollmentDatesForItemSafe\(/g) ?? [];
   assert.equal(calls.length, 2, "단건 승인 1회 + 일괄 승인 1회를 호출해야 한다");
   assert.match(route, /if \(changed\.item\.status === "APPROVED"\) await syncEnrollmentDatesForItemSafe\(itemId\);/);

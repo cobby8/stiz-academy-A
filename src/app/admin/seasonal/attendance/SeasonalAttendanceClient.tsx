@@ -14,6 +14,9 @@ type BoardDate = {
   ymd: string; location: string | null; capacity: number | null; scheduled: number; makeup: number;
   present: number; late: number; absent: number; excused: number; unchecked: number; checked: number;
   state: "DONE" | "LIVE" | "PLANNED";
+  // 그날 코트에 실제로 들어오는 전체 인원(같은 코트를 함께 쓰는 형제 반 합산) / 그 정원.
+  // scheduled(이 반 인원)와 기준이 다르므로 화면에서 구분해 표시한다.
+  courtOccupied?: number | null; courtCapacity?: number | null;
 };
 type RosterRow = {
   enrollmentDateId: string; kind: string; enrollmentStatus: string; attendanceStatus: string | null;
@@ -140,16 +143,25 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
     catch (e) { setErr((e as Error).message); }
   }
 
-  const capOf = (d: BoardDate) => d.capacity ?? offering?.capacity ?? 12;
+  const capOf = (d: BoardDate) => d.courtCapacity ?? d.capacity ?? offering?.capacity ?? 12;
+  // 정원과 직접 비교해야 하는 값은 "코트 전체 인원"이다. 서버가 값을 못 주면(구버전 응답 등)
+  // 예전처럼 이 반 인원으로 대체해 화면이 깨지지 않게 한다.
+  const courtOf = (d: BoardDate) => (typeof d.courtOccupied === "number" ? d.courtOccupied : null);
+  const gaugeOf = (d: BoardDate) => courtOf(d) ?? d.scheduled;
   const barColor = (d: BoardDate) => {
-    const cap = capOf(d); const pct = cap ? d.scheduled / cap : 0;
+    const cap = capOf(d); const pct = cap ? gaugeOf(d) / cap : 0;
     return pct >= 1 ? "bg-red-500" : pct >= 0.83 ? "bg-amber-500" : "bg-[var(--brand-accent)]";
   };
+  // 선택한 날짜의 코트 인원/정원 — 상단 KPI와 명단 헤더에서 함께 쓴다.
+  const selCourt = selBoard ? courtOf(selBoard) : null;
+  const selCourtCap = selBoard ? capOf(selBoard) : null;
+  const selCourtOver = selCourt != null && selCourtCap != null && selCourt > selCourtCap;
 
   return (
     <div className="mx-auto max-w-6xl p-4">
+      {/* 페이지 제목은 상위 서버 페이지의 공통 SeasonalHeader가 담당한다(중복 방지).
+          여기서는 시즌·특강 선택 드롭다운만 우측에 배치한다. */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="flex items-center gap-2 text-lg font-black">🏀 방학특강 · 출석/보강 관리</h1>
         <div className="flex-1" />
         <select value={seasonId} onChange={(e) => setSeasonId(e.target.value)}
           className="min-h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm font-bold dark:border-gray-700 dark:bg-gray-800">
@@ -170,13 +182,18 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
               <span className="text-base font-black">{offering.title}</span>
               <span className="text-xs font-bold text-gray-500">{offering.targetGrades || ""} · 운영 {offering.dateCount}일 · 담당 {offering.instructorName || "-"}</span>
               <div className="flex-1" />
-              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-600 dark:bg-orange-950">정원: 날짜별 {offering.capacity ?? 12}명</span>
+              {/* 정원은 "반 1개"가 아니라 같은 코트를 함께 쓰는 반을 합친 하루 기준이라는 점을 라벨에 명시 */}
+              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-600 dark:bg-orange-950">코트 정원: 하루 {offering.capacity ?? 12}명</span>
             </div>
           )}
 
           {selBoard && (
             <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              <Kpi n={`${selBoard.scheduled}${selBoard.capacity ? "/" + selBoard.capacity : ""}`} l="이 날짜 인원" />
+              {/* 정원과 비교되는 숫자는 "코트 전체 인원"이다. 이 반 인원은 보조 설명으로 함께 보여준다. */}
+              {selCourt != null
+                ? <Kpi n={`${selCourt}/${selCourtCap}`} l={selCourtOver ? "이 날 코트 인원 · 정원 초과" : "이 날 코트 인원 · 정원"}
+                    c={selCourtOver ? "text-red-600 dark:text-red-400" : ""} sub={`이 반 ${selBoard.scheduled}명`} />
+                : <Kpi n={`${selBoard.scheduled}${selBoard.capacity ? "/" + selBoard.capacity : ""}`} l="이 날짜 인원" />}
               <Kpi n={selBoard.present} l="출석" c="text-green-600" />
               <Kpi n={selBoard.late} l="지각" c="text-amber-600" />
               <Kpi n={selBoard.absent} l="결석" c="text-red-600" />
@@ -188,6 +205,8 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {board.map((d) => {
               const cap = capOf(d);
+              const court = courtOf(d);          // 그날 코트 전체 인원(형제 반 합산) — 없으면 null
+              const over = court != null && court > cap; // 정원 초과 여부
               return (
                 <button key={d.sessionDateId} onClick={() => setSelDate(d.sessionDateId)}
                   className={`rounded-xl border bg-white p-3 text-left dark:bg-gray-800 ${selDate === d.sessionDateId ? "border-[var(--brand-accent)] ring-1 ring-[var(--brand-accent)]" : "border-gray-200 dark:border-gray-700"}`}>
@@ -196,9 +215,20 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
                     <span className="text-[11px] font-bold text-gray-400">{d.round}일차</span>
                   </div>
                   <div className="mt-0.5 text-[11px] font-bold text-gray-500">{d.startTime}~{d.endTime}</div>
-                  <div className="mt-2 flex justify-between text-[11px] font-black"><span>정원</span><span className={d.scheduled >= cap ? "text-red-600" : ""}>{d.scheduled}/{cap}</span></div>
+                  {/* 두 숫자를 나눠서 보여준다: "이 반"은 이 반에서 그날 나오는 인원, "코트 전체"는 정원과 비교되는 값 */}
+                  <div className="mt-2 flex justify-between text-[11px] font-black">
+                    <span className="text-gray-500 dark:text-gray-400">이 반</span><span>{d.scheduled}명</span>
+                  </div>
+                  {court != null && (
+                    <div className="mt-0.5 flex justify-between text-[11px] font-black">
+                      <span className="text-gray-500 dark:text-gray-400">코트 전체</span>
+                      <span className={over ? "text-red-600 dark:text-red-400" : ""}>
+                        {court}/{cap}{over && <span className="ml-1">⚠ 초과</span>}
+                      </span>
+                    </div>
+                  )}
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div className={`h-full rounded-full ${barColor(d)}`} style={{ width: `${Math.min(100, cap ? (d.scheduled / cap) * 100 : 0)}%` }} />
+                    <div className={`h-full rounded-full ${barColor(d)}`} style={{ width: `${Math.min(100, cap ? (gaugeOf(d) / cap) * 100 : 0)}%` }} />
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1 text-[11px] font-bold">
                     <StateBadge state={d.state} />
@@ -212,7 +242,9 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
               );
             })}
           </div>
-          <p className="mt-2 px-1 text-[11px] font-bold text-gray-500">※ 정원은 해당 날짜에 오는 인원(정규+보강생) 기준입니다.</p>
+          {/* 두 숫자가 서로 다른 기준임을 분명히 알린다 — 13명 > 정원 12 같은 모순으로 보이지 않도록 */}
+          <p className="mt-2 px-1 text-[11px] font-bold text-gray-500">※ <b>이 반</b> = 이 반에서 그 날짜에 나오는 인원(정규+보강생)입니다.</p>
+          <p className="mt-0.5 px-1 text-[11px] font-bold text-gray-500">※ <b>코트 전체</b> = 같은 시간·같은 코트를 함께 쓰는 반(주2회·주3회 등)을 모두 합쳐 그 요일에 나오는 인원이며, 뒤의 숫자가 정원입니다. 정원을 넘으면 빨간색으로 표시됩니다.</p>
           {/* 날짜별 인원이 반 전체보다 적은 이유를 안내 — 누락으로 오해하지 않도록 */}
           <p className="mt-0.5 px-1 text-[11px] font-bold text-gray-500">※ 학생마다 신청한 요일이 달라 날짜별 인원이 다를 수 있습니다.</p>
 
@@ -222,12 +254,20 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
                 <span className="text-sm font-black">{rosterMeta.dateLabel} ({rosterMeta.dayLabel}) 명단</span>
                 <span className="text-xs font-bold text-gray-500">
                   · {rosterMeta.startTime}~{rosterMeta.endTime}
-                  {/* 반 전체 인원과 이 날 수강 인원을 함께 표시해 "학생 누락" 오해를 방지한다 */}
+                  {/* 반 명부(요일 무관)와 이 날 수강 인원을 함께 표시해 "학생 누락" 오해를 방지한다 */}
                   {typeof rosterMeta.totalApprovedStudents === "number"
-                    ? ` · 반 전체 ${rosterMeta.totalApprovedStudents}명 중 이 날(${rosterMeta.dayLabel}) 수강 ${roster.length}명`
+                    ? ` · 반 명부 ${rosterMeta.totalApprovedStudents}명(요일 무관) · 이 날(${rosterMeta.dayLabel}) 이 반 ${roster.length}명`
                     : ` · ${roster.length}명`}
-                  {` · 정원 ${rosterMeta.capacity ?? offering?.capacity ?? 12}`}
                 </span>
+                {/* 정원과 비교되는 값은 반 명부가 아니라 "그날 코트 전체 인원"이다 — 기준이 다름을 문구로 분리해 보여준다 */}
+                {typeof rosterMeta.courtOccupied === "number" && (
+                  <span className={`text-xs font-bold ${
+                    rosterMeta.courtOccupied > (rosterMeta.courtCapacity ?? rosterMeta.capacity ?? 12)
+                      ? "text-red-600 dark:text-red-400" : "text-gray-500"}`}>
+                    · 이 날 코트 전체 {rosterMeta.courtOccupied}/{rosterMeta.courtCapacity ?? rosterMeta.capacity ?? 12}
+                    {rosterMeta.courtOccupied > (rosterMeta.courtCapacity ?? rosterMeta.capacity ?? 12) ? " ⚠ 정원 초과" : ""}
+                  </span>
+                )}
               </div>
               <table className="w-full text-sm">
                 <thead><tr className="text-[11px] uppercase text-gray-500">
@@ -284,11 +324,13 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
   );
 }
 
-function Kpi({ n, l, c }: { n: any; l: string; c?: string }) {
+// sub: 보조 설명 한 줄(예: "이 반 6명") — 기준이 다른 두 숫자를 한 카드에 같이 보여줄 때 쓴다.
+function Kpi({ n, l, c, sub }: { n: any; l: string; c?: string; sub?: string }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800">
       <div className={`text-xl font-black ${c || ""}`}>{n}</div>
       <div className="mt-1 text-[11px] font-bold text-gray-500">{l}</div>
+      {sub && <div className="mt-0.5 text-[11px] font-bold text-gray-400 dark:text-gray-500">{sub}</div>}
     </div>
   );
 }

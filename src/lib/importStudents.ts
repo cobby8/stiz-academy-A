@@ -6,11 +6,16 @@
  *
  * 핵심 로직:
  * 1. CSV 파싱 → 빈 행 제거
- * 2. 이름+학부모전화번호로 그룹핑 → 같은 학생 여러 행 중복 제거
- * 3. 각 그룹에서 최신 행(월 기준) 선택
+ * 2. 이름+학부모전화번호로 그룹핑 → 같은 학생의 행 모으기
+ * 3. 각 그룹에서 대표 행(최신 월) 선택 → 같은 월 행 전체를 청구 계산에 사용
  * 4. 2호점 데이터 우선 (1호점 폐점)
  * 5. 결제방법에서 상태/결제수단 분리
  * 6. 수업선택에서 교시 추출 → slotKey 변환
+ *
+ * ⚠️ 청구 금액 주의 (2026-07-26 수정)
+ * 시트는 "한 학생이 수업 1개당 1행"이라 주3회 학생은 3행이다.
+ * 예전에는 대표 행 1건의 수강료만 청구해 주2회 이상 학생이 크게 과소 청구됐다.
+ * 금액 계산 규칙은 전부 `studentBilling.ts`에 모아 두었고 회귀 테스트로 방어한다.
  */
 
 import {
@@ -18,6 +23,12 @@ import {
   findSheetValue,
   normalizePhoneDigits,
 } from "@/lib/studentSheetMatching";
+import {
+  studentGroupKey,
+  summarizeStudentBilling,
+  type BillingPaymentMethod,
+  type BillingRow,
+} from "@/lib/studentBilling";
 
 // ──────────────────────────────────────────────
 // 타입 정의
@@ -38,7 +49,10 @@ export interface RawCsvRow {
   address: string | null;    // 주소
   enrollDate: string | null; // 등록일
   paymentMethod: string | null; // 결제방법 (랠리즈/카드/휴원/퇴원 등 혼합)
-  amount: number | null;     // 결제금액
+  amount: number | null;     // `결제액` 칸 (실제 납부액. 대부분 비어 있음)
+  tuitionAmount: number | null;   // `수강료` 칸 — 청구의 기준 금액
+  shuttleFee: number | null;      // `셔틀비` 칸 — 월 단위 값이라 첫 행에만 적힌다
+  carryOverAmount: number | null; // `이월` 금액 칸 — 채워져 있으면 차감
   referralSource: string | null; // 가입경로
   uniformStatus: string | null;  // 유니폼 상태
   classSelections: string[];  // 수업선택 컬럼들 (요일별 교시)
@@ -68,16 +82,27 @@ export interface TransformedStudent {
   status: "ACTIVE" | "PAUSED" | "WITHDRAWN";
 
   // 결제 정보
-  paymentMethod: "RALLYZ" | "CARD" | "CASH" | "UNPAID" | null;
+  paymentMethod: BillingPaymentMethod | null;
+  /** 최종 청구액 = 수강료 합계 + 셔틀비 - 이월 (0 미만 없음) */
   amount: number | null;
+  /** 청구 내역 분해 — 관리자 미리보기와 사후 검증용 */
+  tuitionTotal: number;
+  shuttleFeeTotal: number;
+  carryOverTotal: number;
+  /** 납부 완료 행과 미납 행이 섞여 있어 운영자 확인이 필요한 학생 */
+  needsPaymentReview: boolean;
   year: number | null;
   month: number | null;
 
-  // 수업 슬롯 키 목록 (예: ["Mon-4", "Wed-3"])
+  // 수업 슬롯 키 목록 (예: ["Mon-4", "Wed-3"]) — 같은 월 행 전체의 합집합
   slotKeys: string[];
+  /** Payment.classId에 넣을 대표 반 slotKey (수강료가 가장 큰 행 기준) */
+  billingSlotKey: string | null;
 
-  // 원본 행 번호 (디버깅용)
+  // 원본 행 번호 (대표 행. 디버깅용)
   rowNumber: number;
+  /** 청구 계산에 실제로 들어간 원본 행 번호 전체 */
+  billingRowNumbers: number[];
   branch: string;
 }
 
@@ -366,26 +391,9 @@ function extractStatus(paymentMethod: string | null): "ACTIVE" | "PAUSED" | "WIT
   return "ACTIVE";
 }
 
-/**
- * 결제방법 문자열에서 결제수단을 분리
- * - "랠리즈" → RALLYZ
- * - "카드결제" → CARD
- * - "현금영수증" → CASH
- * - "미납", "미결제" → UNPAID
- * - "휴원", "퇴원", "추가수강", "이월" 등 → null (결제수단 아님)
- */
-function extractPaymentMethod(
-  paymentMethod: string | null
-): "RALLYZ" | "CARD" | "CASH" | "UNPAID" | null {
-  if (!paymentMethod) return null;
-  const trimmed = paymentMethod.trim();
-  if (trimmed === "랠리즈") return "RALLYZ";
-  if (trimmed === "카드결제" || trimmed === "카드") return "CARD";
-  if (trimmed === "현금영수증" || trimmed === "현금") return "CASH";
-  if (trimmed === "미납" || trimmed === "미결제") return "UNPAID";
-  // 휴원, 퇴원, 추가수강, 이월 등은 결제수단이 아님
-  return null;
-}
+// 결제방법 → 결제수단(RALLYZ/CARD/CASH/UNPAID) 변환은
+// 금액 계산과 같은 규칙으로 묶어 두기 위해 `studentBilling.ts`의
+// `classifyPaymentMethod`로 옮겼다. (여러 행의 대표값 선정까지 함께 처리한다)
 
 /**
  * 수업선택 셀에서 교시를 추출하여 slotKey 배열로 변환
@@ -431,6 +439,27 @@ function parseAmount(raw: string | null): number | null {
   const cleaned = raw.replace(/[,\s원]/g, "");
   const num = Number(cleaned);
   return isNaN(num) ? null : num;
+}
+
+/**
+ * 금액 컬럼 하나를 안전하게 읽는다.
+ * 컬럼 자동 감지에 실패해 인덱스가 -1이면 null을 돌려준다.
+ * (예전처럼 `row[-1]`을 읽어 undefined가 흘러가면 금액이 조용히 0이 된다)
+ */
+function readAmountColumn(row: string[], index: number): number | null {
+  if (index === -1) return null;
+  return parseAmount(row[index] ?? null);
+}
+
+/**
+ * 생년월일을 학생 묶음 키로 쓸 수 있는 `YYYY-MM-DD` 문자열로 바꾼다.
+ * `parseSpreadsheetDate`가 로컬 자정으로 만든 Date라 UTC 변환 없이 그대로 읽는다.
+ */
+function toBirthKey(date: Date | null): string | null {
+  if (!date || isNaN(date.getTime())) return null;
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function normalizePhone(raw: string | null): string {
@@ -561,6 +590,23 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
     };
   }
 
+  // 청구 기준은 `수강료` 칸이다. 그 칸이 없는 옛 형식 CSV라면
+  // `결제액` 칸을 대신 쓴다(돈이 통째로 0이 되는 것보다 낫다).
+  const tuitionColumn =
+    colIndex.tuitionAmount !== -1 ? colIndex.tuitionAmount : colIndex.paymentAmount;
+  if (colIndex.tuitionAmount === -1 && colIndex.paymentAmount !== -1) {
+    errors.push({
+      rowNumber: 1,
+      reason: "`수강료` 컬럼이 없어 `결제액` 컬럼을 청구 기준으로 사용했습니다. 금액을 꼭 확인해주세요.",
+    });
+  }
+  if (tuitionColumn === -1) {
+    errors.push({
+      rowNumber: 1,
+      reason: "`수강료`/`결제액` 컬럼을 찾지 못해 청구 금액이 0으로 계산됩니다. 헤더를 확인해주세요.",
+    });
+  }
+
   // 2단계: 데이터 행을 RawCsvRow로 변환
   const rawRows: RawCsvRow[] = [];
   for (let i = 1; i < rows.length; i++) {
@@ -585,7 +631,10 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
         address: row[colIndex.address] || null,
         enrollDate: row[colIndex.enrollDate] || null,
         paymentMethod: row[colIndex.paymentMethod] || null,
-        amount: parseAmount(row[colIndex.amount] || null),
+        amount: readAmountColumn(row, colIndex.paymentAmount),
+        tuitionAmount: readAmountColumn(row, tuitionColumn),
+        shuttleFee: readAmountColumn(row, colIndex.shuttleFee),
+        carryOverAmount: readAmountColumn(row, colIndex.carryOverAmount),
         referralSource: row[colIndex.referralSource] || null,
         uniformStatus: row[colIndex.uniformStatus] || null,
         classSelections: colIndex.dayColumns.map((idx) => row[idx] || ""),
@@ -604,12 +653,16 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
     }
   }
 
-  // 3단계: 이름+학부모전화번호로 그룹핑
-  // 같은 학생이 월별로 여러 행에 등장하므로 최신 행만 선택
-  const groupKey = (r: RawCsvRow) => {
-    const pPhone = (r.parentPhone || "").replace(/[^0-9]/g, "");
-    return `${r.name}__${pPhone}`;
-  };
+  // 3단계: 같은 학생의 행 모으기
+  // 같은 학생이 월별로도, 수업별로도 여러 행에 등장한다.
+  // 학부모 전화번호는 행마다 부/모가 갈려 적히는 경우가 있어 기준으로 쓸 수 없다.
+  // (전화번호로 묶으면 한 학생이 둘로 쪼개져 수강료가 반토막 난다)
+  const groupKey = (r: RawCsvRow) =>
+    studentGroupKey({
+      name: r.name,
+      birthDateISO: toBirthKey(parseSpreadsheetDate(r.birthDate)),
+      parentPhone: r.parentPhone,
+    });
 
   const groups = new Map<string, RawCsvRow[]>();
   for (const raw of rawRows) {
@@ -618,9 +671,10 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
     groups.get(key)!.push(raw);
   }
 
-  // 4단계: 각 그룹에서 대표 행 선택
+  // 4단계: 각 그룹에서 대표 행 선택 + 같은 달 행 전체로 청구액 계산
   // 우선순위: (1) 2호점 > 1호점 (1호점 폐점), (2) 최신 월
   const students: TransformedStudent[] = [];
+  const dayHeaders = colIndex.dayColumns.map((idx) => headers[idx] || "");
 
   for (const [, group] of groups) {
     // 2호점 행이 있으면 2호점만 남기기
@@ -636,13 +690,60 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
 
     const best = candidates[0];
 
-    // 수업선택에서 slotKey 추출
-    const dayHeaders = colIndex.dayColumns.map((idx) => headers[idx] || "");
-    const slotKeys = extractSlotKeys(dayHeaders, best.classSelections);
+    // ⚠️ 여기가 핵심 — 청구는 "대표 행 1건"이 아니라 "같은 달 행 전체"로 계산한다.
+    // 시트에 여러 달이 섞여 들어올 수 있으므로 반드시 같은 연/월 행만 모은다.
+    // (달을 안 나누면 7월치와 8월치가 한 청구서에 합쳐지는 대형 사고가 난다)
+    const monthRows = candidates.filter(
+      (r) => r.year === best.year && r.month === best.month
+    );
 
-    // 상태와 결제수단 분리
+    if (monthRows.length < candidates.length) {
+      // 다른 달 행이 섞여 있어 제외했다는 사실을 운영자가 알 수 있게 남긴다.
+      console.warn(
+        `[import-students] ${best.name}: 등록 행 ${candidates.length}건 중 ` +
+          `${best.year}년 ${best.month}월 ${monthRows.length}건만 청구에 반영했습니다.`
+      );
+    }
+
+    // 청구 금액 계산 (수강료 합계 + 셔틀비 - 이월, 0 미만 없음)
+    const billing = summarizeStudentBilling(
+      monthRows.map<BillingRow>((r) => ({
+        rowNumber: r.rowNumber,
+        paymentMethodRaw: r.paymentMethod,
+        tuitionAmount: r.tuitionAmount,
+        shuttleFee: r.shuttleFee,
+        carryOverAmount: r.carryOverAmount,
+      }))
+    );
+
+    if (billing.mixedPaymentMethods) {
+      console.warn(
+        `[import-students] ${best.name}: 납부 완료 행과 미납 행이 섞여 있어 미납으로 청구했습니다. 수동 확인 필요.`
+      );
+    }
+
+    // 수업선택 → slotKey. 주3회 학생은 행마다 요일이 다르므로 전 행을 합집합한다.
+    const slotKeysByRow = new Map<number, string[]>();
+    for (const r of monthRows) {
+      slotKeysByRow.set(r.rowNumber, extractSlotKeys(dayHeaders, r.classSelections));
+    }
+    const slotKeys = [...new Set(monthRows.flatMap((r) => slotKeysByRow.get(r.rowNumber) ?? []))];
+
+    // 대표 반: 수강료가 가장 큰 행(= 주력 수업), 동률이면 원본 행 번호가 빠른 쪽.
+    // Payment는 학생당 월 1건이라 classId도 1개만 넣을 수 있다.
+    const billingRow = [...monthRows]
+      .filter((r) => billing.countedRowNumbers.includes(r.rowNumber))
+      .sort(
+        (a, b) =>
+          (b.tuitionAmount ?? 0) - (a.tuitionAmount ?? 0) || a.rowNumber - b.rowNumber
+      )[0];
+    const billingSlotKey =
+      (billingRow ? slotKeysByRow.get(billingRow.rowNumber)?.[0] : null) ??
+      slotKeys[0] ??
+      null;
+
+    // 상태는 대표 행 기준 (기존 동작 유지)
     const status = extractStatus(best.paymentMethod);
-    const paymentMethodEnum = extractPaymentMethod(best.paymentMethod);
 
     // 학부모 이름/전화번호 기본값 처리
     const parentName = (best.parentName || "").trim() || best.name + " 보호자";
@@ -662,12 +763,18 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
       referralSource: best.referralSource?.trim() || null,
       uniformStatus: best.uniformStatus?.trim() || null,
       status,
-      paymentMethod: paymentMethodEnum,
-      amount: best.amount,
+      paymentMethod: billing.paymentMethod,
+      amount: billing.billableAmount,
+      tuitionTotal: billing.tuitionTotal,
+      shuttleFeeTotal: billing.shuttleFeeTotal,
+      carryOverTotal: billing.carryOverTotal,
+      needsPaymentReview: billing.mixedPaymentMethods,
       year: best.year,
       month: best.month,
       slotKeys,
+      billingSlotKey,
       rowNumber: best.rowNumber,
+      billingRowNumbers: billing.countedRowNumbers,
       branch: best.branch,
     });
   }
@@ -703,7 +810,14 @@ interface ColumnIndices {
   address: number;
   enrollDate: number;
   paymentMethod: number;
-  amount: number;
+  /** `수강료` 칸 — 청구 기준 금액 */
+  tuitionAmount: number;
+  /** `결제액` 칸 — 실제 납부액 (참고용) */
+  paymentAmount: number;
+  /** `셔틀비` 칸 */
+  shuttleFee: number;
+  /** `이월` 금액 칸 */
+  carryOverAmount: number;
   referralSource: number;
   uniformStatus: number;
   registrationMonth: number;
@@ -732,7 +846,10 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
     address: -1,
     enrollDate: -1,
     paymentMethod: -1,
-    amount: -1,
+    tuitionAmount: -1,
+    paymentAmount: -1,
+    shuttleFee: -1,
+    carryOverAmount: -1,
     referralSource: -1,
     uniformStatus: -1,
     registrationMonth: -1,
@@ -805,13 +922,30 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
     else if (h.includes("등록일") || h.includes("입회일") || h.includes("가입일")) {
       result.enrollDate = i;
     }
-    // 결제방법
-    else if (h.includes("결제방법") || h.includes("결제수단") || h.includes("납부")) {
+    // 결제방법 (금액 칸인 "납부액"은 여기서 잡지 않는다)
+    else if (
+      h.includes("결제방법") ||
+      h.includes("결제수단") ||
+      (h.includes("납부") && !h.includes("액") && !h.includes("금액"))
+    ) {
       result.paymentMethod = i;
     }
-    // 금액
-    else if (h.includes("결제액") || h.includes("금액") || h.includes("수강료") || h.includes("납부액")) {
-      result.amount = i;
+    // ── 금액 칸들 ──
+    // 예전에는 결제액/금액/수강료를 전부 하나의 `amount`에 넣어서,
+    // 헤더 순서에 따라 마지막에 매칭된 칸이 앞의 칸을 덮어썼다.
+    // 청구 기준은 언제나 `수강료`이므로 칸마다 인덱스를 따로 잡고,
+    // 각각 처음 매칭된 컬럼만 채택한다(뒤 컬럼이 덮어쓰지 못하게).
+    else if (h.includes("수강료")) {
+      if (result.tuitionAmount === -1) result.tuitionAmount = i;
+    }
+    else if (h.includes("셔틀비")) {
+      if (result.shuttleFee === -1) result.shuttleFee = i;
+    }
+    else if (h.includes("이월")) {
+      if (result.carryOverAmount === -1) result.carryOverAmount = i;
+    }
+    else if (h.includes("결제액") || h.includes("납부액") || h.includes("금액")) {
+      if (result.paymentAmount === -1) result.paymentAmount = i;
     }
     // 가입경로
     else if (h.includes("가입경로") || h.includes("유입경로") || h.includes("알게된")) {

@@ -24,6 +24,8 @@ type RosterRow = {
   childGrade: string | null; childSchool: string | null; parentName: string; parentPhone: string; originAbsence: string | null;
   // 학생이 신청한 요일 (예: ["MON","WED"] / "월·수") — 날짜별 명단 인원 차이를 설명하기 위한 정보
   selectedWeekdays?: string[]; selectedWeekdayLabel?: string | null;
+  // 코트 합산 명단: 이 좌석이 속한 반 이름 + 현재 열린 반과 같은지 여부(강조용)
+  offeringTitle?: string | null; isThisOffering?: boolean; sessionDateId?: string;
 };
 
 const ATT = [
@@ -254,9 +256,9 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
                 <span className="text-sm font-black">{rosterMeta.dateLabel} ({rosterMeta.dayLabel}) 명단</span>
                 <span className="text-xs font-bold text-gray-500">
                   · {rosterMeta.startTime}~{rosterMeta.endTime}
-                  {/* 반 명부(요일 무관)와 이 날 수강 인원을 함께 표시해 "학생 누락" 오해를 방지한다 */}
+                  {/* 명단은 이제 코트 전체(형제 반 합산) 기준이라 카드의 "코트 전체" 인원과 일치한다 */}
                   {typeof rosterMeta.totalApprovedStudents === "number"
-                    ? ` · 반 명부 ${rosterMeta.totalApprovedStudents}명(요일 무관) · 이 날(${rosterMeta.dayLabel}) 이 반 ${roster.length}명`
+                    ? ` · 이 반 명부 ${rosterMeta.totalApprovedStudents}명(요일 무관) · 이 날(${rosterMeta.dayLabel}) 코트 전체 ${roster.length}명`
                     : ` · ${roster.length}명`}
                 </span>
                 {/* 정원과 비교되는 값은 반 명부가 아니라 "그날 코트 전체 인원"이다 — 기준이 다름을 문구로 분리해 보여준다 */}
@@ -280,6 +282,17 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
                       <tr key={r.enrollmentDateId} className={`border-t border-gray-100 dark:border-gray-700 ${r.kind === "MAKEUP" ? "bg-violet-50 dark:bg-violet-950/40" : r.attendanceStatus === "ABSENT" ? "bg-red-50 dark:bg-red-950/40" : ""}`}>
                         <td className="p-2 text-center font-bold">
                           {r.childName}{r.kind === "MAKEUP" && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-black text-violet-700 dark:bg-violet-900 dark:text-violet-200">보강생</span>}
+                          {/* 반(offering) 뱃지 — 코트 합산 명단이라 형제 반이 섞이므로 각 학생의 반을 표시한다 */}
+                          {r.offeringTitle && (
+                            <div className="mt-0.5">
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-black ${
+                                r.isThisOffering
+                                  ? "bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]"
+                                  : "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200"}`}>
+                                {r.offeringTitle}
+                              </span>
+                            </div>
+                          )}
                           {/* 학생이 신청한 요일 뱃지 — 왜 이 학생이 특정 날짜에만 보이는지 알 수 있게 한다 */}
                           {r.selectedWeekdayLabel && (
                             <div className="mt-0.5">

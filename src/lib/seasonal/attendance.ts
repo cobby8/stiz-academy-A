@@ -261,19 +261,52 @@ export async function getDateRoster(sessionDateId: string) {
   // 승인 시 좌석이 자동 생성되므로, 나중에 거절/취소로 바뀌어도 좌석은 남는다(삭제 경로 없음).
   // 신청항목 상태를 같이 걸러야 그 학생이 출석부에서 빠지고, 위 countApprovedStudents 와 기준이 일치한다.
   // 보강(kind='MAKEUP') 좌석도 결석한 정규 좌석과 같은 신청항목을 가리키므로 승인 상태면 그대로 표시된다.
+  //
+  // ★ 코트 전체 명단: 카드의 "코트 전체 N명"(getCourtOccupancyByWeekday) 과 축을 맞춘다.
+  //   한 회차(sessionDate)만 보면 그 반 좌석만 나와 "이 반 6명 · 코트 전체 15명" 처럼 명단과 카드가 어긋난다.
+  //   그래서 같은 코트(linkedClass가 있으면 같은 시즌·같은 linkedClass의 형제 반, 없으면 이 반)에서
+  //   **같은 KST 날짜**에 열리는 모든 형제 회차의 좌석을 한 명단으로 합친다. 학생별 반은 rowOfferingTitle 로 구분한다.
   const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT e.id AS "enrollmentDateId", e.kind, e.status, e."attendanceStatus", e."arrivedAt", e."attendanceNote",
-            it.id AS "itemId", a."childName", a."childGrade", a."childSchool", a."parentName", a."parentPhone",
-            a."selectedWeekdays",
-            mk."absentSessionDateId", absd."startsAt" AS "originStartsAt"
-       FROM "SpecialProgramEnrollmentDate" e
-       JOIN "SpecialProgramApplicationItem" it ON it.id = e."applicationItemId"
-       JOIN "SpecialProgramApplication" a ON a.id = it."applicationId"
-       LEFT JOIN "SpecialProgramMakeup" mk ON mk.id = e."makeupId"
-       LEFT JOIN "SpecialProgramSessionDate" absd ON absd.id = mk."absentSessionDateId"
-      WHERE e."sessionDateId" = $1 AND e.status <> 'CANCELLED'
-        AND it.status = 'APPROVED'
-      ORDER BY (e.kind = 'MAKEUP') ASC, a."childName" ASC`,
+    `WITH target_sd AS (
+        SELECT sd.id,
+               (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date AS kst_date,
+               o.id AS offering_id, o."seasonId", o."linkedClassId"
+          FROM "SpecialProgramSessionDate" sd
+          JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
+         WHERE sd.id = $1
+      ), scope AS (
+        SELECT o.id
+          FROM "SpecialProgramOffering" o
+          CROSS JOIN target_sd t
+         WHERE CASE
+                 WHEN t."linkedClassId" IS NULL THEN o.id = t.offering_id
+                 ELSE o."seasonId" = t."seasonId" AND o."linkedClassId" = t."linkedClassId"
+               END
+      ), sibling_dates AS (
+        SELECT sd.id
+          FROM "SpecialProgramSessionDate" sd
+          JOIN scope ON scope.id = sd."offeringId"
+          CROSS JOIN target_sd t
+         WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = t.kst_date
+      )
+      SELECT e.id AS "enrollmentDateId", e.kind, e.status, e."attendanceStatus", e."arrivedAt", e."attendanceNote",
+             e."sessionDateId",
+             it.id AS "itemId", a."childName", a."childGrade", a."childSchool", a."parentName", a."parentPhone",
+             a."selectedWeekdays",
+             o2.title AS "rowOfferingTitle",
+             (sd2.id = $1) AS "isThisOffering",
+             mk."absentSessionDateId", absd."startsAt" AS "originStartsAt"
+        FROM "SpecialProgramEnrollmentDate" e
+        JOIN sibling_dates sib ON sib.id = e."sessionDateId"
+        JOIN "SpecialProgramSessionDate" sd2 ON sd2.id = e."sessionDateId"
+        JOIN "SpecialProgramOffering" o2 ON o2.id = sd2."offeringId"
+        JOIN "SpecialProgramApplicationItem" it ON it.id = e."applicationItemId"
+        JOIN "SpecialProgramApplication" a ON a.id = it."applicationId"
+        LEFT JOIN "SpecialProgramMakeup" mk ON mk.id = e."makeupId"
+        LEFT JOIN "SpecialProgramSessionDate" absd ON absd.id = mk."absentSessionDateId"
+       WHERE e.status <> 'CANCELLED'
+         AND it.status = 'APPROVED'
+       ORDER BY (e.kind = 'MAKEUP') ASC, o2.title ASC, a."childName" ASC`,
     sessionDateId,
   );
 
@@ -308,6 +341,9 @@ export async function getDateRoster(sessionDateId: string) {
         attendanceStatus: r.attendanceStatus ?? null, arrivedAt: r.arrivedAt ?? null, attendanceNote: r.attendanceNote ?? null,
         itemId: r.itemId, childName: r.childName, childGrade: r.childGrade ?? null, childSchool: r.childSchool ?? null,
         parentName: r.parentName, parentPhone: r.parentPhone,
+        sessionDateId: r.sessionDateId, // 이 좌석이 속한 회차(형제 반일 수 있음)
+        offeringTitle: r.rowOfferingTitle ?? null, // 학생이 속한 반 이름 (코트 합산 명단에서 반 구분용)
+        isThisOffering: r.isThisOffering === true, // 열려있는 회차와 같은 반인지 (선택된 반 강조용)
         selectedWeekdays, // 학생이 신청한 요일 키 목록 (예: ["MON","WED"])
         selectedWeekdayLabel: weekdayLabel(selectedWeekdays), // 화면용 라벨 (예: "월·수")
         originAbsence: r.absentSessionDateId ? seoulParts(r.originStartsAt).dateLabel : null,

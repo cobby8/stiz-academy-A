@@ -33,6 +33,7 @@ type ShuttleDraft = {
   pickupTime: string;
   dropoffLocation: string;
   note: string;
+  dropoffSameAsPickup: boolean; // 하원=등원 동일(대부분 같음) — 기본 켜짐
   pickupLocationData?: MapLocationData;
   dropoffLocationData?: MapLocationData;
 };
@@ -135,7 +136,7 @@ function remainingText(item: SeasonalClass) {
 }
 
 function emptyShuttle(): ShuttleDraft {
-  return { enabled: false, pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "" };
+  return { enabled: false, pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "", dropoffSameAsPickup: true };
 }
 
 function statusText(status: string) {
@@ -290,20 +291,6 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
     });
   }
 
-  function copyPickupToDropoff(offeringId: string) {
-    setShuttle((current) => {
-      const draft = current[offeringId] ?? emptyShuttle();
-      return {
-        ...current,
-        [offeringId]: {
-          ...draft,
-          dropoffLocation: draft.pickupLocation,
-          dropoffLocationData: draft.pickupLocationData ? { ...draft.pickupLocationData } : undefined,
-        },
-      };
-    });
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) {
@@ -348,7 +335,9 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
               dropoffLocation: shuttle[base.id]?.dropoffLocation,
               note: shuttle[base.id]?.note,
               pickupLocationData: shuttle[base.id]?.pickupLocationData,
-              dropoffLocationData: shuttle[base.id]?.dropoffLocationData,
+              // 하원=등원 동일이면 하원 좌표는 등원을 그대로 사용(서버에서도 미러링)
+              dropoffLocationData: shuttle[base.id]?.dropoffSameAsPickup ? shuttle[base.id]?.pickupLocationData : shuttle[base.id]?.dropoffLocationData,
+              dropoffSameAsPickup: shuttle[base.id]?.dropoffSameAsPickup ?? true,
               locationConsent: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? locationConsent : undefined,
               locationConsentVersion: Boolean(shuttle[base.id]?.pickupLocationData || shuttle[base.id]?.dropoffLocationData) ? SHUTTLE_LOCATION_CONSENT_VERSION : undefined,
             } : undefined,
@@ -442,12 +431,19 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                         </span>
                       </label>
                       {shuttle[item.id]?.enabled && <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <LocationField label="탑승 위치" value={shuttle[item.id]?.pickupLocation ?? ""} mapValue={shuttle[item.id]?.pickupLocationData} onChange={(value) => updateLocationText(item.id, "pickup", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "pickup" })} />
+                        <LocationField label="탑승(등원) 위치" value={shuttle[item.id]?.pickupLocation ?? ""} mapValue={shuttle[item.id]?.pickupLocationData} onChange={(value) => updateLocationText(item.id, "pickup", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "pickup" })} />
                         <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
-                        <LocationField label="하차 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} mapValue={shuttle[item.id]?.dropoffLocationData} onChange={(value) => updateLocationText(item.id, "dropoff", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "dropoff" })} />
+                        {/* 하원=등원 동일 토글 — 대부분 같으므로 기본 켜짐. 켜지면 하차 위치 입력을 숨긴다. */}
+                        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 sm:col-span-2">
+                          <input type="checkbox" checked={shuttle[item.id]?.dropoffSameAsPickup ?? true} onChange={(e) => updateShuttle(item.id, "dropoffSameAsPickup", e.target.checked)} className="h-5 w-5 accent-brand-orange-500 dark:accent-brand-neon-lime" />
+                          하원(하차)은 등원과 동일
+                          <span className="ml-auto text-xs font-medium text-gray-400">다르면 체크 해제</span>
+                        </label>
+                        {!(shuttle[item.id]?.dropoffSameAsPickup ?? true) && (
+                          <LocationField label="하차(하원) 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} mapValue={shuttle[item.id]?.dropoffLocationData} onChange={(value) => updateLocationText(item.id, "dropoff", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "dropoff" })} />
+                        )}
                         <TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} />
-                        <button type="button" onClick={() => copyPickupToDropoff(item.id)} disabled={!shuttle[item.id]?.pickupLocationData} className="min-h-11 rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-700 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200 sm:col-span-2">탑승 위치를 하차 위치로 사용</button>
-                        {!hasShuttleLocation(shuttle[item.id]) && <p role="alert" className="text-xs font-bold text-amber-700 dark:text-amber-300 sm:col-span-2">🚌 셔틀 신청 시 지도에서 탑승 또는 하차 위치를 반드시 선택해 주세요. (텍스트 설명만으로는 신청되지 않습니다)</p>}
+                        {!hasShuttleLocation(shuttle[item.id]) && <p role="alert" className="text-xs font-bold text-amber-700 dark:text-amber-300 sm:col-span-2">🚌 셔틀 신청 시 지도에서 등원 위치를 반드시 선택해 주세요. (텍스트 설명만으로는 신청되지 않습니다)</p>}
                       </div>}
                     </div>
                   )}

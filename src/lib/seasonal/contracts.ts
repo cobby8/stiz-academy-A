@@ -38,6 +38,7 @@ export type SeasonalApplicationInput = {
       note?: string;
       pickupLocationData?: SeasonalShuttleLocationInput;
       dropoffLocationData?: SeasonalShuttleLocationInput;
+      dropoffSameAsPickup?: boolean;
       locationConsent?: true;
       locationConsentVersion?: string;
     };
@@ -163,8 +164,10 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
     const offeringId = cleanText(item?.offeringId, 100);
     if (!offeringId || seen.has(offeringId)) throw new SeasonalError("특강 선택 항목이 올바르지 않습니다.");
     seen.add(offeringId);
+    const dropoffSameAsPickup = item.shuttle?.dropoffSameAsPickup !== false; // 기본 true(대부분 동일)
     const pickupLocationData = parseShuttleLocation(item.shuttle?.pickupLocationData, "탑승");
-    const dropoffLocationData = parseShuttleLocation(item.shuttle?.dropoffLocationData, "하차");
+    // 하원=등원 동일이면 하원 좌표는 등원을 그대로 사용한다.
+    const dropoffLocationData = dropoffSameAsPickup ? pickupLocationData : parseShuttleLocation(item.shuttle?.dropoffLocationData, "하차");
     const hasMapLocation = Boolean(pickupLocationData || dropoffLocationData);
     // 지도 핀 필수: 셔틀을 신청했다면 텍스트 설명만으로는 안 되고 실제 좌표(탑승/하차)가 있어야 한다.
     // (클라이언트도 막지만, 직접 API 호출을 통한 우회를 방지하기 위해 서버에서도 강제한다)
@@ -197,6 +200,7 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
             note: cleanText(item.shuttle.note, 500),
             pickupLocationData,
             dropoffLocationData,
+            dropoffSameAsPickup,
             locationConsent: hasMapLocation ? true as const : undefined,
             locationConsentVersion: hasMapLocation ? locationConsentVersion : undefined,
           }

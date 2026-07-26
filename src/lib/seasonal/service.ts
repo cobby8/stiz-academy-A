@@ -529,8 +529,10 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
         const plan = itemPlans.find((candidate) => candidate.offering.id === item.offeringId);
         const requested = plan?.requested;
         if (!hasSeasonalShuttleSelection(requested?.shuttle) || !requested?.shuttle || !plan?.offering.shuttleAvailable) continue;
+        const same = requested.shuttle.dropoffSameAsPickup !== false; // 기본 true(대부분 동일)
         const pickup = requested.shuttle.pickupLocationData;
-        const dropoff = requested.shuttle.dropoffLocationData;
+        // 하원=등원 동일이면 하원 좌표·주소는 등원을 그대로 사용한다.
+        const dropoff = same ? pickup : requested.shuttle.dropoffLocationData;
         const confirmedAt = pickup || dropoff ? new Date() : undefined;
         await tx.specialProgramShuttleRequest.create({
           data: {
@@ -538,7 +540,8 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
             applicationItemId: item.id,
             pickupLocation: requested.shuttle.pickupLocation,
             pickupTime: requested.shuttle.pickupTime,
-            dropoffLocation: requested.shuttle.dropoffLocation,
+            dropoffLocation: same ? requested.shuttle.pickupLocation : requested.shuttle.dropoffLocation,
+            dropoffSameAsPickup: same,
             note: requested.shuttle.note,
             pickupAddress: pickup?.address,
             pickupRoadAddress: pickup?.roadAddress,

@@ -38,6 +38,8 @@ export type StaffSessionDetail = {
   photos: string[];
   startedAt: string | null;
   endedAt: string | null;
+  // 방학특강 회차 식별자(정규 수업이면 null). 진행 화면에서 시작 취소 후 이동 경로 분기에 사용.
+  sessionDateId: string | null;
 };
 
 export type StaffSessionStudent = {

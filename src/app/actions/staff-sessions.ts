@@ -429,6 +429,39 @@ export async function completeClassSession(input: { sessionId: string }) {
   };
 }
 
+/**
+ * 진행 화면의 '수업 시작 취소' 버튼이 호출하는 서버 기능입니다.
+ * 실수/테스트로 시작한 수업을 '시작 전(PLANNED)' 상태로 되돌립니다.
+ * ★ 세션 상태(status/startedAt/startedByUserId)만 되돌리고, 출결(Attendance /
+ *   SpecialProgramEnrollmentDate.attendanceStatus)·사진·메모는 절대 건드리지 않습니다.
+ *   (관리자 사전 결석·셔틀 제외 마크 등 기록을 보존하기 위함)
+ */
+export async function cancelClassSession(input: { sessionId: string }) {
+  // 종료/출결과 동일한 권한 게이트로 담당 수업(또는 특강)인지 다시 검사합니다.
+  const { session } = await requireSessionAccess(input.sessionId);
+
+  // 진행 중(IN_PROGRESS)인 수업만 시작을 취소할 수 있습니다. 그 외 상태는 되돌릴 대상이 아닙니다.
+  if (session.status !== "IN_PROGRESS") {
+    return { ok: false as const, message: "진행 중인 수업만 시작을 취소할 수 있습니다." };
+  }
+
+  // status='IN_PROGRESS' 조건을 WHERE에 함께 걸어, 그 사이 다른 기기에서 상태가 바뀌었으면
+  // 0행이 되어 안전하게 통과시킵니다(이미 바뀐 것이므로 목표 상태와 일치 → 성공 처리).
+  //  - startedAt/startedByUserId를 NULL로 비워 다음 시작 때 새 스톱워치가 잡히게 합니다.
+  //  - 정규/특강 공통(sessionDateId 유무와 무관하게 세션 상태만 되돌립니다).
+  await prisma.$executeRawUnsafe(
+    `UPDATE "Session"
+        SET status = 'PLANNED', "startedAt" = NULL, "startedByUserId" = NULL, "updatedAt" = NOW()
+      WHERE id = $1 AND status = 'IN_PROGRESS'`,
+    input.sessionId,
+  );
+
+  // 진행 화면(page.tsx)은 status !== 'IN_PROGRESS'면 /staff로 리다이렉트하므로 캐시를 무효화합니다.
+  revalidatePath("/staff");
+  revalidatePath(`/staff/sessions/${input.sessionId}`);
+  return { ok: true as const };
+}
+
 type SessionStartRow = {
   id: string;
   classId: string;

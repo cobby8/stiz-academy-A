@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
+  cancelClassSession,
   completeClassSession,
   saveSessionMemo,
   saveStaffAttendance,
@@ -326,6 +327,30 @@ export default function SessionInProgressClient({
     void persistMemo(memo, true);
   }
 
+  // 실수/테스트로 시작한 수업을 '시작 전' 상태로 되돌린다.
+  // 세션 상태만 되돌리고 출결 기록은 그대로 유지된다(서버에서 보장).
+  function cancelStart() {
+    if (pending || voiceBusy || memoStatus === "saving") return;
+    // 되돌리기는 위험/비가역 성격이므로 반드시 한 번 확인받는다.
+    if (!window.confirm("수업 시작을 취소하고 '시작 전' 상태로 되돌릴까요? (기록한 출결은 그대로 유지됩니다)")) return;
+    setMessage("");
+    startTransition(async () => {
+      try {
+        const result = await cancelClassSession({ sessionId: session.id });
+        if (!result.ok) {
+          setMessage(result.message);
+          return;
+        }
+        // 세션이 더 이상 IN_PROGRESS가 아니므로 진행 화면을 벗어난다.
+        // 진행 페이지도 status가 바뀌면 /staff로 리다이렉트하므로 그 흐름과 일관되게 이동한다.
+        router.replace(session.sessionDateId ? "/staff/seasonal" : "/staff");
+        router.refresh();
+      } catch {
+        setMessage("수업 시작 취소 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+    });
+  }
+
   function finishSession() {
     if (pending || voiceBusy || memoStatus === "saving") return;
     setFinishError("");
@@ -515,6 +540,8 @@ export default function SessionInProgressClient({
           <button type="button" disabled={pending || voiceBusy || memoStatus === "saving" || !online} onClick={() => { setFinishError(""); setShowEndConfirm(true); }} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 disabled:opacity-50 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
           {(voiceBusy || memoStatus === "saving" || !online) && <p className="mt-1 text-center text-[11px] font-bold text-amber-700">{voiceBusy ? "음성 메모 처리 후 종료할 수 있습니다." : memoStatus === "saving" ? "메모 저장 후 종료할 수 있습니다." : "온라인 연결 후 종료할 수 있습니다."}</p>}
           <p className="mt-1 text-center text-[11px] font-bold text-gray-500">출결을 검토한 뒤 확인 화면에서 종료됩니다.</p>
+          {/* 실수/테스트로 시작한 수업 되돌리기 — 종료와 구분되는 보조(회색 테두리) 톤 */}
+          <button type="button" disabled={pending || voiceBusy || memoStatus === "saving"} onClick={cancelStart} className="mt-2 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-4 text-xs font-black text-gray-500 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"><span className="material-symbols-outlined mr-1 align-middle text-base">undo</span>수업 시작 취소 (시작 전으로 되돌리기)</button>
         </div>
       </div>
 

@@ -1,0 +1,125 @@
+"use client";
+
+import { useState } from "react";
+import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
+
+// 정규 셔틀 기사님 운행 화면 — 로그인 없이 토큰으로 접근. 오늘 요일의 수업별 등원·하원 타임라인.
+// ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼(dark: 미사용). 탭 한 번으로 즉시 저장.
+
+export type DriverRow = { rowId: string; name: string; parentPhone: string | null; studentPhone: string | null };
+export type DriverStop = { label: string; arriveTime: string | null; lat: number | null; lng: number | null; direction: "BOARD" | "ALIGHT"; rows: DriverRow[] };
+export type DriverClass = { classTime: string; board: DriverStop[]; alight: DriverStop[] };
+type Status = "BOARDED" | "NOSHOW";
+
+function digits(p: string | null): string | null { if (!p) return null; const d = p.replace(/[^0-9]/g, ""); return d.length >= 9 ? d : null; }
+function fmtDate(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso;
+  const dow = ["일", "월", "화", "수", "목", "금", "토"][new Date(`${iso}T12:00:00+09:00`).getUTCDay()] ?? "";
+  return `${Number(m[2])}/${Number(m[3])}${dow ? ` (${dow})` : ""}`;
+}
+
+function StopList({ stops, token, boarding, setStatus }: {
+  stops: DriverStop[]; token: string; boarding: Record<string, Status>;
+  setStatus: (rowId: string, name: string, next: Status) => void;
+}) {
+  const busyKey = (id: string) => id;
+  return (
+    <ol className="space-y-2.5">
+      {stops.map((s, si) => {
+        const isPickup = s.direction === "BOARD";
+        const url = tmapNavigationCoordinateUrl({ latitude: s.lat, longitude: s.lng, name: s.label });
+        return (
+          <li key={si} className="rounded-2xl border-2 border-gray-200 bg-white p-3.5">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-orange-500 text-[15px] font-black text-white">{si + 1}</span>
+              <span className="min-w-0 flex-1 text-[18px] font-black leading-tight text-gray-900">{s.label}</span>
+              {s.arriveTime && <span className="shrink-0 text-[16px] font-black text-blue-600">{s.arriveTime}</span>}
+            </div>
+            {url && <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-[16px] font-black text-white active:bg-blue-700">🧭 T맵 길안내</a>}
+            <div className="mt-2.5 space-y-2.5">
+              {s.rows.map((st) => {
+                const status = boarding[st.rowId] ?? null;
+                const parent = digits(st.parentPhone), child = digits(st.studentPhone);
+                return (
+                  <div key={st.rowId} className="flex items-center gap-2 rounded-xl bg-gray-50 p-2.5">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[19px] font-black text-gray-900">{st.name}</span>
+                      <div className="mt-1 flex gap-3">
+                        {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
+                        {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setStatus(st.rowId, st.name, "BOARDED")}
+                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
+                    <button type="button" onClick={() => setStatus(st.rowId, st.name, "NOSHOW")}
+                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                  </div>
+                );
+              })}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+export default function RegularDriverClient({ token, date, classes, initialBoarding }: {
+  token: string; date: string; classes: DriverClass[]; initialBoarding: Record<string, Status>;
+}) {
+  const [boarding, setBoarding] = useState<Record<string, Status>>(initialBoarding);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  async function setStatus(rowId: string, name: string, next: Status) {
+    if (busy[rowId]) return;
+    const cur = boarding[rowId] ?? null;
+    const target: Status | null = cur === next ? null : next;
+    setBoarding((b) => { const n = { ...b }; if (target) n[rowId] = target; else delete n[rowId]; return n; });
+    setBusy((x) => ({ ...x, [rowId]: true }));
+    try {
+      const r = await fetch("/api/shuttle/regular-boarding", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, rowId, status: target, studentName: name }),
+      });
+      if (!r.ok) throw new Error();
+    } catch {
+      setBoarding((b) => { const n = { ...b }; if (cur) n[rowId] = cur; else delete n[rowId]; return n; });
+    } finally {
+      setBusy((x) => ({ ...x, [rowId]: false }));
+    }
+  }
+
+  const allRows = classes.flatMap((c) => [...c.board, ...c.alight].flatMap((s) => s.rows));
+  const boarded = allRows.filter((r) => boarding[r.rowId] === "BOARDED").length;
+
+  return (
+    <div className="mx-auto max-w-lg px-3 pb-28 text-gray-900" style={{ colorScheme: "light" }}>
+      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b border-gray-200 bg-white px-4 py-4">
+        <p className="text-[20px] font-black text-gray-900">🚌 스티즈 정규 셔틀</p>
+        <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 체크 {boarded}/{allRows.length}</p>
+      </header>
+
+      {classes.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">오늘은 운행이 없습니다.</p>}
+
+      {classes.map((c) => (
+        <section key={c.classTime} className="mb-6">
+          <div className="sticky top-[68px] z-[5] -mx-1 mb-3 rounded-2xl bg-brand-navy-900 px-4 py-3 text-[18px] font-black text-white">🕒 {c.classTime} 수업</div>
+          {c.board.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1.5 flex items-center gap-1.5 text-[16px] font-black text-blue-700">⬆ 등원(승차)</p>
+              <StopList stops={c.board} token={token} boarding={boarding} setStatus={setStatus} />
+            </div>
+          )}
+          {c.alight.length > 0 && (
+            <div>
+              <p className="mb-1.5 flex items-center gap-1.5 text-[16px] font-black text-orange-700">⬇ 하원(하차)</p>
+              <StopList stops={c.alight} token={token} boarding={boarding} setStatus={setStatus} />
+            </div>
+          )}
+        </section>
+      ))}
+      <p className="mt-3 text-center text-[14px] font-semibold text-gray-400">탭 한 번으로 저장됩니다 · 다시 누르면 대기로 돌아갑니다</p>
+    </div>
+  );
+}

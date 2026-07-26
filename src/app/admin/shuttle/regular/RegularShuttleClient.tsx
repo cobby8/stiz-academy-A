@@ -128,6 +128,19 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
     finally { setBusy(false); }
   }
 
+  // 정규 셔틀 기사 고정 링크 복사 — 하나만 전달하면 매일 '오늘 요일' 운행이 자동으로 뜬다.
+  async function copyRegularRunLink() {
+    setErr(null); setMsg(null);
+    try {
+      const r = await fetch("/api/admin/shuttle/regular-run-link", { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "링크 생성 실패");
+      const url = `${window.location.origin}${j.path}`;
+      try { await navigator.clipboard.writeText(url); setMsg("기사님 운행 링크를 복사했습니다(매일 열면 오늘 요일 운행)"); }
+      catch { setMsg(`기사님 링크: ${url}`); }
+    } catch (e: any) { setErr(e?.message || "링크를 만들지 못했습니다."); }
+  }
+
   // 저장 후 목록을 다시 읽어 로컬 상태를 최신화(순서·시각 반영).
   async function refreshStops() {
     const g = await fetch("/api/admin/shuttle/regular", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
@@ -239,6 +252,11 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
 
             {mode === "dispatch" ? (
               <div className="mt-3">
+                {/* 기사님 링크 — 하나만 전달하면 매일 그날 요일 운행이 자동으로 뜬다. */}
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <button onClick={copyRegularRunLink} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">🚌 기사님 운행 링크 복사</button>
+                  <span className="text-[11.5px] text-gray-400">기사님 폰·태블릿에 이 링크 하나만 저장 → 매일 열면 그날 요일 노선·탑승체크</span>
+                </div>
                 {classTimes.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">이 요일에 수업 정차가 없습니다.</div>
                 ) : (

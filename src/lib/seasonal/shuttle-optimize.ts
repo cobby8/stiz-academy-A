@@ -62,6 +62,9 @@ type Run = {
   index: number; vehicleName: string; plate: string | null; capacity: number; tripLabel: string | null;
   passengers: number; stops: Stop[]; over: boolean;
   provider: "TMAP" | "LOCAL"; tmapMinutes: number | null; tmapKm: number | null; depotTime: string | null;
+  // 첫 노드 출발 시각 / 마지막 노드 도착 시각. 등원=차고지 출발·학원 도착, 하원=학원 출발·차고지 복귀.
+  // 화면에서 출발 시각을 직접 조정할 때 기준값으로 쓴다.
+  departTime: string | null; arriveTime: string | null;
 };
 
 export type DispatchSuggestion = {
@@ -133,6 +136,9 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
   order.forEach((s, i) => { s.etaLabel = `${minToHHMM(times[i + 1])} ${direction === "PICKUP" ? "승차" : "하차"}`; });
   run.stops = order;
   run.depotTime = depot ? minToHHMM(direction === "PICKUP" ? times[0] : times[path.length - 1]) : null;
+  // 첫 노드 출발/마지막 노드 도착(방향 무관 대칭). 출발 시각 수동 조정의 기준값.
+  run.departTime = minToHHMM(times[0]);
+  run.arriveTime = minToHHMM(times[path.length - 1]);
 }
 
 export async function suggestDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
@@ -197,7 +203,7 @@ export async function suggestDispatch(opts: { direction: DispatchDirection; date
     tripByVeh[idx] = (tripByVeh[idx] ?? 0) + 1;
     const trip = tripByVeh[idx];
     const reused = vi >= vehicleFleet.length;
-    return { index: runs.length + 1, vehicleName: veh.name, plate: veh.plate, capacity: veh.capacity, tripLabel: reused || trip > 1 ? `${trip}차 운행` : null, passengers: 0, stops: [], over: false, provider: "LOCAL", tmapMinutes: null, tmapKm: null, depotTime: null };
+    return { index: runs.length + 1, vehicleName: veh.name, plate: veh.plate, capacity: veh.capacity, tripLabel: reused || trip > 1 ? `${trip}차 운행` : null, passengers: 0, stops: [], over: false, provider: "LOCAL", tmapMinutes: null, tmapKm: null, depotTime: null, departTime: null, arriveTime: null };
   };
   let run = mkRun();
   for (const stop of ordered) {

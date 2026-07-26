@@ -10,6 +10,28 @@ import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
 
 function tel(p: string | null): string | null { if (!p) return null; const d = p.replace(/[^0-9]/g, ""); return d.length >= 9 ? `tel:${d}` : null; }
 
+// 출발 시각 수동 조정용 시간 유틸. 시각은 전부 'HH:MM' 문자열로 다룬다.
+function parseHHMM(s: string | null): number | null {
+  if (!s || !/^\d{1,2}:\d{2}$/.test(s)) return null;
+  const [h, m] = s.split(":").map(Number);
+  return h * 60 + m;
+}
+function fmtHHMM(mins: number): string {
+  const v = ((Math.round(mins) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+}
+function shiftHHMM(s: string | null, delta: number): string | null {
+  const m = parseHHMM(s);
+  return m == null ? s : fmtHHMM(m + delta);
+}
+// "09:20 승차" 같은 라벨의 앞 시각만 delta분 이동시킨다.
+function shiftLabel(label: string | undefined, delta: number): string | undefined {
+  if (!label) return label;
+  const mt = label.match(/^(\d{1,2}:\d{2})(.*)$/);
+  if (!mt) return label;
+  return `${shiftHHMM(mt[1], delta)}${mt[2]}`;
+}
+
 type GeoKind = "academy" | "depot" | "hub";
 const GEO_META: Record<GeoKind, { title: string; icon: string }> = {
   academy: { title: "학원", icon: "🏫" },
@@ -61,11 +83,41 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
   }
 
   function moveStop(vIdx: number, sIdx: number, dir: -1 | 1) {
+    reorderStop(vIdx, sIdx, sIdx + dir);
+  }
+
+  // 정차 순서 변경(위/아래 버튼과 드래그앤드롭이 공통으로 쓴다).
+  function reorderStop(vIdx: number, from: number, to: number) {
     setSug((cur) => {
       const vehicles = cur.vehicles.map((v) => ({ ...v, stops: [...v.stops] }));
-      const stops = vehicles[vIdx].stops; const j = sIdx + dir;
-      if (j < 0 || j >= stops.length) return cur;
-      [stops[sIdx], stops[j]] = [stops[j], stops[sIdx]];
+      const stops = vehicles[vIdx].stops;
+      if (from < 0 || from >= stops.length || to < 0 || to >= stops.length || from === to) return cur;
+      const [moved] = stops.splice(from, 1);
+      stops.splice(to, 0, moved);
+      return { ...cur, vehicles };
+    });
+  }
+
+  // 드래그 중인 정차 위치(차량 index + 정차 index). 같은 차량 안에서만 순서를 바꾼다.
+  const [drag, setDrag] = useState<{ v: number; s: number } | null>(null);
+
+  // 출발 시각 직접 조정 — 첫 노드(등원=차고지 / 하원=학원) 출발을 바꾸면 그 차량 전체 시각이 같이 이동한다.
+  function setDepartTime(vIdx: number, newDepart: string) {
+    setSug((cur) => {
+      const vehicles = cur.vehicles.map((v, i) => {
+        if (i !== vIdx) return v;
+        const oldMin = parseHHMM(v.departTime), newMin = parseHHMM(newDepart);
+        if (oldMin == null || newMin == null) return v;
+        const delta = newMin - oldMin;
+        if (delta === 0) return v;
+        return {
+          ...v,
+          departTime: shiftHHMM(v.departTime, delta),
+          arriveTime: shiftHHMM(v.arriveTime, delta),
+          depotTime: shiftHHMM(v.depotTime, delta),
+          stops: v.stops.map((s) => ({ ...s, etaLabel: shiftLabel(s.etaLabel, delta) })),
+        };
+      });
       return { ...cur, vehicles };
     });
   }
@@ -78,7 +130,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <h3 className="text-base font-black text-gray-900 dark:text-white">노선 자동 제안</h3>
         <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">
-          날짜를 고르면 그 날 등원하는 셔틀 학생만(요일별 스케줄 반영) 등록 차량에 배차합니다. 정차 순서는 위/아래로 조정하고, 각 정차에서 바로 전화·인쇄할 수 있습니다.
+          날짜를 고르면 그 날 등원하는 셔틀 학생만(요일별 스케줄 반영) 등록 차량에 배차합니다. 정차 순서는 드래그(⠿)하거나 ▲▼로 바꾸고, 출발 시각을 직접 조정할 수 있습니다. 각 정차에서 바로 전화·인쇄도 됩니다.
         </p>
 
         {/* 기준 위치 편집 — 학원·차고지·1호점을 지도로 손쉽게 변경 */}
@@ -141,10 +193,19 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                 <li className="flex items-center gap-2.5 bg-gray-50/60 px-3 py-2 dark:bg-gray-900/40">
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-gray-600 text-[11px] text-white">{isPickup ? "🚏" : "🏫"}</span>
                   <span className="text-[12px] font-bold text-gray-600 dark:text-gray-300">{isPickup ? (sug.depot ? `${sug.depot.name.replace(/^차고지 · /, "차고지 ")} 출발` : "출발") : `${sug.academy.name} 출발`}</span>
-                  {isPickup && v.depotTime && <span className="ml-auto text-[11.5px] font-black text-gray-500">{v.depotTime} 출발</span>}
+                  {/* 출발 시각 직접 조정 — 바꾸면 이 차량 전체 정차 시각이 함께 이동한다. */}
+                  <label className="ml-auto flex items-center gap-1 text-[11px] font-bold text-gray-500 print:hidden">
+                    출발
+                    <input type="time" value={v.departTime ?? ""} onChange={(e) => setDepartTime(vIdx, e.target.value)}
+                      className="rounded-lg border border-gray-200 px-1.5 py-0.5 text-[11.5px] font-black text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
+                  </label>
+                  {v.departTime && <span className="hidden text-[11.5px] font-black text-gray-500 print:inline">{v.departTime} 출발</span>}
                 </li>
                 {v.stops.map((s, sIdx) => (
-                  <li key={sIdx} className={`flex items-start gap-2.5 px-3 py-2.5 ${s.isHub ? "bg-green-50/70 dark:bg-green-900/15" : ""}`}>
+                  <li key={sIdx}
+                    onDragOver={(e) => { if (drag && drag.v === vIdx) e.preventDefault(); }}
+                    onDrop={(e) => { e.preventDefault(); if (drag && drag.v === vIdx && drag.s !== sIdx) reorderStop(vIdx, drag.s, sIdx); setDrag(null); }}
+                    className={`flex items-start gap-2.5 px-3 py-2.5 ${s.isHub ? "bg-green-50/70 dark:bg-green-900/15" : ""} ${drag && drag.v === vIdx && drag.s === sIdx ? "opacity-40" : ""}`}>
                     <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-black text-white ${s.isHub ? "bg-green-600" : "bg-brand-orange-500"}`}>{s.isHub ? "🆓" : sIdx + 1}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-bold text-gray-900 dark:text-white">
@@ -160,19 +221,27 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                           : s.students.map((st, i) => { const t = tel(st.parentPhone); return <span key={i}>{st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} className="ml-0.5 font-bold text-green-600">📞</a>}</span>; })}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {s.etaLabel && <span className="whitespace-nowrap text-[11.5px] font-black text-blue-600 dark:text-blue-300">{s.etaLabel}</span>}
-                      <span className="flex gap-0.5">
+                    <div className="flex flex-col items-end gap-1 print:hidden">
+                      {s.etaLabel && <span className="whitespace-nowrap text-[11.5px] font-black text-blue-600 dark:text-blue-300 print:text-black">{s.etaLabel}</span>}
+                      <span className="flex items-center gap-0.5">
+                        <span draggable
+                          onDragStart={(e) => { setDrag({ v: vIdx, s: sIdx }); e.dataTransfer.effectAllowed = "move"; }}
+                          onDragEnd={() => setDrag(null)}
+                          title="드래그해서 순서 변경"
+                          className="cursor-move select-none px-1 text-base leading-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">⠿</span>
                         <button onClick={() => moveStop(vIdx, sIdx, -1)} className="h-6 w-6 rounded border border-gray-200 text-xs dark:border-gray-600">▲</button>
                         <button onClick={() => moveStop(vIdx, sIdx, 1)} className="h-6 w-6 rounded border border-gray-200 text-xs dark:border-gray-600">▼</button>
                       </span>
                     </div>
+                    {/* 인쇄본에는 시각만 남기고 조작 버튼은 숨긴다. */}
+                    {s.etaLabel && <span className="hidden whitespace-nowrap text-[11.5px] font-black text-black print:inline">{s.etaLabel}</span>}
                   </li>
                 ))}
                 {/* 종료 노드: 등원=학원 도착 / 하원=차고지 복귀 */}
                 <li className="flex items-center gap-2.5 bg-gray-50 px-3 py-2.5 dark:bg-gray-900">
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-navy-900 text-[11px] text-white">{isPickup ? "🏫" : "🚏"}</span>
                   <span className="text-[12.5px] font-bold text-gray-700 dark:text-gray-200">{isPickup ? `${sug.academy.name} 도착` : (sug.depot ? `${sug.depot.name.replace(/^차고지 · /, "차고지 ")} 복귀` : "복귀")}</span>
+                  {isPickup && v.arriveTime && <span className="ml-auto text-[11.5px] font-black text-gray-500">{v.arriveTime} 도착</span>}
                   {!isPickup && v.depotTime && <span className="ml-auto text-[11.5px] font-black text-gray-500">{v.depotTime} 복귀</span>}
                 </li>
               </ol>
@@ -189,7 +258,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
         )}
 
         <p className="mt-3 text-[11px] text-gray-400">
-          ※ {sug.routingProvider === "TMAP" ? "T맵 실도로 최적경로 기준입니다." : "T맵 연결이 없어 직선거리 근사로 계산했습니다(운영 환경변수 TMAP_APP_KEY 설정 시 실도로 최적경로 사용)."} 정차 순서는 위/아래로 조정 가능합니다.
+          ※ {sug.routingProvider === "TMAP" ? "T맵 실도로 최적경로 기준입니다." : "T맵 연결이 없어 직선거리 근사로 계산했습니다(운영 환경변수 TMAP_APP_KEY 설정 시 실도로 최적경로 사용)."} 정차 순서는 드래그(⠿) 또는 ▲▼로 조정하고, 출발 시각을 바꾸면 그 차량 전체 시각이 함께 이동합니다.
           {sug.depot ? ` · 차고지: ${sug.depot.name.replace(/^차고지 · /, "")}` : ""}
           {sug.hub ? ` · 🆓 ${sug.hub.name} 무료 탑승 거점을 항상 경유합니다` : ""}
         </p>

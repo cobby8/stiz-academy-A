@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
+import RegularRouteSection, { type ShuttleGeo } from "@/components/shuttle/RegularRouteSection";
 
 // ── 카카오 지도 SDK(장소검색) 로더 ─────────────────────────────
 // REST 키는 401이라 브라우저 JS SDK로만 좌표를 찾을 수 있다(방학특강과 동일 방식).
@@ -69,10 +70,11 @@ function fmtImported(iso: string | null): string {
   return `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`;
 }
 
-export default function RegularShuttleClient({ initialStops, importedAt: initialImportedAt, defaultSheetUrl }: {
+export default function RegularShuttleClient({ initialStops, importedAt: initialImportedAt, defaultSheetUrl, geo }: {
   initialStops: RegularShuttleStop[];
   importedAt: string | null;
   defaultSheetUrl: string;
+  geo: ShuttleGeo;
 }) {
   const [stops, setStops] = useState<RegularShuttleStop[]>(initialStops);
   const [importedAt, setImportedAt] = useState<string | null>(initialImportedAt);
@@ -98,6 +100,16 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
   const [active, setActive] = useState<number>(weekdays[0]?.weekday ?? 1);
   const activeWd = weekdays.some((w) => w.weekday === active) ? active : (weekdays[0]?.weekday ?? 1);
   const dayStops = useMemo(() => stops.filter((s) => s.weekday === activeWd).sort((a, b) => a.sortOrder - b.sortOrder), [stops, activeWd]);
+
+  const [mode, setMode] = useState<"dispatch" | "list">("dispatch"); // 배차·지도 / 운행 목록
+  // 이 요일의 수업시간 목록(학생이 있는 BOARD/ALIGHT 기준). 배차 단위 = 요일 × 수업 × 방향.
+  const classTimes = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of dayStops) if (s.classTime && s.studentName && (s.direction === "BOARD" || s.direction === "ALIGHT")) set.add(s.classTime);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [dayStops]);
+  const [activeClass, setActiveClass] = useState<string>("");
+  const curClass = classTimes.includes(activeClass) ? activeClass : (classTimes[0] ?? "");
 
   async function importSheet() {
     if (busy) return;
@@ -164,30 +176,34 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
           </div>
         </div>
 
-        {/* 시트 가져오기 */}
-        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
-          <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[11px] font-bold text-gray-500">구글 시트 URL
-            <input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-          </label>
-          <button onClick={importSheet} disabled={busy} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? "가져오는 중…" : "⬇ 시트에서 가져오기"}</button>
-        </div>
-        {/* 좌표 채우기 */}
-        {stops.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-black text-gray-700 dark:text-gray-200">📍 정류장 좌표</p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                {geoBusy && geoProgress
-                  ? `찾는 중… ${geoProgress.done}/${geoProgress.total}`
-                  : `${totalNames - missingNames.length}/${totalNames}곳 좌표 있음${missingNames.length > 0 ? ` · ${missingNames.length}곳 남음` : " · 완료"}`}
-              </p>
+        {/* 시트 가져오기·좌표 채우기 — 최초 1회만 쓰는 준비 작업이라 접어 둔다. */}
+        <details className="mt-3 rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40" open={stops.length === 0}>
+          <summary className="cursor-pointer select-none px-3 py-2 text-[12px] font-black text-gray-600 dark:text-gray-300">⚙️ 시트 가져오기 · 좌표 채우기 (최초 1회)</summary>
+          <div className="border-t border-gray-200 p-3 dark:border-gray-700">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[11px] font-bold text-gray-500">구글 시트 URL
+                <input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+              </label>
+              <button onClick={importSheet} disabled={busy} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? "가져오는 중…" : "⬇ 시트에서 가져오기"}</button>
             </div>
-            <button onClick={runGeocode} disabled={geoBusy || missingNames.length === 0}
-              className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40 dark:bg-white dark:text-brand-navy-900">
-              {geoBusy ? "채우는 중…" : missingNames.length === 0 ? "✓ 좌표 완료" : `📍 좌표 자동 채우기 (${missingNames.length})`}
-            </button>
+            {stops.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] font-black text-gray-700 dark:text-gray-200">📍 정류장 좌표</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    {geoBusy && geoProgress
+                      ? `찾는 중… ${geoProgress.done}/${geoProgress.total}`
+                      : `${totalNames - missingNames.length}/${totalNames}곳 좌표 있음${missingNames.length > 0 ? ` · ${missingNames.length}곳 남음` : " · 완료"}`}
+                  </p>
+                </div>
+                <button onClick={runGeocode} disabled={geoBusy || missingNames.length === 0}
+                  className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40 dark:bg-white dark:text-brand-navy-900">
+                  {geoBusy ? "채우는 중…" : missingNames.length === 0 ? "✓ 좌표 완료" : `📍 좌표 자동 채우기 (${missingNames.length})`}
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </details>
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
         {msg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {msg}</p>}
 
@@ -205,6 +221,41 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
               ))}
             </div>
 
+            {/* 보기 전환: 배차·지도 / 운행 목록 */}
+            <div className="mt-3 flex items-center gap-1">
+              {([["dispatch", "🗺 배차·지도"], ["list", "📋 운행 목록"]] as const).map(([m, label]) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={`rounded-lg px-3 py-1.5 text-[12px] font-black ${mode === m ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {mode === "dispatch" ? (
+              <div className="mt-3">
+                {classTimes.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">이 요일에 수업 정차가 없습니다.</div>
+                ) : (
+                  <>
+                    {/* 수업시간 탭 */}
+                    <div className="flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
+                      {classTimes.map((ct) => (
+                        <button key={ct} onClick={() => setActiveClass(ct)}
+                          className={`min-h-8 rounded-lg px-3 text-[12.5px] font-black ${curClass === ct ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                          {ct}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="BOARD" geo={geo} />
+                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="ALIGHT" geo={geo} />
+                    </div>
+                  </>
+                )}
+                <p className="mt-3 text-[11px] text-gray-400">※ 지금은 시트 순서·시각 그대로 보여줍니다. 순서 드래그 변경·저장·기사님 링크·탑승 체크는 다음 단계입니다.</p>
+              </div>
+            ) : (
+            <>
             <p className="mt-3 text-[12.5px] font-black text-gray-700 dark:text-gray-200">📅 {["일", "월", "화", "수", "목", "금", "토"][activeWd]}요일 · {dayStops.length}개 정차</p>
 
             <ol className="mt-2 space-y-1.5">
@@ -235,9 +286,10 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                 );
               })}
             </ol>
+            </>
+            )}
           </>
         )}
-        <p className="mt-3 text-[11px] text-gray-400">※ 순서: ① 시트에서 가져오기 → ② 좌표 자동 채우기(⚠︎ 남은 곳은 이름을 시트에서 더 정확히 수정 후 다시 실행). 지도·기사님 링크·탑승 체크는 다음 단계에서 붙입니다.</p>
       </div>
     </div>
   );

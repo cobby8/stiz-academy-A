@@ -374,9 +374,9 @@ export default function ShuttleRosterClient({
           <input defaultValue={r.pickupLocation ?? ""} key={`p-${r.requestId}-${r.pickupLocation ?? ""}`}
             onBlur={(e) => { if (e.target.value !== (r.pickupLocation ?? "")) save(r, { pickupLocation: e.target.value }, { pickupLocation: e.target.value }); }}
             placeholder={r.ride ? "예: 다산이편한세상자이 정문" : "미탑승"} className={cell} />
-          <button type="button" disabled={confirmed} onClick={() => setPinEdit({ requestId: r.requestId, kind: "pickup" })}
-            title={confirmed ? "확정된 명단에서는 지도 핀을 바꿀 수 없습니다" : "지도에서 핀 찍기"}
-            className={`${pinBtn(r.pickupPinned)} ${confirmed ? "opacity-40" : ""}`}>📍</button>
+          <button type="button" onClick={() => setPinEdit({ requestId: r.requestId, kind: "pickup" })}
+            title="지도에서 핀 찍기"
+            className={pinBtn(r.pickupPinned)}>📍</button>
           <span title={r.pickupPinned ? "정밀 핀" : r.pickupApprox ? "자동추정(재확인)" : "미지정"} className={dot(r.pickupPinned, r.pickupApprox)} />
         </div>
       </td>
@@ -392,9 +392,9 @@ export default function ShuttleRosterClient({
             <input defaultValue={r.dropoffLocation ?? ""} key={`d-${r.requestId}-${r.dropoffLocation ?? ""}`}
               onBlur={(e) => { if (e.target.value !== (r.dropoffLocation ?? "")) save(r, { dropoffLocation: e.target.value }, { dropoffLocation: e.target.value }); }}
               placeholder="예: 힐스테이트다산 정문" className={cell} />
-            <button type="button" disabled={confirmed} onClick={() => setPinEdit({ requestId: r.requestId, kind: "dropoff" })}
-              title={confirmed ? "확정된 명단에서는 지도 핀을 바꿀 수 없습니다" : "지도에서 핀 찍기"}
-              className={`${pinBtn(r.dropoffPinned)} ${confirmed ? "opacity-40" : ""}`}>📍</button>
+            <button type="button" onClick={() => setPinEdit({ requestId: r.requestId, kind: "dropoff" })}
+              title="지도에서 핀 찍기"
+              className={pinBtn(r.dropoffPinned)}>📍</button>
             <span title={r.dropoffPinned ? "정밀 핀" : r.dropoffApprox ? "자동추정(재확인)" : "미지정"} className={dot(r.dropoffPinned, r.dropoffApprox)} />
           </div>
         )}
@@ -526,7 +526,7 @@ export default function ShuttleRosterClient({
         </div>
         <p className="mt-2 text-[11px] text-gray-400">● 초록=정밀 핀 · ● 노랑=자동추정(재확인 권장) · 📍 지도 핀 찍기 · 학생 이름을 누르면 상세 정보가 열립니다.</p>
         {confirmed && (
-          <p className="mt-1 text-[11px] text-gray-400">확정 후에는 위치 이름·하차 설정만 이 표에서 고칠 수 있고, 지도 핀(좌표)은 잠깁니다.</p>
+          <p className="mt-1 text-[11px] text-gray-400">확정 후 이 표에서 고친 값(위치 이름·지도 핀·하차 설정)은 확정 명단에만 저장되고, 학부모가 낸 원본 신청서는 그대로 유지됩니다.</p>
         )}
       </div>
 

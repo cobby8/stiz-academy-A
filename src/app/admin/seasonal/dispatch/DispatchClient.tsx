@@ -68,9 +68,10 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
 
         {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
 
-        <div className="mt-3 text-[12.5px] font-bold text-gray-500">
-          {sug.date ?? "-"}{sug.dow ? ` (${sug.dow})` : ""} · {isPickup ? "등원" : "하원"} · {sug.classStart ?? "-"}{sug.classEnd ? `~${sug.classEnd}` : ""} 수업 · 탑승 {sug.totalRiders}명
-          {fleet && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-gray-700 dark:text-gray-200">🚐 {fleet.name}{fleet.plate ? ` (${fleet.plate})` : ""} · {fleet.capacity}인승</span>}
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] font-bold text-gray-500">
+          <span>{sug.date ?? "-"}{sug.dow ? ` (${sug.dow})` : ""} · {isPickup ? "등원" : "하원"} · {sug.classStart ?? "-"}{sug.classEnd ? `~${sug.classEnd}` : ""} 수업 · 탑승 {sug.totalRiders}명</span>
+          {fleet && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-gray-700 dark:text-gray-200">🚐 {fleet.name}{fleet.plate ? ` (${fleet.plate})` : ""} · {fleet.capacity}인승</span>}
+          <span className={`rounded-full px-2 py-0.5 text-[11px] ${sug.routingProvider === "TMAP" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200" : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"}`}>{sug.routingProvider === "TMAP" ? "T맵 최적경로" : "직선 추정"}</span>
         </div>
 
         {sug.vehicles.length === 0 && <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">이 날짜에 배차할 등원 셔틀 학생이 없습니다.</div>}
@@ -82,7 +83,19 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                 <span className="font-black">🚐 {v.vehicleName}{v.tripLabel ? ` · ${v.tripLabel}` : ""} · {isPickup ? "등원" : "하원"}</span>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${v.over ? "bg-red-500" : "bg-white/15"}`}>{v.passengers} / {v.capacity}명</span>
               </div>
+              <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-[11px] font-bold dark:border-gray-700 dark:bg-gray-900/50">
+                {v.provider === "TMAP"
+                  ? <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">T맵 최적경로</span>
+                  : <span className="rounded bg-gray-200 px-1.5 py-0.5 text-gray-600 dark:bg-gray-700 dark:text-gray-300">직선 추정</span>}
+                {v.tmapMinutes != null && <span className="text-gray-500">약 {v.tmapMinutes}분{v.tmapKm != null ? ` · ${v.tmapKm}km` : ""}</span>}
+              </div>
               <ol className="divide-y divide-gray-100 dark:divide-gray-700">
+                {/* 시작 노드: 등원=차고지 출발 / 하원=학원 출발 */}
+                <li className="flex items-center gap-2.5 bg-gray-50/60 px-3 py-2 dark:bg-gray-900/40">
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-gray-600 text-[11px] text-white">{isPickup ? "🚏" : "🏫"}</span>
+                  <span className="text-[12px] font-bold text-gray-600 dark:text-gray-300">{isPickup ? (sug.depot ? `${sug.depot.name.replace(/^차고지 · /, "차고지 ")} 출발` : "출발") : `${sug.academy.name} 출발`}</span>
+                  {isPickup && v.depotTime && <span className="ml-auto text-[11.5px] font-black text-gray-500">{v.depotTime} 출발</span>}
+                </li>
                 {v.stops.map((s, sIdx) => (
                   <li key={sIdx} className="flex items-start gap-2.5 px-3 py-2.5">
                     <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-orange-500 text-[11px] font-black text-white">{sIdx + 1}</span>
@@ -105,9 +118,11 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                     </div>
                   </li>
                 ))}
+                {/* 종료 노드: 등원=학원 도착 / 하원=차고지 복귀 */}
                 <li className="flex items-center gap-2.5 bg-gray-50 px-3 py-2.5 dark:bg-gray-900">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-navy-900 text-[11px] text-white">🏫</span>
-                  <span className="text-[12.5px] font-bold text-gray-700 dark:text-gray-200">{isPickup ? `${sug.academy.name} 도착` : `${sug.academy.name} 출발`}</span>
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-navy-900 text-[11px] text-white">{isPickup ? "🏫" : "🚏"}</span>
+                  <span className="text-[12.5px] font-bold text-gray-700 dark:text-gray-200">{isPickup ? `${sug.academy.name} 도착` : (sug.depot ? `${sug.depot.name.replace(/^차고지 · /, "차고지 ")} 복귀` : "복귀")}</span>
+                  {!isPickup && v.depotTime && <span className="ml-auto text-[11.5px] font-black text-gray-500">{v.depotTime} 복귀</span>}
                 </li>
               </ol>
             </div>
@@ -122,7 +137,10 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
           </div>
         )}
 
-        <p className="mt-3 text-[11px] text-gray-400">※ 예상 시각은 직선거리 기반 근사치입니다(실제 도로 소요시간 연동은 후속). 정차 순서는 위/아래로 조정 가능합니다.</p>
+        <p className="mt-3 text-[11px] text-gray-400">
+          ※ {sug.routingProvider === "TMAP" ? "T맵 실도로 최적경로 기준입니다." : "T맵 연결이 없어 직선거리 근사로 계산했습니다(운영 환경변수 TMAP_APP_KEY 설정 시 실도로 최적경로 사용)."} 정차 순서는 위/아래로 조정 가능합니다.
+          {sug.depot ? ` · 차고지: ${sug.depot.name.replace(/^차고지 · /, "")}` : ""}
+        </p>
       </div>
     </div>
   );

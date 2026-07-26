@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import DispatchRouteMap from "@/components/seasonal/DispatchRouteMap";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
@@ -45,6 +45,15 @@ function haversineKm(a: Pt, b: Pt): number {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 function segMin(a: Pt, b: Pt): number { return haversineKm(a, b) * MIN_PER_KM + STOP_DWELL_MIN; }
+
+// 저장 시각 표기(학원 시간대, MM/DD HH:MM).
+function fmtSaved(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d);
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? "";
+  return `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`;
+}
 
 type Run = DispatchSuggestion["vehicles"][number];
 // 한 차량의 현재 정차 순서로 승·하차 시각(등원=학원 도착, 하원=학원 출발 기준)을 다시 계산한다.
@@ -102,6 +111,11 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
   const [departPinned, setDepartPinned] = useState<Record<number, boolean>>({});
   // 지도로 보고 있는 차량 index(모달).
   const [mapVehicle, setMapVehicle] = useState<number | null>(null);
+  // 저장(수정 노선 DB 저장) 상태
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [loadedFromSaved, setLoadedFromSaved] = useState(false);
 
   async function saveGeo(kind: GeoKind, loc: MapLocationData) {
     setSavingGeo(true); setErr(null);
@@ -137,6 +151,49 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
+
+  // 그 날짜·방향에 저장된 노선이 있으면 불러와 화면에 적용한다. 있으면 true.
+  async function loadAndApplySaved(d: string, dir: "PICKUP" | "DROPOFF"): Promise<boolean> {
+    try {
+      const r = await fetch(`/api/admin/seasonal/dispatch/saved?date=${encodeURIComponent(d)}&direction=${dir}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !j?.saved) return false;
+      const saved = j.saved as { vehicles: DispatchSuggestion["vehicles"]; classStart: string | null; classEnd: string | null; savedAt: string | null };
+      setSug((cur) => ({ ...cur, direction: dir, date: d, vehicles: saved.vehicles, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd }));
+      setSavedAt(saved.savedAt); setLoadedFromSaved(true); setDepartPinned({}); setErr(null); setSaveMsg(null);
+      return true;
+    } catch { return false; }
+  }
+
+  // 날짜/방향을 바꿀 때: 저장된 노선이 있으면 그걸, 없으면 자동 제안을 새로 계산한다.
+  async function switchTo(next: { date?: string; direction?: "PICKUP" | "DROPOFF" }) {
+    const d = next.date ?? date;
+    const dir = next.direction ?? direction;
+    const applied = d ? await loadAndApplySaved(d, dir) : false;
+    if (!applied) { setLoadedFromSaved(false); setSaveMsg(null); await generate(next); }
+  }
+
+  // 화면에 보이는(조정된) 노선을 DB에 저장한다.
+  async function saveRoute() {
+    if (saving || !sug.date) return;
+    setSaving(true); setSaveMsg(null); setErr(null);
+    try {
+      const r = await fetch("/api/admin/seasonal/dispatch/saved", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles, classStart: sug.classStart, classEnd: sug.classEnd }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "저장 실패");
+      setSavedAt(j.savedAt ?? null); setLoadedFromSaved(true); setSaveMsg("저장했습니다");
+    } catch (e: any) { setErr(e?.message || "노선을 저장하지 못했습니다."); }
+    finally { setSaving(false); }
+  }
+
+  // 첫 진입 시 저장된 노선이 있으면 자동 제안 대신 그걸 보여준다.
+  useEffect(() => {
+    if (initial.date) loadAndApplySaved(initial.date, initial.direction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function moveStop(vIdx: number, sIdx: number, dir: -1 | 1) {
     reorderStop(vIdx, sIdx, sIdx + dir);
@@ -236,21 +293,24 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
 
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">날짜
-            <select value={date} onChange={(e) => { setDate(e.target.value); generate({ date: e.target.value }); }} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            <select value={date} onChange={(e) => { setDate(e.target.value); switchTo({ date: e.target.value }); }} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900 dark:text-white">
               {sug.availableDates.length === 0 && <option value="">-</option>}
               {sug.availableDates.map((d) => <option key={d.date} value={d.date}>{d.label}</option>)}
             </select>
           </label>
           <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">방향
-            <select value={direction} onChange={(e) => { const d = e.target.value as any; setDirection(d); generate({ direction: d }); }} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            <select value={direction} onChange={(e) => { const d = e.target.value as "PICKUP" | "DROPOFF"; setDirection(d); switchTo({ direction: d }); }} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900 dark:text-white">
               <option value="PICKUP">등원 (PICKUP)</option><option value="DROPOFF">하원 (DROPOFF)</option>
             </select>
           </label>
-          <button onClick={() => generate()} disabled={loading} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{loading ? "계산 중…" : "⚡ 자동 제안"}</button>
+          <button onClick={() => { setLoadedFromSaved(false); setSaveMsg(null); generate(); }} disabled={loading} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{loading ? "계산 중…" : "⚡ 자동 제안"}</button>
+          <button onClick={saveRoute} disabled={saving || sug.vehicles.length === 0} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{saving ? "저장 중…" : "💾 이 노선 저장"}</button>
           <button onClick={() => window.print()} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 dark:border-gray-600 dark:text-gray-200">🖨 인쇄</button>
         </div>
 
         {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
+        {loadedFromSaved && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">💾 저장된 노선을 불러왔습니다{savedAt ? ` · ${fmtSaved(savedAt)} 저장` : ""}. 「⚡ 자동 제안」을 누르면 자동배차로 새로 계산합니다.</p>}
+        {saveMsg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {saveMsg}</p>}
 
         <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] font-bold text-gray-500">
           <span>{sug.date ?? "-"}{sug.dow ? ` (${sug.dow})` : ""} · {isPickup ? "등원" : "하원"} · {sug.classStart ?? "-"}{sug.classEnd ? `~${sug.classEnd}` : ""} 수업 · 탑승 {sug.totalRiders}명</span>

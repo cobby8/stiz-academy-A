@@ -2160,3 +2160,19 @@ model SpecialProgramMakeup {
   @@index([studentId])
   @@index([status, requestedAt])
 }
+
+// 저장된 배차 노선 — 원장이 자동 제안을 손으로 조정한 뒤 저장한 결과(날짜×방향 1행).
+// 상세 근거는 prisma/migrations/20260726160000_add_seasonal_dispatch_route/migration.sql 참고.
+model SeasonalDispatchRoute {
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  serviceDate   String // 'YYYY-MM-DD'
+  direction     String // 'PICKUP' | 'DROPOFF'
+  payload       Json // 조정된 vehicles 스냅샷
+  classStart    String?
+  classEnd      String?
+  savedByUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@unique([serviceDate, direction])
+}

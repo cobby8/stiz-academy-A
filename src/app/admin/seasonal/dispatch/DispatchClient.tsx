@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
-import DispatchRouteMap from "@/components/seasonal/DispatchRouteMap";
+import { RouteMapCanvas } from "@/components/seasonal/DispatchRouteMap";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
 
 // 방학특강 셔틀 노선 자동 제안 화면.
@@ -109,8 +109,10 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
   const [savingGeo, setSavingGeo] = useState(false);
   // 사람이 출발 시각을 직접 맞춘 차량 index. 이 차량은 순서를 바꿔도 출발 시각을 유지한다.
   const [departPinned, setDepartPinned] = useState<Record<number, boolean>>({});
-  // 지도로 보고 있는 차량 index(모달).
-  const [mapVehicle, setMapVehicle] = useState<number | null>(null);
+  // 우측 지도 패널에서 보고 있는 차량 index.
+  const [mapVehicle, setMapVehicle] = useState<number>(0);
+  // 순서를 손으로 바꾼 차량 — 지도에 T맵 실도로 선 대신 현재 순서 직선을 그린다.
+  const [reordered, setReordered] = useState<Record<number, boolean>>({});
   // 저장(수정 노선 DB 저장) 상태
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -147,7 +149,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "실패");
       setSug(j);
-      setDepartPinned({}); // 새로 제안하면 출발 고정도 초기화
+      setDepartPinned({}); setReordered({}); // 새로 제안하면 출발 고정·순서변경 표시 초기화
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
@@ -207,6 +209,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
       if (from < 0 || from >= stops.length || to < 0 || to >= stops.length || from === to) return cur;
       const [moved] = stops.splice(from, 1);
       stops.splice(to, 0, moved);
+      setReordered((r) => ({ ...r, [vIdx]: true })); // 지도 선을 현재 순서 기준으로
       // ★ 순서가 바뀌었으니 그 차량의 승·하차 시각을 다시 계산한다(예전엔 최초 시각이 그대로 남았다).
       // 사람이 출발 시각을 맞춰 둔 차량이면 그 출발을 고정해 유지한다(초기화 방지).
       const pinnedDepart = departPinned[vIdx] ? vehicles[vIdx].departTime : null;
@@ -266,6 +269,9 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
 
   const isPickup = sug.direction === "PICKUP";
   const fleet = sug.vehicleFleet?.[0];
+  const activeMapIdx = sug.vehicles.length ? Math.min(Math.max(mapVehicle, 0), sug.vehicles.length - 1) : 0;
+  const mapStartPt = isPickup ? (sug.depot ?? sug.academy) : sug.academy;
+  const mapEndPt = isPickup ? sug.academy : (sug.depot ?? sug.academy);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4">
@@ -320,7 +326,8 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
 
         {sug.vehicles.length === 0 && <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">이 날짜에 배차할 등원 셔틀 학생이 없습니다.</div>}
 
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 lg:flex lg:items-start lg:gap-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:min-w-0 lg:flex-1 lg:grid-cols-1 2xl:grid-cols-2">
           {sug.vehicles.map((v, vIdx) => (
             <div key={vIdx} className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between bg-brand-navy-900 px-4 py-2.5 text-white">
@@ -421,6 +428,30 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
               </ol>
             </div>
           ))}
+          </div>
+
+          {/* 우측 고정 지도 패널 — 순서를 바꾸면 실시간으로 다시 그린다. */}
+          {sug.vehicles.length > 0 && (
+            <aside className="mt-3 lg:mt-0 lg:sticky lg:top-4 lg:w-[400px] lg:shrink-0 print:hidden">
+              <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between gap-2 bg-brand-navy-900 px-3 py-2 text-white">
+                  <span className="text-xs font-black">🗺 노선 지도 · 실시간</span>
+                  {sug.vehicles.length > 1 && (
+                    <select value={activeMapIdx} onChange={(e) => setMapVehicle(Number(e.target.value))} className="rounded bg-white/15 px-2 py-1 text-[11px] font-bold text-white">
+                      {sug.vehicles.map((v, i) => <option key={i} value={i} className="text-black">{v.vehicleName}{v.tripLabel ? ` ${v.tripLabel}` : ""}</option>)}
+                    </select>
+                  )}
+                </div>
+                <RouteMapCanvas
+                  start={{ lat: mapStartPt.lat, lng: mapStartPt.lng, label: isPickup ? "차고지" : "학원" }}
+                  end={{ lat: mapEndPt.lat, lng: mapEndPt.lng, label: isPickup ? "학원" : "차고지" }}
+                  stops={sug.vehicles[activeMapIdx].stops.map((s, i) => ({ lat: s.lat, lng: s.lng, label: s.label, badge: s.isHub ? "무료" : String(i + 1), kind: s.isHub ? "hub" : "stop" }))}
+                  path={(!reordered[activeMapIdx] && !loadedFromSaved) ? sug.vehicles[activeMapIdx].path : undefined}
+                  heightClass="h-[52vh] lg:h-[62vh]"
+                />
+              </div>
+            </aside>
+          )}
         </div>
 
         {sug.unassigned.length > 0 && (
@@ -437,22 +468,6 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
           {sug.hub ? ` · 🆓 ${sug.hub.name} 무료 탑승 거점을 항상 경유합니다` : ""}
         </p>
       </div>
-
-      {mapVehicle != null && sug.vehicles[mapVehicle] && (() => {
-        const v = sug.vehicles[mapVehicle];
-        const startPt = isPickup ? (sug.depot ?? sug.academy) : sug.academy;
-        const endPt = isPickup ? sug.academy : (sug.depot ?? sug.academy);
-        return (
-          <DispatchRouteMap
-            title={`${v.vehicleName}${v.tripLabel ? ` · ${v.tripLabel}` : ""} · ${isPickup ? "등원" : "하원"}`}
-            start={{ lat: startPt.lat, lng: startPt.lng, label: isPickup ? "차고지" : "학원" }}
-            end={{ lat: endPt.lat, lng: endPt.lng, label: isPickup ? "학원" : "차고지" }}
-            stops={v.stops.map((s, i) => ({ lat: s.lat, lng: s.lng, label: s.label, badge: s.isHub ? "무료" : String(i + 1), kind: s.isHub ? "hub" : "stop" }))}
-            path={v.path}
-            onClose={() => setMapVehicle(null)}
-          />
-        );
-      })()}
 
       {editKind && (
         <LocationPickerModal

@@ -1,11 +1,11 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청(A)**: 방학특강 셔틀 4단계 — 확정 후 변동(신규 신청·시즌 스코프·결석) 반영
-- **요청(B, origin)**: 셔틀 배차/명단 개선 묶음 — 건물명 표시·무료탑승 드래그·T맵 활성화·순서 재계산·출발 고정·건물명 일괄변환·노선 지도·노선 DB 저장
-- **상태**: (A) 4a-1(결석→그날 배차 자동 제외) 구현·검증·커밋 완료, 4a-2~4d 대기 / (B) 전부 구현·배포 완료, SeasonalDispatchRoute 테이블 운영 DB 생성(원장 승인), 브라우저 수동 검증 대기. 두 갈래 머지 진행 중(placeName 단일화)
+- **상태(2026-07-27 마무리)**: 아래 다수 기능 구현·검증(tsc EXIT=0)·배포 완료. **미푸시 0.** 병렬 세션과 계속 머지하며 진행.
+- 오늘 배포: ①수강생 상세(/admin/students/[id]) 전문 재설계 + 인라인 편집(정보·결제·반·셔틀좌표) ②셔틀 위치 장소명(placeName) 전역 통일 ③저장 배차노선 reconcile-on-read(제거 자동/추가·위치변경 배너/증분삽입 재배차/라벨 자가갱신) ④정차 확정시간(실 T맵 구간시간 + 관리자 편집·보존 + 기사/학부모 노출) ⑤방학특강 선생님 화면을 정규 '수업 시작→흐름 저장→출결' 통합 흐름으로 개편(로스터 전원화·출결 좌석저장·수업시작 취소·UI) ⑥수업시작 void 핫픽스 ⑦관리자→선생님 화면 진입점
+- **미완/이월**: 방학특강 셔틀 4단계 4a-2(학부모 사전 결석 신고)·4b(시즌 격리)·4c(추가 확정)·4d(변동 배지). 미전환 신청자 학부모 알림(선생님 출결 시). 카카오맵 키는 localhost만 미등록(프로덕션 정상).
 - **현재 담당**: pm
-- **마지막 세션**: 2026-07-26
+- **마지막 세션**: 2026-07-27
 
 ## 4단계 실행 계획 (사용자 결정 반영)
 - 사용자 결정: ①결석=기존 출결(ABSENT/EXCUSED)에 셔틀 자동연동 ②입력=관리자+학부모 마이페이지 둘 다 ③신규 신청=원장 '추가 확정' 버튼(수동)
@@ -35,12 +35,182 @@
 | 배차 노선 지도(T맵 실도로 경로) | 완료·배포 |
 | 배차 노선 수정본 DB 저장/불러오기 | 완료·배포(테이블 생성) |
 | 순서 변경 시 T맵 실도로 재계산(고정순서 /routes 청킹) | 완료·배포 |
+| 증분 재배차 cheapest-insertion(Phase 2b, 순서보존) | 완료·검증(tsc EXIT=0, 유닛 13/13) |
 | 기사님 운행 화면(전용 링크·탑승 체크) | 완료·배포(테이블 2개) |
 | 셔틀 확정 명단 4~5단계(변동 감지·재발 방지 가드) | 대기 |
 | 정규반 형제할인 자동화 | 대기(시트 수동 10% 이중적용 위험 확인 필요) |
 | 미푸시 커밋 | 1개 (b04fdf8) |
 
 ## 구현 기록 (developer)
+
+### 구현 기록 — 방학특강 통합 진행화면 로스터·출결 좌석 기준 전원화 (A) (2026-07-27)
+📝 방학특강 통합 수업진행 화면이 전환(Student 변환) 여부와 무관하게 **APPROVED 신청항목 전원(=좌석)**을 로스터·출결하도록 변경. 기존엔 `convertedStudentId IS NOT NULL`로 걸러 미전환자가 명단에서 빠졌음. 이제 출결 정본 = 좌석(SpecialProgramEnrollmentDate.attendanceStatus), 전환된 학생만 정규 Attendance 병행.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/staff-session-queries.ts | StaffSessionStudent 타입에 attendanceKey/studentId/grade/phone 추가. seasonal 로스터 쿼리를 좌석(SpecialProgramEnrollmentDate, SCHEDULED) 조인으로 교체 — convertedStudentId·conversionStatus·요일CASE 필터 제거(좌석 존재=요일매칭 인코딩). name=childName 폴백, key=enrollmentDateId. 정규 분기는 attendanceKey=studentId 매핑만 추가(동작 무변경) | 수정 |
+| src/app/actions/staff-sessions.ts | saveStaffAttendance 입력 studentId→attendanceKey. seasonal이면 saveSeasonalSeatAttendance(신규)로 분기: 좌석을 세션 스코프 내 검증하며 UPDATE→전환자(studentId)면 Attendance+알림 병행, 미전환은 좌석만. 기존 mirrorSeasonalSeatAttendance 제거. completeClassSession seasonal 미확인 카운트를 좌석(attendanceStatus IS NULL AND status='SCHEDULED') 기준으로 재작성 | 수정 |
+| src/app/staff/sessions/[sessionId]/SessionInProgressClient.tsx | 출결 버튼(updateAttendance·markAllPresent)이 student.attendanceKey로 saveStaffAttendance 호출. 사진 태깅은 studentId 있는 행만(미전환 제외) | 수정 |
+
+💡 tester 참고:
+- 방학특강 반: [수업 시작]→진행화면 출석부에 **미전환 신청자 포함 전원**이 뜨는지(예전엔 거의 빔). 형제 반/court는 좌석별 행으로 합산.
+- 출석/지각/결석 → 좌석 attendanceStatus 저장(관리자 배지·셔틀 결석제외가 읽는 컬럼). 전환된 학생은 정규 Attendance에도 기록+학부모 알림.
+- 전원 출결 확인해야 [수업 종료] 가능(좌석 기준 미확인 카운트).
+- 정규(비seasonal) 로스터·출결·종료·학부모 알림 **동작 무변경**. tsc EXIT=0. 순수함수 없음(전부 SQL)→유닛 없음.
+
+⚠️ reviewer 참고:
+- 셔틀 shuttleRoster.ts 무변경. attendanceStatus는 기존과 동일 (applicationItem+sessionDate) 좌석 키·값으로만 기록 → 셔틀 결석제외 그대로 동작.
+- 스키마 변경 없음. $queryRawUnsafe/$executeRawUnsafe.
+- 오매칭 방지: 좌석 UPDATE가 세션의 sibling 스코프+APPROVED item+좌석ID로 검증(스코프 밖 enrollmentDateId 위조 시 0행→'명단에 없는 좌석'). 좌석=고유키라 형제 반/동명이인 오매칭 없음.
+- 잔존: isSessionRosterStudent의 seasonal 분기는 이제 미호출(정규만 사용). 기능 영향 없어 제거하지 않음.
+
+### 구현 기록 — 배차 정차 라벨 reconcile-on-read 갱신 (2026-07-27)
+📝 명단의 승·하차 위치 텍스트(placeLabel)를 고치면 저장 배차 노선의 얼어붙은 라벨도 읽을 때 현재 명단 라벨로 자동 갱신(재배차·좌표변경 없이 텍스트만·자가치유).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/dispatchReconcile.ts | `reconcileSavedVehicles`에 옵셔널 `labelByRequestId` 추가 → 살아남은 학생 pickupLabel + 비허브 정차 label만 갱신(허브 라벨·좌표·시각·순서 불변) | 수정 |
+| src/lib/seasonal/dispatchRoute.ts | `getSavedDispatchRoute`에서 riders로 requestId→placeLabel 맵 만들어 reconcile에 전달 | 수정 |
+| tests/seasonal-dispatch-reconcile.test.mjs | 라벨 갱신 5케이스 추가(학생/비허브/허브불변/좌표시각불변/맵없음 하위호환) | 수정 |
+
+💡 tester 참고: `node --test tests/seasonal-dispatch-reconcile.test.mjs` 11/11 통과, `tsc --noEmit` EXIT=0. 명단 라벨 수정→배차/기사님 화면 라벨 반영, 허브(무료탑승) 정차명은 고정, 재배차 배너(locationChanged)는 좌표변경 시에만 별개로 동작.
+
+### 구현 기록 — 특강 명단 버그 #2·#3 수정 (2026-07-27)
+📝 (#3) `getTodayStaffClasses` seasonal 쿼리가 CANCELLED offering을 안 걸러 취소반이 학생0명으로 노출되던 것 수정 + (#2) `/staff/seasonal`이 offering별로 주n회 쪼개지던 것을 홈과 동일한 반 단위 소스로 교체.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/staff-session-queries.ts | #3: 메인 WHERE `o.status<>'CANCELLED'` + access_o EXISTS `access_o.status<>'CANCELLED'`. #2대비: `getTodayStaffClasses(dateKey=오늘)` 날짜 파라미터 추가(기본값 오늘→홈 무영향) | 수정 |
+| src/app/staff/seasonal/page.tsx | 데이터소스를 getTodayStaffClasses(SEASONAL 필터)로 교체 | 수정 |
+| src/app/staff/seasonal/StaffSeasonalClient.tsx | 타입 StaffTodayClass로 교체, 필드 매핑(name·studentCount·id·scheduleKey) | 수정 |
+| src/app/api/staff/seasonal/route.ts | GET `?date=` 분기를 getTodayStaffClasses로 교체(sessionDateId/ POST 분기 유지) | 수정 |
+
+💡 tester 참고:
+- #3: CANCELLED offering(중등부·초등저학년)이 홈/특강 화면 목록에서 사라지는지. 같은 반에 OPEN offering 하나라도 있으면 유지, 전부 취소면 제거.
+- #2: 초등 고학년 주5/3/2회가 카드 1장으로 합쳐지는지(반+시간 그룹). 날짜 네비 이동 시 API도 동일.
+- 홈(`/staff`)·정규수업·startClassSession 무변경. tsc EXIT=0.
+- getSeasonalDatesForStaff는 소비처 제거됐지만 함수 자체는 attendance.ts에 잔존(제거 안 함).
+
+### 구현 기록 — 방학특강 선생님 화면 '수업 시작' 흐름 리디자인(S2) (2026-07-27)
+📝 `/staff/seasonal`을 레거시(날짜별 반 목록 + 인라인 출석 3버튼)에서 정규 수업과 동일한 **[수업 시작]→통합 진행화면** 흐름으로 개편. 출결·메모·사진·종료는 이제 `sessions/[sessionId]`에서 처리. 새 서버액션 없이 정규 `startClassSession` 재사용(seasonal 분기 내장).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/attendance.ts | `getSeasonalDatesForStaff` 쿼리에 `Session` LEFT JOIN(s."specialProgramSessionDateId"=sd.id) 추가 → 각 회차에 linkedClassId·sessionId·sessionStatus 반환. GROUP BY 확장 | 수정 |
+| src/app/staff/seasonal/page.tsx | initial dates 타입에 linkedClassId/sessionId/sessionStatus 추가 | 수정 |
+| src/app/staff/seasonal/StaffSeasonalClient.tsx | 전면 재작성 — 날짜 네비 유지 + 특강 **카드 목록**. 상태별 버튼: PLANNED/null→[수업 시작](startClassSession→sessions/[id]?view=attendance, ACTIVE_SESSION 재라우팅), IN_PROGRESS→[수업 이어하기](sessionId 이동), COMPLETED→완료 배지+[기록 보기]. 레거시 인라인 출석 3버튼·상세뷰 제거. 빈 상태 유지 | 수정 |
+
+- 홈 startLesson 패턴 그대로(로딩·에러·ACTIVE_SESSION). linkedClassId 없는 회차는 시작 불가 안내(엣지). 옛 `/api/staff/seasonal` POST 출결·`?sessionDateId=` roster 경로는 이 화면에서 미사용(파일은 유지).
+
+💡 tester: 선생님 계정 `/staff/seasonal` → 날짜의 특강이 카드로. [수업 시작] 누르면 `sessions/[id]?view=attendance` 진입(정규와 동일). 다른 수업 진행 중이면 그 세션으로 이동. 진행 중 회차는 [수업 이어하기], 완료는 배지+[기록 보기]. S1 미러링으로 통합 화면 출결이 특강 좌석 컬럼에 반영됨. tsc EXIT=0.
+⚠️ reviewer: 새 서버액션 0(startClassSession 재사용). 쿼리는 컬럼 추가만(하위호환). 권한은 startClassSession/requireStaffSeasonalSessionAccess가 처리. 하드코딩 hex 0(brand-accent·의미색+dark). 정규/홈/진행화면 무변경.
+
+### 구현 기록 — 학부모 마이페이지 방학특강 확정 승·하차 시각 노출(T3) (2026-07-27)
+📝 학부모 마이페이지 "셔틀 안내"의 방학특강(SPECIAL_PROGRAM) 항목에 확정 승/하차 시각을 표시. 출처는 저장된 배차 노선 SeasonalDispatchRoute.payload의 각 정차 etaLabel(수동확정 etaManual 반영값). 매핑: 학생→roster(shuttleRequestId)→payload stops[].students[].requestId 매칭→그 stop 라벨. 방향별 대표 1건(updatedAt DESC 최신 저장분).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/dispatchEtaLookup.ts | 순수 로직 extractEtaByRequestId(payload.vehicles→requestId별 라벨). etaLabel 우선, 없으면 etaManual→etaMinutes로 라벨 재생성. 자기완결형(import 0) | 신규 |
+| src/lib/seasonal/dispatchRoute.ts | getConfirmedDispatchEtas(requestIds) — 저장 노선 전체(수십행) 훑어 방향별 대표 라벨. 읽기전용·인증없음(호출부가 자녀 필터). 테이블없음 try/catch | 수정 |
+| src/lib/shuttle/parent.ts | ParentShuttleOverviewItem에 pickupEtaLabel?/dropoffEtaLabel? 추가. seasonalEntries.shuttleRequestId로 eta 조회 후 specialItems 양쪽 분기에 부착 | 수정 |
+| src/app/mypage/MyPageClient.tsx | SPECIAL_PROGRAM이고 eta 있을 때 "확정 시각: 등원 08:53 승차 · 하원 …" 행 추가(showDetails 무관, 값 없으면 미표시) | 수정 |
+| tests/seasonal-dispatch-eta-lookup.test.mjs | 순수 로직 유닛 5개(라벨우선·수동/자동폴백·하차·잘못된입력·중복) | 신규 |
+
+💡 tester: 저장된 배차 노선(관리자 배차 저장)이 있는 방학특강 셔틀 학부모 계정 마이페이지 → "셔틀 안내" 카드에 "확정 시각" 행. 미배차/미저장이면 행 미표시(종전과 동일). `node --test tests/seasonal-dispatch-eta-lookup.test.mjs` 5/5, tsc EXIT=0.
+⚠️ reviewer: 필드 optional 추가만(하위호환·회귀없음). 정규반(ShuttleRoutePassenger) 로직 무변경. IDOR: parent.ts가 본인 자녀 shuttleRequestId만 넘김, 헬퍼는 인증X. 하드코딩 hex 0(기존 gray 토큰 재사용·dark 유지). 서버 읽기전용(DB 무변경).
+
+### 구현 기록 — 정차별 시각 관리자 개별 편집·확정(T2) (2026-07-27)
+📝 각 정차 시각을 관리자가 input(HH:MM)으로 직접 확정(etaManual). 확정값은 재계산(자동제안/증분/순서변경/출발shift)에도 유지되고, 개별 [↺ 다시 계산]으로 자동값 복귀. 서버는 자동값(etaMinutes)만 계산, 클라가 확정값을 키 매칭으로 오버레이.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/shuttleStopEta.ts | 순수 오버레이 로직 — confirmedEtaMin(수동 우선)·stopKey(requestId 집합 정렬, 승객 없으면 좌표 폴백)·etaMinToLabel·reapplyManualEta(V) | 신규 |
+| src/lib/seasonal/shuttle-optimize.ts | Stop 타입에 `etaManual?: number\|null` 추가(서버는 미설정, 클라 오버레이용) | 수정 |
+| src/components/seasonal/RouteSection.tsx | 정차 input[type=time] 편집 + '확정(수정됨)' 뱃지 + [↺ 다시 계산]. setStopEta/resetStopEta/stopEtaHHMM. recomputeRunTimes·setDepartTime에서 확정값 불변·자동값만 갱신. generate/incremental 결과에 reapplyManualEtaVehicles 오버레이 | 수정 |
+| tests/seasonal-shuttle-stop-eta.test.mjs | 순수 로직 유닛 9개(우선순위·라벨·키·순서변경 유지·리셋복귀·신규·입력불변·차량이동·좌표폴백) | 신규 |
+
+💡 tester: 관리자 배차 화면 각 정차 시각 input 수정 → '확정(수정됨)' 뱃지. 순서 드래그/변동 재배차/출발시각 변경해도 확정 정차 시각 불변, 자동 정차만 재계산. [↺ 다시 계산] → 자동값 복귀. [저장] 후 재로드 시 확정 복원(payload 보존). `node --test tests/seasonal-shuttle-stop-eta.test.mjs` 9/9, tsc EXIT=0.
+⚠️ reviewer: etaManual optional 필드 추가만(하위호환). reconcile은 stop 전개(...)로 etaManual 보존. 기사/학부모 노출은 T3. 하드코딩 hex 0(blue 의미색+dark). 순수함수 입력 불변.
+
+### 구현 기록 — planRun ETA를 T맵 '구간별 실제시간' 기반으로 교체 (2026-07-27)
+📝 기존: routeFixedOrder(총시간)만 받아 segMin(직선거리) 비율로 정차 ETA 배분(부정확). 변경: routeSegments로 정차 사이 구간별 실제 시간을 받아 stop ETA를 실측 누적으로 계산. 실패 구간만 segMin 폴백, 전체 실패는 종전대로 전 구간 segMin+경로 prev 복원.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/shuttle-eta.ts | 순수 ETA 함수(segmentMinutes·nodeTimesFromSegments) 분리 — 서버 의존성 없어 테스트가 직접 import | 신규 |
+| src/lib/seasonal/shuttle-optimize.ts | planRun T맵 호출을 routeSegmentsWithTmapRetry로 교체, 구간 실측시간 누적 ETA, stop.etaMinutes(분 숫자) 추가, 미사용 routeFixedOrder 래퍼 제거 | 수정 |
+| tests/seasonal-shuttle-eta.test.mjs | 누적 로직 유닛 8케이스(성공전구간/일부실패/방향별/결합) | 신규 |
+
+💡 tester 참고:
+- `node --test tests/seasonal-shuttle-eta.test.mjs` → 8 pass. `npx tsc --noEmit` EXIT=0.
+- 정상: 자동배차/증분재배차 시 정차별 ETA가 실도로 구간시간 누적으로 나옴. localOnly(직선추정)·정차0/1 회귀 없음(fallbackMin=종전 segMin과 동일 → scale=1 케이스와 결과 일치).
+- 주의: T맵 appKey 없거나 전체 실패 시 전 구간 segMin 폴백 + 저장 경로(prev) 복원. 부분 실패는 그 구간만 폴백.
+- ⚠️ 기존 실패 1건(admin-shuttle-compat: `import ShuttleRouteAdminClient`)은 **본 변경과 무관한 stale 테스트**(page.tsx가 VehicleManagerClient로 이미 리팩터됨). 내 변경 파일 아님.
+
+### 구현 기록 — 증분 재배차 후 지도 "직선 퇴화" 버그 수정 (2026-07-27)
+📝 planRun이 T맵 재계산 전에 실도로 path를 선파괴 → T맵 일시 실패 시 저장 경로 소실. 선파괴 제거 + 실패 시 이전값 복원 + 증분 연속호출용 짧은 재시도.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/tmapRouteMerge.ts | 병합 규칙 순수 헬퍼(mergeTmapRoute) — 성공→갱신/실패→prev유지 | 신규 |
+| src/lib/seasonal/shuttle-optimize.ts | planRun 선파괴 제거·폴백 복원, T맵호출 재시도 래퍼(200/400ms), 헬퍼 import | 수정 |
+| tests/seasonal-shuttle-tmap-route-merge.test.mjs | 병합 규칙 유닛 4케이스 | 신규 |
+
+💡 tester 참고: `node --test tests/seasonal-shuttle-tmap-route-merge.test.mjs` 4/4 통과, tsc EXIT=0. 회귀 무: localOnly(전체제안 base)·정차0·신규run은 여전히 LOCAL/무path로 초기화(else 분기). 폴백은 "T맵 호출했는데 실패 + 이전에 실도로 path 있던 run"에서만 체감. 드래그 reroute·전체 suggestDispatch 경로 무변경.
+
+### 구현 기록 — 증분 재배차 cheapest-insertion (Phase 2b) (2026-07-27)
+
+📝 구현: 저장된 노선의 **기존 정차 순서를 그대로 두고**, 신규·복귀·위치변경 학생만 cheapest-insertion으로 최적 위치에 끼워넣은 뒤, **변경된 차량만** 순서 고정으로 T맵 시간 재계산. ★전체 재최적화(suggestDispatch) 금지 — 정차 상호 순서 재배열 안 함.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/dispatchIncrement.ts | **순수 로직**(의존성 0) `planIncrementalInsert(vehicles, targets, geo)` — 차량선택(정원여유+삽입비용최소)·cheapest-insertion(인접쌍 h(A,S)+h(S,B)-h(A,B) 최소)·동좌표(±1e-5)병합·정원초과 unassigned·위치변경(제거후재삽입)·hub학생추가. 입력 불변(얕은 복제). reroute 집합 반환(기하 변경 차량만). haversineKm 로컬 구현(순수 유지 위해 shuttle-optimize:49 공식 복제) | 신규 |
+| src/lib/seasonal/shuttle-optimize.ts | `planRun`에 `keepOrder` 파라미터(기본 false=기존동작; true면 NN 재정렬 스킵). `incrementalDispatch(date,direction)` 신설: base(localOnly)→저장본 조회(없으면 computeDispatch 폴백)→added/locationChanged를 riders에서 IncrTarget으로 변환→planIncrementalInsert→reroute 차량만 `routeFixedOrderWithTmap`(planRun keepOrder=true) | 수정 |
+| src/app/api/admin/seasonal/dispatch/increment/route.ts | `POST {date,direction}` → incrementalDispatch. requireAdmin은 엔진에서 강제 | 신규 |
+| src/components/seasonal/RouteSection.tsx | `incremental(forDate)` 추가(/increment 호출→setSug). 배너 버튼 `[🔄 자동배차 다시 실행]`(generate=전체) → `[🔄 변동만 재배차]`(증분)로 교체. 저장은 기존 [저장] 버튼 | 수정 |
+| tests/seasonal-dispatch-increment.test.mjs | 순수 로직 유닛 13개(순서보존·cheapest·동좌표병합·정원초과·차량선택·위치변경·hub·좌표없음·입력불변·빈노선) | 신규 |
+
+**routeFixedOrderWithTmap 재사용 지점**: incrementalDispatch가 reroute 대상 차량마다 `planRun(..., keepOrder=true)` 호출 → planRun 내부가 `routeFixedOrderWithTmap({start,end,waypoints})`로 순서 고정 실도로 경로·시간 계산(reroute API와 동일 primitive). haversineKm은 순수모듈 삽입비용용으로만 사용.
+
+**"기존 순서 보존" 근거**: (1)planIncrementalInsert는 `v.stops.splice(k,0,newStop)`로 인접쌍 사이 끼워넣기만 함 — 기존 stops의 상대 순서 불변(유닛테스트 "기존 정차 상호 순서를 재배열하지 않는다"로 고정). (2)재계산은 `planRun(keepOrder=true)`라 NN 재정렬 스킵. (3)전체 재최적화(computeDispatch)는 저장본 없을 때만 폴백.
+
+💡 tester: 저장 노선 있는 날짜에서 학생 추가/위치변경 후 관리자 배차 화면 배너 `[🔄 변동만 재배차]` → 기존 순서 유지된 채 신규만 삽입됨. `node --test tests/seasonal-dispatch-increment.test.mjs` 13/13, tsc EXIT=0.
+⚠️ reviewer: planRun keepOrder는 additive(기본 false). incrementalDispatch는 requireAdmin. 하드코딩 hex 0(배너 amber 유지). 저장 payload 불변(순수함수 입력 복제).
+
+### 구현 기록 — 저장 노선 변동 감지(신규·복귀·위치변경) + 관리자 배너 (Phase 2a) (2026-07-27)
+
+📝 구현: reconcile(제거)의 반대 방향. 저장 노선 이후 생긴 **추가/위치변경을 알림만** 한다. 저장 payload·순서·시각·좌표 무변경(순수 읽기 진단). 기사님 화면 미노출.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/dispatchReconcile.ts | 순수 함수 `diffSavedRoute(vehicles, riders)` 추가 — savedIds 집합·requestId→정차좌표 맵 만들어 added(∉savedIds)/locationChanged(좌표 Δ>1e-5, null 스킵) 산출. requestId만 매칭·불변 | 수정 |
+| src/lib/seasonal/dispatchRoute.ts | `SavedDispatchRoute`에 added/locationChanged 추가. `getSavedDispatchRoute`가 reconcile 후 diff 계산해 반환(명단 조회 실패 시 빈 배열) | 수정 |
+| src/lib/seasonal/shuttle-optimize.ts | `DispatchSuggestion`에 added?/locationChanged? 추가. `getDispatchForView` 저장본 분기에서 전달 | 수정 |
+| src/components/seasonal/RouteSection.tsx | 변동 배너(관리자 전용) + [🔄 자동배차 다시 실행] 버튼(→ generate, Phase 2b TODO 주석). loadAndApplySaved가 필드 실어줌 | 수정 |
+| tests/seasonal-dispatch-diff.test.mjs | diffSavedRoute 유닛 8개(added/locationChanged/임계/빈좌표×2/불변/id매칭) | 신규 |
+
+💡 tester 참고:
+- 테스트: `node --test --experimental-strip-types tests/seasonal-dispatch-diff.test.mjs` (8개 통과), `npx tsc --noEmit` EXIT=0
+- 정상: 저장본 있고 변동 있으면 관리자 배차 화면 상단 배너("⚠️ 저장 노선 이후 변동…") + 이름 목록. 변동 없으면 배너 없음. 자동제안 실행 시 배너 사라짐(computeDispatch엔 필드 없음).
+- 기사화면 미노출 확인: `src/app/shuttle/run/[token]/page.tsx`가 DriverSection으로 수동 매핑 → added/locationChanged 필드를 아예 읽지 않음. 배너는 RouteSection(관리자)에만.
+- 하위호환: 필드 추가만(added?/locationChanged? optional). saved API는 saved 객체 그대로 반환이라 자동 전파. 기존 reconcile 동작 무변경.
+
+⚠️ reviewer 참고: Phase 2b 연결 지점 = RouteSection 배너 버튼 onClick(현재 generate=전체 재최적화). "기존 순서 유지+증분 삽입"으로 교체 예정(코드에 TODO 주석 명시).
+
+### 구현 기록 — 저장된 배차 노선 reconcile-on-read (2026-07-27)
+
+📝 구현: 저장된 배차 payload를 DB에서 바꾸지 않고 **읽을 때** 그날 유효하지 않은 학생(결석·수강취소·폐강)을 자동으로 걸러낸다(자가치유). 순서·시각·경로는 무변경.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/dispatchReconcile.ts | 순수 함수 `reconcileSavedVehicles(vehicles, validRequestIds)` — students를 requestId로 필터→빈 정차 제거(isHub 유지)→passengers/over 재계산. 의존성 0(테스트용 분리) | 신규 |
+| src/lib/seasonal/dispatchRoute.ts | `getSavedDispatchRoute`에서 date 있으면 `getConfirmedShuttleRosterForDate`로 validIds 만들어 vehicles를 reconcile 결과로 교체. 실패 시 저장본 그대로 | 수정 |
+| tests/seasonal-dispatch-reconcile.test.mjs | 순수함수 유닛 6개(제거/빈정차·isHub/재계산/보존/불변/자가치유) | 신규 |
+
+💡 tester 참고:
+- 테스트: `node --test tests/seasonal-dispatch-reconcile.test.mjs` (6개 통과), `npx tsc --noEmit` EXIT=0
+- 순환 import 없음: dispatchRoute→shuttleRoster(단방향), dispatchReconcile은 무의존. shuttle-optimize만 dispatchRoute를 import.
+- 정상: 저장 노선에서 결석/취소 학생이 그날 화면(관리자·기사님)에서만 사라지고, 다시 유효해지면 자동 복원. DB payload는 불변.
 
 ### 구현 기록 — 좌표 없는 탑승자 '배차 불가' 가시화 (G4) (2026-07-27)
 
@@ -346,6 +516,14 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-27 | **세션 마무리(pm)** — 오늘 다수 배포(수강생 상세 재설계+편집 / 셔틀 위치 placeName 전역통일 / 저장배차노선 reconcile·증분재배차·라벨자가갱신 / 정차 확정시간 실T맵+편집+기사·학부모노출 / 방학특강 선생님 화면 정규 통합흐름 개편[로스터 전원화·좌석출결·수업시작 취소·void 핫픽스·UI] / 관리자→선생님 진입점). 각 tsc EXIT=0, 병렬세션과 반복 머지. **미푸시 0.** 개발서버 종료. 이월: 셔틀4단계 4a-2/4b/4c/4d, 미전환자 학부모알림, (참고)카카오맵 키는 localhost만 미등록·프로덕션 정상 | 마무리·배포완료 |
+| 2026-07-27 | **수업 시작 취소(되돌리기) 추가(developer)** — 스태프 진행 화면에서 실수/테스트로 시작한 수업을 PLANNED로 되돌림. 서버액션 `cancelClassSession({sessionId})`(staff-sessions.ts): requireSessionAccess 권한게이트, IN_PROGRESS 아니면 거부, `UPDATE Session SET status='PLANNED',startedAt=NULL,startedByUserId=NULL WHERE id=$1 AND status='IN_PROGRESS'`($executeRawUnsafe, 0행이면 안전통과), **출결/사진/메모 무변경**, revalidatePath. 정규·특강 공통. StaffSessionDetail 타입에 sessionDateId 노출(쿼리는 이미 반환). SessionInProgressClient에 종료바 하단 보조버튼(회색 테두리·undo아이콘)+window.confirm+성공시 router.replace(seasonal?'/staff/seasonal':'/staff'). tsc EXIT=0 | 구현완료(PM 검증대기) |
+| 2026-07-27 | **특강 명단 버그 #2·#3 수정(developer)** — (#3) `getTodayStaffClasses` seasonal 쿼리가 CANCELLED offering을 안 걸러 취소반(중등부·초등저학년)이 학생0명으로 노출 → 메인 WHERE `o.status<>'CANCELLED'` + access_o EXISTS 서브쿼리 `access_o.status<>'CANCELLED'` 추가(반+시간 GROUP BY라 OPEN 하나라도 있으면 유지·전부취소면 제거). (#2) `/staff/seasonal`이 offering별 getSeasonalDatesForStaff로 주n회 쪼개짐 → 홈과 동일한 반 단위 `getTodayStaffClasses`(SEASONAL 필터)로 데이터소스 교체. getTodayStaffClasses에 날짜 파라미터 추가(기본=오늘, 홈 무영향). page.tsx·StaffSeasonalClient(필드 매핑 StaffTodayClass)·api/staff/seasonal route(GET date 분기) 수정. 홈/정규/startClassSession 무변경. tsc EXIT=0 | 구현완료(PM 검증대기) |
+| 2026-07-27 | **학부모 마이페이지 방학특강 확정 승·하차 시각 노출(T3, developer)** — 마이페이지 "셔틀 안내" 방학특강 카드에 확정 시각 표시. 출처=SeasonalDispatchRoute.payload stops[].etaLabel(etaManual 반영값), 매핑=학생→roster.shuttleRequestId→payload students[].requestId. 순수 `extractEtaByRequestId`(dispatchEtaLookup.ts 신규, import 0)+서버 `getConfirmedDispatchEtas`(방향별 대표 1건, updatedAt DESC, 읽기전용·인증X)+parent.ts에 pickupEtaLabel?/dropoffEtaLabel? optional 필드+MyPageClient "확정 시각" 행. 정규반 로직 무변경, 미저장이면 미표시(회귀없음). IDOR: 본인 자녀 requestId만 전달. 유닛 5/5+tsc EXIT=0 | 구현완료(PM 검증대기) |
+| 2026-07-27 | **planRun ETA를 T맵 구간별 실제시간으로 교체(developer)** — 기존 routeFixedOrder(총시간)+segMin 비율배분(부정확) → routeSegmentsWithTmapRetry로 정차 사이 구간별 실측시간 받아 stop ETA를 실측 누적 계산. 순수함수 `segmentMinutes`/`nodeTimesFromSegments`를 무의존 모듈 `shuttle-eta.ts`로 분리(테스트 직접 import). 실패 구간만 segMin 폴백, 전체실패는 전 구간 segMin+경로 prev복원(mergeTmapRoute). stop.etaMinutes(분 숫자, T2 확정편집 기준값) 추가. keepOrder(증분)·일반자동 둘 다 경유, localOnly·정차0/1 회귀없음(fallbackMin=종전 segMin과 동일). 미사용 routeFixedOrder 래퍼 제거. 유닛 8개+tsc EXIT=0. (admin-shuttle-compat 실패 1건은 무관 stale) | 구현완료(PM 검증대기) |
+| 2026-07-27 | **배차 정차 라벨 reconcile-on-read 갱신(developer)** — 명단 placeLabel 수정이 저장 배차 노선의 얼어붙은 라벨에도 읽을 때 반영(재배차·좌표변경 없이 텍스트만·자가치유). `reconcileSavedVehicles`에 옵셔널 `labelByRequestId`(requestId→placeLabel) 3번째 인자 추가: 살아남은 학생 pickupLabel + 비허브 정차 label만 갱신, isHub 라벨·좌표·시각·순서·path 전부 불변, 맵 없으면 기존 유지(하위호환). `getSavedDispatchRoute`가 riders로 맵 만들어 전달. 유닛 11개(라벨 5케이스 추가)+tsc EXIT=0 | 구현완료(PM 검증대기) |
+| 2026-07-27 | **저장 노선 변동 감지 + 관리자 배너(Phase 2a, developer)** — reconcile(제거)의 반대. 순수함수 `diffSavedRoute(vehicles, riders)` 추가(dispatchReconcile.ts): savedIds·requestId→정차좌표 맵으로 added(∉savedIds=신규·복귀)/locationChanged(좌표Δ>1e-5, null스킵) 산출, requestId만 매칭·불변. `getSavedDispatchRoute`가 reconcile 후 diff 반환(SavedDispatchRoute·DispatchSuggestion에 added/locationChanged 필드 추가, getDispatchForView 저장분기 전달). RouteSection 관리자 배너("⚠️ 저장 노선 이후 변동…"+이름목록)+[🔄 자동배차 다시 실행] 버튼(현재 generate, Phase 2b TODO 주석). 기사화면 미노출(run/[token] 수동매핑이 필드 안 읽음). 저장 payload·순서·시각·좌표 무변경(순수읽기). 유닛 8개+tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-27 | **저장 배차 노선 reconcile-on-read(developer)** — 저장 payload를 DB에서 안 바꾸고 **읽을 때** 그날 유효하지 않은 학생(결석·수강취소·폐강)만 필터(자가치유). 순수함수 `reconcileSavedVehicles`를 무의존 모듈 `dispatchReconcile.ts`로 분리(shuttleRosterEdit 패턴, 실행 테스트 가능), `getSavedDispatchRoute`가 date 있으면 `getConfirmedShuttleRosterForDate`로 validIds 만들어 vehicles 교체. requestId(shuttleRequestId)만 매칭, isHub 정차 유지, passengers/over 재계산, 순서·etaLabel·시각·path 보존. 순환import 없음. 유닛 6개+tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-27 | **셔틀 장소명 저장경로 유실 버그 수정(G3, developer)** — (1)정규반 신청→학생 전환의 `StudentShuttleLocation` INSERT가 `name`을 NULL 하드코딩하던 버그 수정: 라벨 컬럼(`app.shuttlePickup`→PICKUP, `app.shuttleDropoff`→DROPOFF)에서 장소명 읽어 파라미터화($12), ON CONFLICT에 `name=EXCLUDED.name` 추가, 폴백 `roadAddress ?? address`. 좌표/주소/placeId/source 무변경. (2)방학특강 확정본은 확인만—`confirmSeasonalShuttleRoster` INSERT…SELECT가 원본 `pickupLocation/dropoffLocation` 라벨을 그대로 복사, 편집경로도 라벨 저장 → **변경 불필요**. 스키마 변경 없음. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-27 | **셔틀 라벨에 장소명 우선 저장(G2, developer)** — 지도 선택 장소명을 라벨 컬럼에 `name ?? 주소`로 저장(스키마 변경 없음, 라벨 컬럼 재활용). 방학특강: contracts.ts `name?` 파싱 + service.ts 저장부 `pickup?.name ?? 텍스트라벨` + SeasonalApplyClient 라벨 매핑. 정규반: EnrollLaterSteps onConfirm + public.ts `EnrollmentShuttleLocationData.name?` 정규화 + INSERT/UPDATE 라벨($17/$19) name 우선. 좌표/주소/placeId 무변경(운행 기준 보존), name 없으면 주소 폴백(하위호환). **정규반 name→`shuttlePickup`/`shuttleDropoff` 컬럼 저장(G3 참고)**. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-26 | **수강생 상세 반 추가·삭제(E3, developer)** — `/admin/students/[id]` 개요 탭 "현재 수강 반"에 [반 추가](프로그램별·수강중 제외 선택)+행별 빨간 휴지통 하드삭제(강한 확인창). 기존 `enrollStudent`/`deleteEnrollment` 호출만(서버 무변경). 클래스목록=`getClasses()` 재사용, page.tsx가 getStudentActivity와 Promise.all 병렬조회해 classes prop 신규전달(getStudentActivity 무변경). E1/E2·loadData·데이터계약 무변경. tsc EXIT=0 | 구현완료(tester 대기) |

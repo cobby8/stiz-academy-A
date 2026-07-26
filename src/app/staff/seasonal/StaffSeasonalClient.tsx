@@ -3,23 +3,11 @@
 import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startClassSession } from "@/app/actions/staff-sessions";
+import type { StaffTodayClass } from "@/lib/staff-session-queries";
 
-// 특강 회차 1건(카드 1장). page.tsx가 내려주는 dates 배열의 원소와 동일한 형태.
-type SeasonalDate = {
-  sessionDateId: string;
-  offeringTitle: string;
-  dateLabel: string;
-  dayLabel: string;
-  startTime: string;
-  endTime: string;
-  capacity: number | null;
-  instructorName: string | null;
-  scheduled: number;
-  unchecked: number;
-  linkedClassId: string | null;
-  sessionId: string | null;
-  sessionStatus: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | null;
-};
+// 특강 카드 1장 = 홈과 동일한 반 단위 항목(StaffTodayClass).
+// 버그#2 수정: offering별로 쪼개지 않고 반+시간으로 묶인 목록을 그대로 사용한다.
+type SeasonalClass = StaffTodayClass;
 
 async function getJSON(url: string) {
   const r = await fetch(url, { cache: "no-store" });
@@ -28,21 +16,21 @@ async function getJSON(url: string) {
   return j;
 }
 
-export default function StaffSeasonalClient({ initial }: { initial: { ymd: string; dates: SeasonalDate[] } }) {
+export default function StaffSeasonalClient({ initial }: { initial: { ymd: string; classes: SeasonalClass[] } }) {
   const router = useRouter();
   const [ymd, setYmd] = useState<string>(initial.ymd);
-  const [dates, setDates] = useState<SeasonalDate[]>(initial.dates || []);
+  const [dates, setDates] = useState<SeasonalClass[]>(initial.classes || []);
   const [err, setErr] = useState("");
   // 어떤 카드에서 "수업 시작"이 진행 중인지(중복 클릭·로딩 표시용)
   const [startingId, setStartingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  // 날짜 이동 시 그 날짜의 특강 회차 목록을 다시 불러온다(상태·sessionId 포함).
+  // 날짜 이동 시 그 날짜의 특강 반 목록을 다시 불러온다(상태·sessionId 포함).
   const loadDay = useCallback(async (d: string) => {
     setErr("");
     try {
       const data = await getJSON(`/api/staff/seasonal?date=${d}`);
-      setDates(data.dates || []);
+      setDates(data.classes || []);
       setYmd(data.ymd);
     } catch (e) {
       setErr((e as Error).message);
@@ -59,8 +47,9 @@ export default function StaffSeasonalClient({ initial }: { initial: { ymd: strin
   // 정규 수업 시작과 완전히 동일한 흐름:
   // startClassSession(정규 서버액션) 호출 → 반환된 sessionId로 통합 진행화면 이동.
   // 이미 다른 수업이 진행 중이면 ACTIVE_SESSION 코드로 그 세션으로 라우팅한다(홈 startLesson과 동일).
-  function startLesson(row: SeasonalDate) {
-    if (!row.linkedClassId) {
+  function startLesson(row: SeasonalClass) {
+    // StaffTodayClass.id = 연결된 반(Class)의 id, sessionDateId = 대표 회차 id
+    if (!row.id || !row.sessionDateId) {
       setErr("이 특강은 연결된 수업 정보가 없어 시작할 수 없습니다. 관리자에게 문의해 주세요.");
       return;
     }
@@ -68,9 +57,9 @@ export default function StaffSeasonalClient({ initial }: { initial: { ymd: strin
     setStartingId(row.sessionDateId);
     startTransition(async () => {
       const result = await startClassSession({
-        classId: row.linkedClassId as string,
+        classId: row.id,
         date: ymd,
-        sessionDateId: row.sessionDateId,
+        sessionDateId: row.sessionDateId as string,
       });
       if (!result.ok) {
         if (result.code === "ACTIVE_SESSION" && result.activeSessionId) {
@@ -103,11 +92,11 @@ export default function StaffSeasonalClient({ initial }: { initial: { ymd: strin
           const status = d.sessionStatus;
           const busy = pending && startingId === d.sessionDateId;
           return (
-            <article key={d.sessionDateId} className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <article key={d.scheduleKey} className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate font-black dark:text-white">{d.offeringTitle}</div>
-                  <div className="mt-0.5 text-xs font-bold text-gray-500">{d.startTime}~{d.endTime} · 학생 {d.scheduled}명</div>
+                  <div className="truncate font-black dark:text-white">{d.name}</div>
+                  <div className="mt-0.5 text-xs font-bold text-gray-500">{d.startTime}~{d.endTime} · 학생 {d.studentCount}명</div>
                 </div>
                 <StatusBadge status={status} />
               </div>
@@ -163,7 +152,7 @@ export default function StaffSeasonalClient({ initial }: { initial: { ymd: strin
 }
 
 // 회차 상태 배지(정규 홈의 StatusBadge와 동일한 문구 체계)
-function StatusBadge({ status }: { status: SeasonalDate["sessionStatus"] }) {
+function StatusBadge({ status }: { status: SeasonalClass["sessionStatus"] }) {
   const text = status === "COMPLETED" ? "완료" : status === "IN_PROGRESS" ? "수업 중" : "시작 전";
   const tone =
     status === "IN_PROGRESS"

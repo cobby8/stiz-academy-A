@@ -75,11 +75,12 @@ function toIso(value: Date | string | null) {
   return value ? new Date(value).toISOString() : null;
 }
 
-export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
+// dateKey(YYYY-MM-DD)를 인자로 받아 그 날짜의 담당 수업을 반환한다.
+// 기본값은 오늘(getKoreaDateKey)이라 기존 홈 호출부(인자 없음)는 동작이 그대로 유지된다.
+export async function getTodayStaffClasses(dateKey: string = getKoreaDateKey()): Promise<StaffTodayClass[]> {
   const access = await getStaffClassAccessContext();
   const classIds = await getAccessibleClassIds(access);
 
-  const dateKey = getKoreaDateKey();
   const koreaDay = new Date(`${dateKey}T12:00:00+09:00`).getDay();
   const regularRows = classIds.length === 0 ? [] : await prisma.$queryRawUnsafe<TodayClassRow[]>(
     `SELECT c.id, c.name, c."startTime", c."endTime", c.location,
@@ -124,6 +125,10 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
               END = ANY(a."selectedWeekdays")
             )
         WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
+          -- 버그#3: 취소(CANCELLED)된 offering 회차는 명단에서 제외한다.
+          -- 반+시간으로 GROUP BY 하므로, 한 반의 offering이 전부 취소면 그 반은 사라지고
+          -- OPEN offering이 하나라도 남아 있으면 그 반은 유지된다(주n회 혼재 정상 처리).
+          AND o.status <> 'CANCELLED'
           AND (
             $2::boolean = true
             OR EXISTS (
@@ -135,6 +140,8 @@ export async function getTodayStaffClasses(): Promise<StaffTodayClass[]> {
                  AND access_sd."endsAt" = sd."endsAt"
                  AND access_o."linkedClassId" = o."linkedClassId"
                  AND access_o."seasonId" = o."seasonId"
+                 -- 버그#3: 접근권한 판정도 취소된 offering은 제외(취소반으로 권한이 잡히지 않도록)
+                 AND access_o.status <> 'CANCELLED'
                  AND (access_s."coachId" = $3 OR (access_s.id IS NULL AND access_o."instructorId" = $3))
             )
           )

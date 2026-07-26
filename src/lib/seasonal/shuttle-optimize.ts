@@ -71,7 +71,9 @@ function isFreeHubLabel(label: string | null | undefined): boolean {
 type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null; requestId: string; pickupLabel: string };
 // etaMinutes: 그 정차의 승/하차 예상 시각을 '자정 기준 분'으로 담는 숫자 필드.
 // T2에서 정차별 '확정시간 편집'을 붙일 때 문자열 라벨 파싱 없이 이 숫자를 직접 쓴다.
-type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string; etaMinutes?: number };
+// etaManual: 관리자가 그 정차 시각을 손으로 고쳐 '확정'한 값(자정 기준 분). 있으면 표시·저장 기준이 되고
+//   재계산해도 자동값(etaMinutes)으로 덮이지 않는다(T2). 서버는 자동값만 계산하고 이 필드는 클라가 오버레이한다.
+type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string; etaMinutes?: number; etaManual?: number | null };
 type Run = {
   index: number; vehicleName: string; plate: string | null; capacity: number; tripLabel: string | null;
   passengers: number; stops: Stop[]; over: boolean;

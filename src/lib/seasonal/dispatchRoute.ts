@@ -7,6 +7,8 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
 // reconcile 로직은 의존성 없는 순수 모듈이 정본이다(shuttleRosterEdit.ts와 같은 이유 — 실제 실행 테스트 가능).
 import { reconcileSavedVehicles, diffSavedRoute } from "./dispatchReconcile";
+// 저장 payload에서 requestId별 확정 정차 라벨을 뽑는 순수 로직(학부모 마이페이지 확정시각 표시에 쓴다).
+import { extractEtaByRequestId } from "./dispatchEtaLookup";
 
 // 저장된 배차 노선(SeasonalDispatchRoute) 읽기/쓰기.
 // 자동 제안을 손으로 조정한 결과를 (날짜 × 방향) 단위로 1행 저장한다. PgBouncer 때문에 $queryRawUnsafe 고정.
@@ -93,6 +95,57 @@ export async function getSavedDispatchRoute(date: string | null, direction: stri
     // 테이블이 아직 없는 환경 → 저장 없음으로 취급(화면은 자동 제안 그대로).
     return null;
   }
+}
+
+/** 한 학생의 확정 승/하차 시각 라벨. 없으면 null. */
+export type ConfirmedDispatchEta = { pickupEtaLabel: string | null; dropoffEtaLabel: string | null };
+
+/**
+ * 셔틀 신청 id들에 대해 "확정 승/하차 시각"을 저장된 배차 노선에서 찾아 돌려준다(학부모 마이페이지 T3).
+ *
+ * 왜 이렇게 조회하나:
+ *   방학특강 셔틀의 확정 시각은 정규반처럼 ShuttleRoutePassenger.stop에 있지 않고,
+ *   (날짜 × 방향) 단위로 저장된 SeasonalDispatchRoute.payload의 각 정차 etaLabel에 들어 있다.
+ *   노선은 날짜별로 여러 건이지만 시각은 대체로 일정하므로 방향별 **대표 1건**만 쓴다.
+ *   → 최근 저장분(updatedAt DESC)부터 훑어 그 학생이 처음 나타난 정차의 라벨을 채운다.
+ *
+ * 권한: 조회 함수는 인증하지 않는다(게이트웨이 조회 함수와 동일 원칙). 호출부(parent.ts)가
+ *   이미 본인 자녀의 shuttleRequestId만 넘기므로 여기서 학생을 다시 필터하지 않는다(IDOR 안전).
+ *   requestId 목록에 없는 학생 것은 애초에 결과에 담기지 않는다.
+ */
+export async function getConfirmedDispatchEtas(
+  requestIds: string[],
+): Promise<Map<string, ConfirmedDispatchEta>> {
+  const result = new Map<string, ConfirmedDispatchEta>();
+  const ids = [...new Set((requestIds ?? []).filter((x): x is string => typeof x === "string" && x !== ""))];
+  if (ids.length === 0) return result;
+  const want = new Set(ids);
+  for (const id of ids) result.set(id, { pickupEtaLabel: null, dropoffEtaLabel: null });
+
+  try {
+    // 저장 노선은 시즌당 (운행일 × 2방향) 수십 행 수준이라 전체를 훑어도 가볍다.
+    // 최근 저장분을 먼저 만나도록 정렬 → 아래에서 "아직 비어 있을 때만" 채워 대표 1건을 고른다.
+    const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+      `SELECT "direction", "payload" FROM "SeasonalDispatchRoute" ORDER BY "updatedAt" DESC`,
+    );
+    for (const r of rows) {
+      const dir = normDir(r.direction);
+      if (!dir) continue;
+      const payload = r.payload as { vehicles?: unknown } | null;
+      const byId = extractEtaByRequestId(payload?.vehicles, dir);
+      if (byId.size === 0) continue;
+      for (const id of want) {
+        const label = byId.get(id);
+        if (!label) continue;
+        const cur = result.get(id)!;
+        if (dir === "PICKUP" && cur.pickupEtaLabel == null) cur.pickupEtaLabel = label;
+        if (dir === "DROPOFF" && cur.dropoffEtaLabel == null) cur.dropoffEtaLabel = label;
+      }
+    }
+  } catch {
+    // 테이블이 없는 구버전 DB 등 → 시각 없음으로 둔다(학부모 화면은 종전과 동일하게 보인다).
+  }
+  return result;
 }
 
 /** 조정된 노선을 저장(덮어쓰기). 원장/관리자만. */

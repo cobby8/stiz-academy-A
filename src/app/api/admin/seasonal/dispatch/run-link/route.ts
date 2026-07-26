@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { createOrGetRunLink } from "@/lib/seasonal/shuttleRun";
+import { createOrGetRunLink, createOrGetRollingRunLink } from "@/lib/seasonal/shuttleRun";
 
 export const dynamic = "force-dynamic";
 
 // 기사님 전용 링크 토큰 생성/조회(원장 전용). requireAdmin은 라이브러리에서 강제한다.
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => null) as { date?: string } | null;
-    if (!body?.date) {
+    const body = await request.json().catch(() => null) as { date?: string; rolling?: boolean } | null;
+    // rolling=true면 '매일 오늘'을 보는 고정 링크, 아니면 특정 날짜 링크(긴급 하루용).
+    if (!body?.rolling && !body?.date) {
       return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     }
-    const { token } = await createOrGetRunLink(body.date);
+    const { token } = body?.rolling ? await createOrGetRollingRunLink() : await createOrGetRunLink(body!.date!);
     return NextResponse.json({ token, path: `/shuttle/run/${token}` });
   } catch (e) {
     console.error("[dispatch/run-link POST]", e);

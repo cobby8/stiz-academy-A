@@ -2202,3 +2202,23 @@ model ShuttleBoarding {
 
   @@unique([serviceDate, direction, shuttleRequestId])
 }
+
+// 정규 수업 셔틀 운행리스트(구글 시트 이관본). 요일별 하루 타임라인의 정차 하나 = 1행.
+model RegularShuttleStop {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  weekday      Int
+  classTime    String?
+  arriveTime   String?
+  stopName     String
+  direction    String // 'BOARD'|'ALIGHT'|'PIVOT'|'RETURN'
+  studentName  String?
+  studentPhone String?
+  parentPhone  String?
+  note         String?
+  sortOrder    Int      @default(0)
+  latitude     Float?
+  longitude    Float?
+  importedAt   DateTime @default(now())
+
+  @@index([weekday, sortOrder])
+}

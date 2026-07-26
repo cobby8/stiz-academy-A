@@ -16,6 +16,22 @@ export type BoardingStatus = "BOARDED" | "NOSHOW";
 
 // 날짜 단위 링크는 방향을 'ALL'로 저장한다(그 날 등원·하원 전체를 한 링크로).
 const ALL_DIRECTION = "ALL";
+// 고정(rolling) 링크: 특정 날짜가 아니라 '오늘'을 보는 링크. serviceDate에 이 값을 넣는다.
+const ROLLING_DATE = "ROLLING";
+
+/** 기사 고정 링크(매일 오늘 운행) 토큰을 만들거나 이미 있으면 그대로 돌려준다(원장 전용). */
+export async function createOrGetRollingRunLink(): Promise<{ token: string }> {
+  const admin = await requireAdmin();
+  const token = randomBytes(16).toString("hex");
+  const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+    `INSERT INTO "ShuttleRunLink" ("token","serviceDate","direction","createdByUserId")
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT ("serviceDate","direction") DO UPDATE SET "createdAt" = "ShuttleRunLink"."createdAt"
+     RETURNING "token"`,
+    token, ROLLING_DATE, ALL_DIRECTION, admin.appUserId ?? null,
+  );
+  return { token: String(rows[0]?.token ?? token) };
+}
 
 /** 그 날짜의 기사님 링크 토큰을 만들거나 이미 있으면 그대로 돌려준다(원장 전용). 등원·하원 전체 포함. */
 export async function createOrGetRunLink(date: string): Promise<{ token: string }> {
@@ -42,7 +58,8 @@ export async function resolveRunToken(token: string): Promise<{ date: string; di
       `SELECT "serviceDate", "direction" FROM "ShuttleRunLink" WHERE "token" = $1 LIMIT 1`, t,
     );
     const r = rows[0];
-    const date = normDate(r?.serviceDate);
+    const raw = typeof r?.serviceDate === "string" ? r.serviceDate : "";
+    const date = raw === ROLLING_DATE ? ROLLING_DATE : normDate(raw); // 고정 링크는 'ROLLING'(오늘)로 해석
     const dir = typeof r?.direction === "string" ? r.direction : null;
     return date && dir ? { date, direction: dir } : null;
   } catch { return null; }

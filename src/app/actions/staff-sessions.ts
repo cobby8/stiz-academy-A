@@ -62,6 +62,64 @@ async function isSessionRosterStudent(classId: string, sessionDateId: string | n
   return Boolean(rows[0]);
 }
 
+// 방학특강 좌석 컬럼(SpecialProgramEnrollmentDate.attendanceStatus)에 통합 출결을 미러링한다.
+// 왜: 통합 흐름은 Attendance 테이블에만 저장하는데, 방학특강 좌석 컬럼은 보강 신청·셔틀 결석제외·
+//     관리자 출결 화면이 참조하므로 함께 동기화돼야 정합성이 맞는다.
+// 매핑: session의 anchor sessionDate → (형제 반 포함) 같은 시각의 sibling sessionDate →
+//       APPROVED 신청항목 → app.convertedStudentId = studentId 로 좁혀,
+//       그 학생의 그날 좌석(SpecialProgramEnrollmentDate)만 정확히 갱신한다(형제 반/동명이인 오매칭 방지).
+// 상태값은 통합(PRESENT/LATE/ABSENT)과 방학특강 attendanceStatus 문자열이 동일해 직결한다.
+// ★ 이 함수는 try/catch로 격리 호출된다 — 미러 실패가 정규 Attendance 저장을 되돌리지 않게 한다.
+async function mirrorSeasonalSeatAttendance(input: {
+  sessionDateId: string;
+  studentId: string;
+  status: AttendanceStatus;
+  note: string | null;
+  checkedByUserId: string | null;
+}) {
+  const updated = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `UPDATE "SpecialProgramEnrollmentDate" e
+        SET "attendanceStatus" = $3,
+            "attendanceNote" = $4,
+            "arrivedAt" = CASE WHEN $3 = 'LATE' THEN COALESCE(e."arrivedAt", now()) ELSE NULL END,
+            "attendanceCheckedAt" = now(),
+            "attendanceCheckedByUserId" = $5,
+            "updatedAt" = now()
+       FROM "SpecialProgramSessionDate" anchor_sd
+       JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+       JOIN "SpecialProgramSessionDate" sd
+         ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+       JOIN "SpecialProgramOffering" o
+         ON o.id = sd."offeringId"
+        AND (
+          o.id = anchor_o.id
+          OR (
+            anchor_o."linkedClassId" IS NOT NULL
+            AND o."linkedClassId" = anchor_o."linkedClassId"
+            AND o."seasonId" = anchor_o."seasonId"
+          )
+        )
+       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id
+         AND i.status = 'APPROVED'
+         AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+       JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
+         AND app."convertedStudentId" = $2
+      WHERE anchor_sd.id = $1
+        AND e."sessionDateId" = sd.id
+        AND e."applicationItemId" = i.id
+        AND e.status <> 'CANCELLED'
+      RETURNING e.id`,
+    input.sessionDateId, input.studentId, input.status, input.note, input.checkedByUserId,
+  );
+  // 좌석을 못 찾으면(요일 불일치·좌석 미생성 등) 정규 저장은 유지하고 경고만 남긴다.
+  if (updated.length === 0) {
+    console.warn("[mirrorSeasonalSeatAttendance] 좌석을 찾지 못해 미러링을 건너뜀", {
+      sessionDateId: input.sessionDateId,
+      studentId: input.studentId,
+    });
+  }
+}
+
 async function getSessionParentRecipients(session: { classId: string; sessionDateId: string | null }, studentIds?: string[]) {
   if (!session.sessionDateId) return getClassParentRecipients(session.classId, studentIds);
   return prisma.$queryRawUnsafe<ParentRecipient[]>(
@@ -179,6 +237,27 @@ export async function saveStaffAttendance(input: { sessionId: string; studentId:
      RETURNING id`,
     input.sessionId, input.studentId, input.status, input.note?.trim() || null, access.staff.appUserId,
   );
+
+  // seasonal(방학특강) 세션이면 방학특강 좌석 컬럼에도 같은 출결을 미러링한다.
+  // try/catch로 격리 — 미러 실패가 위에서 이미 성공한 정규 Attendance 저장을 되돌리지 않게 한다.
+  if (session.sessionDateId) {
+    try {
+      await mirrorSeasonalSeatAttendance({
+        sessionDateId: session.sessionDateId,
+        studentId: input.studentId,
+        status: input.status,
+        note: input.note?.trim() || null,
+        checkedByUserId: access.staff.appUserId,
+      });
+    } catch (error) {
+      console.error("[saveStaffAttendance] 방학특강 좌석 미러링 실패(정규 저장은 유지)", {
+        sessionId: input.sessionId,
+        sessionDateId: session.sessionDateId,
+        studentId: input.studentId,
+        error,
+      });
+    }
+  }
 
   if (changed && (input.status === "PRESENT" || input.status === "LATE")) {
     try {

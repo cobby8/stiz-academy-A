@@ -11,7 +11,7 @@ export default async function StaffSeasonalPage() {
   const today = await getSeasonalDatesForStaff(staff.appUserId, staff.appUserRole);
   const initial = JSON.parse(JSON.stringify(today)) as {
     ymd: string;
-    dates: Array<{ sessionDateId: string; offeringTitle: string; dateLabel: string; dayLabel: string; startTime: string; endTime: string; capacity: number | null; instructorName: string | null; scheduled: number; unchecked: number }>;
+    dates: Array<{ sessionDateId: string; offeringTitle: string; dateLabel: string; dayLabel: string; startTime: string; endTime: string; capacity: number | null; instructorName: string | null; scheduled: number; unchecked: number; linkedClassId: string | null; sessionId: string | null; sessionStatus: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | null }>;
   };
   return <StaffSeasonalClient initial={initial} />;
 }

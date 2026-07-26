@@ -382,16 +382,27 @@ export { gradeToNumber } from "@/lib/seasonal/makeup";
 export async function getSeasonalDatesForStaff(userId: string, role: string, ymd?: string | null) {
   const targetYmd = ymd || seoulParts(new Date()).ymd;
   const scopeInstructor = role === "INSTRUCTOR";
+  // 왜 Session을 LEFT JOIN 하나?
+  // 특강 수업 카드를 정규 수업처럼 "수업 시작 → 통합 진행화면" 흐름으로 바꾸려면
+  // 각 회차에 연결된 정규 Session의 진행 상태(PLANNED/IN_PROGRESS/COMPLETED)와 그 sessionId가 필요하다.
+  // - status 로 [수업 시작]/[이어하기]/[완료] 버튼을 분기한다.
+  // - sessionId 로 진행 중/완료 세션의 통합 화면(sessions/[id])으로 바로 이동한다.
+  // - linkedClassId 는 startClassSession(정규 서버액션)이 요구하는 classId 이므로 함께 내려준다.
+  // Session은 시작 시 sessionKey `seasonal:<sessionDateId>`로 그 회차에 1:1로 붙는다(s."specialProgramSessionDateId" = sd.id).
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT sd.id, sd."startsAt", sd."endsAt", o.title AS "offeringTitle", o.capacity, o."instructorName",
+            o."linkedClassId" AS "linkedClassId",
+            s.id AS "sessionId", s.status AS "sessionStatus",
             COUNT(e.id) FILTER (WHERE e.status = 'SCHEDULED') AS scheduled,
             COUNT(e.id) FILTER (WHERE e.status = 'SCHEDULED' AND e."attendanceStatus" IS NULL) AS unchecked
        FROM "SpecialProgramSessionDate" sd
        JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
        LEFT JOIN "SpecialProgramEnrollmentDate" e ON e."sessionDateId" = sd.id AND e.status <> 'CANCELLED'
+       LEFT JOIN "Session" s ON s."specialProgramSessionDateId" = sd.id
       WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
         AND ($2 = false OR o."instructorId" = $3)
-      GROUP BY sd.id, sd."startsAt", sd."endsAt", o.title, o.capacity, o."instructorName"
+      GROUP BY sd.id, sd."startsAt", sd."endsAt", o.title, o.capacity, o."instructorName",
+               o."linkedClassId", s.id, s.status
       ORDER BY sd."startsAt" ASC`,
     targetYmd, scopeInstructor, userId,
   );
@@ -405,6 +416,10 @@ export async function getSeasonalDatesForStaff(userId: string, role: string, ymd
         capacity: r.capacity == null ? null : Number(r.capacity),
         instructorName: r.instructorName ?? null,
         scheduled: num(r.scheduled), unchecked: num(r.unchecked),
+        // 정규 수업 시작 흐름 재사용에 필요한 연결 정보
+        linkedClassId: r.linkedClassId ?? null,
+        sessionId: r.sessionId ?? null,
+        sessionStatus: (r.sessionStatus ?? null) as "PLANNED" | "IN_PROGRESS" | "COMPLETED" | null,
       };
     }),
   };

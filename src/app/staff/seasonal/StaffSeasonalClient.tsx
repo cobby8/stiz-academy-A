@@ -1,12 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { startClassSession } from "@/app/actions/staff-sessions";
 
-const ATT = [
-  { key: "PRESENT", label: "출석", on: "bg-green-600 text-white" },
-  { key: "LATE", label: "지각", on: "bg-amber-500 text-white" },
-  { key: "ABSENT", label: "결석", on: "bg-red-600 text-white" },
-];
+// 특강 회차 1건(카드 1장). page.tsx가 내려주는 dates 배열의 원소와 동일한 형태.
+type SeasonalDate = {
+  sessionDateId: string;
+  offeringTitle: string;
+  dateLabel: string;
+  dayLabel: string;
+  startTime: string;
+  endTime: string;
+  capacity: number | null;
+  instructorName: string | null;
+  scheduled: number;
+  unchecked: number;
+  linkedClassId: string | null;
+  sessionId: string | null;
+  sessionStatus: "PLANNED" | "IN_PROGRESS" | "COMPLETED" | null;
+};
 
 async function getJSON(url: string) {
   const r = await fetch(url, { cache: "no-store" });
@@ -15,96 +28,148 @@ async function getJSON(url: string) {
   return j;
 }
 
-export default function StaffSeasonalClient({ initial }: { initial: any }) {
+export default function StaffSeasonalClient({ initial }: { initial: { ymd: string; dates: SeasonalDate[] } }) {
+  const router = useRouter();
   const [ymd, setYmd] = useState<string>(initial.ymd);
-  const [dates, setDates] = useState<any[]>(initial.dates || []);
-  const [sel, setSel] = useState<any>(null);
-  const [roster, setRoster] = useState<any[]>([]);
-  const [meta, setMeta] = useState<any>(null);
+  const [dates, setDates] = useState<SeasonalDate[]>(initial.dates || []);
   const [err, setErr] = useState("");
+  // 어떤 카드에서 "수업 시작"이 진행 중인지(중복 클릭·로딩 표시용)
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
+  // 날짜 이동 시 그 날짜의 특강 회차 목록을 다시 불러온다(상태·sessionId 포함).
   const loadDay = useCallback(async (d: string) => {
     setErr("");
-    try { const data = await getJSON(`/api/staff/seasonal?date=${d}`); setDates(data.dates || []); setYmd(data.ymd); }
-    catch (e) { setErr((e as Error).message); }
-  }, []);
-
-  const openDate = useCallback(async (row: any) => {
-    setSel(row); setErr("");
-    try { const data = await getJSON(`/api/staff/seasonal?sessionDateId=${row.sessionDateId}`); setRoster(data.rows || []); setMeta(data.date || null); }
-    catch (e) { setErr((e as Error).message); }
-  }, []);
-
-  useEffect(() => { /* initial already loaded */ }, []);
-
-  async function mark(row: any, status: string) {
-    const next = row.attendanceStatus === status ? null : status;
     try {
-      const r = await fetch("/api/staff/seasonal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "attendance", enrollmentDateId: row.enrollmentDateId, status: next }) });
-      const j = await r.json(); if (!r.ok) throw new Error(j?.error || "실패");
-      setRoster((prev) => prev.map((x) => x.enrollmentDateId === row.enrollmentDateId ? { ...x, attendanceStatus: next } : x));
-    } catch (e) { setErr((e as Error).message); }
-  }
+      const data = await getJSON(`/api/staff/seasonal?date=${d}`);
+      setDates(data.dates || []);
+      setYmd(data.ymd);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }, []);
 
   function shiftDay(delta: number) {
-    const d = new Date(ymd + "T00:00:00+09:00"); d.setDate(d.getDate() + delta);
-    void loadDay(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d));
+    const d = new Date(ymd + "T00:00:00+09:00");
+    d.setDate(d.getDate() + delta);
+    const next = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+    void loadDay(next);
   }
 
-  if (sel && meta) {
-    return (
-      <div className="mx-auto max-w-lg p-4">
-        <button onClick={() => { setSel(null); setMeta(null); void loadDay(ymd); }} className="mb-3 text-sm font-black text-gray-500">← 목록으로</button>
-        <div className="mb-3">
-          <div className="text-lg font-black">{meta.offeringTitle}</div>
-          <div className="text-sm font-bold text-gray-500">{meta.dateLabel} ({meta.dayLabel}) · {meta.startTime}~{meta.endTime} · {roster.length}명</div>
-        </div>
-        {err && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:bg-red-950 dark:text-red-300">{err}</div>}
-        <div className="space-y-2">
-          {roster.map((r) => (
-            <div key={r.enrollmentDateId} className={`rounded-xl border p-3 dark:border-gray-700 ${r.kind === "MAKEUP" ? "border-violet-300 bg-violet-50 dark:bg-violet-950/40" : "border-gray-200 bg-white dark:bg-gray-800"}`}>
-              <div className="mb-2 flex items-center gap-2">
-                <span className="font-black">{r.childName}</span>
-                <span className="text-xs font-bold text-gray-500">{r.childGrade || ""}</span>
-                {r.kind === "MAKEUP" && <span className="rounded bg-violet-100 px-1 text-[10px] font-black text-violet-700 dark:bg-violet-900 dark:text-violet-200">보강생{r.originAbsence ? ` ←${r.originAbsence}` : ""}</span>}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {ATT.map((a) => (
-                  <button key={a.key} onClick={() => mark(r, a.key)}
-                    className={`min-h-11 rounded-xl text-sm font-black ${r.attendanceStatus === a.key ? a.on : "border border-gray-200 text-gray-500 dark:border-gray-600"}`}>{a.label}</button>
-                ))}
-              </div>
-            </div>
-          ))}
-          {roster.length === 0 && <div className="p-6 text-center text-sm text-gray-400">이 회차에 학생이 없습니다.</div>}
-        </div>
-      </div>
-    );
+  // 정규 수업 시작과 완전히 동일한 흐름:
+  // startClassSession(정규 서버액션) 호출 → 반환된 sessionId로 통합 진행화면 이동.
+  // 이미 다른 수업이 진행 중이면 ACTIVE_SESSION 코드로 그 세션으로 라우팅한다(홈 startLesson과 동일).
+  function startLesson(row: SeasonalDate) {
+    if (!row.linkedClassId) {
+      setErr("이 특강은 연결된 수업 정보가 없어 시작할 수 없습니다. 관리자에게 문의해 주세요.");
+      return;
+    }
+    setErr("");
+    setStartingId(row.sessionDateId);
+    startTransition(async () => {
+      const result = await startClassSession({
+        classId: row.linkedClassId as string,
+        date: ymd,
+        sessionDateId: row.sessionDateId,
+      });
+      if (!result.ok) {
+        if (result.code === "ACTIVE_SESSION" && result.activeSessionId) {
+          router.push(`/staff/sessions/${result.activeSessionId}`);
+          return;
+        }
+        setErr(result.message);
+        setStartingId(null);
+        return;
+      }
+      router.push(`/staff/sessions/${result.sessionId}?view=attendance`);
+    });
   }
 
   return (
     <div className="mx-auto max-w-lg p-4">
-      <h1 className="mb-3 text-lg font-black">🏀 특강 출석</h1>
+      <h1 className="mb-3 text-lg font-black dark:text-white">🏀 특강 수업</h1>
+
+      {/* 날짜 네비(정규와 동일하게 유지, 오늘 기본) */}
       <div className="mb-3 flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
         <button onClick={() => shiftDay(-1)} className="min-h-9 px-3 font-black text-gray-500">‹</button>
-        <span className="text-sm font-black">{ymd}</span>
+        <span className="text-sm font-black dark:text-white">{ymd}</span>
         <button onClick={() => shiftDay(1)} className="min-h-9 px-3 font-black text-gray-500">›</button>
       </div>
+
       {err && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:bg-red-950 dark:text-red-300">{err}</div>}
-      <div className="space-y-2">
-        {dates.map((d) => (
-          <button key={d.sessionDateId} onClick={() => openDate(d)} className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left dark:border-gray-700 dark:bg-gray-800">
-            <div className="flex-1">
-              <div className="font-black">{d.offeringTitle}</div>
-              <div className="text-xs font-bold text-gray-500">{d.startTime}~{d.endTime} · {d.scheduled}명</div>
-            </div>
-            {d.unchecked > 0
-              ? <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-black text-orange-600 dark:bg-orange-950">미확인 {d.unchecked}</span>
-              : <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-black text-green-700 dark:bg-green-950 dark:text-green-300">완료</span>}
-          </button>
-        ))}
-        {dates.length === 0 && <div className="p-6 text-center text-sm text-gray-400">이 날짜에 진행하는 특강이 없습니다.</div>}
+
+      <div className="space-y-3">
+        {dates.map((d) => {
+          const status = d.sessionStatus;
+          const busy = pending && startingId === d.sessionDateId;
+          return (
+            <article key={d.sessionDateId} className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate font-black dark:text-white">{d.offeringTitle}</div>
+                  <div className="mt-0.5 text-xs font-bold text-gray-500">{d.startTime}~{d.endTime} · 학생 {d.scheduled}명</div>
+                </div>
+                <StatusBadge status={status} />
+              </div>
+
+              <div className="mt-3">
+                {status === "IN_PROGRESS" && d.sessionId ? (
+                  // 진행 중: 통합 진행화면으로 바로 이어하기
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/staff/sessions/${d.sessionId}`)}
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]"
+                  >
+                    <span className="material-symbols-outlined">arrow_forward</span>
+                    수업 이어하기
+                  </button>
+                ) : status === "COMPLETED" ? (
+                  // 완료: 배지 + (세션 있으면) 기록 보기
+                  d.sessionId ? (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/staff/sessions/${d.sessionId}`)}
+                      className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 font-bold text-gray-600 dark:border-gray-600 dark:text-gray-300"
+                    >
+                      <span className="material-symbols-outlined text-lg">history</span>
+                      기록 보기
+                    </button>
+                  ) : null
+                ) : (
+                  // 시작 전(PLANNED 또는 세션 미생성): 수업 시작
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => startLesson(d)}
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined">play_arrow</span>
+                    {busy ? "시작 중…" : "수업 시작"}
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })}
+
+        {dates.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400 dark:border-gray-700">
+            이 날짜에 특강 수업이 없습니다.
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+// 회차 상태 배지(정규 홈의 StatusBadge와 동일한 문구 체계)
+function StatusBadge({ status }: { status: SeasonalDate["sessionStatus"] }) {
+  const text = status === "COMPLETED" ? "완료" : status === "IN_PROGRESS" ? "수업 중" : "시작 전";
+  const tone =
+    status === "IN_PROGRESS"
+      ? "bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]"
+      : status === "COMPLETED"
+        ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+        : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300";
+  return <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${tone}`}>{text}</span>;
 }

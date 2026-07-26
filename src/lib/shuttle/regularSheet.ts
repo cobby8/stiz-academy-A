@@ -14,6 +14,8 @@ export type RegularShuttleStop = {
   parentPhone: string | null;
   note: string | null;
   sortOrder: number;        // 요일 안에서 도착시간·행순 정렬용
+  latitude?: number | null; // 정류장 좌표(지오코딩 후 채워짐)
+  longitude?: number | null;
 };
 
 const WD: Record<string, number> = { "일": 0, "월": 1, "화": 2, "수": 3, "목": 4, "금": 5, "토": 6 };

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth-guard";
-import { getSeasonalDatesForStaff, getDateRoster, setSeasonalAttendance } from "@/lib/seasonal/attendance";
+import { getDateRoster, setSeasonalAttendance } from "@/lib/seasonal/attendance";
+import { getKoreaDateKey, getTodayStaffClasses } from "@/lib/staff-session-queries";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  let staff;
-  try { staff = await requireStaff(); } catch { return NextResponse.json({ error: "권한이 필요합니다." }, { status: 401 }); }
+  // 인증 확인만 필요(대상자 조회는 getTodayStaffClasses가 로그인 컨텍스트로 접근권한을 판정)
+  try { await requireStaff(); } catch { return NextResponse.json({ error: "권한이 필요합니다." }, { status: 401 }); }
 
   const { searchParams } = request.nextUrl;
   const sessionDateId = searchParams.get("sessionDateId");
@@ -14,9 +15,11 @@ export async function GET(request: NextRequest) {
     if (sessionDateId) {
       return NextResponse.json(await getDateRoster(sessionDateId), { headers: { "Cache-Control": "no-store" } });
     }
-    const ymd = searchParams.get("date");
-    const data = await getSeasonalDatesForStaff(staff.appUserId, staff.appUserRole, ymd);
-    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
+    // 버그#2: 날짜 이동 시에도 홈과 동일한 반 단위 seasonal 목록을 반환한다.
+    const ymd = searchParams.get("date") || getKoreaDateKey();
+    const classes = await getTodayStaffClasses(ymd);
+    const seasonal = classes.filter((c) => c.kind === "SEASONAL");
+    return NextResponse.json({ ymd, classes: seasonal }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[api/staff/seasonal] GET failed:", error);
     return NextResponse.json({ error: "조회에 실패했습니다." }, { status: 500 });

@@ -10,11 +10,13 @@ const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> =
   { key: "applications", href: "/admin/seasonal?tab=applications", label: "신청 관리", icon: "assignment_ind" },
   { key: "attendance", href: "/admin/seasonal/attendance", label: "출석 관리", icon: "fact_check" },
   { key: "makeup", href: "/admin/seasonal/attendance?view=makeup", label: "보강 관리", icon: "cached" },
+  { key: "roster", href: "/admin/seasonal/shuttle", label: "셔틀 명단", icon: "list_alt" },
   { key: "shuttle", href: "/admin/shuttle", label: "셔틀 노선", icon: "directions_bus" },
 ];
 
 // 활성 탭 판정 — 경로(pathname) + ?view 쿼리 조합. 기존 판정 결과와 동일하다.
 function resolveActiveKey(pathname: string, view: string | null): string {
+  if (pathname.startsWith("/admin/seasonal/shuttle")) return "roster"; // 학생 통합 명단(더 구체적인 경로 먼저 판정)
   if (pathname.startsWith("/admin/shuttle")) return "shuttle";
   if (pathname.startsWith("/admin/seasonal/attendance")) return view === "makeup" ? "makeup" : "attendance";
   return "";

@@ -88,14 +88,8 @@ model Student {
   hopeNote            String? // 바라는 점
   agreementsJSON      String                      @default("{}") // 개인정보/이용약관/주의사항 동의 원본
   sourceImportRowId   String? // 마지막 시트 이관 원본 행
-  // 중복 학생 병합(soft merge): 값이 있으면 이 행은 흡수된 쪽이고, 대표 학생 id를 가리킨다.
-  // 하드 삭제를 하지 않기 위한 표시이므로, 학생을 세는 모든 조회는 `mergedIntoStudentId IS NULL`을 걸어야 한다.
-  mergedIntoStudentId String?
-  mergedAt            DateTime?
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
-  mergedInto          Student?                    @relation("StudentMerge", fields: [mergedIntoStudentId], references: [id])
-  mergedFrom          Student[]                   @relation("StudentMerge")
   attendances         Attendance[]
   enrollments         Enrollment[]
   guardians           Guardian[]
@@ -113,28 +107,6 @@ model Student {
   @@index([name, parentId])
   @@index([branch])
   @@index([sourceImportRowId])
-  @@index([mergedIntoStudentId])
-}
-
-/// 중복 학생 병합의 변경 이력 원장.
-/// 여기 남은 기록만으로 병합 전 상태로 되돌릴 수 있어야 한다(완전 가역).
-model StudentMergeLog {
-  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  mergeId         String // 한 번의 병합 실행 묶음 ID = 롤백 단위
-  winnerStudentId String // 대표(살아남는) 학생
-  loserStudentId  String // 흡수되는 학생
-  tableName       String
-  rowId           String
-  column          String
-  oldValue        String?
-  newValue        String?
-  action          String // MOVE | UPDATE | SOFT_SKIP | MARK
-  note            String?
-  createdAt       DateTime @default(now()) @db.Timestamptz(6)
-
-  @@index([mergeId])
-  @@index([loserStudentId])
-  @@index([tableName, rowId])
 }
 
 model Program {
@@ -503,14 +475,6 @@ model AcademySettings {
   uniformFormUrl              String? // 유니폼 신청 구글폼 URL
   useBuiltInTrialForm         Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
   useBuiltInEnrollForm        Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
-  // 셔틀 노선의 출발지·도착지 기준이 되는 학원 위치(정본).
-  // 좌표가 String인 이유: 이 테이블의 컬럼 자동 추가 fallback(admin.ts rawUpsertAcademySettings)이
-  // TEXT로 만들기 때문에 타입을 맞춰야 환경마다 컬럼 타입이 갈리지 않는다.
-  // 숫자 변환·범위 검증은 src/lib/shuttle/academyLocation.ts가 담당한다.
-  academyPlaceName            String?
-  academyAddress              String?
-  academyLatitude             String?
-  academyLongitude            String?
 }
 
 model ClassSlotOverride {
@@ -1722,6 +1686,7 @@ model SpecialProgramShuttleRequest {
   dropoffLocationSource String?
   dropoffAccuracyMeters Float?
   dropoffConfirmedAt DateTime? @db.Timestamptz(6)
+  dropoffSameAsPickup Boolean @default(false)
   locationConsentVersion String?
   note String?
   status String @default("REQUESTED")

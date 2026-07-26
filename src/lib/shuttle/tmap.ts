@@ -82,7 +82,16 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function distMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000, toR = (d: number) => (d * Math.PI) / 180;
+  const dLat = toR(b.lat - a.lat), dLng = toR(b.lng - a.lng);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
 // 응답 features의 LineString 좌표(도로 경로)를 순서대로 이어 붙인다. T맵 좌표는 [경도, 위도].
+// ⚠️ /routes(경유지)는 본 경로 뒤에 '경유지로 향하는 짧은 연결선'(도로명 없는 2점 세그먼트)을 붙여서 준다.
+//    그대로 이어붙이면 지도에 긴 직선 점프가 생기므로, 직전 끝점과 크게 끊긴(>150m) 세그먼트는 건너뛴다.
 function extractPath(value: unknown): { lat: number; lng: number }[] {
   const out: { lat: number; lng: number }[] = [];
   const feats = (value as { features?: unknown })?.features;
@@ -90,9 +99,17 @@ function extractPath(value: unknown): { lat: number; lng: number }[] {
   for (const f of feats) {
     const geom = (f as { geometry?: { type?: string; coordinates?: unknown } })?.geometry;
     if (geom?.type !== "LineString" || !Array.isArray(geom.coordinates)) continue;
+    const seg: { lat: number; lng: number }[] = [];
     for (const c of geom.coordinates) {
       const lng = Number((c as unknown[])?.[0]), lat = Number((c as unknown[])?.[1]);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) out.push({ lat, lng });
+      if (Number.isFinite(lat) && Number.isFinite(lng)) seg.push({ lat, lng });
+    }
+    if (!seg.length) continue;
+    // 이 세그먼트가 지금까지의 경로 끝과 끊겨 있으면(경유지 연결선 찌꺼기) 건너뛴다.
+    if (out.length && distMeters(out[out.length - 1], seg[0]) > 150) continue;
+    for (const c of seg) {
+      const last = out[out.length - 1];
+      if (!last || last.lat !== c.lat || last.lng !== c.lng) out.push(c);
     }
   }
   return out;

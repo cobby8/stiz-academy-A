@@ -109,6 +109,18 @@ const BOOLEAN_SETTINGS_COLUMNS = new Set([
     "useBuiltInTrialForm",
     "useBuiltInEnrollForm",
 ]);
+// 숫자(double precision) 컬럼 목록.
+// 왜 필요한가: 아래 rawUpsertAcademySettings의 "없는 컬럼 자동 생성" fallback은
+// 여기(그리고 BOOLEAN 목록)에 없으면 무조건 TEXT로 만든다. 좌표처럼 이미 마이그레이션이
+// double precision으로 만든 컬럼을 TEXT로 재생성하면 환경마다 타입이 갈리고,
+// 반대로 숫자 컬럼에 문자열을 바인딩하면 Postgres가 42804로 저장을 거부한다.
+// (실측: float8 컬럼에 문자열 파라미터 → ERROR 42804 "is of type double precision but expression is of type text")
+const NUMERIC_SETTINGS_COLUMNS = new Set([
+    "shuttleDepotLatitude",
+    "shuttleDepotLongitude",
+    "shuttleHubLatitude",
+    "shuttleHubLongitude",
+]);
 
 function revalidateProgramAdminCaches() {
     revalidateTag("admin-programs", { expire: 0 });
@@ -196,6 +208,10 @@ function revalidateMakeupAdminCaches() {
     revalidateTag("admin-classes", { expire: 0 });
 }
 
+// ⚠️ 현재 이 함수를 호출하는 곳은 없다(전수 검색 확인).
+//    실제 컬럼 생성은 rawUpsertAcademySettings의 fallback이 담당한다.
+//    따라서 여기 목록만 고쳐도 실 DB에는 아무 영향이 없다 — 반드시 아래
+//    BOOLEAN/NUMERIC 목록과 ALLOWED_SETTINGS_COLUMNS를 함께 맞춰야 한다.
 export async function ensureAcademySettingsColumns() {
     if (_columnsEnsured) return;
     const columns: [string, string][] = [
@@ -231,6 +247,15 @@ export async function ensureAcademySettingsColumns() {
         ["academyAddress", "TEXT"],
         ["academyLatitude", "TEXT"],
         ["academyLongitude", "TEXT"],
+        // 차고지·무료 탑승 거점 좌표는 마이그레이션이 DOUBLE PRECISION으로 만든다.
+        // 여기서 TEXT로 만들면 타입이 갈리므로 반드시 동일 타입으로 맞춘다.
+        ["shuttleDepotAddress", "TEXT"],
+        ["shuttleDepotLatitude", "DOUBLE PRECISION"],
+        ["shuttleDepotLongitude", "DOUBLE PRECISION"],
+        ["shuttleHubName", "TEXT"],
+        ["shuttleHubAddress", "TEXT"],
+        ["shuttleHubLatitude", "DOUBLE PRECISION"],
+        ["shuttleHubLongitude", "DOUBLE PRECISION"],
     ];
     for (const [col, type] of columns) {
         try {
@@ -269,16 +294,43 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'academyLongitude',
 ] as const;
 
+const ALLOWED_SETTINGS_COLUMN_SET: ReadonlySet<string> = new Set(ALLOWED_SETTINGS_COLUMNS);
+
+// 숫자 컬럼에는 문자열을 그대로 넣으면 Postgres가 42804로 거부한다.
+// 폼에서 온 "37.61" 같은 문자열을 숫자로 바꿔서 바인딩한다.
+function coerceSettingValue(col: string, value: unknown) {
+    if (value === null || value === undefined) return value;
+    if (!NUMERIC_SETTINGS_COLUMNS.has(col)) return value;
+    if (typeof value === "number") return value;
+    const parsed = Number(String(value).trim());
+    if (!Number.isFinite(parsed)) {
+        // 조용히 null로 만들면 좌표가 사라져 셔틀 경로가 깨진다. 차라리 실패시킨다.
+        throw new Error(`설정값 "${col}"이(가) 숫자가 아닙니다.`);
+    }
+    return parsed;
+}
+
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
     // singleton 행이 없으면 생성
     await prisma.$executeRawUnsafe(
         `INSERT INTO "AcademySettings" (id, "createdAt", "updatedAt") VALUES ('singleton', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`
     );
 
+    // 허용 목록에 없는 키는 아무 에러 없이 버려진다(조용한 실패).
+    // 컬럼을 새로 추가하고 ALLOWED_SETTINGS_COLUMNS 등록을 잊는 실수를 로그로 잡는다.
+    const droppedKeys = Object.keys(payload).filter(
+        key => payload[key] !== undefined && !ALLOWED_SETTINGS_COLUMN_SET.has(key)
+    );
+    if (droppedKeys.length > 0) {
+        console.warn(
+            `[rawUpsert] ALLOWED_SETTINGS_COLUMNS에 없어 저장하지 않은 키: ${droppedKeys.join(", ")}`
+        );
+    }
+
     const colsToUpdate = ALLOWED_SETTINGS_COLUMNS.filter(col => payload[col] !== undefined);
     if (colsToUpdate.length === 0) return;
 
-    const values = colsToUpdate.map(col => payload[col]);
+    const values = colsToUpdate.map(col => coerceSettingValue(col, payload[col]));
 
     // 단일 배치 UPDATE: 19개 개별 쿼리(~1,400ms) → 쿼리 1개(~75ms)
     // 신규 컬럼 없을 때까지 재시도 (최대 컬럼 수)
@@ -297,7 +349,11 @@ async function rawUpsertAcademySettings(payload: Record<string, any>) {
             if (missingCol) {
                 // 해당 컬럼만 추가 후 재시도
                 try {
-                    const colType = BOOLEAN_SETTINGS_COLUMNS.has(missingCol) ? 'BOOLEAN DEFAULT false' : 'TEXT';
+                    const colType = BOOLEAN_SETTINGS_COLUMNS.has(missingCol)
+                        ? 'BOOLEAN DEFAULT false'
+                        : NUMERIC_SETTINGS_COLUMNS.has(missingCol)
+                            ? 'DOUBLE PRECISION'
+                            : 'TEXT';
                     await prisma.$executeRawUnsafe(
                         `ALTER TABLE "AcademySettings" ADD COLUMN IF NOT EXISTS "${missingCol}" ${colType}`
                     );

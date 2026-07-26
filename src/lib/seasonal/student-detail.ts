@@ -11,8 +11,8 @@ export type StudentDetail = {
   classes: { title: string; classStart: string | null; classEnd: string | null; status: string | null }[];
   shuttle: {
     ride: boolean;
-    pickupLocation: string | null; pickupPinned: boolean; pickupApprox: boolean;
-    dropoffLocation: string | null; dropoffPinned: boolean; dropoffApprox: boolean;
+    pickupLocation: string | null; pickupPinned: boolean; pickupApprox: boolean; pickupLat: number | null; pickupLng: number | null;
+    dropoffLocation: string | null; dropoffPinned: boolean; dropoffApprox: boolean; dropoffLat: number | null; dropoffLng: number | null;
     dropoffSameAsPickup: boolean; pickupTime: string | null;
   } | null;
 };
@@ -52,8 +52,8 @@ export async function getSeasonalStudentDetail(applicationId: string): Promise<S
   );
 
   const sh = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT r.status, r."pickupLocation", r."pickupTime", r."pickupLocationSource" AS "pSrc", r."pickupLatitude" AS "pLat",
-            r."dropoffLocation", r."dropoffLocationSource" AS "dSrc", r."dropoffLatitude" AS "dLat",
+    `SELECT r.status, r."pickupLocation", r."pickupTime", r."pickupLocationSource" AS "pSrc", r."pickupLatitude" AS "pLat", r."pickupLongitude" AS "pLng",
+            r."dropoffLocation", r."dropoffLocationSource" AS "dSrc", r."dropoffLatitude" AS "dLat", r."dropoffLongitude" AS "dLng",
             COALESCE(r."dropoffSameAsPickup", false) AS "same"
        FROM "SpecialProgramShuttleRequest" r WHERE r."applicationId" = $1 LIMIT 1`,
     applicationId,
@@ -77,7 +77,9 @@ export async function getSeasonalStudentDetail(applicationId: string): Promise<S
     shuttle: s ? {
       ride: s.status !== "CANCELLED",
       pickupLocation: s.pickupLocation ?? null, pickupPinned: pinned(s.pSrc), pickupApprox: s.pLat != null && s.pSrc === "SEARCH",
+      pickupLat: s.pLat != null ? Number(s.pLat) : null, pickupLng: s.pLng != null ? Number(s.pLng) : null,
       dropoffLocation: s.dropoffLocation ?? null, dropoffPinned: pinned(s.dSrc), dropoffApprox: s.dLat != null && s.dSrc === "SEARCH",
+      dropoffLat: s.dLat != null ? Number(s.dLat) : null, dropoffLng: s.dLng != null ? Number(s.dLng) : null,
       dropoffSameAsPickup: s.same === true, pickupTime: s.pickupTime ?? null,
     } : null,
   };

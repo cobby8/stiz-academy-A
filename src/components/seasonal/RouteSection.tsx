@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RouteMapCanvas } from "@/components/seasonal/DispatchRouteMap";
 import type { DispatchSuggestion, DispatchChange } from "@/lib/seasonal/shuttle-optimize";
+import StudentDetailModal from "@/components/seasonal/StudentDetailModal";
 import { confirmedEtaMin, etaMinToLabel, reapplyManualEtaVehicles } from "@/lib/seasonal/shuttleStopEta";
 
 // 한 방향(등원 또는 하원)의 노선 섹션 — 목록 + 지도 + 순서변경/재계산/무료탑승 드래그/출발조정/저장을 자립적으로 담는다.
@@ -125,6 +126,8 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
   const [loadedFromSaved, setLoadedFromSaved] = useState(false);
   const [drag, setDrag] = useState<{ v: number; s: number } | null>(null);
   const [stuDrag, setStuDrag] = useState<{ v: number; s: number; i: number } | null>(null);
+  // 학생 이름 클릭 → 상세 모달(승하차 위치 편집 포함). applicationId가 있어야 열린다.
+  const [openStu, setOpenStu] = useState<{ applicationId: string; rosterId: string | null; requestId: string | null } | null>(null);
   const [hubBusy, setHubBusy] = useState(false);
   const [relocatedCount, setRelocatedCount] = useState(0); // 이번 로드에서 좌표 자동 반영된 학생 수(안내용)
   const [assignVi, setAssignVi] = useState<Record<string, number>>({}); // 신규자 requestId별 사용자가 고른 차량
@@ -266,7 +269,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
 
   // 신규·복귀자 배정용 ─────────────────────────────
   function buildStudent(c: DispatchChange) {
-    return { name: c.name, grade: c.grade, parentPhone: c.parentPhone, childPhone: c.childPhone, rosterId: c.rosterId, requestId: c.requestId, pickupLabel: c.label };
+    return { name: c.name, grade: c.grade, parentPhone: c.parentPhone, childPhone: c.childPhone, rosterId: c.rosterId, requestId: c.requestId, pickupLabel: c.label, applicationId: null };
   }
   // 한 차량에서 이 학생을 넣을 최적(추가비용 최소) 인접위치 k를 찾는다(기존 정차 순서 보존).
   function bestInsertK(cur: DispatchSuggestion, v: Run, S: Pt): number {
@@ -499,14 +502,14 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
                       <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11.5px] text-gray-500">
                         {s.isHub ? (
                           <>
-                            {s.students.map((st, i) => { const t = tel(st.parentPhone); return <span key={i} className="font-bold text-green-800 dark:text-green-200">{st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} draggable={false} className="ml-0.5 text-green-600">📞</a>}</span>; })}
+                            {s.students.map((st, i) => { const t = tel(st.parentPhone); return <span key={i} className="font-bold text-green-800 dark:text-green-200"><button type="button" onClick={() => st.applicationId && setOpenStu({ applicationId: st.applicationId, rosterId: st.rosterId, requestId: st.requestId })} className={st.applicationId ? "underline decoration-dotted underline-offset-2 hover:text-green-600" : ""}>{st.name}{st.grade ? `·${st.grade}` : ""}</button>{t && <a href={t} draggable={false} className="ml-0.5 text-green-600">📞</a>}</span>; })}
                             <span className="text-green-700 dark:text-green-300">학생을 여기로 끌어다 놓으면 무료 거점 {isPickup ? "탑승" : "하차"}으로 지정됩니다 · 워크인 정원 별도</span>
                           </>
                         ) : (
                           s.students.map((st, i) => {
                             const t = tel(st.parentPhone);
-                            return <span key={i} draggable onDragStart={(e) => { setStuDrag({ v: vIdx, s: sIdx, i }); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setStuDrag(null)} title="드래그해서 무료 거점으로 이동" className="cursor-grab select-none rounded px-0.5 hover:bg-lime-100 dark:hover:bg-lime-900/30">
-                              {st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} draggable={false} className="ml-0.5 font-bold text-green-600">📞</a>}</span>;
+                            return <span key={i} draggable onDragStart={(e) => { setStuDrag({ v: vIdx, s: sIdx, i }); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setStuDrag(null)} title="드래그해서 무료 거점으로 이동 · 이름 클릭 시 상세" className="cursor-grab select-none rounded px-0.5 hover:bg-lime-100 dark:hover:bg-lime-900/30">
+                              <button type="button" draggable={false} onClick={() => st.applicationId && setOpenStu({ applicationId: st.applicationId, rosterId: st.rosterId, requestId: st.requestId })} className={st.applicationId ? "font-bold underline decoration-dotted underline-offset-2 hover:text-brand-orange-600" : "font-bold"}>{st.name}{st.grade ? `·${st.grade}` : ""}</button>{t && <a href={t} draggable={false} className="ml-0.5 font-bold text-green-600">📞</a>}</span>;
                           })
                         )}
                       </div>
@@ -569,6 +572,15 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
           <div className="text-[12.5px] font-black text-amber-800 dark:text-amber-200">⚠ 좌표가 없어 배차하지 못한 학생 {sug.unassigned.length}명</div>
           <div className="mt-1 text-[12px] text-amber-700 dark:text-amber-200">{sug.unassigned.map((u) => `${u.name}(${u.label ?? "위치없음"})`).join(", ")}</div>
         </div>
+      )}
+
+      {openStu && (
+        <StudentDetailModal
+          applicationId={openStu.applicationId}
+          save={{ rosterId: openStu.rosterId, requestId: openStu.requestId }}
+          onChanged={() => { void switchTo(sug.date ?? date); }}
+          onClose={() => setOpenStu(null)}
+        />
       )}
     </section>
   );

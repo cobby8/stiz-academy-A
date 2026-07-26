@@ -16,7 +16,7 @@ export default async function RegularShuttlePage() {
 
   return (
     <>
-      <SeasonalHeader />
+      <SeasonalHeader eyebrow="SHUTTLE" title="셔틀 관리" subtitle="정규 수업 셔틀 노선을 요일·수업별로 관리합니다." />
       <ShuttleSectionTabs />
       <RegularShuttleClient initialStops={initial.stops} importedAt={initial.importedAt} defaultSheetUrl={DEFAULT_SHEET_URL} geo={geoPlain} />
     </>

@@ -17,7 +17,7 @@ export default async function SeasonalDispatchPage() {
 
   return (
     <>
-      <SeasonalHeader />
+      <SeasonalHeader eyebrow="SHUTTLE" title="셔틀 관리" subtitle="요일별 등원·하원 노선을 짜고 기사님 링크를 전달합니다." />
       <ShuttleSectionTabs />
       <DispatchClient initialPickup={initialPickup} initialDropoff={initialDropoff} />
     </>

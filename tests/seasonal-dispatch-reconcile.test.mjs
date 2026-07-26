@@ -115,3 +115,64 @@ test("전원이 다시 유효해지면 저장본이 그대로 복원된다(자�
   assert.equal(out[0].passengers, 3);
   assert.equal(out[0].over, false);
 });
+
+// ────────────────────────────────────────────────────────────────
+// 라벨 갱신(reconcile-on-read): 명단 라벨을 고치면 저장본의 얼어붙은 라벨도 읽을 때 따라온다.
+// ────────────────────────────────────────────────────────────────
+
+test("(라벨) 학생 pickupLabel이 현재 명단 라벨로 갱신된다", () => {
+  const vehicles = [sampleVehicle()];
+  // req-1의 명단 라벨을 새 텍스트로 변경했다고 가정.
+  const labels = new Map([["req-1", "정차A-수정됨"], ["req-2", "정차A-수정됨"]]);
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3"]), labels);
+  const stopA = out[0].stops.find((s) => s.students.some((st) => st.requestId === "req-1"));
+  const s1 = stopA.students.find((st) => st.requestId === "req-1");
+  assert.equal(s1.pickupLabel, "정차A-수정됨");
+});
+
+test("(라벨) 비허브 정차의 표시 label이 첫 학생의 새 라벨로 갱신된다", () => {
+  const vehicles = [sampleVehicle()];
+  const labels = new Map([["req-1", "새라벨A"], ["req-2", "새라벨A"], ["req-3", "새라벨B"]]);
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3"]), labels);
+  const stopA = out[0].stops.find((s) => s.students.some((st) => st.requestId === "req-1"));
+  const stopB = out[0].stops.find((s) => s.students.some((st) => st.requestId === "req-3"));
+  assert.equal(stopA.label, "새라벨A");
+  assert.equal(stopB.label, "새라벨B");
+});
+
+test("(라벨) isHub 거점 라벨은 절대 갱신되지 않는다", () => {
+  const v = sampleVehicle();
+  // 거점 정차에도 학생을 하나 앉혀 두고, 라벨맵에 그 학생의 새 라벨을 넣어도 거점명은 그대로여야 한다.
+  const hub = v.stops.find((s) => s.isHub === true);
+  hub.students = [{ name: "거점학생", requestId: "req-hub", rosterId: null, pickupLabel: "무료 탑승 거점" }];
+  const labels = new Map([["req-hub", "바뀌면안됨"]]);
+  const out = reconcileSavedVehicles([v], new Set(["req-hub"]), labels);
+  const outHub = out[0].stops.find((s) => s.isHub === true);
+  assert.equal(outHub.label, "무료 탑승 거점", "허브 정차 label은 고정명 유지");
+  // 단, 학생 개인 pickupLabel은 갱신 대상(정차명과는 별개).
+  assert.equal(outHub.students[0].pickupLabel, "바뀌면안됨");
+});
+
+test("(라벨) 좌표·시각·순서는 라벨 갱신 중에도 불변", () => {
+  const vehicles = [sampleVehicle()];
+  const labels = new Map([["req-1", "X"], ["req-2", "X"], ["req-3", "Y"]]);
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3"]), labels);
+  const run = out[0];
+  assert.equal(run.departTime, "08:35");
+  assert.equal(run.arriveTime, "09:20");
+  assert.deepEqual(run.path, [{ lat: 37.6, lng: 127.1 }, { lat: 37.61, lng: 127.15 }]);
+  const stopA = run.stops.find((s) => s.students.some((st) => st.requestId === "req-1"));
+  assert.equal(stopA.lat, 37.60);
+  assert.equal(stopA.lng, 127.10);
+  assert.equal(stopA.etaLabel, "08:40 승차");
+  // 정차 순서 보존
+  assert.deepEqual(run.stops.map((s) => s.students.length), [2, 1, 0]);
+});
+
+test("(라벨) 라벨맵이 없으면 기존 라벨을 그대로 유지(하위호환)", () => {
+  const vehicles = [sampleVehicle()];
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3"]));
+  const stopA = out[0].stops.find((s) => s.label === "정차A");
+  assert.ok(stopA, "라벨맵 없으면 정차A 라벨 그대로");
+  assert.equal(stopA.students[0].pickupLabel, "정차A");
+});

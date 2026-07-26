@@ -16,14 +16,23 @@ type ReconcileRun = { stops?: unknown; capacity?: unknown };
 /**
  * 저장된 노선(vehicles)에서 그날 유효하지 않은 학생만 걸러낸다. **순수 함수**(부수효과·DB 접근 없음).
  *
- * 절대 손대지 않는 것(전개로 원본 유지): stops 순서, etaLabel, depotTime/departTime/arriveTime,
- *   path, lat/lng/label, provider/tmapMinutes/tmapKm. 재최적화·시각 재계산을 하지 않는다.
+ * 절대 손대지 않는 것(전개로 원본 유지): stops 순서, etaLabel/etaMinutes/etaManual, depotTime/departTime/arriveTime,
+ *   path, lat/lng, provider/tmapMinutes/tmapKm. 재최적화·시각 재계산·좌표 변경을 하지 않는다.
  * 바꾸는 것: 각 정차의 students를 유효 명단으로 필터 → 빈 정차 제거(단 isHub 정차는 유지) → passengers·over 재계산.
+ *   추가로 labelByRequestId가 주어지면 **표시용 텍스트 라벨만** 현재 명단 라벨로 갱신한다(좌표·경로 무관).
+ *   - 살아남은 각 학생의 pickupLabel = 현재 명단 라벨(없으면 기존값 유지).
+ *   - 비허브(isHub 아님) 정차의 label = 그 정차 첫 학생의 갱신된 라벨(학생 없으면 기존값 유지).
+ *   - isHub 정차 라벨은 절대 갱신하지 않는다(무료거점 고정명 보존).
  *
- * @param vehicles        저장 payload의 vehicles(Run[] 형태이나 구조만 신뢰).
- * @param validRequestIds 그날 실제로 태울 학생의 shuttleRequestId 집합.
+ * @param vehicles          저장 payload의 vehicles(Run[] 형태이나 구조만 신뢰).
+ * @param validRequestIds   그날 실제로 태울 학생의 shuttleRequestId 집합.
+ * @param labelByRequestId  (옵셔널·하위호환) requestId → 현재 명단 라벨. 주어지면 텍스트 라벨만 갱신한다.
  */
-export function reconcileSavedVehicles(vehicles: unknown[], validRequestIds: Set<string>): unknown[] {
+export function reconcileSavedVehicles(
+  vehicles: unknown[],
+  validRequestIds: Set<string>,
+  labelByRequestId?: Map<string, string>,
+): unknown[] {
   if (!Array.isArray(vehicles)) return [];
   return vehicles.map((v) => {
     const run = (v ?? {}) as ReconcileRun;
@@ -33,11 +42,25 @@ export function reconcileSavedVehicles(vehicles: unknown[], validRequestIds: Set
     //    (rosterId/applicationItemId는 폴백모드에서 null이라 불안정하므로 절대 쓰지 않는다.)
     const filteredStops = rawStops.map((s) => {
       const stop = (s ?? {}) as ReconcileStop;
+      const isHub = stop.isHub === true;
       const students = Array.isArray(stop.students) ? (stop.students as unknown[]) : [];
       const kept = students.filter((st) => {
         const rid = (st as ReconcileStudent)?.requestId;
         return rid != null && validRequestIds.has(String(rid));
+      }).map((st) => {
+        // 라벨 갱신: 순수 표시용 텍스트만 현재 명단 라벨로 바꾼다(좌표·시각·순서 무관). 새 객체 반환(불변).
+        if (!labelByRequestId) return st;
+        const rid = (st as ReconcileStudent)?.requestId;
+        const next = rid != null ? labelByRequestId.get(String(rid)) : undefined;
+        return next != null ? { ...(st as object), pickupLabel: next } : st;
       });
+
+      // 비허브 정차의 표시 라벨을 첫 학생의 갱신된 라벨로 맞춘다. 허브는 고정명 보존이라 건드리지 않는다.
+      if (labelByRequestId && !isHub && kept.length > 0) {
+        const firstRid = (kept[0] as ReconcileStudent)?.requestId;
+        const nextLabel = firstRid != null ? labelByRequestId.get(String(firstRid)) : undefined;
+        if (nextLabel != null) return { ...(s as object), students: kept, label: nextLabel };
+      }
       return { ...(s as object), students: kept };
     });
 

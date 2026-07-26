@@ -80,7 +80,11 @@ export async function getSavedDispatchRoute(date: string | null, direction: stri
       try {
         const plan = await getConfirmedShuttleRosterForDate(d, dir);
         const validIds = new Set(plan.riders.map((rider) => rider.shuttleRequestId));
-        vehicles = reconcileSavedVehicles(savedVehicles, validIds);
+        // requestId → 현재 명단 라벨. reconcile이 저장본의 얼어붙은 정차 라벨을 이걸로 갱신한다(텍스트만·자가치유).
+        const labelByRequestId = new Map(
+          plan.riders.map((rider) => [rider.shuttleRequestId, rider.placeLabel]),
+        );
+        vehicles = reconcileSavedVehicles(savedVehicles, validIds, labelByRequestId);
         // reconcile 후(= 실제로 화면에 보이는) 노선과 그날 명단을 비교해 추가/변경만 뽑는다.
         // ★ 저장 payload는 절대 바꾸지 않는다 — diff는 순수 읽기 진단이다.
         const diff = diffSavedRoute(vehicles, plan.riders);

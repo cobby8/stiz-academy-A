@@ -128,6 +128,12 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
     finally { setBusy(false); }
   }
 
+  // 저장 후 목록을 다시 읽어 로컬 상태를 최신화(순서·시각 반영).
+  async function refreshStops() {
+    const g = await fetch("/api/admin/shuttle/regular", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+    if (g?.stops) { setStops(g.stops); setImportedAt(g.importedAt ?? null); }
+  }
+
   // 좌표 자동 채우기 — 브라우저 카카오 SDK로 정류장 이름을 검색해 좌표를 찾아 DB에 저장한다.
   async function runGeocode() {
     if (geoBusy || missingNames.length === 0) return;
@@ -167,7 +173,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-4">
+    <div className="mx-auto max-w-6xl px-4 py-4">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -247,12 +253,12 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                       ))}
                     </div>
                     <div className="mt-3 space-y-3">
-                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="BOARD" geo={geo} />
-                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="ALIGHT" geo={geo} />
+                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="BOARD" geo={geo} onSaved={refreshStops} />
+                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="ALIGHT" geo={geo} onSaved={refreshStops} />
                     </div>
                   </>
                 )}
-                <p className="mt-3 text-[11px] text-gray-400">※ 지금은 시트 순서·시각 그대로 보여줍니다. 순서 드래그 변경·저장·기사님 링크·탑승 체크는 다음 단계입니다.</p>
+                <p className="mt-3 text-[11px] text-gray-400">※ 드래그(⠿)로 순서를 바꾸고 도착시각을 고친 뒤 <b>💾 저장</b>하세요. 기사님 링크·탑승 체크는 다음 단계입니다.</p>
               </div>
             ) : (
             <>

@@ -56,15 +56,35 @@ export async function saveRegularStopCoords(
   return { updated };
 }
 
+/** 정규 셔틀 정차의 순서(sortOrder)·도착시각(arriveTime)을 저장한다(원장 전용). id 기준 개별 갱신. */
+export async function saveRegularStopOrder(
+  updates: { id: string; sortOrder: number; arriveTime: string | null }[],
+): Promise<{ updated: number }> {
+  await requireAdmin();
+  let updated = 0;
+  for (const u of updates) {
+    const id = (u.id ?? "").trim();
+    if (!id || !Number.isFinite(u.sortOrder)) continue;
+    const arrive = typeof u.arriveTime === "string" && /^\d{1,2}:\d{2}$/.test(u.arriveTime.trim()) ? u.arriveTime.trim() : null;
+    const n = await prisma.$executeRawUnsafe(
+      `UPDATE "RegularShuttleStop" SET "sortOrder"=$1,"arriveTime"=$2 WHERE "id"=$3`,
+      Math.round(u.sortOrder), arrive, id,
+    );
+    updated += Number(n) || 0;
+  }
+  return { updated };
+}
+
 /** 저장된 정규 셔틀 정차를 요일 순·시간 순으로 돌려준다. */
 export async function getRegularShuttleStops(): Promise<{ stops: RegularShuttleStop[]; importedAt: string | null }> {
   try {
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `SELECT "weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
+      `SELECT "id","weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
          FROM "RegularShuttleStop" ORDER BY "weekday" ASC, "sortOrder" ASC`,
     );
     const WD = ["일", "월", "화", "수", "목", "금", "토"];
     const stops: RegularShuttleStop[] = rows.map((r) => ({
+      id: r.id != null ? String(r.id) : undefined,
       weekday: Number(r.weekday),
       weekdayLabel: WD[Number(r.weekday)] ?? "",
       classTime: (r.classTime as string | null) ?? null,

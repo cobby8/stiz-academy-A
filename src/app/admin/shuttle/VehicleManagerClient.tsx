@@ -64,7 +64,7 @@ export default function VehicleManagerClient({ initialVehicles }: { initialVehic
   const active = vehicles.filter((v) => v.isActive !== false);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-4">
+    <div className="mx-auto max-w-6xl px-4 py-4">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>

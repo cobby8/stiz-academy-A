@@ -10,18 +10,10 @@ const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> =
   { key: "applications", href: "/admin/seasonal?tab=applications", label: "신청 관리", icon: "assignment_ind" },
   { key: "attendance", href: "/admin/seasonal/attendance", label: "출석 관리", icon: "fact_check" },
   { key: "makeup", href: "/admin/seasonal/attendance?view=makeup", label: "보강 관리", icon: "cached" },
-  { key: "roster", href: "/admin/seasonal/shuttle", label: "셔틀 명단", icon: "list_alt" },
-  { key: "dispatch", href: "/admin/seasonal/dispatch", label: "자동 배차", icon: "route" },
-  { key: "regular", href: "/admin/shuttle/regular", label: "정규 셔틀", icon: "commute" },
-  { key: "shuttle", href: "/admin/shuttle", label: "차량 관리", icon: "directions_bus" },
 ];
 
 // 활성 탭 판정 — 경로(pathname) + ?view 쿼리 조합. 기존 판정 결과와 동일하다.
 function resolveActiveKey(pathname: string, view: string | null): string {
-  if (pathname.startsWith("/admin/seasonal/dispatch")) return "dispatch"; // 자동 배차
-  if (pathname.startsWith("/admin/seasonal/shuttle")) return "roster"; // 학생 통합 명단(더 구체적인 경로 먼저 판정)
-  if (pathname.startsWith("/admin/shuttle/regular")) return "regular"; // 정규 셔틀(더 구체적 경로 먼저)
-  if (pathname.startsWith("/admin/shuttle")) return "shuttle";
   if (pathname.startsWith("/admin/seasonal/attendance")) return view === "makeup" ? "makeup" : "attendance";
   return "";
 }

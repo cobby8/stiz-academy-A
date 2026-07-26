@@ -60,6 +60,16 @@ const MORE_OPS_PATHS = [
     "/admin/media-revocations",
 ];
 
+// 셔틀 관리 메뉴에 속하는 경로 판정 — 방학특강 배차/명단은 /admin/seasonal 하위지만
+// 사이드바에서는 "셔틀 관리"로 묶어 표시하므로, 방학특강 메뉴와 겹치지 않게 여기서 걸러낸다.
+function isShuttlePath(pathname: string): boolean {
+    return (
+        pathname.startsWith("/admin/shuttle") ||
+        pathname.startsWith("/admin/seasonal/shuttle") ||
+        pathname.startsWith("/admin/seasonal/dispatch")
+    );
+}
+
 export default function AdminShellClient({
     children,
     initialUserName,
@@ -196,7 +206,8 @@ export default function AdminShellClient({
                             <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
                             <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
                             <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/청구" />
-                            <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal") || pathname.startsWith("/admin/shuttle")} icon="🏀" label="방학특강" />
+                            <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal") && !isShuttlePath(pathname)} icon="🏀" label="방학특강" />
+                            <NavItem href="/admin/seasonal/dispatch" active={isShuttlePath(pathname)} icon="🚌" label="셔틀 관리" />
 
                             <details className="group mt-4" open={moreOpsActive}>
                                 <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 text-gray-300 transition-colors hover:bg-white/10 hover:text-white">

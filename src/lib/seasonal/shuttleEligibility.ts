@@ -39,17 +39,26 @@ function sqlList(values: string[]): string {
  * ⚠️ `it`(수강항목)·`o`(개설 반)는 LEFT JOIN으로 붙는 경우가 있다.
  * 그래서 `IS NULL OR ...` 가드를 반드시 함께 넣는다. 이게 없으면
  * 조인이 비어 있는 정상 행이 WHERE 절에서 통째로 사라진다.
+ *
+ * `shuttleRequest`(선택): 셔틀 신청 자체의 취소·거절까지 SQL에서 걸러야 하는 화면용.
+ * - 통합 명단 화면은 이 값을 **주지 않는다**. '미탑승'으로 눌러둔 학생도 행은 남겨야
+ *   나중에 다시 탑승으로 되돌릴 수 있기 때문이다(판정은 isRidingShuttleStatus로 한다).
+ * - 자동 배차처럼 "실제로 태울 사람"만 뽑는 곳은 이 값을 줘서 SQL에서 바로 제외한다.
  */
 export function seasonalShuttleEligibilitySql(alias: {
   application: string;
   item: string;
   offering: string;
+  shuttleRequest?: string;
 }): string {
   const closed = sqlList(CLOSED_SHUTTLE_STATUSES);
-  const { application: a, item: it, offering: o } = alias;
-  return [
+  const { application: a, item: it, offering: o, shuttleRequest: r } = alias;
+  const parts = [
     `${a}.status NOT IN (${closed})`,
     `(${it}.id IS NULL OR ${it}.status NOT IN (${closed}))`,
     `(${o}.id IS NULL OR ${o}.status <> '${CANCELLED_OFFERING_STATUS}')`,
-  ].join("\n        AND ");
+  ];
+  // 셔틀 상태는 '탑승 여부'라서 항상 거르면 안 된다. 요청한 화면에서만 조건을 추가한다.
+  if (r) parts.push(`${r}.status NOT IN (${closed})`);
+  return parts.join("\n        AND ");
 }

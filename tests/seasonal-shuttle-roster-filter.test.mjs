@@ -88,11 +88,44 @@ test("CSV 파일명에 탑승자 명단임이 드러난다", () => {
 
 // --- 자동 배차 ---
 
-test("자동 배차는 명단의 탑승자만 쓴다", () => {
-    assert.match(optimize, /getSeasonalShuttleRoster\(\)\)\.filter\(\(r\) => r\.ride\)/);
+// 자동 배차는 이제 통합 명단을 거치지 않고 날짜별 좌석(SpecialProgramEnrollmentDate)에서 직접 뽑는다.
+// 조회를 새로 짤 때마다 필터가 빠지는 사고가 반복됐으므로, 공용 기준을 쓰는지 자체를 고정한다.
+test("자동 배차 대상자는 공용 기준(shuttleEligibility)으로 거른다", () => {
+    assert.match(optimize, /import \{ seasonalShuttleEligibilitySql \} from "\.\/shuttleEligibility"/);
+    // 두 쿼리(날짜 목록 + 선택 날짜 탑승자) 모두에 공용 조각이 들어가야 한다.
+    const uses = optimize.match(/seasonalShuttleEligibilitySql\(\{ application: "a", item: "it", offering: "o", shuttleRequest: "r" \}\)/g) ?? [];
+    assert.equal(uses.length, 2);
+});
+
+// 공용 조각이 요구하는 별칭이 실제로 조인돼 있지 않으면 SQL이 런타임에 터진다.
+test("자동 배차 쿼리는 공용 기준이 쓰는 별칭(a/it/o)을 모두 조인한다", () => {
+    assert.match(optimize, /JOIN "SpecialProgramApplication" a ON a\.id = r\."applicationId"/);
+    assert.match(optimize, /JOIN "SpecialProgramApplicationItem" it ON it\.id = e\."applicationItemId"/);
+    assert.match(optimize, /JOIN "SpecialProgramOffering" o ON o\.id = it\."offeringId"/);
+});
+
+// 셔틀 상태를 `<> 'CANCELLED'`로만 보면 REJECTED가 탑승자로 샌다(과거 실제 사고).
+test("자동 배차는 셔틀 상태를 손으로 비교하지 않는다", () => {
+    assert.doesNotMatch(optimize, /r\.status <> 'CANCELLED'/);
+    assert.match(shared, /if \(r\) parts\.push\(`\$\{r\}\.status NOT IN \(\$\{closed\}\)`\)/);
+});
+
+// 통합 명단은 미탑승 되돌리기를 위해 r.status를 SQL에서 거르면 안 된다.
+// 그래서 공용 조각의 셔틀 조건은 '선택'이어야 하고, 명단 호출부는 그 인자를 주면 안 된다.
+test("셔틀 상태 조건은 선택 인자이고 통합 명단은 쓰지 않는다", () => {
+    assert.match(shared, /shuttleRequest\?: string;/);
+    assert.doesNotMatch(rosterQuery, /shuttleRequest/);
 });
 
 test("하원 기준 종료시각은 가장 늦게 끝나는 반을 쓴다", () => {
-    assert.doesNotMatch(optimize, /pool\.find\(\(r\) => r\.classEnd\)\?\.classEnd/);
-    assert.match(optimize, /const classEnd = pool\.reduce<string \| null>\(/);
+    assert.doesNotMatch(optimize, /const classEnd = riders\[0\]\?\.classEnd/);
+    assert.match(optimize, /const classEnd = riders\.reduce<string \| null>\(/);
+    // 등원은 반대로 가장 먼저 시작하는 반 기준이어야 지각이 안 난다.
+    assert.match(optimize, /const classStart = riders\.reduce<string \| null>\(/);
+});
+
+// 날짜별 배차인데 날짜 조건이 빠지면 다른 요일 학생까지 한 차에 실린다.
+test("탑승자 조회는 선택한 날짜로 좁힌다", () => {
+    assert.match(optimize, /\(sd\."startsAt" AT TIME ZONE 'Asia\/Seoul'\)::date = \$1::date/);
+    assert.match(optimize, /e\.status = 'SCHEDULED'/);
 });

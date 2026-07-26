@@ -3,12 +3,12 @@ import { suggestDispatch, type DispatchDirection } from "@/lib/seasonal/shuttle-
 
 export const dynamic = "force-dynamic";
 
-// 방학특강 셔틀 노선 자동 제안. requireAdmin은 엔진에서 강제한다.
+// 방학특강 셔틀 노선 자동 제안 — 날짜(요일 스케줄)·방향 기준. requireAdmin은 엔진에서 강제한다.
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({})) as { direction?: string; classStart?: string | null; capacity?: number };
+    const body = await request.json().catch(() => ({})) as { direction?: string; date?: string | null };
     const direction: DispatchDirection = body.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
-    const suggestion = await suggestDispatch({ direction, classStart: body.classStart ?? null, capacity: body.capacity });
+    const suggestion = await suggestDispatch({ direction, date: body.date ?? null });
     return NextResponse.json(suggestion, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[dispatch POST]", e);

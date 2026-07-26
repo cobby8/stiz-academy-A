@@ -257,18 +257,22 @@ export default function SessionInProgressClient({
     [students],
   );
 
-  function updateAttendance(studentId: string, status: AttendanceStatus) {
+  // studentId 파라미터명이지만 실제로는 로스터 행의 고유 id(정규=studentId / 방학특강=enrollmentDateId)다.
+  // 서버에는 그 행의 attendanceKey(방학특강이면 좌석ID)를 넘겨 좌석 기준으로 저장한다.
+  function updateAttendance(rowId: string, status: AttendanceStatus) {
     setMessage("");
+    const target = students.find((student) => student.id === rowId);
+    if (!target) return;
     startTransition(async () => {
       try {
-        const result = await saveStaffAttendance({ sessionId: session.id, studentId, status });
+        const result = await saveStaffAttendance({ sessionId: session.id, attendanceKey: target.attendanceKey, status });
         if (!result.ok) {
           setMessage(result.message);
           return;
         }
         setStudents((current) =>
           current.map((student) =>
-            student.id === studentId
+            student.id === rowId
               ? {
                   ...student,
                   status,
@@ -295,7 +299,7 @@ export default function SessionInProgressClient({
         for (const [index, student] of unchecked.entries()) {
           const result = await saveStaffAttendance({
             sessionId: session.id,
-            studentId: student.id,
+            attendanceKey: student.attendanceKey,
             status: "PRESENT",
           });
           if (!result.ok) {
@@ -469,7 +473,13 @@ export default function SessionInProgressClient({
 
       <section id="session-photos" className="scroll-mt-40 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <h2 className="mb-3 flex items-center gap-2 font-black"><span className="material-symbols-outlined text-[var(--brand-accent)]">photo_camera</span>수업 사진</h2>
-        <SessionPhotoUploader sessionId={session.id} students={students.map(({ id, name }) => ({ id, name }))} />
+        {/* 사진 태깅은 실제 Student(전환된 학생)만 대상으로 한다. 방학특강 미전환 신청자는 Student가 없어 제외. */}
+        <SessionPhotoUploader
+          sessionId={session.id}
+          students={students
+            .filter((student) => student.studentId)
+            .map((student) => ({ id: student.studentId as string, name: student.name }))}
+        />
       </section>
 
       <section id="session-memo" className="scroll-mt-40 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">

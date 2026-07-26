@@ -99,6 +99,11 @@ async function fetchAcademySettings() {
                 galleryImagesJSON: r.galleryImagesJSON ?? r.galleryimagesjson ?? null,
                 naverPlaceUrl: r.naverPlaceUrl ?? r.naverplaceurl ?? null,
                 uniformFormUrl: r.uniformFormUrl ?? r.uniformformurl ?? null,
+                // 셔틀 노선의 출발지·도착지로 쓰는 학원 위치(정본). 좌표는 TEXT라 읽는 쪽에서 Number()로 변환한다.
+                academyPlaceName: r.academyPlaceName ?? r.academyplacename ?? null,
+                academyAddress: r.academyAddress ?? r.academyaddress ?? null,
+                academyLatitude: r.academyLatitude ?? r.academylatitude ?? null,
+                academyLongitude: r.academyLongitude ?? r.academylongitude ?? null,
                 // 자체 폼 ON/OFF 플래그 (false=구글폼 모드, true=자체 폼 모드)
                 // TEXT 컬럼에서 'false' 문자열이 올 수 있어 toBool로 안전 변환
                 useBuiltInTrialForm: toBool(r.useBuiltInTrialForm ?? r.usebuiltintrialform, false),

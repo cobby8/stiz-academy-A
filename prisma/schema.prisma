@@ -503,6 +503,14 @@ model AcademySettings {
   uniformFormUrl              String? // 유니폼 신청 구글폼 URL
   useBuiltInTrialForm         Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
   useBuiltInEnrollForm        Boolean  @default(false) // true=자체 폼, false=구글폼 외부 링크
+  // 셔틀 노선의 출발지·도착지 기준이 되는 학원 위치(정본).
+  // 좌표가 String인 이유: 이 테이블의 컬럼 자동 추가 fallback(admin.ts rawUpsertAcademySettings)이
+  // TEXT로 만들기 때문에 타입을 맞춰야 환경마다 컬럼 타입이 갈리지 않는다.
+  // 숫자 변환·범위 검증은 src/lib/shuttle/academyLocation.ts가 담당한다.
+  academyPlaceName            String?
+  academyAddress              String?
+  academyLatitude             String?
+  academyLongitude            String?
 }
 
 model ClassSlotOverride {

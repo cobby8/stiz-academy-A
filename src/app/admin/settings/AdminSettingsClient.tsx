@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import ConfirmSubmitButton from "./ConfirmSubmitButton";
 import LazyRichTextEditor from "./LazyRichTextEditor";
 import { updateAcademySettings } from "@/app/actions/admin";
 import { BODY_FONT_OPTIONS, HEADING_FONT_OPTIONS, type FontOption } from "@/lib/fonts";
+import type { MapLocationData } from "@/components/maps/LocationPickerModal";
+
+// 지도 모달은 카카오 지도 SDK를 끌고 오는 무거운 컴포넌트라 실제로 열 때만 불러온다.
+const LocationPickerModal = dynamic(() => import("@/components/maps/LocationPickerModal"), { ssr: false });
 
 // ─── 적용 범위 뱃지 ────────────────────────────────────────────────────────────
 function AppliesTo({ pages }: { pages: string[] }) {
@@ -134,6 +139,14 @@ export default function AdminSettingsClient({
         } catch {}
         return [];
     });
+    // 셔틀 노선의 출발지·도착지로 쓰는 학원 위치. 지도에서 찍거나 직접 고칠 수 있다.
+    const [academyPin, setAcademyPin] = useState({
+        name: settings?.academyPlaceName || "",
+        address: settings?.academyAddress || "",
+        latitude: settings?.academyLatitude || "",
+        longitude: settings?.academyLongitude || "",
+    });
+    const [academyPickerOpen, setAcademyPickerOpen] = useState(false);
     const bodyFontCss = BODY_FONT_OPTIONS.find(f => f.key === bodyFont)?.css ?? "";
     const headingFontCss = headingFont === "same-as-body"
         ? bodyFontCss
@@ -172,6 +185,13 @@ export default function AdminSettingsClient({
         setIntroText(settings?.introductionText || "");
         setPhilosophyText(settings?.philosophyText || "");
         setFacilitiesText(settings?.facilitiesText || "");
+        // 셔틀 기준 학원 위치. 좌표는 TEXT로 저장되므로 문자열 그대로 입력칸에 넣는다.
+        setAcademyPin({
+            name: settings?.academyPlaceName || "",
+            address: settings?.academyAddress || "",
+            latitude: settings?.academyLatitude || "",
+            longitude: settings?.academyLongitude || "",
+        });
         try {
             setFacilityImages(settings?.facilitiesImagesJSON ? JSON.parse(settings.facilitiesImagesJSON) : []);
         } catch {
@@ -432,6 +452,75 @@ export default function AdminSettingsClient({
                                     className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
+
+                            {/* ── 셔틀 기준 학원 위치 ──────────────────────────
+                                위 "오시는 길"은 홈페이지에 보여주는 안내 문구라 자유롭게 바꿀 수 있다.
+                                반면 여기 좌표는 셔틀 노선의 출발지·도착지와 T맵 경로 계산의 기준점이라
+                                문구가 바뀌어도 흔들리면 안 되므로 별도 항목으로 관리한다. */}
+                            <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">셔틀 기준 학원 위치</p>
+                                        <p className="text-xs text-gray-400 mt-1">셔틀 노선 만들기의 &quot;학원으로 채우기&quot;와 반별 자동배치가 이 좌표를 사용합니다.</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAcademyPickerOpen(true)}
+                                        className="min-h-10 rounded-lg border border-gray-300 bg-gray-50 px-3 text-xs font-bold text-gray-800 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 transition"
+                                    >
+                                        지도에서 선택
+                                    </button>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2 mt-3">
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">학원 이름</label>
+                                        <input
+                                            name="academyPlaceName"
+                                            type="text"
+                                            value={academyPin.name}
+                                            onChange={(e) => setAcademyPin(p => ({ ...p, name: e.target.value }))}
+                                            placeholder="스티즈농구교실 다산2호점"
+                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">학원 주소</label>
+                                        <input
+                                            name="academyAddress"
+                                            type="text"
+                                            value={academyPin.address}
+                                            onChange={(e) => setAcademyPin(p => ({ ...p, address: e.target.value }))}
+                                            placeholder="경기 남양주시 다산중앙로20번길 10-32"
+                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">위도</label>
+                                        <input
+                                            name="academyLatitude"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={academyPin.latitude}
+                                            onChange={(e) => setAcademyPin(p => ({ ...p, latitude: e.target.value }))}
+                                            placeholder="37.6145054"
+                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">경도</label>
+                                        <input
+                                            name="academyLongitude"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={academyPin.longitude}
+                                            onChange={(e) => setAcademyPin(p => ({ ...p, longitude: e.target.value }))}
+                                            placeholder="127.1563116"
+                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-2">직접 입력해도 되지만, 지도에서 고르는 쪽이 정확합니다. 저장 시 대한민국 범위를 벗어난 좌표는 거부됩니다.</p>
+                            </div>
                         </div>
                     </section>
 
@@ -551,6 +640,31 @@ export default function AdminSettingsClient({
                 </form>
 
             </div>
+
+            {/* 학원 위치 지도 선택. 폼 밖에 두어 지도 안의 조작이 설정 저장을 건드리지 않게 한다.
+                여기서는 입력칸만 채우고, 실제 저장은 아래 "저장하기"를 눌러야 일어난다. */}
+            {academyPickerOpen && (
+                <LocationPickerModal
+                    title="학원 위치 선택"
+                    initialValue={(() => {
+                        const latitude = Number(academyPin.latitude);
+                        const longitude = Number(academyPin.longitude);
+                        if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !academyPin.latitude || !academyPin.longitude) return undefined;
+                        return { address: academyPin.address || academyPin.name || "학원", latitude, longitude, source: "MAP_PIN" as const };
+                    })()}
+                    onClose={() => setAcademyPickerOpen(false)}
+                    onConfirm={(value: MapLocationData) => {
+                        setAcademyPin(previous => ({
+                            // 이름은 원장이 부르는 이름(예: 다산2호점)이 정본이라 지도 결과로 덮지 않는다.
+                            name: previous.name,
+                            address: value.roadAddress || value.address,
+                            latitude: String(value.latitude),
+                            longitude: String(value.longitude),
+                        }));
+                        setAcademyPickerOpen(false);
+                    }}
+                />
+            )}
         </div>
     );
 }

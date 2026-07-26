@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 import AdminModal from "@/components/admin/AdminModal";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
@@ -88,7 +88,9 @@ interface ClassBasedCandidates {
   sessions: ClassCandidateSession[];
   totals: { sessions: number; students: number; pickupReady: number; dropoffReady: number; missingPickup: number; missingDropoff: number };
 }
-interface Payload { seasons: Season[]; selectedSeasonId?: string; vehicles: Vehicle[]; drivers: Driver[]; routes: RoutePlan[]; unassignedRequests: ShuttleRequest[]; classBasedCandidates?: ClassBasedCandidates | null }
+/** 셔틀 기준점이 되는 학원 위치. 서버가 DB(AcademySettings) → 환경변수 순으로 골라 내려준다. */
+interface AcademyLocation { name: string; address?: string | null; latitude: number; longitude: number; source?: "SETTINGS" | "ENV" }
+interface Payload { seasons: Season[]; selectedSeasonId?: string; academyLocation?: AcademyLocation | null; vehicles: Vehicle[]; drivers: Driver[]; routes: RoutePlan[]; unassignedRequests: ShuttleRequest[]; classBasedCandidates?: ClassBasedCandidates | null }
 interface OptimizationPreview { provider: string; routeId: string; routeName: string; totalDistance?: number; totalTime?: number; stops: Array<{ id: string; previousOrder: number; recommendedOrder: number; name: string; address?: string | null; passengerCount: number }> }
 interface ClassPlacementPreview {
   provider: string;
@@ -145,7 +147,7 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
       const response = await fetch(`/api/admin/shuttle?${query.toString()}`, { cache: "no-store" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "셔틀 노선 정보를 불러오지 못했습니다.");
-      const payload: Payload = { seasons: body.seasons ?? [], vehicles: body.vehicles ?? [], drivers: body.drivers ?? [], routes: body.routes ?? [], unassignedRequests: body.unassignedRequests ?? [], classBasedCandidates: body.classBasedCandidates ?? null, selectedSeasonId: body.selectedSeasonId };
+      const payload: Payload = { seasons: body.seasons ?? [], vehicles: body.vehicles ?? [], drivers: body.drivers ?? [], routes: body.routes ?? [], unassignedRequests: body.unassignedRequests ?? [], classBasedCandidates: body.classBasedCandidates ?? null, academyLocation: body.academyLocation ?? null, selectedSeasonId: body.selectedSeasonId };
       setData(payload);
       const nextSeasonId = requestedSeasonId || payload.selectedSeasonId || payload.seasons[0]?.id || "";
       setSeasonId(nextSeasonId);
@@ -434,7 +436,9 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
     </div>}
 
     {modal === "vehicle" && <SimpleModal title="차량 등록" onClose={() => setModal(null)}><form onSubmit={(event) => void createResource(event, "vehicle")} className="space-y-4"><Input name="name" label="차량명" required placeholder="예: 스타리아 1호차" autoFocus /><Input name="plateNumber" label="차량번호" placeholder="예: 12가 3456" /><Input name="capacity" label="승차 정원" type="number" min="1" required /><Input name="notes" label="메모" /><ModalActions pending={pending} onClose={() => setModal(null)} /></form></SimpleModal>}
-    {modal === "route" && <SimpleModal title={`${direction === "PICKUP" ? "등원" : "하원"} 노선 만들기`} onClose={() => setModal(null)}><form onSubmit={(event) => void createResource(event, "route")} className="space-y-4"><Input name="name" label="노선명" required placeholder="예: 여름특강 등원 A노선" autoFocus /><label className="block text-sm font-bold">차량<select name="vehicleId" required className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">선택</option>{data.vehicles.filter((vehicle) => vehicle.isActive !== false).map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name} ({vehicle.capacity}명)</option>)}</select></label><label className="block text-sm font-bold">담당 기사<select name="driverUserId" required className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">기사 선택</option>{data.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}{driver.phone ? ` (${driver.phone})` : ""}</option>)}</select></label><Input name="serviceDate" label="운행일" type="date" /><EndpointFields prefix="origin" label="출발지" /><EndpointFields prefix="destination" label="도착지" /><p className="text-xs text-gray-500">현재는 출발·도착 좌표를 직접 입력합니다. 다음 자동 경로 단계에서 지도 선택으로 교체됩니다.</p><ModalActions pending={pending} onClose={() => setModal(null)} /></form></SimpleModal>}
+    {modal === "route" && <SimpleModal title={`${direction === "PICKUP" ? "등원" : "하원"} 노선 만들기`} onClose={() => setModal(null)}><form onSubmit={(event) => void createResource(event, "route")} className="space-y-4"><Input name="name" label="노선명" required placeholder="예: 여름특강 등원 A노선" autoFocus /><label className="block text-sm font-bold">차량<select name="vehicleId" required className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">선택</option>{data.vehicles.filter((vehicle) => vehicle.isActive !== false).map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name} ({vehicle.capacity}명)</option>)}</select></label><label className="block text-sm font-bold">담당 기사<select name="driverUserId" required className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 dark:border-gray-600 dark:bg-gray-900"><option value="">기사 선택</option>{data.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}{driver.phone ? ` (${driver.phone})` : ""}</option>)}</select></label><Input name="serviceDate" label="운행일" type="date" /><EndpointFields prefix="origin" label="출발지" academy={data.academyLocation} /><EndpointFields prefix="destination" label="도착지" academy={data.academyLocation} />{data.academyLocation
+      ? <p className="text-xs text-gray-500 dark:text-gray-400">{direction === "PICKUP" ? "등원은 보통 학원이 도착지입니다." : "하원은 보통 학원이 출발지입니다."} <strong>학원으로 채우기</strong>를 누르면 장소명·주소·좌표가 한 번에 채워집니다. 채운 뒤에도 직접 고칠 수 있습니다.</p>
+      : <p role="alert" className="rounded-xl bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">학원 위치가 아직 등록되지 않아 <strong>학원으로 채우기</strong>를 쓸 수 없습니다. 관리자 → 설정 → &quot;연락처 및 위치&quot;에서 학원 위치를 지도로 지정한 뒤 다시 시도해 주세요. 그때까지는 좌표를 직접 입력할 수 있습니다.</p>}<ModalActions pending={pending} onClose={() => setModal(null)} /></form></SimpleModal>}
     {modal === "assign" && assignRequest && selectedRoute && (() => { const location = chosenLocation(assignRequest); return <SimpleModal title="학생 배정" onClose={() => setModal(null)}><form onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); void mutate({ resource: "route", id: selectedRoute.id, action: "assign", data: { shuttleRequestId: assignRequest.id, stop: { name: values.name, address: location.address, roadAddress: location.roadAddress, lat: Number(location.lat), lng: Number(location.lng), plannedAt: values.plannedAt || undefined, note: location.note } } }, "학생을 노선에 배정했습니다."); }} className="space-y-4"><p className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900"><strong>{assignRequest.childName || assignRequest.studentName}</strong><br />{location.address}<br /><span className="text-xs font-bold text-gray-500 dark:text-gray-400">{preferredTimeLabel(assignRequest.pickupTime)}</span></p><Input name="name" label="정류장 이름" required defaultValue={location.name} autoFocus /><Input name="plannedAt" label="확정 시간" type="time" /><p className="text-xs text-gray-500 dark:text-gray-400">여기 넣은 시간이 학부모·기사에게 안내되는 실제 탑승 시각입니다. 위 희망시간은 참고용입니다.</p><ModalActions pending={pending} onClose={() => setModal(null)} submitLabel="배정" /></form></SimpleModal>; })()}
     {modal === "confirm" && selectedRoute && <SimpleModal title="노선을 확정하시겠습니까?" onClose={() => setModal(null)}><p className="text-sm leading-6 text-gray-600 dark:text-gray-300">확정 후에는 정류장 순서와 학생 배정을 직접 바꿀 수 없습니다. 변경하려면 새 수정 버전을 만들어야 합니다.</p>{stopsMissingPlannedAt.length > 0 && <p role="alert" className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-bold leading-6 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">확정 시간이 비어 있는 정류장이 {stopsMissingPlannedAt.length}곳 있습니다({stopsMissingPlannedAt.slice(0, 3).map((stop) => stop.name).join(", ")}{stopsMissingPlannedAt.length > 3 ? ` 외 ${stopsMissingPlannedAt.length - 3}곳` : ""}). 이대로 확정하면 학부모 문자에 시각 대신 &quot;시간 확인 중&quot;이 발송됩니다.</p>}<dl className="mt-4 grid grid-cols-2 gap-2"><Metric label="학생" value={`${passengerCount}명`} /><Metric label="정류장" value={`${stops.length}곳`} /></dl><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setModal(null)} className="min-h-11 rounded-xl border border-gray-300 px-4 font-bold dark:border-gray-600">취소</button><button type="button" disabled={pending} onClick={() => void mutate({ resource: "route", id: selectedRoute.id, action: "confirm", data: {} }, "노선을 확정했습니다.")} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{pending ? "확정 중…" : "확정"}</button></div></SimpleModal>}
     {locationPicker && <LocationPickerModal title={pickerTitle} initialValue={pickerInitialValue} confirmPending={pending} onClose={() => setLocationPicker(null)} onConfirm={(value) => void saveRequestLocation(locationPicker, value)} />}
@@ -562,5 +566,41 @@ function rideStatusClass(status?: string | null) { return status === "BOARDED" |
 function Metric({ label, value, danger }: { label: string; value: string; danger?: boolean }) { return <div className={`rounded-xl p-3 ${danger ? "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-200" : "bg-gray-50 dark:bg-gray-900"}`}><dt className="text-[11px] font-bold text-gray-500">{label}</dt><dd className="mt-1 break-words text-sm font-black">{value}</dd></div>; }
 function SimpleModal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { const id = `shuttle-modal-${title.replace(/\s/g, "-")}`; return <AdminModal titleId={id} onClose={onClose}><div className="p-5 sm:p-6"><header className="mb-5 flex items-center justify-between gap-3"><h2 id={id} className="text-xl font-black">{title}</h2><button type="button" onClick={onClose} aria-label="닫기" className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700"><FontFreeIcon name="close" size={20} /></button></header>{children}</div></AdminModal>; }
 function Input({ label, autoFocus, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; autoFocus?: boolean }) { return <label className="block text-sm font-bold">{label}<input {...props} data-admin-modal-initial-focus={autoFocus ? "true" : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-gray-950 dark:border-gray-600 dark:bg-gray-900 dark:text-white" /></label>; }
-function EndpointFields({ prefix, label }: { prefix: "origin" | "destination"; label: string }) { return <fieldset className="rounded-xl border border-gray-200 p-3 dark:border-gray-700"><legend className="px-1 text-sm font-black">{label}</legend><div className="grid gap-3 sm:grid-cols-2"><Input name={`${prefix}Name`} label="장소명" required /><Input name={`${prefix}Address`} label="주소" required /><Input name={`${prefix}Latitude`} label="위도" type="number" step="any" required /><Input name={`${prefix}Longitude`} label="경도" type="number" step="any" required /></div></fieldset>; }
+/**
+ * 노선의 출발지·도착지 입력 묶음.
+ *
+ * 왜 상태를 들고 있나: 원장이 위경도를 손으로 치는 건 사실상 불가능하다. "학원으로 채우기"를 누르면
+ * 4칸(장소명·주소·위도·경도)이 한 번에 채워져야 하는데, 그러려면 값을 React가 쥐고 있어야 한다.
+ * 채운 뒤에도 그대로 수정할 수 있게 controlled input으로 두고, 저장은 기존처럼 FormData가 읽어간다.
+ */
+function EndpointFields({ prefix, label, academy }: { prefix: "origin" | "destination"; label: string; academy?: AcademyLocation | null }) {
+  const [values, setValues] = useState({ name: "", address: "", latitude: "", longitude: "" });
+  const update = (key: keyof typeof values) => (event: ChangeEvent<HTMLInputElement>) => setValues((previous) => ({ ...previous, [key]: event.target.value }));
+  // 주소가 비어 있으면 장소명으로 대신 채운다. 주소 칸이 required라 빈 채로 두면 저장이 막힌다.
+  const fillWithAcademy = () => {
+    if (!academy) return;
+    setValues({ name: academy.name, address: academy.address || academy.name, latitude: String(academy.latitude), longitude: String(academy.longitude) });
+  };
+  return <fieldset className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+    <legend className="px-1 text-sm font-black">{label}</legend>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs font-bold text-gray-500 dark:text-gray-400">{academy ? `학원: ${academy.name}` : "학원 위치 미등록"}</p>
+      <button
+        type="button"
+        onClick={fillWithAcademy}
+        disabled={!academy}
+        title={academy ? `${academy.address || academy.name} 좌표로 채웁니다` : "학원 위치가 등록되지 않았습니다"}
+        className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 text-xs font-black text-gray-800 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+      >
+        <FontFreeIcon name="school" size={16} />학원으로 채우기
+      </button>
+    </div>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Input name={`${prefix}Name`} label="장소명" required value={values.name} onChange={update("name")} />
+      <Input name={`${prefix}Address`} label="주소" required value={values.address} onChange={update("address")} />
+      <Input name={`${prefix}Latitude`} label="위도" type="number" step="any" required value={values.latitude} onChange={update("latitude")} />
+      <Input name={`${prefix}Longitude`} label="경도" type="number" step="any" required value={values.longitude} onChange={update("longitude")} />
+    </div>
+  </fieldset>;
+}
 function ModalActions({ pending, onClose, submitLabel = "저장" }: { pending: boolean; onClose: () => void; submitLabel?: string }) { return <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={onClose} disabled={pending} className="min-h-11 rounded-xl border border-gray-300 px-4 font-bold dark:border-gray-600">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{pending ? "처리 중…" : submitLabel}</button></div>; }

@@ -2,6 +2,7 @@ import { Prisma, ShuttleRouteDirection, ShuttleRoutePlanStatus } from "@prisma/c
 import { prisma } from "@/lib/prisma";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
+import { resolveAcademyShuttleLocation, type AcademyShuttleLocation } from "./academyLocation";
 import { chooseActiveShuttleAssignment } from "./assignment";
 import { optimizeWaypointOrderWithTmap, TmapApiError, type TmapWaypoint } from "./tmap";
 import { notifyShuttlePassengerNoShow, notifyShuttleRouteConfirmed } from "./notifications";
@@ -441,12 +442,15 @@ export async function getShuttleDashboard(
     note: request.note,
   }));
   const classBasedCandidates = selectedServiceDate ? await getClassBasedShuttleCandidates(selectedServiceDate) : null;
+  // 노선 만들기 모달의 "학원으로 채우기" 버튼이 쓸 값. 없으면 null이고 버튼은 비활성화된다.
+  const academyLocation = await getAcademyShuttleLocation();
 
   return {
     seasons,
     selectedSeasonId,
     selectedDirection,
     selectedServiceDate,
+    academyLocation,
     vehicles,
     drivers,
     routes: routes.map((route) => ({
@@ -687,22 +691,52 @@ export async function previewOptimizedRouteStops(actor: Actor, routeId: string) 
   };
 }
 
-function academyWaypoint(): TmapWaypoint {
-  const latitude = Number(process.env[ACADEMY_LATITUDE_ENV]);
-  const longitude = Number(process.env[ACADEMY_LONGITUDE_ENV]);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+/**
+ * 학원(셔틀 기준점) 위치를 읽는다. 정본은 DB(AcademySettings), 없으면 기존 환경변수.
+ *
+ * DB를 먼저 보는 이유: 환경변수는 배포 환경마다 따로 넣어야 해서 한 곳만 빠지면
+ * 반별 자동배치가 409로 죽는데, 원장이 스스로 고칠 방법이 없었다. 이제 관리자 설정 화면에서
+ * 지도로 찍어 고칠 수 있다. 환경변수는 DB 컬럼이 비어 있는 환경을 위한 fallback으로 남긴다.
+ *
+ * 실패해도 화면 전체가 죽으면 안 되므로(예: 셔틀 대시보드 첫 로딩) 조회 오류는 삼키고
+ * 환경변수 쪽으로 넘긴다. 값이 아예 없을 때 던지는 판단은 호출부(requireAcademyWaypoint)가 한다.
+ */
+export async function getAcademyShuttleLocation(): Promise<AcademyShuttleLocation | null> {
+  let settings: Record<string, unknown> | null = null;
+  try {
+    // PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe(simple query protocol)를 쓴다.
+    const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+      `SELECT "academyPlaceName", "academyAddress", "academyLatitude", "academyLongitude"
+         FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`,
+    );
+    settings = rows[0] ?? null;
+  } catch (error) {
+    // 컬럼이 아직 없는 환경(마이그레이션 미적용)에서도 환경변수로 계속 동작해야 한다.
+    console.warn("[shuttle] AcademySettings 학원 좌표 조회 실패 — 환경변수로 대체합니다.", (error as Error).message);
+  }
+  return resolveAcademyShuttleLocation({
+    settings: settings
+      ? { name: settings.academyPlaceName, address: settings.academyAddress, latitude: settings.academyLatitude, longitude: settings.academyLongitude }
+      : null,
+    env: {
+      name: process.env[ACADEMY_NAME_ENV],
+      latitude: process.env[ACADEMY_LATITUDE_ENV],
+      longitude: process.env[ACADEMY_LONGITUDE_ENV],
+    },
+  });
+}
+
+/** 자동배치처럼 학원 좌표가 반드시 있어야 하는 경로에서 쓴다. 없으면 어디서 고치는지 안내한다. */
+async function requireAcademyWaypoint(): Promise<TmapWaypoint & { address: string | null }> {
+  const academy = await getAcademyShuttleLocation();
+  if (!academy) {
     throw new ShuttleServiceError(
-      `${ACADEMY_LATITUDE_ENV}, ${ACADEMY_LONGITUDE_ENV} environment variables are required for class based shuttle placement.`,
+      "학원 위치가 아직 등록되지 않았습니다. 관리자 → 설정 → 연락처 및 위치에서 학원 위치를 지도로 지정해 주세요.",
       409,
       "ACADEMY_COORDINATES_REQUIRED",
     );
   }
-  return {
-    id: "academy",
-    name: process.env[ACADEMY_NAME_ENV]?.trim() || "STIZ Dasan Academy",
-    latitude,
-    longitude,
-  };
+  return { id: "academy", name: academy.name, address: academy.address, latitude: academy.latitude, longitude: academy.longitude };
 }
 
 function readyCandidateLocation(
@@ -727,7 +761,7 @@ export async function previewClassBasedShuttlePlacement(actor: Actor, input: Rec
     throw new ShuttleServiceError("Student shuttle location table is not available.", 409, "STUDENT_LOCATION_TABLE_UNAVAILABLE");
   }
 
-  const academy = academyWaypoint();
+  const academy = await requireAcademyWaypoint();
   const missingStudents: Array<{ studentId: string; studentName: string; className: string; reason: string }> = [];
   const waypoints: Array<TmapWaypoint & {
     studentId: string;
@@ -878,12 +912,13 @@ export async function createClassBasedShuttleRouteDraft(actor: Actor, input: Rec
         name: routeName,
         direction: preview.direction,
         serviceDate: new Date(`${preview.serviceDate}T00:00:00.000Z`),
+        // 주소가 등록돼 있으면 진짜 주소를 넣는다(예전엔 주소 칸에도 장소명을 넣고 있었다).
         originName: preview.academy.name,
-        originAddress: preview.academy.name,
+        originAddress: preview.academy.address || preview.academy.name,
         originLatitude: preview.academy.latitude,
         originLongitude: preview.academy.longitude,
         destinationName: preview.academy.name,
-        destinationAddress: preview.academy.name,
+        destinationAddress: preview.academy.address || preview.academy.name,
         destinationLatitude: preview.academy.latitude,
         destinationLongitude: preview.academy.longitude,
       },

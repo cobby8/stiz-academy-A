@@ -26,6 +26,7 @@ import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings } from "@/lib/queries";
 import { notMergedStudent } from "@/lib/studentVisibility";
 import { createTrialEnrollShortLink } from "@/lib/enroll-short-link";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
+import { validateAcademyCoordinateInput } from "@/lib/shuttle/academyLocation";
 import { assertSolapiShortSms } from "@/lib/sms-byte-length";
 import { renderSmsTemplate } from "@/lib/smsTemplate";
 import {
@@ -223,6 +224,13 @@ export async function ensureAcademySettingsColumns() {
         ["uniformFormUrl", "TEXT"],
         ["useBuiltInTrialForm", "BOOLEAN DEFAULT false"],  // 자체 폼 ON/OFF (false=구글폼)
         ["useBuiltInEnrollForm", "BOOLEAN DEFAULT false"], // 자체 폼 ON/OFF (false=구글폼)
+        // 셔틀 노선의 출발지·도착지로 쓰는 학원 위치. 좌표도 TEXT인 이유는
+        // 아래 rawUpsertAcademySettings의 컬럼 자동 추가 fallback이 TEXT로 만들기 때문이다.
+        // (타입이 갈리면 환경마다 컬럼 타입이 달라진다. 검증은 shuttle/academyLocation.ts가 한다.)
+        ["academyPlaceName", "TEXT"],
+        ["academyAddress", "TEXT"],
+        ["academyLatitude", "TEXT"],
+        ["academyLongitude", "TEXT"],
     ];
     for (const [col, type] of columns) {
         try {
@@ -254,6 +262,11 @@ const ALLOWED_SETTINGS_COLUMNS = [
     'uniformFormUrl',
     'useBuiltInTrialForm',
     'useBuiltInEnrollForm',
+    // 셔틀 기준 학원 위치 (지도로 찍어 저장)
+    'academyPlaceName',
+    'academyAddress',
+    'academyLatitude',
+    'academyLongitude',
 ] as const;
 
 async function rawUpsertAcademySettings(payload: Record<string, any>) {
@@ -546,12 +559,28 @@ export async function updateAcademySettings(data: {
     uniformFormUrl?: string;
     useBuiltInTrialForm?: boolean;
     useBuiltInEnrollForm?: boolean;
+    academyPlaceName?: string;
+    academyAddress?: string;
+    academyLatitude?: string;
+    academyLongitude?: string;
 }) {
     await requireAdmin();
     // 빈 URL 필드는 기존 DB 값을 덮어쓰지 않음
     const payload = { ...data };
     if (payload.googleSheetsScheduleUrl === "") delete payload.googleSheetsScheduleUrl;
     if (payload.googleCalendarIcsUrl === "") delete payload.googleCalendarIcsUrl;
+
+    // 학원 좌표 검증: 틀린 좌표를 저장하면 셔틀 T맵 경로가 통째로 엉뚱한 곳으로 간다.
+    // 둘 다 비어 있으면 "아직 지정 안 함"이라는 정상 상태이므로 통과시킨다.
+    const hasLatitude = typeof payload.academyLatitude === "string" && payload.academyLatitude.trim() !== "";
+    const hasLongitude = typeof payload.academyLongitude === "string" && payload.academyLongitude.trim() !== "";
+    if (hasLatitude || hasLongitude) {
+        const checked = validateAcademyCoordinateInput(payload.academyLatitude, payload.academyLongitude);
+        if (!checked.ok) throw new Error(checked.reason);
+        // 검증을 통과한 값으로 정규화해 저장한다(공백 제거, 숫자 형식 통일).
+        payload.academyLatitude = String(checked.latitude);
+        payload.academyLongitude = String(checked.longitude);
+    }
 
     // raw SQL 로 직접 저장 — 누락 컬럼은 rawUpsertAcademySettings 내부에서 lazily 추가
     try {

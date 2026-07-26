@@ -478,7 +478,9 @@ export async function startClassSession(input: {
     const sessionKey = sessionDateId ? `seasonal:${sessionDateId}` : `${classId}:${date}`;
     const result = await prisma.$transaction(async (tx) => {
       // 교사별 잠금은 두 휴대폰에서 동시에 눌러도 한 수업만 열리게 하는 안전장치입니다.
-      await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, access.staff.appUserId);
+      // pg_advisory_xact_lock는 void를 반환한다. $queryRawUnsafe로 부르면 Prisma가 void 컬럼 역직렬화에 실패(P2010)하므로,
+      // 결과를 읽지 않는 $executeRawUnsafe로 호출한다(락은 fire-and-forget).
+      await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, access.staff.appUserId);
 
       // 같은 수업의 빠른 중복 클릭은 새 장부를 만들지 않고 기존 장부로 복귀합니다.
       const existing = await tx.$queryRawUnsafe<SessionStartRow[]>(

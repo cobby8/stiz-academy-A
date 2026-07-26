@@ -3,6 +3,52 @@
 import { useMemo, useState } from "react";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
 
+// ── 카카오 지도 SDK(장소검색) 로더 ─────────────────────────────
+// REST 키는 401이라 브라우저 JS SDK로만 좌표를 찾을 수 있다(방학특강과 동일 방식).
+type KakaoPlace = { x: string; y: string; place_name: string; address_name: string };
+type KakaoSdk = {
+  maps: {
+    load: (cb: () => void) => void;
+    services: { Places: new () => { keywordSearch: (kw: string, cb: (data: KakaoPlace[], status: string) => void) => void } };
+  };
+};
+// 다른 파일에서 이미 window.kakao 타입을 선언하므로, 여기선 전역 선언 없이 캐스팅으로 접근한다.
+function winKakao(): KakaoSdk | undefined { return (window as unknown as { kakao?: KakaoSdk }).kakao; }
+let kakaoLoader: Promise<KakaoSdk> | null = null;
+function loadKakaoSdk(key: string): Promise<KakaoSdk> {
+  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
+  const k = winKakao();
+  if (k?.maps?.services) return Promise.resolve(k);
+  if (kakaoLoader) return kakaoLoader;
+  kakaoLoader = new Promise<KakaoSdk>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-stiz-kakao-map="true"]');
+    const onReady = () => {
+      const kk = winKakao();
+      if (!kk?.maps) { kakaoLoader = null; return reject(new Error("카카오 SDK 로드 실패")); }
+      kk.maps.load(() => resolve(kk));
+    };
+    if (existing) { existing.addEventListener("load", onReady); if (winKakao()?.maps) onReady(); return; }
+    const script = document.createElement("script");
+    script.dataset.stizKakaoMap = "true";
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(key)}&autoload=false&libraries=services`;
+    script.onload = onReady;
+    script.onerror = () => { kakaoLoader = null; reject(new Error("카카오 SDK 로드 실패")); };
+    document.head.appendChild(script);
+  });
+  return kakaoLoader;
+}
+// 장소 이름 하나를 좌표로. 첫 검색결과를 쓴다. 못 찾으면 null.
+function geocodePlace(sdk: KakaoSdk, keyword: string): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    try {
+      new sdk.maps.services.Places().keywordSearch(keyword, (data, status) => {
+        if (status === "OK" && data.length > 0) resolve({ lat: Number(data[0].y), lng: Number(data[0].x) });
+        else resolve(null);
+      });
+    } catch { resolve(null); }
+  });
+}
+
 // 정규 셔틀 — 구글 시트에서 가져온 요일별 하루 타임라인을 앱에서 본다.
 // 각 정차 = 승차/하차/학원경유/복귀. 시트 '가져오기'로 통째 갱신한다.
 
@@ -34,6 +80,16 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoProgress, setGeoProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // 좌표가 아직 없는 '고유 정류장 이름' 목록 — 지오코딩 대상.
+  const missingNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const s of stops) if (s.latitude == null || s.longitude == null) names.add(s.stopName);
+    return [...names];
+  }, [stops]);
+  const totalNames = useMemo(() => new Set(stops.map((s) => s.stopName)).size, [stops]);
 
   const weekdays = useMemo(() => {
     const present = new Set(stops.map((s) => s.weekday));
@@ -60,6 +116,44 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
     finally { setBusy(false); }
   }
 
+  // 좌표 자동 채우기 — 브라우저 카카오 SDK로 정류장 이름을 검색해 좌표를 찾아 DB에 저장한다.
+  async function runGeocode() {
+    if (geoBusy || missingNames.length === 0) return;
+    const key = process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY?.trim();
+    if (!key) { setErr("카카오 지도 키(NEXT_PUBLIC_KAKAO_MAP_JS_KEY)가 없습니다."); return; }
+    setGeoBusy(true); setMsg(null); setErr(null);
+    setGeoProgress({ done: 0, total: missingNames.length });
+    try {
+      const sdk = await loadKakaoSdk(key);
+      const found: { stopName: string; latitude: number; longitude: number }[] = [];
+      const failed: string[] = [];
+      for (let i = 0; i < missingNames.length; i++) {
+        const name = missingNames[i];
+        const c = await geocodePlace(sdk, name);
+        if (c) found.push({ stopName: name, latitude: c.lat, longitude: c.lng });
+        else failed.push(name);
+        setGeoProgress({ done: i + 1, total: missingNames.length });
+      }
+      if (found.length > 0) {
+        const r = await fetch("/api/admin/shuttle/regular-geocode", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entries: found }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j?.error || "좌표를 저장하지 못했습니다.");
+        // 로컬 상태에도 좌표 반영(새로고침 없이 핀 상태 갱신)
+        const coordMap = new Map(found.map((f) => [f.stopName, f]));
+        setStops((prev) => prev.map((s) => {
+          const c = coordMap.get(s.stopName);
+          return c ? { ...s, latitude: c.latitude, longitude: c.longitude } : s;
+        }));
+      }
+      const parts = [`${found.length}곳 좌표 저장`];
+      if (failed.length > 0) parts.push(`${failed.length}곳 못 찾음: ${failed.slice(0, 5).join(", ")}${failed.length > 5 ? " 외" : ""}`);
+      setMsg(parts.join(" · "));
+    } catch (e: any) { setErr(e?.message || "좌표 채우기에 실패했습니다."); }
+    finally { setGeoBusy(false); setGeoProgress(null); }
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-4">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -77,6 +171,23 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
           </label>
           <button onClick={importSheet} disabled={busy} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? "가져오는 중…" : "⬇ 시트에서 가져오기"}</button>
         </div>
+        {/* 좌표 채우기 */}
+        {stops.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-black text-gray-700 dark:text-gray-200">📍 정류장 좌표</p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {geoBusy && geoProgress
+                  ? `찾는 중… ${geoProgress.done}/${geoProgress.total}`
+                  : `${totalNames - missingNames.length}/${totalNames}곳 좌표 있음${missingNames.length > 0 ? ` · ${missingNames.length}곳 남음` : " · 완료"}`}
+              </p>
+            </div>
+            <button onClick={runGeocode} disabled={geoBusy || missingNames.length === 0}
+              className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40 dark:bg-white dark:text-brand-navy-900">
+              {geoBusy ? "채우는 중…" : missingNames.length === 0 ? "✓ 좌표 완료" : `📍 좌표 자동 채우기 (${missingNames.length})`}
+            </button>
+          </div>
+        )}
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
         {msg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {msg}</p>}
 
@@ -107,6 +218,9 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                       <span className="w-12 shrink-0 text-[13px] font-black text-blue-600 dark:text-blue-300">{s.arriveTime ?? "-"}</span>
                       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-black ${dir.cls}`}>{dir.label}</span>
                       <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-gray-900 dark:text-white">{s.stopName}</span>
+                      {s.latitude != null && s.longitude != null
+                        ? <span title="좌표 있음" className="shrink-0 text-[12px]">📍</span>
+                        : <span title="좌표 없음" className="shrink-0 text-[11px] font-black text-amber-500">⚠︎</span>}
                       {s.classTime && <span className="shrink-0 text-[11px] font-bold text-gray-400">{s.classTime}</span>}
                     </div>
                     {(s.studentName || t || tp) && (
@@ -123,7 +237,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
             </ol>
           </>
         )}
-        <p className="mt-3 text-[11px] text-gray-400">※ 지금은 시트를 그대로 가져와 보여줍니다. 좌표(핀)·지도·기사님 링크·탑승 체크는 다음 단계에서 붙입니다.</p>
+        <p className="mt-3 text-[11px] text-gray-400">※ 순서: ① 시트에서 가져오기 → ② 좌표 자동 채우기(⚠︎ 남은 곳은 이름을 시트에서 더 정확히 수정 후 다시 실행). 지도·기사님 링크·탑승 체크는 다음 단계에서 붙입니다.</p>
       </div>
     </div>
   );

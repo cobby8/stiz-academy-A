@@ -38,11 +38,29 @@ export async function importRegularShuttleFromSheet(sheetUrl: string): Promise<{
   return { imported: stops.length, title };
 }
 
+/** 정류장 이름별 좌표를 저장한다. 같은 이름의 모든 행에 동일 좌표를 채운다(원장 전용). */
+export async function saveRegularStopCoords(
+  entries: { stopName: string; latitude: number; longitude: number }[],
+): Promise<{ updated: number }> {
+  await requireAdmin();
+  let updated = 0;
+  for (const e of entries) {
+    const name = (e.stopName ?? "").trim();
+    if (!name || !Number.isFinite(e.latitude) || !Number.isFinite(e.longitude)) continue;
+    const n = await prisma.$executeRawUnsafe(
+      `UPDATE "RegularShuttleStop" SET "latitude"=$1,"longitude"=$2 WHERE "stopName"=$3`,
+      e.latitude, e.longitude, name,
+    );
+    updated += Number(n) || 0;
+  }
+  return { updated };
+}
+
 /** 저장된 정규 셔틀 정차를 요일 순·시간 순으로 돌려준다. */
 export async function getRegularShuttleStops(): Promise<{ stops: RegularShuttleStop[]; importedAt: string | null }> {
   try {
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `SELECT "weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","importedAt"
+      `SELECT "weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
          FROM "RegularShuttleStop" ORDER BY "weekday" ASC, "sortOrder" ASC`,
     );
     const WD = ["일", "월", "화", "수", "목", "금", "토"];
@@ -58,6 +76,8 @@ export async function getRegularShuttleStops(): Promise<{ stops: RegularShuttleS
       parentPhone: (r.parentPhone as string | null) ?? null,
       note: (r.note as string | null) ?? null,
       sortOrder: Number(r.sortOrder) || 0,
+      latitude: r.latitude != null ? Number(r.latitude) : null,
+      longitude: r.longitude != null ? Number(r.longitude) : null,
     }));
     const importedAt = rows[0]?.importedAt ? new Date(String(rows[0].importedAt)).toISOString() : null;
     return { stops, importedAt };

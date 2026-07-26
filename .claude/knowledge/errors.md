@@ -35,3 +35,10 @@
 - **해결(즉시)**: `src/lib/noticeContent.ts`의 `toNoticeHtml`은 이미 모든 사용자 텍스트를 `escapeHtml`로 이스케이프하고 화이트리스트 `<a>` 태그만 삽입하므로 출력이 이미 안전하다. 마지막 `return sanitizeHtml(out)`을 `return out`으로 바꾸고 sanitize import를 제거하면 jsdom 의존이 사라져 500 해소.
 - **해결(근본)**: 사이트 전역에서 서버측 sanitize가 깨진 상태(ISR 재검증 실패로 stale 누적). isomorphic-dompurify를 jsdom 비의존 새니타이저로 교체하거나 서버 번들 설정을 조정하는 별도 작업 필요.
 - **참조횟수**: 0
+
+### [2026-07-26] T맵 경유지최적화가 항상 400(9401)으로 실패 → 노선이 늘 '직선 추정'
+- **분류**: error
+- **발견자**: pm
+- **내용**: `src/lib/shuttle/tmap.ts`의 `optimizeWaypointOrderWithTmap`이 T맵 routeOptimization API를 호출하는데 두 가지 필수 조건을 어겨 **항상 400(code 9401 "필수 파라메터가 없습니다")**를 받고, `planRun`의 try/catch가 이를 삼켜 조용히 LOCAL(직선 추정) 폴백. 그래서 유효한 `TMAP_APP_KEY`가 있어도 "T맵 최적경로"가 절대 활성화되지 않았다. 실측 진단(실 키로 API 직접 호출): ①`startTime`(yyyyMMddHHmm)이 **필수** — 빼면 400, 넣으면 200. ②`viaPointId "0"`을 T맵이 **값 없음으로 취급** — 호출부(shuttle-optimize)가 `String(i)`로 0부터 매기면 첫 경유지가 "0"이라 항상 400. `carType`은 불필요(넣어도 무관), `searchOption`도 무관. 기본 자동차경로/POI API는 같은 키로 200이라 키·권한 문제 아님.
+- **해결**: tmap.ts에서 (1) 요청 본문에 `startTime: tmapStartTime()`(현재 시각 Asia/Seoul) 추가, (2) 호출부 id를 그대로 보내지 말고 내부 안전 id(`wp0`,`wp1`…)로 바꿔 전송한 뒤 응답 순서를 원래 id로 되돌린다(originalBySafe 맵). 호출부 계약(id 넣고 순서 받기)은 그대로. 회귀 테스트 `tmap-route-optimization.test.mjs`에 startTime 형식·viaPointId≠"0" 단언 추가.
+- **참조횟수**: 0

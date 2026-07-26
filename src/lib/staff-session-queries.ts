@@ -270,11 +270,25 @@ export async function getStaffSessionStudents(
   sessionId: string,
   classId: string,
 ): Promise<StaffSessionStudent[]> {
-  const sessionKinds = await prisma.$queryRawUnsafe<Array<{ sessionDateId: string | null }>>(
-    `SELECT "specialProgramSessionDateId" AS "sessionDateId" FROM "Session" WHERE id = $1 LIMIT 1`,
+  const sessionKinds = await prisma.$queryRawUnsafe<Array<{ sessionDateId: string | null; date: string | null; classId: string | null }>>(
+    `SELECT "specialProgramSessionDateId" AS "sessionDateId", to_char(date,'YYYY-MM-DD') AS date, "classId" FROM "Session" WHERE id = $1 LIMIT 1`,
     sessionId,
   );
-  const sessionDateId = sessionKinds[0]?.sessionDateId;
+  let sessionDateId = sessionKinds[0]?.sessionDateId ?? null;
+  // 폴백: 세션에 특강 회차(sessionDateId)가 안 붙어 있어도, 이 반이 '그날 방학특강 회차가 있는 연결반'이면
+  // 그 회차를 앵커로 삼아 방학특강(좌석 기준) 명단을 쓴다. (같은 반에 정규식 세션이 섞여 있어 김윤만 뜨던 문제 해결)
+  if (!sessionDateId && sessionKinds[0]?.date) {
+    const anchor = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT sd.id
+         FROM "SpecialProgramOffering" o
+         JOIN "SpecialProgramSessionDate" sd ON sd."offeringId" = o.id
+        WHERE o."linkedClassId" = $1
+          AND (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $2::date
+        LIMIT 1`,
+      sessionKinds[0].classId ?? classId, sessionKinds[0].date,
+    );
+    if (anchor[0]?.id) sessionDateId = anchor[0].id;
+  }
   if (sessionDateId) {
     await requireStaffSeasonalSessionAccess(sessionDateId);
     // ★ 좌석(SpecialProgramEnrollmentDate) 기준 로스터 — 전환 여부와 무관하게 APPROVED 신청항목 전원.
@@ -303,8 +317,7 @@ export async function getStaffSessionStudents(
               e."attendanceStatus" AS status,
               e."attendanceNote" AS "attendanceNote",
               e."arrivedAt" AS "arrivedAt"
-       FROM "Session" s
-       JOIN "SpecialProgramSessionDate" anchor_sd ON anchor_sd.id = s."specialProgramSessionDateId"
+       FROM "SpecialProgramSessionDate" anchor_sd
        JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
        JOIN "SpecialProgramSessionDate" sd
          ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
@@ -325,9 +338,9 @@ export async function getStaffSessionStudents(
          ON e."applicationItemId" = i.id AND e."sessionDateId" = sd.id AND e.status = 'SCHEDULED'
        -- 전환된 학생 이름 우선(병합 학생은 제외되어 childName 폴백)
        LEFT JOIN "Student" st ON st.id = app."convertedStudentId" AND ${notMergedStudent("st")}
-       WHERE s.id = $1
+       WHERE anchor_sd.id = $1
        ORDER BY COALESCE(st.name, app."childName")`,
-      sessionId,
+      sessionDateId,
     );
     return rows.map((row) => ({
       id: row.enrollmentDateId,

@@ -53,14 +53,29 @@ type StaffClassPersonRow = Omit<
 
 async function resolveSessionDateId(sessionId?: string | null) {
   if (!sessionId) return null;
-  const rows = await prisma.$queryRawUnsafe<Array<{ sessionDateId: string | null }>>(
-    `SELECT "specialProgramSessionDateId" AS "sessionDateId"
+  const rows = await prisma.$queryRawUnsafe<Array<{ sessionDateId: string | null; classId: string | null; date: string | null }>>(
+    `SELECT "specialProgramSessionDateId" AS "sessionDateId", "classId", to_char(date,'YYYY-MM-DD') AS date
        FROM "Session"
       WHERE id = $1
       LIMIT 1`,
     sessionId,
   );
-  return rows[0]?.sessionDateId ?? null;
+  if (rows[0]?.sessionDateId) return rows[0].sessionDateId;
+  // 폴백: 세션에 특강 회차가 안 붙어 있어도, 이 반이 '그날 방학특강 회차가 있는 연결반'이면 그 회차를 앵커로 삼는다.
+  // (같은 반에 정규식 세션이 섞여 있어 특강 명단이 정규(1명)로 폴백되던 문제 해결)
+  if (rows[0]?.classId && rows[0]?.date) {
+    const anchor = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT sd.id
+         FROM "SpecialProgramOffering" o
+         JOIN "SpecialProgramSessionDate" sd ON sd."offeringId" = o.id
+        WHERE o."linkedClassId" = $1
+          AND (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $2::date
+        LIMIT 1`,
+      rows[0].classId, rows[0].date,
+    );
+    if (anchor[0]?.id) return anchor[0].id;
+  }
+  return null;
 }
 
 /**

@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { getInstagramRuntimeStatus } from "@/lib/instagram";
 import { getPaymentProviderPublicStatus } from "@/lib/payment-ledger";
 import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import {
     getAcademySettings,
     getAttendanceClassOptions,
@@ -235,7 +236,7 @@ async function loadDashboardPrimaryPayload() {
     try {
         const rows = await prisma.$queryRawUnsafe<DashboardPrimaryRow[]>(
             `SELECT
-                (SELECT COUNT(*)::int FROM "Student") AS "studentCount",
+                (SELECT COUNT(*)::int FROM "Student" s WHERE ${notMergedStudent("s")}) AS "studentCount",
                 (SELECT COUNT(*)::int FROM "Program") AS "programCount",
                 (SELECT COUNT(*)::int FROM "Coach") AS "coachCount",
                 (SELECT COUNT(*)::int FROM "Class") AS "classCount",
@@ -333,7 +334,8 @@ async function getRecentStudents() {
             `SELECT s.id, s.name, s."createdAt", u.name AS parent_name
              FROM "Student" s
              LEFT JOIN "User" u ON s."parentId" = u.id
-             WHERE s."createdAt" >= NOW() - INTERVAL '7 days'
+             WHERE ${notMergedStudent("s")}
+               AND s."createdAt" >= NOW() - INTERVAL '7 days'
              ORDER BY s."createdAt" DESC
              LIMIT 5`,
         );
@@ -587,6 +589,7 @@ async function getStudentSheetImportSummary() {
                         css.status
                     FROM "Student" s
                     LEFT JOIN current_student_status css ON css."studentId" = s.id
+                    WHERE ${notMergedStudent("s")}
                 )
                 SELECT
                     COUNT(*)::int AS total,

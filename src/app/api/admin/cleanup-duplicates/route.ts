@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,8 @@ export async function GET() {
     // 1단계: 같은 이름이 2명 이상인 이름 목록 조회
     const duplicateNames = await prisma.$queryRawUnsafe<{ name: string; cnt: number }[]>(
       `SELECT name, COUNT(*)::int as cnt
-       FROM "Student"
+       FROM "Student" s
+       WHERE ${notMergedStudent("s")}
        GROUP BY name
        HAVING COUNT(*) >= 2
        ORDER BY name`
@@ -78,8 +80,8 @@ export async function GET() {
       createdAt: string;
     }[]>(
       `SELECT id, name, "birthDate"::text, school, grade, "parentId", phone, "createdAt"::text
-       FROM "Student"
-       WHERE name IN (${placeholders})
+       FROM "Student" s
+       WHERE ${notMergedStudent("s")} AND name IN (${placeholders})
        ORDER BY name, "createdAt" DESC`,
       ...nameList
     );
@@ -151,7 +153,8 @@ export async function POST() {
     // 1단계: 삭제 대상 학생 ID 목록 산출 (GET과 동일한 로직)
     const duplicateNames = await prisma.$queryRawUnsafe<{ name: string }[]>(
       `SELECT name
-       FROM "Student"
+       FROM "Student" s
+       WHERE ${notMergedStudent("s")}
        GROUP BY name
        HAVING COUNT(*) >= 2`
     );
@@ -171,8 +174,8 @@ export async function POST() {
       parentId: string;
     }[]>(
       `SELECT id, name, school, grade, "parentId"
-       FROM "Student"
-       WHERE name IN (${placeholders})`,
+       FROM "Student" s
+       WHERE ${notMergedStudent("s")} AND name IN (${placeholders})`,
       ...nameList
     );
 
@@ -221,6 +224,8 @@ export async function POST() {
     // 3단계: 고아 User 삭제 (다른 Student가 없는 학부모)
     let orphanUsersDeleted = 0;
     for (const parentId of parentIdsToCheck) {
+      // ⚠️ 여기에는 병합 필터를 넣지 않는다.
+      //    흡수된 학생도 여전히 이 학부모를 참조하므로, 세지 않고 User를 지우면 FK가 깨진다.
       const remaining = await prisma.$queryRawUnsafe<{ cnt: number }[]>(
         `SELECT COUNT(*)::int as cnt FROM "Student" WHERE "parentId" = $1`,
         parentId

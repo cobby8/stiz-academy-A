@@ -7,6 +7,7 @@ import {
   WITHDRAW_CANDIDATE_MIN_GAP_MONTHS,
 } from "@/lib/enrollmentReconcilePolicy";
 import { prisma } from "@/lib/prisma";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 type ReconcileSampleRow = {
   studentId: string;
@@ -149,7 +150,7 @@ const RECONCILE_CTE = `
       e.status
     FROM "Enrollment" e
     JOIN "Class" c ON c.id = e."classId"
-    JOIN "Student" s ON s.id = e."studentId"
+    JOIN "Student" s ON s.id = e."studentId" AND ${notMergedStudent("s")}
     WHERE c."slotKey" IS NOT NULL
   ),
   missing AS (

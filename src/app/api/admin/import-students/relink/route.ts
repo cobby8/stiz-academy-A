@@ -3,6 +3,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import {
   cleanSheetString,
   findSheetValue,
@@ -616,7 +617,7 @@ async function applyManualCandidate(batchId: string, input: unknown) {
   }
 
   const students = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT id FROM "Student" WHERE id = $1 LIMIT 1`,
+    `SELECT id FROM "Student" s WHERE s.id = $1 AND ${notMergedStudent("s")} LIMIT 1`,
     body.studentId
   );
   if (!students[0]) {

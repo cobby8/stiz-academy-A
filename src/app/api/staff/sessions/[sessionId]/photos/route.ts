@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStaffClassAccess } from "@/lib/staff-class-access";
 import { ensureSocialPostDraftTable } from "@/lib/socialDrafts";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import {
   ensurePrivateSessionPhotoBucket,
   parseSessionPhotoEntries,
@@ -95,7 +96,8 @@ export async function POST(req: Request, context: { params: Promise<{ sessionId:
       `SELECT DISTINCT st.id
        FROM "Student" st
        JOIN "Enrollment" e ON e."studentId" = st.id
-       WHERE e."classId" = $1 AND e.status = 'ACTIVE' AND st.id = ANY($2::text[])`,
+       WHERE e."classId" = $1 AND e.status = 'ACTIVE' AND st.id = ANY($2::text[])
+         AND ${notMergedStudent("st")}`,
       session.classId,
       subjectStudentIds,
     );
@@ -148,7 +150,8 @@ export async function POST(req: Request, context: { params: Promise<{ sessionId:
         const lockedEligibleSubjects = await tx.$queryRawUnsafe<Array<{ id: string }>>(
           `SELECT DISTINCT st.id FROM "Student" st
              JOIN "Enrollment" e ON e."studentId" = st.id
-            WHERE e."classId" = $1 AND e.status = 'ACTIVE' AND st.id = ANY($2::text[])`,
+            WHERE e."classId" = $1 AND e.status = 'ACTIVE' AND st.id = ANY($2::text[])
+              AND ${notMergedStudent("st")}`,
           session.classId,
           subjectStudentIds,
         );

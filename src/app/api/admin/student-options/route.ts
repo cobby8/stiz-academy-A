@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { createAdminTiming, requireTimedAdmin, timedJson } from "@/lib/adminTiming";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 const STUDENT_OPTIONS_CACHE_SECONDS = 60;
 const STUDENT_OPTIONS_CACHE_HEADERS = {
@@ -19,6 +20,7 @@ const getCachedStudentOptions = unstable_cache(
             SELECT s.id, s.name, u.name AS "parentName"
             FROM "Student" s
             LEFT JOIN "User" u ON s."parentId" = u.id
+            WHERE ${notMergedStudent("s")}
             ORDER BY s.name ASC
         `);
 

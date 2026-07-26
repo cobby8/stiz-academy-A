@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { PushDeliveryResult } from "@/lib/pushNotification";
 import { processPushOutbox } from "@/lib/push-outbox";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 export type ParentRecipient = {
   studentId: string;
@@ -19,7 +20,7 @@ export async function getClassParentRecipients(classId: string, studentIds?: str
   return prisma.$queryRawUnsafe<ParentRecipient[]>(
     `SELECT DISTINCT s.id AS "studentId", s.name AS "studentName", s."parentId" AS "userId"
      FROM "Enrollment" e
-     JOIN "Student" s ON s.id = e."studentId"
+     JOIN "Student" s ON s.id = e."studentId" AND ${notMergedStudent("s")}
      WHERE e."classId" = $1 AND e.status = 'ACTIVE'
        AND ($2::text[] IS NULL OR s.id = ANY($2::text[]))
        AND s."parentId" IS NOT NULL`,

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaffClassAccess, requireStaffSeasonalSessionAccess } from "@/lib/staff-class-access";
 import { deliverParentNotification, getClassParentRecipients } from "@/lib/staff-notifications";
 import type { ParentRecipient } from "@/lib/staff-notifications";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT";
 
@@ -90,7 +91,7 @@ async function getSessionParentRecipients(session: { classId: string; sessionDat
            WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
          END = ANY(app."selectedWeekdays")
        )
-     JOIN "Student" st ON st.id = app."convertedStudentId"
+     JOIN "Student" st ON st.id = app."convertedStudentId" AND ${notMergedStudent("st")}
      WHERE anchor_sd.id = $1 AND ($2::text[] IS NULL OR st.id = ANY($2::text[])) AND st."parentId" IS NOT NULL`,
     session.sessionDateId, studentIds?.length ? studentIds : null,
   );

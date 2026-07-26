@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getAccessibleClassIds, getStaffClassAccessContext } from "@/lib/staff-class-access";
 import { resolveStaffBillingGuard } from "@/lib/staff-billing-policy";
 import { normalizePhoneNumber } from "@/lib/staff-contacts";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 export type StaffStudentListItem = { id: string; name: string; school: string | null; grade: string | null; studentPhone: string | null; parentName: string; parentPhone: string | null; classNames: string[] };
 export type StaffBillingListItem = { id: string; classId: string; paymentClassId: string | null; studentName: string; className: string; title: string; amount: number; invoiceAmount: number; amountMismatch: boolean; studentMismatch: boolean; status: string; dueDate: Date; paidDate: Date | null; invoiceNo: string | null; confirmationStatus: string | null; confirmable: boolean; blockReason: string | null };
@@ -20,7 +21,8 @@ export async function getStaffStudents(): Promise<StaffStudentListItem[]> {
      FROM "Student" s JOIN "User" p ON p.id = s."parentId"
      JOIN "Enrollment" e ON e."studentId" = s.id AND e.status = 'ACTIVE'
      JOIN "Class" c ON c.id = e."classId"
-     WHERE e."classId" = ANY($1::text[])
+     -- 병합으로 흡수된 학생은 담당 반 명단에서 제외한다
+     WHERE e."classId" = ANY($1::text[]) AND ${notMergedStudent("s")}
      GROUP BY s.id, s.name, s.school, s.grade, s.phone, p.name, p.phone ORDER BY s.name`, classIds);
   return rows.map((row) => ({ ...row, studentPhone: normalizePhoneNumber(row.studentPhone), parentPhone: normalizePhoneNumber(row.parentPhone), classNames: row.classNames ?? [] }));
 }

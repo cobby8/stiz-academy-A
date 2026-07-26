@@ -23,6 +23,7 @@ import {
 import { publishGalleryPostToInstagram } from "@/lib/instagram";
 import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
 import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings } from "@/lib/queries";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import { createTrialEnrollShortLink } from "@/lib/enroll-short-link";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 import { assertSolapiShortSms } from "@/lib/sms-byte-length";
@@ -2165,8 +2166,9 @@ export async function bulkCreateStudents(
             if (student.birthDate) {
                 // 이름 + 생년월일 기준으로 기존 학생 조회
                 const existing = await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT id FROM "Student"
-                     WHERE name = $1 AND "birthDate"::date = $2::date
+                    `SELECT id FROM "Student" s
+                     WHERE ${notMergedStudent("s")}
+                       AND s.name = $1 AND s."birthDate"::date = $2::date
                      LIMIT 1`,
                     student.name,
                     student.birthDate,
@@ -3046,7 +3048,8 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
         JOIN "User" u ON u.id = s."parentId"
         JOIN "Enrollment" e ON e."studentId" = s.id
         JOIN "Class" c ON c.id = e."classId"
-        WHERE e.status = 'ACTIVE'
+        -- 흡수된 중복 학생에게 새 청구가 또 만들어지면 같은 아이에게 두 번 청구된다.
+        WHERE e.status = 'ACTIVE' AND ${notMergedStudent("s")}
     ),
     target_pairs AS (
         SELECT
@@ -4888,7 +4891,8 @@ export async function approveEnrollApplication(
         let studentId: string;
 
         const existingStudents = await tx.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "Student" WHERE name = $1 AND "parentId" = $2 LIMIT 1`,
+            `SELECT id FROM "Student" s
+             WHERE ${notMergedStudent("s")} AND s.name = $1 AND s."parentId" = $2 LIMIT 1`,
             childName, parentId
         );
 

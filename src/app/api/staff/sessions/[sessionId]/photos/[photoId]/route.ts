@@ -11,6 +11,7 @@ import {
   type SessionPhotoDraftRow,
 } from "@/lib/sessionPhotoManagement";
 import { normalizeSubjectStudentIds } from "@/lib/studentMediaConsentPolicy";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import {
   enqueueSessionPhotoDeletion,
   ensureSessionPhotoDeletionQueue,
@@ -30,7 +31,7 @@ async function requirePhotoViewer(classId: string, sessionStatus: string): Promi
     const rows = await prisma.$queryRawUnsafe<Array<{ studentId: string }>>(
       `SELECT DISTINCT s.id AS "studentId"
        FROM "User" u
-       JOIN "Student" s ON s."parentId" = u.id
+       JOIN "Student" s ON s."parentId" = u.id AND ${notMergedStudent("s")}
        JOIN "Enrollment" e ON e."studentId" = s.id
        WHERE LOWER(u.email) = LOWER($1) AND e."classId" = $2 AND e.status = 'ACTIVE'`,
       user.email,
@@ -168,7 +169,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ sessi
       const eligible = await tx.$queryRawUnsafe<Array<{ id: string }>>(
         `SELECT DISTINCT st.id FROM "Student" st
           JOIN "Enrollment" e ON e."studentId" = st.id
-         WHERE e."classId" = $1 AND e.status = 'ACTIVE' AND st.id = ANY($2::text[])`,
+         WHERE e."classId" = $1 AND e.status = 'ACTIVE' AND st.id = ANY($2::text[])
+           AND ${notMergedStudent("st")}`,
         manageable.session.classId,
         subjectStudentIds,
       );

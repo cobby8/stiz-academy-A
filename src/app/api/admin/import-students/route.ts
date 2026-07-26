@@ -27,6 +27,7 @@ import {
   type TransformedStudent,
 } from "@/lib/importStudents";
 import { findStudentIdentityMatch } from "@/lib/studentSheetMatching";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import { monthlyBillingDueDate } from "@/lib/billing-due-date";
 
 export async function POST(request: NextRequest) {
@@ -517,7 +518,8 @@ async function findOrCreateStudent(
 ): Promise<string> {
   // 같은 학부모의 같은 이름 학생이 이미 있는지 확인
   const existing = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT id FROM "Student" WHERE name = $1 AND "parentId" = $2 LIMIT 1`,
+    `SELECT id FROM "Student" s
+     WHERE ${notMergedStudent("s")} AND s.name = $1 AND s."parentId" = $2 LIMIT 1`,
     s.name,
     parentId
   );

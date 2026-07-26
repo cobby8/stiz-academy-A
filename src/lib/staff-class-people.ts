@@ -6,6 +6,7 @@ import {
   requireStaffSeasonalSessionAccess,
 } from "@/lib/staff-class-access";
 import { normalizePhoneNumber } from "@/lib/staff-contacts";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 export type StaffClassGuardian = {
   id: string | null;
@@ -110,7 +111,7 @@ export async function getStaffClassPeople(
                 WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
               END = ANY(app."selectedWeekdays")
             )
-           JOIN "Student" s ON s.id = app."convertedStudentId"
+           JOIN "Student" s ON s.id = app."convertedStudentId" AND ${notMergedStudent("s")}
           WHERE anchor_sd.id = $1
             AND anchor_o."linkedClassId" = $2
        ), recent_attendance AS (
@@ -207,7 +208,7 @@ export async function getStaffClassPeople(
     `WITH active_students AS (
        SELECT DISTINCT s.id, s.name, s.school, s.grade, s.memo, s.phone, s."parentId"
          FROM "Enrollment" e
-         JOIN "Student" s ON s.id = e."studentId"
+         JOIN "Student" s ON s.id = e."studentId" AND ${notMergedStudent("s")}
         WHERE e."classId" = $1
           AND e.status = 'ACTIVE'
      ), recent_attendance AS (

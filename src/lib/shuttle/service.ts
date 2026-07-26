@@ -274,7 +274,8 @@ export async function getClassBasedShuttleCandidates(serviceDate: Date) {
       FROM "Session" s
       JOIN "Class" c ON c.id = s."classId"
       JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
-      JOIN "Student" st ON st.id = e."studentId"
+      -- 병합으로 흡수된 학생 제외 (규칙: src/lib/studentVisibility.ts)
+      JOIN "Student" st ON st.id = e."studentId" AND st."mergedIntoStudentId" IS NULL
       LEFT JOIN "User" parent ON parent.id = st."parentId"
       LEFT JOIN "StudentShuttleLocation" pickup ON pickup."studentId" = st.id AND pickup.kind = 'PICKUP'
       LEFT JOIN "StudentShuttleLocation" dropoff ON dropoff."studentId" = st.id AND dropoff.kind = 'DROPOFF'

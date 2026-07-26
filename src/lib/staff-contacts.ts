@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaffClassAccess } from "@/lib/staff-class-access";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 export function normalizePhoneNumber(value: string | null) {
   return value?.replace(/\D/g, "") || null;
@@ -18,7 +19,7 @@ export async function getStaffClassContacts(classId: string) {
             g.id AS "guardianId", g.name AS "guardianName", g.relation AS "guardianRelation",
             g.phone AS "guardianPhone", g."isPrimary" AS "guardianIsPrimary"
      FROM "Enrollment" e
-     JOIN "Student" s ON s.id = e."studentId"
+     JOIN "Student" s ON s.id = e."studentId" AND ${notMergedStudent("s")}
      JOIN "User" p ON p.id = s."parentId"
      LEFT JOIN "Guardian" g ON g."studentId" = s.id
      WHERE e."classId" = $1 AND e.status = 'ACTIVE'

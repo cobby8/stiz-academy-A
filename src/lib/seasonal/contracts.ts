@@ -166,6 +166,15 @@ export function parseApplicationInput(value: unknown): SeasonalApplicationInput 
     const pickupLocationData = parseShuttleLocation(item.shuttle?.pickupLocationData, "탑승");
     const dropoffLocationData = parseShuttleLocation(item.shuttle?.dropoffLocationData, "하차");
     const hasMapLocation = Boolean(pickupLocationData || dropoffLocationData);
+    // 지도 핀 필수: 셔틀을 신청했다면 텍스트 설명만으로는 안 되고 실제 좌표(탑승/하차)가 있어야 한다.
+    // (클라이언트도 막지만, 직접 API 호출을 통한 우회를 방지하기 위해 서버에서도 강제한다)
+    if (item.shuttle && !hasMapLocation) {
+      throw new SeasonalError(
+        "셔틀 신청 시 지도에서 탑승 또는 하차 위치를 선택해 주세요.",
+        400,
+        "SHUTTLE_LOCATION_REQUIRED",
+      );
+    }
     const locationConsentVersion = cleanText(item.shuttle?.locationConsentVersion, 80);
     if (hasMapLocation && (
       item.shuttle?.locationConsent !== true

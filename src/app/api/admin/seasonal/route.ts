@@ -1586,7 +1586,9 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
         SELECT DISTINCT student.id AS "studentId"
           FROM "Student" student
           JOIN "Guardian" guardian ON guardian."studentId" = student.id
-         WHERE student.name = ${item.application.childName}
+         -- 병합으로 흡수된 중복 학생에 신청서가 다시 붙지 않도록 대표만 본다.
+         WHERE student."mergedIntoStudentId" IS NULL
+           AND student.name = ${item.application.childName}
            AND ((student."birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date = (${item.application.childBirthDate}::timestamptz AT TIME ZONE 'Asia/Seoul')::date
            AND regexp_replace(COALESCE(guardian.phone, ''), '[^0-9]', '', 'g') = ${parentPhone}
          ORDER BY student.id
@@ -1615,7 +1617,8 @@ async function convertApprovedItemToEnrollmentAndInvoice(itemId: string, actorId
 
     const existingStudents = matchedGuardianStudentId ? [] : await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM "Student"
-       WHERE name = ${item.application.childName}
+       WHERE "mergedIntoStudentId" IS NULL
+         AND name = ${item.application.childName}
          AND "parentId" = ${parentId}
          AND (("birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date = (${item.application.childBirthDate}::timestamptz AT TIME ZONE 'Asia/Seoul')::date
        LIMIT 1

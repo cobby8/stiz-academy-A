@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
 import { loadSeasonalMakeupRooms } from "@/lib/seasonal/makeup-capacity";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 // 방학특강 보강 라이브러리. 규칙: 결석일+2개월 이내, 결석 1건당 보강 1건, 정원(특강 12/정규반 capacity) 미만.
 export const MAKEUP_WINDOW_DAYS = 60;
@@ -98,7 +99,8 @@ export async function getMakeupOptions(enrollmentDateId: string) {
        FROM "Class" c
        LEFT JOIN "User" u ON u.id = c."instructorId"
        LEFT JOIN "Enrollment" en ON en."classId" = c.id AND en.status = 'ACTIVE'
-       LEFT JOIN "Student" st ON st.id = en."studentId"
+       -- LEFT JOIN 이라 ON 절에 넣는다. WHERE 로 옮기면 수강생이 0명인 반이 통째로 사라진다.
+       LEFT JOIN "Student" st ON st.id = en."studentId" AND ${notMergedStudent("st")}
       GROUP BY c.id, u.name`,
   );
 

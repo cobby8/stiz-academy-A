@@ -7,6 +7,7 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { ensurePaymentInfrastructure } from "@/lib/payment-ledger";
+import { notMergedStudent, notMergedStudentOptional } from "@/lib/studentVisibility";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
 // 값을 불리언으로 안전 변환 (TEXT 컬럼에서 'false' 문자열이 올 수 있음)
@@ -383,6 +384,7 @@ export const getStudents = cache(async (limit?: number) => {
                        s.phone, s.school, s.grade, s.address, s."enrollDate",
                        s."createdAt", s."updatedAt"
                 FROM "Student" s
+                WHERE ${notMergedStudent("s")}
                 ORDER BY s.name ASC${normalizedLimit ? ` LIMIT ${normalizedLimit}` : ""}
              ),
              enrollment_json AS (
@@ -692,7 +694,7 @@ export const getDashboardStats = cache(async () => {
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(`
             SELECT
-                (SELECT COUNT(*)::int FROM "Student") AS "studentCount",
+                (SELECT COUNT(*)::int FROM "Student" s WHERE ${notMergedStudent("s")}) AS "studentCount",
                 (SELECT COUNT(*)::int FROM "Program") AS "programCount",
                 (SELECT COUNT(*)::int FROM "Coach") AS "coachCount",
                 (SELECT COUNT(*)::int FROM "Class") AS "classCount"
@@ -765,6 +767,7 @@ export const getAttendanceByDateAndClass = cache(async (date: string, classId: s
                       END = ANY(app."selectedWeekdays")
                     )
                    JOIN "Student" st ON st.id = app."convertedStudentId"
+                        AND ${notMergedStudent("st")}
                   WHERE anchor_sd.id = $1
                   ORDER BY st.name`,
                 sessionDateId,
@@ -803,7 +806,7 @@ export const getAttendanceByDateAndClass = cache(async (date: string, classId: s
         const enrolled = await prisma.$queryRawUnsafe<any[]>(
             `SELECT e."studentId", s.name AS student_name
              FROM "Enrollment" e
-             JOIN "Student" s ON e."studentId" = s.id
+             JOIN "Student" s ON e."studentId" = s.id AND ${notMergedStudent("s")}
              WHERE e."classId" = $1 AND e.status = 'ACTIVE'
              ORDER BY s.name ASC`,
             classId
@@ -1050,7 +1053,9 @@ export async function getMyPageData(userEmail: string) {
 
         // 자녀 목록
         const students = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, name, "birthDate", gender FROM "Student" WHERE "parentId" = $1 ORDER BY "createdAt" ASC`,
+            `SELECT id, name, "birthDate", gender FROM "Student" s
+             WHERE s."parentId" = $1 AND ${notMergedStudent("s")}
+             ORDER BY s."createdAt" ASC`,
             parent.id
         );
 
@@ -2328,7 +2333,7 @@ export const getClassWithStudents = cache(async (classId: string) => {
                         s.id AS student_id, s.name AS student_name, s.phone, s.school, s.grade,
                         s."birthDate", s.gender
                  FROM "Enrollment" e
-                 JOIN "Student" s ON e."studentId" = s.id
+                 JOIN "Student" s ON e."studentId" = s.id AND ${notMergedStudent("s")}
                  WHERE e."classId" = $1 AND e.status = 'ACTIVE'
                  ORDER BY s.name ASC`,
                 classId
@@ -2467,7 +2472,9 @@ export const getSessionReport = cache(async (sessionId: string) => {
                 `SELECT a.id, a."studentId", a.status,
                         s.name AS student_name
                  FROM "Attendance" a
-                 JOIN "Student" s ON a."studentId" = s.id
+                 -- 병합 시 같은 세션 출석행은 UNIQUE 충돌로 흡수된 쪽에 그대로 남는다.
+                 -- 필터가 없으면 출석부에 같은 학생이 두 줄 뜬다.
+                 JOIN "Student" s ON a."studentId" = s.id AND ${notMergedStudent("s")}
                  WHERE a."sessionId" = $1
                  ORDER BY s.name ASC`,
                 sessionId
@@ -2476,7 +2483,7 @@ export const getSessionReport = cache(async (sessionId: string) => {
                 `SELECT ssn.id, ssn."studentId", ssn.note, ssn.rating,
                         s.name AS student_name
                  FROM "StudentSessionNote" ssn
-                 JOIN "Student" s ON ssn."studentId" = s.id
+                 JOIN "Student" s ON ssn."studentId" = s.id AND ${notMergedStudent("s")}
                  WHERE ssn."sessionId" = $1
                  ORDER BY s.name ASC`,
                 sessionId
@@ -2528,7 +2535,7 @@ export async function getStudentReports(parentId: string, studentId?: string) {
     try {
         // parentId에 속한 자녀 ID 목록 (보안: 다른 사람의 자녀는 조회 불가)
         const myStudents = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, name FROM "Student" WHERE "parentId" = $1`,
+            `SELECT id, name FROM "Student" s WHERE s."parentId" = $1 AND ${notMergedStudent("s")}`,
             parentId
         );
         if (myStudents.length === 0) return [];
@@ -2897,6 +2904,8 @@ export const getWaitlistAll = cache(async () => {
              FROM "Waitlist" w
              LEFT JOIN "Student" s ON w."studentId" = s.id
              LEFT JOIN "Class" c ON w."classId" = c.id
+             -- LEFT JOIN 이라 학생이 안 붙은 행은 살려 두고, 붙었는데 흡수된 경우만 제외한다.
+             WHERE ${notMergedStudentOptional("s")}
              ORDER BY w."classId", w.priority ASC, w."createdAt" ASC`
         );
         return rows.map((r: any) => ({

@@ -5,6 +5,7 @@ import {
   requireStaffClassAccess,
   requireStaffSeasonalSessionAccess,
 } from "@/lib/staff-class-access";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 export type StaffTodayClass = {
   id: string;
@@ -288,7 +289,7 @@ export async function getStaffSessionStudents(
              WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
            END = ANY(app."selectedWeekdays")
          )
-       JOIN "Student" st ON st.id = app."convertedStudentId"
+       JOIN "Student" st ON st.id = app."convertedStudentId" AND ${notMergedStudent("st")}
        LEFT JOIN "Attendance" att ON att."sessionId" = s.id AND att."studentId" = st.id
        WHERE s.id = $1
        ORDER BY st.name`,
@@ -303,7 +304,7 @@ export async function getStaffSessionStudents(
   >(
     `SELECT st.id, st.name, a.status, a.note AS "attendanceNote", a."arrivedAt"
      FROM "Enrollment" e
-     JOIN "Student" st ON st.id = e."studentId"
+     JOIN "Student" st ON st.id = e."studentId" AND ${notMergedStudent("st")}
      LEFT JOIN "Attendance" a ON a."sessionId" = $1 AND a."studentId" = st.id
      WHERE e."classId" = $2 AND e.status = 'ACTIVE'
      ORDER BY st.name`,

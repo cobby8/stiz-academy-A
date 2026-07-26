@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 export const dynamic = "force-dynamic";
 
@@ -203,6 +204,8 @@ async function getSummary(batchId: string, requestedMonth: number | null) {
       JOIN target_identity_keys tik
         ON tik."normalizedName" = lower(trim(s.name))
        AND tik."parentPhone" = regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g')
+      -- 이미 병합한 쌍이 "중복 그룹"으로 계속 뜨지 않도록 흡수된 쪽은 세지 않는다.
+      WHERE ${notMergedStudent("s")}
       GROUP BY lower(trim(s.name)), regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g')
       HAVING COUNT(DISTINCT s.id) > 1
     ),
@@ -216,6 +219,7 @@ async function getSummary(batchId: string, requestedMonth: number | null) {
       SELECT un."normalizedName", COUNT(DISTINCT s.id)::int AS "studentCount"
       FROM unresolved_names un
       JOIN "Student" s ON lower(trim(s.name)) = un."normalizedName"
+       AND ${notMergedStudent("s")}
       GROUP BY un."normalizedName"
       HAVING COUNT(DISTINCT s.id) > 1
     )
@@ -306,6 +310,7 @@ async function getDuplicateGroups(batchId: string, requestedMonth: number | null
     JOIN target_identity_keys tik
       ON tik."normalizedName" = lower(trim(s.name))
      AND tik."parentPhone" = regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g')
+    WHERE ${notMergedStudent("s")}
     GROUP BY lower(trim(s.name)), regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g')
     HAVING COUNT(DISTINCT s.id) > 1
     ORDER BY "studentCount" DESC, "studentName"
@@ -330,6 +335,7 @@ async function getNameConflicts(batchId: string, requestedMonth: number | null) 
       array_agg(DISTINCT s.id ORDER BY s.id) AS "studentIds"
     FROM unresolved_names un
     JOIN "Student" s ON lower(trim(s.name)) = un."normalizedName"
+     AND ${notMergedStudent("s")}
     GROUP BY un."normalizedName"
     HAVING COUNT(DISTINCT s.id) > 1
     ORDER BY "studentCount" DESC, "studentName"

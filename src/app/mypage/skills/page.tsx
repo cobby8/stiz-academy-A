@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSkillCategories, getStudentSkills, getSkillHistory } from "@/lib/queries";
 import Link from "next/link";
 import SkillRadarChart from "@/components/SkillRadarChart";
+import { notMergedStudent } from "@/lib/studentVisibility";
 
 // 학부모 마이페이지는 실시간 데이터 필요
 export const dynamic = "force-dynamic";
@@ -53,7 +54,9 @@ export default async function MyPageSkillsPage() {
 
     // 해당 학부모의 자녀 목록 조회
     const children = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT id, name FROM "Student" WHERE "parentId" = $1 ORDER BY "createdAt" ASC`,
+        `SELECT id, name FROM "Student" s
+         WHERE s."parentId" = $1 AND ${notMergedStudent("s")}
+         ORDER BY s."createdAt" ASC`,
         parentId,
     );
 

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import Link from "next/link";
 
 // 학부모 리포트 상세는 실시간 데이터 필요 (보안 체크)
@@ -71,7 +72,7 @@ export default async function ParentReportDetailPage({
     // ── 4. 보안: 내 자녀가 이 세션에 출석했는지 확인 ──
     // 내 자녀 ID 목록 조회
     const myStudents = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT id, name FROM "Student" WHERE "parentId" = $1`,
+        `SELECT id, name FROM "Student" s WHERE s."parentId" = $1 AND ${notMergedStudent("s")}`,
         parentId
     );
     if (myStudents.length === 0) notFound();

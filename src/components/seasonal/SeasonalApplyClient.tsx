@@ -119,8 +119,8 @@ function hasShuttle(draft?: ShuttleDraft) {
 }
 
 function hasShuttleLocation(draft?: ShuttleDraft) {
-  return Boolean(draft?.pickupLocation.trim() || draft?.dropoffLocation.trim()
-    || draft?.pickupLocationData || draft?.dropoffLocationData);
+  // 지도 핀 필수: 정확한 노선 운영을 위해 텍스트 설명이 아니라 실제 좌표(탑승 또는 하차)가 있어야 한다.
+  return Boolean(draft?.pickupLocationData || draft?.dropoffLocationData);
 }
 
 function isFull(item: SeasonalClass) {
@@ -277,6 +277,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   }
 
   function updateLocationText(offeringId: string, kind: "pickup" | "dropoff", value: string) {
+    // 텍스트는 이제 '상세 설명(선택)'이다. 지도 핀 좌표를 지우지 않는다(핀이 실제 위치의 기준).
     setShuttle((current) => {
       const draft = current[offeringId] ?? emptyShuttle();
       return {
@@ -284,7 +285,6 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
         [offeringId]: {
           ...draft,
           [kind === "pickup" ? "pickupLocation" : "dropoffLocation"]: value,
-          [kind === "pickup" ? "pickupLocationData" : "dropoffLocationData"]: undefined,
         },
       };
     });
@@ -446,8 +446,8 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                         <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
                         <LocationField label="하차 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} mapValue={shuttle[item.id]?.dropoffLocationData} onChange={(value) => updateLocationText(item.id, "dropoff", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "dropoff" })} />
                         <TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} />
-                        <button type="button" onClick={() => copyPickupToDropoff(item.id)} disabled={!shuttle[item.id]?.pickupLocation} className="min-h-11 rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-700 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200 sm:col-span-2">탑승 위치를 하차 위치로 사용</button>
-                        {!hasShuttleLocation(shuttle[item.id]) && <p role="alert" className="text-xs font-bold text-amber-700 dark:text-amber-300 sm:col-span-2">셔틀 신청에는 탑승 위치 또는 하차 위치가 반드시 필요합니다.</p>}
+                        <button type="button" onClick={() => copyPickupToDropoff(item.id)} disabled={!shuttle[item.id]?.pickupLocationData} className="min-h-11 rounded-xl border border-gray-300 px-3 text-sm font-bold text-gray-700 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200 sm:col-span-2">탑승 위치를 하차 위치로 사용</button>
+                        {!hasShuttleLocation(shuttle[item.id]) && <p role="alert" className="text-xs font-bold text-amber-700 dark:text-amber-300 sm:col-span-2">🚌 셔틀 신청 시 지도에서 탑승 또는 하차 위치를 반드시 선택해 주세요. (텍스트 설명만으로는 신청되지 않습니다)</p>}
                       </div>}
                     </div>
                   )}
@@ -666,16 +666,19 @@ function LocationField({
   onOpenMap: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
-      <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
-        {label}
-        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} placeholder="주소 또는 정차 위치 설명" className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-      </label>
-      <button type="button" onClick={onOpenMap} className="mt-2 flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-brand-orange-500 px-3 text-sm font-black text-brand-orange-600 dark:border-brand-neon-lime dark:text-brand-neon-lime">
-        <span className="material-symbols-outlined text-lg" aria-hidden="true">map</span>
-        {mapValue ? "지도 위치 다시 선택" : "지도에서 정확한 위치 선택"}
+    <div className={`rounded-xl border p-3 ${mapValue ? "border-green-300 bg-green-50/50 dark:border-green-600/50 dark:bg-green-900/10" : "border-amber-300 bg-amber-50/40 dark:border-amber-500/40 dark:bg-amber-900/10"} dark:bg-gray-800`}>
+      <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{label} <span className="text-red-500">*</span></p>
+      {/* 지도 핀이 실제 위치의 기준 — 버튼을 1순위로 노출한다 */}
+      <button type="button" onClick={onOpenMap} className={`mt-2 flex min-h-11 w-full items-center justify-center gap-1 rounded-xl px-3 text-sm font-black ${mapValue ? "border border-green-500 text-green-700 dark:border-green-500 dark:text-green-300" : "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"}`}>
+        <span className="material-symbols-outlined text-lg" aria-hidden="true">{mapValue ? "check_circle" : "map"}</span>
+        {mapValue ? "지도 위치 지정됨 · 다시 선택" : "지도에서 위치 선택 (필수)"}
       </button>
-      {mapValue && <p className="mt-2 text-xs font-bold text-green-700 dark:text-green-300">지도 위치가 저장됩니다.</p>}
+      {mapValue && <p className="mt-2 text-xs font-bold text-green-700 dark:text-green-300">📍 {mapValue.roadAddress ?? mapValue.address}</p>}
+      {/* 텍스트는 위치 설명(선택) — 지도 핀을 찍으면 주소가 자동 입력되며, 수정해 상세 설명을 남길 수 있다. 좌표를 대체하지 않는다 */}
+      <label className="mt-2 block text-xs font-medium text-gray-500 dark:text-gray-400">
+        위치 설명 (선택 · 지도 선택 시 자동 입력)
+        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} placeholder="예: 아파트 정문, 2동 앞" className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+      </label>
     </div>
   );
 }

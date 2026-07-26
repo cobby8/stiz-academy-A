@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { NOT_MERGED_STUDENT } from "@/lib/studentVisibility";
 
 export type ParentShuttleOverviewItem = {
   id: string;
@@ -62,7 +63,8 @@ function preferRouteVersion<T extends { routePlan: { status: string; version: nu
  */
 export async function getParentShuttleOverview(appUserId: string): Promise<ParentShuttleOverviewItem[]> {
   const students = await prisma.student.findMany({
-    where: { parentId: appUserId },
+    // 병합으로 흡수된 학생은 학부모 마이페이지에서도 보이지 않아야 한다
+    where: { parentId: appUserId, ...NOT_MERGED_STUDENT },
     select: { id: true, name: true, birthDate: true },
   });
   if (students.length === 0) return [];

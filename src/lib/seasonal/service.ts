@@ -249,7 +249,9 @@ async function hasMatchingExistingStudent(input: SeasonalApplicationInput) {
       SELECT 1
         FROM "Student" student
         JOIN "User" parent ON parent.id = student."parentId"
-       WHERE student.name = ${input.child.name}
+       -- 병합으로 흡수된 중복 학생은 판정에서 제외한다 (대표 학생 쪽이 같은 조건으로 매칭된다).
+       WHERE student."mergedIntoStudentId" IS NULL
+         AND student.name = ${input.child.name}
          -- "Student"."birthDate"는 timestamp(naive) 컬럼이다.
          -- 첫 AT TIME ZONE 'UTC'는 naive 값을 UTC 순간으로 "해석"하고, 두 번째가 KST로 "변환"한다.
          -- 시간대 이중 적용이 아니라 정상적인 2단계 변환이므로 절대 단순화하지 말 것.

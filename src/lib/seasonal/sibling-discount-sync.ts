@@ -45,14 +45,17 @@ const CANDIDATE_SQL = `
                SELECT regexp_replace(COALESCE(parent.phone, ''), '[^0-9]', '', 'g') AS phone
                  FROM "Student" student
                  JOIN "User" parent ON parent.id = student."parentId"
-                WHERE student.name = app."childName"
+                -- 병합으로 흡수된 중복 학생의 (오기일 수 있는) 번호가 형제 판정에 섞이면 안 된다.
+                WHERE student."mergedIntoStudentId" IS NULL
+                  AND student.name = app."childName"
                   AND ((student."birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date
                       = (app."childBirthDate" AT TIME ZONE 'Asia/Seoul')::date
                UNION ALL
                SELECT regexp_replace(COALESCE(guardian.phone, ''), '[^0-9]', '', 'g')
                  FROM "Student" student
                  JOIN "Guardian" guardian ON guardian."studentId" = student.id
-                WHERE student.name = app."childName"
+                WHERE student."mergedIntoStudentId" IS NULL
+                  AND student.name = app."childName"
                   AND ((student."birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date
                       = (app."childBirthDate" AT TIME ZONE 'Asia/Seoul')::date
              ) matched

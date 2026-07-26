@@ -1,3 +1,8 @@
+import { notMergedStudent } from "@/lib/studentVisibility";
+
+// 시트 재임포트가 병합으로 흡수된 학생에 다시 붙으면 중복이 되살아난다.
+// 그래서 후보 조회는 전부 대표 학생만 본다.
+// (부수 효과로, 중복 2건 때문에 매칭 실패하던 케이스가 1건으로 좁혀져 매칭에 성공한다.)
 type Queryable = {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
 };
@@ -96,7 +101,8 @@ export async function findStudentIdentityMatch(
       `SELECT s.id
        FROM "Student" s
        INNER JOIN "User" u ON u.id = s."parentId"
-       WHERE s.name = $1
+       WHERE ${notMergedStudent("s")}
+         AND s.name = $1
          AND regexp_replace(COALESCE(u.phone, ''), '[^0-9]', '', 'g') = $2
        LIMIT 2`,
       studentName,
@@ -113,7 +119,8 @@ export async function findStudentIdentityMatch(
     const rows = await db.$queryRawUnsafe<StudentIdRow[]>(
       `SELECT s.id
        FROM "Student" s
-       WHERE s.name = $1
+       WHERE ${notMergedStudent("s")}
+         AND s.name = $1
          AND regexp_replace(COALESCE(s.phone, ''), '[^0-9]', '', 'g') = $2
        LIMIT 2`,
       studentName,
@@ -130,7 +137,8 @@ export async function findStudentIdentityMatch(
     const rows = await db.$queryRawUnsafe<StudentIdRow[]>(
       `SELECT s.id
        FROM "Student" s
-       WHERE s.name = $1
+       WHERE ${notMergedStudent("s")}
+         AND s.name = $1
          AND DATE(s."birthDate") = DATE($2::timestamp)
        LIMIT 2`,
       studentName,
@@ -150,7 +158,8 @@ export async function findStudentIdentityMatch(
       `SELECT s.id
        FROM "Student" s
        INNER JOIN "User" u ON u.id = s."parentId"
-       WHERE s.name = $1
+       WHERE ${notMergedStudent("s")}
+         AND s.name = $1
          AND ($2::text IS NULL OR u.name = $2)
          AND ($3::text IS NULL OR s.school = $3)
          AND ($4::text IS NULL OR s.grade = $4)
@@ -169,7 +178,8 @@ export async function findStudentIdentityMatch(
   const rows = await db.$queryRawUnsafe<StudentIdRow[]>(
     `SELECT s.id
      FROM "Student" s
-     WHERE s.name = $1
+     WHERE ${notMergedStudent("s")}
+       AND s.name = $1
      LIMIT 2`,
     studentName
   );

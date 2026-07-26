@@ -4,6 +4,7 @@ import { optimizeWaypointOrderWithTmap, type TmapWaypoint } from "@/lib/shuttle/
 // 태울 학생 판정은 절대 여기서 하지 않는다. 게이트웨이 한 곳만 통과한다.
 // (여기서 WHERE 절을 손으로 다시 쓰다가 취소자·폐강 반 학생이 배차에 실리는 사고가 5번 반복됐다.)
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
+import { getSavedDispatchRoute } from "./dispatchRoute";
 
 // 방학특강 셔틀 노선 자동 제안 엔진.
 // - 그 날짜에 실제 등원(SCHEDULED)하는 셔틀 학생만 배차(요일별 반복 스케줄 반영).
@@ -98,13 +99,16 @@ function nnOrder(stops: Stop[], from: Pt): Stop[] {
 }
 
 // 한 차량(run)의 경로·시각 계산. 등원: 차고지→정차→학원 / 하원: 학원→정차→차고지.
-async function planRun(run: Run, direction: DispatchDirection, academy: Geo, depot: Geo | null, csMin: number | null, ceMin: number | null) {
+async function planRun(run: Run, direction: DispatchDirection, academy: Geo, depot: Geo | null, csMin: number | null, ceMin: number | null, localOnly = false) {
   const startPt: Geo = direction === "PICKUP" ? (depot ?? academy) : academy;
   const endPt: Geo = direction === "PICKUP" ? academy : (depot ?? academy);
   let order = run.stops;
 
-  // 1) 순서 최적화 — T맵 우선
-  try {
+  // 1) 순서 최적화 — T맵 우선. localOnly면 T맵을 아예 부르지 않고 직선 최근접(NN)만 쓴다(제공량 절약).
+  if (localOnly) {
+    order = nnOrder(run.stops, startPt);
+    run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined;
+  } else try {
     if (run.stops.length >= 1) {
       const waypoints: TmapWaypoint[] = run.stops.map((s, i) => ({ id: String(i), name: s.label.slice(0, 40), latitude: s.lat, longitude: s.lng }));
       const res = await optimizeWaypointOrderWithTmap({
@@ -155,10 +159,35 @@ export async function suggestDispatch(opts: { direction: DispatchDirection; date
   return computeDispatch(opts);
 }
 
+/**
+ * 조회용 노선 — T맵 제공량을 아끼는 게 목적이다.
+ *   1) 저장된(원장 확정) 노선이 있으면 그걸 그대로 쓴다(T맵 0회). 기준정보만 T맵 없이 채운다.
+ *   2) 없으면: allowTmap=true면 T맵으로 새로 계산(관리자 첫 진입), false면 직선 추정(기사님 화면).
+ * "볼 때"는 절대 T맵을 부르지 않도록 하는 진입점. 실제 T맵 호출은 "편집(자동 제안·순서 변경)"에서만.
+ */
+export async function getDispatchForView(date: string | null, direction: DispatchDirection, allowTmap: boolean): Promise<DispatchSuggestion> {
+  // 먼저 T맵 없이 기준정보(+날짜 확정)를 얻는다. NN 정렬은 순수 계산이라 외부 호출 0.
+  const base = await computeDispatch({ direction, date, localOnly: true });
+  const resolvedDate = base.date;
+  const saved = resolvedDate ? await getSavedDispatchRoute(resolvedDate, direction) : null;
+  if (saved && Array.isArray(saved.vehicles) && saved.vehicles.length) {
+    return {
+      ...base,
+      vehicles: saved.vehicles as DispatchSuggestion["vehicles"],
+      classStart: saved.classStart ?? base.classStart,
+      classEnd: saved.classEnd ?? base.classEnd,
+      routingProvider: "TMAP",
+    };
+  }
+  // 저장본이 없을 때만: 관리자 첫 진입은 T맵으로 계산, 기사님 화면은 직선 추정(base) 그대로.
+  return allowTmap ? computeDispatch({ direction, date: resolvedDate, localOnly: false }) : base;
+}
+
 // 인증 없이 노선을 계산한다. 관리자 경로는 suggestDispatch(requireAdmin)로만 부르고,
 // 기사님 전용 링크는 유효 토큰을 확인한 뒤 이 함수를 직접 부른다(토큰이 관리자 인증을 대신함).
-export async function computeDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
+export async function computeDispatch(opts: { direction: DispatchDirection; date?: string | null; localOnly?: boolean }): Promise<DispatchSuggestion> {
   const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
+  const localOnly = opts.localOnly === true; // true면 T맵 미호출(직선 추정) — 조회·기사님 화면에서 제공량 절약
   const { academy, depot, hub } = await getSettings();
 
   // ⚠️ 태울 학생은 게이트웨이 한 곳으로만 읽는다.
@@ -236,7 +265,7 @@ export async function computeDispatch(opts: { direction: DispatchDirection; date
   if (run.stops.length) runs.push(run);
 
   const csMin = hhmmToMin(classStart), ceMin = hhmmToMin(classEnd);
-  for (const v of runs) { await planRun(v, direction, academy, depot, csMin, ceMin); v.over = v.passengers > v.capacity; }
+  for (const v of runs) { await planRun(v, direction, academy, depot, csMin, ceMin, localOnly); v.over = v.passengers > v.capacity; }
 
   return {
     direction, date, dow, classStart, classEnd, academy, depot, hub,

@@ -1,5 +1,4 @@
-import { computeDispatch } from "@/lib/seasonal/shuttle-optimize";
-import { getSavedDispatchRoute } from "@/lib/seasonal/dispatchRoute";
+import { getDispatchForView } from "@/lib/seasonal/shuttle-optimize";
 import { resolveRunToken, getBoardingMap, type BoardingStatus } from "@/lib/seasonal/shuttleRun";
 import DriverRunClient, { type DriverSection } from "@/components/seasonal/DriverRunClient";
 
@@ -25,9 +24,9 @@ export default async function ShuttleRunPage({ params }: { params: Promise<{ tok
 
   const directions: ("PICKUP" | "DROPOFF")[] = ["PICKUP", "DROPOFF"];
   const sections: DriverSection[] = await Promise.all(directions.map(async (d) => {
-    const sug = await computeDispatch({ direction: d, date: run.date });
-    const saved = await getSavedDispatchRoute(run.date, d);
-    const vraw = (saved?.vehicles as DispatchVehicleLike[] | undefined) ?? (sug.vehicles as DispatchVehicleLike[]);
+    // 기사님 화면은 T맵을 절대 부르지 않는다(allowTmap=false) — 저장본 또는 직선 추정.
+    const sug = await getDispatchForView(run.date, d, false);
+    const vraw = sug.vehicles as DispatchVehicleLike[];
     const isPickup = d === "PICKUP";
     return {
       direction: d,

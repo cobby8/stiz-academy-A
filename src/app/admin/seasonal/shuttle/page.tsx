@@ -17,7 +17,7 @@ export default async function SeasonalShuttleRosterPage() {
 
   return (
     <>
-      <SeasonalHeader />
+      <SeasonalHeader eyebrow="SHUTTLE" title="셔틀 관리" subtitle="방학특강 셔틀 신청 학생 명단을 확인·편집합니다." />
       <ShuttleSectionTabs />
       <ShuttleRosterClient
         initialRoster={initialRoster}

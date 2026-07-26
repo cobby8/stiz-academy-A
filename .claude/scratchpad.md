@@ -26,6 +26,51 @@
 
 ## 구현 기록 (developer)
 
+### 구현 기록 — 좌표 없는 탑승자 '배차 불가' 가시화 (G4) (2026-07-27)
+
+📝 구현: 좌표 없는 탑승자가 자동 배차에서 조용히 빠지던 것을 **관리자 화면에 경고로 표시**. **표시 전용** — 배차 제외 로직·서버·데이터 계약 전부 무변경. 좌표 null 판정만 사용.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/app/admin/seasonal/shuttle/ShuttleRosterClient.tsx | `missingCoord(r)` 헬퍼 추가(ride 행 중 승차 좌표 null 또는 하차 별도인데 하차 좌표 null). 상단 배너 아래 "좌표 없는 탑승자 N명 — 배차 제외" 빨강 요약 블록, 행별 학생명 옆 "좌표 없음 · 배차 불가" 빨강 뱃지 | 수정 |
+
+- **DispatchClient.tsx는 무변경**: 이미 252~258행에 `unassigned` 좌표 없음 경고 블록("좌표가 없어 배차하지 못한 학생 N명" + 명단 + 안내)이 있어 요구사항 충족. 추가 변경 없음.
+
+💡 tester: `/admin/seasonal/shuttle` — 탑승 학생 중 지도 핀 미지정(좌표 null)인 행에 빨강 "좌표 없음 · 배차 불가" 뱃지 + 상단 요약 경고. 좌표 있으면 뱃지 없음. 미탑승 행은 대상 아님. 로직·CSV·확정·핀편집 무변경.
+⚠️ reviewer: 표시 전용(배차 제외 로직·서버·계약 무변경). 하드코딩 hex 0(red 의미색 Tailwind + dark 대응). tsc EXIT=0.
+
+### 구현 기록 — 셔틀 라벨 컬럼에 장소명 우선 저장 (G2) (2026-07-27)
+
+📝 구현: 지도에서 고른 **장소명(place name)**을 라벨 컬럼에 주소 대신 우선 저장(`name ?? 주소`). **스키마 변경 없음**(기존 라벨 컬럼 재활용). 좌표/주소/placeId 컬럼은 무변경(운행 기준 보존).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/contracts.ts | `SeasonalShuttleLocationInput`에 `name?` 추가, `parseShuttleLocation`이 `name` 파싱(옵셔널) | 수정 |
+| src/lib/seasonal/service.ts | 방학특강 저장부: `pickupLocation/dropoffLocation` = `pickup?.name ?? 텍스트라벨`. address/lat/lng/placeId 그대로 | 수정 |
+| src/components/seasonal/SeasonalApplyClient.tsx | `saveMapLocation` 라벨 = `name ?? roadAddress ?? address` | 수정 |
+| src/app/apply/enroll/EnrollApplicationLaterSteps.tsx | `onConfirm`에서 `shuttlePickup/Dropoff` 라벨 = `name ?? address` | 수정 |
+| src/app/actions/public.ts | `EnrollmentShuttleLocationData.name?`(string\|null) 추가·정규화, INSERT/UPDATE 라벨($17/$19) = `location.name ?? 텍스트라벨`. 좌표/주소/source 그대로 | 수정 |
+
+**정규반 name 저장 컬럼(G3 참고)**: 정규반 신청의 장소명은 `EnrollmentApplication."shuttlePickup"`(탑승)·`"shuttleDropoff"`(하차) 라벨 컬럼에 저장된다(주소 컬럼 `shuttlePickupAddress` 등은 별개로 유지). G3의 정규반 전환·확정본 스냅샷은 이 두 라벨 컬럼에서 장소명을 읽으면 된다.
+
+💡 tester: 방학특강/정규반 셔틀 신청 시 지도에서 **장소 검색으로 선택**하면 라벨(입력칸·명단)에 장소명이 뜬다. 핀만 찍거나(옛 데이터) 장소명 없으면 기존처럼 주소 표기(하위호환). 좌표는 여전히 저장되어 배차 정상.
+⚠️ reviewer: 라벨에 name 우선(사용자가 지도 선택 후 텍스트를 수동 편집한 경우 서버가 name으로 덮을 수 있음 — 스펙의 "장소명 우선" 준수). 좌표/주소 컬럼 무변경. tsc EXIT=0.
+
+### 구현 기록 — 셔틀 장소명 저장경로 유실 버그 수정 (G3) (2026-07-27)
+
+📝 구현: 저장 경로에서 장소명이 유실되던 두 지점 중 (1) 정규반 전환 버그 수정, (2) 방학특강 확정본 스냅샷은 확인 결과 변경 불필요. 좌표·주소·placeId 컬럼 무변경(운행 기준 보존).
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/actions/admin.ts | 정규반 신청→학생 전환 시 `StudentShuttleLocation` INSERT의 `name`을 NULL 하드코딩 → 라벨 컬럼값으로 파라미터화($12). ON CONFLICT DO UPDATE에 `name = EXCLUDED.name` 추가 | 수정 |
+
+**(1) name 매핑**: kind=PICKUP ← prefix `shuttlePickup` ← `app.shuttlePickup`(라벨), kind=DROPOFF ← prefix `shuttleDropoff` ← `app.shuttleDropoff`(라벨). `app`은 `SELECT * FROM EnrollmentApplication`이라 G2가 저장한 라벨 컬럼 포함. 폴백: 라벨 없으면 `${prefix}RoadAddress ?? ${prefix}Address`(name NULL 방지, service.ts:1057과 동일 철학). 좌표/주소/placeId/source/accuracy/confirmedAt/consentVersion 파라미터·값 무변경.
+
+**(2) 확정본 스냅샷 — 변경 불필요(확인만)**: `shuttleRoster.ts` `confirmSeasonalShuttleRoster` INSERT…SELECT(554·556행)가 원본 `r."pickupLocation"`/`r."dropoffLocation"` 라벨 컬럼을 그대로 복사 → G2 장소명 자동 전달. 확정본 편집(`shuttleRosterEdit.ts` 127·129행)도 `pickupLocation`/`dropoffLocation` 라벨에 저장. 둘 다 장소명 보존됨.
+
+💡 tester: 정규반 신청서(셔틀 지도 장소검색 선택)를 관리자가 승인·학생 전환하면 `StudentShuttleLocation.name`에 장소명이 남는지 확인. 기존엔 NULL이었음. 좌표는 여전히 저장.
+⚠️ reviewer: `$queryRawUnsafe`/`$executeRawUnsafe` 유지, 스키마 변경 없음. 좌표·주소 무변경. tsc EXIT=0.
+
 ### 구현 기록 — 수강생 상세 반 추가·삭제(E3) (2026-07-26)
 
 📝 구현한 기능: `/admin/students/[id]` **개요 탭 "현재 수강 반"** 카드에 반 추가·하드삭제 추가. 기존 서버액션 `enrollStudent`/`deleteEnrollment` **호출만**(서버 무변경). 클래스 목록은 학생관리 목록이 쓰는 `getClasses()`(queries.ts) 재사용 — page.tsx에서 `getStudentActivity`와 Promise.all 병렬 조회해 `classes` prop 신규 전달(getStudentActivity 무변경).
@@ -285,6 +330,8 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-27 | **셔틀 장소명 저장경로 유실 버그 수정(G3, developer)** — (1)정규반 신청→학생 전환의 `StudentShuttleLocation` INSERT가 `name`을 NULL 하드코딩하던 버그 수정: 라벨 컬럼(`app.shuttlePickup`→PICKUP, `app.shuttleDropoff`→DROPOFF)에서 장소명 읽어 파라미터화($12), ON CONFLICT에 `name=EXCLUDED.name` 추가, 폴백 `roadAddress ?? address`. 좌표/주소/placeId/source 무변경. (2)방학특강 확정본은 확인만—`confirmSeasonalShuttleRoster` INSERT…SELECT가 원본 `pickupLocation/dropoffLocation` 라벨을 그대로 복사, 편집경로도 라벨 저장 → **변경 불필요**. 스키마 변경 없음. tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-27 | **셔틀 라벨에 장소명 우선 저장(G2, developer)** — 지도 선택 장소명을 라벨 컬럼에 `name ?? 주소`로 저장(스키마 변경 없음, 라벨 컬럼 재활용). 방학특강: contracts.ts `name?` 파싱 + service.ts 저장부 `pickup?.name ?? 텍스트라벨` + SeasonalApplyClient 라벨 매핑. 정규반: EnrollLaterSteps onConfirm + public.ts `EnrollmentShuttleLocationData.name?` 정규화 + INSERT/UPDATE 라벨($17/$19) name 우선. 좌표/주소/placeId 무변경(운행 기준 보존), name 없으면 주소 폴백(하위호환). **정규반 name→`shuttlePickup`/`shuttleDropoff` 컬럼 저장(G3 참고)**. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-26 | **수강생 상세 반 추가·삭제(E3, developer)** — `/admin/students/[id]` 개요 탭 "현재 수강 반"에 [반 추가](프로그램별·수강중 제외 선택)+행별 빨간 휴지통 하드삭제(강한 확인창). 기존 `enrollStudent`/`deleteEnrollment` 호출만(서버 무변경). 클래스목록=`getClasses()` 재사용, page.tsx가 getStudentActivity와 Promise.all 병렬조회해 classes prop 신규전달(getStudentActivity 무변경). E1/E2·loadData·데이터계약 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-26 | **수강생 상세 수납 탭 결제 상태 변경(E2, developer)** — `/admin/students/[id]` "청구·납부(시스템)" 각 건에 ✏️→4-세그먼트(완납/대기/연체/취소) 상태 변경. E1 패턴 답습(async 핸들러+loadData+피드백). 기존 `updatePaymentStatus` 호출만(서버 무변경). 취소만 window.confirm, 성공 "변경됨" 2초, 권한 실패 시 서버메시지 표면화(조용한 실패 없음). "장부 수납(시트원장)" 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-26 | **정규반 수강생 상세 페이지 UI 재설계(developer)** — `/admin/students/[id]` 시안대로 UI만 교체(데이터·API·서버액션·로직 100% 보존). 새 레이아웃: 정체성 헤더 → KPI 4칸(출석률 미니도넛·수강중·이번달수납·미납) → 좌 320px sticky 레일(연락처·셔틀·메모) + 우 5탭(개요/수강출결/수납/월별히스토리/사진). 기존 "운영 요약" 카드는 KPI로 흡수, 셔틀을 월별히스토리→좌레일로 승격, 테이블→카드리스트, 수납 시스템/시트원장 2출처 분리, 월별히스토리 `<details>`+반뱃지 전체노출. 3핸들러(saveMemo/changeEnrollmentStatus/loadData)·`StudentActivityData` 계약·media-consent 라우트 무변경. 하드코딩 hex 0, Material Symbols만. tsc EXIT=0, eslint 0 error(경고 1=기존 갤러리 img) | 구현완료(tester 대기) |
@@ -294,6 +341,5 @@
 | 2026-07-26 | 셔틀 확정 명단 3단계 리뷰 — SQL 인젝션·$n 번호·핀 저장(ConfirmedAt/라벨보존/등원동일 복제)·soft delete·재확정 방지·안전장치 3종 전부 이상 없음. **치명 1(R-5)**: 확정 후에도 requestId 경로가 열려 있어 오래 열어둔 탭이 원본을 수정하고 "저장됨" 표시(확정본 미반영) → 409 거절 필요. 권장 4(R-6 SET 중복컬럼 500, R-7 전원제외 폴백부활·다음시즌 잠김, R-8 낙관롤백·되돌리기 세션한정, 테스트가 전부 문자열매칭이라 실동작 결함 미검출). tsc EXIT=0, 신규테스트 24/24 | 리뷰: 수정필요(R-5) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 2차 수정(리뷰 R-5/R-6/R-7①/R-8 + 테스터 T-1) — ①R-5(치명): 원본 수정 직전 서버가 확정본 조회→409 거절+화면 자동 새로고침 ②R-6: SET 조립을 의존성0 순수모듈로 분리, 컬럼중복 제거(42701 방지) ③R-7①: 확정 판정을 "확정본 존재(제외행 포함)"로 교체—전원제외해도 폴백 부활 없음 ④R-8: 저장 실패 시 낙관반영 롤백 ⑤T-1(치명): 노선편성 핀 저장을 확정본으로 라우팅(조용한 no-op 제거, 부원장은 403 안내). ★실행 테스트 16건 신설이 추가 결함(Number(null)=0 → 좌표 0,0 저장) 실제 검출·수정. tsc/build EXIT=0, 전체 676/681(잔여 5는 기존 실패) | 구현완료(tester 대기) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 1차 수정 — 확정 후 지도 핀 잠금 해제(PM 지시). `ConfirmedRosterPin` + `pickupPin/dropoffPin` patch 추가, `pinSetClauses()`로 확정본 기존 컬럼에만 저장(새 컬럼·마이그레이션 0), 좌표 검증은 원본 applyPin과 동일 기준이되 실패 시 throw→400+이유, `${kind}ConfirmedAt` 동시 기록(배차 판정 보호), 라벨 COALESCE 보존, '등원과 동일' 하원 복제. 확정 후 원본 신청서 UPDATE 경로 없음(테스트 고정). tsc/build EXIT=0, 전체 657/662(잔여 5는 기존 실패), 확정 테스트 24/24 | 구현완료(tester 대기) |
-| 2026-07-26 | 셔틀 확정 명단 3단계 구현 — 화면 확정 배너/버튼(확정 전 안내+`N명 확정하기`, 확정 후 건수·확정일시 표시·버튼 숨김), 확정 후 저장은 rosterId로 확정본만 수정(원본 신청서 무변경), 행 제외/되돌리기(soft remove), GET에 confirmed/confirmedCount/confirmedAt 추가(roster 키 유지). 대상자 SQL 신규 작성 0(게이트웨이 경유), DB 스키마 변경 없음. tsc/build EXIT=0, 전체 650/655(잔여 5는 기존 실패), 신규 고정 테스트 17/17. ★확정 후 지도 핀 편집은 잠금 — PM 확인 필요 | 구현완료(tester 대기) |
 | 2026-07-26 | 셔틀 명단 개편(코워크) 푸시 — 개편 과정에서 지워졌던 안전장치 복구: ①미탑승 기본 숨김+토글 ②기사님 CSV 탑승자만 ③탑승판정 isRidingShuttleStatus(REJECTED 누수) ④대상자 조회를 getConfirmedShuttleRoster 게이트웨이로 일원화(필터 누락 6회째 차단). 게이트웨이에 applicationId 추가. tsc/build EXIT=0, 셔틀 회귀 32/32 PASS, 전체 633/638(잔여 5건은 HEAD 기존실패) | 배포완료(78380ec) |
 | 2026-07-26 | 이용약관 개정 초안 → **완성본** 갱신(`.Codex/drafts/terms-revision-2026-07.md`) — ★이월 계산식 오류 수정(`÷4` → `해당 월 수강료 ÷ 그 달 총 수업 횟수`, 주2회 반 2배 과다차감 방지) + 빈칸 5건 확정 채움(휴원·퇴원 신청마감=수강 시작일 전 / 최대 휴원 2개월 / 자리 보장·같은 반 복귀 / 셔틀비 미이용분 반환 / 시행일은 게시일 기입 안내). 형제할인 조항은 2-B 별도 상자로 분리해 ⏸️ 게시보류 표시(정규반 자동적용 완료 후). 자동퇴원 조문은 완곡 문구+`[원장님 확인 필요]`. 환불 규정·기존 문장 무변경. DB·소스 무수정 | 문서 완료(남은 확인 2건: 자동퇴원·시행일) |

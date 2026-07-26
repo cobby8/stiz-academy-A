@@ -5058,10 +5058,11 @@ export async function approveEnrollApplication(
                     latitude, longitude, "placeId", source, "accuracyMeters",
                     "confirmedAt", "consentVersion", "createdAt", "updatedAt"
                  ) VALUES (
-                    gen_random_uuid()::text, $1, $2, NULL, $3, $4,
+                    gen_random_uuid()::text, $1, $2, $12, $3, $4,
                     $5, $6, $7, $8, $9, $10::timestamptz, $11, NOW(), NOW()
                  )
                  ON CONFLICT ("studentId", kind) DO UPDATE SET
+                    name = EXCLUDED.name,
                     address = EXCLUDED.address,
                     "roadAddress" = EXCLUDED."roadAddress",
                     latitude = EXCLUDED.latitude,
@@ -5083,6 +5084,12 @@ export async function approveEnrollApplication(
                 readAppField(`${prefix}AccuracyMeters`),
                 readAppField(`${prefix}ConfirmedAt`),
                 consentVersion,
+                // $12: 장소명(라벨) — G2에서 EnrollmentApplication.shuttlePickup/shuttleDropoff 라벨 컬럼에 저장된 값.
+                // prefix 자체가 라벨 컬럼명(접미사 없는 shuttlePickup/shuttleDropoff)이라 그대로 읽는다.
+                // 값이 없으면 도로명주소 -> 지번주소 순으로 폴백(관리자 수동확정 service.ts와 동일 철학, 단 name null 방지).
+                readAppField(prefix)
+                    ?? readAppField(`${prefix}RoadAddress`)
+                    ?? readAppField(`${prefix}Address`),
             );
             await upsertLocation("PICKUP", "shuttlePickup");
             await upsertLocation("DROPOFF", "shuttleDropoff");

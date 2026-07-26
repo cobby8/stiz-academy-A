@@ -542,6 +542,7 @@ export async function getAvailableTrialSlots(): Promise<AvailableSlot[]> {
 export interface EnrollmentShuttleLocationData {
     address: string;
     roadAddress?: string;
+    name?: string | null; // 지도에서 선택한 장소명(선택). 라벨(shuttlePickup/shuttleDropoff)에 우선 저장.
     latitude: number;
     longitude: number;
     placeId?: string;
@@ -639,6 +640,7 @@ function normalizeEnrollmentShuttleLocation(
     return {
         address,
         roadAddress: value?.roadAddress?.trim() || undefined,
+        name: value?.name?.trim() || undefined, // 장소명 보존(없으면 undefined, 저장 시 주소 폴백)
         latitude,
         longitude,
         placeId: value?.placeId?.trim() || undefined,
@@ -985,9 +987,10 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
                 data.basketballExp || null,
                 data.uniformSize || null,
                 data.shuttleNeeded ?? false,
-                data.shuttlePickup?.trim() || null,
+                // 라벨 컬럼에 장소명 우선 저장(없으면 기존 텍스트 라벨로 폴백). 좌표/주소 컬럼은 별도로 그대로 저장됨.
+                shuttlePickupLocation?.name ?? (data.shuttlePickup?.trim() || null),
                 data.shuttleTime || null,
-                data.shuttleDropoff?.trim() || null,
+                shuttleDropoffLocation?.name ?? (data.shuttleDropoff?.trim() || null),
                 data.paymentMethod || null,
                 data.referralSource || null,
                 data.memo?.trim() || null,
@@ -1103,9 +1106,9 @@ export async function submitEnrollApplication(data: EnrollApplicationInput) {
             data.basketballExp || null,         // $14
             data.uniformSize || null,           // $15
             data.shuttleNeeded ?? false,        // $16
-            data.shuttlePickup?.trim() || null, // $17
+            shuttlePickupLocation?.name ?? (data.shuttlePickup?.trim() || null), // $17 라벨: 장소명 우선(폴백=텍스트 라벨)
             data.shuttleTime || null,           // $18
-            data.shuttleDropoff?.trim() || null,// $19
+            shuttleDropoffLocation?.name ?? (data.shuttleDropoff?.trim() || null),// $19 라벨: 장소명 우선(폴백=텍스트 라벨)
             data.paymentMethod || null,         // $20
             data.referralSource || null,        // $21
             data.memo?.trim() || null,          // $22

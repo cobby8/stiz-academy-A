@@ -5,6 +5,7 @@ export type ShuttleLocationSource = (typeof SHUTTLE_LOCATION_SOURCES)[number];
 export type SeasonalShuttleLocationInput = {
   address: string;
   roadAddress?: string;
+  name?: string; // 지도에서 선택한 장소명(선택). 라벨 컬럼에 주소 대신 우선 저장한다.
   latitude: number;
   longitude: number;
   placeId?: string;
@@ -129,6 +130,8 @@ export function parseShuttleLocation(
   return {
     address,
     roadAddress,
+    // 장소명은 옵셔널이다. 없으면 undefined로 두고, 저장 시 주소로 폴백한다(하위호환).
+    name: cleanText(location.name, 200),
     latitude,
     longitude,
     placeId: cleanText(location.placeId, 200),

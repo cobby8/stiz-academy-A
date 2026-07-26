@@ -20,6 +20,18 @@ function isFreeHubRow(r: ShuttleRosterRow): boolean {
   return (r.pickupLocation ?? "").replace(/\s/g, "").includes("무료탑승");
 }
 
+// 좌표 없음 = 배차 불가 판정(표시 전용).
+// 자동 배차는 핀 좌표 기준이라 좌표가 없으면 그 학생은 조용히 배차에서 빠진다.
+// 여기서는 로직을 바꾸지 않고, 원장이 한눈에 알아보도록 경고만 붙이기 위한 판정이다.
+//   · 탑승(ride) 행만 대상 — 미탑승은 애초에 배차 대상이 아니다.
+//   · 승차 좌표가 없거나, 하차가 등원과 다른데 하차 좌표가 없으면 배차 불가로 본다.
+function missingCoord(r: ShuttleRosterRow): boolean {
+  if (!r.ride) return false;
+  const noPickup = r.pickupLat == null || r.pickupLng == null;
+  const noDropoff = !r.dropoffSameAsPickup && (r.dropoffLat == null || r.dropoffLng == null);
+  return noPickup || noDropoff;
+}
+
 async function callApi(method: string, body?: unknown) {
   const r = await fetch(ROSTER_API, {
     method,
@@ -125,6 +137,8 @@ export default function ShuttleRosterClient({
 
   const rideCount = rows.filter((r) => r.ride).length;
   const nonRiderCount = rows.length - rideCount;
+  // 좌표가 없어 자동 배차에서 빠지는 탑승자 수(표시 전용 경고). 검색 결과가 아니라 전체 기준으로 센다.
+  const missingCoordCount = rows.filter(missingCoord).length;
   const visible = useMemo(() => (showNonRiders ? searched : searched.filter((r) => r.ride)), [searched, showNonRiders]);
   // 1호점 무료탑승 학생은 별도 폴더로 묶는다. 나머지는 평소대로.
   const hubRows = useMemo(() => visible.filter(isFreeHubRow), [visible]);
@@ -251,6 +265,8 @@ export default function ShuttleRosterClient({
         <button type="button" onClick={() => setDetailAppId(r.applicationId)} className="group text-left">
           <div className="font-bold text-gray-900 underline-offset-2 group-hover:text-brand-orange-600 group-hover:underline dark:text-white">
             {r.childName}{!r.ride && <span className="ml-1 rounded bg-gray-100 px-1 text-[10px] font-black text-gray-500 dark:bg-gray-700">미탑승</span>}
+            {/* 좌표 없음 = 자동 배차에서 빠지는 학생. 원장이 바로 알아채도록 위험(빨강) 뱃지로 표시한다. */}
+            {missingCoord(r) && <span className="ml-1 rounded bg-red-100 px-1 text-[10px] font-black text-red-700 dark:bg-red-900/40 dark:text-red-300">좌표 없음 · 배차 불가</span>}
           </div>
           <div className="text-[11px] text-gray-400">{[r.childGrade, r.childGender].filter(Boolean).join(" · ")}</div>
         </button>
@@ -330,6 +346,19 @@ export default function ShuttleRosterClient({
               className="rounded-xl bg-amber-600 px-3.5 py-2 text-[13px] font-black text-white disabled:opacity-50">
               {confirming ? "확정하는 중..." : `${rideCount}명 확정하기`}
             </button>
+          </div>
+        )}
+
+        {/* 좌표 없는 탑승자 요약 — 자동 배차는 좌표 기준이라, 좌표가 없으면 그 학생은 조용히 배차에서 빠진다.
+            원장이 명단 단계에서 미리 알아채고 위치를 지정하도록 눈에 띄는 경고로 노출한다(표시 전용). */}
+        {missingCoordCount > 0 && (
+          <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 dark:border-red-500/40 dark:bg-red-900/20">
+            <p className="text-[12.5px] font-black text-red-700 dark:text-red-300">
+              ⚠ 좌표 없는 탑승자 {missingCoordCount}명 — 자동 배차에서 제외됩니다.
+            </p>
+            <p className="mt-0.5 text-[11.5px] font-semibold text-red-600/90 dark:text-red-300/80">
+              해당 학생의 승·하차 위치를 지도 핀(📍)으로 지정하면 자동 배차에 포함됩니다.
+            </p>
           </div>
         )}
 

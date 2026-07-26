@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
+import DispatchRouteMap from "@/components/seasonal/DispatchRouteMap";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
 
 // 방학특강 셔틀 노선 자동 제안 화면.
@@ -99,6 +100,8 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
   const [savingGeo, setSavingGeo] = useState(false);
   // 사람이 출발 시각을 직접 맞춘 차량 index. 이 차량은 순서를 바꿔도 출발 시각을 유지한다.
   const [departPinned, setDepartPinned] = useState<Record<number, boolean>>({});
+  // 지도로 보고 있는 차량 index(모달).
+  const [mapVehicle, setMapVehicle] = useState<number | null>(null);
 
   async function saveGeo(kind: GeoKind, loc: MapLocationData) {
     setSavingGeo(true); setErr(null);
@@ -262,7 +265,10 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
             <div key={vIdx} className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between bg-brand-navy-900 px-4 py-2.5 text-white">
                 <span className="font-black">🚐 {v.vehicleName}{v.tripLabel ? ` · ${v.tripLabel}` : ""} · {isPickup ? "등원" : "하원"}</span>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${v.over ? "bg-red-500" : "bg-white/15"}`}>{v.passengers} / {v.capacity}명</span>
+                <span className="flex items-center gap-2">
+                  <button type="button" onClick={() => setMapVehicle(vIdx)} className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-bold hover:bg-white/25 print:hidden">🗺 지도</button>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${v.over ? "bg-red-500" : "bg-white/15"}`}>{v.passengers} / {v.capacity}명</span>
+                </span>
               </div>
               <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-[11px] font-bold dark:border-gray-700 dark:bg-gray-900/50">
                 {v.provider === "TMAP"
@@ -371,6 +377,22 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
           {sug.hub ? ` · 🆓 ${sug.hub.name} 무료 탑승 거점을 항상 경유합니다` : ""}
         </p>
       </div>
+
+      {mapVehicle != null && sug.vehicles[mapVehicle] && (() => {
+        const v = sug.vehicles[mapVehicle];
+        const startPt = isPickup ? (sug.depot ?? sug.academy) : sug.academy;
+        const endPt = isPickup ? sug.academy : (sug.depot ?? sug.academy);
+        return (
+          <DispatchRouteMap
+            title={`${v.vehicleName}${v.tripLabel ? ` · ${v.tripLabel}` : ""} · ${isPickup ? "등원" : "하원"}`}
+            start={{ lat: startPt.lat, lng: startPt.lng, label: isPickup ? "차고지" : "학원" }}
+            end={{ lat: endPt.lat, lng: endPt.lng, label: isPickup ? "학원" : "차고지" }}
+            stops={v.stops.map((s, i) => ({ lat: s.lat, lng: s.lng, label: s.label, badge: s.isHub ? "무료" : String(i + 1), kind: s.isHub ? "hub" : "stop" }))}
+            path={v.path}
+            onClose={() => setMapVehicle(null)}
+          />
+        );
+      })()}
 
       {editKind && (
         <LocationPickerModal

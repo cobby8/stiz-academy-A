@@ -70,6 +70,8 @@ type Run = {
   // 첫 노드 출발 시각 / 마지막 노드 도착 시각. 등원=차고지 출발·학원 도착, 하원=학원 출발·차고지 복귀.
   // 화면에서 출발 시각을 직접 조정할 때 기준값으로 쓴다.
   departTime: string | null; arriveTime: string | null;
+  // T맵 실도로 경로 좌표(출발→…→도착). 지도에 경로를 그릴 때 쓴다. 직선 추정이면 없음.
+  path?: { lat: number; lng: number }[];
 };
 
 export type DispatchSuggestion = {
@@ -115,6 +117,8 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
       run.provider = "TMAP";
       run.tmapMinutes = res.rawSummary?.totalTime != null ? Math.round(res.rawSummary.totalTime / 60) : null;
       run.tmapKm = res.rawSummary?.totalDistance != null ? Math.round(res.rawSummary.totalDistance / 100) / 10 : null;
+      run.path = res.path && res.path.length ? res.path : undefined; // 지도에 그릴 실도로 경로
+
     }
   } catch {
     order = nnOrder(run.stops, startPt);

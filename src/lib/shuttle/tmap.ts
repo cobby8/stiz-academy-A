@@ -18,6 +18,8 @@ export type TmapRouteOptimizationResult = {
     totalDistance?: number;
     totalTime?: number;
   };
+  /** 실제 도로 경로 좌표(출발→…→도착 순). 지도에 경로를 그릴 때 쓴다. */
+  path?: { lat: number; lng: number }[];
 };
 
 export class TmapApiError extends Error {
@@ -78,6 +80,22 @@ function collectWaypointIds(value: unknown, knownIds: Set<string>, output: strin
 function numberValue(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+// 응답 features의 LineString 좌표(도로 경로)를 순서대로 이어 붙인다. T맵 좌표는 [경도, 위도].
+function extractPath(value: unknown): { lat: number; lng: number }[] {
+  const out: { lat: number; lng: number }[] = [];
+  const feats = (value as { features?: unknown })?.features;
+  if (!Array.isArray(feats)) return out;
+  for (const f of feats) {
+    const geom = (f as { geometry?: { type?: string; coordinates?: unknown } })?.geometry;
+    if (geom?.type !== "LineString" || !Array.isArray(geom.coordinates)) continue;
+    for (const c of geom.coordinates) {
+      const lng = Number((c as unknown[])?.[0]), lat = Number((c as unknown[])?.[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) out.push({ lat, lng });
+    }
+  }
+  return out;
 }
 
 function extractSummary(value: unknown) {
@@ -174,5 +192,6 @@ export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimization
     // 내부 안전 id → 호출부가 준 원래 id로 되돌린다.
     orderedWaypointIds: orderedSafeIds.map((safe) => originalBySafe.get(safe) as string),
     rawSummary: extractSummary(body),
+    path: extractPath(body),
   };
 }

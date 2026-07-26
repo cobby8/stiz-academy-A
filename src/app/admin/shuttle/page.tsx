@@ -18,7 +18,7 @@ export default async function ShuttleAdminPage() {
     <>
       <SeasonalHeader eyebrow="SHUTTLE" title="셔틀 관리" subtitle="차량·기준 위치와 배차·정규 셔틀을 한곳에서 관리합니다." />
       <ShuttleSectionTabs />
-      <div className="mx-auto max-w-3xl px-4 pt-4">
+      <div className="mx-auto max-w-6xl px-4 pt-4">
         <ShuttleGeoEditor initial={geoPlain} />
       </div>
       <VehicleManagerClient initialVehicles={data.vehicles ?? []} />

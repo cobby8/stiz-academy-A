@@ -538,12 +538,9 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
           data: {
             applicationId: application.id,
             applicationItemId: item.id,
-            // 라벨 컬럼에는 장소명 우선 저장(없으면 기존 텍스트 라벨로 폴백). 좌표/주소 컬럼은 아래 그대로 유지.
-            pickupLocation: pickup?.name ?? requested.shuttle.pickupLocation,
+            pickupLocation: requested.shuttle.pickupLocation,
             pickupTime: requested.shuttle.pickupTime,
-            dropoffLocation: same
-              ? (pickup?.name ?? requested.shuttle.pickupLocation)
-              : (dropoff?.name ?? requested.shuttle.dropoffLocation),
+            dropoffLocation: same ? requested.shuttle.pickupLocation : requested.shuttle.dropoffLocation,
             dropoffSameAsPickup: same,
             note: requested.shuttle.note,
             pickupAddress: pickup?.address,

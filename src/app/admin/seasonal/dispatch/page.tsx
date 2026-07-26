@@ -8,17 +8,19 @@ export const dynamic = "force-dynamic";
 
 // 방학특강 셔틀 자동 배차(노선 자동 제안). 기본값은 등원/첫 수업시간대/9인승으로 초안을 미리 계산해 보여준다.
 export default async function SeasonalDispatchPage() {
-  const [initial, makeupPending] = await Promise.all([
+  const [pickup, dropoff, makeupPending] = await Promise.all([
     suggestDispatch({ direction: "PICKUP" }),
+    suggestDispatch({ direction: "DROPOFF" }),
     countPendingMakeups(),
   ]);
-  const initialData = JSON.parse(JSON.stringify(initial));
+  const initialPickup = JSON.parse(JSON.stringify(pickup));
+  const initialDropoff = JSON.parse(JSON.stringify(dropoff));
 
   return (
     <>
       <SeasonalHeader />
       <SeasonalSectionTabs makeupPending={makeupPending} />
-      <DispatchClient initial={initialData} />
+      <DispatchClient initialPickup={initialPickup} initialDropoff={initialDropoff} />
     </>
   );
 }

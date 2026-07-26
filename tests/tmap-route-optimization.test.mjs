@@ -67,12 +67,25 @@ test("tmap upstream HTTP status is not exposed through the admin API", () => {
 });
 
 test("tmap runtime preserves normal optimization results", async () => {
+  // T맵은 우리가 보낸 viaPointId를 그대로 되돌려준다. 코드는 "0"을 값 없음으로 취급하는 문제를 피하려고
+  // 내부 안전 id(wp0)로 바꿔 보내므로, 응답도 wp0으로 오고 → 호출부가 준 원래 id(stop-1)로 되돌아와야 한다.
   const result = await withMockedTmapFetch(
-    async () => new Response(JSON.stringify({ viaPointId: "stop-1", totalDistance: 1200 }), { status: 200 }),
+    async () => new Response(JSON.stringify({ viaPointId: "wp0", totalDistance: 1200 }), { status: 200 }),
     () => tmapModule.optimizeWaypointOrderWithTmap(optimizationInput),
   );
   assert.deepEqual(result.orderedWaypointIds, ["stop-1"]);
   assert.equal(result.rawSummary.totalDistance, 1200);
+});
+
+test("tmap runtime sends the required startTime and avoids viaPointId '0'", async () => {
+  let sentBody = null;
+  await withMockedTmapFetch(
+    async (_url, init) => { sentBody = JSON.parse(init.body); return new Response(JSON.stringify({ viaPointId: "wp0" }), { status: 200 }); },
+    () => tmapModule.optimizeWaypointOrderWithTmap(optimizationInput),
+  );
+  assert.match(String(sentBody.startTime), /^\d{12}$/); // yyyyMMddHHmm 필수 파라미터
+  assert.equal(sentBody.viaPoints[0].viaPointId, "wp0"); // 원래 id "stop-1"이 아니라 안전 id로 전송
+  assert.notEqual(sentBody.viaPoints[0].viaPointId, "0");
 });
 
 test("tmap runtime maps request and body timeouts to 504", async (t) => {

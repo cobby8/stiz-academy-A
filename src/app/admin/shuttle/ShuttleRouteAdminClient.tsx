@@ -201,7 +201,7 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
         action: "confirmLocation",
         data: {
           kind: target.kind.toUpperCase(),
-          name: value.roadAddress || value.address,
+          name: value.placeName || value.roadAddress || value.address,
           address: value.address,
           roadAddress: value.roadAddress,
           latitude: value.latitude,
@@ -219,7 +219,7 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
       action: "confirmLocation",
       data: {
         kind: target.kind,
-        name: value.roadAddress || value.address,
+        name: value.placeName || value.roadAddress || value.address,
         address: value.address,
         roadAddress: value.roadAddress,
         latitude: value.latitude,

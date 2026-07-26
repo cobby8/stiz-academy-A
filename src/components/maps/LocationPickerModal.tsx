@@ -3,10 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 export type MapLocationData = {
-  // 장소명(예: "롯데캐슬 정문"). 옵셔널이라 기존 사용처는 영향받지 않는다.
-  name?: string | null;
   address: string;
   roadAddress?: string;
+  /** 장소명(예: "롯데캐슬 정문" 또는 검색으로 고른 아파트·건물명). 검색 자동채움 또는 사용자 입력으로 채워진다. */
+  placeName?: string;
   latitude: number;
   longitude: number;
   placeId?: string;
@@ -106,7 +106,7 @@ export default function LocationPickerModal({
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   const [query, setQuery] = useState(initialValue?.roadAddress ?? initialValue?.address ?? "");
   // 장소명 입력값. 검색으로 고른 장소의 이름이 자동 프리필되고, 사용자가 직접 수정할 수 있다.
-  const [placeName, setPlaceName] = useState(initialValue?.name ?? "");
+  const [placeName, setPlaceName] = useState(initialValue?.placeName ?? "");
   const [location, setLocation] = useState<MapLocationData | undefined>(initialValue);
   const [isLocating, setIsLocating] = useState(false);
   const [message, setMessage] = useState("지도를 움직여 핀을 실제 탑승 위치에 맞춰주세요.");
@@ -206,10 +206,9 @@ export default function LocationPickerModal({
       const first = results[0];
       const address = first?.address?.address_name ?? first?.road_address?.address_name ?? "지도에서 선택한 위치";
       setLocation({
-        // 검색으로 잡은 장소명(pendingSearch.name)을 유지한다. 핀 이동/현재위치면 name은 없다.
-        name: pendingSearch?.name ?? null,
         address: pendingSearch?.address ?? address,
         roadAddress: pendingSearch?.roadAddress ?? (first?.road_address?.address_name || undefined),
+        placeName: pendingSearch?.placeName,
         latitude,
         longitude,
         placeId: pendingSearch?.placeId,
@@ -246,9 +245,9 @@ export default function LocationPickerModal({
       // 사용자가 아직 장소명을 직접 입력하지 않았으면 검색한 장소명을 자동 프리필한다.
       if (searchedName) setPlaceName((prev) => prev.trim() ? prev : searchedName);
       pendingSearchRef.current = { sequence: interactionSequence, value: {
-        name: searchedName ?? null,
         address: first.address_name || first.place_name || query.trim(),
         roadAddress: first.road_address_name || undefined,
+        placeName: first.place_name || undefined,
         latitude,
         longitude,
         placeId: first.id,
@@ -305,9 +304,9 @@ export default function LocationPickerModal({
       setMessage("현재 위치 확인이 끝나거나 지도를 움직여 위치를 선택해주세요.");
       return;
     }
-    // 사용자가 입력/수정한 장소명을 우선 반영한다. 비어 있으면 검색으로 잡힌 name(location.name)을 유지한다.
+    // 사용자가 입력/수정한 장소명을 우선 반영한다. 비어 있으면 검색으로 잡힌 placeName을 유지한다.
     const trimmedName = placeName.trim();
-    onConfirm({ ...location, name: trimmedName || location.name || null });
+    onConfirm({ ...location, placeName: trimmedName || location.placeName || undefined });
   }
 
   return (
@@ -335,7 +334,7 @@ export default function LocationPickerModal({
           {status !== "fallback" && (
             <div>
               <label className="mb-1 block text-xs font-bold text-gray-600 dark:text-gray-300" htmlFor={`${titleId}-place-name`}>장소명 (선택)</label>
-              {/* 검색으로 고른 장소의 이름이 자동 채워지고, 직접 수정할 수 있다. 확정 시 name으로 함께 저장된다. */}
+              {/* 검색으로 고른 장소의 이름이 자동 채워지고, 직접 수정할 수 있다. 확정 시 placeName으로 함께 저장된다. */}
               <input id={`${titleId}-place-name`} value={placeName} onChange={(event) => setPlaceName(event.target.value)} placeholder="예: 롯데캐슬 정문" className="min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
             </div>
           )}
@@ -358,8 +357,11 @@ export default function LocationPickerModal({
               </div>
               <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
                 <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-                <p className="mt-1 font-bold text-gray-900 dark:text-white">{location?.roadAddress ?? location?.address ?? "위치를 선택해주세요."}</p>
-                {location?.roadAddress && location.address !== location.roadAddress && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">지번 {location.address}</p>}
+                <p className="mt-1 font-bold text-gray-900 dark:text-white">{location?.placeName ?? location?.roadAddress ?? location?.address ?? "위치를 선택해주세요."}</p>
+                {/* 장소명이 있으면 그 아래에 주소를, 없으면 기존처럼 지번을 보조로 보여준다. */}
+                {location?.placeName
+                  ? <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{location.roadAddress ?? location.address}</p>
+                  : (location?.roadAddress && location.address !== location.roadAddress && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">지번 {location.address}</p>)}
               </div>
             </>
           )}

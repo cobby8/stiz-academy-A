@@ -18,6 +18,8 @@ export type TmapRouteOptimizationResult = {
     totalDistance?: number;
     totalTime?: number;
   };
+  /** 실제 도로 경로 좌표(출발→…→도착 순). 지도에 경로를 그릴 때 쓴다. */
+  path?: { lat: number; lng: number }[];
 };
 
 export class TmapApiError extends Error {
@@ -80,6 +82,22 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+// 응답 features의 LineString 좌표(도로 경로)를 순서대로 이어 붙인다. T맵 좌표는 [경도, 위도].
+function extractPath(value: unknown): { lat: number; lng: number }[] {
+  const out: { lat: number; lng: number }[] = [];
+  const feats = (value as { features?: unknown })?.features;
+  if (!Array.isArray(feats)) return out;
+  for (const f of feats) {
+    const geom = (f as { geometry?: { type?: string; coordinates?: unknown } })?.geometry;
+    if (geom?.type !== "LineString" || !Array.isArray(geom.coordinates)) continue;
+    for (const c of geom.coordinates) {
+      const lng = Number((c as unknown[])?.[0]), lat = Number((c as unknown[])?.[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) out.push({ lat, lng });
+    }
+  }
+  return out;
+}
+
 function extractSummary(value: unknown) {
   if (!value || typeof value !== "object") return undefined;
   const data = value as Record<string, unknown>;
@@ -90,12 +108,80 @@ function extractSummary(value: unknown) {
   };
 }
 
+// T맵 경유지 최적화는 startTime(출발 예정시각, yyyyMMddHHmm)이 필수다. 없으면 400(9401)로 거절된다.
+// 교통량 예측 기준 시각일 뿐이라 현재 시각(학원 시간대)을 넣는다.
+function tmapStartTime(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date());
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${g("year")}${g("month")}${g("day")}${g("hour")}${g("minute")}`;
+}
+
+type LatLng = { lat: number; lng: number };
+export type FixedRouteResult = { provider: "TMAP"; path: LatLng[]; totalTime: number; totalDistance: number };
+
+// 한 구간(출발+경유지≤5+도착)의 실도로 경로·시간을 /routes로 받는다.
+async function routesLeg(appKey: string, start: LatLng, end: LatLng, vias: LatLng[]): Promise<FixedRouteResult> {
+  const body: Record<string, unknown> = {
+    startX: String(start.lng), startY: String(start.lat), endX: String(end.lng), endY: String(end.lat),
+    reqCoordType: "WGS84GEO", resCoordType: "WGS84GEO", searchOption: "0", startName: "S", endName: "E",
+  };
+  if (vias.length) body.passList = vias.map((v) => `${v.lng},${v.lat}`).join("_");
+  const res = await fetch("https://apis.openapi.sk.com/tmap/routes?version=1&format=json", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json", appKey },
+    signal: AbortSignal.timeout(TMAP_REQUEST_TIMEOUT_MS),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new TmapApiError("T맵 경로 요청이 실패했습니다.");
+  const j = await res.json().catch(() => null);
+  const path = extractPath(j);
+  if (!path.length) throw new TmapApiError("T맵 경로 좌표를 확인하지 못했습니다.");
+  const props = ((j as { features?: { properties?: Record<string, unknown> }[] })?.features?.[0]?.properties) ?? {};
+  return { provider: "TMAP", path, totalTime: Number(props.totalTime) || 0, totalDistance: Number(props.totalDistance) || 0 };
+}
+
+// 사용자가 정한 순서 그대로(재정렬 없이) 실도로 경로·시간을 계산한다.
+// /routes passList는 최대 5개라, 경유지가 많으면 경계를 공유하며 구간을 쪼개 호출하고 이어붙인다.
+export async function routeFixedOrderWithTmap(input: { start: LatLng; end: LatLng; waypoints: LatLng[] }): Promise<FixedRouteResult> {
+  const appKey = process.env.TMAP_APP_KEY?.trim();
+  if (!appKey) throw new TmapApiError("TMAP_APP_KEY 환경변수가 설정되지 않았습니다.", 500);
+  const nodes: LatLng[] = [input.start, ...input.waypoints, input.end];
+  if (nodes.length < 2) throw new TmapApiError("좌표가 부족합니다.", 400);
+  const path: LatLng[] = [];
+  let totalTime = 0, totalDistance = 0;
+  let i = 0;
+  while (i < nodes.length - 1) {
+    const endIdx = Math.min(i + 6, nodes.length - 1); // 출발 + 경유지 최대 5 + 도착 = 7노드
+    const leg = await routesLeg(appKey, nodes[i], nodes[endIdx], nodes.slice(i + 1, endIdx));
+    for (const c of leg.path) {
+      const last = path[path.length - 1];
+      if (!last || last.lat !== c.lat || last.lng !== c.lng) path.push(c); // 경계 중복 제거
+    }
+    totalTime += leg.totalTime; totalDistance += leg.totalDistance;
+    i = endIdx;
+  }
+  return { provider: "TMAP", path, totalTime, totalDistance };
+}
+
 export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimizationInput): Promise<TmapRouteOptimizationResult> {
   const appKey = process.env.TMAP_APP_KEY?.trim();
   if (!appKey) throw new TmapApiError("TMAP_APP_KEY 환경변수가 설정되지 않았습니다.", 500);
   if (!input.waypoints.length) {
     return { provider: "TMAP", orderedWaypointIds: [], rawSummary: undefined };
   }
+
+  // ⚠️ T맵은 viaPointId "0"을 "값 없음"으로 취급해 400(9401)을 낸다(호출부가 인덱스 0을 쓰면 항상 실패).
+  //    내부용 안전 id(wpN)로 바꿔 보내고, 응답 순서를 호출부가 준 원래 id로 되돌린다.
+  const originalBySafe = new Map<string, string>();
+  const safeById = new Map<string, string>();
+  input.waypoints.forEach((point, index) => {
+    const safe = `wp${index}`;
+    originalBySafe.set(safe, point.id);
+    safeById.set(point.id, safe);
+  });
 
   let response: Response;
   let body: unknown = null;
@@ -111,10 +197,11 @@ export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimization
       body: JSON.stringify({
         reqCoordType: "WGS84GEO",
         resCoordType: "WGS84GEO",
+        startTime: tmapStartTime(),
         ...pointPayload(input.start, "start"),
         ...pointPayload(input.end, "end"),
         viaPoints: input.waypoints.map((point) => ({
-          viaPointId: point.id,
+          viaPointId: safeById.get(point.id),
           viaPointName: point.name,
           viaX: String(point.longitude),
           viaY: String(point.latitude),
@@ -141,15 +228,17 @@ export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimization
     throw new TmapApiError("T맵 경유지 최적화 요청이 실패했습니다.");
   }
 
-  const knownIds = new Set(input.waypoints.map((point) => point.id));
-  const orderedWaypointIds = collectWaypointIds(body, knownIds);
-  if (orderedWaypointIds.length !== input.waypoints.length) {
+  const knownSafeIds = new Set(originalBySafe.keys());
+  const orderedSafeIds = collectWaypointIds(body, knownSafeIds);
+  if (orderedSafeIds.length !== input.waypoints.length) {
     throw new TmapApiError("T맵 응답에서 경유지 추천 순서를 확인하지 못했습니다.");
   }
 
   return {
     provider: "TMAP",
-    orderedWaypointIds,
+    // 내부 안전 id → 호출부가 준 원래 id로 되돌린다.
+    orderedWaypointIds: orderedSafeIds.map((safe) => originalBySafe.get(safe) as string),
     rawSummary: extractSummary(body),
+    path: extractPath(body),
   };
 }

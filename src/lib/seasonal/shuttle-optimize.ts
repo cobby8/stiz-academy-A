@@ -55,8 +55,13 @@ function segMin(a: Pt, b: Pt): number { return haversineKm(a, b) * MIN_PER_KM + 
 function hhmmToMin(t: string | null): number | null { if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; }
 function minToHHMM(x: number): string { const v = Math.max(0, Math.round(x)); return `${String(Math.floor(v / 60) % 24).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`; }
 function pinnedSrc(s: unknown) { return s === "MAP_PIN" || s === "CURRENT_LOCATION"; }
+// 무료탑승 거점에서 타는 학생 판정 — 명단 화면(isFreeHubRow)과 같은 기준(라벨에 '무료탑승' 포함).
+function isFreeHubLabel(label: string | null | undefined): boolean {
+  return (label ?? "").replace(/\s/g, "").includes("무료탑승");
+}
 
-type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null };
+// rosterId(확정본) 또는 requestId(원본)로 그 학생의 명단 행을 되짚는다. 화면에서 무료탑승으로 옮길 때 쓴다.
+type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null; requestId: string; pickupLabel: string };
 type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string };
 type Run = {
   index: number; vehicleName: string; plate: string | null; capacity: number; tripLabel: string | null;
@@ -65,6 +70,8 @@ type Run = {
   // 첫 노드 출발 시각 / 마지막 노드 도착 시각. 등원=차고지 출발·학원 도착, 하원=학원 출발·차고지 복귀.
   // 화면에서 출발 시각을 직접 조정할 때 기준값으로 쓴다.
   departTime: string | null; arriveTime: string | null;
+  // T맵 실도로 경로 좌표(출발→…→도착). 지도에 경로를 그릴 때 쓴다. 직선 추정이면 없음.
+  path?: { lat: number; lng: number }[];
 };
 
 export type DispatchSuggestion = {
@@ -110,6 +117,8 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
       run.provider = "TMAP";
       run.tmapMinutes = res.rawSummary?.totalTime != null ? Math.round(res.rawSummary.totalTime / 60) : null;
       run.tmapKm = res.rawSummary?.totalDistance != null ? Math.round(res.rawSummary.totalDistance / 100) / 10 : null;
+      run.path = res.path && res.path.length ? res.path : undefined; // 지도에 그릴 실도로 경로
+
     }
   } catch {
     order = nnOrder(run.stops, startPt);
@@ -143,6 +152,12 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
 
 export async function suggestDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
   await requireAdmin();
+  return computeDispatch(opts);
+}
+
+// 인증 없이 노선을 계산한다. 관리자 경로는 suggestDispatch(requireAdmin)로만 부르고,
+// 기사님 전용 링크는 유효 토큰을 확인한 뒤 이 함수를 직접 부른다(토큰이 관리자 인증을 대신함).
+export async function computeDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
   const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
   const { academy, depot, hub } = await getSettings();
 
@@ -178,18 +193,25 @@ export async function suggestDispatch(opts: { direction: DispatchDirection; date
 
   const unassigned: { name: string; label: string | null }[] = [];
   const stopMap = new Map<string, Stop>();
+  // 무료 탑승 거점(1호점 등)은 등록 인원과 무관하게 항상 경유한다. 지정 학생이 없으면 워크인만 태우는 빈 정류장으로 남는다.
+  const hubStop: Stop | null = hub ? { lat: hub.lat, lng: hub.lng, label: hub.name, students: [], approx: false, isHub: true } : null;
   for (const r of riders) {
+    const student: StopStudent = {
+      name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone,
+      rosterId: r.rosterId, requestId: r.shuttleRequestId, pickupLabel: r.placeLabel,
+    };
+    // '무료탑승'으로 지정된 학생은 집이 아니라 거점에서 타고(등원)/내린다(하원). 좌표가 없어도 배차 가능.
+    if (hubStop && isFreeHubLabel(r.placeLabel)) { hubStop.students.push(student); continue; }
     const { latitude: lat, longitude: lng } = r.place;
     const label = r.placeLabel;
     if (lat == null || lng == null) { unassigned.push({ name: r.studentName, label }); continue; }
     const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
     if (!stopMap.has(key)) stopMap.set(key, { lat, lng, label, students: [], approx: !pinnedSrc(r.place.source) });
-    stopMap.get(key)!.students.push({ name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone });
+    stopMap.get(key)!.students.push(student);
   }
 
-  // 무료 탑승 거점(1호점 등)은 등록 인원과 무관하게 항상 경유한다. 정원은 소비하지 않는다(워크인).
   const allStops: Stop[] = [...stopMap.values()];
-  if (hub) allStops.push({ lat: hub.lat, lng: hub.lng, label: hub.name, students: [], approx: false, isHub: true });
+  if (hubStop) allStops.push(hubStop);
 
   // 정원 배차: 차고지(등원)/학원(하원) 기준 최근접순으로 채운 뒤, 정원 초과 시 같은 차량 추가 운행
   const fillFrom: Pt = direction === "PICKUP" ? (depot ?? academy) : academy;

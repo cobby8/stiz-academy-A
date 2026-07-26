@@ -32,6 +32,64 @@ function missingCoord(r: ShuttleRosterRow): boolean {
   return noPickup || noDropoff;
 }
 
+// ── 기존 주소 → 건물명 일괄 변환용 카카오 JS SDK(브라우저 전용) ──
+// REST 키가 없어 서버에서 못 하므로, 관리자 브라우저에서 JS SDK로 좌표→건물명을 되찾는다.
+type KakaoGeocoderResult = { road_address?: { address_name?: string; building_name?: string }; address?: { address_name?: string } };
+type KakaoSdkLite = {
+  maps: {
+    load(cb: () => void): void;
+    services: {
+      Status: { OK: string };
+      Geocoder: new () => { coord2Address(lng: number, lat: number, cb: (res: KakaoGeocoderResult[], status: string) => void): void };
+    };
+  };
+};
+let kakaoSdkPromise: Promise<KakaoSdkLite> | null = null;
+function kakaoGlobal(): KakaoSdkLite | undefined { return (window as unknown as { kakao?: KakaoSdkLite }).kakao; }
+function loadKakaoSdk(key: string): Promise<KakaoSdkLite> {
+  if (kakaoGlobal()?.maps?.services) return Promise.resolve(kakaoGlobal() as KakaoSdkLite);
+  if (kakaoSdkPromise) return kakaoSdkPromise;
+  kakaoSdkPromise = new Promise((resolve, reject) => {
+    const fail = () => { kakaoSdkPromise = null; reject(new Error("지도를 불러오지 못했습니다.")); };
+    const start = () => { const k = kakaoGlobal(); if (!k) return fail(); k.maps.load(() => resolve(k)); };
+    const existing = document.querySelector<HTMLScriptElement>('script[data-stiz-kakao-map="true"]');
+    if (existing) {
+      if (kakaoGlobal()?.maps) return start();
+      existing.addEventListener("load", start, { once: true });
+      existing.addEventListener("error", fail, { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.async = true;
+    script.dataset.stizKakaoMap = "true";
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(key)}&autoload=false&libraries=services`;
+    script.addEventListener("load", start, { once: true });
+    script.addEventListener("error", () => { script.remove(); fail(); }, { once: true });
+    document.head.appendChild(script);
+  });
+  return kakaoSdkPromise;
+}
+// 좌표의 도로명 건물명(아파트·건물명)을 돌려준다. 없거나 응답 지연이면 null(→ 주소 유지).
+function buildingNameAt(sdk: KakaoSdkLite, lng: number, lat: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (v: string | null) => { if (!settled) { settled = true; resolve(v); } };
+    try {
+      new sdk.maps.services.Geocoder().coord2Address(lng, lat, (res, status) => {
+        if (status !== sdk.maps.services.Status.OK) return done(null);
+        const bn = res?.[0]?.road_address?.building_name;
+        done(bn && bn.trim() ? bn.trim() : null);
+      });
+    } catch { done(null); }
+    setTimeout(() => done(null), 5000);
+  });
+}
+// 현재 라벨이 '주소'처럼 보이는지 — 이미 건물명으로 잘 적힌 라벨은 건드리지 않는다.
+function looksLikeAddress(s: string | null): boolean {
+  if (!s) return false;
+  return /(경기|서울|인천|남양주|[가-힣]+(로|길)\s*\d|동\s*\d|\d+-\d+|번지)/.test(s);
+}
+
 async function callApi(method: string, body?: unknown) {
   const r = await fetch(ROSTER_API, {
     method,
@@ -123,6 +181,9 @@ export default function ShuttleRosterClient({
   const [lastRemoved, setLastRemoved] = useState<{ rosterId: string; name: string } | null>(null);
   // 서버가 알려 준 확정 여부. 전원을 명단에서 빼면 목록이 비어 행으로는 판정할 수 없다.
   const [confirmedFlag, setConfirmedFlag] = useState<boolean>(initialConfirmed);
+  // 주소 → 건물명 일괄 변환 상태
+  const [converting, setConverting] = useState(false);
+  const [convertMsg, setConvertMsg] = useState<string | null>(null);
 
   // 확정 여부는 서버 판정과 행의 출처를 함께 본다. 둘 중 하나라도 확정이면 확정으로 취급한다
   // (한쪽만 믿으면 "전원 제외" 상태나 오래된 목록에서 확정 전 화면으로 되돌아가 보인다).
@@ -220,7 +281,7 @@ export default function ShuttleRosterClient({
 
   async function savePin(requestId: string, kind: "pickup" | "dropoff", loc: MapLocationData) {
     setPinSaving(true);
-    const addr = loc.roadAddress ?? loc.address;
+    const addr = loc.placeName ?? loc.roadAddress ?? loc.address;
     const patch = { [`${kind}Pin`]: { latitude: loc.latitude, longitude: loc.longitude, address: loc.address, roadAddress: loc.roadAddress, source: loc.source, placeId: loc.placeId, accuracyMeters: loc.accuracyMeters } };
     const isPinned = loc.source === "MAP_PIN" || loc.source === "CURRENT_LOCATION";
     const optimistic: Partial<ShuttleRosterRow> = kind === "pickup"
@@ -232,6 +293,39 @@ export default function ShuttleRosterClient({
     if (kind === "dropoff" && !target?.dropoffLocation) optimistic.dropoffLocation = addr;
     try { if (target) await save(target, patch, optimistic); setPinEdit(null); }
     finally { setPinSaving(false); }
+  }
+
+  // 기존 주소 라벨을 카카오 건물명으로 일괄 변환한다(관리자 브라우저 JS SDK).
+  // 탑승자만·무료탑승 제외·주소처럼 보이는 라벨만·건물명이 있을 때만 바꾼다. 저장은 기존 save() 경로.
+  async function convertAddressesToBuildingNames() {
+    if (converting) return;
+    const apiKey = process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY?.trim();
+    if (!apiKey) { setError("카카오 지도 키가 설정되지 않아 변환할 수 없습니다."); return; }
+    const targets = rows.filter((r) => r.ride && !isFreeHubRow(r));
+    if (targets.length === 0) { setConvertMsg("변환할 대상이 없습니다."); return; }
+    setConverting(true); setError(null); setConvertMsg("지도를 불러오는 중...");
+    try {
+      const sdk = await loadKakaoSdk(apiKey);
+      let changed = 0;
+      for (let i = 0; i < targets.length; i++) {
+        const r = targets[i];
+        setConvertMsg(`변환 중 ${i + 1}/${targets.length}…`);
+        if (r.pickupLat != null && r.pickupLng != null && looksLikeAddress(r.pickupLocation)) {
+          const name = await buildingNameAt(sdk, r.pickupLng, r.pickupLat);
+          if (name && name !== r.pickupLocation) { await save(r, { pickupLocation: name }, { pickupLocation: name }); changed++; }
+        }
+        if (!r.dropoffSameAsPickup && r.dropoffLat != null && r.dropoffLng != null && looksLikeAddress(r.dropoffLocation)) {
+          const name = await buildingNameAt(sdk, r.dropoffLng, r.dropoffLat);
+          if (name && name !== r.dropoffLocation) { await save(r, { dropoffLocation: name }, { dropoffLocation: name }); }
+        }
+      }
+      setConvertMsg(`완료 · ${changed}건을 건물명으로 바꿨습니다${changed < targets.length ? " (건물명이 없는 곳은 주소 유지)" : ""}.`);
+    } catch (e: any) {
+      setError(e?.message || "건물명 변환에 실패했습니다.");
+      setConvertMsg(null);
+    } finally {
+      setConverting(false);
+    }
   }
 
   const pinRow = pinEdit ? rows.find((r) => r.requestId === pinEdit.requestId) : null;
@@ -376,14 +470,20 @@ export default function ShuttleRosterClient({
             <span aria-hidden>🔍</span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생·학부모·아파트 검색" className="w-full bg-transparent text-sm font-semibold outline-none dark:text-white" />
           </div>
-          {savedAt && !error && <span className="rounded-full bg-green-50 px-2.5 py-1 text-[11.5px] font-black text-green-700 dark:bg-green-900/30 dark:text-green-300">✓ 저장됨</span>}
+          {savedAt && !error && !converting && <span className="rounded-full bg-green-50 px-2.5 py-1 text-[11.5px] font-black text-green-700 dark:bg-green-900/30 dark:text-green-300">✓ 저장됨</span>}
           {error && <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11.5px] font-black text-red-600">⚠ {error}</span>}
+          {convertMsg && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11.5px] font-black text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">{convertMsg}</span>}
           {nonRiderCount > 0 && (
             <button type="button" onClick={() => setShowNonRiders((v) => !v)}
               className={`rounded-xl border px-3 py-2 text-[13px] font-bold ${showNonRiders ? "border-[var(--brand-accent)] text-[var(--brand-accent)]" : "border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300"}`}>
               {showNonRiders ? <>미탑승 {nonRiderCount}명 숨기기</> : <>미탑승 {nonRiderCount}명 보기</>}
             </button>
           )}
+          <button onClick={convertAddressesToBuildingNames} disabled={converting}
+            title="저장된 좌표로 아파트·건물명을 되찾아 승·하차 위치 이름을 일괄로 바꿉니다(건물명이 없는 곳은 주소 유지)."
+            className="rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">
+            {converting ? "변환 중…" : "🏢 주소→건물명 변환"}
+          </button>
           <button onClick={exportCsv} className="rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-bold text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200">⬇ 기사님용 내보내기 ({exportRows.length}명)</button>
         </div>
 

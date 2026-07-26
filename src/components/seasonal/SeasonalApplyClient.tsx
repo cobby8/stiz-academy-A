@@ -269,7 +269,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
         ...current,
         [target.offeringId]: {
           ...draft,
-          [isPickup ? "pickupLocation" : "dropoffLocation"]: value.name ?? value.roadAddress ?? value.address,
+          [isPickup ? "pickupLocation" : "dropoffLocation"]: value.placeName ?? value.roadAddress ?? value.address,
           [isPickup ? "pickupLocationData" : "dropoffLocationData"]: value,
         },
       };

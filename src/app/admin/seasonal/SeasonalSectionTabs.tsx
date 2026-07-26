@@ -12,7 +12,7 @@ const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> =
   { key: "makeup", href: "/admin/seasonal/attendance?view=makeup", label: "보강 관리", icon: "cached" },
   { key: "roster", href: "/admin/seasonal/shuttle", label: "셔틀 명단", icon: "list_alt" },
   { key: "dispatch", href: "/admin/seasonal/dispatch", label: "자동 배차", icon: "route" },
-  { key: "shuttle", href: "/admin/shuttle", label: "셔틀 노선", icon: "directions_bus" },
+  { key: "shuttle", href: "/admin/shuttle", label: "차량 관리", icon: "directions_bus" },
 ];
 
 // 활성 탭 판정 — 경로(pathname) + ?view 쿼리 조합. 기존 판정 결과와 동일하다.

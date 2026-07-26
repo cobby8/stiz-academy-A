@@ -1,4 +1,4 @@
-import ShuttleRouteAdminClient from "./ShuttleRouteAdminClient";
+import VehicleManagerClient from "./VehicleManagerClient";
 import SeasonalSectionTabs from "../seasonal/SeasonalSectionTabs";
 import SeasonalHeader from "../seasonal/SeasonalHeader";
 import { getShuttleDashboard } from "@/lib/shuttle/service";
@@ -6,20 +6,20 @@ import { countPendingMakeups } from "@/lib/seasonal/attendance";
 
 export const dynamic = "force-dynamic";
 
+// 셔틀 '차량 관리' — 노선 편성은 「자동 배차」로 대체되어, 이 화면은 차량 등록·관리만 담당한다.
+// (옛 노선 편성 화면 ShuttleRouteAdminClient는 파일로 남겨 두되 렌더하지 않는다.)
 export default async function ShuttleAdminPage() {
-  // 셔틀 화면에서도 같은 상단 탭을 쓰므로 보강 대기 뱃지를 동일하게 표시한다(병렬 조회).
   const [dashboard, makeupPending] = await Promise.all([
     getShuttleDashboard(),
     countPendingMakeups(),
   ]);
-  const initialData = JSON.parse(JSON.stringify(dashboard)) as Parameters<typeof ShuttleRouteAdminClient>[0]["initialData"];
+  const data = JSON.parse(JSON.stringify(dashboard)) as { vehicles?: { id: string; name: string; plateNumber?: string | null; capacity: number; notes?: string | null; isActive?: boolean }[] };
 
   return (
     <>
-      {/* 렌더 순서 통일: 공통 헤더 → 6개 탭 바 → 본문 */}
       <SeasonalHeader />
       <SeasonalSectionTabs makeupPending={makeupPending} />
-      <ShuttleRouteAdminClient initialData={initialData} />
+      <VehicleManagerClient initialVehicles={data.vehicles ?? []} />
     </>
   );
 }

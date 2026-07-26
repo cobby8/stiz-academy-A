@@ -5,6 +5,7 @@ import { routeFixedOrderWithTmap } from "@/lib/shuttle/tmap";
 // (여기서 WHERE 절을 손으로 다시 쓰다가 취소자·폐강 반 학생이 배차에 실리는 사고가 5번 반복됐다.)
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
 import { getSavedDispatchRoute } from "./dispatchRoute";
+import { firstDateOfSameWeekday } from "./weekday";
 import { planIncrementalInsert, type IncrTarget } from "./dispatchIncrement";
 
 // 방학특강 셔틀 노선 자동 제안 엔진.
@@ -170,7 +171,9 @@ export async function getDispatchForView(date: string | null, direction: Dispatc
   // 먼저 T맵 없이 기준정보(+날짜 확정)를 얻는다. NN 정렬은 순수 계산이라 외부 호출 0.
   const base = await computeDispatch({ direction, date, localOnly: true });
   const resolvedDate = base.date;
-  const saved = resolvedDate ? await getSavedDispatchRoute(resolvedDate, direction) : null;
+  // 요일별 관리: 노선은 그 요일의 '대표 날짜'(첫 운행일)에만 저장/조회한다. 같은 요일이면 모두 같은 노선.
+  const canonicalDate = resolvedDate ? firstDateOfSameWeekday(base.availableDates, resolvedDate) : null;
+  const saved = canonicalDate ? await getSavedDispatchRoute(canonicalDate, direction) : null;
   if (saved && Array.isArray(saved.vehicles) && saved.vehicles.length) {
     return {
       ...base,

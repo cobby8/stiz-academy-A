@@ -48,7 +48,7 @@ function segMin(a: Pt, b: Pt): number { return haversineKm(a, b) * MIN_PER_KM + 
 type Run = DispatchSuggestion["vehicles"][number];
 // 한 차량의 현재 정차 순서로 승·하차 시각(등원=학원 도착, 하원=학원 출발 기준)을 다시 계산한다.
 // T맵 총 소요시간이 있으면 그 값을 새 순서의 거리 비율로 재배분한다(서버와 동일 공식).
-function recomputeRunTimes(cur: DispatchSuggestion, run: Run): Run {
+function recomputeRunTimes(cur: DispatchSuggestion, run: Run, pinnedDepart?: string | null): Run {
   const isPickup = cur.direction === "PICKUP";
   const startPt: Pt = isPickup ? (cur.depot ?? cur.academy) : cur.academy;
   const endPt: Pt = isPickup ? cur.academy : (cur.depot ?? cur.academy);
@@ -61,8 +61,13 @@ function recomputeRunTimes(cur: DispatchSuggestion, run: Run): Run {
   const seg = segs.map((s) => s * scale);
   const csMin = parseHHMM(cur.classStart), ceMin = parseHHMM(cur.classEnd);
   const times = new Array<number>(path.length).fill(0);
-  if (isPickup) {
-    times[path.length - 1] = (csMin ?? 0) - PICKUP_BUFFER_MIN; // 학원 도착
+  const pinMin = pinnedDepart ? parseHHMM(pinnedDepart) : null;
+  if (pinMin != null) {
+    // 사람이 출발 시각을 고정함 → 출발에서 앞으로 배분(도착은 파생). 순서를 바꿔도 출발이 유지된다.
+    times[0] = pinMin;
+    for (let i = 1; i < path.length; i++) times[i] = times[i - 1] + seg[i - 1];
+  } else if (isPickup) {
+    times[path.length - 1] = (csMin ?? 0) - PICKUP_BUFFER_MIN; // 학원 도착 기준 역산
     for (let i = path.length - 2; i >= 0; i--) times[i] = times[i + 1] - seg[i];
   } else {
     times[0] = (ceMin ?? 0) + DROPOFF_BUFFER_MIN; // 학원 출발
@@ -92,6 +97,8 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
   const [err, setErr] = useState<string | null>(null);
   const [editKind, setEditKind] = useState<GeoKind | null>(null);
   const [savingGeo, setSavingGeo] = useState(false);
+  // 사람이 출발 시각을 직접 맞춘 차량 index. 이 차량은 순서를 바꿔도 출발 시각을 유지한다.
+  const [departPinned, setDepartPinned] = useState<Record<number, boolean>>({});
 
   async function saveGeo(kind: GeoKind, loc: MapLocationData) {
     setSavingGeo(true); setErr(null);
@@ -123,6 +130,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "실패");
       setSug(j);
+      setDepartPinned({}); // 새로 제안하면 출발 고정도 초기화
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
@@ -140,7 +148,9 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
       const [moved] = stops.splice(from, 1);
       stops.splice(to, 0, moved);
       // ★ 순서가 바뀌었으니 그 차량의 승·하차 시각을 다시 계산한다(예전엔 최초 시각이 그대로 남았다).
-      vehicles[vIdx] = recomputeRunTimes(cur, vehicles[vIdx]);
+      // 사람이 출발 시각을 맞춰 둔 차량이면 그 출발을 고정해 유지한다(초기화 방지).
+      const pinnedDepart = departPinned[vIdx] ? vehicles[vIdx].departTime : null;
+      vehicles[vIdx] = recomputeRunTimes(cur, vehicles[vIdx], pinnedDepart);
       return { ...cur, vehicles };
     });
   }
@@ -174,6 +184,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
 
   // 출발 시각 직접 조정 — 첫 노드(등원=차고지 / 하원=학원) 출발을 바꾸면 그 차량 전체 시각이 같이 이동한다.
   function setDepartTime(vIdx: number, newDepart: string) {
+    setDepartPinned((p) => ({ ...p, [vIdx]: true })); // 이 차량은 출발 고정으로 표시
     setSug((cur) => {
       const vehicles = cur.vehicles.map((v, i) => {
         if (i !== vIdx) return v;

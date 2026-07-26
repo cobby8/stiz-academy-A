@@ -68,7 +68,7 @@ function isFreeHubLabel(label: string | null | undefined): boolean {
 }
 
 // rosterId(확정본) 또는 requestId(원본)로 그 학생의 명단 행을 되짚는다. 화면에서 무료탑승으로 옮길 때 쓴다.
-type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null; requestId: string; pickupLabel: string };
+type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null; requestId: string; pickupLabel: string; applicationId: string | null };
 // etaMinutes: 그 정차의 승/하차 예상 시각을 '자정 기준 분'으로 담는 숫자 필드.
 // T2에서 정차별 '확정시간 편집'을 붙일 때 문자열 라벨 파싱 없이 이 숫자를 직접 쓴다.
 // etaManual: 관리자가 그 정차 시각을 손으로 고쳐 '확정'한 값(자정 기준 분). 있으면 표시·저장 기준이 되고
@@ -299,7 +299,7 @@ export async function computeDispatch(opts: { direction: DispatchDirection; date
   for (const r of riders) {
     const student: StopStudent = {
       name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone,
-      rosterId: r.rosterId, requestId: r.shuttleRequestId, pickupLabel: r.placeLabel,
+      rosterId: r.rosterId, requestId: r.shuttleRequestId, pickupLabel: r.placeLabel, applicationId: r.applicationId ?? null,
     };
     // '무료탑승'으로 지정된 학생은 집이 아니라 거점에서 타고(등원)/내린다(하원). 좌표가 없어도 배차 가능.
     if (hubStop && isFreeHubLabel(r.placeLabel)) { hubStop.students.push(student); continue; }
@@ -382,7 +382,7 @@ export async function incrementalDispatch(opts: { direction: DispatchDirection; 
     if (!r) continue; // 명단에서 사라졌으면(방어) 건너뛴다.
     const student: StopStudent = {
       name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone,
-      rosterId: r.rosterId, requestId: r.shuttleRequestId, pickupLabel: r.placeLabel,
+      rosterId: r.rosterId, requestId: r.shuttleRequestId, pickupLabel: r.placeLabel, applicationId: r.applicationId ?? null,
     };
     const isHub = isFreeHubLabel(r.placeLabel);
     targets.push({

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 // 셔틀 대상자 판정 기준은 명단·노선·자동배차가 반드시 같아야 한다. 공용 모듈 한 곳에서만 정의한다.
 // 셔틀 대상자는 게이트웨이 한 곳으로만 읽는다(원본 4테이블을 여기서 다시 조인하지 않는다).
-import { getConfirmedShuttleRoster } from "@/lib/seasonal/shuttleRoster";
+import { getConfirmedShuttleRoster, applyConfirmedRosterPin } from "@/lib/seasonal/shuttleRoster";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { resolveAcademyShuttleLocation, type AcademyShuttleLocation } from "./academyLocation";
 import { chooseActiveShuttleAssignment } from "./assignment";
@@ -983,6 +983,30 @@ export async function updateShuttleRequestLocation(actor: Actor, shuttleRequestI
   const accuracyMeters = accuracyValue === undefined || accuracyValue === null || accuracyValue === ""
     ? null
     : coordinate(accuracyValue, "위치 정확도", 0, 100_000);
+
+  // ★ 이 화면의 명단은 확정본(게이트웨이)에서 읽는다. 그런데 저장을 원본에만 하면
+  //   핀을 찍어도 좌표가 그대로인 채 "저장했습니다"만 뜬다(에러도 로그도 없는 조용한 no-op).
+  //   읽는 곳과 쓰는 곳이 갈리면 반드시 이렇게 되므로, 확정본이 있으면 확정본에 쓴다.
+  const routed = await applyConfirmedRosterPin(
+    shuttleRequestId,
+    kind,
+    { latitude, longitude, address, roadAddress, source, placeId, accuracyMeters },
+    name,
+  ).catch((error: unknown) => {
+    // 확정본 수정은 원장(ADMIN) 권한이 필요하다. 부원장이면 조용히 원본에 쓰지 말고 이유를 알린다.
+    const message = error instanceof Error ? error.message : "";
+    if (/원장|ADMIN/.test(message)) {
+      throw new ShuttleServiceError("확정된 명단의 위치는 원장(ADMIN)만 수정할 수 있습니다.", 403, "CONFIRMED_ROSTER_OWNER_ONLY");
+    }
+    throw error;
+  });
+  if (routed.applied) {
+    // 원본 신청서는 건드리지 않는다(확정 후 원본 불변). 감사 로그만 남긴다.
+    await audit(prisma, actor, "SHUTTLE_LOCATION_CONFIRMED", { shuttleRequestId }, null, {
+      target: "SeasonalShuttleRoster", kind, latitude, longitude, address, roadAddress, source,
+    });
+    return { id: shuttleRequestId, confirmedRoster: true, kind, latitude, longitude };
+  }
 
   return prisma.$transaction(async (tx) => {
     const before = await tx.specialProgramShuttleRequest.findUnique({

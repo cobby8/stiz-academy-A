@@ -83,8 +83,21 @@ test("미탑승 학생은 기본으로 숨기고 토글로만 보여준다", () 
 });
 
 test("표는 전체 목록이 아니라 걸러진 목록을 그린다", () => {
-    assert.match(client, /\{visible\.map\(\(r\) => \(/);
-    assert.doesNotMatch(client, /\{rows\.map\(\(r\) => \(/);
+    // 표를 여러 묶음(예: 1호점 무료탑승 폴더)으로 나눠 그리더라도, 그리는 원천은 반드시
+    // 걸러진 목록(visible)에서 파생돼야 한다. rows를 직접 그리면 미탑승자가 표에 되살아난다.
+    // 그리는 방식(인라인 JSX든 renderRow 헬퍼든)은 자유지만, 원천 목록은 고정이다.
+    const rendered = [...client.matchAll(/\{(?:\w+ && )?(\w+)\.map\((?:\(r\) => \(|renderRow\))/g)].map((m) => m[1]);
+    assert.ok(rendered.length > 0, "표를 그리는 map을 찾지 못했다");
+    assert.ok(!rendered.includes("rows"), "걸러지지 않은 rows를 직접 그리고 있다");
+    for (const name of new Set(rendered)) {
+        if (name === "visible") continue;
+        // visible이 아니면 visible에서 파생된 목록이어야 한다.
+        assert.match(
+            client,
+            new RegExp(`const ${name} = useMemo\\(\\(\\) => visible`),
+            `${name} 이 걸러진 목록(visible)에서 나오지 않는다`,
+        );
+    }
 });
 
 // 기사님용 CSV에 미탑승자·취소자가 들어가면 실제로 태우면 안 되는 학생을 태우게 된다.

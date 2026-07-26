@@ -15,7 +15,8 @@ const gateway = readFileSync(new URL("../src/lib/seasonal/shuttleRoster.ts", imp
 
 test("노선 화면은 셔틀 대상자를 원본에서 직접 찾지 않는다", () => {
     assert.doesNotMatch(source, /prisma\.specialProgramShuttleRequest\.findMany/);
-    assert.match(source, /import \{ getConfirmedShuttleRoster \} from "@\/lib\/seasonal\/shuttleRoster"/);
+    // 게이트웨이에서 가져다 쓰기만 하면 된다(같은 import 줄에 다른 함수가 함께 와도 무방).
+    assert.match(source, /import \{[^}]*\bgetConfirmedShuttleRoster\b[^}]*\} from "@\/lib\/seasonal\/shuttleRoster"/);
     assert.match(source, /getConfirmedShuttleRoster\(selectedSeasonId\)/);
 });
 

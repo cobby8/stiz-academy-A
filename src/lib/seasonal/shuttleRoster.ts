@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { isRidingShuttleStatus, ridingShuttleStatusSql, seasonalShuttleEligibilitySql } from "./shuttleEligibility";
+import { buildConfirmedRosterUpdate, type ConfirmedRosterPatch, type ConfirmedRosterPin } from "./shuttleRosterEdit";
+// 확정본 수정에 쓰는 타입은 순수 모듈이 정본이다. 소비처(API·서비스)는 계속 이 파일에서 가져다 쓴다.
+export type { ConfirmedRosterPatch, ConfirmedRosterPin } from "./shuttleRosterEdit";
 
 /**
  * 방학특강 셔틀 "확정 명단" 게이트웨이 — 셔틀 대상자를 읽는 **유일한 출구**.
@@ -312,7 +315,11 @@ const ROSTER_ORDER = `ORDER BY "ride" DESC, "classStart" NULLS LAST, "studentNam
  * 탑승자만 필요한 화면은 `rows.filter((row) => row.ride)`로 거른다.
  */
 export async function getConfirmedShuttleRoster(seasonId?: string | null): Promise<ShuttleRosterEntry[]> {
-  if (await confirmedModeEnabled()) {
+  // ★ 판정 기준은 "보이는 행이 있느냐"가 아니라 "확정본이 존재하느냐"다.
+  //   보이는 행으로 판정하면, 원장이 명단에서 전원을 빼는 순간 확정본이 비어 보여 폴백이 되살아나고
+  //   **일부러 뺀 학생이 기사님 CSV에 다시 나타난다.** 게다가 확정 버튼을 다시 눌러도
+  //   ON CONFLICT DO NOTHING이라 아무 일도 안 일어나 빠져나갈 방법이 없다.
+  if (await confirmedModeEnabled() && await confirmedRosterExists(seasonId)) {
     const scope = seasonScope({ roster: "sr", season: "s" }, seasonId);
     const rows = await prisma.$queryRawUnsafe<RawRow[]>(
       `SELECT ${CONFIRMED_COLUMNS}
@@ -324,10 +331,33 @@ export async function getConfirmedShuttleRoster(seasonId?: string | null): Promi
         ${ROSTER_ORDER}`,
       ...scope.params,
     );
-    // 확정본이 한 행이라도 있으면 그것이 정본이다. 원본을 섞지 않는다(섞으면 확정의 의미가 사라진다).
-    if (rows.length > 0) return rows.map((r) => toEntry(r, "CONFIRMED"));
+    // 확정본이 정본이다. 원본을 섞지 않고(섞으면 확정의 의미가 사라진다),
+    // 결과가 빈 목록이어도 그대로 돌려준다(= "아무도 안 태운다"가 원장의 결정이다).
+    return rows.map((r) => toEntry(r, "CONFIRMED"));
   }
   return fallbackSeasonRoster(seasonId);
+}
+
+/**
+ * 이 시즌에 확정본 행이 하나라도 있는가(제외된 행 포함).
+ * 제외된 행까지 세는 이유는 위 주석 그대로다 — 전원 제외가 폴백 부활로 이어지면 안 된다.
+ */
+async function confirmedRosterExists(seasonId?: string | null): Promise<boolean> {
+  const scope = seasonScope({ roster: "sr", season: "s" }, seasonId);
+  try {
+    const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+      `SELECT 1 AS one
+         FROM "SeasonalShuttleRoster" sr
+         JOIN "SpecialProgramSeason" s ON s.id = sr."seasonId"
+        WHERE ${scope.where}
+        LIMIT 1`,
+      ...scope.params,
+    );
+    return rows.length > 0;
+  } catch {
+    // 테이블이 없는 구버전 DB에서는 폴백으로 동작한다(화면이 비는 것보다 안전하다).
+    return false;
+  }
 }
 
 /**
@@ -546,35 +576,51 @@ export async function confirmSeasonalShuttleRoster(seasonId?: string | null): Pr
   return { inserted };
 }
 
-export type ConfirmedRosterPatch = {
-  ride?: boolean;
-  pickupLocation?: string | null;
-  pickupTime?: string | null;
-  dropoffLocation?: string | null;
-  dropoffSameAsPickup?: boolean;
-  note?: string | null;
-};
-
-/** 확정본 한 행 수정. 원본(SpecialProgramShuttleRequest)은 건드리지 않는다. */
+/**
+ * 확정본 한 행 수정. 원본(SpecialProgramShuttleRequest)은 건드리지 않는다.
+ * 지도 핀도 여기서만 처리한다 — 확정 후 원본에 쓰면 확정본과 원본이 갈라져 어느 쪽이 정본인지 알 수 없게 된다.
+ *
+ * ★ SET 절 조립 규칙(같은 컬럼 중복 금지·파라미터 번호·핀과 텍스트 우선순위)은 의존성 없는 순수 모듈
+ *   `shuttleRosterEdit.ts`에 있다. 그 규칙의 결함(예: 컬럼 중복 → Postgres 42701 → 500)은 소스 문자열
+ *   검사로는 절대 못 잡아서, 실제로 돌려 보는 테스트가 가능하도록 떼어 놓았다.
+ */
 export async function updateConfirmedShuttleRosterRow(rosterId: string, patch: ConfirmedRosterPatch) {
   await requireRosterOwner();
   if (!rosterId) throw new Error("rosterId required");
 
-  const sets: string[] = [];
-  const args: unknown[] = [rosterId];
-  const push = (col: string, val: unknown) => { args.push(val); sets.push(`"${col}" = $${args.length}`); };
-  if (patch.ride !== undefined) push("ride", patch.ride === true);
-  if (patch.pickupLocation !== undefined) push("pickupLocation", str(patch.pickupLocation));
-  if (patch.pickupTime !== undefined) push("pickupTime", str(patch.pickupTime));
-  if (patch.dropoffLocation !== undefined) push("dropoffLocation", str(patch.dropoffLocation));
-  if (patch.dropoffSameAsPickup !== undefined) push("dropoffSameAsPickup", patch.dropoffSameAsPickup === true);
-  if (patch.note !== undefined) push("note", str(patch.note));
-  if (sets.length === 0) return { ok: true, changed: 0 };
+  // 좌표 검증도 여기서 끝난다(좌표가 이상하면 던지고, 아래 UPDATE는 아예 실행되지 않는다).
+  const { sets, args } = buildConfirmedRosterUpdate(rosterId, patch);
+  let changed = 0;
+  if (sets.length > 0) {
+    changed = await prisma.$executeRawUnsafe(
+      `UPDATE "SeasonalShuttleRoster" SET ${sets.join(", ")}, "updatedAt" = now() WHERE id = $1`,
+      ...args,
+    );
+  }
 
-  const changed = await prisma.$executeRawUnsafe(
-    `UPDATE "SeasonalShuttleRoster" SET ${sets.join(", ")}, "updatedAt" = now() WHERE id = $1`,
-    ...args,
+  // '하원=등원 동일'이 켜져 있으면 등원 좌표·주소를 하원으로 복제한다(폴백 경로와 같은 규칙).
+  const cur = await prisma.$queryRawUnsafe<RawRow[]>(
+    `SELECT "dropoffSameAsPickup" AS same, "pickupLatitude" AS lat FROM "SeasonalShuttleRoster" WHERE id = $1`,
+    rosterId,
   );
+  if (cur[0]?.same === true) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "SeasonalShuttleRoster"
+          SET "dropoffLocation" = "pickupLocation",
+              "dropoffAddress" = "pickupAddress",
+              "dropoffRoadAddress" = "pickupRoadAddress",
+              "dropoffLatitude" = "pickupLatitude",
+              "dropoffLongitude" = "pickupLongitude",
+              "dropoffPlaceId" = "pickupPlaceId",
+              "dropoffLocationSource" = CASE WHEN "pickupLatitude" IS NOT NULL THEN COALESCE("pickupLocationSource", 'SEARCH') ELSE "dropoffLocationSource" END,
+              "dropoffAccuracyMeters" = "pickupAccuracyMeters",
+              "dropoffConfirmedAt" = CASE WHEN "pickupLatitude" IS NOT NULL THEN COALESCE("pickupConfirmedAt", now()) ELSE "dropoffConfirmedAt" END,
+              "updatedAt" = now()
+        WHERE id = $1`,
+      rosterId,
+    );
+  }
+
   return { ok: true, changed };
 }
 
@@ -606,4 +652,105 @@ export async function restoreConfirmedShuttleRosterRow(rosterId: string) {
     rosterId,
   );
   return { ok: true, changed };
+}
+
+/**
+ * 확정 "메타 정보"만 돌려준다 — 몇 건이 확정돼 있고, 언제 확정했는지.
+ *
+ * ⚠️ 이름을 일부러 get* 으로 짓지 않았다. 이 파일의 규칙은 "명단을 읽는 출구(get*)는 딱 2개"이고
+ *    (회귀 테스트가 그 개수를 지킨다), 이 함수는 명단이 아니라 화면 배너에 쓸 부가 정보만 준다.
+ *
+ * 확정일시는 확정본 행의 **최소 confirmedAt**(DDL의 `"confirmedAt" TIMESTAMPTZ NOT NULL DEFAULT now()`)을 쓴다.
+ * 나중에 추가된 행이 아니라 "원장이 처음 확정을 누른 시각"이 화면에 보여야 하기 때문이다.
+ * 인증을 걸지 않는 이유는 조회 함수와 같다(호출부가 기존 가드를 유지한다).
+ */
+export async function shuttleRosterConfirmationInfo(
+  seasonId?: string | null,
+): Promise<{ confirmed: boolean; count: number; confirmedAt: Date | null }> {
+  const scope = seasonScope({ roster: "sr", season: "s" }, seasonId);
+  try {
+    // ★ confirmed 를 "살아 있는 행 수 > 0"으로 판정하면 안 된다. 전원 제외 상태에서 count가 0이 되어
+    //   화면이 다시 "확정 전"으로 보이고, 원장은 이미 확정한 명단을 또 확정하려 들게 된다.
+    //   명단 조회(getConfirmedShuttleRoster)와 완전히 같은 기준으로 판정한다.
+    const confirmed = (await confirmedModeEnabled()) && (await confirmedRosterExists(seasonId));
+    const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+      `SELECT count(*)::int AS "count", min(sr."confirmedAt") AS "confirmedAt"
+         FROM "SeasonalShuttleRoster" sr
+         JOIN "SpecialProgramSeason" s ON s.id = sr."seasonId"
+        WHERE sr."removedAt" IS NULL
+          AND ${scope.where}`,
+      ...scope.params,
+    );
+    return { confirmed, count: num(rows[0]?.count) ?? 0, confirmedAt: dt(rows[0]?.confirmedAt) };
+  } catch {
+    // 테이블이 아직 없는 환경(구버전 DB)에서는 "확정 안 됨"으로 본다. 화면이 죽는 것보다 안전하다.
+    return { confirmed: false, count: 0, confirmedAt: null };
+  }
+}
+
+/**
+ * 이 셔틀 신청이 이미 확정본에 들어가 있는가.
+ *
+ * 왜 필요한가(R-5): 저장 요청을 확정본으로 보낼지 원본으로 보낼지를 **클라이언트가 보낸 값으로**
+ * 판단하면, 확정 전에 열어 둔 탭이 확정 후에 저장하는 순간 rosterId가 없어서 원본 신청서가 수정된다.
+ * 화면엔 "저장됨"이 뜨지만 기사님 명단(확정본)은 그대로라 아이가 옛 주소에서 기다리게 된다.
+ * → 원본을 고치기 직전에 서버가 직접 확인한다.
+ */
+export async function isShuttleRequestConfirmed(shuttleRequestId: string): Promise<boolean> {
+  if (!shuttleRequestId) return false;
+  if (!(await confirmedModeEnabled())) return false; // 킬 스위치가 꺼져 있으면 원본이 정본이다.
+  try {
+    const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+      `SELECT 1 AS one
+         FROM "SeasonalShuttleRoster"
+        WHERE "shuttleRequestId" = $1
+          AND "removedAt" IS NULL
+        LIMIT 1`,
+      shuttleRequestId,
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 셔틀 신청 id로 확정본 행을 찾아 지도 핀을 찍는다(T-1).
+ *
+ * 왜 필요한가: 노선 편성 화면(/admin/shuttle)의 미배정 명단은 게이트웨이(= 확정본)에서 읽는데,
+ * 핀 저장은 원본 테이블에만 쓰고 있었다. 그래서 확정 후에는 핀을 찍어도 "저장했습니다" 토스트만 뜨고
+ * 좌표는 그대로였다(에러도 로그도 없는 조용한 no-op). **읽는 곳과 쓰는 곳이 갈리면 반드시 이렇게 된다.**
+ *
+ * 확정본이 없으면 `applied:false`를 돌려주고, 호출부가 기존대로 원본에 저장한다.
+ * @param label 화면이 함께 보낸 표시 이름. 있으면 라벨을 이 값으로 덮는다(노선 편성 화면의 기존 동작).
+ */
+export async function applyConfirmedRosterPin(
+  shuttleRequestId: string,
+  kind: "pickup" | "dropoff",
+  pin: ConfirmedRosterPin,
+  label?: string | null,
+): Promise<{ applied: boolean }> {
+  if (!shuttleRequestId) return { applied: false };
+  if (!(await confirmedModeEnabled())) return { applied: false };
+
+  let rosterId: string | null = null;
+  try {
+    const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+      `SELECT id FROM "SeasonalShuttleRoster"
+        WHERE "shuttleRequestId" = $1 AND "removedAt" IS NULL
+        ORDER BY "confirmedAt" DESC
+        LIMIT 1`,
+      shuttleRequestId,
+    );
+    rosterId = str(rows[0]?.id);
+  } catch {
+    return { applied: false }; // 테이블이 없는 구버전 DB → 기존 경로 유지
+  }
+  if (!rosterId) return { applied: false };
+
+  const patch: ConfirmedRosterPatch = kind === "pickup"
+    ? { pickupPin: pin, ...(str(label) ? { pickupLocation: str(label) } : {}) }
+    : { dropoffPin: pin, ...(str(label) ? { dropoffLocation: str(label) } : {}) };
+  await updateConfirmedShuttleRosterRow(rosterId, patch);
+  return { applied: true };
 }

@@ -34,8 +34,12 @@ test("폴백은 게이트웨이 안에만 있고 밖으로 새지 않는다", ()
 
 // ── ① 확정본이 없을 때(폴백) ──────────────────────────────────
 
-test("확정본이 비어 있으면 원본 폴백으로 내려간다", () => {
-    assert.match(gateway, /if \(rows\.length > 0\) return rows\.map\(\(r\) => toEntry\(r, "CONFIRMED"\)\)/);
+test("확정본이 아예 없을 때만 원본 폴백으로 내려간다", () => {
+    // ⚠️ 예전에는 "보이는 행이 0개면 폴백"이었다. 그러면 원장이 명단에서 전원을 빼는 순간
+    //    폴백이 되살아나 **일부러 뺀 학생이 기사님 CSV에 다시 나타난다**(2026-07-26 리뷰 R-7①).
+    //    그래서 판정 기준은 "행이 보이느냐"가 아니라 "확정본이 존재하느냐"다.
+    assert.match(gateway, /confirmedRosterExists\(seasonId\)/);
+    assert.doesNotMatch(gateway, /if \(rows\.length > 0\) return rows\.map/);
     assert.match(gateway, /return fallbackSeasonRoster\(seasonId\)/);
 });
 

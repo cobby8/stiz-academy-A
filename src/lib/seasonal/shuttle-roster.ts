@@ -1,11 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getConfirmedShuttleRoster } from "./shuttleRoster";
+import type { ShuttleRosterSource } from "./shuttleRoster";
 
 // 방학특강 셔틀 통합 명단(학생 단위) — 기사님과 공유하던 시트를 앱으로 옮긴 편집형 뷰의 서버 로직.
 // 한 학생(신청서)당 셔틀 신청 1건을 한 줄로 본다. 모든 쿼리는 PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe.
 
 export type ShuttleRosterRow = {
+  // 이 줄이 확정본에서 온 값인지(CONFIRMED) 아직 원본을 그대로 비추는 중인지(FALLBACK).
+  // 화면은 이 값 하나로 "확정 전 배너 / 확정 후 배너"를 가른다. 별도 플래그를 만들지 않는 이유는
+  // 명단과 확정 여부가 서로 다른 출처에서 와서 어긋나는 사고를 원천 차단하기 위해서다.
+  origin: ShuttleRosterSource;
+  // 확정본 행 id. 확정 전에는 null이고, 이 값이 있을 때만 저장이 확정본으로 간다(원본은 건드리지 않는다).
+  rosterId: string | null;
   requestId: string;
   applicationId: string;
   ride: boolean; // 탑승 여부 (status !== 'CANCELLED')
@@ -37,6 +44,8 @@ export async function getSeasonalShuttleRoster(): Promise<ShuttleRosterRow[]> {
   await requireAdmin();
   const entries = await getConfirmedShuttleRoster();
   return entries.map((e) => ({
+    origin: e.origin,
+    rosterId: e.rosterId,
     requestId: e.shuttleRequestId,
     applicationId: e.applicationId ?? "",
     ride: e.ride,

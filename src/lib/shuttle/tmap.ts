@@ -183,6 +183,61 @@ export async function routeFixedOrderWithTmap(input: { start: LatLng; end: LatLn
   return { provider: "TMAP", path, totalTime, totalDistance };
 }
 
+// 한 구간(점대점)만 재시도로 감싼다. 구간별 호출은 연속 호출이라 일시 실패(429 등)가 잦다.
+async function routesLegRetry(appKey: string, start: LatLng, end: LatLng, retries = 1): Promise<FixedRouteResult> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await routesLeg(appKey, start, end, []); // 경유지 없이 두 정차 사이만 잇는다.
+    } catch (e) {
+      lastErr = e;
+      if (attempt < retries) await new Promise((r) => setTimeout(r, 200 * (attempt + 1))); // 200ms backoff
+    }
+  }
+  throw lastErr;
+}
+
+// 한 구간(정차 사이)의 실도로 이동시간·거리·경로. 실패 시 time/distance=null, path=[].
+export type SegmentLeg = { time: number | null; distance: number | null; path: LatLng[] };
+export type SegmentsRouteResult = {
+  provider: "TMAP";
+  segments: SegmentLeg[]; // 길이 = 노드수-1 = 정차수+1
+  path: LatLng[]; // 성공 구간을 순서대로 이어붙인 전체 경로
+  totalTime: number; // 성공 구간 시간 합(초)
+  totalDistance: number; // 성공 구간 거리 합(m)
+};
+
+// 정차 사이를 "점대점 단일 경로"로 개별 호출해 각 구간의 실제 이동시간을 얻는다.
+// 왜 이렇게? 기존 routeFixedOrderWithTmap는 총시간만 주고 구간 시간이 없어, 정차별 ETA를
+// 직선거리 비율로 추정 배분했다(부정확). 구간마다 /routes를 따로 부르면 각 정차의 실도로 ETA가 나온다.
+// ⚠️ 정차 N개면 T맵 호출 N+1번. "편집할 때만" 부르므로 수용 가능(조회 시엔 호출 안 함).
+// ⚠️ 한 구간이 실패해도 그 구간만 null 처리하고 나머지는 살린다(전체 폴백보다 부분 유지가 낫다).
+export async function routeSegmentsWithTmap(input: { start: LatLng; end: LatLng; waypoints: LatLng[] }): Promise<SegmentsRouteResult> {
+  const appKey = process.env.TMAP_APP_KEY?.trim();
+  if (!appKey) throw new TmapApiError("TMAP_APP_KEY 환경변수가 설정되지 않았습니다.", 500);
+  const nodes: LatLng[] = [input.start, ...input.waypoints, input.end];
+  if (nodes.length < 2) throw new TmapApiError("좌표가 부족합니다.", 400);
+
+  const segments: SegmentLeg[] = [];
+  const path: LatLng[] = [];
+  let totalTime = 0, totalDistance = 0;
+  for (let i = 0; i < nodes.length - 1; i++) {
+    try {
+      const leg = await routesLegRetry(appKey, nodes[i], nodes[i + 1]);
+      segments.push({ time: leg.totalTime, distance: leg.totalDistance, path: leg.path });
+      for (const c of leg.path) {
+        const last = path[path.length - 1];
+        if (!last || last.lat !== c.lat || last.lng !== c.lng) path.push(c); // 경계 좌표 중복 제거
+      }
+      totalTime += leg.totalTime; totalDistance += leg.totalDistance;
+    } catch {
+      // 이 구간만 실패 처리. 호출부가 segMin 추정으로 폴백하도록 time=null을 남긴다.
+      segments.push({ time: null, distance: null, path: [] });
+    }
+  }
+  return { provider: "TMAP", segments, path, totalTime, totalDistance };
+}
+
 export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimizationInput): Promise<TmapRouteOptimizationResult> {
   const appKey = process.env.TMAP_APP_KEY?.trim();
   if (!appKey) throw new TmapApiError("TMAP_APP_KEY 환경변수가 설정되지 않았습니다.", 500);

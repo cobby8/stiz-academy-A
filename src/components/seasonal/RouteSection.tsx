@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RouteMapCanvas } from "@/components/seasonal/DispatchRouteMap";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
+import { confirmedEtaMin, etaMinToLabel, reapplyManualEtaVehicles } from "@/lib/seasonal/shuttleStopEta";
 
 // 한 방향(등원 또는 하원)의 노선 섹션 — 목록 + 지도 + 순서변경/재계산/무료탑승 드래그/출발조정/저장을 자립적으로 담는다.
 // 날짜·기준위치가 바뀌면(refreshKey) 그 방향을 다시 계산한다.
@@ -58,7 +59,15 @@ function recomputeRunTimes(cur: DispatchSuggestion, run: Run, pinnedDepart?: str
     times[0] = (ceMin ?? 0) + DROPOFF_BUFFER_MIN;
     for (let i = 1; i < path.length; i++) times[i] = times[i - 1] + seg[i - 1];
   }
-  const stops = order.map((s, i) => ({ ...s, etaLabel: `${fmtHHMM(times[i + 1])} ${isPickup ? "승차" : "하차"}` }));
+  // 자동값(etaMinutes)은 항상 최신 재계산값으로 갱신해 '다시 계산' 리셋의 기준이 되게 하고,
+  // 표시 라벨은 확정값(etaManual)이 있으면 그것을, 없으면 자동값을 쓴다(확정 정차는 재계산에도 불변).
+  const stops = order.map((s, i) => {
+    const autoMin = Math.round(times[i + 1]);
+    const base = { ...s, etaMinutes: autoMin };
+    return s.etaManual != null
+      ? { ...base, etaLabel: etaMinToLabel(s.etaManual, cur.direction) }
+      : { ...base, etaLabel: etaMinToLabel(autoMin, cur.direction) };
+  });
   return {
     ...run, stops,
     departTime: fmtHHMM(times[0]),
@@ -99,7 +108,9 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "실패");
-      setSug(j); setDepartPinned({});
+      // 서버는 자동값만 계산한다 → 기존 화면의 수동 확정값(etaManual)을 키 매칭으로 다시 얹는다(확정 유지).
+      const prior = sugRef.current.vehicles;
+      setSug({ ...j, vehicles: reapplyManualEtaVehicles(j.vehicles, prior, direction) }); setDepartPinned({});
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
@@ -115,7 +126,9 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "실패");
-      setSug(j); setDepartPinned({}); setLoadedFromSaved(false); setSaveMsg(null);
+      // 증분 재배차도 자동값만 돌아온다 → 기존 확정값(etaManual) 재적용.
+      const prior = sugRef.current.vehicles;
+      setSug({ ...j, vehicles: reapplyManualEtaVehicles(j.vehicles, prior, direction) }); setDepartPinned({}); setLoadedFromSaved(false); setSaveMsg(null);
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
@@ -236,10 +249,41 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
         if (oldMin == null || newMin == null) return v;
         const delta = newMin - oldMin;
         if (delta === 0) return v;
-        return { ...v, departTime: shiftHHMM(v.departTime, delta), arriveTime: shiftHHMM(v.arriveTime, delta), depotTime: shiftHHMM(v.depotTime, delta), stops: v.stops.map((s) => ({ ...s, etaLabel: shiftLabel(s.etaLabel, delta) })) };
+        // 확정(etaManual) 정차는 절대값을 유지한다(출발시각 이동에 흔들리지 않음). 자동 정차만 delta만큼 민다.
+        return { ...v, departTime: shiftHHMM(v.departTime, delta), arriveTime: shiftHHMM(v.arriveTime, delta), depotTime: shiftHHMM(v.depotTime, delta), stops: v.stops.map((s) => s.etaManual != null ? s : ({ ...s, etaLabel: shiftLabel(s.etaLabel, delta), etaMinutes: s.etaMinutes != null ? s.etaMinutes + delta : s.etaMinutes })) };
       });
       return { ...cur, vehicles };
     });
+  }
+
+  // 정차 시각 편집(T2) — 관리자가 input(HH:MM)으로 고치면 그 값을 etaManual에 '확정'하고 라벨을 확정값으로 갱신한다.
+  function setStopEta(vIdx: number, sIdx: number, value: string) {
+    const min = parseHHMM(value);
+    if (min == null) return; // 빈값/잘못된 입력은 무시(기존 값 유지)
+    setSug((cur) => ({
+      ...cur,
+      vehicles: cur.vehicles.map((v, i) => i !== vIdx ? v
+        : { ...v, stops: v.stops.map((s, j) => j !== sIdx ? s : ({ ...s, etaManual: min, etaLabel: etaMinToLabel(min, cur.direction) })) }),
+    }));
+  }
+  // '다시 계산' — 그 정차의 확정을 풀고(etaManual=null) 자동값(etaMinutes)으로 되돌린다.
+  function resetStopEta(vIdx: number, sIdx: number) {
+    setSug((cur) => ({
+      ...cur,
+      vehicles: cur.vehicles.map((v, i) => i !== vIdx ? v
+        : { ...v, stops: v.stops.map((s, j) => {
+            if (j !== sIdx) return s;
+            const auto = s.etaMinutes;
+            return { ...s, etaManual: null, etaLabel: auto != null ? etaMinToLabel(auto, cur.direction) : s.etaLabel };
+          }) }),
+    }));
+  }
+  // input[type=time]에 넣을 확정 시각(HH:MM). 확정값 우선, 없으면 자동값, 그것도 없으면 라벨 앞의 시각.
+  function stopEtaHHMM(s: Run["stops"][number]): string {
+    const m = confirmedEtaMin(s);
+    if (m != null) return fmtHHMM(m);
+    const mt = s.etaLabel?.match(/^(\d{1,2}:\d{2})/);
+    return mt ? mt[1] : "";
   }
 
   const activeMapIdx = sug.vehicles.length ? Math.min(Math.max(mapVehicle, 0), sug.vehicles.length - 1) : 0;
@@ -361,8 +405,21 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 print:hidden">
-                      {s.etaLabel && <span className="whitespace-nowrap text-[11.5px] font-black text-blue-600 dark:text-blue-300 print:text-black">{s.etaLabel}</span>}
+                    {/* 정차 시각 편집(T2): input으로 직접 확정. 수정 시 '확정(수정됨)' 뱃지 + [다시 계산] 리셋. */}
+                    <div className="flex flex-col items-end gap-0.5 print:hidden">
+                      <div className="flex items-center gap-1">
+                        <input type="time" value={stopEtaHHMM(s)} onChange={(e) => setStopEta(vIdx, sIdx, e.target.value)}
+                          title="정차 시각을 직접 확정합니다" draggable={false}
+                          className={`rounded-lg border px-1.5 py-0.5 text-[11.5px] font-black dark:bg-gray-900 ${s.etaManual != null ? "border-blue-400 text-blue-700 dark:border-blue-500 dark:text-blue-200" : "border-gray-200 text-blue-600 dark:border-gray-600 dark:text-blue-300"}`} />
+                        <span className="whitespace-nowrap text-[10px] font-black text-gray-400">{isPickup ? "승차" : "하차"}</span>
+                      </div>
+                      {s.etaManual != null && (
+                        <div className="flex items-center gap-1">
+                          <span className="rounded bg-blue-100 px-1 text-[9px] font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">확정(수정됨)</span>
+                          <button type="button" onClick={() => resetStopEta(vIdx, sIdx)} title="자동 계산값으로 되돌립니다"
+                            className="text-[10px] font-black text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">↺ 다시 계산</button>
+                        </div>
+                      )}
                     </div>
                     {s.etaLabel && <span className="hidden whitespace-nowrap text-[11.5px] font-black text-black print:inline">{s.etaLabel}</span>}
                   </li>

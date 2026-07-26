@@ -5,6 +5,7 @@ import { routeFixedOrderWithTmap } from "@/lib/shuttle/tmap";
 // (여기서 WHERE 절을 손으로 다시 쓰다가 취소자·폐강 반 학생이 배차에 실리는 사고가 5번 반복됐다.)
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
 import { getSavedDispatchRoute } from "./dispatchRoute";
+import { planIncrementalInsert, type IncrTarget } from "./dispatchIncrement";
 
 // 방학특강 셔틀 노선 자동 제안 엔진.
 // - 그 날짜에 실제 등원(SCHEDULED)하는 셔틀 학생만 배차(요일별 반복 스케줄 반영).
@@ -86,6 +87,10 @@ export type DispatchSuggestion = {
   totalRiders: number;
   vehicleFleet: { name: string; plate: string | null; capacity: number }[];
   routingProvider: "TMAP" | "LOCAL"; // 전체적으로 T맵이 쓰였는지
+  // 저장 노선 이후의 변동(Phase 2a). 저장본이 있을 때만 채워지고, 관리자 배너 표시에만 쓴다.
+  // 기사님 화면(DriverRunClient)은 이 필드를 읽지 않으므로 노출되지 않는다.
+  added?: { requestId: string; name: string }[];
+  locationChanged?: { requestId: string; name: string }[];
 };
 
 function nnOrder(stops: Stop[], from: Pt): Stop[] {
@@ -99,12 +104,14 @@ function nnOrder(stops: Stop[], from: Pt): Stop[] {
 }
 
 // 한 차량(run)의 경로·시각 계산. 등원: 차고지→정차→학원 / 하원: 학원→정차→차고지.
-async function planRun(run: Run, direction: DispatchDirection, academy: Geo, depot: Geo | null, csMin: number | null, ceMin: number | null, localOnly = false) {
+// keepOrder=true면 NN 재정렬을 하지 않고 run.stops 순서를 그대로 쓴다(증분 재배차 = 저장 순서 보존).
+async function planRun(run: Run, direction: DispatchDirection, academy: Geo, depot: Geo | null, csMin: number | null, ceMin: number | null, localOnly = false, keepOrder = false) {
   const startPt: Geo = direction === "PICKUP" ? (depot ?? academy) : academy;
   const endPt: Geo = direction === "PICKUP" ? academy : (depot ?? academy);
   // 순서는 최근접(NN)으로 정한다. routeOptimization(최적경로) API는 제공량이 작아 429가 잦으므로 쓰지 않고,
   // 제공량이 넉넉한 /routes(다중경로)로 그 순서의 실도로 경로·시간을 받는다(순서 변경 재계산과 동일 방식).
-  let order = nnOrder(run.stops, startPt);
+  // ★ keepOrder면 재정렬 없이 이미 잡힌 순서를 그대로 유지한다(증분 삽입 결과 보존).
+  let order = keepOrder ? [...run.stops] : nnOrder(run.stops, startPt);
   run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined;
 
   if (!localOnly && run.stops.length >= 1) {
@@ -171,6 +178,9 @@ export async function getDispatchForView(date: string | null, direction: Dispatc
       classStart: saved.classStart ?? base.classStart,
       classEnd: saved.classEnd ?? base.classEnd,
       routingProvider: "TMAP",
+      // 저장 노선 이후의 변동을 그대로 전달(관리자 배너용). 기사님 화면은 이 필드를 매핑하지 않는다.
+      added: saved.added,
+      locationChanged: saved.locationChanged,
     };
   }
   // 저장본이 없을 때만: 관리자 첫 진입은 T맵으로 계산, 기사님 화면은 직선 추정(base) 그대로.
@@ -266,5 +276,91 @@ export async function computeDispatch(opts: { direction: DispatchDirection; date
     vehicles: runs, unassigned, availableDates,
     totalRiders: riders.length - unassigned.length, vehicleFleet,
     routingProvider: runs.some((r) => r.provider === "TMAP") ? "TMAP" : "LOCAL",
+  };
+}
+
+/**
+ * 증분 재배차(Phase 2b) — 저장된 노선의 기존 정차 순서를 **그대로 두고**, 신규·복귀·위치변경 학생만
+ * cheapest-insertion으로 가장 적합한 위치에 끼워넣은 뒤, 변경된 차량만 순서 고정으로 T맵 시간을 다시 계산한다.
+ * ★ 전체 재최적화(suggestDispatch/computeDispatch) 금지 — 기존 정차 상호 순서를 절대 재배열하지 않는다.
+ *
+ * 저장본이 없으면 전체 자동배차(computeDispatch)로 폴백한다(끼워넣을 기준 노선이 없으므로).
+ */
+export async function incrementalDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
+  await requireAdmin();
+  const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
+
+  // 1) 기준정보(+날짜 확정)를 T맵 없이 얻는다. 저장본이 있으면 base.vehicles는 쓰지 않는다.
+  const base = await computeDispatch({ direction, date: opts.date ?? null, localOnly: true });
+  const date = base.date;
+  if (!date) return base;
+
+  // 2) 저장된 노선(reconcile=제거 반영)과 added/locationChanged를 얻는다. 없으면 전체 재최적화로 폴백.
+  const saved = await getSavedDispatchRoute(date, direction);
+  if (!saved || !Array.isArray(saved.vehicles) || saved.vehicles.length === 0) {
+    return computeDispatch({ direction, date, localOnly: false });
+  }
+
+  // 3) 삽입 대상 = added(신규·복귀) + locationChanged(위치변경). 그날 유효 명단에서 학생 정보를 되짚는다.
+  const plan = await getConfirmedShuttleRosterForDate(date, direction);
+  const riderById = new Map(plan.riders.map((r) => [r.shuttleRequestId, r]));
+  const targetIds = [
+    ...(saved.added ?? []).map((a) => a.requestId),
+    ...(saved.locationChanged ?? []).map((c) => c.requestId),
+  ];
+  const targets: IncrTarget[] = [];
+  for (const id of targetIds) {
+    const r = riderById.get(id);
+    if (!r) continue; // 명단에서 사라졌으면(방어) 건너뛴다.
+    const student: StopStudent = {
+      name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone,
+      rosterId: r.rosterId, requestId: r.shuttleRequestId, pickupLabel: r.placeLabel,
+    };
+    const isHub = isFreeHubLabel(r.placeLabel);
+    targets.push({
+      requestId: r.shuttleRequestId,
+      student: student as unknown as Record<string, unknown>,
+      name: r.studentName,
+      lat: isHub ? null : (r.place.latitude ?? null),
+      lng: isHub ? null : (r.place.longitude ?? null),
+      label: r.placeLabel,
+      approx: !pinnedSrc(r.place.source),
+      isHub,
+    });
+  }
+
+  // 4) 순수 로직으로 삽입(기존 순서 보존). start/end는 방향에 맞춘 차고지/학원 기준.
+  const { academy, depot } = base;
+  const startPt = direction === "PICKUP" ? (depot ?? academy) : academy;
+  const endPt = direction === "PICKUP" ? academy : (depot ?? academy);
+  const result = planIncrementalInsert(
+    saved.vehicles,
+    targets,
+    { start: { lat: startPt.lat, lng: startPt.lng }, end: { lat: endPt.lat, lng: endPt.lng } },
+  );
+
+  // 5) 삽입/제거로 정차 기하가 바뀐 차량만 순서 고정으로 T맵 재계산(path·시간·eta 갱신). 나머지는 그대로.
+  const vehicles = result.vehicles as Run[];
+  const classStart = saved.classStart ?? base.classStart;
+  const classEnd = saved.classEnd ?? base.classEnd;
+  const csMin = hhmmToMin(classStart), ceMin = hhmmToMin(classEnd);
+  for (const vi of result.reroute) {
+    const v = vehicles[vi];
+    if (!v) continue;
+    await planRun(v, direction, academy, depot, csMin, ceMin, false, /* keepOrder */ true);
+    v.over = v.passengers > v.capacity;
+  }
+
+  const totalStudents = vehicles.reduce((acc, v) => acc + (v.passengers ?? 0), 0);
+  return {
+    ...base,
+    classStart, classEnd,
+    vehicles,
+    unassigned: result.unassigned,
+    totalRiders: totalStudents,
+    routingProvider: vehicles.some((v) => v.provider === "TMAP") ? "TMAP" : "LOCAL",
+    // 삽입을 반영했으므로 배너의 변동 목록은 비운다(이번 재배차로 처리됨).
+    added: [],
+    locationChanged: [],
   };
 }

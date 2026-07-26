@@ -3,8 +3,20 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { updateEnrollmentStatus, updateStudentMemo, updateStudent, updatePaymentStatus, enrollStudent, deleteEnrollment } from "@/app/actions/admin";
+import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 
 type MediaItem = { url: string; type: "image" | "video" };
+
+// 배차용 실제 셔틀 위치(StudentShuttleLocation) — page.tsx가 getStudentShuttleLocations로 전달
+type ShuttleLocationRow = {
+    kind: string;               // "PICKUP" | "DROPOFF"
+    name: string | null;
+    address: string | null;
+    roadAddress: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    confirmedAt: Date | string | null;
+};
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -301,6 +313,61 @@ function EmptyState({ text }: { text: string }) {
     );
 }
 
+// 확정일 표시용 간단 포맷(YYYY-MM-DD HH:MM)
+function formatShuttleConfirmedAt(value: Date | string | null): string {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// 배차용 셔틀 위치 한 방향(승차/하차) 블록 — 주소·좌표·확정일 + 위치 설정 버튼
+// loc이 없으면 "미설정" 빈 상태를 보여준다. 저장 로직은 부모(saveShuttleLocation)가 담당.
+function ShuttleLocationBlock({
+    label, icon, loc, onEdit, disabled,
+}: {
+    label: string;
+    icon: string;
+    loc: ShuttleLocationRow | null;
+    onEdit: () => void;
+    disabled: boolean;
+}) {
+    const hasCoord = loc && loc.latitude != null && loc.longitude != null;
+    const addr = loc ? (loc.roadAddress || loc.address || loc.name) : null;
+    return (
+        <div className="rounded-xl border border-gray-100 p-3 dark:border-gray-700">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-gray-900 dark:text-gray-100">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-brand-orange-50 text-brand-orange-600 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime">
+                        <SymbolIcon name={icon} size={14} />
+                    </span>
+                    {label}
+                </span>
+                <button
+                    onClick={onEdit}
+                    disabled={disabled}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                    <SymbolIcon name={hasCoord ? "edit_location" : "add_location_alt"} size={13} />
+                    {hasCoord ? "위치 수정" : "위치 설정"}
+                </button>
+            </div>
+            {hasCoord ? (
+                <div className="space-y-0.5 pl-8">
+                    <p className="text-[13px] text-gray-800 dark:text-gray-100">{addr || "주소 미상"}</p>
+                    <p className="text-[11px] text-gray-400">
+                        📍 {loc!.latitude!.toFixed(6)}, {loc!.longitude!.toFixed(6)}
+                        {loc!.confirmedAt ? ` · ${formatShuttleConfirmedAt(loc!.confirmedAt)} 확정` : ""}
+                    </p>
+                </div>
+            ) : (
+                <p className="pl-8 text-[12px] text-gray-400">{label} 위치 미설정</p>
+            )}
+        </div>
+    );
+}
+
 // ── 반 추가 선택지용 클래스 타입 (E3) ──────────────────────────────
 // 학생관리 목록 페이지가 쓰는 getClasses() 결과의 부분집합만 사용한다(id·이름·요일·시간·프로그램).
 type ClassOption = {
@@ -344,11 +411,14 @@ export default function StudentDetailClient({
     data: initialData,
     studentId,
     classes = [],
+    shuttleLocations = [],
 }: {
     data?: StudentActivityData;
     studentId?: string;
     // 반 추가 선택지 — page.tsx가 getClasses()로 조회해 전달(신규 prop, 기본 빈 배열로 안전)
     classes?: ClassOption[];
+    // 배차용 실제 셔틀 위치 — page.tsx가 getStudentShuttleLocations로 전달(신규 prop)
+    shuttleLocations?: ShuttleLocationRow[];
 }) {
     const [activityData, setActivityData] = useState<StudentActivityData | null>(initialData ?? null);
     const [loading, setLoading] = useState(!initialData);
@@ -374,6 +444,68 @@ export default function StudentDetailClient({
     const [payError, setPayError] = useState<{ id: string; message: string } | null>(null);
     // 우측 본문 탭 상태 (UI 전용 — 데이터/로직 무관)
     const [activeTab, setActiveTab] = useState<TabKey>("overview");
+
+    // ── 배차용 셔틀 위치 편집 상태 (E4) ──────────────────────────────
+    // shuttleLocs: PICKUP/DROPOFF 로컬 상태(저장 성공 시 응답으로 그 카드만 즉시 갱신)
+    // pickerKind: 지도 모달을 연 종류 / shuttleSaving: 저장 중(disabled) / shuttleError: 실패 사유
+    const [shuttleLocs, setShuttleLocs] = useState<ShuttleLocationRow[]>(shuttleLocations);
+    const [pickerKind, setPickerKind] = useState<null | "PICKUP" | "DROPOFF">(null);
+    const [shuttleSaving, setShuttleSaving] = useState(false);
+    const [shuttleError, setShuttleError] = useState<string | null>(null);
+
+    // 종류별 현재 위치를 꺼내는 헬퍼
+    const pickupLoc = shuttleLocs.find(l => l.kind === "PICKUP") ?? null;
+    const dropoffLoc = shuttleLocs.find(l => l.kind === "DROPOFF") ?? null;
+
+    // 지도 모달 확정 → /api/admin/shuttle(studentLocation·confirmLocation)로 저장
+    // 서버 updateStudentShuttleLocation은 좌표·주소 필수(없으면 400). 성공 시 응답 location으로 로컬만 갱신.
+    // 참고 패턴: src/app/admin/shuttle/ShuttleRouteAdminClient.tsx:196 saveRequestLocation
+    async function saveShuttleLocation(kind: "PICKUP" | "DROPOFF", value: MapLocationData) {
+        if (!studentId) return;
+        setShuttleSaving(true);
+        setShuttleError(null);
+        try {
+            const response = await fetch("/api/admin/shuttle", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    resource: "studentLocation",
+                    id: studentId,
+                    action: "confirmLocation",
+                    data: {
+                        kind, // "PICKUP" | "DROPOFF"
+                        name: value.roadAddress || value.address,
+                        address: value.address,
+                        roadAddress: value.roadAddress,
+                        latitude: value.latitude,
+                        longitude: value.longitude,
+                        placeId: value.placeId,
+                        source: value.source,
+                        accuracyMeters: value.accuracyMeters,
+                    },
+                }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.error || "위치를 저장하지 못했습니다.");
+            // 서버 응답(location)으로 해당 종류 행만 즉시 교체(전체 새로고침 대신)
+            const loc = result.location ?? {};
+            const nextRow: ShuttleLocationRow = {
+                kind,
+                name: loc.name ?? value.roadAddress ?? value.address ?? null,
+                address: loc.address ?? value.address ?? null,
+                roadAddress: loc.roadAddress ?? loc.roadaddress ?? value.roadAddress ?? null,
+                latitude: loc.latitude != null ? Number(loc.latitude) : value.latitude,
+                longitude: loc.longitude != null ? Number(loc.longitude) : value.longitude,
+                confirmedAt: loc.confirmedAt ?? loc.confirmedat ?? new Date().toISOString(),
+            };
+            setShuttleLocs(prev => [...prev.filter(l => l.kind !== kind), nextRow]);
+            setPickerKind(null);
+        } catch (e) {
+            setShuttleError(e instanceof Error ? e.message : "위치를 저장하지 못했습니다.");
+        } finally {
+            setShuttleSaving(false);
+        }
+    }
 
     // ── 인라인 편집 상태 (A: 헤더 기본정보 / B: 연락처·프로필) ─────────────
     // 편집 중인 섹션, 저장 전용 트랜지션, 저장 성공/에러 피드백을 별도로 둔다(메모 저장과 충돌 방지)
@@ -1018,43 +1150,47 @@ export default function StudentDetailClient({
                         )}
                     </div>
 
-                    {/* 셔틀 (최신 등록월 기준) */}
+                    {/* 셔틀 (배차용 실제 위치 — StudentShuttleLocation) */}
                     <div className={CARD_CLASS}>
                         <SectionTitle
                             icon="directions_bus"
-                            title="셔틀"
+                            title="셔틀 위치 (배차용)"
                             right={
-                                currentMonthHistory?.shuttle.needed ? (
-                                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:text-emerald-100 dark:ring-emerald-300/20">탑승</span>
+                                (pickupLoc || dropoffLoc) ? (
+                                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:text-emerald-100 dark:ring-emerald-300/20">설정됨</span>
                                 ) : (
-                                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-gray-500 ring-1 ring-gray-200 dark:text-gray-400 dark:ring-gray-700">미이용</span>
+                                    <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-gray-500 ring-1 ring-gray-200 dark:text-gray-400 dark:ring-gray-700">미설정</span>
                                 )
                             }
                         />
-                        {currentMonthHistory?.shuttle.needed ? (
-                            <div className="space-y-2 text-sm">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-brand-orange-50 text-brand-orange-600 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime">
-                                        <SymbolIcon name="login" size={14} />
-                                    </span>
-                                    <span className="text-gray-800 dark:text-gray-100">
-                                        <b className="font-bold">승차</b> {currentMonthHistory.shuttle.pickup || "미입력"}
-                                        {currentMonthHistory.shuttle.preferredTime ? ` · ${currentMonthHistory.shuttle.preferredTime}` : ""}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2.5">
-                                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-brand-orange-50 text-brand-orange-600 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime">
-                                        <SymbolIcon name="logout" size={14} />
-                                    </span>
-                                    <span className="text-gray-800 dark:text-gray-100">
-                                        <b className="font-bold">하차</b> {currentMonthHistory.shuttle.dropoff || "승차와 동일"}
-                                    </span>
-                                </div>
-                                <p className="pt-1 text-[11px] text-gray-400">최신 등록월({formatMonthLabel(currentMonthHistory)}) 기준</p>
-                            </div>
-                        ) : (
-                            <p className="text-sm text-gray-400">
-                                {currentMonthHistory ? "셔틀을 이용하지 않습니다." : "등록된 셔틀 이력이 없습니다."}
+                        <div className="space-y-2">
+                            {/* 승차(PICKUP) */}
+                            <ShuttleLocationBlock
+                                label="승차"
+                                icon="login"
+                                loc={pickupLoc}
+                                disabled={shuttleSaving}
+                                onEdit={() => { setShuttleError(null); setPickerKind("PICKUP"); }}
+                            />
+                            {/* 하차(DROPOFF) */}
+                            <ShuttleLocationBlock
+                                label="하차"
+                                icon="logout"
+                                loc={dropoffLoc}
+                                disabled={shuttleSaving}
+                                onEdit={() => { setShuttleError(null); setPickerKind("DROPOFF"); }}
+                            />
+                        </div>
+                        {shuttleError && (
+                            <p className="mt-2 text-[11px] font-semibold text-red-600 dark:text-red-400">{shuttleError}</p>
+                        )}
+                        {/* 신청서 희망 셔틀(시트 장부)은 참고용 작은 줄로만 남긴다(혼동 방지) */}
+                        {currentMonthHistory?.shuttle.needed && (
+                            <p className="mt-2 border-t border-gray-100 pt-2 text-[11px] text-gray-400 dark:border-gray-700">
+                                신청서 희망: 승차 {currentMonthHistory.shuttle.pickup || "미입력"}
+                                {currentMonthHistory.shuttle.preferredTime ? ` (${currentMonthHistory.shuttle.preferredTime})` : ""}
+                                {" · 하차 "}{currentMonthHistory.shuttle.dropoff || "승차와 동일"}
+                                {` · ${formatMonthLabel(currentMonthHistory)} 기준`}
                             </p>
                         )}
                     </div>
@@ -1547,6 +1683,22 @@ export default function StudentDetailClient({
                     )}
                 </section>
             </div>
+
+            {/* 배차용 셔틀 위치 지도 선택 모달 — 핀(좌표) 확정 시에만 저장(서버가 좌표 필수 검증) */}
+            {pickerKind && (
+                <LocationPickerModal
+                    title={`셔틀 ${pickerKind === "PICKUP" ? "승차" : "하차"} 위치`}
+                    initialValue={(() => {
+                        const loc = pickerKind === "PICKUP" ? pickupLoc : dropoffLoc;
+                        return loc && loc.latitude != null && loc.longitude != null
+                            ? { address: loc.roadAddress || loc.address || "", latitude: loc.latitude, longitude: loc.longitude, source: "MAP_PIN" as const }
+                            : undefined;
+                    })()}
+                    confirmPending={shuttleSaving}
+                    onConfirm={(loc) => void saveShuttleLocation(pickerKind, loc)}
+                    onClose={() => setPickerKind(null)}
+                />
+            )}
         </div>
     );
 }

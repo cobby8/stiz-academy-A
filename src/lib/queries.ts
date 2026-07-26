@@ -1936,6 +1936,41 @@ export async function getStudentActivity(studentId: string) {
     }
 }
 
+// 배차용 실제 셔틀 위치(StudentShuttleLocation) 조회 — PICKUP/DROPOFF 최대 2행
+// 수강생 상세에서 위치 편집 카드의 표시·프리필용. 프로젝트 규칙대로 $queryRawUnsafe 사용.
+export type StudentShuttleLocationRow = {
+    kind: string;               // "PICKUP" | "DROPOFF"
+    name: string | null;
+    address: string | null;
+    roadAddress: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    confirmedAt: Date | string | null;
+};
+export async function getStudentShuttleLocations(studentId: string): Promise<StudentShuttleLocationRow[]> {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT kind, name, address, "roadAddress", latitude, longitude, "confirmedAt"
+             FROM "StudentShuttleLocation"
+             WHERE "studentId" = $1`,
+            studentId
+        );
+        // 원시 SQL 컬럼은 camelCase 그대로 오지만, 방어적으로 lower 케이스도 흡수
+        return rows.map((r: any) => ({
+            kind: r.kind,
+            name: r.name ?? null,
+            address: r.address ?? null,
+            roadAddress: r.roadAddress ?? r.roadaddress ?? null,
+            latitude: r.latitude !== null && r.latitude !== undefined ? Number(r.latitude) : null,
+            longitude: r.longitude !== null && r.longitude !== undefined ? Number(r.longitude) : null,
+            confirmedAt: r.confirmedAt ?? r.confirmedat ?? null,
+        }));
+    } catch (e) {
+        console.error("[getStudentShuttleLocations] failed:", e);
+        return [];
+    }
+}
+
 /** Google Sheets 동기화 캐시 조회 (SheetSlotCache 테이블 싱글턴 row) */
 export const getSheetSlotCache = cache(async (): Promise<SheetClassSlot[] | null> => {
     try {

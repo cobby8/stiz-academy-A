@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
-import { routeFixedOrderWithTmap, type FixedRouteResult } from "@/lib/shuttle/tmap";
+import { routeSegmentsWithTmap, type SegmentsRouteResult } from "@/lib/shuttle/tmap";
 // 태울 학생 판정은 절대 여기서 하지 않는다. 게이트웨이 한 곳만 통과한다.
 // (여기서 WHERE 절을 손으로 다시 쓰다가 취소자·폐강 반 학생이 배차에 실리는 사고가 5번 반복됐다.)
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
 import { getSavedDispatchRoute } from "./dispatchRoute";
 import { planIncrementalInsert, type IncrTarget } from "./dispatchIncrement";
 import { mergeTmapRoute, type RunRouteFields } from "./tmapRouteMerge";
+// 구간 실제시간 → 방향별 stop ETA 누적(순수 함수). 테스트가 prisma 없이 검증하도록 분리했다.
+import { segmentMinutes, nodeTimesFromSegments } from "./shuttle-eta";
 
 // 방학특강 셔틀 노선 자동 제안 엔진.
 // - 그 날짜에 실제 등원(SCHEDULED)하는 셔틀 학생만 배차(요일별 반복 스케줄 반영).
@@ -55,6 +57,7 @@ function haversineKm(a: Pt, b: Pt): number {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 function segMin(a: Pt, b: Pt): number { return haversineKm(a, b) * MIN_PER_KM + STOP_DWELL_MIN; }
+
 function hhmmToMin(t: string | null): number | null { if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; }
 function minToHHMM(x: number): string { const v = Math.max(0, Math.round(x)); return `${String(Math.floor(v / 60) % 24).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`; }
 function pinnedSrc(s: unknown) { return s === "MAP_PIN" || s === "CURRENT_LOCATION"; }
@@ -65,7 +68,9 @@ function isFreeHubLabel(label: string | null | undefined): boolean {
 
 // rosterId(확정본) 또는 requestId(원본)로 그 학생의 명단 행을 되짚는다. 화면에서 무료탑승으로 옮길 때 쓴다.
 type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null; requestId: string; pickupLabel: string };
-type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string };
+// etaMinutes: 그 정차의 승/하차 예상 시각을 '자정 기준 분'으로 담는 숫자 필드.
+// T2에서 정차별 '확정시간 편집'을 붙일 때 문자열 라벨 파싱 없이 이 숫자를 직접 쓴다.
+type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string; etaMinutes?: number };
 type Run = {
   index: number; vehicleName: string; plate: string | null; capacity: number; tripLabel: string | null;
   passengers: number; stops: Stop[]; over: boolean;
@@ -110,17 +115,19 @@ function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 // 증분 재배차는 변동 차량마다 T맵을 연속 호출해 일시 실패(429 등)가 잦다.
 // 짧게 최대 2회 재시도(200ms, 400ms backoff, 합 600ms ≤ 1초)로 일시 실패를 흡수한다.
 // 그래도 최종 실패하면 planRun의 폴백(mergeTmapRoute 실패 분기)이 이전 실도로 경로를 지켜 준다.
-async function routeFixedOrderWithTmapRetry(
+// 구간별 T맵 호출을 재시도로 감싼다. routeSegmentsWithTmap 자체가 구간 단위 부분실패는
+// 이미 내부에서 흡수하므로, 여기서 재시도되는 건 appKey 누락 등 '전체 실패'뿐이다.
+async function routeSegmentsWithTmapRetry(
   input: { start: Pt; end: Pt; waypoints: Pt[] },
   retries = 2,
-): Promise<FixedRouteResult> {
+): Promise<SegmentsRouteResult> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      return await routeFixedOrderWithTmap(input);
+      return await routeSegmentsWithTmap(input);
     } catch (e) {
       lastErr = e;
-      if (attempt < retries) await sleep(200 * (attempt + 1)); // 200ms → 400ms
+      if (attempt < retries) await sleep(200 * (attempt + 1));
     }
   }
   throw lastErr;
@@ -141,23 +148,39 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
   //   (기존엔 여기서 무조건 지운 탓에, 증분 재배차 중 T맵 일시 실패 시 저장된 실도로 경로가 사라져 직선으로 퇴화했다.)
   const prev: RunRouteFields = { provider: run.provider, tmapMinutes: run.tmapMinutes, tmapKm: run.tmapKm, path: run.path };
 
+  // 1) 경로 노드: [start, ...정차, end]. 구간 수 = 노드수-1 = 정차수+1.
+  const path: Pt[] = [startPt, ...order, endPt];
+  // 각 구간의 직선거리 추정시간(분). T맵 구간이 실패하면 이 값으로 폴백해 ETA가 비지 않게 한다.
+  const fallbackMin: number[] = [];
+  for (let i = 1; i < path.length; i++) fallbackMin.push(segMin(path[i - 1], path[i]));
+
+  // 구간별 실도로 시간(초, 실패 구간은 null). 기본은 전부 null(=T맵 미호출·전체실패 → 전 구간 fallback).
+  let segSeconds: (number | null)[] = fallbackMin.map(() => null);
+
   if (!localOnly && run.stops.length >= 1) {
     // T맵을 실제로 호출하는 경우에만 폴백(prev 복원)이 의미를 가진다.
     let merged: RunRouteFields;
     try {
-      const res = await routeFixedOrderWithTmapRetry({
+      // ★ 총시간만 주던 routeFixedOrder 대신, 정차 사이마다 개별 호출해 '구간별 실제 시간'을 받는다.
+      const res = await routeSegmentsWithTmapRetry({
         start: { lat: startPt.lat, lng: startPt.lng },
         end: { lat: endPt.lat, lng: endPt.lng },
         waypoints: order.map((s) => ({ lat: s.lat, lng: s.lng })),
       });
-      merged = mergeTmapRoute(prev, {
-        ok: true,
-        tmapMinutes: res.totalTime > 0 ? Math.round(res.totalTime / 60) : null,
-        tmapKm: res.totalDistance > 0 ? Math.round(res.totalDistance / 100) / 10 : null,
-        path: res.path.length ? res.path : undefined, // 지도에 그릴 실도로 경로
-      });
+      // 구간 시간(초). 성공 구간은 실측, 실패 구간은 null → 아래 segmentMinutes가 fallbackMin으로 대체.
+      segSeconds = res.segments.map((s) => s.time);
+      // 한 구간이라도 성공했으면 실도로 경로/시간으로 갱신, 전부 실패면 prev 복원(mergeTmapRoute).
+      const anyOk = res.segments.some((s) => s.time != null && s.time > 0);
+      merged = mergeTmapRoute(prev, anyOk
+        ? {
+            ok: true,
+            tmapMinutes: res.totalTime > 0 ? Math.round(res.totalTime / 60) : null,
+            tmapKm: res.totalDistance > 0 ? Math.round(res.totalDistance / 100) / 10 : null,
+            path: res.path.length ? res.path : undefined, // 지도에 그릴 실도로 경로(성공 구간 이어붙임)
+          }
+        : { ok: false });
     } catch {
-      // 실패 → 이전값 유지(실도로 경로가 있었으면 그대로 두고, 없었으면 종전처럼 LOCAL/무path).
+      // 전체 실패(appKey 누락 등) → 이전값 유지 + segSeconds는 전부 null 유지(전 구간 fallback).
       merged = mergeTmapRoute(prev, { ok: false });
     }
     run.provider = merged.provider; run.tmapMinutes = merged.tmapMinutes; run.tmapKm = merged.tmapKm; run.path = merged.path;
@@ -166,24 +189,18 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
     run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined;
   }
 
-  // 2) 경로 노드: [start, ...정차, end]
-  const path: Pt[] = [startPt, ...order, endPt];
-  const segs: number[] = [];
-  for (let i = 1; i < path.length; i++) segs.push(segMin(path[i - 1], path[i]));
-  const sum = segs.reduce((a, b) => a + b, 0) || 1;
-  const scale = run.tmapMinutes != null && run.tmapMinutes > 0 ? run.tmapMinutes / sum : 1;
-  const segScaled = segs.map((s) => s * scale);
+  // 2) 구간 실제시간(분). 성공 구간=실측, 실패/미호출 구간=fallbackMin(직선추정). (순수 함수)
+  const segMinutes = segmentMinutes(segSeconds, fallbackMin);
 
-  // 3) 시각 배분
-  const times = new Array(path.length).fill(0);
-  if (direction === "PICKUP") {
-    times[path.length - 1] = (csMin ?? 0) - PICKUP_BUFFER_MIN; // 학원 도착
-    for (let i = path.length - 2; i >= 0; i--) times[i] = times[i + 1] - segScaled[i];
-  } else {
-    times[0] = (ceMin ?? 0) + DROPOFF_BUFFER_MIN; // 학원 출발
-    for (let i = 1; i < path.length; i++) times[i] = times[i - 1] + segScaled[i - 1];
-  }
-  order.forEach((s, i) => { s.etaLabel = `${minToHHMM(times[i + 1])} ${direction === "PICKUP" ? "승차" : "하차"}`; });
+  // 3) 방향별 시각 누적(순수 함수). PICKUP=학원 도착 기준 역산 / DROPOFF=학원 출발 기준 순방향.
+  const anchorMin = direction === "PICKUP" ? (csMin ?? 0) - PICKUP_BUFFER_MIN : (ceMin ?? 0) + DROPOFF_BUFFER_MIN;
+  const times = nodeTimesFromSegments(segMinutes, direction, anchorMin);
+
+  // 각 정차(order[i])는 노드 times[i+1]에 해당. 표시용 라벨 + T2용 숫자(etaMinutes)를 함께 남긴다.
+  order.forEach((s, i) => {
+    s.etaLabel = `${minToHHMM(times[i + 1])} ${direction === "PICKUP" ? "승차" : "하차"}`;
+    s.etaMinutes = Math.round(times[i + 1]); // 확정시간 편집(T2)이 기준값으로 쓰는 분 단위 숫자
+  });
   run.stops = order;
   run.depotTime = depot ? minToHHMM(direction === "PICKUP" ? times[0] : times[path.length - 1]) : null;
   // 첫 노드 출발/마지막 노드 도착(방향 무관 대칭). 출발 시각 수동 조정의 기준값.

@@ -1041,6 +1041,8 @@ export async function updateStudent(id: string, data: {
     gender?: string | null;
     parentName: string;
     parentPhone?: string | null;
+    // 학부모 이메일(데이터계약 parent.email 대응). 인라인 편집에서 전달
+    parentEmail?: string | null;
     // 새 필드: 학생 추가 정보
     phone?: string | null;
     school?: string | null;
@@ -1066,8 +1068,8 @@ export async function updateStudent(id: string, data: {
         );
         if (student[0]) {
             await prisma.$executeRawUnsafe(
-                `UPDATE "User" SET name = $1, phone = $2, "updatedAt" = NOW() WHERE id = $3`,
-                data.parentName, data.parentPhone || null, student[0].parentId ?? student[0].parentid,
+                `UPDATE "User" SET name = $1, phone = $2, email = $3, "updatedAt" = NOW() WHERE id = $4`,
+                data.parentName, data.parentPhone || null, data.parentEmail || null, student[0].parentId ?? student[0].parentid,
             );
         }
     } catch (e) {

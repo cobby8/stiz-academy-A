@@ -1,21 +1,106 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 방학특강 셔틀 확정 명단 3단계(원장 확정 + 확정본 편집)
-- **상태**: 구현·리뷰·검증·배포 완료 (9fa3d33 푸시)
+- **요청**: 방학특강 셔틀 4단계 — 확정 후 변동(신규 신청·시즌 스코프·결석) 반영
+- **상태**: 4a-1(결석→그날 배차 자동 제외) 구현·검증·커밋 완료. 4a-2~4d 대기
 - **현재 담당**: pm
 - **마지막 세션**: 2026-07-26
+
+## 4단계 실행 계획 (사용자 결정 반영)
+- 사용자 결정: ①결석=기존 출결(ABSENT/EXCUSED)에 셔틀 자동연동 ②입력=관리자+학부모 마이페이지 둘 다 ③신규 신청=원장 '추가 확정' 버튼(수동)
+- **4a. 결석 → 그날 셔틀 제외** (독립·명시요청): 4a-1 배차쿼리+관리자입력 ✅ / 4a-2 학부모 마이페이지 사전 결석 신고(보안 가드) ⬜
+- **4b. 시즌 격리 (R-7②)**: 여름·겨울 한 바구니 → 시즌별 분리 (4c 선행) ⬜
+- **4c. 확정 후 '추가 확정'**: GET에 미확정 N명 → 배너 버튼(ON CONFLICT 재사용) ⬜
+- **4d. 변동 감지 배지 (선택)**: sourceFingerprint 재계산 diff → ⚠️ 배지 ⬜
+- 주의: 배차는 stateless 재계산 → 저장된 노선은 결석 반영에 재배차 필요(4a에서 안내)
 
 ## 진행 현황
 | 항목 | 상태 |
 |------|------|
-| 셔틀 확정 명단 0~2단계(게이트웨이) | 완료·배포 |
-| 셔틀 확정 명단 3단계(확정 UI·확정본 편집·핀) | 완료·배포 |
-| 셔틀 확정 명단 4~5단계(변동 감지·재발 방지 가드) | 대기 |
+| 셔틀 확정 명단 0~3단계(게이트웨이·확정 UI·확정본 편집·핀) | 완료·배포 |
+| 4a-1 결석→그날 배차 자동 제외 | 완료·커밋(b04fdf8, 미푸시) |
+| 4a-2 학부모 마이페이지 사전 결석 신고 | 대기 |
+| 4b 시즌 격리(R-7②) / 4c 추가 확정 / 4d 변동 배지 | 대기 |
 | 정규반 형제할인 자동화 | 대기(시트 수동 10% 이중적용 위험 확인 필요) |
-| 미푸시 커밋 | 0개 |
+| 미푸시 커밋 | 1개 (b04fdf8) |
 
 ## 구현 기록 (developer)
+
+### 구현 기록 — 수강생 상세 반 추가·삭제(E3) (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` **개요 탭 "현재 수강 반"** 카드에 반 추가·하드삭제 추가. 기존 서버액션 `enrollStudent`/`deleteEnrollment` **호출만**(서버 무변경). 클래스 목록은 학생관리 목록이 쓰는 `getClasses()`(queries.ts) 재사용 — page.tsx에서 `getStudentActivity`와 Promise.all 병렬 조회해 `classes` prop 신규 전달(getStudentActivity 무변경).
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/[id]/page.tsx | `getClasses` import + `Promise.all([getStudentActivity, getClasses])` 병렬 조회, `classes` prop 전달. getStudentActivity 무변경 | 수정 |
+| src/app/admin/students/[id]/StudentDetailClient.tsx | import에 `enrollStudent`/`deleteEnrollment`. `ClassOption` 타입 + `DAY_ORDER` + `groupClassesByProgram`(StudentManagement 패턴 간소화). `classes` prop(기본 []). 상태 4개(showClassPicker/enrollingClassId/deletingEnrollmentId/enrollError). 핸들러 `addEnrollment`(enrollStudent→loadData→피드백)·`removeEnrollment`(강한 window.confirm→deleteEnrollment→loadData). SectionTitle 우측 [+반 추가] 토글, 이미 수강중 classId 제외한 프로그램별 선택 UI, 각 행에 빨간 휴지통(delete) 삭제 버튼 | 수정 |
+
+💡 tester 참고:
+- 테스트: 개요 탭 "현재 수강 반" 카드 우측 [반 추가] → 프로그램별 반 목록(이미 듣는 반 제외) → 선택 시 등록·재조회·"추가했습니다". 각 반 행 빨간 휴지통 → 강한 확인창 → 삭제·재조회.
+- 정상: 하드삭제 확인문구 = "이 반 수강을 완전히 삭제할까요? 수강 이력이 영구 제거됩니다. (퇴원 처리를 원하면 상태를 '퇴원'으로 바꾸세요)". enrollStudent는 ON CONFLICT로 퇴원했던 반 재추가 시 ACTIVE 복원.
+- 주의: 반 0개 학생·추가 가능 반 없음(전부 수강중)일 때 "추가할 수 있는 반이 없습니다". 권한(requireAdmin) 실패 시 빨간 에러 문구.
+
+⚠️ reviewer 참고: 서버 로직 무변경(호출만). 하드삭제=퇴원(소프트)과 별개·시각 구분(빨간 톤). 하드코딩 hex 0, SymbolIcon(add/delete/close)만. E1/E2·loadData·데이터계약 무변경. tsc EXIT=0.
+
+### 구현 기록 — 수강생 상세 수납 탭 결제 상태 변경(E2) (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` **수납 탭 "청구·납부(시스템)"** 각 결제 건에 상태 변경 추가. E1 편집 패턴(useTransition 대신 async 핸들러+loadData 재조회+피드백) 답습. 기존 `updatePaymentStatus(id, status)` 서버 액션 **호출만**(서버 무변경). "장부 수납(시트 원장)" 블록은 무변경.
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/[id]/StudentDetailClient.tsx | import에 `updatePaymentStatus` 추가. 상수 `PAY_STATUS_OPTIONS`(완납PAID/대기PENDING/연체OVERDUE/취소CANCELED)+`PAY_SEG_SELECTED`(의미색). 상태 4개(payEditingId/payUpdatingId/payChangedId/payError). 핸들러 `changePaymentStatus`(취소만 window.confirm→호출→loadData→"변경됨" 2초 / 실패 시 서버메시지 표면화). 결제 건 우측에 상태칩+✏️ 토글, 펼치면 4-세그먼트(현재상태 하이라이트·disabled), 처리 중 "변경 중…", 실패 시 빨간 사유 | 수정 |
+
+💡 tester 참고:
+- 테스트: 수납 탭 → "청구·납부(시스템)" 각 건의 상태칩 옆 ✏️ → 세그먼트에서 상태 선택. 취소(CANCELED)만 확인창, 나머지 즉시. 성공 시 "변경됨" 뜨고 목록 재조회. 재무 권한 없는 계정은 빨간 에러 문구("수납 상태 변경 실패" 등).
+- 정상: 현재 상태 버튼은 disabled(하이라이트). 처리 중 컨트롤 disabled.
+- 장부 수납 블록은 편집 불가 그대로.
+
+⚠️ reviewer 참고: 서버 `updatePaymentStatus`(requireFinanceOwner) 미변경, 호출만. 조용한 실패 없음(throw→에러 문구). payments 필드·데이터계약 무변경.
+
+#### tsc: EXIT=0
+
+### 구현 기록 — 수강생 상세 인라인 편집(✏️) 추가 (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` 상세에 **학생·학부모 정보 인라인 편집** 2영역 추가. 기존 `updateStudent` 재활용, 데이터 경로 최소화.
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/actions/admin.ts | `updateStudent` data에 `parentEmail?` 추가, 부모 User UPDATE에 `email = $3` 컬럼만 추가(name/phone/email/updatedAt, id=$4). 그 외 시그니처·로직 무변경 | 수정 |
+| src/app/admin/students/[id]/StudentDetailClient.tsx | 편집 상태(editSection/editForm/전용 useTransition/저장·에러 피드백), `startEditSection/cancelEditSection/saveSection/setField/renderEditControls` 헬퍼, `toInputDate`·`EDIT_INPUT_CLASS` 추가. (A)헤더 기본정보(이름·학년·학교·생년월일·성별·등록일) + (B)연락처카드(학생전화·학부모이름·전화·이메일·주소)에 연필→인풋+저장/취소 | 수정 |
+
+💡 tester 참고:
+- 테스트: 상세페이지 헤더 우측 연필(A), 연락처 카드 우측 연필(B) 클릭 → 인풋 편집 → 저장 → 재조회 후 값 반영 + "저장됨" 2초. 취소 시 원복.
+- 정상: 한 섹션만 저장해도 다른 섹션 값 안 지워짐(편집 폼에 현재값 전체 채워 함께 전송). 학부모 이메일 저장/반영 확인.
+- 주의 입력: 생년월일/등록일 빈칸(enrollDate nullable), 성별 미지정, 이메일 빈값 → null 저장.
+
+⚠️ reviewer 참고: `updateStudent`가 전체 필드 UPDATE라 편집 안 한 필드도 현재값으로 재전송하는 구조(no-op 방지). email 확장 외 서버 무변경.
+
+#### tsc: EXIT=0
+
+### 구현 기록 — 정규반 수강생 상세 페이지 UI 재설계 (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` 상세 화면을 승인된 시안대로 **UI만** 새로 구현. 데이터·API·서버액션·로직은 100% 보존(UI 렌더링만 교체). 새 레이아웃: 정체성 헤더 → KPI 4칸 → (좌 320px sticky 레일 3카드 + 우 5탭). 기존 "운영 요약" 별도 카드는 KPI로 흡수(중복 제거), 셔틀 정보를 월별 히스토리에서 좌측 레일로 끌어올림, 출결/수납 테이블 → 카드 리스트, 수납은 시스템/시트원장 2출처 분리, 월별 히스토리는 `<details>` 확장 + 반 뱃지 전체 노출(+N 숨김 개선).
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/[id]/StudentDetailClient.tsx | 전체 재작성. 데이터타입·상태맵·헬퍼·3핸들러(saveMemo/changeEnrollmentStatus/loadData) 전부 원본 그대로 보존. 추가: `activeTab` state(UI 전용), `MiniDonut`(hex 없는 currentColor 도넛), `SectionTitle`/`EmptyState` 헬퍼, `renderEnrollmentRow`(기존 renderEnrollmentCard를 가로 세그먼트 레이아웃으로) | 수정 |
+| src/app/admin/students/[id]/page.tsx | 상단 "사진 사용 동의 관리" 링크 제거(헤더 우측 액션으로 이동). `getStudentActivity` 데이터 로딩 무변경 | 수정 |
+
+**보존 확인(자기검증):**
+- **데이터 계약 무변경**: `StudentActivityData` 타입/필드 한 글자도 안 건드림. 원시 SQL camel/lower 방어 접근 유지(기존 헬퍼 그대로 사용, 새 필드·새 API 0).
+- **3개 인터랙션 무변경**: `saveMemo`(→updateStudentMemo), `changeEnrollmentStatus`(→updateEnrollmentStatus, window.confirm 확인 그대로), `loadData`(fetch `/api/.../activity`, cache:no-store) — 함수 본문 원본 복사. SSR initialData+클라이언트 refetch 하이브리드 그대로.
+- **라우트 유지**: media-consent는 `/admin/students/[id]/media-consent` 그대로(위치만 헤더로 이동, studentId ?? student.id로 생성).
+- **디자인 규칙**: 하드코딩 hex 0(Tailwind 팔레트 + brand-orange-500/brand-neon-lime/brand-navy-900 토큰 + `dark:` 전면), 아이콘 Material Symbols(`SymbolIcon`)만. 상태 색상맵(ATT/PAY/INVOICE/ENROLLMENT) 유지 = 의미색 일관.
+
+**검증**: `npx tsc --noEmit` EXIT=0 / eslint 변경파일 = **0 error**(경고 1건: 갤러리 `<img>` — 기존 원본과 동일 패턴이라 유지).
+
+💡 tester 참고:
+- 테스트 방법: dev(4000) → `/admin/students/[아무 학생 id]`. (1)메모 입력→저장→"저장됨" 뜨는지, (2)개요 탭에서 반 상태 세그먼트(수강중/휴원/퇴원) 클릭→확인창→변경 후 목록 새로고침, (3)탭 5종 전환(개요/수강출결/수납/월별히스토리/사진), (4)데이터 없는 학생은 각 섹션에 점선 "없습니다" 카드가 뜨는지.
+- 정상 동작: 헤더 대표상태칩·N개 반 칩, KPI 4칸(출석률 미니도넛·수강중·이번달수납·미납), 좌측 레일 sticky(연락처·셔틀·메모), 수납 탭의 시스템/시트원장 분리, 월별 히스토리 `<details>` 펼침·반 뱃지 전부 노출.
+- 주의할 입력: 학부모 폰 tel 링크, invoiceCheckoutUrl 있는 결제(납부 링크), 셔틀 미이용 학생(레일에 "미이용"), galleryPosts의 video 타입.
+
+⚠️ reviewer 참고:
+- 봐줄 부분: (1)3개 핸들러·데이터 계약이 정말 원본과 동일한지(로직 무변경), (2)새 API/필드를 만들지 않았는지, (3)다크모드 대응 누락 없는지, (4)`ledgerHistory` 필터(장부 수납 노출 조건)가 과·소 노출 아닌지.
 
 ### 구현 기록 — 방학특강 셔틀 확정 명단 3단계 (화면 확정 + 확정본 편집) (2026-07-26)
 
@@ -200,6 +285,11 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-26 | **수강생 상세 반 추가·삭제(E3, developer)** — `/admin/students/[id]` 개요 탭 "현재 수강 반"에 [반 추가](프로그램별·수강중 제외 선택)+행별 빨간 휴지통 하드삭제(강한 확인창). 기존 `enrollStudent`/`deleteEnrollment` 호출만(서버 무변경). 클래스목록=`getClasses()` 재사용, page.tsx가 getStudentActivity와 Promise.all 병렬조회해 classes prop 신규전달(getStudentActivity 무변경). E1/E2·loadData·데이터계약 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-26 | **수강생 상세 수납 탭 결제 상태 변경(E2, developer)** — `/admin/students/[id]` "청구·납부(시스템)" 각 건에 ✏️→4-세그먼트(완납/대기/연체/취소) 상태 변경. E1 패턴 답습(async 핸들러+loadData+피드백). 기존 `updatePaymentStatus` 호출만(서버 무변경). 취소만 window.confirm, 성공 "변경됨" 2초, 권한 실패 시 서버메시지 표면화(조용한 실패 없음). "장부 수납(시트원장)" 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-26 | **정규반 수강생 상세 페이지 UI 재설계(developer)** — `/admin/students/[id]` 시안대로 UI만 교체(데이터·API·서버액션·로직 100% 보존). 새 레이아웃: 정체성 헤더 → KPI 4칸(출석률 미니도넛·수강중·이번달수납·미납) → 좌 320px sticky 레일(연락처·셔틀·메모) + 우 5탭(개요/수강출결/수납/월별히스토리/사진). 기존 "운영 요약" 카드는 KPI로 흡수, 셔틀을 월별히스토리→좌레일로 승격, 테이블→카드리스트, 수납 시스템/시트원장 2출처 분리, 월별히스토리 `<details>`+반뱃지 전체노출. 3핸들러(saveMemo/changeEnrollmentStatus/loadData)·`StudentActivityData` 계약·media-consent 라우트 무변경. 하드코딩 hex 0, Material Symbols만. tsc EXIT=0, eslint 0 error(경고 1=기존 갤러리 img) | 구현완료(tester 대기) |
+| 2026-07-26 | **셔틀 명단 시트↔앱 대조 + 운영 데이터 반영(운영 DB 쓰기)** — 원장 요청으로 구글폼 시트(23명)와 앱 DB 대조. 발견: ①양서진(신규·미탑승) 시트에만 있음 ②이승민 앱=탑승/시트=미탑승 충돌 ③이수아 앱에만(시트 무관, DB 정답). 조치(사용자 승인): **이승민→무료탑승**(pickupLocation`1호점(무료탑승)`+거점좌표, 셔틀비 10,000→0, 합계150,000), **양서진→수강등록**(초등고 주3회 44b2ad31, APPROVED, 좌석11 월화수, 셔틀無, 멱등키 임포터공식 sheet-c4bad8…, importSource 동일). 시트임포터=`scripts/seasonal-import.mjs`(PENDING생성+승인시 좌석). 전부 단일 트랜잭션·검증SELECT 완료 | 운영반영 완료 |
+| 2026-07-26 | 셔틀 4단계 기획 + **4a-1 구현·커밋** — 3개 Explore 조사(확정 시즌스코프/날짜별 배차/결석 시스템)로 현황 파악. 핵심발견: 날짜별 배차는 `getConfirmedShuttleRosterForDate` 한 곳이 유일 게이트, `SpecialProgramEnrollmentDate`에 `status`(배차가 봄)와 `attendanceStatus`(출결, 배차 안 봄)가 **따로** 존재. 사용자 결정 3건(결석=출결 자동연동/입력=관리자+학부모/신규=원장 수동버튼). **4a-1**: 배차 좌석 쿼리 WHERE에 `attendanceStatus NOT IN (ABSENT,EXCUSED)` 추가 → 결석 미리 찍으면 그날 셔틀 등·하원 자동 제외(LATE는 태움, 시즌명단 유지). 관리자 입력은 기존 출결화면 미래회차로 이미 가능(버튼 disabled 없음). tsc EXIT=0, 셔틀 회귀 88/88 | 커밋완료(b04fdf8, 미푸시) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 **실 DB 읽기 검증(tester)** — tsc/build EXIT=0, 전체 657/662(잔여 5는 기준선 동일). 운영 DB SELECT 전용 검증: 테이블 실재·행 0(미확정 정상)·킬스위치 NULL(꺼짐)·컬럼 46개 중 SELECT/INSERT/핀16 **누락 0**·NOT NULL 충돌 0·UNIQUE(seasonId,shuttleRequestId) 실재·**확정 INSERT의 SELECT 절을 읽기 실행해 39/39 표현식 정상·18행 반환**. 폴백 명단 18행(탑승17/미탑승1) **취소·거절·폐강 오염 0건**(필터가 실제 2건 제외 중). → **확정 버튼 500 위험 없음, 눌러도 됨(예상 inserted=18)**. ★신규 치명 1건(T-1): 확정 후 `/admin/shuttle` 노선 편성 화면의 "위치 확정" 핀이 원본에만 써서 조용히 무시됨 | 검증완료(T-1 수정 필요) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 리뷰 — SQL 인젝션·$n 번호·핀 저장(ConfirmedAt/라벨보존/등원동일 복제)·soft delete·재확정 방지·안전장치 3종 전부 이상 없음. **치명 1(R-5)**: 확정 후에도 requestId 경로가 열려 있어 오래 열어둔 탭이 원본을 수정하고 "저장됨" 표시(확정본 미반영) → 409 거절 필요. 권장 4(R-6 SET 중복컬럼 500, R-7 전원제외 폴백부활·다음시즌 잠김, R-8 낙관롤백·되돌리기 세션한정, 테스트가 전부 문자열매칭이라 실동작 결함 미검출). tsc EXIT=0, 신규테스트 24/24 | 리뷰: 수정필요(R-5) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 2차 수정(리뷰 R-5/R-6/R-7①/R-8 + 테스터 T-1) — ①R-5(치명): 원본 수정 직전 서버가 확정본 조회→409 거절+화면 자동 새로고침 ②R-6: SET 조립을 의존성0 순수모듈로 분리, 컬럼중복 제거(42701 방지) ③R-7①: 확정 판정을 "확정본 존재(제외행 포함)"로 교체—전원제외해도 폴백 부활 없음 ④R-8: 저장 실패 시 낙관반영 롤백 ⑤T-1(치명): 노선편성 핀 저장을 확정본으로 라우팅(조용한 no-op 제거, 부원장은 403 안내). ★실행 테스트 16건 신설이 추가 결함(Number(null)=0 → 좌표 0,0 저장) 실제 검출·수정. tsc/build EXIT=0, 전체 676/681(잔여 5는 기존 실패) | 구현완료(tester 대기) |
@@ -207,6 +297,3 @@
 | 2026-07-26 | 셔틀 확정 명단 3단계 구현 — 화면 확정 배너/버튼(확정 전 안내+`N명 확정하기`, 확정 후 건수·확정일시 표시·버튼 숨김), 확정 후 저장은 rosterId로 확정본만 수정(원본 신청서 무변경), 행 제외/되돌리기(soft remove), GET에 confirmed/confirmedCount/confirmedAt 추가(roster 키 유지). 대상자 SQL 신규 작성 0(게이트웨이 경유), DB 스키마 변경 없음. tsc/build EXIT=0, 전체 650/655(잔여 5는 기존 실패), 신규 고정 테스트 17/17. ★확정 후 지도 핀 편집은 잠금 — PM 확인 필요 | 구현완료(tester 대기) |
 | 2026-07-26 | 셔틀 명단 개편(코워크) 푸시 — 개편 과정에서 지워졌던 안전장치 복구: ①미탑승 기본 숨김+토글 ②기사님 CSV 탑승자만 ③탑승판정 isRidingShuttleStatus(REJECTED 누수) ④대상자 조회를 getConfirmedShuttleRoster 게이트웨이로 일원화(필터 누락 6회째 차단). 게이트웨이에 applicationId 추가. tsc/build EXIT=0, 셔틀 회귀 32/32 PASS, 전체 633/638(잔여 5건은 HEAD 기존실패) | 배포완료(78380ec) |
 | 2026-07-26 | 이용약관 개정 초안 → **완성본** 갱신(`.Codex/drafts/terms-revision-2026-07.md`) — ★이월 계산식 오류 수정(`÷4` → `해당 월 수강료 ÷ 그 달 총 수업 횟수`, 주2회 반 2배 과다차감 방지) + 빈칸 5건 확정 채움(휴원·퇴원 신청마감=수강 시작일 전 / 최대 휴원 2개월 / 자리 보장·같은 반 복귀 / 셔틀비 미이용분 반환 / 시행일은 게시일 기입 안내). 형제할인 조항은 2-B 별도 상자로 분리해 ⏸️ 게시보류 표시(정규반 자동적용 완료 후). 자동퇴원 조문은 완곡 문구+`[원장님 확인 필요]`. 환불 규정·기존 문장 무변경. DB·소스 무수정 | 문서 완료(남은 확인 2건: 자동퇴원·시행일) |
-| 2026-07-06 | 공지 리치에디터 7단계 검증(tester, 통합) — tsc/build EXIT=0(전체 라우트 컴파일). 붙여넣기 정제 happy-dom 격리검증 **30/30 PASS**(제거: style/script/조건부주석/o:p·mso/class·on*·빈span, 보존: 서식/링크/img/표/data-pm-slice). 공지500 재발경로無(DOMParser만·sanitize.ts 무변경 확인). 이미지붙여넣기 무충돌(handlePaste 선처리). 제출잠금 이중가드. onUploadingChange 옵셔널 설정페이지 무영향. 회귀無. 11/12통과·1미실시(로그인벽)·0실패. ★1~7 전체완료 확인 | 검증통과(커밋OK) |
-| 2026-07-06 | 공지 리치에디터 7단계 리뷰(붙여넣기정제+제출잠금) — 정제로직 견고(스냅샷순회·빈span언랩·중첩안전), 공지500 재발경로無(DOMParser만·SSR미호출·sanitize무변경), 이미지붙여넣기 무충돌(handlePaste 선처리), 제출가드 이중(handleSubmit+disabled) 우회불가, onUploadingChange 하위호환. 정제실패 원본반환도 Link protocols+sanitize 2중방어로 안전. 치명0·권장0·사소3(href스킴 미검증이나 무해). ★1~7 전체 리뷰통과 | 리뷰통과(커밋OK) |
-| 2026-07-06 | 공지 리치에디터 7단계(마지막) 구현 — 외부 붙여넣기 정제 transformPastedHTML(브라우저 DOMParser, jsdom無: style/script/조건부주석/o:p·mso/class·빈span 제거, 지원서식+data-pm-slice 보존, handlePaste이미지와 무충돌) + 6단계 리스크보강(본문이미지 업로드중 제출잠금 onUploadingChange). tsc/build EXIT=0, 정제 단위 23/23(happy-dom 격리검증). ★리치에디터 강화 1~7 전체완료 | 구현완료(tester대기) |

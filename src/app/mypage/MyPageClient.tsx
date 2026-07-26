@@ -415,6 +415,18 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                         <dd className="font-medium text-gray-800 dark:text-gray-100">
                                             {item.serviceDate ? <time dateTime={item.serviceDate}>{formatShuttleDate(item.serviceDate)}</time> : "운행일 확인 중"}
                                         </dd>
+                                        {/* 방학특강 셔틀의 확정 승·하차 시각(저장된 배차 노선 기준). 값이 있을 때만 노출한다. */}
+                                        {item.sourceType === "SPECIAL_PROGRAM" && (item.pickupEtaLabel || item.dropoffEtaLabel) && (
+                                            <>
+                                                <dt className="text-gray-500 dark:text-gray-400">확정 시각</dt>
+                                                <dd className="font-medium text-gray-800 dark:text-gray-100">
+                                                    {[
+                                                        item.pickupEtaLabel ? `등원 ${item.pickupEtaLabel}` : null,
+                                                        item.dropoffEtaLabel ? `하원 ${item.dropoffEtaLabel}` : null,
+                                                    ].filter(Boolean).join(" · ")}
+                                                </dd>
+                                            </>
+                                        )}
                                         {showDetails && (
                                             <>
                                                 <dt className="text-gray-500 dark:text-gray-400">노선</dt>

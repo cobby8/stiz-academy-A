@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NOT_MERGED_STUDENT } from "@/lib/studentVisibility";
 // 셔틀 대상자는 게이트웨이 한 곳으로만 읽는다(원본 신청 테이블을 여기서 직접 조회하지 않는다).
 import { getConfirmedShuttleRoster } from "@/lib/seasonal/shuttleRoster";
+// 방학특강 셔틀의 확정 승/하차 시각은 저장된 배차 노선(SeasonalDispatchRoute)에서 읽는다(T3).
+import { getConfirmedDispatchEtas } from "@/lib/seasonal/dispatchRoute";
 
 export type ParentShuttleOverviewItem = {
   id: string;
@@ -18,6 +20,10 @@ export type ParentShuttleOverviewItem = {
   plannedAt: string | null;
   vehicleName: string | null;
   rideStatus: string | null;
+  // 방학특강 셔틀의 확정 승/하차 시각 라벨(예: "08:53 승차"). 저장된 배차 노선에서 온다.
+  // 정규반 항목이나 미배차/미저장이면 null(있으면 표시, 없으면 종전과 동일).
+  pickupEtaLabel?: string | null;
+  dropoffEtaLabel?: string | null;
 };
 
 type RouteStatus = "DRAFT" | "CONFIRMED" | "COMPLETED";
@@ -149,6 +155,11 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
         },
       })
     : [];
+  // 방학특강 확정 승/하차 시각(저장된 배차 노선 기준). 본인 자녀의 shuttleRequestId만 넘긴다(IDOR 안전).
+  const etaByRequest = seasonalEntries.length
+    ? await getConfirmedDispatchEtas(seasonalEntries.map((entry) => entry.shuttleRequestId))
+    : new Map<string, { pickupEtaLabel: string | null; dropoffEtaLabel: string | null }>();
+
   const passengersByRequest = new Map<string, typeof seasonalPassengers>();
   for (const passenger of seasonalPassengers) {
     if (!passenger.shuttleRequestId) continue;
@@ -187,6 +198,10 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
   });
 
   const specialItems = seasonalEntries.flatMap<ParentShuttleOverviewItem>((entry) => {
+    // 이 신청의 확정 승/하차 시각(없으면 둘 다 null). 아래 카드마다 그대로 붙인다.
+    const eta = etaByRequest.get(entry.shuttleRequestId);
+    const pickupEtaLabel = eta?.pickupEtaLabel ?? null;
+    const dropoffEtaLabel = eta?.dropoffEtaLabel ?? null;
     const routePassengers = passengersByRequest.get(entry.shuttleRequestId) ?? [];
     const activeByRoute = new Map<string, (typeof routePassengers)[number]>();
     for (const passenger of routePassengers) {
@@ -209,6 +224,8 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
         plannedAt: null,
         vehicleName: null,
         rideStatus: null,
+        pickupEtaLabel,
+        dropoffEtaLabel,
       }];
     }
     return [...activeByRoute.values()].map((passenger) => {
@@ -228,6 +245,8 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
         plannedAt: isDraft ? null : dateTime(passenger.stop.plannedAt),
         vehicleName: isDraft ? null : (passenger.routePlan.vehicle?.name ?? null),
         rideStatus: isDraft ? null : passenger.rideStatus,
+        pickupEtaLabel,
+        dropoffEtaLabel,
       };
     });
   });

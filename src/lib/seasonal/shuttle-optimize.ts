@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
-import { routeFixedOrderWithTmap } from "@/lib/shuttle/tmap";
+import { routeFixedOrderWithTmap, type FixedRouteResult } from "@/lib/shuttle/tmap";
 // 태울 학생 판정은 절대 여기서 하지 않는다. 게이트웨이 한 곳만 통과한다.
 // (여기서 WHERE 절을 손으로 다시 쓰다가 취소자·폐강 반 학생이 배차에 실리는 사고가 5번 반복됐다.)
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
 import { getSavedDispatchRoute } from "./dispatchRoute";
 import { planIncrementalInsert, type IncrTarget } from "./dispatchIncrement";
+import { mergeTmapRoute, type RunRouteFields } from "./tmapRouteMerge";
 
 // 방학특강 셔틀 노선 자동 제안 엔진.
 // - 그 날짜에 실제 등원(SCHEDULED)하는 셔틀 학생만 배차(요일별 반복 스케줄 반영).
@@ -103,6 +104,28 @@ function nnOrder(stops: Stop[], from: Pt): Stop[] {
   return out;
 }
 
+// backoff용 지연. 이 프로젝트는 setTimeout 사용 제약이 없다.
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+// 증분 재배차는 변동 차량마다 T맵을 연속 호출해 일시 실패(429 등)가 잦다.
+// 짧게 최대 2회 재시도(200ms, 400ms backoff, 합 600ms ≤ 1초)로 일시 실패를 흡수한다.
+// 그래도 최종 실패하면 planRun의 폴백(mergeTmapRoute 실패 분기)이 이전 실도로 경로를 지켜 준다.
+async function routeFixedOrderWithTmapRetry(
+  input: { start: Pt; end: Pt; waypoints: Pt[] },
+  retries = 2,
+): Promise<FixedRouteResult> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await routeFixedOrderWithTmap(input);
+    } catch (e) {
+      lastErr = e;
+      if (attempt < retries) await sleep(200 * (attempt + 1)); // 200ms → 400ms
+    }
+  }
+  throw lastErr;
+}
+
 // 한 차량(run)의 경로·시각 계산. 등원: 차고지→정차→학원 / 하원: 학원→정차→차고지.
 // keepOrder=true면 NN 재정렬을 하지 않고 run.stops 순서를 그대로 쓴다(증분 재배차 = 저장 순서 보존).
 async function planRun(run: Run, direction: DispatchDirection, academy: Geo, depot: Geo | null, csMin: number | null, ceMin: number | null, localOnly = false, keepOrder = false) {
@@ -112,22 +135,35 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
   // 제공량이 넉넉한 /routes(다중경로)로 그 순서의 실도로 경로·시간을 받는다(순서 변경 재계산과 동일 방식).
   // ★ keepOrder면 재정렬 없이 이미 잡힌 순서를 그대로 유지한다(증분 삽입 결과 보존).
   let order = keepOrder ? [...run.stops] : nnOrder(run.stops, startPt);
-  run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined;
+
+  // ★ 선파괴 금지: 진입 시 기존 실도로 경로/제공자/시간을 보관해 둔다.
+  //   T맵이 "성공했을 때만" 새 값으로 갈아끼우고, T맵을 호출했는데 실패하면 이 이전값을 복원한다.
+  //   (기존엔 여기서 무조건 지운 탓에, 증분 재배차 중 T맵 일시 실패 시 저장된 실도로 경로가 사라져 직선으로 퇴화했다.)
+  const prev: RunRouteFields = { provider: run.provider, tmapMinutes: run.tmapMinutes, tmapKm: run.tmapKm, path: run.path };
 
   if (!localOnly && run.stops.length >= 1) {
+    // T맵을 실제로 호출하는 경우에만 폴백(prev 복원)이 의미를 가진다.
+    let merged: RunRouteFields;
     try {
-      const res = await routeFixedOrderWithTmap({
+      const res = await routeFixedOrderWithTmapRetry({
         start: { lat: startPt.lat, lng: startPt.lng },
         end: { lat: endPt.lat, lng: endPt.lng },
         waypoints: order.map((s) => ({ lat: s.lat, lng: s.lng })),
       });
-      run.provider = "TMAP";
-      run.tmapMinutes = res.totalTime > 0 ? Math.round(res.totalTime / 60) : null;
-      run.tmapKm = res.totalDistance > 0 ? Math.round(res.totalDistance / 100) / 10 : null;
-      run.path = res.path.length ? res.path : undefined; // 지도에 그릴 실도로 경로
+      merged = mergeTmapRoute(prev, {
+        ok: true,
+        tmapMinutes: res.totalTime > 0 ? Math.round(res.totalTime / 60) : null,
+        tmapKm: res.totalDistance > 0 ? Math.round(res.totalDistance / 100) / 10 : null,
+        path: res.path.length ? res.path : undefined, // 지도에 그릴 실도로 경로
+      });
     } catch {
-      run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined; // 실패 시 직선 추정
+      // 실패 → 이전값 유지(실도로 경로가 있었으면 그대로 두고, 없었으면 종전처럼 LOCAL/무path).
+      merged = mergeTmapRoute(prev, { ok: false });
     }
+    run.provider = merged.provider; run.tmapMinutes = merged.tmapMinutes; run.tmapKm = merged.tmapKm; run.path = merged.path;
+  } else {
+    // T맵 미호출(localOnly=전체제안 base, 또는 정차 0) → 종전 동작 그대로 LOCAL/무path로 초기화(회귀 금지).
+    run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined;
   }
 
   // 2) 경로 노드: [start, ...정차, end]

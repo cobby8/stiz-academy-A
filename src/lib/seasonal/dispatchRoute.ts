@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
+// 저장 시점 이후의 수강상태 변동(결석·수강취소·폐강 등)을 "읽을 때" 반영하기 위해 유효 명단 게이트웨이를 쓴다.
+// ⚠️ 순환 import 주의: shuttleRoster.ts는 dispatchRoute를 import하지 않으므로(단방향) 여기서 가져와도 안전하다.
+//    shuttle-optimize.ts는 dispatchRoute를 import하므로, 반대로 여기서 shuttle-optimize를 import하면 순환이 된다.
+//    그래서 Run/Stop 타입을 재사용하지 않고 이 파일 안에 최소 구조 타입을 직접 정의한다.
+import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
+// reconcile 로직은 의존성 없는 순수 모듈이 정본이다(shuttleRosterEdit.ts와 같은 이유 — 실제 실행 테스트 가능).
+import { reconcileSavedVehicles } from "./dispatchReconcile";
 
 // 저장된 배차 노선(SeasonalDispatchRoute) 읽기/쓰기.
 // 자동 제안을 손으로 조정한 결과를 (날짜 × 방향) 단위로 1행 저장한다. PgBouncer 때문에 $queryRawUnsafe 고정.
@@ -40,7 +47,23 @@ export async function getSavedDispatchRoute(date: string | null, direction: stri
     const r = rows[0];
     if (!r) return null;
     const payload = r.payload as { vehicles?: unknown[] } | null;
-    const vehicles = Array.isArray(payload?.vehicles) ? payload!.vehicles! : [];
+    const savedVehicles = Array.isArray(payload?.vehicles) ? payload!.vehicles! : [];
+
+    // reconcile-on-read: d(날짜)가 있을 때만 그날 유효 명단으로 필터한다.
+    // date가 null이면 애초에 위에서 return null이라 여기 오지 않지만, 방어적으로 스킵 조건을 둔다.
+    // ★ DB는 절대 건드리지 않는다(읽기 필터만). 학생이 다시 유효해지면 자동으로 다시 나타난다(자가치유).
+    let vehicles = savedVehicles;
+    if (d) {
+      try {
+        const plan = await getConfirmedShuttleRosterForDate(d, dir);
+        const validIds = new Set(plan.riders.map((rider) => rider.shuttleRequestId));
+        vehicles = reconcileSavedVehicles(savedVehicles, validIds);
+      } catch {
+        // 유효 명단 조회가 실패하면(테이블 없음 등) 저장본을 그대로 보여 준다 — 화면이 비는 것보다 안전하다.
+        vehicles = savedVehicles;
+      }
+    }
+
     return {
       vehicles,
       classStart: (r.classStart as string | null) ?? null,

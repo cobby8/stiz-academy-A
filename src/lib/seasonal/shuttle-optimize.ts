@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
-import { optimizeWaypointOrderWithTmap, type TmapWaypoint } from "@/lib/shuttle/tmap";
+import { routeFixedOrderWithTmap } from "@/lib/shuttle/tmap";
 // 태울 학생 판정은 절대 여기서 하지 않는다. 게이트웨이 한 곳만 통과한다.
 // (여기서 WHERE 절을 손으로 다시 쓰다가 취소자·폐강 반 학생이 배차에 실리는 사고가 5번 반복됐다.)
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
@@ -102,31 +102,25 @@ function nnOrder(stops: Stop[], from: Pt): Stop[] {
 async function planRun(run: Run, direction: DispatchDirection, academy: Geo, depot: Geo | null, csMin: number | null, ceMin: number | null, localOnly = false) {
   const startPt: Geo = direction === "PICKUP" ? (depot ?? academy) : academy;
   const endPt: Geo = direction === "PICKUP" ? academy : (depot ?? academy);
-  let order = run.stops;
+  // 순서는 최근접(NN)으로 정한다. routeOptimization(최적경로) API는 제공량이 작아 429가 잦으므로 쓰지 않고,
+  // 제공량이 넉넉한 /routes(다중경로)로 그 순서의 실도로 경로·시간을 받는다(순서 변경 재계산과 동일 방식).
+  let order = nnOrder(run.stops, startPt);
+  run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined;
 
-  // 1) 순서 최적화 — T맵 우선. localOnly면 T맵을 아예 부르지 않고 직선 최근접(NN)만 쓴다(제공량 절약).
-  if (localOnly) {
-    order = nnOrder(run.stops, startPt);
-    run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined;
-  } else try {
-    if (run.stops.length >= 1) {
-      const waypoints: TmapWaypoint[] = run.stops.map((s, i) => ({ id: String(i), name: s.label.slice(0, 40), latitude: s.lat, longitude: s.lng }));
-      const res = await optimizeWaypointOrderWithTmap({
-        start: { id: "S", name: startPt.name.slice(0, 40), latitude: startPt.lat, longitude: startPt.lng },
-        end: { id: "E", name: endPt.name.slice(0, 40), latitude: endPt.lat, longitude: endPt.lng },
-        waypoints,
+  if (!localOnly && run.stops.length >= 1) {
+    try {
+      const res = await routeFixedOrderWithTmap({
+        start: { lat: startPt.lat, lng: startPt.lng },
+        end: { lat: endPt.lat, lng: endPt.lng },
+        waypoints: order.map((s) => ({ lat: s.lat, lng: s.lng })),
       });
-      order = res.orderedWaypointIds.map((id) => run.stops[Number(id)]).filter(Boolean);
-      if (order.length !== run.stops.length) order = run.stops; // 방어
       run.provider = "TMAP";
-      run.tmapMinutes = res.rawSummary?.totalTime != null ? Math.round(res.rawSummary.totalTime / 60) : null;
-      run.tmapKm = res.rawSummary?.totalDistance != null ? Math.round(res.rawSummary.totalDistance / 100) / 10 : null;
-      run.path = res.path && res.path.length ? res.path : undefined; // 지도에 그릴 실도로 경로
-
+      run.tmapMinutes = res.totalTime > 0 ? Math.round(res.totalTime / 60) : null;
+      run.tmapKm = res.totalDistance > 0 ? Math.round(res.totalDistance / 100) / 10 : null;
+      run.path = res.path.length ? res.path : undefined; // 지도에 그릴 실도로 경로
+    } catch {
+      run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null; run.path = undefined; // 실패 시 직선 추정
     }
-  } catch {
-    order = nnOrder(run.stops, startPt);
-    run.provider = "LOCAL"; run.tmapMinutes = null; run.tmapKm = null;
   }
 
   // 2) 경로 노드: [start, ...정차, end]

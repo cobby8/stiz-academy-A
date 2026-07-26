@@ -104,13 +104,30 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
     finally { setLoading(false); }
   }
 
+  // 증분 재배차(Phase 2b) — 저장 노선 순서를 유지한 채 신규·복귀·위치변경만 끼워넣는다.
+  // 전체 재최적화(generate)와 달리 기존 정차 순서를 재배열하지 않는다. 저장은 기존 [저장] 버튼으로.
+  async function incremental(forDate: string) {
+    setLoading(true); setErr(null);
+    try {
+      const r = await fetch("/api/admin/seasonal/dispatch/increment", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction, date: forDate || null }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "실패");
+      setSug(j); setDepartPinned({}); setLoadedFromSaved(false); setSaveMsg(null);
+    } catch (e: any) { setErr(e?.message || "실패"); }
+    finally { setLoading(false); }
+  }
+
   async function loadAndApplySaved(forDate: string): Promise<boolean> {
     try {
       const r = await fetch(`/api/admin/seasonal/dispatch/saved?date=${encodeURIComponent(forDate)}&direction=${direction}`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || !j?.saved) return false;
-      const saved = j.saved as { vehicles: DispatchSuggestion["vehicles"]; classStart: string | null; classEnd: string | null; savedAt: string | null };
-      setSug((cur) => ({ ...cur, date: forDate, vehicles: saved.vehicles, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd }));
+      const saved = j.saved as { vehicles: DispatchSuggestion["vehicles"]; classStart: string | null; classEnd: string | null; savedAt: string | null; added?: DispatchSuggestion["added"]; locationChanged?: DispatchSuggestion["locationChanged"] };
+      // added/locationChanged(변동 감지)도 함께 실어 둔다 — 아래 배너가 sug에서 읽는다.
+      setSug((cur) => ({ ...cur, date: forDate, vehicles: saved.vehicles, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd, added: saved.added ?? [], locationChanged: saved.locationChanged ?? [] }));
       setSavedAt(saved.savedAt); setLoadedFromSaved(true); setDepartPinned({}); setErr(null); setSaveMsg(null);
       return true;
     } catch { return false; }
@@ -250,6 +267,32 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
       {loadedFromSaved && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11.5px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">💾 저장된 노선{savedAt ? ` · ${fmtSaved(savedAt)} 저장` : ""} · 「자동 제안」으로 새로 계산</p>}
       {saveMsg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-[11.5px] font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {saveMsg}</p>}
+
+      {/* 변동 감지 배너(Phase 2a) — 저장 노선 이후 신규/복귀·위치변경이 생겼을 때만 뜬다.
+          원장 전용 화면에서만 렌더링된다(기사님 화면은 이 컴포넌트를 쓰지 않는다). */}
+      {(() => {
+        const added = sug.added ?? [];
+        const changed = sug.locationChanged ?? [];
+        if (added.length + changed.length === 0) return null;
+        return (
+          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-500/40 dark:bg-amber-500/10">
+            <p className="text-[12px] font-black text-amber-800 dark:text-amber-200">
+              ⚠️ 저장 노선 이후 변동 — 신규/복귀 {added.length}명, 위치변경 {changed.length}명. 재배차가 필요합니다.
+            </p>
+            {added.length > 0 && <p className="mt-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-200">신규·복귀: {added.map((a) => a.name).join(", ")}</p>}
+            {changed.length > 0 && <p className="mt-0.5 text-[11.5px] font-bold text-amber-700 dark:text-amber-200">위치변경: {changed.map((a) => a.name).join(", ")}</p>}
+            {/* Phase 2b: 저장 노선 순서를 유지한 채 신규·복귀·위치변경만 끼워넣는 증분 재배차.
+                전체 재최적화(generate)와 달리 기존 정차 순서를 재배열하지 않는다. 저장은 하단 [저장] 버튼으로. */}
+            <button
+              onClick={() => { void incremental(sug.date ?? date); }}
+              disabled={loading}
+              className="mt-2 rounded-lg bg-brand-orange-500 px-2.5 py-1.5 text-[11.5px] font-black text-white disabled:opacity-50 print:hidden"
+            >
+              {loading ? "계산 중…" : "🔄 변동만 재배차"}
+            </button>
+          </div>
+        );
+      })()}
 
       {sug.vehicles.length === 0 && <div className="mt-3 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">이 날짜에 배차할 {isPickup ? "등원" : "하원"} 셔틀 학생이 없습니다.</div>}
 

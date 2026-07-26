@@ -54,3 +54,88 @@ export function reconcileSavedVehicles(vehicles: unknown[], validRequestIds: Set
     return { ...(v as object), stops, passengers, over: passengers > capacity };
   });
 }
+
+// ────────────────────────────────────────────────────────────────
+// 변동 감지(diff) — reconcile와 반대 방향. "제거"가 아니라 "추가/변경"을 **알림만** 한다.
+// ────────────────────────────────────────────────────────────────
+
+// diff에 필요한 최소 형태만 선언한다. reconcile 쪽 타입과 겹치지 않게 별도로 둔다.
+type DiffStudent = { requestId?: unknown };
+type DiffStop = { students?: unknown; lat?: unknown; lng?: unknown };
+type DiffRun = { stops?: unknown };
+type DiffRiderPlace = { latitude?: unknown; longitude?: unknown } | null | undefined;
+type DiffRider = { shuttleRequestId?: unknown; studentName?: unknown; place?: DiffRiderPlace };
+
+/** 좌표 임계값 — 부동소수 저장/역직렬화 오차를 넘어서는 "진짜 이동"만 변경으로 본다. */
+const COORD_EPSILON = 1e-5;
+
+function toNum(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 저장된 노선(vehicles)과 그날 유효 명단(riders)을 비교해 **변동만** 골라낸다. **순수 함수**(부수효과 없음).
+ *
+ * 저장 payload·순서·시각·좌표는 절대 건드리지 않는다(읽기 진단만). 반환값도 이름/id 요약뿐이다.
+ *
+ * @returns
+ *   added           = riders 중 저장 노선에 아예 없는 사람(신규·복귀).
+ *   locationChanged = 저장 노선에는 있으나, 그 학생이 앉은 정차 좌표가 지금 좌표와 임계 이상 다른 사람.
+ *                     rider 좌표가 null이면(위치 미확정) 판정 불가라 스킵한다.
+ *
+ * requestId(=shuttleRequestId)만으로 매칭한다(rosterId/applicationItemId는 폴백에서 null이라 불안정).
+ */
+export function diffSavedRoute(
+  vehicles: unknown[],
+  riders: DiffRider[],
+): { added: { requestId: string; name: string }[]; locationChanged: { requestId: string; name: string }[] } {
+  const savedIds = new Set<string>();
+  // requestId → 그 학생이 앉아 있는 정차의 좌표. 같은 학생이 여러 번 나오는 비정상 상황이면 첫 좌표를 쓴다.
+  const savedCoord = new Map<string, { lat: number | null; lng: number | null }>();
+
+  if (Array.isArray(vehicles)) {
+    for (const v of vehicles) {
+      const stops = Array.isArray((v as DiffRun)?.stops) ? ((v as DiffRun).stops as unknown[]) : [];
+      for (const s of stops) {
+        const stop = (s ?? {}) as DiffStop;
+        const students = Array.isArray(stop.students) ? (stop.students as unknown[]) : [];
+        for (const st of students) {
+          const rid = (st as DiffStudent)?.requestId;
+          if (rid == null) continue;
+          const key = String(rid);
+          savedIds.add(key);
+          if (!savedCoord.has(key)) savedCoord.set(key, { lat: toNum(stop.lat), lng: toNum(stop.lng) });
+        }
+      }
+    }
+  }
+
+  const added: { requestId: string; name: string }[] = [];
+  const locationChanged: { requestId: string; name: string }[] = [];
+
+  for (const rider of riders ?? []) {
+    const rid = rider?.shuttleRequestId;
+    if (rid == null) continue;
+    const key = String(rid);
+    const name = String(rider?.studentName ?? "");
+
+    // 신규·복귀 — 저장 노선에 없던 사람.
+    if (!savedIds.has(key)) {
+      added.push({ requestId: key, name });
+      continue;
+    }
+
+    // 위치변경 — 저장 좌표와 지금 좌표를 비교한다. 한쪽이라도 좌표가 없으면 판정하지 않는다.
+    const now = { lat: toNum(rider?.place?.latitude), lng: toNum(rider?.place?.longitude) };
+    if (now.lat == null || now.lng == null) continue;
+    const saved = savedCoord.get(key);
+    if (!saved || saved.lat == null || saved.lng == null) continue;
+    if (Math.abs(saved.lat - now.lat) > COORD_EPSILON || Math.abs(saved.lng - now.lng) > COORD_EPSILON) {
+      locationChanged.push({ requestId: key, name });
+    }
+  }
+
+  return { added, locationChanged };
+}

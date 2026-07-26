@@ -1,10 +1,19 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **요청**: 셔틀 배차/명단 개선 묶음 — 건물명 표시·무료탑승 드래그·T맵 활성화·순서 재계산·출발 고정·건물명 일괄변환·노선 지도·노선 DB 저장
-- **상태**: 전부 구현·배포 완료. SeasonalDispatchRoute 테이블 운영 DB에 생성(원장 승인). 브라우저 수동 검증 대기
+- **요청(A)**: 방학특강 셔틀 4단계 — 확정 후 변동(신규 신청·시즌 스코프·결석) 반영
+- **요청(B, origin)**: 셔틀 배차/명단 개선 묶음 — 건물명 표시·무료탑승 드래그·T맵 활성화·순서 재계산·출발 고정·건물명 일괄변환·노선 지도·노선 DB 저장
+- **상태**: (A) 4a-1(결석→그날 배차 자동 제외) 구현·검증·커밋 완료, 4a-2~4d 대기 / (B) 전부 구현·배포 완료, SeasonalDispatchRoute 테이블 운영 DB 생성(원장 승인), 브라우저 수동 검증 대기. 두 갈래 머지 진행 중(placeName 단일화)
 - **현재 담당**: pm
 - **마지막 세션**: 2026-07-26
+
+## 4단계 실행 계획 (사용자 결정 반영)
+- 사용자 결정: ①결석=기존 출결(ABSENT/EXCUSED)에 셔틀 자동연동 ②입력=관리자+학부모 마이페이지 둘 다 ③신규 신청=원장 '추가 확정' 버튼(수동)
+- **4a. 결석 → 그날 셔틀 제외** (독립·명시요청): 4a-1 배차쿼리+관리자입력 ✅ / 4a-2 학부모 마이페이지 사전 결석 신고(보안 가드) ⬜
+- **4b. 시즌 격리 (R-7②)**: 여름·겨울 한 바구니 → 시즌별 분리 (4c 선행) ⬜
+- **4c. 확정 후 '추가 확정'**: GET에 미확정 N명 → 배너 버튼(ON CONFLICT 재사용) ⬜
+- **4d. 변동 감지 배지 (선택)**: sourceFingerprint 재계산 diff → ⚠️ 배지 ⬜
+- 주의: 배차는 stateless 재계산 → 저장된 노선은 결석 반영에 재배차 필요(4a에서 안내)
 
 ## ⚠️ 배포 메커니즘(중요)
 - Vercel 빌드는 `prisma generate && next build`뿐 — **`migrate deploy` 자동 실행 안 됨**. 스키마 변경은 **멱등 SQL을 운영 Supabase(ref gpjdtkumqxzfgkixjamp)에 직접 적용**(Supabase MCP apply_migration). 마이그레이션 폴더는 기록용.
@@ -13,8 +22,10 @@
 ## 진행 현황
 | 항목 | 상태 |
 |------|------|
-| 셔틀 확정 명단 0~2단계(게이트웨이) | 완료·배포 |
-| 셔틀 확정 명단 3단계(확정 UI·확정본 편집·핀) | 완료·배포 |
+| 셔틀 확정 명단 0~3단계(게이트웨이·확정 UI·확정본 편집·핀) | 완료·배포 |
+| 4a-1 결석→그날 배차 자동 제외 | 완료·커밋(b04fdf8, 미푸시) |
+| 4a-2 학부모 마이페이지 사전 결석 신고 | 대기 |
+| 4b 시즌 격리(R-7②) / 4c 추가 확정 / 4d 변동 배지 | 대기 |
 | 승차위치 아파트/건물명 표시(카카오 장소명) | 완료·커밋(수동검증 대기) |
 | 자동배차 무료탑승 드래그 지정 | 완료·커밋(수동검증 대기) |
 | T맵 최적경로 활성화(startTime·viaPointId 버그 수정) | 완료·배포 |
@@ -27,9 +38,130 @@
 | 기사님 운행 화면(전용 링크·탑승 체크) | 완료·배포(테이블 2개) |
 | 셔틀 확정 명단 4~5단계(변동 감지·재발 방지 가드) | 대기 |
 | 정규반 형제할인 자동화 | 대기(시트 수동 10% 이중적용 위험 확인 필요) |
-| 미푸시 커밋 | 0개 |
+| 미푸시 커밋 | 1개 (b04fdf8) |
 
 ## 구현 기록 (developer)
+
+### 구현 기록 — 좌표 없는 탑승자 '배차 불가' 가시화 (G4) (2026-07-27)
+
+📝 구현: 좌표 없는 탑승자가 자동 배차에서 조용히 빠지던 것을 **관리자 화면에 경고로 표시**. **표시 전용** — 배차 제외 로직·서버·데이터 계약 전부 무변경. 좌표 null 판정만 사용.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/app/admin/seasonal/shuttle/ShuttleRosterClient.tsx | `missingCoord(r)` 헬퍼 추가(ride 행 중 승차 좌표 null 또는 하차 별도인데 하차 좌표 null). 상단 배너 아래 "좌표 없는 탑승자 N명 — 배차 제외" 빨강 요약 블록, 행별 학생명 옆 "좌표 없음 · 배차 불가" 빨강 뱃지 | 수정 |
+
+- **DispatchClient.tsx는 무변경**: 이미 252~258행에 `unassigned` 좌표 없음 경고 블록("좌표가 없어 배차하지 못한 학생 N명" + 명단 + 안내)이 있어 요구사항 충족. 추가 변경 없음.
+
+💡 tester: `/admin/seasonal/shuttle` — 탑승 학생 중 지도 핀 미지정(좌표 null)인 행에 빨강 "좌표 없음 · 배차 불가" 뱃지 + 상단 요약 경고. 좌표 있으면 뱃지 없음. 미탑승 행은 대상 아님. 로직·CSV·확정·핀편집 무변경.
+⚠️ reviewer: 표시 전용(배차 제외 로직·서버·계약 무변경). 하드코딩 hex 0(red 의미색 Tailwind + dark 대응). tsc EXIT=0.
+
+### 구현 기록 — 셔틀 라벨 컬럼에 장소명 우선 저장 (G2) (2026-07-27)
+
+📝 구현: 지도에서 고른 **장소명(place name)**을 라벨 컬럼에 주소 대신 우선 저장(`name ?? 주소`). **스키마 변경 없음**(기존 라벨 컬럼 재활용). 좌표/주소/placeId 컬럼은 무변경(운행 기준 보존).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/contracts.ts | `SeasonalShuttleLocationInput`에 `name?` 추가, `parseShuttleLocation`이 `name` 파싱(옵셔널) | 수정 |
+| src/lib/seasonal/service.ts | 방학특강 저장부: `pickupLocation/dropoffLocation` = `pickup?.name ?? 텍스트라벨`. address/lat/lng/placeId 그대로 | 수정 |
+| src/components/seasonal/SeasonalApplyClient.tsx | `saveMapLocation` 라벨 = `name ?? roadAddress ?? address` | 수정 |
+| src/app/apply/enroll/EnrollApplicationLaterSteps.tsx | `onConfirm`에서 `shuttlePickup/Dropoff` 라벨 = `name ?? address` | 수정 |
+| src/app/actions/public.ts | `EnrollmentShuttleLocationData.name?`(string\|null) 추가·정규화, INSERT/UPDATE 라벨($17/$19) = `location.name ?? 텍스트라벨`. 좌표/주소/source 그대로 | 수정 |
+
+**정규반 name 저장 컬럼(G3 참고)**: 정규반 신청의 장소명은 `EnrollmentApplication."shuttlePickup"`(탑승)·`"shuttleDropoff"`(하차) 라벨 컬럼에 저장된다(주소 컬럼 `shuttlePickupAddress` 등은 별개로 유지). G3의 정규반 전환·확정본 스냅샷은 이 두 라벨 컬럼에서 장소명을 읽으면 된다.
+
+💡 tester: 방학특강/정규반 셔틀 신청 시 지도에서 **장소 검색으로 선택**하면 라벨(입력칸·명단)에 장소명이 뜬다. 핀만 찍거나(옛 데이터) 장소명 없으면 기존처럼 주소 표기(하위호환). 좌표는 여전히 저장되어 배차 정상.
+⚠️ reviewer: 라벨에 name 우선(사용자가 지도 선택 후 텍스트를 수동 편집한 경우 서버가 name으로 덮을 수 있음 — 스펙의 "장소명 우선" 준수). 좌표/주소 컬럼 무변경. tsc EXIT=0.
+
+### 구현 기록 — 셔틀 장소명 저장경로 유실 버그 수정 (G3) (2026-07-27)
+
+📝 구현: 저장 경로에서 장소명이 유실되던 두 지점 중 (1) 정규반 전환 버그 수정, (2) 방학특강 확정본 스냅샷은 확인 결과 변경 불필요. 좌표·주소·placeId 컬럼 무변경(운행 기준 보존).
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/actions/admin.ts | 정규반 신청→학생 전환 시 `StudentShuttleLocation` INSERT의 `name`을 NULL 하드코딩 → 라벨 컬럼값으로 파라미터화($12). ON CONFLICT DO UPDATE에 `name = EXCLUDED.name` 추가 | 수정 |
+
+**(1) name 매핑**: kind=PICKUP ← prefix `shuttlePickup` ← `app.shuttlePickup`(라벨), kind=DROPOFF ← prefix `shuttleDropoff` ← `app.shuttleDropoff`(라벨). `app`은 `SELECT * FROM EnrollmentApplication`이라 G2가 저장한 라벨 컬럼 포함. 폴백: 라벨 없으면 `${prefix}RoadAddress ?? ${prefix}Address`(name NULL 방지, service.ts:1057과 동일 철학). 좌표/주소/placeId/source/accuracy/confirmedAt/consentVersion 파라미터·값 무변경.
+
+**(2) 확정본 스냅샷 — 변경 불필요(확인만)**: `shuttleRoster.ts` `confirmSeasonalShuttleRoster` INSERT…SELECT(554·556행)가 원본 `r."pickupLocation"`/`r."dropoffLocation"` 라벨 컬럼을 그대로 복사 → G2 장소명 자동 전달. 확정본 편집(`shuttleRosterEdit.ts` 127·129행)도 `pickupLocation`/`dropoffLocation` 라벨에 저장. 둘 다 장소명 보존됨.
+
+💡 tester: 정규반 신청서(셔틀 지도 장소검색 선택)를 관리자가 승인·학생 전환하면 `StudentShuttleLocation.name`에 장소명이 남는지 확인. 기존엔 NULL이었음. 좌표는 여전히 저장.
+⚠️ reviewer: `$queryRawUnsafe`/`$executeRawUnsafe` 유지, 스키마 변경 없음. 좌표·주소 무변경. tsc EXIT=0.
+
+### 구현 기록 — 수강생 상세 반 추가·삭제(E3) (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` **개요 탭 "현재 수강 반"** 카드에 반 추가·하드삭제 추가. 기존 서버액션 `enrollStudent`/`deleteEnrollment` **호출만**(서버 무변경). 클래스 목록은 학생관리 목록이 쓰는 `getClasses()`(queries.ts) 재사용 — page.tsx에서 `getStudentActivity`와 Promise.all 병렬 조회해 `classes` prop 신규 전달(getStudentActivity 무변경).
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/[id]/page.tsx | `getClasses` import + `Promise.all([getStudentActivity, getClasses])` 병렬 조회, `classes` prop 전달. getStudentActivity 무변경 | 수정 |
+| src/app/admin/students/[id]/StudentDetailClient.tsx | import에 `enrollStudent`/`deleteEnrollment`. `ClassOption` 타입 + `DAY_ORDER` + `groupClassesByProgram`(StudentManagement 패턴 간소화). `classes` prop(기본 []). 상태 4개(showClassPicker/enrollingClassId/deletingEnrollmentId/enrollError). 핸들러 `addEnrollment`(enrollStudent→loadData→피드백)·`removeEnrollment`(강한 window.confirm→deleteEnrollment→loadData). SectionTitle 우측 [+반 추가] 토글, 이미 수강중 classId 제외한 프로그램별 선택 UI, 각 행에 빨간 휴지통(delete) 삭제 버튼 | 수정 |
+
+💡 tester 참고:
+- 테스트: 개요 탭 "현재 수강 반" 카드 우측 [반 추가] → 프로그램별 반 목록(이미 듣는 반 제외) → 선택 시 등록·재조회·"추가했습니다". 각 반 행 빨간 휴지통 → 강한 확인창 → 삭제·재조회.
+- 정상: 하드삭제 확인문구 = "이 반 수강을 완전히 삭제할까요? 수강 이력이 영구 제거됩니다. (퇴원 처리를 원하면 상태를 '퇴원'으로 바꾸세요)". enrollStudent는 ON CONFLICT로 퇴원했던 반 재추가 시 ACTIVE 복원.
+- 주의: 반 0개 학생·추가 가능 반 없음(전부 수강중)일 때 "추가할 수 있는 반이 없습니다". 권한(requireAdmin) 실패 시 빨간 에러 문구.
+
+⚠️ reviewer 참고: 서버 로직 무변경(호출만). 하드삭제=퇴원(소프트)과 별개·시각 구분(빨간 톤). 하드코딩 hex 0, SymbolIcon(add/delete/close)만. E1/E2·loadData·데이터계약 무변경. tsc EXIT=0.
+
+### 구현 기록 — 수강생 상세 수납 탭 결제 상태 변경(E2) (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` **수납 탭 "청구·납부(시스템)"** 각 결제 건에 상태 변경 추가. E1 편집 패턴(useTransition 대신 async 핸들러+loadData 재조회+피드백) 답습. 기존 `updatePaymentStatus(id, status)` 서버 액션 **호출만**(서버 무변경). "장부 수납(시트 원장)" 블록은 무변경.
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/[id]/StudentDetailClient.tsx | import에 `updatePaymentStatus` 추가. 상수 `PAY_STATUS_OPTIONS`(완납PAID/대기PENDING/연체OVERDUE/취소CANCELED)+`PAY_SEG_SELECTED`(의미색). 상태 4개(payEditingId/payUpdatingId/payChangedId/payError). 핸들러 `changePaymentStatus`(취소만 window.confirm→호출→loadData→"변경됨" 2초 / 실패 시 서버메시지 표면화). 결제 건 우측에 상태칩+✏️ 토글, 펼치면 4-세그먼트(현재상태 하이라이트·disabled), 처리 중 "변경 중…", 실패 시 빨간 사유 | 수정 |
+
+💡 tester 참고:
+- 테스트: 수납 탭 → "청구·납부(시스템)" 각 건의 상태칩 옆 ✏️ → 세그먼트에서 상태 선택. 취소(CANCELED)만 확인창, 나머지 즉시. 성공 시 "변경됨" 뜨고 목록 재조회. 재무 권한 없는 계정은 빨간 에러 문구("수납 상태 변경 실패" 등).
+- 정상: 현재 상태 버튼은 disabled(하이라이트). 처리 중 컨트롤 disabled.
+- 장부 수납 블록은 편집 불가 그대로.
+
+⚠️ reviewer 참고: 서버 `updatePaymentStatus`(requireFinanceOwner) 미변경, 호출만. 조용한 실패 없음(throw→에러 문구). payments 필드·데이터계약 무변경.
+
+#### tsc: EXIT=0
+
+### 구현 기록 — 수강생 상세 인라인 편집(✏️) 추가 (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` 상세에 **학생·학부모 정보 인라인 편집** 2영역 추가. 기존 `updateStudent` 재활용, 데이터 경로 최소화.
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/actions/admin.ts | `updateStudent` data에 `parentEmail?` 추가, 부모 User UPDATE에 `email = $3` 컬럼만 추가(name/phone/email/updatedAt, id=$4). 그 외 시그니처·로직 무변경 | 수정 |
+| src/app/admin/students/[id]/StudentDetailClient.tsx | 편집 상태(editSection/editForm/전용 useTransition/저장·에러 피드백), `startEditSection/cancelEditSection/saveSection/setField/renderEditControls` 헬퍼, `toInputDate`·`EDIT_INPUT_CLASS` 추가. (A)헤더 기본정보(이름·학년·학교·생년월일·성별·등록일) + (B)연락처카드(학생전화·학부모이름·전화·이메일·주소)에 연필→인풋+저장/취소 | 수정 |
+
+💡 tester 참고:
+- 테스트: 상세페이지 헤더 우측 연필(A), 연락처 카드 우측 연필(B) 클릭 → 인풋 편집 → 저장 → 재조회 후 값 반영 + "저장됨" 2초. 취소 시 원복.
+- 정상: 한 섹션만 저장해도 다른 섹션 값 안 지워짐(편집 폼에 현재값 전체 채워 함께 전송). 학부모 이메일 저장/반영 확인.
+- 주의 입력: 생년월일/등록일 빈칸(enrollDate nullable), 성별 미지정, 이메일 빈값 → null 저장.
+
+⚠️ reviewer 참고: `updateStudent`가 전체 필드 UPDATE라 편집 안 한 필드도 현재값으로 재전송하는 구조(no-op 방지). email 확장 외 서버 무변경.
+
+#### tsc: EXIT=0
+
+### 구현 기록 — 정규반 수강생 상세 페이지 UI 재설계 (2026-07-26)
+
+📝 구현한 기능: `/admin/students/[id]` 상세 화면을 승인된 시안대로 **UI만** 새로 구현. 데이터·API·서버액션·로직은 100% 보존(UI 렌더링만 교체). 새 레이아웃: 정체성 헤더 → KPI 4칸 → (좌 320px sticky 레일 3카드 + 우 5탭). 기존 "운영 요약" 별도 카드는 KPI로 흡수(중복 제거), 셔틀 정보를 월별 히스토리에서 좌측 레일로 끌어올림, 출결/수납 테이블 → 카드 리스트, 수납은 시스템/시트원장 2출처 분리, 월별 히스토리는 `<details>` 확장 + 반 뱃지 전체 노출(+N 숨김 개선).
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/app/admin/students/[id]/StudentDetailClient.tsx | 전체 재작성. 데이터타입·상태맵·헬퍼·3핸들러(saveMemo/changeEnrollmentStatus/loadData) 전부 원본 그대로 보존. 추가: `activeTab` state(UI 전용), `MiniDonut`(hex 없는 currentColor 도넛), `SectionTitle`/`EmptyState` 헬퍼, `renderEnrollmentRow`(기존 renderEnrollmentCard를 가로 세그먼트 레이아웃으로) | 수정 |
+| src/app/admin/students/[id]/page.tsx | 상단 "사진 사용 동의 관리" 링크 제거(헤더 우측 액션으로 이동). `getStudentActivity` 데이터 로딩 무변경 | 수정 |
+
+**보존 확인(자기검증):**
+- **데이터 계약 무변경**: `StudentActivityData` 타입/필드 한 글자도 안 건드림. 원시 SQL camel/lower 방어 접근 유지(기존 헬퍼 그대로 사용, 새 필드·새 API 0).
+- **3개 인터랙션 무변경**: `saveMemo`(→updateStudentMemo), `changeEnrollmentStatus`(→updateEnrollmentStatus, window.confirm 확인 그대로), `loadData`(fetch `/api/.../activity`, cache:no-store) — 함수 본문 원본 복사. SSR initialData+클라이언트 refetch 하이브리드 그대로.
+- **라우트 유지**: media-consent는 `/admin/students/[id]/media-consent` 그대로(위치만 헤더로 이동, studentId ?? student.id로 생성).
+- **디자인 규칙**: 하드코딩 hex 0(Tailwind 팔레트 + brand-orange-500/brand-neon-lime/brand-navy-900 토큰 + `dark:` 전면), 아이콘 Material Symbols(`SymbolIcon`)만. 상태 색상맵(ATT/PAY/INVOICE/ENROLLMENT) 유지 = 의미색 일관.
+
+**검증**: `npx tsc --noEmit` EXIT=0 / eslint 변경파일 = **0 error**(경고 1건: 갤러리 `<img>` — 기존 원본과 동일 패턴이라 유지).
+
+💡 tester 참고:
+- 테스트 방법: dev(4000) → `/admin/students/[아무 학생 id]`. (1)메모 입력→저장→"저장됨" 뜨는지, (2)개요 탭에서 반 상태 세그먼트(수강중/휴원/퇴원) 클릭→확인창→변경 후 목록 새로고침, (3)탭 5종 전환(개요/수강출결/수납/월별히스토리/사진), (4)데이터 없는 학생은 각 섹션에 점선 "없습니다" 카드가 뜨는지.
+- 정상 동작: 헤더 대표상태칩·N개 반 칩, KPI 4칸(출석률 미니도넛·수강중·이번달수납·미납), 좌측 레일 sticky(연락처·셔틀·메모), 수납 탭의 시스템/시트원장 분리, 월별 히스토리 `<details>` 펼침·반 뱃지 전부 노출.
+- 주의할 입력: 학부모 폰 tel 링크, invoiceCheckoutUrl 있는 결제(납부 링크), 셔틀 미이용 학생(레일에 "미이용"), galleryPosts의 video 타입.
+
+⚠️ reviewer 참고:
+- 봐줄 부분: (1)3개 핸들러·데이터 계약이 정말 원본과 동일한지(로직 무변경), (2)새 API/필드를 만들지 않았는지, (3)다크모드 대응 누락 없는지, (4)`ledgerHistory` 필터(장부 수납 노출 조건)가 과·소 노출 아닌지.
 
 ### 구현 기록 — 방학특강 셔틀 확정 명단 3단계 (화면 확정 + 확정본 편집) (2026-07-26)
 
@@ -214,10 +346,17 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
-| 2026-07-27 | **순서변경 T맵 실도로 재계산 + 기사님 운행 화면** — ①순서 변경 시 routeOptimization(재정렬) 대신 `/routes` 고정순서 경로: passList≤5 → 경계공유 청킹(routeFixedOrderWithTmap), /dispatch/reroute API, 클라 0.5초 디바운스로 실도로 선·실제시간 교체(ref로 stale 방지·'🔄 재계산'). 지도 2등분·모바일 목록↑지도↓·▲▼삭제 동반. ②기사님 화면: ShuttleRunLink(토큰)·ShuttleBoarding(탑승) 테이블(운영 DB apply_migration), computeDispatch 분리(비로그인 토큰게이트), /shuttle/run/[token] 공개+DriverRunClient(탑승/미탑승 탭·진행률), /api/shuttle/boarding, 배차에 '🔗 기사님 링크'. 미탑승 기록만(MVP). tsc/next build EXIT=0. 커밋 a78571f·064c7db | 배포완료 |
-| 2026-07-26 | **배차 개선 2차 묶음(전부 배포)** — ①출발시각 조정 후 순서변경 시 초기화 버그: '출발 고정' 상태 추가해 유지 ②기존 주소→건물명 일괄변환: 명단 화면 버튼(카카오 JS SDK coord2Address 건물명, 탑승자·주소라벨·건물명 있을 때만) ③드래그 핸들 카드 맨 앞 이동 ④노선 지도: T맵 features의 LineString(실도로 경로) 추출→Run.path→DispatchRouteMap(카카오 지도 폴리라인+번호 마커) ⑤노선 수정본 DB 저장: SeasonalDispatchRoute 테이블(운영 DB에 apply_migration으로 생성)+저장/조회 API+저장 버튼·자동 로드·배너. ★배포는 migrate deploy 없이 fast-forward push, DDL은 Supabase MCP. tsc/next build EXIT=0, 셔틀·T맵 테스트 통과. 커밋 db7f1aa·88dfc34·(출발고정)·(지도)·f210bb0 | 배포완료 |
-| 2026-07-26 | **T맵 최적경로 활성화 + 배차 순서변경 시각 재계산** — ①T맵이 늘 400(9401)로 실패해 직선추정으로 내려가던 원인 2건 규명(실 키로 API 직접 진단): `startTime` 필수 누락, `viaPointId "0"`을 값없음 취급. tmap.ts에 startTime 추가 + 내부 안전id(wpN) 전송 후 원래 id로 복원(호출부 계약 유지). ②배차 화면 reorderStop이 순서만 바꾸고 시각 미갱신 → recomputeRunTimes(서버 planRun과 동일 공식, 학원 도착/출발 기준 역산·T맵총시간 재배분) 연결. tsc EXIT=0, tmap 14/14(단언 2건 신설)·셔틀 100/100. errors.md에 T맵 버그 기록. 커밋 965ceec | 구현완료(수동검증 대기) |
-| 2026-07-26 | **승차위치 아파트/건물명 표시 + 자동배차 무료탑승 드래그** — ①MapLocationData에 placeName 추가, 카카오 검색 place_name 저장, 표시 이름표를 장소명→도로명→지번 순(신청폼·명단핀·노선편성핀 4곳). ②shuttle-optimize: 학생에 rosterId/requestId/pickupLabel 추가, 등원에서 '무료탑승' 라벨 학생을 거점 정류장에 붙여 계산(명단 무료탑승 학생이 집좌표로 가던 불일치 해소). DispatchClient: 학생칩 드래그→거점 드롭→pickupLocation='무료탑승·기존이름' 저장(기존 PATCH 재사용)→재계산, 거점에 지정학생 목록·인원수. tsc EXIT=0, 셔틀 명단필터 18/18·호환 1/1, location-picker 9/1(1은 기준선 기존실패, 무관). 커밋 eb2e11b·4fbf380 | 구현완료(수동검증 대기) |
+| 2026-07-27 | **셔틀 장소명 저장경로 유실 버그 수정(G3, developer)** — (1)정규반 신청→학생 전환의 `StudentShuttleLocation` INSERT가 `name`을 NULL 하드코딩하던 버그 수정: 라벨 컬럼(`app.shuttlePickup`→PICKUP, `app.shuttleDropoff`→DROPOFF)에서 장소명 읽어 파라미터화($12), ON CONFLICT에 `name=EXCLUDED.name` 추가, 폴백 `roadAddress ?? address`. 좌표/주소/placeId/source 무변경. (2)방학특강 확정본은 확인만—`confirmSeasonalShuttleRoster` INSERT…SELECT가 원본 `pickupLocation/dropoffLocation` 라벨을 그대로 복사, 편집경로도 라벨 저장 → **변경 불필요**. 스키마 변경 없음. tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-27 | **셔틀 라벨에 장소명 우선 저장(G2, developer)** — 지도 선택 장소명을 라벨 컬럼에 `name ?? 주소`로 저장(스키마 변경 없음, 라벨 컬럼 재활용). 방학특강: contracts.ts `name?` 파싱 + service.ts 저장부 `pickup?.name ?? 텍스트라벨` + SeasonalApplyClient 라벨 매핑. 정규반: EnrollLaterSteps onConfirm + public.ts `EnrollmentShuttleLocationData.name?` 정규화 + INSERT/UPDATE 라벨($17/$19) name 우선. 좌표/주소/placeId 무변경(운행 기준 보존), name 없으면 주소 폴백(하위호환). **정규반 name→`shuttlePickup`/`shuttleDropoff` 컬럼 저장(G3 참고)**. tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-26 | **수강생 상세 반 추가·삭제(E3, developer)** — `/admin/students/[id]` 개요 탭 "현재 수강 반"에 [반 추가](프로그램별·수강중 제외 선택)+행별 빨간 휴지통 하드삭제(강한 확인창). 기존 `enrollStudent`/`deleteEnrollment` 호출만(서버 무변경). 클래스목록=`getClasses()` 재사용, page.tsx가 getStudentActivity와 Promise.all 병렬조회해 classes prop 신규전달(getStudentActivity 무변경). E1/E2·loadData·데이터계약 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-26 | **수강생 상세 수납 탭 결제 상태 변경(E2, developer)** — `/admin/students/[id]` "청구·납부(시스템)" 각 건에 ✏️→4-세그먼트(완납/대기/연체/취소) 상태 변경. E1 패턴 답습(async 핸들러+loadData+피드백). 기존 `updatePaymentStatus` 호출만(서버 무변경). 취소만 window.confirm, 성공 "변경됨" 2초, 권한 실패 시 서버메시지 표면화(조용한 실패 없음). "장부 수납(시트원장)" 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
+| 2026-07-26 | **정규반 수강생 상세 페이지 UI 재설계(developer)** — `/admin/students/[id]` 시안대로 UI만 교체(데이터·API·서버액션·로직 100% 보존). 새 레이아웃: 정체성 헤더 → KPI 4칸(출석률 미니도넛·수강중·이번달수납·미납) → 좌 320px sticky 레일(연락처·셔틀·메모) + 우 5탭(개요/수강출결/수납/월별히스토리/사진). 기존 "운영 요약" 카드는 KPI로 흡수, 셔틀을 월별히스토리→좌레일로 승격, 테이블→카드리스트, 수납 시스템/시트원장 2출처 분리, 월별히스토리 `<details>`+반뱃지 전체노출. 3핸들러(saveMemo/changeEnrollmentStatus/loadData)·`StudentActivityData` 계약·media-consent 라우트 무변경. 하드코딩 hex 0, Material Symbols만. tsc EXIT=0, eslint 0 error(경고 1=기존 갤러리 img) | 구현완료(tester 대기) |
+| 2026-07-26 | **셔틀 명단 시트↔앱 대조 + 운영 데이터 반영(운영 DB 쓰기)** — 원장 요청으로 구글폼 시트(23명)와 앱 DB 대조. 발견: ①양서진(신규·미탑승) 시트에만 있음 ②이승민 앱=탑승/시트=미탑승 충돌 ③이수아 앱에만(시트 무관, DB 정답). 조치(사용자 승인): **이승민→무료탑승**(pickupLocation`1호점(무료탑승)`+거점좌표, 셔틀비 10,000→0, 합계150,000), **양서진→수강등록**(초등고 주3회 44b2ad31, APPROVED, 좌석11 월화수, 셔틀無, 멱등키 임포터공식 sheet-c4bad8…, importSource 동일). 시트임포터=`scripts/seasonal-import.mjs`(PENDING생성+승인시 좌석). 전부 단일 트랜잭션·검증SELECT 완료 | 운영반영 완료 |
+| 2026-07-26 | 셔틀 4단계 기획 + **4a-1 구현·커밋** — 3개 Explore 조사(확정 시즌스코프/날짜별 배차/결석 시스템)로 현황 파악. 핵심발견: 날짜별 배차는 `getConfirmedShuttleRosterForDate` 한 곳이 유일 게이트, `SpecialProgramEnrollmentDate`에 `status`(배차가 봄)와 `attendanceStatus`(출결, 배차 안 봄)가 **따로** 존재. 사용자 결정 3건(결석=출결 자동연동/입력=관리자+학부모/신규=원장 수동버튼). **4a-1**: 배차 좌석 쿼리 WHERE에 `attendanceStatus NOT IN (ABSENT,EXCUSED)` 추가 → 결석 미리 찍으면 그날 셔틀 등·하원 자동 제외(LATE는 태움, 시즌명단 유지). 관리자 입력은 기존 출결화면 미래회차로 이미 가능(버튼 disabled 없음). tsc EXIT=0, 셔틀 회귀 88/88 | 커밋완료(b04fdf8, 미푸시) |
+| 2026-07-27 | **순서변경 T맵 실도로 재계산 + 기사님 운행 화면(origin)** — ①순서 변경 시 routeOptimization(재정렬) 대신 `/routes` 고정순서 경로: passList≤5 → 경계공유 청킹(routeFixedOrderWithTmap), /dispatch/reroute API, 클라 0.5초 디바운스로 실도로 선·실제시간 교체(ref로 stale 방지·'🔄 재계산'). 지도 2등분·모바일 목록↑지도↓·▲▼삭제 동반. ②기사님 화면: ShuttleRunLink(토큰)·ShuttleBoarding(탑승) 테이블(운영 DB apply_migration), computeDispatch 분리(비로그인 토큰게이트), /shuttle/run/[token] 공개+DriverRunClient(탑승/미탑승 탭·진행률), /api/shuttle/boarding, 배차에 '🔗 기사님 링크'. 미탑승 기록만(MVP). tsc/next build EXIT=0. 커밋 a78571f·064c7db | 배포완료 |
+| 2026-07-26 | **배차 개선 2차 묶음(origin·전부 배포)** — ①출발시각 조정 후 순서변경 시 초기화 버그: '출발 고정' 상태 추가해 유지 ②기존 주소→건물명 일괄변환: 명단 화면 버튼(카카오 JS SDK coord2Address 건물명, 탑승자·주소라벨·건물명 있을 때만) ③드래그 핸들 카드 맨 앞 이동 ④노선 지도: T맵 features의 LineString(실도로 경로) 추출→Run.path→DispatchRouteMap(카카오 지도 폴리라인+번호 마커) ⑤노선 수정본 DB 저장: SeasonalDispatchRoute 테이블(운영 DB에 apply_migration으로 생성)+저장/조회 API+저장 버튼·자동 로드·배너. ★배포는 migrate deploy 없이 fast-forward push, DDL은 Supabase MCP. tsc/next build EXIT=0, 셔틀·T맵 테스트 통과. 커밋 db7f1aa·88dfc34·(출발고정)·(지도)·f210bb0 | 배포완료 |
+| 2026-07-26 | **T맵 최적경로 활성화 + 배차 순서변경 시각 재계산(origin)** — ①T맵이 늘 400(9401)로 실패해 직선추정으로 내려가던 원인 2건 규명(실 키로 API 직접 진단): `startTime` 필수 누락, `viaPointId "0"`을 값없음 취급. tmap.ts에 startTime 추가 + 내부 안전id(wpN) 전송 후 원래 id로 복원(호출부 계약 유지). ②배차 화면 reorderStop이 순서만 바꾸고 시각 미갱신 → recomputeRunTimes(서버 planRun과 동일 공식, 학원 도착/출발 기준 역산·T맵총시간 재배분) 연결. tsc EXIT=0, tmap 14/14(단언 2건 신설)·셔틀 100/100. errors.md에 T맵 버그 기록. 커밋 965ceec | 구현완료(수동검증 대기) |
+| 2026-07-26 | **승차위치 아파트/건물명 표시 + 자동배차 무료탑승 드래그(origin)** — ①MapLocationData에 placeName 추가, 카카오 검색 place_name 저장, 표시 이름표를 장소명→도로명→지번 순(신청폼·명단핀·노선편성핀 4곳). ②shuttle-optimize: 학생에 rosterId/requestId/pickupLabel 추가, 등원에서 '무료탑승' 라벨 학생을 거점 정류장에 붙여 계산(명단 무료탑승 학생이 집좌표로 가던 불일치 해소). DispatchClient: 학생칩 드래그→거점 드롭→pickupLocation='무료탑승·기존이름' 저장(기존 PATCH 재사용)→재계산, 거점에 지정학생 목록·인원수. tsc EXIT=0, 셔틀 명단필터 18/18·호환 1/1, location-picker 9/1(1은 기준선 기존실패, 무관). 커밋 eb2e11b·4fbf380 | 구현완료(수동검증 대기) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 **실 DB 읽기 검증(tester)** — tsc/build EXIT=0, 전체 657/662(잔여 5는 기준선 동일). 운영 DB SELECT 전용 검증: 테이블 실재·행 0(미확정 정상)·킬스위치 NULL(꺼짐)·컬럼 46개 중 SELECT/INSERT/핀16 **누락 0**·NOT NULL 충돌 0·UNIQUE(seasonId,shuttleRequestId) 실재·**확정 INSERT의 SELECT 절을 읽기 실행해 39/39 표현식 정상·18행 반환**. 폴백 명단 18행(탑승17/미탑승1) **취소·거절·폐강 오염 0건**(필터가 실제 2건 제외 중). → **확정 버튼 500 위험 없음, 눌러도 됨(예상 inserted=18)**. ★신규 치명 1건(T-1): 확정 후 `/admin/shuttle` 노선 편성 화면의 "위치 확정" 핀이 원본에만 써서 조용히 무시됨 | 검증완료(T-1 수정 필요) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 리뷰 — SQL 인젝션·$n 번호·핀 저장(ConfirmedAt/라벨보존/등원동일 복제)·soft delete·재확정 방지·안전장치 3종 전부 이상 없음. **치명 1(R-5)**: 확정 후에도 requestId 경로가 열려 있어 오래 열어둔 탭이 원본을 수정하고 "저장됨" 표시(확정본 미반영) → 409 거절 필요. 권장 4(R-6 SET 중복컬럼 500, R-7 전원제외 폴백부활·다음시즌 잠김, R-8 낙관롤백·되돌리기 세션한정, 테스트가 전부 문자열매칭이라 실동작 결함 미검출). tsc EXIT=0, 신규테스트 24/24 | 리뷰: 수정필요(R-5) |
 | 2026-07-26 | 셔틀 확정 명단 3단계 2차 수정(리뷰 R-5/R-6/R-7①/R-8 + 테스터 T-1) — ①R-5(치명): 원본 수정 직전 서버가 확정본 조회→409 거절+화면 자동 새로고침 ②R-6: SET 조립을 의존성0 순수모듈로 분리, 컬럼중복 제거(42701 방지) ③R-7①: 확정 판정을 "확정본 존재(제외행 포함)"로 교체—전원제외해도 폴백 부활 없음 ④R-8: 저장 실패 시 낙관반영 롤백 ⑤T-1(치명): 노선편성 핀 저장을 확정본으로 라우팅(조용한 no-op 제거, 부원장은 403 안내). ★실행 테스트 16건 신설이 추가 결함(Number(null)=0 → 좌표 0,0 저장) 실제 검출·수정. tsc/build EXIT=0, 전체 676/681(잔여 5는 기존 실패) | 구현완료(tester 대기) |

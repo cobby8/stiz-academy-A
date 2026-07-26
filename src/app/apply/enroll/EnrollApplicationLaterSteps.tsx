@@ -317,10 +317,11 @@ export default function EnrollApplicationLaterSteps({ step, form, availableSlots
                     onClose={() => setLocationPicker(null)}
                     onConfirm={(location: MapLocationData) => {
                         if (locationPicker === "pickup") {
-                            update("shuttlePickup", location.address);
+                            // 라벨(shuttlePickup)에는 장소명 우선. 없으면 주소로 폴백(하위호환).
+                            update("shuttlePickup", location.placeName ?? location.address);
                             update("shuttlePickupLocationData", location);
                         } else {
-                            update("shuttleDropoff", location.address);
+                            update("shuttleDropoff", location.placeName ?? location.address);
                             update("shuttleDropoffLocationData", location);
                         }
                         update("shuttleLocationConsent", false);

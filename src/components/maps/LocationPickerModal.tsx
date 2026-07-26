@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 export type MapLocationData = {
   address: string;
   roadAddress?: string;
-  /** 카카오 검색으로 고른 장소명(아파트·건물명, 예: "다산이편한세상자이"). 검색으로 고른 경우에만 채워진다. */
+  /** 장소명(예: "롯데캐슬 정문" 또는 검색으로 고른 아파트·건물명). 검색 자동채움 또는 사용자 입력으로 채워진다. */
   placeName?: string;
   latitude: number;
   longitude: number;
@@ -105,6 +105,8 @@ export default function LocationPickerModal({
   const pendingSearchRef = useRef<{ sequence: number; value: MapLocationData } | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   const [query, setQuery] = useState(initialValue?.roadAddress ?? initialValue?.address ?? "");
+  // 장소명 입력값. 검색으로 고른 장소의 이름이 자동 프리필되고, 사용자가 직접 수정할 수 있다.
+  const [placeName, setPlaceName] = useState(initialValue?.placeName ?? "");
   const [location, setLocation] = useState<MapLocationData | undefined>(initialValue);
   const [isLocating, setIsLocating] = useState(false);
   const [message, setMessage] = useState("지도를 움직여 핀을 실제 탑승 위치에 맞춰주세요.");
@@ -238,6 +240,10 @@ export default function LocationPickerModal({
       selectionEnabledRef.current = true;
       const latitude = Number(first.y);
       const longitude = Number(first.x);
+      // 카카오 검색 결과의 장소명(place_name)을 보존한다. 이전에는 주소 폴백으로만 쓰고 버렸다.
+      const searchedName = first.place_name || undefined;
+      // 사용자가 아직 장소명을 직접 입력하지 않았으면 검색한 장소명을 자동 프리필한다.
+      if (searchedName) setPlaceName((prev) => prev.trim() ? prev : searchedName);
       pendingSearchRef.current = { sequence: interactionSequence, value: {
         address: first.address_name || first.place_name || query.trim(),
         roadAddress: first.road_address_name || undefined,
@@ -298,7 +304,9 @@ export default function LocationPickerModal({
       setMessage("현재 위치 확인이 끝나거나 지도를 움직여 위치를 선택해주세요.");
       return;
     }
-    onConfirm(location);
+    // 사용자가 입력/수정한 장소명을 우선 반영한다. 비어 있으면 검색으로 잡힌 placeName을 유지한다.
+    const trimmedName = placeName.trim();
+    onConfirm({ ...location, placeName: trimmedName || location.placeName || undefined });
   }
 
   return (
@@ -320,6 +328,14 @@ export default function LocationPickerModal({
               <label className="sr-only" htmlFor={`${titleId}-search`}>주소 또는 장소 검색</label>
               <input ref={searchInputRef} id={`${titleId}-search`} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); search(); } }} placeholder="도로명, 건물명으로 검색" className="min-h-11 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
               <button type="button" onClick={search} disabled={confirmPending} className="min-h-11 rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">검색</button>
+            </div>
+          )}
+
+          {status !== "fallback" && (
+            <div>
+              <label className="mb-1 block text-xs font-bold text-gray-600 dark:text-gray-300" htmlFor={`${titleId}-place-name`}>장소명 (선택)</label>
+              {/* 검색으로 고른 장소의 이름이 자동 채워지고, 직접 수정할 수 있다. 확정 시 placeName으로 함께 저장된다. */}
+              <input id={`${titleId}-place-name`} value={placeName} onChange={(event) => setPlaceName(event.target.value)} placeholder="예: 롯데캐슬 정문" className="min-h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
             </div>
           )}
 

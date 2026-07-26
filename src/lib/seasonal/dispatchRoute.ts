@@ -14,7 +14,18 @@ import { extractEtaByRequestId } from "./dispatchEtaLookup";
 // 자동 제안을 손으로 조정한 결과를 (날짜 × 방향) 단위로 1행 저장한다. PgBouncer 때문에 $queryRawUnsafe 고정.
 
 // 저장 노선 이후의 "추가/변경" 요약(Phase 2a). 저장본을 바꾸지 않고 화면 배너에만 쓰는 진단값이다.
-export type SavedRouteChange = { requestId: string; name: string };
+// 화면에서 '추천 배정'·'좌표 자동 반영'을 하려면 좌표·라벨·학생정보까지 필요하므로 함께 실어 보낸다.
+export type SavedRouteChange = {
+  requestId: string; name: string;
+  lat: number | null; lng: number | null; // 현재(변경 후) 좌표. isHub이거나 미확정이면 null.
+  label: string; isHub: boolean;
+  grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null;
+};
+
+// 무료탑승 거점 학생 판정 — shuttle-optimize.isFreeHubLabel과 같은 기준(순환 import 회피 위해 여기 복제).
+function isFreeHubLabelLocal(label: string | null | undefined): boolean {
+  return (label ?? "").replace(/\s/g, "").includes("무료탑승");
+}
 
 export type SavedDispatchRoute = {
   vehicles: unknown[];
@@ -73,8 +84,22 @@ export async function getSavedDispatchRoute(date: string | null, direction: stri
         // reconcile 후(= 실제로 화면에 보이는) 노선과 그날 명단을 비교해 추가/변경만 뽑는다.
         // ★ 저장 payload는 절대 바꾸지 않는다 — diff는 순수 읽기 진단이다.
         const diff = diffSavedRoute(vehicles, plan.riders);
-        added = diff.added;
-        locationChanged = diff.locationChanged;
+        // 좌표·라벨·학생정보로 살찌운다(화면의 추천 배정·좌표 자동 반영용). 명단에서 그 학생을 되짚어 채운다.
+        const byId = new Map(plan.riders.map((rider) => [rider.shuttleRequestId, rider]));
+        const enrich = (c: { requestId: string; name: string }): SavedRouteChange => {
+          const r = byId.get(c.requestId);
+          const isHub = isFreeHubLabelLocal(r?.placeLabel);
+          return {
+            requestId: c.requestId, name: c.name,
+            lat: r && !isHub ? (r.place.latitude ?? null) : null,
+            lng: r && !isHub ? (r.place.longitude ?? null) : null,
+            label: r?.placeLabel ?? "", isHub,
+            grade: r?.childGrade ?? null, parentPhone: r?.parentPhone ?? null,
+            childPhone: r?.childPhone ?? null, rosterId: r?.rosterId ?? null,
+          };
+        };
+        added = diff.added.map(enrich);
+        locationChanged = diff.locationChanged.map(enrich);
       } catch {
         // 유효 명단 조회가 실패하면(테이블 없음 등) 저장본을 그대로 보여 준다 — 화면이 비는 것보다 안전하다.
         vehicles = savedVehicles;

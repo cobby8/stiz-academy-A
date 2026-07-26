@@ -182,7 +182,8 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
     try {
       const r = await fetch("/api/admin/seasonal/dispatch/saved", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles, classStart: sug.classStart, classEnd: sug.classEnd }),
+        // 순서를 바꾼 차량은 실도로 경로가 순서와 어긋나므로 저장 시 경로를 비운다(불러올 때 직선으로 표시).
+        body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles.map((v, i) => (reordered[i] ? { ...v, path: undefined } : v)), classStart: sug.classStart, classEnd: sug.classEnd }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "저장 실패");
@@ -196,10 +197,6 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
     if (initial.date) loadAndApplySaved(initial.date, initial.direction);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  function moveStop(vIdx: number, sIdx: number, dir: -1 | 1) {
-    reorderStop(vIdx, sIdx, sIdx + dir);
-  }
 
   // 정차 순서 변경(위/아래 버튼과 드래그앤드롭이 공통으로 쓴다).
   function reorderStop(vIdx: number, from: number, to: number) {
@@ -326,8 +323,8 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
 
         {sug.vehicles.length === 0 && <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">이 날짜에 배차할 등원 셔틀 학생이 없습니다.</div>}
 
-        <div className="mt-3 lg:flex lg:items-start lg:gap-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:min-w-0 lg:flex-1 lg:grid-cols-1 2xl:grid-cols-2">
+        <div className="mt-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+          <div className="grid min-w-0 gap-3">
           {sug.vehicles.map((v, vIdx) => (
             <div key={vIdx} className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between bg-brand-navy-900 px-4 py-2.5 text-white">
@@ -409,10 +406,6 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                     </div>
                     <div className="flex flex-col items-end gap-1 print:hidden">
                       {s.etaLabel && <span className="whitespace-nowrap text-[11.5px] font-black text-blue-600 dark:text-blue-300 print:text-black">{s.etaLabel}</span>}
-                      <span className="flex items-center gap-0.5">
-                        <button onClick={() => moveStop(vIdx, sIdx, -1)} className="h-6 w-6 rounded border border-gray-200 text-xs dark:border-gray-600">▲</button>
-                        <button onClick={() => moveStop(vIdx, sIdx, 1)} className="h-6 w-6 rounded border border-gray-200 text-xs dark:border-gray-600">▼</button>
-                      </span>
                     </div>
                     {/* 인쇄본에는 시각만 남기고 조작 버튼은 숨긴다. */}
                     {s.etaLabel && <span className="hidden whitespace-nowrap text-[11.5px] font-black text-black print:inline">{s.etaLabel}</span>}
@@ -432,7 +425,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
 
           {/* 우측 고정 지도 패널 — 순서를 바꾸면 실시간으로 다시 그린다. */}
           {sug.vehicles.length > 0 && (
-            <aside className="mt-3 lg:mt-0 lg:sticky lg:top-4 lg:w-[400px] lg:shrink-0 print:hidden">
+            <aside className="mt-3 lg:mt-0 lg:sticky lg:top-4 print:hidden">
               <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between gap-2 bg-brand-navy-900 px-3 py-2 text-white">
                   <span className="text-xs font-black">🗺 노선 지도 · 실시간</span>
@@ -446,7 +439,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                   start={{ lat: mapStartPt.lat, lng: mapStartPt.lng, label: isPickup ? "차고지" : "학원" }}
                   end={{ lat: mapEndPt.lat, lng: mapEndPt.lng, label: isPickup ? "학원" : "차고지" }}
                   stops={sug.vehicles[activeMapIdx].stops.map((s, i) => ({ lat: s.lat, lng: s.lng, label: s.label, badge: s.isHub ? "무료" : String(i + 1), kind: s.isHub ? "hub" : "stop" }))}
-                  path={(!reordered[activeMapIdx] && !loadedFromSaved) ? sug.vehicles[activeMapIdx].path : undefined}
+                  path={reordered[activeMapIdx] ? undefined : sug.vehicles[activeMapIdx].path}
                   heightClass="h-[52vh] lg:h-[62vh]"
                 />
               </div>

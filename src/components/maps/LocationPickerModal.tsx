@@ -5,6 +5,8 @@ import { useEffect, useId, useRef, useState } from "react";
 export type MapLocationData = {
   address: string;
   roadAddress?: string;
+  /** 카카오 검색으로 고른 장소명(아파트·건물명, 예: "다산이편한세상자이"). 검색으로 고른 경우에만 채워진다. */
+  placeName?: string;
   latitude: number;
   longitude: number;
   placeId?: string;
@@ -204,6 +206,7 @@ export default function LocationPickerModal({
       setLocation({
         address: pendingSearch?.address ?? address,
         roadAddress: pendingSearch?.roadAddress ?? (first?.road_address?.address_name || undefined),
+        placeName: pendingSearch?.placeName,
         latitude,
         longitude,
         placeId: pendingSearch?.placeId,
@@ -238,6 +241,7 @@ export default function LocationPickerModal({
       pendingSearchRef.current = { sequence: interactionSequence, value: {
         address: first.address_name || first.place_name || query.trim(),
         roadAddress: first.road_address_name || undefined,
+        placeName: first.place_name || undefined,
         latitude,
         longitude,
         placeId: first.id,
@@ -337,8 +341,11 @@ export default function LocationPickerModal({
               </div>
               <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-900">
                 <p className="text-xs text-gray-500 dark:text-gray-400">{message}</p>
-                <p className="mt-1 font-bold text-gray-900 dark:text-white">{location?.roadAddress ?? location?.address ?? "위치를 선택해주세요."}</p>
-                {location?.roadAddress && location.address !== location.roadAddress && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">지번 {location.address}</p>}
+                <p className="mt-1 font-bold text-gray-900 dark:text-white">{location?.placeName ?? location?.roadAddress ?? location?.address ?? "위치를 선택해주세요."}</p>
+                {/* 장소명이 있으면 그 아래에 주소를, 없으면 기존처럼 지번을 보조로 보여준다. */}
+                {location?.placeName
+                  ? <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{location.roadAddress ?? location.address}</p>
+                  : (location?.roadAddress && location.address !== location.roadAddress && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">지번 {location.address}</p>)}
               </div>
             </>
           )}

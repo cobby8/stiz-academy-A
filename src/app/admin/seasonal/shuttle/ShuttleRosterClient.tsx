@@ -206,7 +206,7 @@ export default function ShuttleRosterClient({
 
   async function savePin(requestId: string, kind: "pickup" | "dropoff", loc: MapLocationData) {
     setPinSaving(true);
-    const addr = loc.roadAddress ?? loc.address;
+    const addr = loc.placeName ?? loc.roadAddress ?? loc.address;
     const patch = { [`${kind}Pin`]: { latitude: loc.latitude, longitude: loc.longitude, address: loc.address, roadAddress: loc.roadAddress, source: loc.source, placeId: loc.placeId, accuracyMeters: loc.accuracyMeters } };
     const isPinned = loc.source === "MAP_PIN" || loc.source === "CURRENT_LOCATION";
     const optimistic: Partial<ShuttleRosterRow> = kind === "pickup"

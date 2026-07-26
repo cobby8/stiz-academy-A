@@ -380,15 +380,15 @@ export default function ShuttleRosterClient({
           <span title={r.pickupPinned ? "정밀 핀" : r.pickupApprox ? "자동추정(재확인)" : "미지정"} className={dot(r.pickupPinned, r.pickupApprox)} />
         </div>
       </td>
-      <td className="p-2">
-        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] font-bold text-gray-600 dark:text-gray-300">
+      <td className="p-2 text-center">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 text-[12px] font-bold text-gray-600 dark:text-gray-300">
           <input type="checkbox" checked={r.dropoffSameAsPickup}
             onChange={(e) => save(r, { dropoffSameAsPickup: e.target.checked }, { dropoffSameAsPickup: e.target.checked, dropoffLocation: e.target.checked ? r.pickupLocation : r.dropoffLocation })}
             className="h-4 w-4 accent-[var(--brand-accent)]" />
           등원과 동일
         </label>
         {!r.dropoffSameAsPickup && (
-          <div className="mt-1.5 flex items-center gap-1.5" style={{ minWidth: 190 }}>
+          <div className="mt-1.5 flex items-center justify-center gap-1.5">
             <input defaultValue={r.dropoffLocation ?? ""} key={`d-${r.requestId}-${r.dropoffLocation ?? ""}`}
               onBlur={(e) => { if (e.target.value !== (r.dropoffLocation ?? "")) save(r, { dropoffLocation: e.target.value }, { dropoffLocation: e.target.value }); }}
               placeholder="예: 힐스테이트다산 정문" className={cell} />

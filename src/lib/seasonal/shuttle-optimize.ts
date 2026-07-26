@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { getSeasonalShuttleRoster } from "@/lib/seasonal/shuttle-roster";
 import { requireAdmin } from "@/lib/auth-guard";
 
@@ -5,8 +6,25 @@ import { requireAdmin } from "@/lib/auth-guard";
 // "자동 제안 + 수동 조정" 원칙: 여기서는 위치·정원·수업시간을 근거로 정차 그룹핑 + 순서 + 예상 시각을 계산해 '초안'을 만든다.
 // 실제 도로 소요시간(Tmap) 연동은 후속 단계. v1은 직선거리 기반 근사(도로계수 1.3, 평균 24km/h)로 계산한다.
 
-// 학원 좌표(다산2호점 인근). 필요 시 설정에서 조정 가능하게 확장한다.
-const ACADEMY = { lat: 37.62366, lng: 127.15366, name: "STIZ 다산점" };
+type Academy = { lat: number; lng: number; name: string };
+// 학원 좌표는 AcademySettings에서 읽는다. DB 조회 실패 시 아래 실제 값(다산중앙로20번길 10-32)으로 폴백.
+const ACADEMY_FALLBACK: Academy = { lat: 37.6145625, lng: 127.1563125, name: "STIZ 다산점" };
+
+async function getAcademy(): Promise<Academy> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "academyLatitude" AS lat, "academyLongitude" AS lng, "academyAddress" AS addr FROM "AcademySettings" LIMIT 1`,
+    );
+    const r = rows[0];
+    const lat = r?.lat != null ? Number(r.lat) : NaN;
+    const lng = r?.lng != null ? Number(r.lng) : NaN;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng, name: r?.addr ? `STIZ 다산점 · ${r.addr}` : "STIZ 다산점" };
+    }
+  } catch { /* 폴백 사용 */ }
+  return ACADEMY_FALLBACK;
+}
+
 const ROAD_FACTOR = 1.3;       // 직선 → 도로거리 보정
 const SPEED_KM_PER_MIN = 0.4;  // 약 24km/h (도심 셔틀)
 const MIN_PER_KM = ROAD_FACTOR / SPEED_KM_PER_MIN; // ≈ 3.25분/km
@@ -43,7 +61,7 @@ export type DispatchSuggestion = {
   classStart: string | null;
   classEnd: string | null;
   capacity: number;
-  academy: typeof ACADEMY;
+  academy: Academy;
   vehicles: Vehicle[];
   unassigned: { name: string; label: string | null }[]; // 좌표 없어 배차 불가
   availableClassTimes: string[];
@@ -65,13 +83,22 @@ export async function suggestDispatch(opts: { direction: DispatchDirection; clas
   await requireAdmin();
   const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
   const capacity = Math.max(1, Math.min(45, Math.floor(opts.capacity ?? 9)));
+  const ACADEMY = await getAcademy();
 
+  // 명단 조회(getSeasonalShuttleRoster)가 이미 신청 취소·거절·개설 취소 반을 제외하고 돌려준다.
+  // 여기서는 '미탑승'으로 눌러둔 학생만 추가로 뺀다(원장이 손으로 끈 학생 = 태우지 않음).
   const roster = (await getSeasonalShuttleRoster()).filter((r) => r.ride);
   const availableClassTimes = Array.from(new Set(roster.map((r) => r.classStart).filter(Boolean) as string[])).sort();
   const classStart = opts.classStart && availableClassTimes.includes(opts.classStart) ? opts.classStart : (availableClassTimes[0] ?? null);
 
   const pool = roster.filter((r) => (classStart ? r.classStart === classStart : true));
-  const classEnd = pool.find((r) => r.classEnd)?.classEnd ?? null;
+  // 하원 출발 기준 시각. 같은 시작시각이라도 반마다 종료시각이 다를 수 있는데,
+  // 먼저 걸린 반의 종료시각을 쓰면 늦게 끝나는 반 학생을 두고 출발하게 된다.
+  // 그래서 "가장 늦게 끝나는 반"(최댓값)을 기준으로 잡는다. 'HH:MM' 문자열은 사전순=시간순이라 그대로 비교 가능.
+  const classEnd = pool.reduce<string | null>(
+    (latest, r) => (r.classEnd && (latest === null || r.classEnd > latest) ? r.classEnd : latest),
+    null,
+  );
 
   const unassigned: { name: string; label: string | null }[] = [];
   const pts = pool.map((r) => {

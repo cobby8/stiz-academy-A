@@ -12,11 +12,13 @@ export default async function ShuttleRunPage({ params }: { params: Promise<{ tok
   const run = await resolveRunToken(token);
   if (!run) {
     return (
-      <div className="mx-auto grid min-h-[70dvh] max-w-md place-items-center px-6 text-center">
-        <div>
-          <p className="text-4xl">🚌</p>
-          <h1 className="mt-3 text-lg font-black text-gray-900 dark:text-white">유효하지 않은 링크입니다</h1>
-          <p className="mt-1 text-sm text-gray-500">원장님께 새 링크를 요청해주세요.</p>
+      <div className="min-h-screen bg-white text-gray-900" style={{ colorScheme: "light" }}>
+        <div className="mx-auto grid min-h-[80dvh] max-w-md place-items-center px-6 text-center">
+          <div>
+            <p className="text-5xl">🚌</p>
+            <h1 className="mt-3 text-xl font-black text-gray-900">유효하지 않은 링크입니다</h1>
+            <p className="mt-1 text-base text-gray-500">원장님께 새 링크를 요청해주세요.</p>
+          </div>
         </div>
       </div>
     );
@@ -47,12 +49,15 @@ export default async function ShuttleRunPage({ params }: { params: Promise<{ tok
   const [pickupBoarding, dropoffBoarding] = await Promise.all([getBoardingMap(run.date, "PICKUP"), getBoardingMap(run.date, "DROPOFF")]);
 
   return (
-    <DriverRunClient
-      token={token}
-      date={run.date}
-      sections={sections}
-      initialBoarding={{ PICKUP: pickupBoarding, DROPOFF: dropoffBoarding } as { PICKUP: Record<string, BoardingStatus>; DROPOFF: Record<string, BoardingStatus> }}
-    />
+    // 기사님 화면은 연세를 고려해 항상 라이트 모드로 고정한다(테마와 무관하게 흰 배경).
+    <div className="min-h-screen bg-white py-2" style={{ colorScheme: "light" }}>
+      <DriverRunClient
+        token={token}
+        date={run.date}
+        sections={sections}
+        initialBoarding={{ PICKUP: pickupBoarding, DROPOFF: dropoffBoarding } as { PICKUP: Record<string, BoardingStatus>; DROPOFF: Record<string, BoardingStatus> }}
+      />
+    </div>
   );
 }
 

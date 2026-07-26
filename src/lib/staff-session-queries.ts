@@ -41,8 +41,19 @@ export type StaffSessionDetail = {
 };
 
 export type StaffSessionStudent = {
+  // React 렌더 key 겸 화면 표시용 고유 식별자.
+  //  - 정규: studentId  /  - 방학특강: enrollmentDateId(그 좌석)
   id: string;
+  // 출결 저장 서버액션에 넘길 키.
+  //  - 정규: studentId  /  - 방학특강: enrollmentDateId(좌석 = 정본)
+  // ★ 방학특강은 미전환(Student 없음) 신청자도 로스터에 뜨므로 학생ID가 아닌 좌석ID로 저장한다.
+  attendanceKey: string;
+  // 전환된 Student.id (방학특강 미전환자는 null). 사진 태깅·정규 Attendance 병행에 사용.
+  studentId: string | null;
   name: string;
+  // 표시정보(방학특강 명단용). 정규는 현재 미사용(null).
+  grade: string | null;
+  phone: string | null;
   status: "PRESENT" | "LATE" | "ABSENT" | null;
   attendanceNote: string | null;
   arrivedAt: string | null;
@@ -266,10 +277,32 @@ export async function getStaffSessionStudents(
   const sessionDateId = sessionKinds[0]?.sessionDateId;
   if (sessionDateId) {
     await requireStaffSeasonalSessionAccess(sessionDateId);
+    // ★ 좌석(SpecialProgramEnrollmentDate) 기준 로스터 — 전환 여부와 무관하게 APPROVED 신청항목 전원.
+    //   왜 좌석 기준인가: 방학특강 출결의 정본은 좌석의 attendanceStatus다(셔틀 결석제외·보강·관리자 배지가 읽음).
+    //   미전환 신청자는 Student가 없어 예전 convertedStudentId 조인으로는 명단이 거의 비었다.
+    //   좌석은 승인(APPROVED) 시점에 신청 요일과 겹치는 회차마다 생성되므로, 좌석 존재 자체가
+    //   "이 회차 명단"을 뜻한다(요일 필터를 SQL에서 다시 걸 필요 없음).
+    //   형제 반/court 는 sibling sessionDate 조인으로 합산되고, 각 좌석이 별개 행(=별개 출결 대상)이다.
     const rows = await prisma.$queryRawUnsafe<
-      Array<Omit<StaffSessionStudent, "arrivedAt"> & { arrivedAt: Date | string | null }>
+      Array<{
+        enrollmentDateId: string;
+        studentId: string | null;
+        name: string;
+        grade: string | null;
+        phone: string | null;
+        status: StaffSessionStudent["status"];
+        attendanceNote: string | null;
+        arrivedAt: Date | string | null;
+      }>
     >(
-      `SELECT DISTINCT st.id, st.name, att.status, att.note AS "attendanceNote", att."arrivedAt"
+      `SELECT e.id AS "enrollmentDateId",
+              app."convertedStudentId" AS "studentId",
+              COALESCE(st.name, app."childName") AS name,
+              app."childGrade" AS grade,
+              COALESCE(app."childPhone", app."parentPhone") AS phone,
+              e."attendanceStatus" AS status,
+              e."attendanceNote" AS "attendanceNote",
+              e."arrivedAt" AS "arrivedAt"
        FROM "Session" s
        JOIN "SpecialProgramSessionDate" anchor_sd ON anchor_sd.id = s."specialProgramSessionDateId"
        JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
@@ -285,29 +318,39 @@ export async function getStaffSessionStudents(
             AND o."seasonId" = anchor_o."seasonId"
           )
         )
-       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id
-         AND i.status = 'APPROVED'
-         AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id AND i.status = 'APPROVED'
        JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
-         AND (
-           COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
-           OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
-             WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
-             WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
-           END = ANY(app."selectedWeekdays")
-         )
-       JOIN "Student" st ON st.id = app."convertedStudentId" AND ${notMergedStudent("st")}
-       LEFT JOIN "Attendance" att ON att."sessionId" = s.id AND att."studentId" = st.id
+       -- 좌석: 이 신청항목의 이 회차 좌석. SCHEDULED 만(취소=CANCELLED·보강이동=MOVED 제외).
+       JOIN "SpecialProgramEnrollmentDate" e
+         ON e."applicationItemId" = i.id AND e."sessionDateId" = sd.id AND e.status = 'SCHEDULED'
+       -- 전환된 학생 이름 우선(병합 학생은 제외되어 childName 폴백)
+       LEFT JOIN "Student" st ON st.id = app."convertedStudentId" AND ${notMergedStudent("st")}
        WHERE s.id = $1
-       ORDER BY st.name`,
+       ORDER BY COALESCE(st.name, app."childName")`,
       sessionId,
     );
-    return rows.map((row) => ({ ...row, arrivedAt: toIso(row.arrivedAt) }));
+    return rows.map((row) => ({
+      id: row.enrollmentDateId,
+      attendanceKey: row.enrollmentDateId,
+      studentId: row.studentId ?? null,
+      name: row.name,
+      grade: row.grade ?? null,
+      phone: row.phone ?? null,
+      status: row.status,
+      attendanceNote: row.attendanceNote,
+      arrivedAt: toIso(row.arrivedAt),
+    }));
   }
 
   await requireStaffClassAccess(classId);
   const rows = await prisma.$queryRawUnsafe<
-    Array<Omit<StaffSessionStudent, "arrivedAt"> & { arrivedAt: Date | string | null }>
+    Array<{
+      id: string;
+      name: string;
+      status: StaffSessionStudent["status"];
+      attendanceNote: string | null;
+      arrivedAt: Date | string | null;
+    }>
   >(
     `SELECT st.id, st.name, a.status, a.note AS "attendanceNote", a."arrivedAt"
      FROM "Enrollment" e
@@ -318,5 +361,16 @@ export async function getStaffSessionStudents(
     sessionId,
     classId,
   );
-  return rows.map((row) => ({ ...row, arrivedAt: toIso(row.arrivedAt) }));
+  // 정규는 studentId 가 곧 로스터 키다(기존과 동일). attendanceKey=studentId.
+  return rows.map((row) => ({
+    id: row.id,
+    attendanceKey: row.id,
+    studentId: row.id,
+    name: row.name,
+    grade: null,
+    phone: null,
+    status: row.status,
+    attendanceNote: row.attendanceNote,
+    arrivedAt: toIso(row.arrivedAt),
+  }));
 }

@@ -257,18 +257,22 @@ export default function SessionInProgressClient({
     [students],
   );
 
-  function updateAttendance(studentId: string, status: AttendanceStatus) {
+  // studentId 파라미터명이지만 실제로는 로스터 행의 고유 id(정규=studentId / 방학특강=enrollmentDateId)다.
+  // 서버에는 그 행의 attendanceKey(방학특강이면 좌석ID)를 넘겨 좌석 기준으로 저장한다.
+  function updateAttendance(rowId: string, status: AttendanceStatus) {
     setMessage("");
+    const target = students.find((student) => student.id === rowId);
+    if (!target) return;
     startTransition(async () => {
       try {
-        const result = await saveStaffAttendance({ sessionId: session.id, studentId, status });
+        const result = await saveStaffAttendance({ sessionId: session.id, attendanceKey: target.attendanceKey, status });
         if (!result.ok) {
           setMessage(result.message);
           return;
         }
         setStudents((current) =>
           current.map((student) =>
-            student.id === studentId
+            student.id === rowId
               ? {
                   ...student,
                   status,
@@ -295,7 +299,7 @@ export default function SessionInProgressClient({
         for (const [index, student] of unchecked.entries()) {
           const result = await saveStaffAttendance({
             sessionId: session.id,
-            studentId: student.id,
+            attendanceKey: student.attendanceKey,
             status: "PRESENT",
           });
           if (!result.ok) {
@@ -469,7 +473,13 @@ export default function SessionInProgressClient({
 
       <section id="session-photos" className="scroll-mt-40 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <h2 className="mb-3 flex items-center gap-2 font-black"><span className="material-symbols-outlined text-[var(--brand-accent)]">photo_camera</span>수업 사진</h2>
-        <SessionPhotoUploader sessionId={session.id} students={students.map(({ id, name }) => ({ id, name }))} />
+        {/* 사진 태깅은 실제 Student(전환된 학생)만 대상으로 한다. 방학특강 미전환 신청자는 Student가 없어 제외. */}
+        <SessionPhotoUploader
+          sessionId={session.id}
+          students={students
+            .filter((student) => student.studentId)
+            .map((student) => ({ id: student.studentId as string, name: student.name }))}
+        />
       </section>
 
       <section id="session-memo" className="scroll-mt-40 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
@@ -498,7 +508,9 @@ export default function SessionInProgressClient({
       {showPeople && <ClassPeopleSheet open classId={session.classId} sessionId={session.id} className={session.className} onClose={() => setShowPeople(false)} onOpenBilling={(student) => { setShowPeople(false); setBillingStudent(student); }} />}
       {billingStudent !== undefined && <ClassBillingSheet key={`${session.classId}:${billingStudent?.id || "all"}`} open classId={session.classId} className={session.className} student={billingStudent} onClose={() => setBillingStudent(undefined)} />}
 
-      <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-lg px-4">
+      {/* 수업 진행 화면에서는 하단 탭바(StaffBottomNav)가 숨겨지므로, 종료 바를 화면 최하단에 밀착시킨다.
+          홈 인디케이터(safe-area)만큼만 아래 여백을 줘 겹침 없이 항상 접근 가능하게 한다. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="rounded-2xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
           <button type="button" disabled={pending || voiceBusy || memoStatus === "saving" || !online} onClick={() => { setFinishError(""); setShowEndConfirm(true); }} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 disabled:opacity-50 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
           {(voiceBusy || memoStatus === "saving" || !online) && <p className="mt-1 text-center text-[11px] font-bold text-amber-700">{voiceBusy ? "음성 메모 처리 후 종료할 수 있습니다." : memoStatus === "saving" ? "메모 저장 후 종료할 수 있습니다." : "온라인 연결 후 종료할 수 있습니다."}</p>}

@@ -62,22 +62,31 @@ async function isSessionRosterStudent(classId: string, sessionDateId: string | n
   return Boolean(rows[0]);
 }
 
-// 방학특강 좌석 컬럼(SpecialProgramEnrollmentDate.attendanceStatus)에 통합 출결을 미러링한다.
-// 왜: 통합 흐름은 Attendance 테이블에만 저장하는데, 방학특강 좌석 컬럼은 보강 신청·셔틀 결석제외·
-//     관리자 출결 화면이 참조하므로 함께 동기화돼야 정합성이 맞는다.
-// 매핑: session의 anchor sessionDate → (형제 반 포함) 같은 시각의 sibling sessionDate →
-//       APPROVED 신청항목 → app.convertedStudentId = studentId 로 좁혀,
-//       그 학생의 그날 좌석(SpecialProgramEnrollmentDate)만 정확히 갱신한다(형제 반/동명이인 오매칭 방지).
-// 상태값은 통합(PRESENT/LATE/ABSENT)과 방학특강 attendanceStatus 문자열이 동일해 직결한다.
-// ★ 이 함수는 try/catch로 격리 호출된다 — 미러 실패가 정규 Attendance 저장을 되돌리지 않게 한다.
-async function mirrorSeasonalSeatAttendance(input: {
-  sessionDateId: string;
-  studentId: string;
+type SessionRow = { id: string; classId: string; status: string; className: string; sessionDateId: string | null };
+
+// 방학특강 출결 저장 — 좌석(SpecialProgramEnrollmentDate)이 정본이다.
+// 입력 키 = enrollmentDateId(그 좌석). 미전환 신청자도 좌석이 있어 여기서 저장된다.
+// 절차:
+//  1) 좌석을 이 세션의 형제 반/court 스코프 안에서만 검증하며 UPDATE(다른 회차 좌석ID 위조 방지).
+//  2) 전환된 학생(e.studentId 있음)이면 정규 Attendance 도 병행 기록 + 학부모 알림(정규 소비처·알림 위해).
+//  3) 미전환이면 좌석만 저장(Attendance/알림 skip — 학부모 알림은 후속 과제).
+// 상태값(PRESENT/LATE/ABSENT)은 좌석 attendanceStatus 문자열과 동일해 직결한다.
+async function saveSeasonalSeatAttendance(input: {
+  session: SessionRow;
+  enrollmentDateId: string;
   status: AttendanceStatus;
   note: string | null;
   checkedByUserId: string | null;
 }) {
-  const updated = await prisma.$queryRawUnsafe<{ id: string }[]>(
+  // 알림 전송 여부 판정용 이전 좌석 상태(변경 없으면 알림 생략).
+  const prev = await prisma.$queryRawUnsafe<{ attendanceStatus: string | null }[]>(
+    `SELECT "attendanceStatus" FROM "SpecialProgramEnrollmentDate" WHERE id = $1 LIMIT 1`,
+    input.enrollmentDateId,
+  );
+  const changed = prev[0]?.attendanceStatus !== input.status;
+
+  // 좌석을 이 세션 스코프(형제 반 포함) 안에서만 갱신한다. 스코프 밖 좌석ID면 0행 → 명단 외 처리.
+  const updated = await prisma.$queryRawUnsafe<{ id: string; studentId: string | null }[]>(
     `UPDATE "SpecialProgramEnrollmentDate" e
         SET "attendanceStatus" = $3,
             "attendanceNote" = $4,
@@ -85,7 +94,8 @@ async function mirrorSeasonalSeatAttendance(input: {
             "attendanceCheckedAt" = now(),
             "attendanceCheckedByUserId" = $5,
             "updatedAt" = now()
-       FROM "SpecialProgramSessionDate" anchor_sd
+       FROM "Session" s
+       JOIN "SpecialProgramSessionDate" anchor_sd ON anchor_sd.id = s."specialProgramSessionDateId"
        JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
        JOIN "SpecialProgramSessionDate" sd
          ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
@@ -99,25 +109,70 @@ async function mirrorSeasonalSeatAttendance(input: {
             AND o."seasonId" = anchor_o."seasonId"
           )
         )
-       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id
-         AND i.status = 'APPROVED'
-         AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
-       JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
-         AND app."convertedStudentId" = $2
-      WHERE anchor_sd.id = $1
-        AND e."sessionDateId" = sd.id
+       JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id AND i.status = 'APPROVED'
+      WHERE s.id = $1
+        AND e.id = $2
         AND e."applicationItemId" = i.id
-        AND e.status <> 'CANCELLED'
-      RETURNING e.id`,
-    input.sessionDateId, input.studentId, input.status, input.note, input.checkedByUserId,
+        AND e."sessionDateId" = sd.id
+        AND e.status = 'SCHEDULED'
+      RETURNING e.id, e."studentId"`,
+    input.session.id, input.enrollmentDateId, input.status, input.note, input.checkedByUserId,
   );
-  // 좌석을 못 찾으면(요일 불일치·좌석 미생성 등) 정규 저장은 유지하고 경고만 남긴다.
   if (updated.length === 0) {
-    console.warn("[mirrorSeasonalSeatAttendance] 좌석을 찾지 못해 미러링을 건너뜀", {
-      sessionDateId: input.sessionDateId,
-      studentId: input.studentId,
-    });
+    return { ok: false as const, message: "이 수업의 확정 명단에 없는 좌석입니다." };
   }
+
+  const studentId = updated[0].studentId;
+  // 미전환(Student 없음) 좌석은 여기서 끝. 정규 Attendance/학부모 알림은 없다.
+  if (!studentId) {
+    return { ok: true as const, attendanceId: updated[0].id, changed };
+  }
+
+  // 전환된 학생: 정규 Attendance 에도 기록(정규 출결 소비처·통계용). 좌석 저장은 이미 성공했으므로
+  // Attendance/알림 실패가 좌석 저장을 되돌리지 않게 격리한다(좌석이 정본).
+  let attendanceId = updated[0].id;
+  try {
+    const saved = await prisma.$queryRawUnsafe<{ id: string }[]>(
+      `INSERT INTO "Attendance" (id, "sessionId", "studentId", status, note, "checkedAt", "arrivedAt", "checkedByUserId", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW(), CASE WHEN $3 = 'LATE' THEN NOW() ELSE NULL END, $5, NOW(), NOW())
+       ON CONFLICT ("sessionId", "studentId") DO UPDATE SET
+         status = EXCLUDED.status, note = EXCLUDED.note,
+         "checkedAt" = COALESCE("Attendance"."checkedAt", NOW()),
+         "arrivedAt" = CASE WHEN EXCLUDED.status = 'LATE' THEN COALESCE("Attendance"."arrivedAt", NOW()) ELSE NULL END,
+         "checkedByUserId" = EXCLUDED."checkedByUserId", "updatedAt" = NOW()
+       RETURNING id`,
+      input.session.id, studentId, input.status, input.note, input.checkedByUserId,
+    );
+    if (saved[0]) attendanceId = saved[0].id;
+
+    if (changed && (input.status === "PRESENT" || input.status === "LATE")) {
+      const [recipient] = await getSessionParentRecipients(input.session, [studentId]);
+      if (recipient) {
+        const delivery = await deliverParentNotification({
+          eventType: input.status === "LATE" ? "ATTENDANCE_LATE" : "ATTENDANCE_PRESENT",
+          dedupeKey: `attendance:${attendanceId}:status:${input.status}:user:${recipient.userId}`,
+          recipient,
+          title: `${input.session.className} 출석 안내`,
+          message: `${recipient.studentName} 학생이 ${input.status === "LATE" ? "지각 출석" : "출석"}했습니다.`,
+          linkUrl: "/parent/attendance",
+          sessionId: input.session.id,
+          attendanceId,
+        });
+        if (!delivery.duplicate && delivery.push?.status === "FAILED") {
+          return { ok: true as const, attendanceId, changed, notificationWarning: true as const };
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[saveSeasonalSeatAttendance] 정규 Attendance/알림 실패(좌석 저장은 유지)", {
+      sessionId: input.session.id,
+      enrollmentDateId: input.enrollmentDateId,
+      studentId,
+      error,
+    });
+    return { ok: true as const, attendanceId, changed, notificationWarning: true as const };
+  }
+  return { ok: true as const, attendanceId, changed };
 }
 
 async function getSessionParentRecipients(session: { classId: string; sessionDateId: string | null }, studentIds?: string[]) {
@@ -214,16 +269,31 @@ export async function saveSessionMemo(input: { sessionId: string; notes: string 
   return { ok: true as const };
 }
 
-export async function saveStaffAttendance(input: { sessionId: string; studentId: string; status: AttendanceStatus; note?: string }) {
+export async function saveStaffAttendance(input: { sessionId: string; attendanceKey: string; status: AttendanceStatus; note?: string }) {
   const { session, access } = await requireSessionAccess(input.sessionId);
   if (session.status !== "IN_PROGRESS") return { ok: false as const, message: "진행 중인 수업에서만 출결을 기록할 수 있습니다." };
   if (!["PRESENT", "LATE", "ABSENT"].includes(input.status)) return { ok: false as const, message: "올바른 출결 상태가 아닙니다." };
 
-  const enrolled = await isSessionRosterStudent(session.classId, session.sessionDateId, input.studentId);
+  // 방학특강(seasonal) 세션은 좌석(SpecialProgramEnrollmentDate)이 출결 정본이다.
+  //  - attendanceKey = enrollmentDateId(좌석). 미전환 신청자도 좌석이 있어 여기서 처리된다.
+  //  - 좌석을 먼저 저장하고, 전환된 학생(studentId 있음)만 정규 Attendance + 학부모 알림을 병행한다.
+  if (session.sessionDateId) {
+    return saveSeasonalSeatAttendance({
+      session,
+      enrollmentDateId: input.attendanceKey,
+      status: input.status,
+      note: input.note?.trim() || null,
+      checkedByUserId: access.staff.appUserId,
+    });
+  }
+
+  // 정규(비seasonal): attendanceKey = studentId. 기존 동작 그대로.
+  const studentId = input.attendanceKey;
+  const enrolled = await isSessionRosterStudent(session.classId, session.sessionDateId, studentId);
   if (!enrolled) return { ok: false as const, message: "이 수업의 확정 명단에 없는 학생입니다." };
 
   const previous = await prisma.$queryRawUnsafe<{ status: string }[]>(
-    `SELECT status FROM "Attendance" WHERE "sessionId" = $1 AND "studentId" = $2 LIMIT 1`, input.sessionId, input.studentId,
+    `SELECT status FROM "Attendance" WHERE "sessionId" = $1 AND "studentId" = $2 LIMIT 1`, input.sessionId, studentId,
   );
   const changed = previous[0]?.status !== input.status;
   const saved = await prisma.$queryRawUnsafe<{ id: string }[]>(
@@ -235,33 +305,12 @@ export async function saveStaffAttendance(input: { sessionId: string; studentId:
        "arrivedAt" = CASE WHEN EXCLUDED.status = 'LATE' THEN COALESCE("Attendance"."arrivedAt", NOW()) ELSE NULL END,
        "checkedByUserId" = EXCLUDED."checkedByUserId", "updatedAt" = NOW()
      RETURNING id`,
-    input.sessionId, input.studentId, input.status, input.note?.trim() || null, access.staff.appUserId,
+    input.sessionId, studentId, input.status, input.note?.trim() || null, access.staff.appUserId,
   );
-
-  // seasonal(방학특강) 세션이면 방학특강 좌석 컬럼에도 같은 출결을 미러링한다.
-  // try/catch로 격리 — 미러 실패가 위에서 이미 성공한 정규 Attendance 저장을 되돌리지 않게 한다.
-  if (session.sessionDateId) {
-    try {
-      await mirrorSeasonalSeatAttendance({
-        sessionDateId: session.sessionDateId,
-        studentId: input.studentId,
-        status: input.status,
-        note: input.note?.trim() || null,
-        checkedByUserId: access.staff.appUserId,
-      });
-    } catch (error) {
-      console.error("[saveStaffAttendance] 방학특강 좌석 미러링 실패(정규 저장은 유지)", {
-        sessionId: input.sessionId,
-        sessionDateId: session.sessionDateId,
-        studentId: input.studentId,
-        error,
-      });
-    }
-  }
 
   if (changed && (input.status === "PRESENT" || input.status === "LATE")) {
     try {
-      const [recipient] = await getSessionParentRecipients(session, [input.studentId]);
+      const [recipient] = await getSessionParentRecipients(session, [studentId]);
       if (recipient) {
         const delivery = await deliverParentNotification({
           eventType: input.status === "LATE" ? "ATTENDANCE_LATE" : "ATTENDANCE_PRESENT",
@@ -280,7 +329,7 @@ export async function saveStaffAttendance(input: { sessionId: string; studentId:
     } catch (error) {
       console.error("[saveStaffAttendance] Parent notification failed", {
         sessionId: input.sessionId,
-        studentId: input.studentId,
+        studentId,
         error,
       });
       return { ok: true as const, attendanceId: saved[0].id, changed, notificationWarning: true as const };
@@ -296,7 +345,9 @@ export async function completeClassSession(input: { sessionId: string }) {
 
   const missing = session.sessionDateId
       ? await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-        `SELECT COUNT(DISTINCT app."convertedStudentId")::bigint AS count
+        // 좌석 기준 미확인 카운트: 형제 반/court 합산, 승인항목의 이 회차 좌석(SCHEDULED) 중
+        // 아직 출결이 안 찍힌(attendanceStatus IS NULL) 좌석 수. 전환 여부와 무관하게 전원 확인해야 종료 가능.
+        `SELECT COUNT(*)::bigint AS count
          FROM "SpecialProgramSessionDate" anchor_sd
          JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
          JOIN "SpecialProgramSessionDate" sd
@@ -311,20 +362,11 @@ export async function completeClassSession(input: { sessionId: string }) {
               AND o."seasonId" = anchor_o."seasonId"
             )
           )
-         JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = sd."offeringId"
-           AND i.status = 'APPROVED'
-           AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
-         JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
-         WHERE anchor_sd.id = $1 AND app."convertedStudentId" IS NOT NULL
-           AND (
-             COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
-             OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
-               WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
-               WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
-             END = ANY(app."selectedWeekdays")
-           )
-           AND NOT EXISTS (SELECT 1 FROM "Attendance" a WHERE a."sessionId" = $2 AND a."studentId" = app."convertedStudentId")`,
-        session.sessionDateId, input.sessionId,
+         JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id AND i.status = 'APPROVED'
+         JOIN "SpecialProgramEnrollmentDate" e
+           ON e."applicationItemId" = i.id AND e."sessionDateId" = sd.id AND e.status = 'SCHEDULED'
+         WHERE anchor_sd.id = $1 AND e."attendanceStatus" IS NULL`,
+        session.sessionDateId,
       )
     : await prisma.$queryRawUnsafe<{ count: bigint }[]>(
         `SELECT COUNT(*)::bigint AS count FROM "Enrollment" e

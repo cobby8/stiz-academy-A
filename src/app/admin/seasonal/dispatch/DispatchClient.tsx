@@ -101,6 +101,30 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
   // 드래그 중인 정차 위치(차량 index + 정차 index). 같은 차량 안에서만 순서를 바꾼다.
   const [drag, setDrag] = useState<{ v: number; s: number } | null>(null);
 
+  // 무료탑승 거점으로 끌어 넣는 중인 학생(차량·정차·학생 index). 정차 순서 드래그(drag)와 별개다.
+  const [stuDrag, setStuDrag] = useState<{ v: number; s: number; i: number } | null>(null);
+  const [hubBusy, setHubBusy] = useState(false);
+
+  // 학생을 무료탑승 거점으로 옮긴다 — 그 학생의 승차위치 이름표에 '무료탑승 ·'을 붙여 확정 명단에 저장한다.
+  // 좌표는 지우지 않는다(되돌릴 때 안전). 저장 후 재계산하면 그 학생이 거점 정류장에 붙어 표시된다.
+  async function moveStudentToHub(vIdx: number, sIdx: number, stuIdx: number) {
+    const st = sug.vehicles[vIdx]?.stops[sIdx]?.students[stuIdx];
+    if (!st || hubBusy) return;
+    setHubBusy(true); setErr(null);
+    try {
+      const target = st.rosterId ? { rosterId: st.rosterId } : { requestId: st.requestId };
+      const newLabel = `무료탑승 · ${(st.pickupLabel || st.name).replace(/^무료탑승\s*·?\s*/, "")}`;
+      const r = await fetch("/api/admin/seasonal/shuttle-roster", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...target, patch: { pickupLocation: newLabel } }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "저장 실패");
+      await generate(); // 확정 명단이 바뀌었으니 노선을 다시 계산해 거점에 반영
+    } catch (e: any) { setErr(e?.message || "무료탑승으로 옮기지 못했습니다."); }
+    finally { setHubBusy(false); }
+  }
+
   // 출발 시각 직접 조정 — 첫 노드(등원=차고지 / 하원=학원) 출발을 바꾸면 그 차량 전체 시각이 같이 이동한다.
   function setDepartTime(vIdx: number, newDepart: string) {
     setSug((cur) => {
@@ -203,22 +227,47 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                 </li>
                 {v.stops.map((s, sIdx) => (
                   <li key={sIdx}
-                    onDragOver={(e) => { if (drag && drag.v === vIdx) e.preventDefault(); }}
-                    onDrop={(e) => { e.preventDefault(); if (drag && drag.v === vIdx && drag.s !== sIdx) reorderStop(vIdx, drag.s, sIdx); setDrag(null); }}
-                    className={`flex items-start gap-2.5 px-3 py-2.5 ${s.isHub ? "bg-green-50/70 dark:bg-green-900/15" : ""} ${drag && drag.v === vIdx && drag.s === sIdx ? "opacity-40" : ""}`}>
+                    onDragOver={(e) => {
+                      if (drag && drag.v === vIdx) e.preventDefault();       // 정차 순서 변경
+                      else if (stuDrag && s.isHub) e.preventDefault();       // 학생을 무료탑승 거점으로
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (drag && drag.v === vIdx && drag.s !== sIdx) reorderStop(vIdx, drag.s, sIdx);
+                      else if (stuDrag && s.isHub) moveStudentToHub(stuDrag.v, stuDrag.s, stuDrag.i);
+                      setDrag(null); setStuDrag(null);
+                    }}
+                    className={`flex items-start gap-2.5 px-3 py-2.5 ${s.isHub ? "bg-green-50/70 dark:bg-green-900/15" : ""} ${drag && drag.v === vIdx && drag.s === sIdx ? "opacity-40" : ""} ${stuDrag && s.isHub ? "ring-2 ring-inset ring-green-400" : ""}`}>
                     <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-black text-white ${s.isHub ? "bg-green-600" : "bg-brand-orange-500"}`}>{s.isHub ? "🆓" : sIdx + 1}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-bold text-gray-900 dark:text-white">
                         {s.label}
                         {s.isHub
-                          ? <span className="ml-1 rounded bg-green-600 px-1.5 text-[10px] font-black text-white">무료 탑승 거점</span>
+                          ? <>
+                              <span className="ml-1 rounded bg-green-600 px-1.5 text-[10px] font-black text-white">무료 탑승 거점</span>
+                              {s.students.length > 0 && <span className="ml-1 rounded bg-lime-200 px-1.5 text-[10px] font-black text-brand-navy-900">{s.students.length}명</span>}
+                            </>
                           : <span className="ml-1 rounded bg-lime-200 px-1.5 text-[10px] font-black text-brand-navy-900">{s.students.length}명</span>}
                         {s.approx && !s.isHub && <span className="ml-1 rounded bg-amber-100 px-1.5 text-[10px] font-black text-amber-700">추정</span>}
                       </div>
                       <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11.5px] text-gray-500">
-                        {s.isHub
-                          ? <span className="text-green-700 dark:text-green-300">여기서 무료로 탑승할 수 있습니다(워크인, 정원 별도)</span>
-                          : s.students.map((st, i) => { const t = tel(st.parentPhone); return <span key={i}>{st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} className="ml-0.5 font-bold text-green-600">📞</a>}</span>; })}
+                        {s.isHub ? (
+                          <>
+                            {s.students.map((st, i) => { const t = tel(st.parentPhone); return <span key={i} className="font-bold text-green-800 dark:text-green-200">{st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} draggable={false} className="ml-0.5 text-green-600">📞</a>}</span>; })}
+                            <span className="text-green-700 dark:text-green-300">{isPickup ? "학생을 여기로 끌어다 놓으면 무료탑승으로 지정됩니다 · 워크인 정원 별도" : "여기서 무료로 탑승할 수 있습니다(워크인, 정원 별도)"}</span>
+                          </>
+                        ) : (
+                          s.students.map((st, i) => {
+                            const t = tel(st.parentPhone);
+                            return <span key={i}
+                              draggable={isPickup}
+                              onDragStart={isPickup ? (e) => { setStuDrag({ v: vIdx, s: sIdx, i }); e.dataTransfer.effectAllowed = "move"; } : undefined}
+                              onDragEnd={() => setStuDrag(null)}
+                              title={isPickup ? "드래그해서 무료탑승 거점으로 이동" : undefined}
+                              className={isPickup ? "cursor-grab select-none rounded px-0.5 hover:bg-lime-100 dark:hover:bg-lime-900/30" : ""}>
+                              {st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} draggable={false} className="ml-0.5 font-bold text-green-600">📞</a>}</span>;
+                          })
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 print:hidden">

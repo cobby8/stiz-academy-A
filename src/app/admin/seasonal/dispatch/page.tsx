@@ -1,16 +1,17 @@
 import DispatchClient from "./DispatchClient";
 import SeasonalSectionTabs from "../SeasonalSectionTabs";
 import SeasonalHeader from "../SeasonalHeader";
-import { suggestDispatch } from "@/lib/seasonal/shuttle-optimize";
+import { getDispatchForView } from "@/lib/seasonal/shuttle-optimize";
 import { countPendingMakeups } from "@/lib/seasonal/attendance";
 
 export const dynamic = "force-dynamic";
 
 // 방학특강 셔틀 자동 배차(노선 자동 제안). 기본값은 등원/첫 수업시간대/9인승으로 초안을 미리 계산해 보여준다.
 export default async function SeasonalDispatchPage() {
+  // 저장본이 있으면 T맵 없이 그대로(제공량 절약). 없을 때만 T맵으로 초안 계산.
   const [pickup, dropoff, makeupPending] = await Promise.all([
-    suggestDispatch({ direction: "PICKUP" }),
-    suggestDispatch({ direction: "DROPOFF" }),
+    getDispatchForView(null, "PICKUP", true),
+    getDispatchForView(null, "DROPOFF", true),
     countPendingMakeups(),
   ]);
   const initialPickup = JSON.parse(JSON.stringify(pickup));

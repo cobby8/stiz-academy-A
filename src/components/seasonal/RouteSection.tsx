@@ -88,6 +88,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
   const departPinnedRef = useRef(departPinned); departPinnedRef.current = departPinned;
   const rerouteTimer = useRef<number | null>(null);
   const dirtyVehicles = useRef<Set<number>>(new Set());
+  const firstRun = useRef(true); // 첫 렌더는 서버가 준 initial을 쓰고 재조회하지 않는다(중복 T맵 방지).
 
   async function generate(forDate: string) {
     setLoading(true); setErr(null);
@@ -120,8 +121,9 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
     if (!applied) { setLoadedFromSaved(false); setSaveMsg(null); await generate(forDate); }
   }
 
-  // 날짜/기준위치 변경 시 이 방향을 다시 계산한다.
+  // 날짜/기준위치 변경 시 이 방향을 다시 계산한다. 첫 렌더는 서버 initial을 그대로 쓴다.
   useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
     void switchTo(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, refreshKey]);

@@ -28,7 +28,7 @@ export type DispatchDirection = "PICKUP" | "DROPOFF";
 type Pt = { lat: number; lng: number };
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
-async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; hub: Geo | null }> {
+export async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; hub: Geo | null }> {
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>(
       `SELECT "academyLatitude" AS alat, "academyLongitude" AS alng, "academyAddress" AS aaddr,

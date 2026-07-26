@@ -4,14 +4,14 @@
 | 파일 | 항목 수 | 최종 업데이트 |
 |------|--------|------------|
 | architecture.md | 6 | 2026-07-06 |
-| errors.md | 30 | 2026-07-26 |
+| errors.md | 6 | 2026-07-26 |
 | conventions.md | 10 | 2026-07-26 |
-| decisions.md | 16 | 2026-07-06 |
-| lessons.md | 2 | 2026-03-26 |
+| decisions.md | 18 | 2026-07-26 |
+| lessons.md | 4 | 2026-07-26 |
 
 ## 최근 추가된 지식 (최근 5건)
-1. [architecture] 리치 텍스트 에디터 구조: TipTap 설정페이지 1곳만, 공지는 textarea+plain, StarterKit 내장 확장 정리
-2. [decision] 공지 리치 에디터 강화: 공유 TipTap 강화 + plain/HTML 혼재 렌더 + 유튜브 iframe 화이트리스트
-3. [decision] 서버 HTML 새니타이저: isomorphic-dompurify → sanitize-html 교체(jsdom 제거)
-4. [decision] 체험/수강신청 구글폼 전환: AcademySettings DB 플래그 방식
-5. [architecture] 알림 시스템 아키텍처: 2계층(DB인앱+웹Push) + Coach-User 미연결 이슈
+1. [lesson] 같은 화면을 두 세션이 동시에 고치면 안전장치가 지워진다 (6회 재발) — 게이트웨이 + 가드 테스트 + 성질 검사
+2. [lesson] 읽기만 게이트웨이로 옮기고 쓰기를 남겨두면 "조용한 no-op"이 된다 — 읽기 경로 변경 시 쓰기 경로 전수 조사 필수
+3. [error] 확정본 도입 후 저장이 원본으로 새는 경로 — 확정본/원본 분기는 클라이언트가 보낸 값이 아니라 서버가 조회해서 판단
+4. [convention] 셔틀 대상자 조회는 getConfirmedShuttleRoster 게이트웨이 한 곳으로만 — 화면이 SQL 직접 작성 금지
+5. [decision] 셔틀 명단을 매번 재계산 → 원장 확정 스냅샷 구조로 전환(SeasonalShuttleRoster)

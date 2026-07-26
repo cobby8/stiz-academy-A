@@ -152,6 +152,23 @@ test("탑승자 조회는 선택한 날짜로 좁힌다", () => {
     assert.match(gateway, /String\(seat\.serviceDate\) !== selected/);
 });
 
+// 결석을 미리 표시하면 그날 배차에서만 빠져야 한다(등·하원 양방향, 같은 쿼리 한 곳).
+// status는 SCHEDULED 그대로라 시즌 명단·정원·보강에는 영향이 없다.
+test("결석·사유결석으로 표시된 학생은 그날 좌석 조회에서 제외한다", () => {
+    // 좌석 조회 WHERE 절만 잘라내 그 안에 결석 제외가 있는지 본다.
+    const seatQuery = gateway.slice(
+        gateway.indexOf('FROM "SpecialProgramEnrollmentDate" e'),
+        gateway.indexOf('ORDER BY "serviceDate" ASC'),
+    );
+    assert.ok(seatQuery.length > 0, "좌석 조회 쿼리를 찾지 못했다");
+    // 결석(ABSENT)·사유결석(EXCUSED)은 제외한다.
+    assert.match(seatQuery, /attendanceStatus" NOT IN \('ABSENT', 'EXCUSED'\)/);
+    // 미확인(NULL)은 태워야 하므로 IS NULL 통과 가드가 함께 있어야 한다(정상 학생이 통째로 사라지는 사고 방지).
+    assert.match(seatQuery, /attendanceStatus" IS NULL OR /);
+    // 지각(LATE)까지 빼면 오는 학생을 못 태운다 — LATE는 제외 목록에 없어야 한다.
+    assert.doesNotMatch(seatQuery, /'LATE'/);
+});
+
 // 확정 명단은 "시즌 회원"이고, 그날 태울 사람은 좌석으로 파생한다.
 // 그날 수업이 취소되면 그날 노선에서만 빠지고 시즌 명단에는 남아야 한다.
 test("날짜별 명단은 확정본 × 그날 좌석으로 파생한다", () => {

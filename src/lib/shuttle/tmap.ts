@@ -119,6 +119,53 @@ function tmapStartTime(): string {
   return `${g("year")}${g("month")}${g("day")}${g("hour")}${g("minute")}`;
 }
 
+type LatLng = { lat: number; lng: number };
+export type FixedRouteResult = { provider: "TMAP"; path: LatLng[]; totalTime: number; totalDistance: number };
+
+// 한 구간(출발+경유지≤5+도착)의 실도로 경로·시간을 /routes로 받는다.
+async function routesLeg(appKey: string, start: LatLng, end: LatLng, vias: LatLng[]): Promise<FixedRouteResult> {
+  const body: Record<string, unknown> = {
+    startX: String(start.lng), startY: String(start.lat), endX: String(end.lng), endY: String(end.lat),
+    reqCoordType: "WGS84GEO", resCoordType: "WGS84GEO", searchOption: "0", startName: "S", endName: "E",
+  };
+  if (vias.length) body.passList = vias.map((v) => `${v.lng},${v.lat}`).join("_");
+  const res = await fetch("https://apis.openapi.sk.com/tmap/routes?version=1&format=json", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json", appKey },
+    signal: AbortSignal.timeout(TMAP_REQUEST_TIMEOUT_MS),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new TmapApiError("T맵 경로 요청이 실패했습니다.");
+  const j = await res.json().catch(() => null);
+  const path = extractPath(j);
+  if (!path.length) throw new TmapApiError("T맵 경로 좌표를 확인하지 못했습니다.");
+  const props = ((j as { features?: { properties?: Record<string, unknown> }[] })?.features?.[0]?.properties) ?? {};
+  return { provider: "TMAP", path, totalTime: Number(props.totalTime) || 0, totalDistance: Number(props.totalDistance) || 0 };
+}
+
+// 사용자가 정한 순서 그대로(재정렬 없이) 실도로 경로·시간을 계산한다.
+// /routes passList는 최대 5개라, 경유지가 많으면 경계를 공유하며 구간을 쪼개 호출하고 이어붙인다.
+export async function routeFixedOrderWithTmap(input: { start: LatLng; end: LatLng; waypoints: LatLng[] }): Promise<FixedRouteResult> {
+  const appKey = process.env.TMAP_APP_KEY?.trim();
+  if (!appKey) throw new TmapApiError("TMAP_APP_KEY 환경변수가 설정되지 않았습니다.", 500);
+  const nodes: LatLng[] = [input.start, ...input.waypoints, input.end];
+  if (nodes.length < 2) throw new TmapApiError("좌표가 부족합니다.", 400);
+  const path: LatLng[] = [];
+  let totalTime = 0, totalDistance = 0;
+  let i = 0;
+  while (i < nodes.length - 1) {
+    const endIdx = Math.min(i + 6, nodes.length - 1); // 출발 + 경유지 최대 5 + 도착 = 7노드
+    const leg = await routesLeg(appKey, nodes[i], nodes[endIdx], nodes.slice(i + 1, endIdx));
+    for (const c of leg.path) {
+      const last = path[path.length - 1];
+      if (!last || last.lat !== c.lat || last.lng !== c.lng) path.push(c); // 경계 중복 제거
+    }
+    totalTime += leg.totalTime; totalDistance += leg.totalDistance;
+    i = endIdx;
+  }
+  return { provider: "TMAP", path, totalTime, totalDistance };
+}
+
 export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimizationInput): Promise<TmapRouteOptimizationResult> {
   const appKey = process.env.TMAP_APP_KEY?.trim();
   if (!appKey) throw new TmapApiError("TMAP_APP_KEY 환경변수가 설정되지 않았습니다.", 500);

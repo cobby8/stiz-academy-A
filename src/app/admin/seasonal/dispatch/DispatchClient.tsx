@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import { RouteMapCanvas } from "@/components/seasonal/DispatchRouteMap";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
@@ -111,8 +111,13 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
   const [departPinned, setDepartPinned] = useState<Record<number, boolean>>({});
   // 우측 지도 패널에서 보고 있는 차량 index.
   const [mapVehicle, setMapVehicle] = useState<number>(0);
-  // 순서를 손으로 바꾼 차량 — 지도에 T맵 실도로 선 대신 현재 순서 직선을 그린다.
-  const [reordered, setReordered] = useState<Record<number, boolean>>({});
+  // 순서 변경 후 T맵 실도로 경로를 다시 계산 중인지.
+  const [rerouting, setRerouting] = useState(false);
+  // 콜백에서 최신 값을 읽기 위한 ref(디바운스 재계산이 옛 상태를 쓰지 않도록).
+  const sugRef = useRef(sug); sugRef.current = sug;
+  const departPinnedRef = useRef(departPinned); departPinnedRef.current = departPinned;
+  const rerouteTimer = useRef<number | null>(null);
+  const dirtyVehicles = useRef<Set<number>>(new Set());
   // 저장(수정 노선 DB 저장) 상태
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -149,7 +154,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "실패");
       setSug(j);
-      setDepartPinned({}); setReordered({}); // 새로 제안하면 출발 고정·순서변경 표시 초기화
+      setDepartPinned({}); // 새로 제안하면 출발 고정 초기화
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
@@ -182,8 +187,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
     try {
       const r = await fetch("/api/admin/seasonal/dispatch/saved", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        // 순서를 바꾼 차량은 실도로 경로가 순서와 어긋나므로 저장 시 경로를 비운다(불러올 때 직선으로 표시).
-        body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles.map((v, i) => (reordered[i] ? { ...v, path: undefined } : v)), classStart: sug.classStart, classEnd: sug.classEnd }),
+        body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles, classStart: sug.classStart, classEnd: sug.classEnd }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "저장 실패");
@@ -206,13 +210,57 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
       if (from < 0 || from >= stops.length || to < 0 || to >= stops.length || from === to) return cur;
       const [moved] = stops.splice(from, 1);
       stops.splice(to, 0, moved);
-      setReordered((r) => ({ ...r, [vIdx]: true })); // 지도 선을 현재 순서 기준으로
-      // ★ 순서가 바뀌었으니 그 차량의 승·하차 시각을 다시 계산한다(예전엔 최초 시각이 그대로 남았다).
+      // ★ 순서가 바뀌었으니 그 차량의 승·하차 시각을 다시 계산한다.
       // 사람이 출발 시각을 맞춰 둔 차량이면 그 출발을 고정해 유지한다(초기화 방지).
+      // 실도로 경로(path)는 T맵 재계산 전까지 비워 직선(점선)으로 즉시 표시한다.
       const pinnedDepart = departPinned[vIdx] ? vehicles[vIdx].departTime : null;
-      vehicles[vIdx] = recomputeRunTimes(cur, vehicles[vIdx], pinnedDepart);
+      vehicles[vIdx] = { ...recomputeRunTimes(cur, vehicles[vIdx], pinnedDepart), path: undefined };
       return { ...cur, vehicles };
     });
+    scheduleReroute(vIdx); // 바뀐 순서 그대로 실도로 경로·시간을 다시 계산(디바운스)
+  }
+
+  // 순서 변경 후 그 차량의 실도로 경로·시간을 T맵으로 다시 계산한다. 빠른 연속 변경은 0.5초 디바운스로 1회.
+  function scheduleReroute(vIdx: number) {
+    dirtyVehicles.current.add(vIdx);
+    if (rerouteTimer.current) window.clearTimeout(rerouteTimer.current);
+    rerouteTimer.current = window.setTimeout(() => { void runReroute(); }, 500);
+  }
+  async function runReroute() {
+    const ids = [...dirtyVehicles.current];
+    dirtyVehicles.current.clear();
+    if (ids.length === 0) return;
+    setRerouting(true);
+    try { for (const vIdx of ids) await rerouteVehicle(vIdx); }
+    finally { setRerouting(false); }
+  }
+  async function rerouteVehicle(vIdx: number) {
+    const cur = sugRef.current;
+    const v = cur.vehicles[vIdx];
+    if (!v || v.stops.length === 0) return;
+    const isPickupNow = cur.direction === "PICKUP";
+    const startPt = isPickupNow ? (cur.depot ?? cur.academy) : cur.academy;
+    const endPt = isPickupNow ? cur.academy : (cur.depot ?? cur.academy);
+    try {
+      const r = await fetch("/api/admin/seasonal/dispatch/reroute", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          start: { lat: startPt.lat, lng: startPt.lng },
+          end: { lat: endPt.lat, lng: endPt.lng },
+          waypoints: v.stops.map((s) => ({ lat: s.lat, lng: s.lng })),
+        }),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.path) return; // T맵 실패 → 직선 추정 유지
+      setSug((prev) => {
+        if (!prev.vehicles[vIdx]) return prev;
+        const vehicles = prev.vehicles.map((vv, i) => (i !== vIdx ? vv
+          : { ...vv, path: j.path as { lat: number; lng: number }[], tmapMinutes: j.totalMinutes ?? vv.tmapMinutes, tmapKm: j.totalKm ?? vv.tmapKm, provider: "TMAP" as const }));
+        // 실제 소요시간 기준으로 시각을 다시 배분.
+        vehicles[vIdx] = recomputeRunTimes(prev, vehicles[vIdx], departPinnedRef.current[vIdx] ? vehicles[vIdx].departTime : null);
+        return { ...prev, vehicles };
+      });
+    } catch { /* 유지 */ }
   }
 
   // 드래그 중인 정차 위치(차량 index + 정차 index). 같은 차량 안에서만 순서를 바꾼다.
@@ -428,7 +476,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
             <aside className="mt-3 lg:mt-0 lg:sticky lg:top-4 print:hidden">
               <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between gap-2 bg-brand-navy-900 px-3 py-2 text-white">
-                  <span className="text-xs font-black">🗺 노선 지도 · 실시간</span>
+                  <span className="text-xs font-black">🗺 노선 지도 · 실시간{rerouting ? " · 🔄 재계산…" : ""}</span>
                   {sug.vehicles.length > 1 && (
                     <select value={activeMapIdx} onChange={(e) => setMapVehicle(Number(e.target.value))} className="rounded bg-white/15 px-2 py-1 text-[11px] font-bold text-white">
                       {sug.vehicles.map((v, i) => <option key={i} value={i} className="text-black">{v.vehicleName}{v.tripLabel ? ` ${v.tripLabel}` : ""}</option>)}
@@ -439,7 +487,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                   start={{ lat: mapStartPt.lat, lng: mapStartPt.lng, label: isPickup ? "차고지" : "학원" }}
                   end={{ lat: mapEndPt.lat, lng: mapEndPt.lng, label: isPickup ? "학원" : "차고지" }}
                   stops={sug.vehicles[activeMapIdx].stops.map((s, i) => ({ lat: s.lat, lng: s.lng, label: s.label, badge: s.isHub ? "무료" : String(i + 1), kind: s.isHub ? "hub" : "stop" }))}
-                  path={reordered[activeMapIdx] ? undefined : sug.vehicles[activeMapIdx].path}
+                  path={sug.vehicles[activeMapIdx].path}
                   heightClass="h-[52vh] lg:h-[62vh]"
                 />
               </div>

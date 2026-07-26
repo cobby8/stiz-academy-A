@@ -3,6 +3,7 @@
 // 각 행 = 하루 타임라인의 정차 하나. '2호점'(학원) 경유 행은 반 교대 지점.
 
 export type RegularShuttleStop = {
+  id?: string;              // DB 행 id(조회 시 채워짐). 순서·시각 저장에 쓴다.
   weekday: number;          // 0=일 … 6=토 (월=1)
   weekdayLabel: string;     // '월'…'금'
   classTime: string | null; // '17:00~18:00' 등(2호점 경유 행은 없을 수 있음)

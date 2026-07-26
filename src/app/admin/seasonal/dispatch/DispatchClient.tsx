@@ -196,6 +196,23 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
     finally { setSaving(false); }
   }
 
+  // 기사님 전용 링크를 만들어(있으면 그대로) 클립보드에 복사한다.
+  async function copyRunLink() {
+    if (!sug.date) return;
+    setErr(null);
+    try {
+      const r = await fetch("/api/admin/seasonal/dispatch/run-link", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: sug.date, direction: sug.direction }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "링크 생성 실패");
+      const url = `${window.location.origin}${j.path}`;
+      try { await navigator.clipboard.writeText(url); setSaveMsg("기사님 링크를 복사했습니다"); }
+      catch { setSaveMsg(`기사님 링크: ${url}`); }
+    } catch (e: any) { setErr(e?.message || "링크를 만들지 못했습니다."); }
+  }
+
   // 첫 진입 시 저장된 노선이 있으면 자동 제안 대신 그걸 보여준다.
   useEffect(() => {
     if (initial.date) loadAndApplySaved(initial.date, initial.direction);
@@ -356,6 +373,7 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
           </label>
           <button onClick={() => { setLoadedFromSaved(false); setSaveMsg(null); generate(); }} disabled={loading} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{loading ? "계산 중…" : "⚡ 자동 제안"}</button>
           <button onClick={saveRoute} disabled={saving || sug.vehicles.length === 0} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{saving ? "저장 중…" : "💾 이 노선 저장"}</button>
+          <button onClick={copyRunLink} disabled={sug.vehicles.length === 0} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">🔗 기사님 링크</button>
           <button onClick={() => window.print()} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 dark:border-gray-600 dark:text-gray-200">🖨 인쇄</button>
         </div>
 

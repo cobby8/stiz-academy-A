@@ -152,6 +152,12 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
 
 export async function suggestDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
   await requireAdmin();
+  return computeDispatch(opts);
+}
+
+// 인증 없이 노선을 계산한다. 관리자 경로는 suggestDispatch(requireAdmin)로만 부르고,
+// 기사님 전용 링크는 유효 토큰을 확인한 뒤 이 함수를 직접 부른다(토큰이 관리자 인증을 대신함).
+export async function computeDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
   const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
   const { academy, depot, hub } = await getSettings();
 

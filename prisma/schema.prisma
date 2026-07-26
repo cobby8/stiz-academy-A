@@ -2176,3 +2176,29 @@ model SeasonalDispatchRoute {
 
   @@unique([serviceDate, direction])
 }
+
+// 기사님 전용 링크 — 토큰 → (날짜×방향). 상세: prisma/migrations/20260727000000_add_shuttle_run_link_and_boarding
+model ShuttleRunLink {
+  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  token           String   @unique
+  serviceDate     String
+  direction       String
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  @@unique([serviceDate, direction])
+}
+
+// 셔틀 탑승/미탑승 기록 — (날짜×방향×셔틀신청) 1행.
+model ShuttleBoarding {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  serviceDate      String
+  direction        String
+  shuttleRequestId String
+  studentName      String?
+  status           String // 'BOARDED' | 'NOSHOW'
+  checkedVia       String?
+  checkedAt        DateTime @default(now())
+
+  @@unique([serviceDate, direction, shuttleRequestId])
+}

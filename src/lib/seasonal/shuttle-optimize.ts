@@ -200,8 +200,8 @@ export async function computeDispatch(opts: { direction: DispatchDirection; date
       name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone,
       rosterId: r.rosterId, requestId: r.shuttleRequestId, pickupLabel: r.placeLabel,
     };
-    // 등원에서 '무료탑승'으로 지정된 학생은 집이 아니라 거점에서 탄다(좌표가 없어도 배차 가능).
-    if (direction === "PICKUP" && hubStop && isFreeHubLabel(r.placeLabel)) { hubStop.students.push(student); continue; }
+    // '무료탑승'으로 지정된 학생은 집이 아니라 거점에서 타고(등원)/내린다(하원). 좌표가 없어도 배차 가능.
+    if (hubStop && isFreeHubLabel(r.placeLabel)) { hubStop.students.push(student); continue; }
     const { latitude: lat, longitude: lng } = r.place;
     const label = r.placeLabel;
     if (lat == null || lng == null) { unassigned.push({ name: r.studentName, label }); continue; }

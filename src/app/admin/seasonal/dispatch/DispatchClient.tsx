@@ -454,17 +454,17 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                         {s.isHub ? (
                           <>
                             {s.students.map((st, i) => { const t = tel(st.parentPhone); return <span key={i} className="font-bold text-green-800 dark:text-green-200">{st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} draggable={false} className="ml-0.5 text-green-600">📞</a>}</span>; })}
-                            <span className="text-green-700 dark:text-green-300">{isPickup ? "학생을 여기로 끌어다 놓으면 무료탑승으로 지정됩니다 · 워크인 정원 별도" : "여기서 무료로 탑승할 수 있습니다(워크인, 정원 별도)"}</span>
+                            <span className="text-green-700 dark:text-green-300">학생을 여기로 끌어다 놓으면 무료 거점 {isPickup ? "탑승" : "하차"}으로 지정됩니다 · 워크인 정원 별도</span>
                           </>
                         ) : (
                           s.students.map((st, i) => {
                             const t = tel(st.parentPhone);
                             return <span key={i}
-                              draggable={isPickup}
-                              onDragStart={isPickup ? (e) => { setStuDrag({ v: vIdx, s: sIdx, i }); e.dataTransfer.effectAllowed = "move"; } : undefined}
+                              draggable
+                              onDragStart={(e) => { setStuDrag({ v: vIdx, s: sIdx, i }); e.dataTransfer.effectAllowed = "move"; }}
                               onDragEnd={() => setStuDrag(null)}
-                              title={isPickup ? "드래그해서 무료탑승 거점으로 이동" : undefined}
-                              className={isPickup ? "cursor-grab select-none rounded px-0.5 hover:bg-lime-100 dark:hover:bg-lime-900/30" : ""}>
+                              title="드래그해서 무료 거점으로 이동"
+                              className="cursor-grab select-none rounded px-0.5 hover:bg-lime-100 dark:hover:bg-lime-900/30">
                               {st.name}{st.grade ? `·${st.grade}` : ""}{t && <a href={t} draggable={false} className="ml-0.5 font-bold text-green-600">📞</a>}</span>;
                           })
                         )}

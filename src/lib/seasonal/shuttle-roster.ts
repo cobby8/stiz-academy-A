@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
+import { isRidingShuttleStatus, seasonalShuttleEligibilitySql } from "./shuttleEligibility";
 
 // 방학특강 셔틀 통합 명단(학생 단위) — 기사님과 공유하던 시트를 앱으로 옮긴 편집형 뷰의 서버 로직.
 // 한 학생(신청서)당 셔틀 신청 1건을 한 줄로 본다. 모든 쿼리는 PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe.
 
 export type ShuttleRosterRow = {
   requestId: string;
-  ride: boolean; // 탑승 여부 (status !== 'CANCELLED')
+  ride: boolean; // 탑승 여부 (셔틀 신청 상태가 CANCELLED/REJECTED가 아님)
   childName: string; childGrade: string | null; childGender: string | null;
   childPhone: string | null; parentName: string | null; parentPhone: string | null;
   offeringTitle: string | null; classStart: string | null; classEnd: string | null;
@@ -29,8 +30,23 @@ function num(v: unknown): number | null { return v == null ? null : Number(v); }
 function pinned(src: unknown): boolean { return src === "MAP_PIN" || src === "CURRENT_LOCATION"; }
 function approx(src: unknown, lat: unknown): boolean { return lat != null && src === "SEARCH"; }
 
-export async function getSeasonalShuttleRoster(): Promise<ShuttleRosterRow[]> {
+/**
+ * 셔틀 통합 명단 조회.
+ *
+ * 시즌 범위:
+ * - `seasonId`를 주면 그 시즌만 본다.
+ * - 안 주면 "보관(ARCHIVED)되지 않은 시즌"만 본다. (countPendingMakeups와 같은 기준)
+ *   '가장 최근 시즌 1개'로 좁히지 않는 이유: 다음 방학 시즌을 미리 만들어 두는 순간
+ *   운영 중인 이번 시즌 명단이 기사님 화면에서 통째로 사라진다. 그게 더 큰 사고다.
+ */
+export async function getSeasonalShuttleRoster(seasonId?: string | null): Promise<ShuttleRosterRow[]> {
   await requireAdmin();
+  const params: unknown[] = [];
+  let seasonWhere = `s.status <> 'ARCHIVED'`;
+  if (seasonId) {
+    params.push(seasonId);
+    seasonWhere = `a."seasonId" = $1`;
+  }
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT r.id AS "requestId", r.status,
             r."pickupLocation", r."pickupTime", r."pickupLatitude" AS "pLat", r."pickupLongitude" AS "pLng", r."pickupLocationSource" AS "pSrc",
@@ -42,14 +58,22 @@ export async function getSeasonalShuttleRoster(): Promise<ShuttleRosterRow[]> {
             (SELECT to_char(min(sd."endsAt")   AT TIME ZONE 'Asia/Seoul','HH24:MI') FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = o.id) AS "classEnd"
        FROM "SpecialProgramShuttleRequest" r
        JOIN "SpecialProgramApplication" a ON a.id = r."applicationId"
+       JOIN "SpecialProgramSeason" s ON s.id = a."seasonId"
        LEFT JOIN "SpecialProgramApplicationItem" it ON it.id = r."applicationItemId"
        LEFT JOIN "SpecialProgramOffering" o ON o.id = it."offeringId"
-      -- 미탑승(CANCELLED)도 명단에 남겨 시트처럼 탑승/미탑승을 한눈에 보고 토글할 수 있게 한다.
-      ORDER BY (r.status <> 'CANCELLED') DESC, "classStart" NULLS LAST, a."childName" ASC`,
+      -- 신청 취소·거절, 개설 취소된 반의 학생은 명단에서 완전히 뺀다(기사님이 태우면 안 되는 사람).
+      -- 반면 셔틀 상태(r.status)는 여기서 거르지 않는다. '미탑승'으로 눌러둔 학생도 행은 남겨야
+      -- 나중에 "역시 태워주세요" 연락이 왔을 때 화면에서 다시 탑승으로 되돌릴 수 있다.
+      WHERE ${seasonWhere}
+        AND ${seasonalShuttleEligibilitySql({ application: "a", item: "it", offering: "o" })}
+      ORDER BY (r.status NOT IN ('CANCELLED','REJECTED')) DESC, "classStart" NULLS LAST, a."childName" ASC`,
+    ...params,
   );
   return rows.map((r) => ({
     requestId: r.requestId,
-    ride: r.status !== "CANCELLED",
+    // REJECTED(거절)도 미탑승이다. `!== 'CANCELLED'`로만 보면 거절 건이 탑승으로 새어
+    // 자동 배차(shuttle-optimize.ts)에까지 실린다.
+    ride: isRidingShuttleStatus(r.status),
     childName: r.childName, childGrade: r.childGrade ?? null, childGender: r.childGender ?? null,
     childPhone: r.childPhone ?? null, parentName: r.parentName ?? null, parentPhone: r.parentPhone ?? null,
     offeringTitle: r.offeringTitle ?? null, classStart: r.classStart ?? null, classEnd: r.classEnd ?? null,

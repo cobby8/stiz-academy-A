@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NOT_MERGED_STUDENT } from "@/lib/studentVisibility";
+import { CLOSED_SHUTTLE_STATUSES } from "@/lib/seasonal/shuttleEligibility";
 
 export type ParentShuttleOverviewItem = {
   id: string;
@@ -102,14 +103,15 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
     }),
     prisma.specialProgramShuttleRequest.findMany({
       where: {
-        status: { notIn: ["CANCELLED", "REJECTED"] },
+        // 기준값은 공용 모듈(shuttleEligibility)에서만 정의한다. 화면마다 다른 목록을 쓰던 것이 사고 원인이었다.
+        status: { notIn: CLOSED_SHUTTLE_STATUSES },
         application: {
           convertedStudentId: { in: studentIds },
-          status: { notIn: ["CANCELLED", "REJECTED"] },
+          status: { notIn: CLOSED_SHUTTLE_STATUSES },
         },
         applicationItem: {
           conversionStatus: "COMPLETED",
-          status: { notIn: ["CANCELLED", "REJECTED"] },
+          status: { notIn: CLOSED_SHUTTLE_STATUSES },
         },
       },
       select: {

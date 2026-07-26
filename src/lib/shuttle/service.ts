@@ -1,6 +1,8 @@
 import { Prisma, ShuttleRouteDirection, ShuttleRoutePlanStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
+// 셔틀 대상자 판정 기준은 명단·노선·자동배차가 반드시 같아야 한다. 공용 모듈 한 곳에서만 정의한다.
+import { CANCELLED_OFFERING_STATUS, CLOSED_SHUTTLE_STATUSES } from "@/lib/seasonal/shuttleEligibility";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { resolveAcademyShuttleLocation, type AcademyShuttleLocation } from "./academyLocation";
 import { chooseActiveShuttleAssignment } from "./assignment";
@@ -34,10 +36,6 @@ type ShuttleLocationKind = "pickup" | "dropoff";
 type StudentShuttleLocationKind = "PICKUP" | "DROPOFF";
 
 const SHUTTLE_RIDE_STATUSES = new Set<ShuttleRideStatus>(["PENDING", "BOARDED", "DROPPED_OFF", "NO_SHOW"]);
-// 셔틀 배정 후보에서 빼야 하는 "종료된" 상태값.
-// 허용 목록(예: 'REQUESTED'만)으로 좁히면 다른 방향 노선에 배정돼 status가 'ASSIGNED'로 바뀐
-// 학생까지 사라지므로, 반드시 제외 방식으로 거른다. (학부모 조회 parent.ts와 동일 기준)
-const CLOSED_SHUTTLE_STATUSES = ["CANCELLED", "REJECTED"];
 const ACADEMY_LATITUDE_ENV = "SHUTTLE_ACADEMY_LATITUDE";
 const ACADEMY_LONGITUDE_ENV = "SHUTTLE_ACADEMY_LONGITUDE";
 const ACADEMY_NAME_ENV = "SHUTTLE_ACADEMY_NAME";
@@ -387,7 +385,12 @@ export async function getShuttleDashboard(
             status: { notIn: CLOSED_SHUTTLE_STATUSES },
             // 신청서 자체가 취소되거나 해당 수강 항목이 취소된 경우도 후보에서 뺀다.
             application: { seasonId: selectedSeasonId, status: { notIn: CLOSED_SHUTTLE_STATUSES } },
-            applicationItem: { status: { notIn: CLOSED_SHUTTLE_STATUSES } },
+            // 개설 자체가 취소된 반(수업이 사라진 반)의 학생도 후보에서 뺀다.
+            // 지금까지는 그런 학생이 마침 신청서까지 CANCELLED라 우연히 걸러졌을 뿐이었다.
+            applicationItem: {
+              status: { notIn: CLOSED_SHUTTLE_STATUSES },
+              offering: { status: { not: CANCELLED_OFFERING_STATUS } },
+            },
             routePassengers: {
               none: {
                 routePlan: {

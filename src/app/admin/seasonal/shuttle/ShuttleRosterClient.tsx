@@ -41,8 +41,12 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
   const [q, setQ] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 미탑승 학생은 기본으로 숨긴다. 완전히 없애지 않는 이유는, "역시 태워주세요" 연락이 왔을 때
+  // 이 화면에서 다시 탑승으로 되돌려야 하기 때문이다. 그래서 숨김 + 토글로 처리한다.
+  const [showNonRiders, setShowNonRiders] = useState(false);
 
-  const filtered = useMemo(() => {
+  // 1단계: 검색어로 거른다.
+  const searched = useMemo(() => {
     const k = q.trim().toLowerCase();
     if (!k) return rows;
     return rows.filter((r) =>
@@ -51,7 +55,16 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
     );
   }, [rows, q]);
 
+  // 2단계: 토글이 꺼져 있으면 미탑승 학생을 화면에서 뺀다.
+  const visible = useMemo(
+    () => (showNonRiders ? searched : searched.filter((r) => r.ride)),
+    [searched, showNonRiders],
+  );
+
   const rideCount = rows.filter((r) => r.ride).length;
+  const nonRiderCount = rows.length - rideCount;
+  // 기사님에게 넘길 대상 = 지금 검색 조건에 걸린 학생 중 '탑승'인 사람만.
+  const exportRows = useMemo(() => searched.filter((r) => r.ride), [searched]);
 
   function apply(requestId: string, partial: Partial<ShuttleRosterRow>) {
     setRows((cur) => cur.map((r) => (r.requestId === requestId ? { ...r, ...partial } : r)));
@@ -68,12 +81,14 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
     }
   }
 
+  // 기사님용 CSV. 취소자·미탑승자가 절대 들어가면 안 되므로 exportRows(= 탑승자만)를 쓴다.
+  // 예전에는 rows(전체)를 그대로 내보내 미탑승자까지 기사님 명단에 실렸다.
   function exportCsv() {
-    const head = ["탑승여부", "학생", "학년", "수업", "요일", "수업시간", "등원위치", "등원시간", "하원위치", "학부모전화", "학생전화"];
+    const head = ["학생", "학년", "수업", "요일", "수업시간", "등원위치", "등원시간", "하원위치", "학부모전화", "학생전화"];
     const lines = [head.join(",")];
-    for (const r of rows) {
+    for (const r of exportRows) {
       const cells = [
-        r.ride ? "탑승" : "미탑승", r.childName, r.childGrade ?? "", r.offeringTitle ?? "", r.weekdayLabel ?? "",
+        r.childName, r.childGrade ?? "", r.offeringTitle ?? "", r.weekdayLabel ?? "",
         r.classStart && r.classEnd ? `${r.classStart}~${r.classEnd}` : (r.classStart ?? ""),
         r.pickupLocation ?? "", r.pickupTime ?? "",
         r.dropoffSameAsPickup ? "등원과 동일" : (r.dropoffLocation ?? ""),
@@ -84,7 +99,8 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "방학특강_셔틀명단.csv"; a.click();
+    // 파일명에 '탑승자'를 박아 둔다. 기사님이 파일만 보고도 전체 명단이 아님을 알 수 있어야 한다.
+    a.href = url; a.download = `방학특강_셔틀_탑승자명단_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -96,7 +112,7 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
         <div className="flex items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-black text-gray-900 dark:text-white">셔틀 통합 명단 <span className="text-xs font-bold text-gray-400">· 셀을 눌러 바로 수정</span></h3>
-            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">한 줄에 학생의 수업·등원·하원·연락을 모아 관리합니다. 변경은 자동 저장됩니다. (탑승 {rideCount}명)</p>
+            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">한 줄에 학생의 수업·등원·하원·연락을 모아 관리합니다. 변경은 자동 저장됩니다. (탑승 {rideCount}명{nonRiderCount > 0 ? ` · 미탑승 ${nonRiderCount}명` : ""})</p>
           </div>
         </div>
 
@@ -105,9 +121,20 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
             <span aria-hidden>🔍</span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="학생·학부모·아파트 검색" className="w-full bg-transparent text-sm font-semibold outline-none dark:text-white" />
           </div>
+          {/* 미탑승 학생 보기 토글 — 기본은 꺼짐(숨김). 켜면 회색 처리된 행으로 다시 나타난다. */}
+          <label className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-3 py-2 text-[13px] font-bold whitespace-nowrap ${nonRiderCount === 0 ? "border-gray-200 text-gray-300 dark:border-gray-700 dark:text-gray-600" : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-900"}`}>
+            <input
+              type="checkbox"
+              checked={showNonRiders}
+              disabled={nonRiderCount === 0}
+              onChange={(e) => setShowNonRiders(e.target.checked)}
+              className="h-4 w-4 accent-[var(--brand-accent)]"
+            />
+            미탑승 {nonRiderCount}명 보기
+          </label>
           {savedAt && !error && <span className="rounded-full bg-green-50 px-2.5 py-1 text-[11.5px] font-black text-green-700 dark:bg-green-900/30 dark:text-green-300">✓ 저장됨</span>}
           {error && <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11.5px] font-black text-red-600">⚠ {error}</span>}
-          <button onClick={exportCsv} className="rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-bold text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200">⬇ 기사님용 내보내기</button>
+          <button onClick={exportCsv} disabled={exportRows.length === 0} className="rounded-xl border border-gray-200 px-3 py-2 text-[13px] font-bold text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300 dark:border-gray-600 dark:text-gray-200 dark:disabled:text-gray-600">⬇ 기사님용 내보내기 (탑승 {exportRows.length}명)</button>
         </div>
 
         <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
@@ -119,10 +146,17 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => (
-                <tr key={r.requestId} className="border-t border-gray-100 align-middle hover:bg-gray-50/50 dark:border-gray-700 dark:hover:bg-gray-900/40">
+              {visible.map((r) => (
+                // 미탑승 행은 회색 배경 + 흐리게 처리해 정상 탑승자와 확실히 구분한다(오탑승 방지).
+                <tr
+                  key={r.requestId}
+                  className={`border-t border-gray-100 align-middle dark:border-gray-700 ${r.ride ? "hover:bg-gray-50/50 dark:hover:bg-gray-900/40" : "bg-gray-100/70 opacity-60 dark:bg-gray-900/60"}`}
+                >
                   <td className="p-2">
-                    <div className="font-bold text-gray-900 dark:text-white">{r.childName}</div>
+                    <div className="font-bold text-gray-900 dark:text-white">
+                      {r.childName}
+                      {!r.ride && <span className="ml-1.5 rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-black text-gray-600 dark:bg-gray-700 dark:text-gray-300">미탑승</span>}
+                    </div>
                     <div className="text-[11px] text-gray-400">{[r.childGrade, r.childGender].filter(Boolean).join(" · ")}</div>
                   </td>
                   <td className="p-2 text-[12.5px] font-semibold text-gray-700 dark:text-gray-200">
@@ -178,13 +212,18 @@ export default function ShuttleRosterClient({ initialRoster }: { initialRoster: 
                   <td className="p-2"><CallButtons row={r} /></td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-400">표시할 셔틀 명단이 없습니다.</td></tr>
+              {visible.length === 0 && (
+                <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-400">
+                  {!showNonRiders && searched.length > 0
+                    ? "탑승 학생이 없습니다. '미탑승 보기'를 켜면 미탑승 학생을 확인할 수 있습니다."
+                    : "표시할 셔틀 명단이 없습니다."}
+                </td></tr>
               )}
             </tbody>
           </table>
         </div>
         <p className="mt-2 text-[11px] text-gray-400">● 초록=정밀 핀 · ● 노랑=자동추정(재확인 권장) · 📞 버튼은 실제 전화로 연결됩니다.</p>
+        <p className="mt-1 text-[11px] text-gray-400">신청을 취소했거나 개설이 취소된 반의 학생은 이 명단에 나오지 않습니다. 내보내기 파일에는 탑승 학생만 담깁니다.</p>
       </div>
     </div>
   );

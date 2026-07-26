@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RouteMapCanvas } from "@/components/seasonal/DispatchRouteMap";
-import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
+import type { DispatchSuggestion, DispatchChange } from "@/lib/seasonal/shuttle-optimize";
 import { confirmedEtaMin, etaMinToLabel, reapplyManualEtaVehicles } from "@/lib/seasonal/shuttleStopEta";
 
 // 한 방향(등원 또는 하원)의 노선 섹션 — 목록 + 지도 + 순서변경/재계산/무료탑승 드래그/출발조정/저장을 자립적으로 담는다.
@@ -76,6 +76,40 @@ function recomputeRunTimes(cur: DispatchSuggestion, run: Run, pinnedDepart?: str
   };
 }
 
+// 위치변경 자동 반영(순수) — 좌표가 바뀐 학생이 앉은 정차의 좌표만 새 좌표로 갱신한다.
+// 차량 배정·정차 순서는 절대 바꾸지 않는다. 공유 정차(여러 명)면 그 학생만 인접 정차로 분리한다.
+// 반환 reroute = 좌표가 바뀌어 T맵 경로 재계산이 필요한 차량 인덱스.
+function relocateInPlace(
+  vehiclesInput: DispatchSuggestion["vehicles"],
+  changes: DispatchChange[],
+): { vehicles: DispatchSuggestion["vehicles"]; reroute: number[] } {
+  const vs = vehiclesInput.map((v) => ({ ...v, stops: v.stops.map((s) => ({ ...s, students: [...s.students] })) }));
+  const reroute = new Set<number>();
+  for (const c of changes) {
+    if (c.isHub || c.lat == null || c.lng == null) continue; // 무료탑승·무좌표는 자동 반영 대상 아님
+    let done = false;
+    for (let vi = 0; vi < vs.length && !done; vi++) {
+      const stops = vs[vi].stops;
+      for (let si = 0; si < stops.length; si++) {
+        const idx = stops[si].students.findIndex((st) => String(st.requestId) === c.requestId);
+        if (idx < 0) continue;
+        const stop = stops[si];
+        if (stop.students.length === 1) {
+          stops[si] = { ...stop, lat: c.lat, lng: c.lng, label: c.label || stop.label, approx: false };
+        } else {
+          const [moved] = stop.students.splice(idx, 1);
+          stops.splice(si + 1, 0, { ...stop, lat: c.lat, lng: c.lng, label: c.label || stop.label, approx: false, isHub: false, students: [moved] });
+        }
+        vs[vi] = { ...vs[vi], path: undefined };
+        reroute.add(vi);
+        done = true;
+        break;
+      }
+    }
+  }
+  return { vehicles: vs, reroute: [...reroute] };
+}
+
 export default function RouteSection({ initial, date, refreshKey }: { initial: DispatchSuggestion; date: string; refreshKey: number }) {
   const direction = initial.direction;
   const isPickup = direction === "PICKUP";
@@ -92,6 +126,8 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
   const [drag, setDrag] = useState<{ v: number; s: number } | null>(null);
   const [stuDrag, setStuDrag] = useState<{ v: number; s: number; i: number } | null>(null);
   const [hubBusy, setHubBusy] = useState(false);
+  const [relocatedCount, setRelocatedCount] = useState(0); // 이번 로드에서 좌표 자동 반영된 학생 수(안내용)
+  const [assignVi, setAssignVi] = useState<Record<string, number>>({}); // 신규자 requestId별 사용자가 고른 차량
 
   const sugRef = useRef(sug); sugRef.current = sug;
   const departPinnedRef = useRef(departPinned); departPinnedRef.current = departPinned;
@@ -110,25 +146,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       if (!r.ok) throw new Error(j?.error || "실패");
       // 서버는 자동값만 계산한다 → 기존 화면의 수동 확정값(etaManual)을 키 매칭으로 다시 얹는다(확정 유지).
       const prior = sugRef.current.vehicles;
-      setSug({ ...j, vehicles: reapplyManualEtaVehicles(j.vehicles, prior, direction) }); setDepartPinned({});
-    } catch (e: any) { setErr(e?.message || "실패"); }
-    finally { setLoading(false); }
-  }
-
-  // 증분 재배차(Phase 2b) — 저장 노선 순서를 유지한 채 신규·복귀·위치변경만 끼워넣는다.
-  // 전체 재최적화(generate)와 달리 기존 정차 순서를 재배열하지 않는다. 저장은 기존 [저장] 버튼으로.
-  async function incremental(forDate: string) {
-    setLoading(true); setErr(null);
-    try {
-      const r = await fetch("/api/admin/seasonal/dispatch/increment", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ direction, date: forDate || null }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "실패");
-      // 증분 재배차도 자동값만 돌아온다 → 기존 확정값(etaManual) 재적용.
-      const prior = sugRef.current.vehicles;
-      setSug({ ...j, vehicles: reapplyManualEtaVehicles(j.vehicles, prior, direction) }); setDepartPinned({}); setLoadedFromSaved(false); setSaveMsg(null);
+      setSug({ ...j, vehicles: reapplyManualEtaVehicles(j.vehicles, prior, direction) }); setDepartPinned({}); setRelocatedCount(0);
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
@@ -138,10 +156,16 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       const r = await fetch(`/api/admin/seasonal/dispatch/saved?date=${encodeURIComponent(forDate)}&direction=${direction}`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || !j?.saved) return false;
-      const saved = j.saved as { vehicles: DispatchSuggestion["vehicles"]; classStart: string | null; classEnd: string | null; savedAt: string | null; added?: DispatchSuggestion["added"]; locationChanged?: DispatchSuggestion["locationChanged"] };
-      // added/locationChanged(변동 감지)도 함께 실어 둔다 — 아래 배너가 sug에서 읽는다.
-      setSug((cur) => ({ ...cur, date: forDate, vehicles: saved.vehicles, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd, added: saved.added ?? [], locationChanged: saved.locationChanged ?? [] }));
+      const saved = j.saved as { vehicles: DispatchSuggestion["vehicles"]; classStart: string | null; classEnd: string | null; savedAt: string | null; added?: DispatchChange[]; locationChanged?: DispatchChange[] };
+      const changes = saved.locationChanged ?? [];
+      // 위치변경 자동 반영 — 저장 노선의 좌표만 갱신(차량 배정·순서 불변). 좌표 바뀐 차량은 아래에서 경로만 재계산.
+      const { vehicles: fixed, reroute } = relocateInPlace(saved.vehicles, changes);
+      // added(신규·복귀)는 배너에서 '추천 배정'으로 쓰므로 그대로 싣고, locationChanged는 이미 반영했으니 비운다.
+      setSug((cur) => ({ ...cur, date: forDate, vehicles: fixed, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd, added: saved.added ?? [], locationChanged: [] }));
       setSavedAt(saved.savedAt); setLoadedFromSaved(true); setDepartPinned({}); setErr(null); setSaveMsg(null);
+      setRelocatedCount(changes.filter((c) => !c.isHub && c.lat != null && c.lng != null).length);
+      // 좌표가 바뀐 차량만 T맵 경로 재계산 예약(순서·배정은 그대로).
+      reroute.forEach((vi) => scheduleReroute(vi));
       return true;
     } catch { return false; }
   }
@@ -168,7 +192,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "저장 실패");
-      setSavedAt(j.savedAt ?? null); setLoadedFromSaved(true); setSaveMsg("저장했습니다");
+      setSavedAt(j.savedAt ?? null); setLoadedFromSaved(true); setSaveMsg("저장했습니다"); setRelocatedCount(0);
     } catch (e: any) { setErr(e?.message || "노선을 저장하지 못했습니다."); }
     finally { setSaving(false); }
   }
@@ -238,6 +262,70 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       await generate(sug.date ?? date);
     } catch (e: any) { setErr(e?.message || "무료탑승으로 옮기지 못했습니다."); }
     finally { setHubBusy(false); }
+  }
+
+  // 신규·복귀자 배정용 ─────────────────────────────
+  function buildStudent(c: DispatchChange) {
+    return { name: c.name, grade: c.grade, parentPhone: c.parentPhone, childPhone: c.childPhone, rosterId: c.rosterId, requestId: c.requestId, pickupLabel: c.label };
+  }
+  // 한 차량에서 이 학생을 넣을 최적(추가비용 최소) 인접위치 k를 찾는다(기존 정차 순서 보존).
+  function bestInsertK(cur: DispatchSuggestion, v: Run, S: Pt): number {
+    const startPt: Pt = isPickup ? (cur.depot ?? cur.academy) : cur.academy;
+    const endPt: Pt = isPickup ? cur.academy : (cur.depot ?? cur.academy);
+    const pts: Pt[] = [startPt, ...v.stops.map((s) => ({ lat: s.lat, lng: s.lng })), endPt];
+    let bestK = 0, bestCost = Infinity;
+    for (let k = 0; k < pts.length - 1; k++) {
+      const cost = haversineKm(pts[k], S) + haversineKm(S, pts[k + 1]) - haversineKm(pts[k], pts[k + 1]);
+      if (cost < bestCost) { bestCost = cost; bestK = k; }
+    }
+    return bestK;
+  }
+  // 추천 차량 인덱스 — 정원 여유가 있는 차량 중 삽입 추가비용이 가장 작은 차량. hub 학생은 hub 있는 차량.
+  function recommendVi(c: DispatchChange): number {
+    const cur = sugRef.current;
+    if (cur.vehicles.length === 0) return 0;
+    if (c.isHub) { const vi = cur.vehicles.findIndex((v) => v.stops.some((s) => s.isHub) && v.passengers < v.capacity); return vi >= 0 ? vi : cur.vehicles.findIndex((v) => v.stops.some((s) => s.isHub)); }
+    if (c.lat == null || c.lng == null) return 0;
+    const S: Pt = { lat: c.lat, lng: c.lng };
+    let best = -1, bestCost = Infinity;
+    cur.vehicles.forEach((v, vi) => {
+      if (v.passengers >= v.capacity) return;
+      const k = bestInsertK(cur, v, S);
+      const startPt: Pt = isPickup ? (cur.depot ?? cur.academy) : cur.academy;
+      const endPt: Pt = isPickup ? cur.academy : (cur.depot ?? cur.academy);
+      const pts: Pt[] = [startPt, ...v.stops.map((s) => ({ lat: s.lat, lng: s.lng })), endPt];
+      const cost = haversineKm(pts[k], S) + haversineKm(S, pts[k + 1]) - haversineKm(pts[k], pts[k + 1]);
+      if (cost < bestCost) { bestCost = cost; best = vi; }
+    });
+    return best >= 0 ? best : 0;
+  }
+  // 신규·복귀자를 선택한 차량에 배정한다(내가 결정). 동좌표는 병합, 아니면 최적위치 삽입 후 그 차량만 경로 재계산.
+  function assignAdded(c: DispatchChange, vi: number) {
+    const cur = sugRef.current;
+    const v = cur.vehicles[vi];
+    if (!v) { setErr("배정할 차량이 없습니다."); return; }
+    const EPS = 1e-5;
+    let needReroute = false;
+    setSug((prev) => {
+      const vehicles = prev.vehicles.map((vv) => ({ ...vv, stops: vv.stops.map((s) => ({ ...s, students: [...s.students] })) }));
+      const veh = vehicles[vi];
+      if (!veh) return prev;
+      const student = buildStudent(c);
+      if (c.isHub) {
+        const hub = veh.stops.find((s) => s.isHub);
+        if (!hub) { setErr("이 차량에 무료탑승 거점이 없습니다."); return prev; }
+        hub.students.push(student);
+      } else if (c.lat != null && c.lng != null) {
+        const mi = veh.stops.findIndex((s) => Math.abs(s.lat - c.lat!) <= EPS && Math.abs(s.lng - c.lng!) <= EPS);
+        if (mi >= 0) veh.stops[mi].students.push(student);
+        else { veh.stops.splice(bestInsertK(prev, veh, { lat: c.lat, lng: c.lng }), 0, { lat: c.lat, lng: c.lng, label: c.label, students: [student], approx: false, isHub: false }); needReroute = true; }
+      } else { setErr(`${c.name}: 좌표가 없어 무료탑승으로만 배정할 수 있습니다.`); return prev; }
+      const passengers = veh.stops.reduce((a, s) => a + s.students.length, 0);
+      const pinnedDepart = departPinned[vi] ? veh.departTime : null;
+      vehicles[vi] = { ...recomputeRunTimes(prev, veh, pinnedDepart), passengers, over: passengers > veh.capacity, ...(needReroute ? { path: undefined } : {}) };
+      return { ...prev, vehicles, added: (prev.added ?? []).filter((a) => a.requestId !== c.requestId) };
+    });
+    if (needReroute) scheduleReroute(vi);
   }
 
   function setDepartTime(vIdx: number, newDepart: string) {
@@ -312,31 +400,49 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
       {loadedFromSaved && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11.5px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">💾 저장된 노선{savedAt ? ` · ${fmtSaved(savedAt)} 저장` : ""} · 「자동 제안」으로 새로 계산</p>}
       {saveMsg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-[11.5px] font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {saveMsg}</p>}
 
-      {/* 변동 감지 배너(Phase 2a) — 저장 노선 이후 신규/복귀·위치변경이 생겼을 때만 뜬다.
+      {/* 위치 미세조정 자동 반영 안내 — 좌표가 바뀐 학생의 경로만 자동 갱신됐다. 배정·순서는 그대로. */}
+      {relocatedCount > 0 && (
+        <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11.5px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-200 print:hidden">
+          📍 위치변경 {relocatedCount}명 — 좌표에 맞춰 경로를 자동 갱신했습니다(배정·순서 그대로). 확인 후 <b>💾 저장</b>하세요.
+        </p>
+      )}
+
+      {/* 신규·복귀자 추천 배정 — 자동으로 끼워넣지 않고, 추천 차량을 보여주고 원장이 직접 배정한다.
           원장 전용 화면에서만 렌더링된다(기사님 화면은 이 컴포넌트를 쓰지 않는다). */}
-      {(() => {
-        const added = sug.added ?? [];
-        const changed = sug.locationChanged ?? [];
-        if (added.length + changed.length === 0) return null;
-        return (
-          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-500/40 dark:bg-amber-500/10">
-            <p className="text-[12px] font-black text-amber-800 dark:text-amber-200">
-              ⚠️ 저장 노선 이후 변동 — 신규/복귀 {added.length}명, 위치변경 {changed.length}명. 재배차가 필요합니다.
-            </p>
-            {added.length > 0 && <p className="mt-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-200">신규·복귀: {added.map((a) => a.name).join(", ")}</p>}
-            {changed.length > 0 && <p className="mt-0.5 text-[11.5px] font-bold text-amber-700 dark:text-amber-200">위치변경: {changed.map((a) => a.name).join(", ")}</p>}
-            {/* Phase 2b: 저장 노선 순서를 유지한 채 신규·복귀·위치변경만 끼워넣는 증분 재배차.
-                전체 재최적화(generate)와 달리 기존 정차 순서를 재배열하지 않는다. 저장은 하단 [저장] 버튼으로. */}
-            <button
-              onClick={() => { void incremental(sug.date ?? date); }}
-              disabled={loading}
-              className="mt-2 rounded-lg bg-brand-orange-500 px-2.5 py-1.5 text-[11.5px] font-black text-white disabled:opacity-50 print:hidden"
-            >
-              {loading ? "계산 중…" : "🔄 변동만 재배차"}
-            </button>
-          </div>
-        );
-      })()}
+      {(sug.added ?? []).length > 0 && (
+        <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-500/40 dark:bg-amber-500/10 print:hidden">
+          <p className="text-[12px] font-black text-amber-800 dark:text-amber-200">🙋 신규·복귀 {(sug.added ?? []).length}명 — 어디에 태울지 정해 주세요(추천은 미리 골라 뒀습니다).</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {(sug.added ?? []).map((c) => {
+              const rec = recommendVi(c);
+              const chosen = assignVi[c.requestId] ?? rec;
+              const noCoord = !c.isHub && (c.lat == null || c.lng == null);
+              return (
+                <li key={c.requestId} className="flex flex-wrap items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 dark:bg-gray-900/50">
+                  <span className="text-[12.5px] font-black text-gray-900 dark:text-white">{c.name}</span>
+                  <span className="text-[11px] font-bold text-gray-500">{c.isHub ? "🆓 무료탑승" : (c.label || "위치")}</span>
+                  {noCoord
+                    ? <span className="ml-auto text-[11px] font-bold text-red-500">좌표 없음 · 무료탑승만 가능</span>
+                    : (
+                      <span className="ml-auto flex items-center gap-1">
+                        {!c.isHub && sug.vehicles.length > 1 && (
+                          <select value={chosen} onChange={(e) => setAssignVi((m) => ({ ...m, [c.requestId]: Number(e.target.value) }))}
+                            className="rounded-lg border border-gray-200 px-1.5 py-1 text-[11px] font-bold dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                            {sug.vehicles.map((v, i) => <option key={i} value={i}>{v.vehicleName}{v.tripLabel ? ` ${v.tripLabel}` : ""}{i === rec ? " ★추천" : ""}</option>)}
+                          </select>
+                        )}
+                        <button onClick={() => assignAdded(c, c.isHub ? rec : chosen)} disabled={hubBusy}
+                          className="rounded-lg bg-brand-orange-500 px-2.5 py-1 text-[11px] font-black text-white disabled:opacity-50">
+                          {c.isHub ? "🆓 무료탑승 배정" : `${sug.vehicles[chosen]?.vehicleName ?? ""}에 배정`}
+                        </button>
+                      </span>
+                    )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {sug.vehicles.length === 0 && <div className="mt-3 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">이 날짜에 배차할 {isPickup ? "등원" : "하원"} 셔틀 학생이 없습니다.</div>}
 

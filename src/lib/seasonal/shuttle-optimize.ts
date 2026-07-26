@@ -98,8 +98,18 @@ export type DispatchSuggestion = {
   routingProvider: "TMAP" | "LOCAL"; // 전체적으로 T맵이 쓰였는지
   // 저장 노선 이후의 변동(Phase 2a). 저장본이 있을 때만 채워지고, 관리자 배너 표시에만 쓴다.
   // 기사님 화면(DriverRunClient)은 이 필드를 읽지 않으므로 노출되지 않는다.
-  added?: { requestId: string; name: string }[];
-  locationChanged?: { requestId: string; name: string }[];
+  added?: DispatchChange[];
+  locationChanged?: DispatchChange[];
+};
+
+// 변동 대상 1명(신규/복귀 또는 위치변경). 화면에서 '추천 배정'·'좌표 자동 반영'에 필요한 정보까지 실어 보낸다.
+// (예전엔 {requestId,name}뿐이라 클라이언트가 좌표·학생정보를 몰라 서버 증분배차에 의존했다.)
+export type DispatchChange = {
+  requestId: string; name: string;
+  lat: number | null; lng: number | null; // 현재(변경 후) 승·하차 좌표. isHub이거나 미확정이면 null.
+  label: string;                           // 승·하차 위치 라벨
+  isHub: boolean;                          // 무료탑승 거점 학생이면 true(좌표 대신 hub 정차로 배정)
+  grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null;
 };
 
 function nnOrder(stops: Stop[], from: Pt): Stop[] {

@@ -284,7 +284,13 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                       else if (stuDrag && s.isHub) moveStudentToHub(stuDrag.v, stuDrag.s, stuDrag.i);
                       setDrag(null); setStuDrag(null);
                     }}
-                    className={`flex items-start gap-2.5 px-3 py-2.5 ${s.isHub ? "bg-green-50/70 dark:bg-green-900/15" : ""} ${drag && drag.v === vIdx && drag.s === sIdx ? "opacity-40" : ""} ${stuDrag && s.isHub ? "ring-2 ring-inset ring-green-400" : ""}`}>
+                    className={`flex items-start gap-2 px-3 py-2.5 ${s.isHub ? "bg-green-50/70 dark:bg-green-900/15" : ""} ${drag && drag.v === vIdx && drag.s === sIdx ? "opacity-40" : ""} ${stuDrag && s.isHub ? "ring-2 ring-inset ring-green-400" : ""}`}>
+                    {/* 드래그 핸들 — 카드 맨 앞. 이걸 잡고 끌어 정차 순서를 바꾼다. */}
+                    <span draggable
+                      onDragStart={(e) => { setDrag({ v: vIdx, s: sIdx }); e.dataTransfer.effectAllowed = "move"; }}
+                      onDragEnd={() => setDrag(null)}
+                      title="드래그해서 순서 변경"
+                      className="mt-0.5 shrink-0 cursor-move select-none text-base leading-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 print:hidden">⠿</span>
                     <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-black text-white ${s.isHub ? "bg-green-600" : "bg-brand-orange-500"}`}>{s.isHub ? "🆓" : sIdx + 1}</span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[13px] font-bold text-gray-900 dark:text-white">
@@ -320,11 +326,6 @@ export default function DispatchClient({ initial }: { initial: DispatchSuggestio
                     <div className="flex flex-col items-end gap-1 print:hidden">
                       {s.etaLabel && <span className="whitespace-nowrap text-[11.5px] font-black text-blue-600 dark:text-blue-300 print:text-black">{s.etaLabel}</span>}
                       <span className="flex items-center gap-0.5">
-                        <span draggable
-                          onDragStart={(e) => { setDrag({ v: vIdx, s: sIdx }); e.dataTransfer.effectAllowed = "move"; }}
-                          onDragEnd={() => setDrag(null)}
-                          title="드래그해서 순서 변경"
-                          className="cursor-move select-none px-1 text-base leading-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">⠿</span>
                         <button onClick={() => moveStop(vIdx, sIdx, -1)} className="h-6 w-6 rounded border border-gray-200 text-xs dark:border-gray-600">▲</button>
                         <button onClick={() => moveStop(vIdx, sIdx, 1)} className="h-6 w-6 rounded border border-gray-200 text-xs dark:border-gray-600">▼</button>
                       </span>

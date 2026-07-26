@@ -1,11 +1,13 @@
 import { computeDispatch } from "@/lib/seasonal/shuttle-optimize";
 import { getSavedDispatchRoute } from "@/lib/seasonal/dispatchRoute";
-import { resolveRunToken, getBoardingMap } from "@/lib/seasonal/shuttleRun";
-import DriverRunClient, { type DriverVehicle } from "@/components/seasonal/DriverRunClient";
+import { resolveRunToken, getBoardingMap, type BoardingStatus } from "@/lib/seasonal/shuttleRun";
+import DriverRunClient, { type DriverSection } from "@/components/seasonal/DriverRunClient";
 
 export const dynamic = "force-dynamic";
 
-// 기사님 전용 운행 화면 — 로그인 없이 토큰으로 접근. 토큰이 유효할 때만 그 날 노선·명단·연락처를 보여준다.
+const PREFIX = /^(STIZ 다산점 · |차고지 · )/;
+
+// 기사님 전용 운행 화면 — 로그인 없이 토큰으로 접근. 그 날 등원 → 하원 타임라인을 함께 보여준다.
 export default async function ShuttleRunPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const run = await resolveRunToken(token);
@@ -21,49 +23,40 @@ export default async function ShuttleRunPage({ params }: { params: Promise<{ tok
     );
   }
 
-  const suggestion = await computeDispatch({ direction: run.direction, date: run.date });
-  const saved = await getSavedDispatchRoute(run.date, run.direction);
-  const vehiclesRaw = (saved?.vehicles as DispatchVehicleLike[] | undefined) ?? (suggestion.vehicles as DispatchVehicleLike[]);
-  const boarding = await getBoardingMap(run.date, run.direction);
-
-  const isPickup = run.direction === "PICKUP";
-  const startName = isPickup ? (suggestion.depot?.name ?? "차고지") : suggestion.academy.name;
-  const endName = isPickup ? suggestion.academy.name : (suggestion.depot?.name ?? "차고지");
-
-  const vehicles: DriverVehicle[] = vehiclesRaw.map((v) => ({
-    vehicleName: v.vehicleName,
-    tripLabel: v.tripLabel ?? null,
-    departTime: v.departTime ?? null,
-    arriveTime: v.arriveTime ?? null,
-    depotTime: v.depotTime ?? null,
-    stops: (v.stops ?? []).map((s) => ({
-      label: s.label,
-      isHub: Boolean(s.isHub),
-      etaLabel: s.etaLabel ?? null,
-      students: (s.students ?? []).map((st) => ({
-        requestId: st.requestId,
-        name: st.name,
-        grade: st.grade ?? null,
-        parentPhone: st.parentPhone ?? null,
-        childPhone: st.childPhone ?? null,
+  const directions: ("PICKUP" | "DROPOFF")[] = ["PICKUP", "DROPOFF"];
+  const sections: DriverSection[] = await Promise.all(directions.map(async (d) => {
+    const sug = await computeDispatch({ direction: d, date: run.date });
+    const saved = await getSavedDispatchRoute(run.date, d);
+    const vraw = (saved?.vehicles as DispatchVehicleLike[] | undefined) ?? (sug.vehicles as DispatchVehicleLike[]);
+    const isPickup = d === "PICKUP";
+    return {
+      direction: d,
+      time: (isPickup ? sug.classStart : sug.classEnd) ?? null,
+      startName: (isPickup ? (sug.depot?.name ?? "차고지") : sug.academy.name).replace(PREFIX, ""),
+      endName: (isPickup ? sug.academy.name : (sug.depot?.name ?? "차고지")).replace(PREFIX, ""),
+      vehicles: vraw.map((v) => ({
+        vehicleName: v.vehicleName, tripLabel: v.tripLabel ?? null,
+        departTime: v.departTime ?? null, arriveTime: v.arriveTime ?? null, depotTime: v.depotTime ?? null,
+        stops: (v.stops ?? []).map((s) => ({
+          label: s.label, isHub: Boolean(s.isHub), etaLabel: s.etaLabel ?? null,
+          students: (s.students ?? []).map((st) => ({ requestId: st.requestId, name: st.name, grade: st.grade ?? null, parentPhone: st.parentPhone ?? null, childPhone: st.childPhone ?? null })),
+        })),
       })),
-    })),
+    };
   }));
+
+  const [pickupBoarding, dropoffBoarding] = await Promise.all([getBoardingMap(run.date, "PICKUP"), getBoardingMap(run.date, "DROPOFF")]);
 
   return (
     <DriverRunClient
       token={token}
       date={run.date}
-      direction={run.direction}
-      startName={startName.replace(/^(STIZ 다산점 · |차고지 · )/, "")}
-      endName={endName.replace(/^(STIZ 다산점 · |차고지 · )/, "")}
-      vehicles={vehicles}
-      initialBoarding={boarding}
+      sections={sections}
+      initialBoarding={{ PICKUP: pickupBoarding, DROPOFF: dropoffBoarding } as { PICKUP: Record<string, BoardingStatus>; DROPOFF: Record<string, BoardingStatus> }}
     />
   );
 }
 
-// 저장본/계산본 vehicles의 느슨한 형태(둘 다 같은 구조).
 type DispatchVehicleLike = {
   vehicleName: string; tripLabel?: string | null;
   departTime?: string | null; arriveTime?: string | null; depotTime?: string | null;

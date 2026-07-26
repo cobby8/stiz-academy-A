@@ -14,24 +14,27 @@ function normDir(v: unknown): "PICKUP" | "DROPOFF" | null {
 
 export type BoardingStatus = "BOARDED" | "NOSHOW";
 
-/** (날짜×방향) 기사님 링크 토큰을 만들거나 이미 있으면 그대로 돌려준다(원장 전용). */
-export async function createOrGetRunLink(date: string, direction: string): Promise<{ token: string }> {
+// 날짜 단위 링크는 방향을 'ALL'로 저장한다(그 날 등원·하원 전체를 한 링크로).
+const ALL_DIRECTION = "ALL";
+
+/** 그 날짜의 기사님 링크 토큰을 만들거나 이미 있으면 그대로 돌려준다(원장 전용). 등원·하원 전체 포함. */
+export async function createOrGetRunLink(date: string): Promise<{ token: string }> {
   const admin = await requireAdmin();
-  const d = normDate(date), dir = normDir(direction);
-  if (!d || !dir) throw new Error("날짜 또는 방향이 올바르지 않습니다.");
+  const d = normDate(date);
+  if (!d) throw new Error("날짜가 올바르지 않습니다.");
   const token = randomBytes(16).toString("hex"); // 32자 랜덤(추측 불가)
   const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
     `INSERT INTO "ShuttleRunLink" ("token","serviceDate","direction","createdByUserId")
      VALUES ($1, $2, $3, $4)
      ON CONFLICT ("serviceDate","direction") DO UPDATE SET "createdAt" = "ShuttleRunLink"."createdAt"
      RETURNING "token"`,
-    token, d, dir, admin.appUserId ?? null,
+    token, d, ALL_DIRECTION, admin.appUserId ?? null,
   );
   return { token: String(rows[0]?.token ?? token) };
 }
 
-/** 토큰 → (날짜×방향). 없으면 null. 인증하지 않는다(토큰 자체가 열쇠). */
-export async function resolveRunToken(token: string): Promise<{ date: string; direction: "PICKUP" | "DROPOFF" } | null> {
+/** 토큰 → 날짜(+방향, 대개 'ALL'). 없으면 null. 인증하지 않는다(토큰 자체가 열쇠). */
+export async function resolveRunToken(token: string): Promise<{ date: string; direction: string } | null> {
   const t = typeof token === "string" ? token.trim() : "";
   if (!/^[a-f0-9]{16,64}$/.test(t)) return null;
   try {
@@ -39,8 +42,8 @@ export async function resolveRunToken(token: string): Promise<{ date: string; di
       `SELECT "serviceDate", "direction" FROM "ShuttleRunLink" WHERE "token" = $1 LIMIT 1`, t,
     );
     const r = rows[0];
-    const dir = normDir(r?.direction);
     const date = normDate(r?.serviceDate);
+    const dir = typeof r?.direction === "string" ? r.direction : null;
     return date && dir ? { date, direction: dir } : null;
   } catch { return null; }
 }

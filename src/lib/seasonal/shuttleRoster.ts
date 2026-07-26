@@ -441,6 +441,10 @@ export async function getConfirmedShuttleRosterForDate(
        FROM "SpecialProgramEnrollmentDate" e
        JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
       WHERE e.status = 'SCHEDULED'
+        -- 그날 결석(ABSENT)·사유결석(EXCUSED)으로 미리 표시된 학생은 그날 셔틀에서만 뺀다.
+        -- 지각(LATE)은 오는 것이므로 태우고, 미확인(NULL)·출석(PRESENT)도 태운다.
+        -- 좌석 status는 SCHEDULED 그대로라 시즌 명단·정원·보강 판정에는 영향이 없다(그날 노선에서만 제외).
+        AND (e."attendanceStatus" IS NULL OR e."attendanceStatus" NOT IN ('ABSENT', 'EXCUSED'))
         AND e."applicationItemId" = ANY($1::text[])
       ORDER BY "serviceDate" ASC, "sessionStart" ASC`,
     itemIds,

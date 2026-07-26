@@ -212,7 +212,7 @@ function formatShuttleTime(value: string | null): string {
     return date.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [], parentShuttleOverview = [] }: {
+export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [], parentShuttleOverview = [], shuttleDriverContact = null }: {
     data: MyPageData;
     gallery?: GalleryItem[];
     notices?: NoticeItem[];
@@ -221,6 +221,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
     myRequests?: RequestItem[];
     feedbacks?: FeedbackItem[];
     parentShuttleOverview?: ParentShuttleOverviewItem[];
+    shuttleDriverContact?: { name: string; phone: string } | null;
 }) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -365,20 +366,32 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             </div>
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{child.name} 학생의 신청 및 배정 현황입니다.</p>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setReqType("SHUTTLE");
-                                setShowRequestForm(true);
-                                setShowRequests(false);
-                                requestAnimationFrame(() => {
-                                    document.getElementById("parent-request-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                });
-                            }}
-                            className="min-h-11 shrink-0 rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-950/40 dark:focus-visible:ring-offset-gray-800"
-                        >
-                            변경 요청
-                        </button>
+                        <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-start">
+                            {shuttleDriverContact?.phone && (
+                                <a
+                                    href={`tel:${shuttleDriverContact.phone.replace(/[^0-9]/g, "")}`}
+                                    className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+                                    aria-label={`셔틀 기사님 ${shuttleDriverContact.name}에게 전화하기`}
+                                >
+                                    <SymbolIcon name="call" size={16} className="text-white" />
+                                    기사님께 연락 ({shuttleDriverContact.name})
+                                </a>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setReqType("SHUTTLE");
+                                    setShowRequestForm(true);
+                                    setShowRequests(false);
+                                    requestAnimationFrame(() => {
+                                        document.getElementById("parent-request-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                    });
+                                }}
+                                className="min-h-11 shrink-0 rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-950/40 dark:focus-visible:ring-offset-gray-800"
+                            >
+                                변경 요청
+                            </button>
+                        </div>
                     </div>
 
                     <div className="space-y-3">

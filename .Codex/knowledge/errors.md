@@ -1,5 +1,45 @@
 # Errors And Traps
 
+## 정규반 청구액이 "첫 행 1건"만 읽혀 510만원 과소 청구됨 (2026-07-26)
+- **분류**: architecture
+- **발견자**: developer
+- **현상**: 2026년 8월 정규반 청구가 14,041,750원(140건)으로 생성됐는데 실제 청구액은 19,141,000원(139명)이었다. 차액 **5,099,250원**. 게다가 8명(배수호·우지호·이성민·서우빈·이현일·김현호·신이준·여민재)은 청구서가 **아예 생성되지 않았다.**
+- **원인 (버그 4개가 겹침)**:
+  1. 구글시트 `등록` 탭은 **한 학생이 수업 1개당 1행**이다(주3회면 3행). 그런데 `importStudents.ts`의 `parseAndTransformCsv`가 `const best = candidates[0]`로 **대표 행 1건만** 골라 그 행의 수강료만 청구했다. 주1회 학생(82명)은 첫 행 = 합계라 **버그가 드러나지 않아** 오래 살아남았다.
+  2. `결제방법`이 `추가수강`인 행이 첫 행이면 수강료 칸이 비어 있어 `s.amount`가 null → `if (s.amount && ... && s.paymentMethod)` 조건에서 걸러져 Payment가 통째로 안 만들어졌다.
+  3. 학생 묶음 키가 `이름 + 학부모전화번호`였다. 같은 학생인데 행마다 부(父)/모(母)의 **다른 번호**를 적어 넣은 경우가 있어(김용준·김백찬·이하준·박서준 4명) 한 학생이 둘로 쪼개져 **수강료가 반토막**(180,000 → 90,000)났다.
+  4. `detectColumnIndices`가 `결제액`/`금액`/`수강료`를 전부 하나의 `amount` 인덱스에 `else if` 체인으로 대입해, **헤더 순서에 따라 뒤 컬럼이 앞 컬럼을 덮어썼다.** 현재 시트는 우연히 `수강료`가 뒤에 있어 정상 동작했을 뿐, 시트에서 열 순서만 바뀌면 청구 기준 금액이 통째로 바뀐다.
+- **해결**: 금액 규칙을 `src/lib/studentBilling.ts`(외부 의존성 0, 순수 함수)로 분리하고 `studentBilling.test.ts` 24개로 방어. 컬럼은 `수강료`/`셔틀비`/`이월`/`결제액`을 각각 별도 인덱스로 잡고 **처음 매칭된 컬럼만** 채택. 묶음 키는 `이름 + 생년월일`(없으면 전화번호 fallback).
+- **예방**:
+  - **"학생 1명 = 시트 1행"을 절대 가정하지 마라.** 이 시트는 수업 단위 행이다. 금액은 반드시 학생별 합계.
+  - 회귀 지표를 "총액"으로만 보지 마라. 주1회 학생만 보면 버그가 안 보인다. **다행 학생 표본(김루하 210,000 = 70,000×3)을 반드시 포함**한다.
+  - **셔틀비는 월 단위 값이라 첫 행에만 적힌다 → 절대 합산 금지.** 8월 실측 568,000원/45명, 두 행에 적힌 학생 0건.
+  - **`이월`은 금액 차감이 아니라 행 제외다.** 시트 전체 2,186행에서 `이월` 금액 칸(M열)은 100% 비어 있고 `결제방법='이월'` 라벨로만 존재한다(전체 21건). 휴원·퇴원과 같이 그 행을 이번 달 청구에서 뺀다.
+  - **형제할인을 코드에서 계산하지 마라.** 시트 금액에 이미 수기 반영돼 있다(72,000 = 80,000 × 0.9). 다시 곱하면 이중 할인 사고.
+  - 시트에 여러 달이 섞여 들어오므로 합산 전 **반드시 같은 연/월 행으로 먼저 자른다.** 안 자르면 7월치와 8월치가 한 청구서로 합쳐진다.
+  - 금액 컬럼 자동 감지를 `else if` 체인 + 단일 변수로 만들지 마라. 컬럼마다 인덱스를 따로 두고 첫 매칭만 채택한다.
+
+## `Payment.classId`가 전건 NULL이라 교사 앱 청구 기능이 죽어 있었음 (2026-07-26)
+- **분류**: architecture
+- **발견자**: developer
+- **현상**: `Payment` 300건 전부 `classId = NULL`이라 교사 앱의 청구·현금수납 확인이 아무것도 표시하지 못했다.
+- **원인**: `import-students` 경로의 `createPaymentIfNeeded` INSERT문에 `classId` 컬럼 자체가 없었다.
+- **해결**: 학생의 대표 반(수강료가 가장 큰 행의 `slotKey`, 동률이면 원본 행 번호가 빠른 쪽)을 `Class.slotKey`로 조회해 채운다. 8월 실측 139명 중 **137명(98.6%)** 채워지고, 2명은 `Tue-3` 반이 `Class`에 없어 NULL로 남는다(경고 로그).
+- **한계 (반드시 인지)**: `Payment`는 학생당 월 1건이고 `PaymentInvoice`와 **1:1**이라 반별로 쪼갤 수 없다. 그래서 여러 반을 듣는 학생은 **대표 반 1개**만 기록되고, 그 학생의 청구는 **다른 반 담당 교사에게는 보이지 않는다.** 금액은 언제나 학생의 월 총액이며 반별로 나뉘지 않는다. 반별 분할이 필요해지면 `Payment`가 아니라 별도 라인아이템 모델을 만들어야 한다.
+- **예방**: `sheet-reconcile`이 `DISTINCT ON (p."studentId")`로 학생당 1건을 가정하므로, Payment를 반별로 쪼개면 그 경로가 조용히 깨진다. 청구 단위를 바꾸려면 두 경로를 함께 고쳐야 한다.
+
+## 승인 경로에 REGULAR 수강일 슬롯 생성 코드가 없어 수동 백필로 운영됨 (2026-07-25)
+- **분류**: architecture
+- **발견자**: developer
+- **현상**: 방학특강 신청을 승인해도 날짜별 출석부(`/admin/seasonal/attendance`)에 학생이 나타나지 않았다. DB의 `SpecialProgramEnrollmentDate` 79행은 생성 시각이 신청 시각과 무관한 3개 배치로, 사람이 수동으로 넣은 값이었다.
+- **원인**: 코드베이스 전체에서 `INSERT INTO "SpecialProgramEnrollmentDate"`는 `src/lib/seasonal/makeup.ts`의 `ensureSeasonalMakeupSlot` 한 곳뿐이고 거기서는 `kind='MAKEUP'`만 넣는다. 즉 `kind='REGULAR'` 슬롯을 만드는 애플리케이션 코드가 애초에 없었다. 출석부는 이 슬롯을 읽어 명단을 그리므로 승인만으로는 아무 것도 생기지 않는다.
+- **해결**: `src/lib/seasonal/enrollment-dates.ts`의 `syncEnrollmentDatesForItem()`을 추가하고, 유일한 상태 변경 choke point인 `updateSpecialProgramItemStatus` 호출부(단건 `resource:"item"`, 일괄 `resource:"bulkItems"`) 뒤에 연결했다.
+- **예방**:
+  - "화면이 읽는 테이블에 행을 넣는 코드가 실제로 존재하는가"를 먼저 grep으로 확인한다. 운영 데이터가 있다고 해서 그 데이터를 만드는 코드가 있는 것은 아니다.
+  - 수강일 슬롯 upsert는 반드시 `ON CONFLICT ("applicationItemId","sessionDateId") DO NOTHING`. `DO UPDATE`를 쓰면 이미 배정된 `kind='MAKEUP'` 보강 슬롯이 REGULAR로 덮여 보강 배정과 출결이 사라진다. (makeup.ts는 보강 배정이 의도적 덮어쓰기라 DO UPDATE를 쓰지만, REGULAR 백필은 절대 안 된다.)
+  - 요일 판정은 반드시 서울시간(`weekdayInSeoul`, `src/lib/seasonal/planning.ts`). UTC 기준으로 판정하면 저녁 수업이 전날 요일로 밀린다.
+  - 승인 부가 처리(슬롯 생성)는 `$transaction` **밖**에서 try/catch로 실행한다. 안에서 실행하면 부가 처리 실패가 승인 롤백으로 이어진다.
+
 ## 분기 안에서 이미 좁혀진 타입을 다시 비교하면 TS2367 발생
 - 현상: `variant === "inline"` 분기 안에서 다시 `variant === "menu"`를 비교하자 `This comparison appears to be unintentional` 오류가 발생했다.
 - 원인: TypeScript가 이미 해당 블록의 `variant` 타입을 `"inline"`으로 좁혔기 때문에 `"menu"`와 비교할 수 없다.
@@ -176,3 +216,29 @@
 - 증상: `classes/page.tsx`의 깨진 주석 안에 `revalidate` 텍스트가 섞여 TypeScript 중복 선언처럼 보였다.
 - 해결: 짧은 page 파일은 깨진 주석을 유지하지 않고 ASCII 주석/명확한 export로 정리한다.
 - 예방: 인코딩이 깨진 주석 주변에 설정 export를 추가할 때는 `npx.cmd tsc --noEmit`으로 중복 선언 여부를 바로 확인한다.
+
+## `Student.birthDate` 비교식은 이중 시간대 적용이 아니다 (건드리지 말 것)
+- 현상: `hasMatchingExistingStudent()`의 `((student."birthDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date`가 "시간대를 두 번 적용해 하루 밀린다"는 오진이 나오기 쉽다.
+- 실제: `Student.birthDate` 컬럼은 `timestamp without time zone`(naive)이다. 첫 `AT TIME ZONE 'UTC'`는 naive→timestamptz **해석**, 두 번째 `AT TIME ZONE 'Asia/Seoul'`은 timestamptz→KST naive **변환**이다. 이중 적용이 아니라 정상적인 2단계 변환이다.
+- 근거(2026-07-26 실측): 저장 형식이 두 가지로 섞여 있다 — `00:00:00`(151건) / `15:00:00`(144건). 시트 원본 생년월일과 대조한 결과 현재 식은 295건 중 **293건(99.3%) 정확**. 반면 naive 날짜부분(`birthDate::date`)을 그대로 쓰면 **149건(50.5%)만 정확**하다. 두 저장 형식 모두 "KST 자정의 UTC 순간"이라는 동일 의미를 갖기 때문이다.
+- 예방: 이 식을 "고치기" 전에 반드시 `StudentSheetRawRow.rawJSON->>'수강생 생년월일'`과 대조해 실측하라. 컬럼이 `timestamptz`가 아니라 `timestamp`라는 점이 핵심이다.
+
+## 방학특강 기존회원 판정: 진짜 결함은 재원 상태 미확인
+- 현상: 휴원(`PAUSED`)·퇴원(`WITHDRAWN`)·과거 이력자가 "기존 회원"으로 판정되어 할인 단가가 적용된다.
+- 원인: `hasMatchingExistingStudent()`가 이름+생년월일+연락처만 보고 `Enrollment` 상태를 전혀 확인하지 않는다.
+- 실측(2026 여름특강 28명): 신규 19명 중 5명이 거짓 양성(전원 `PAUSED` 또는 등록 없음). 기존 9명 중 2명은 매칭 실패인데 원인이 코드가 아니라 **신청서 입력 오류**(전화번호 상이 1건, 생년월일 상이 1건)다.
+- 예방: 재원 여부 판정은 프로젝트 전역 관례인 `Enrollment.status = 'ACTIVE'`를 쓴다. `PAUSED`는 반 이동 시 예전 반에도 남으므로 "학생 단위 ACTIVE 1건 이상" 기준으로 집계해야 한다.
+
+## 🚨 셔틀 대상자 조회를 새로 짤 때마다 필터가 누락된다 — 4회 반복
+- 현상: 자동 배차·명단 화면에 **폐강된 반의 취소 학생(나우준·문근우)** 이 다시 실린다. 고쳐도 다음 기능에서 또 나온다.
+- 반복 이력:
+  1. 기존 노선 화면(`shuttle/service.ts`) — 개설 취소 반(`SpecialProgramOffering.status='CANCELLED'`)을 안 걸렀다.
+  2. 통합 명단(`seasonal/shuttle-roster.ts`) — `WHERE` 절 자체가 없어 취소자가 전부 들어왔다.
+  3. 자동 배차(`seasonal/shuttle-optimize.ts`) — 오염된 명단을 그대로 받아 썼다. → 공용 모듈 `shuttleEligibility.ts` 신설로 1~3 해결(`4c87468`).
+  4. **자동 배차 날짜별 재작성** — 공용 모듈이 있는데도 쓰지 않고 SQL을 손으로 새로 써서 `r.status <> 'CANCELLED'` 하나만 넣었다. 신청서·수강항목·개설반·`REJECTED`가 전부 다시 샜다.
+- 근본 원인: **조회 구조를 바꾸면(명단 기준 → 날짜별 좌석 기준) SQL을 처음부터 새로 쓰게 되고, 그때 필터가 통째로 증발한다.** 기준이 4개(신청서/수강항목/개설반/셔틀)나 되는데 손으로 쓰면 매번 일부만 기억한다.
+- 해결: `src/lib/seasonal/shuttleEligibility.ts`의 `seasonalShuttleEligibilitySql({ application, item, offering, shuttleRequest? })`를 **반드시 import해서 쓴다.** 새 쿼리에 별칭이 없으면 조건을 손으로 쓰지 말고 **JOIN을 추가**해 공용 조각을 그대로 끼운다.
+- 예방:
+  - 셔틀 대상자 SQL에 `status` 비교를 **직접 타이핑하면 그 자체가 버그 신호**다. 특히 `r.status <> 'CANCELLED'`는 `REJECTED`를 못 걸러 항상 틀리다.
+  - `tests/seasonal-shuttle-roster-filter.test.mjs`가 소스에 공용 조각 호출이 있는지 문자열로 검사한다. 새 셔틀 조회를 만들면 이 테스트에 한 줄 추가할 것.
+  - 셔틀 상태(`r.status`)는 **선택 인자**다. 통합 명단은 '미탑승 되돌리기' 때문에 SQL에서 거르면 안 되고, 자동 배차처럼 실제 탑승자만 뽑는 곳만 `shuttleRequest`를 넘긴다.

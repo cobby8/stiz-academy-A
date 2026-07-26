@@ -33,6 +33,15 @@ function sqlList(values: string[]): string {
 }
 
 /**
+ * "탑승 중인가"를 SQL에서 계산해야 할 때 쓰는 조각. 예: `r.status NOT IN ('CANCELLED', 'REJECTED')`
+ * isRidingShuttleStatus(JS)와 반드시 같은 목록을 쓰게 하려고 여기서 만들어 준다.
+ * (화면·쿼리 파일에 ["CANCELLED","REJECTED"]를 다시 적으면 또 갈라진다.)
+ */
+export function ridingShuttleStatusSql(alias: string): string {
+  return `${alias}.status NOT IN (${sqlList(CLOSED_SHUTTLE_STATUSES)})`;
+}
+
+/**
  * $queryRawUnsafe 용 WHERE 조각을 만든다.
  * 값은 전부 위 코드 상수라서 외부 입력이 섞이지 않는다(주입 위험 없음).
  *

@@ -2,7 +2,8 @@ import { Prisma, ShuttleRouteDirection, ShuttleRoutePlanStatus } from "@prisma/c
 import { prisma } from "@/lib/prisma";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
 // 셔틀 대상자 판정 기준은 명단·노선·자동배차가 반드시 같아야 한다. 공용 모듈 한 곳에서만 정의한다.
-import { CANCELLED_OFFERING_STATUS, CLOSED_SHUTTLE_STATUSES } from "@/lib/seasonal/shuttleEligibility";
+// 셔틀 대상자는 게이트웨이 한 곳으로만 읽는다(원본 4테이블을 여기서 다시 조인하지 않는다).
+import { getConfirmedShuttleRoster } from "@/lib/seasonal/shuttleRoster";
 import { assertShuttleCapacity, assertUniqueStopOrders, ShuttleContractError } from "./contracts";
 import { resolveAcademyShuttleLocation, type AcademyShuttleLocation } from "./academyLocation";
 import { chooseActiveShuttleAssignment } from "./assignment";
@@ -369,7 +370,7 @@ export async function getShuttleDashboard(
     select: { id: true, title: true, startsAt: true, endsAt: true },
   });
   const selectedSeasonId = seasonId || seasons[0]?.id || null;
-  const [vehicles, routes, requests, drivers] = await Promise.all([
+  const [vehicles, routes, rosterEntries, drivers, assignedRequestIds] = await Promise.all([
     prisma.shuttleVehicle.findMany({ orderBy: [{ isActive: "desc" }, { name: "asc" }] }),
     selectedSeasonId
       ? prisma.shuttleRoutePlan.findMany({
@@ -378,72 +379,74 @@ export async function getShuttleDashboard(
           include: routeInclude,
         })
       : [],
-    selectedSeasonId
-      ? prisma.specialProgramShuttleRequest.findMany({
-          where: {
-            // 취소·거절된 셔틀 신청은 미배정 후보에서 제외한다(노선 편성 시 태우면 안 되는 학생).
-            status: { notIn: CLOSED_SHUTTLE_STATUSES },
-            // 신청서 자체가 취소되거나 해당 수강 항목이 취소된 경우도 후보에서 뺀다.
-            application: { seasonId: selectedSeasonId, status: { notIn: CLOSED_SHUTTLE_STATUSES } },
-            // 개설 자체가 취소된 반(수업이 사라진 반)의 학생도 후보에서 뺀다.
-            // 지금까지는 그런 학생이 마침 신청서까지 CANCELLED라 우연히 걸러졌을 뿐이었다.
-            applicationItem: {
-              status: { notIn: CLOSED_SHUTTLE_STATUSES },
-              offering: { status: { not: CANCELLED_OFFERING_STATUS } },
-            },
-            routePassengers: {
-              none: {
-                routePlan: {
-                  status: { not: ShuttleRoutePlanStatus.ARCHIVED },
-                  direction: selectedDirection,
-                  ...(hasServiceDate ? { serviceDate: selectedServiceDate } : {}),
-                },
-              },
-            },
-          },
-          orderBy: { createdAt: "asc" },
-          include: { application: true, applicationItem: { include: { offering: { select: { title: true } } } } },
-        })
-      : [],
+    // ⚠️ 셔틀 대상자는 원본 테이블에서 직접 찾지 않는다. 게이트웨이만 통과한다.
+    //    (여기서 WHERE 절을 손으로 다시 쓰다가 필터가 빠지는 사고가 반복됐다.)
+    selectedSeasonId ? getConfirmedShuttleRoster(selectedSeasonId) : [],
     prisma.user.findMany({
       where: { role: "DRIVER" },
       orderBy: [{ name: "asc" }],
       select: { id: true, name: true, phone: true, role: true },
     }),
+    // "이미 이 방향(+날짜) 노선에 태워 둔 사람"의 id 집합. 예전에는 findMany의 routePassengers.none
+    // 조건이 하던 일을 따로 떼어낸 것이다. 대상자 판정과 배정 여부 판정을 분리해야
+    // 대상자 쪽 필터를 게이트웨이 하나로 몰 수 있다.
+    prisma.shuttleRoutePassenger.findMany({
+      where: {
+        shuttleRequestId: { not: null },
+        routePlan: {
+          status: { not: ShuttleRoutePlanStatus.ARCHIVED },
+          direction: selectedDirection,
+          ...(hasServiceDate ? { serviceDate: selectedServiceDate } : {}),
+        },
+      },
+      select: { shuttleRequestId: true },
+    }),
   ]);
 
-  const unassignedRequests = requests.map((request) => ({
-    id: request.id,
-    applicationItemId: request.applicationItemId,
-    childName: request.application.childName,
-    parentName: request.application.parentName,
-    parentPhone: request.application.parentPhone,
-    offeringTitle: request.applicationItem.offering.title,
-    pickup: {
-      name: request.pickupLocation,
-      address: request.pickupAddress,
-      roadAddress: request.pickupRoadAddress,
-      lat: request.pickupLatitude,
-      lng: request.pickupLongitude,
-      placeId: request.pickupPlaceId,
-      source: request.pickupLocationSource,
-      accuracyMeters: request.pickupAccuracyMeters,
-      confirmedAt: request.pickupConfirmedAt,
-    },
-    dropoff: {
-      name: request.dropoffLocation,
-      address: request.dropoffAddress,
-      roadAddress: request.dropoffRoadAddress,
-      lat: request.dropoffLatitude,
-      lng: request.dropoffLongitude,
-      placeId: request.dropoffPlaceId,
-      source: request.dropoffLocationSource,
-      accuracyMeters: request.dropoffAccuracyMeters,
-      confirmedAt: request.dropoffConfirmedAt,
-    },
-    pickupTime: request.pickupTime,
-    note: request.note,
-  }));
+  const assignedIds = new Set(assignedRequestIds.map((row) => row.shuttleRequestId).filter(Boolean) as string[]);
+  const unassignedRequests = rosterEntries
+    // 미탑승으로 눌러 둔 학생은 노선 편성 후보가 아니다(통합 명단에서는 회색 행으로 남는다).
+    .filter((entry) => entry.ride && !assignedIds.has(entry.shuttleRequestId))
+    // 기존 화면 순서(신청 접수순)를 유지한다.
+    // ⚠️ 다만 2026-07-21 일괄 등록분 9건은 createdAt이 **완전히 같아서** 예전 정렬은 사실상 무작위였다
+    //    (DB가 돌려주는 물리적 순서. 행을 한 번 수정하면 순서가 또 바뀐다).
+    //    그래서 동점일 때는 이름순으로 고정한다 — 통합 명단 화면과 같은 기준이라 찾기도 쉽다.
+    .sort((left, right) =>
+      (left.requestCreatedAt?.getTime() ?? 0) - (right.requestCreatedAt?.getTime() ?? 0) ||
+      left.studentName.localeCompare(right.studentName, "ko"),
+    )
+    .map((entry) => ({
+      id: entry.shuttleRequestId,
+      applicationItemId: entry.applicationItemId,
+      childName: entry.studentName,
+      parentName: entry.parentName,
+      parentPhone: entry.parentPhone,
+      offeringTitle: entry.offeringTitle,
+      pickup: {
+        name: entry.pickup.location,
+        address: entry.pickup.address,
+        roadAddress: entry.pickup.roadAddress,
+        lat: entry.pickup.latitude,
+        lng: entry.pickup.longitude,
+        placeId: entry.pickup.placeId,
+        source: entry.pickup.source,
+        accuracyMeters: entry.pickup.accuracyMeters,
+        confirmedAt: entry.pickup.confirmedAt,
+      },
+      dropoff: {
+        name: entry.dropoff.location,
+        address: entry.dropoff.address,
+        roadAddress: entry.dropoff.roadAddress,
+        lat: entry.dropoff.latitude,
+        lng: entry.dropoff.longitude,
+        placeId: entry.dropoff.placeId,
+        source: entry.dropoff.source,
+        accuracyMeters: entry.dropoff.accuracyMeters,
+        confirmedAt: entry.dropoff.confirmedAt,
+      },
+      pickupTime: entry.pickupTime,
+      note: entry.note,
+    }));
   const classBasedCandidates = selectedServiceDate ? await getClassBasedShuttleCandidates(selectedServiceDate) : null;
   // 노선 만들기 모달의 "학원으로 채우기" 버튼이 쓸 값. 없으면 null이고 버튼은 비활성화된다.
   const academyLocation = await getAcademyShuttleLocation();

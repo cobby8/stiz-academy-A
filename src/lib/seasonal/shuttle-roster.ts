@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
-import { isRidingShuttleStatus, seasonalShuttleEligibilitySql } from "./shuttleEligibility";
+import { getConfirmedShuttleRoster } from "./shuttleRoster";
 
 // 방학특강 셔틀 통합 명단(학생 단위) — 기사님과 공유하던 시트를 앱으로 옮긴 편집형 뷰의 서버 로직.
 // 한 학생(신청서)당 셔틀 신청 1건을 한 줄로 본다. 모든 쿼리는 PgBouncer 트랜잭션 모드 호환을 위해 $queryRawUnsafe.
 
 export type ShuttleRosterRow = {
   requestId: string;
-  ride: boolean; // 탑승 여부 (셔틀 신청 상태가 CANCELLED/REJECTED가 아님)
+  applicationId: string;
+  ride: boolean; // 탑승 여부 (status !== 'CANCELLED')
   childName: string; childGrade: string | null; childGender: string | null;
   childPhone: string | null; parentName: string | null; parentPhone: string | null;
   offeringTitle: string | null; classStart: string | null; classEnd: string | null;
@@ -30,59 +31,26 @@ function num(v: unknown): number | null { return v == null ? null : Number(v); }
 function pinned(src: unknown): boolean { return src === "MAP_PIN" || src === "CURRENT_LOCATION"; }
 function approx(src: unknown, lat: unknown): boolean { return lat != null && src === "SEARCH"; }
 
-/**
- * 셔틀 통합 명단 조회.
- *
- * 시즌 범위:
- * - `seasonId`를 주면 그 시즌만 본다.
- * - 안 주면 "보관(ARCHIVED)되지 않은 시즌"만 본다. (countPendingMakeups와 같은 기준)
- *   '가장 최근 시즌 1개'로 좁히지 않는 이유: 다음 방학 시즌을 미리 만들어 두는 순간
- *   운영 중인 이번 시즌 명단이 기사님 화면에서 통째로 사라진다. 그게 더 큰 사고다.
- */
-export async function getSeasonalShuttleRoster(seasonId?: string | null): Promise<ShuttleRosterRow[]> {
+// 대상자 조회는 여기서 직접 짜지 않는다. 화면마다 SQL을 새로 쓰다가 취소 신청·폐강 반 필터가
+// 빠지는 사고가 6번 반복됐다. 명단의 출처는 확정 명단 게이트웨이 하나로 고정한다.
+export async function getSeasonalShuttleRoster(): Promise<ShuttleRosterRow[]> {
   await requireAdmin();
-  const params: unknown[] = [];
-  let seasonWhere = `s.status <> 'ARCHIVED'`;
-  if (seasonId) {
-    params.push(seasonId);
-    seasonWhere = `a."seasonId" = $1`;
-  }
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT r.id AS "requestId", r.status,
-            r."pickupLocation", r."pickupTime", r."pickupLatitude" AS "pLat", r."pickupLongitude" AS "pLng", r."pickupLocationSource" AS "pSrc",
-            r."dropoffLocation", r."dropoffLatitude" AS "dLat", r."dropoffLongitude" AS "dLng", r."dropoffLocationSource" AS "dSrc",
-            COALESCE(r."dropoffSameAsPickup", false) AS "same",
-            a."childName", a."childGrade", a."childGender", a."childPhone", a."parentName", a."parentPhone", a."selectedWeekdays",
-            o.title AS "offeringTitle",
-            (SELECT to_char(min(sd."startsAt") AT TIME ZONE 'Asia/Seoul','HH24:MI') FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = o.id) AS "classStart",
-            (SELECT to_char(min(sd."endsAt")   AT TIME ZONE 'Asia/Seoul','HH24:MI') FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = o.id) AS "classEnd"
-       FROM "SpecialProgramShuttleRequest" r
-       JOIN "SpecialProgramApplication" a ON a.id = r."applicationId"
-       JOIN "SpecialProgramSeason" s ON s.id = a."seasonId"
-       LEFT JOIN "SpecialProgramApplicationItem" it ON it.id = r."applicationItemId"
-       LEFT JOIN "SpecialProgramOffering" o ON o.id = it."offeringId"
-      -- 신청 취소·거절, 개설 취소된 반의 학생은 명단에서 완전히 뺀다(기사님이 태우면 안 되는 사람).
-      -- 반면 셔틀 상태(r.status)는 여기서 거르지 않는다. '미탑승'으로 눌러둔 학생도 행은 남겨야
-      -- 나중에 "역시 태워주세요" 연락이 왔을 때 화면에서 다시 탑승으로 되돌릴 수 있다.
-      WHERE ${seasonWhere}
-        AND ${seasonalShuttleEligibilitySql({ application: "a", item: "it", offering: "o" })}
-      ORDER BY (r.status NOT IN ('CANCELLED','REJECTED')) DESC, "classStart" NULLS LAST, a."childName" ASC`,
-    ...params,
-  );
-  return rows.map((r) => ({
-    requestId: r.requestId,
-    // REJECTED(거절)도 미탑승이다. `!== 'CANCELLED'`로만 보면 거절 건이 탑승으로 새어
-    // 자동 배차(shuttle-optimize.ts)에까지 실린다.
-    ride: isRidingShuttleStatus(r.status),
-    childName: r.childName, childGrade: r.childGrade ?? null, childGender: r.childGender ?? null,
-    childPhone: r.childPhone ?? null, parentName: r.parentName ?? null, parentPhone: r.parentPhone ?? null,
-    offeringTitle: r.offeringTitle ?? null, classStart: r.classStart ?? null, classEnd: r.classEnd ?? null,
-    weekdayLabel: weekdayLabel(r.selectedWeekdays),
-    pickupLocation: r.pickupLocation ?? null, pickupTime: r.pickupTime ?? null,
-    pickupLat: num(r.pLat), pickupLng: num(r.pLng), pickupPinned: pinned(r.pSrc), pickupApprox: approx(r.pSrc, r.pLat),
-    dropoffLocation: r.dropoffLocation ?? null,
-    dropoffLat: num(r.dLat), dropoffLng: num(r.dLng), dropoffPinned: pinned(r.dSrc), dropoffApprox: approx(r.dSrc, r.dLat),
-    dropoffSameAsPickup: r.same === true,
+  const entries = await getConfirmedShuttleRoster();
+  return entries.map((e) => ({
+    requestId: e.shuttleRequestId,
+    applicationId: e.applicationId ?? "",
+    ride: e.ride,
+    childName: e.studentName, childGrade: e.childGrade, childGender: e.childGender,
+    childPhone: e.childPhone, parentName: e.parentName, parentPhone: e.parentPhone,
+    offeringTitle: e.offeringTitle, classStart: e.classStart, classEnd: e.classEnd,
+    weekdayLabel: weekdayLabel(e.weekdays),
+    pickupLocation: e.pickup.location, pickupTime: e.pickupTime,
+    pickupLat: e.pickup.latitude, pickupLng: e.pickup.longitude,
+    pickupPinned: pinned(e.pickup.source), pickupApprox: approx(e.pickup.source, e.pickup.latitude),
+    dropoffLocation: e.dropoff.location,
+    dropoffLat: e.dropoff.latitude, dropoffLng: e.dropoff.longitude,
+    dropoffPinned: pinned(e.dropoff.source), dropoffApprox: approx(e.dropoff.source, e.dropoff.latitude),
+    dropoffSameAsPickup: e.dropoffSameAsPickup,
   }));
 }
 
@@ -92,10 +60,39 @@ function clean(v: unknown, max: number): string | null {
   return t ? t.slice(0, max) : null;
 }
 
+export type PinInput = {
+  latitude: number; longitude: number; address?: string; roadAddress?: string;
+  source?: string; placeId?: string; accuracyMeters?: number;
+};
 export type ShuttleRosterPatch = {
   pickupLocation?: string; pickupTime?: string; dropoffLocation?: string;
   ride?: boolean; dropoffSameAsPickup?: boolean;
+  pickupPin?: PinInput; dropoffPin?: PinInput; // 지도 핀(정밀 좌표) 설정
 };
+
+const VALID_SOURCE = new Set(["MAP_PIN", "SEARCH", "CURRENT_LOCATION"]);
+
+// 지도 핀 좌표를 등원/하원에 반영(제약조건 충족: 주소·source·confirmedAt·consent 필수)
+async function applyPin(requestId: string, kind: "pickup" | "dropoff", pin: PinInput) {
+  const lat = Number(pin.latitude), lng = Number(pin.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+  const src = pin.source && VALID_SOURCE.has(pin.source) ? pin.source : "MAP_PIN";
+  const address = clean(pin.address, 300) ?? clean(pin.roadAddress, 300) ?? "지도에서 선택한 위치";
+  const roadAddress = clean(pin.roadAddress, 300);
+  const placeId = clean(pin.placeId, 200);
+  const acc = pin.accuracyMeters != null && Number.isFinite(Number(pin.accuracyMeters)) ? Math.max(0, Number(pin.accuracyMeters)) : null;
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SpecialProgramShuttleRequest" SET
+        "${kind}Latitude" = $2, "${kind}Longitude" = $3, "${kind}Address" = $4, "${kind}RoadAddress" = $5,
+        "${kind}LocationSource" = $6, "${kind}PlaceId" = $7, "${kind}AccuracyMeters" = $8, "${kind}ConfirmedAt" = now(),
+        -- 표시 라벨(건물/상호명)은 유지: 비어 있을 때만 주소로 채운다(핀이 이름을 덮어쓰지 않음)
+        "${kind}Location" = COALESCE(NULLIF(btrim("${kind}Location"), ''), $4),
+        "locationConsentVersion" = COALESCE("locationConsentVersion", '2026-07-21'),
+        "updatedAt" = now()
+      WHERE id = $1`,
+    requestId, lat, lng, address, roadAddress, src, placeId, acc,
+  );
+}
 
 // 인라인 편집 저장. 지도 좌표(정밀 핀)는 여기서 바꾸지 않고, '등원과 동일'이 켜지면 등원 좌표를 하원으로 복제한다.
 export async function updateShuttleRosterRow(requestId: string, patch: ShuttleRosterPatch) {
@@ -117,6 +114,10 @@ export async function updateShuttleRosterRow(requestId: string, patch: ShuttleRo
       ...args,
     );
   }
+
+  // 지도 핀 좌표 반영
+  if (patch.pickupPin) await applyPin(requestId, "pickup", patch.pickupPin);
+  if (patch.dropoffPin) await applyPin(requestId, "dropoff", patch.dropoffPin);
 
   // '등원과 동일' 유효 상태 확인 후, 켜져 있으면 등원 좌표·주소를 하원으로 복제한다.
   const cur = await prisma.$queryRawUnsafe<any[]>(

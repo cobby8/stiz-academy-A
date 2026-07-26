@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { optimizeWaypointOrderWithTmap, type TmapWaypoint } from "@/lib/shuttle/tmap";
+// 태울 학생 판정은 절대 여기서 하지 않는다. 게이트웨이 한 곳만 통과한다.
+// (여기서 WHERE 절을 손으로 다시 쓰다가 취소자·폐강 반 학생이 배차에 실리는 사고가 5번 반복됐다.)
+import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
 
 // 방학특강 셔틀 노선 자동 제안 엔진.
 // - 그 날짜에 실제 등원(SCHEDULED)하는 셔틀 학생만 배차(요일별 반복 스케줄 반영).
@@ -19,11 +22,12 @@ export type DispatchDirection = "PICKUP" | "DROPOFF";
 type Pt = { lat: number; lng: number };
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
-async function getSettings(): Promise<{ academy: Geo; depot: Geo | null }> {
+async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; hub: Geo | null }> {
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>(
       `SELECT "academyLatitude" AS alat, "academyLongitude" AS alng, "academyAddress" AS aaddr,
-              "shuttleDepotLatitude" AS dlat, "shuttleDepotLongitude" AS dlng, "shuttleDepotAddress" AS daddr
+              "shuttleDepotLatitude" AS dlat, "shuttleDepotLongitude" AS dlng, "shuttleDepotAddress" AS daddr,
+              "shuttleHubLatitude" AS hlat, "shuttleHubLongitude" AS hlng, "shuttleHubName" AS hname
          FROM "AcademySettings" LIMIT 1`,
     );
     const r = rows[0] ?? {};
@@ -34,8 +38,11 @@ async function getSettings(): Promise<{ academy: Geo; depot: Geo | null }> {
     const dlat = Number(r.dlat), dlng = Number(r.dlng);
     const depot: Geo | null = Number.isFinite(dlat) && Number.isFinite(dlng)
       ? { lat: dlat, lng: dlng, name: r.daddr ? `차고지 · ${r.daddr}` : "차고지" } : null;
-    return { academy, depot };
-  } catch { return { academy: ACADEMY_FALLBACK, depot: null }; }
+    const hlat = Number(r.hlat), hlng = Number(r.hlng);
+    const hub: Geo | null = Number.isFinite(hlat) && Number.isFinite(hlng)
+      ? { lat: hlat, lng: hlng, name: (r.hname && String(r.hname)) || "무료 탑승 거점" } : null;
+    return { academy, depot, hub };
+  } catch { return { academy: ACADEMY_FALLBACK, depot: null, hub: null }; }
 }
 
 function haversineKm(a: Pt, b: Pt): number {
@@ -50,7 +57,7 @@ function minToHHMM(x: number): string { const v = Math.max(0, Math.round(x)); re
 function pinnedSrc(s: unknown) { return s === "MAP_PIN" || s === "CURRENT_LOCATION"; }
 
 type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null };
-type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; etaLabel?: string };
+type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string };
 type Run = {
   index: number; vehicleName: string; plate: string | null; capacity: number; tripLabel: string | null;
   passengers: number; stops: Stop[]; over: boolean;
@@ -61,7 +68,7 @@ export type DispatchSuggestion = {
   direction: DispatchDirection;
   date: string | null; dow: string | null;
   classStart: string | null; classEnd: string | null;
-  academy: Geo; depot: Geo | null;
+  academy: Geo; depot: Geo | null; hub: Geo | null;
   vehicles: Run[];
   unassigned: { name: string; label: string | null }[];
   availableDates: { date: string; label: string }[];
@@ -131,22 +138,17 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
 export async function suggestDispatch(opts: { direction: DispatchDirection; date?: string | null }): Promise<DispatchSuggestion> {
   await requireAdmin();
   const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
-  const { academy, depot } = await getSettings();
+  const { academy, depot, hub } = await getSettings();
 
-  const dateRows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT DISTINCT (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date AS d,
-            EXTRACT(DOW FROM (sd."startsAt" AT TIME ZONE 'Asia/Seoul'))::int AS dow
-       FROM "SpecialProgramEnrollmentDate" e
-       JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
-       JOIN "SpecialProgramShuttleRequest" r ON r."applicationItemId" = e."applicationItemId" AND r.status <> 'CANCELLED'
-      WHERE e.status = 'SCHEDULED'
-      ORDER BY d ASC`,
-  );
-  const availableDates = dateRows.map((r) => {
-    const d = String(r.d).slice(0, 10); const [, mm, dd] = d.split("-");
-    return { date: d, label: `${Number(mm)}/${Number(dd)} (${DOW_KO[Number(r.dow)]})` };
+  // ⚠️ 태울 학생은 게이트웨이 한 곳으로만 읽는다.
+  // 여기서 SQL을 새로 쓸 때마다 취소자·폐강 반 필터가 빠지는 사고가 반복됐다(5회).
+  // 운행일 후보와 그날 명단을 한 번에 받아 오므로 이 파일에는 대상자 쿼리가 아예 없다.
+  const plan = await getConfirmedShuttleRosterForDate(opts.date ?? null, direction);
+  const availableDates = plan.availableDates.map((x) => {
+    const [, mm, dd] = x.date.split("-");
+    return { date: x.date, label: `${Number(mm)}/${Number(dd)} (${DOW_KO[x.dow]})` };
   });
-  const date = opts.date && availableDates.some((x) => x.date === opts.date) ? opts.date : (availableDates[0]?.date ?? null);
+  const date = plan.date;
   const dow = date ? (availableDates.find((x) => x.date === date)?.label.match(/\((.)\)/)?.[1] ?? null) : null;
 
   const vehRows = await prisma.$queryRawUnsafe<any[]>(
@@ -156,49 +158,36 @@ export async function suggestDispatch(opts: { direction: DispatchDirection; date
   const vehicleFleet = fleet.length ? fleet : [{ name: "미등록 차량", plate: null, capacity: 9 }];
 
   const base: DispatchSuggestion = {
-    direction, date, dow, classStart: null, classEnd: null, academy, depot,
+    direction, date, dow, classStart: null, classEnd: null, academy, depot, hub,
     vehicles: [], unassigned: [], availableDates, totalRiders: 0, vehicleFleet, routingProvider: "LOCAL",
   };
   if (!date) return base;
 
-  const riders = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT DISTINCT r.id AS "requestId",
-            r."pickupLocation", r."pickupLatitude" AS "pLat", r."pickupLongitude" AS "pLng", r."pickupLocationSource" AS "pSrc",
-            r."dropoffLocation", r."dropoffLatitude" AS "dLat", r."dropoffLongitude" AS "dLng", r."dropoffLocationSource" AS "dSrc",
-            COALESCE(r."dropoffSameAsPickup", false) AS "same",
-            a."childName", a."childGrade", a."childPhone", a."parentPhone",
-            to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul','HH24:MI') AS "classStart",
-            to_char(sd."endsAt"   AT TIME ZONE 'Asia/Seoul','HH24:MI') AS "classEnd"
-       FROM "SpecialProgramEnrollmentDate" e
-       JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
-       JOIN "SpecialProgramShuttleRequest" r ON r."applicationItemId" = e."applicationItemId" AND r.status <> 'CANCELLED'
-       JOIN "SpecialProgramApplication" a ON a.id = r."applicationId"
-      WHERE e.status = 'SCHEDULED'
-        AND (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
-      ORDER BY "classStart" ASC, a."childName" ASC`,
-    date,
-  );
+  // 그날 태울 사람. 방향에 맞는 위치(하원=등원 동일 옵션 포함)는 게이트웨이가 이미 골라 준다.
+  const riders = plan.riders;
   if (riders.length === 0) return base;
 
-  const classStart = riders[0]?.classStart ?? null;
-  const classEnd = riders[0]?.classEnd ?? null;
+  const classStart = plan.classStart;
+  const classEnd = plan.classEnd;
 
   const unassigned: { name: string; label: string | null }[] = [];
   const stopMap = new Map<string, Stop>();
   for (const r of riders) {
-    const lat = direction === "PICKUP" ? r.pLat : (r.dLat ?? r.pLat);
-    const lng = direction === "PICKUP" ? r.pLng : (r.dLng ?? r.pLng);
-    const label = (direction === "PICKUP" ? r.pickupLocation : (r.same ? r.pickupLocation : r.dropoffLocation)) ?? r.pickupLocation ?? "(위치 미지정)";
-    if (lat == null || lng == null) { unassigned.push({ name: r.childName, label }); continue; }
-    const key = `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`;
-    const src = direction === "PICKUP" ? r.pSrc : (r.same ? r.pSrc : r.dSrc);
-    if (!stopMap.has(key)) stopMap.set(key, { lat: Number(lat), lng: Number(lng), label, students: [], approx: !pinnedSrc(src) });
-    stopMap.get(key)!.students.push({ name: r.childName, grade: r.childGrade ?? null, parentPhone: r.parentPhone ?? null, childPhone: r.childPhone ?? null });
+    const { latitude: lat, longitude: lng } = r.place;
+    const label = r.placeLabel;
+    if (lat == null || lng == null) { unassigned.push({ name: r.studentName, label }); continue; }
+    const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+    if (!stopMap.has(key)) stopMap.set(key, { lat, lng, label, students: [], approx: !pinnedSrc(r.place.source) });
+    stopMap.get(key)!.students.push({ name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone });
   }
+
+  // 무료 탑승 거점(1호점 등)은 등록 인원과 무관하게 항상 경유한다. 정원은 소비하지 않는다(워크인).
+  const allStops: Stop[] = [...stopMap.values()];
+  if (hub) allStops.push({ lat: hub.lat, lng: hub.lng, label: hub.name, students: [], approx: false, isHub: true });
 
   // 정원 배차: 차고지(등원)/학원(하원) 기준 최근접순으로 채운 뒤, 정원 초과 시 같은 차량 추가 운행
   const fillFrom: Pt = direction === "PICKUP" ? (depot ?? academy) : academy;
-  const ordered = nnOrder([...stopMap.values()], fillFrom);
+  const ordered = nnOrder(allStops, fillFrom);
   const runs: Run[] = [];
   const tripByVeh: Record<number, number> = {};
   let vi = 0;
@@ -222,7 +211,7 @@ export async function suggestDispatch(opts: { direction: DispatchDirection; date
   for (const v of runs) { await planRun(v, direction, academy, depot, csMin, ceMin); v.over = v.passengers > v.capacity; }
 
   return {
-    direction, date, dow, classStart, classEnd, academy, depot,
+    direction, date, dow, classStart, classEnd, academy, depot, hub,
     vehicles: runs, unassigned, availableDates,
     totalRiders: riders.length - unassigned.length, vehicleFleet,
     routingProvider: runs.some((r) => r.provider === "TMAP") ? "TMAP" : "LOCAL",

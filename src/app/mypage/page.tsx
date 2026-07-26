@@ -3,7 +3,7 @@ import { getMyPageData, getGalleryByClassIds, getNoticesByClassIds, getNotificat
 import MyPageClient from "./MyPageClient";
 import Link from "next/link";
 import { requireVerifiedParent } from "@/lib/auth-guard";
-import { getParentShuttleOverview } from "@/lib/shuttle/parent";
+import { getParentShuttleOverview, getShuttleDriverContact } from "@/lib/shuttle/parent";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +52,7 @@ export default async function MyPageDashboard() {
     // 자녀 ID 목록 추출 (피드백 조회용)
     const studentIds = data.children.map(c => c.id);
     // 갤러리/공지/알림/피드백 데이터 가져오기
-    const [gallery, notices, notifications, unreadCount, myRequests, feedbacks, shuttleOverview] = await Promise.all([
+    const [gallery, notices, notifications, unreadCount, myRequests, feedbacks, shuttleOverview, driverContact] = await Promise.all([
         getGalleryByClassIds(classIds, 10),
         getNoticesByClassIds(classIds, 10),
         getNotifications(data.parent.id),
@@ -60,7 +60,8 @@ export default async function MyPageDashboard() {
         getMyRequests(data.parent.id),
         getChildrenFeedbacks(studentIds),
         getParentShuttleOverview(parentAuth.appUserId),
+        getShuttleDriverContact(),
     ]);
 
-    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} myRequests={myRequests} feedbacks={feedbacks} parentShuttleOverview={shuttleOverview} />;
+    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} myRequests={myRequests} feedbacks={feedbacks} parentShuttleOverview={shuttleOverview} shuttleDriverContact={driverContact} />;
 }

@@ -169,3 +169,17 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - ShuttleRoutePassenger는 실시간 운행 상태를 rideStatus로 보관한다. 값은 PENDING, BOARDED, DROPPED_OFF, NO_SHOW만 사용한다.
 - 기사 모바일 앱 /staff/shuttle은 배정된 확정 노선의 승객별 탑승/하차 버튼을 제공하고, /api/staff/shuttle PATCH로 즉시 저장한다.
 - 관리자 셔틀 화면 /admin/shuttle은 각 승객 배지에 현재 운행 상태를 함께 표시한다.
+
+## 방학특강 날짜별 출석 슬롯과 신청 요일 (2026-07-25)
+
+- **분류**: architecture
+- **발견자**: developer
+- **내용**: `SpecialProgramEnrollmentDate`(날짜별 출석 슬롯)는 학생이 신청 시 고른 `SpecialProgramApplication.selectedWeekdays`에 해당하는 날짜에만 생성된다. 따라서 같은 반이라도 날짜별 명단 인원이 서로 다른 것이 정상이며, "반 전체 승인 인원"은 `sd."offeringId"` 기준 + `e.status <> 'CANCELLED'` + `e.kind='REGULAR'` + 신청항목 `status='APPROVED'`의 DISTINCT `applicationItemId`로 센다(`src/lib/seasonal/attendance.ts`의 `countApprovedStudents`). 관리자 화면은 "반 전체 N명 중 이 날 M명"을 함께 보여줘 누락 오해를 막는다. 날짜 요일 계산은 `src/lib/seasonal/planning.ts`의 `weekdayInSeoul`(Asia/Seoul)을 재사용한다.
+- **참조횟수**: 0
+
+## 방학특강 "정원"의 진짜 기준 = 코트(형제 반) × 요일 (2026-07-25)
+
+- **분류**: architecture
+- **발견자**: developer
+- **내용**: `SpecialProgramOffering.capacity`는 그 반 하나의 인원 상한이 아니다. 승인 검사 `ensureSpecialProgramOperationalCapacity`(`src/app/api/admin/seasonal/route.ts:551~598`)가 쓰는 실제 의미는 **"`linkedClassId`로 묶인 같은 시즌 형제 반(주2회·주3회·주5회 등)을 모두 합쳐, 한 요일에 코트에 들어올 수 있는 최대 인원"**이다. 판정 기준은 `item.status='APPROVED'` DISTINCT 항목 수 + `COALESCE(cardinality(app."selectedWeekdays"),0)=0 OR <요일> = ANY(app."selectedWeekdays")`(요일 미선택 = 전 요일 등원). 반면 `countApprovedStudents`의 "반 전체 N명"은 **반 1개 · 전체 기간** 기준이라 축이 다르며, 그래서 "반 전체 13명 / 정원 12" 같은 모순 표시가 나왔다. 같은 기준의 요일별 점유 집계는 `src/lib/seasonal/attendance.ts`의 `getCourtOccupancyByWeekday()`(7요일 VALUES × LEFT JOIN 단일 쿼리, N+1 없음)로 제공하며 board/roster 응답의 `courtOccupied`/`courtCapacity`로 내려간다. 실측(2026 여름): 초등 고학년 그룹 월 15 / 화 11 / 수 13 / 목 11 / 금 10 (정원 12) — 월·수는 이미 초과 상태.
+- **참조횟수**: 0

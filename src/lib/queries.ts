@@ -104,6 +104,10 @@ async function fetchAcademySettings() {
                 academyAddress: r.academyAddress ?? r.academyaddress ?? null,
                 academyLatitude: r.academyLatitude ?? r.academylatitude ?? null,
                 academyLongitude: r.academyLongitude ?? r.academylongitude ?? null,
+                // 셔틀 확정 명단 킬 스위치(true=확정 명단 사용 / false·NULL=끔).
+                // ⚠️ 이 값은 unstable_cache(5분)를 타므로 실제 판정에는 쓰지 않는다.
+                //    게이트웨이(shuttleRoster.ts)가 DB를 직접 읽는다. 여기 매핑은 설정 화면 표시용이다.
+                shuttleRosterConfirmedMode: toBool(r.shuttleRosterConfirmedMode ?? r.shuttlerosterconfirmedmode, false),
                 // 자체 폼 ON/OFF 플래그 (false=구글폼 모드, true=자체 폼 모드)
                 // TEXT 컬럼에서 'false' 문자열이 올 수 있어 toBool로 안전 변환
                 useBuiltInTrialForm: toBool(r.useBuiltInTrialForm ?? r.usebuiltintrialform, false),

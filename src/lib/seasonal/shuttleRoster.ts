@@ -1,0 +1,609 @@
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guard";
+import { isRidingShuttleStatus, ridingShuttleStatusSql, seasonalShuttleEligibilitySql } from "./shuttleEligibility";
+
+/**
+ * 방학특강 셔틀 "확정 명단" 게이트웨이 — 셔틀 대상자를 읽는 **유일한 출구**.
+ *
+ * 왜 이 파일이 필요한가:
+ *   셔틀 대상자는 지금까지 어디에도 저장돼 있지 않았다. 화면마다 신청서·수강항목·개설반·
+ *   셔틀신청 4개 테이블을 새로 조인해 걸러야 했고, 새 SQL을 쓸 때마다 필터가 빠졌다.
+ *   같은 사고가 2026-07-26 기준 5회 반복됐다(마지막 1회는 이번 작업 중 워킹트리에서 발견).
+ *   공용 SQL 조각(shuttleEligibility.ts)은 "새 쿼리가 그걸 안 쓰면" 여전히 뚫린다.
+ *   → 원장이 확인해 확정한 명단을 값으로 복제해 저장하고, 모든 화면이 이 파일만 통과하게 한다.
+ *
+ * 밖으로 내보내는 **조회** 함수는 딱 2개다:
+ *   1) getConfirmedShuttleRoster(seasonId?)             — 시즌 확정 명단(누가 셔틀 회원인가)
+ *   2) getConfirmedShuttleRosterForDate(date, direction) — 그날 실제로 태울 사람(날짜 × 방향)
+ *
+ * ⚠️ 폴백(확정본이 없을 때 원본을 조회하는 로직)은 **이 파일 안에만** 있다.
+ *    소비처는 폴백의 존재를 몰라야 하고, 원본 테이블을 직접 조회해서도 안 된다.
+ *
+ * 권한: 조회 함수는 인증을 하지 않는다(학부모 마이페이지도 쓰기 때문).
+ *       호출부가 기존 가드(requireAdmin / requireVerifiedParent)를 그대로 유지한다.
+ *       확정·수정·제외 함수만 이 파일에서 ADMIN(원장)을 직접 검사한다.
+ */
+
+// ────────────────────────────────────────────────────────────────
+// 타입
+// ────────────────────────────────────────────────────────────────
+
+export type ShuttleRosterSource = "CONFIRMED" | "FALLBACK";
+
+/** 한 사람의 등원/하원 위치 한 벌. 원본 컬럼 이름을 그대로 따라간다(옮겨 담다 흘리는 실수 방지). */
+export type ShuttleRosterPlace = {
+  location: string | null;
+  address: string | null;
+  roadAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  placeId: string | null;
+  source: string | null;
+  accuracyMeters: number | null;
+  /** 관리자가 위치를 확인한 시각. 노선 편성 화면의 "이 학생 배차 가능" 판정에 쓰인다(빠뜨리면 배차 버튼이 죽는다). */
+  confirmedAt: Date | null;
+};
+
+export type ShuttleRosterEntry = {
+  /** 확정본에서 나왔는지, 폴백(원본 조회)에서 나왔는지. 소비처는 몰라도 되고 진단용이다. */
+  origin: ShuttleRosterSource;
+  /** 확정본 행 id. 폴백이면 null. */
+  rosterId: string | null;
+  seasonId: string;
+  shuttleRequestId: string;
+  /** 신청서 id. 학생 상세 모달을 여는 키다. */
+  applicationId: string | null;
+  applicationItemId: string | null;
+  /** 전환된 Student.id. 전환 전이면 null(학부모 화면은 이 값이 있어야 자녀와 이어 붙인다). */
+  studentId: string | null;
+
+  ride: boolean;
+
+  studentName: string;
+  childGrade: string | null;
+  childGender: string | null;
+  childPhone: string | null;
+  parentName: string | null;
+  parentPhone: string | null;
+
+  offeringId: string | null;
+  offeringTitle: string | null;
+  weekdays: string[];
+  classStart: string | null; // 'HH:MM' (Asia/Seoul)
+  classEnd: string | null;
+
+  pickup: ShuttleRosterPlace;
+  /** 학부모가 적어 낸 희망시간. 형식이 제각각이라(참고값) 계산에 쓰지 않는다. */
+  pickupTime: string | null;
+  dropoff: ShuttleRosterPlace;
+  dropoffSameAsPickup: boolean;
+
+  note: string | null;
+  /** 신청 접수 시각. 미배정 목록의 기존 정렬(신청순)을 그대로 재현하는 데 쓴다. */
+  requestCreatedAt: Date | null;
+};
+
+/** 날짜별 운행 명단 1명. 방향에 따라 이미 결정된 위치 한 벌만 들고 있다. */
+export type ShuttleRosterRider = ShuttleRosterEntry & {
+  serviceDate: string; // 'YYYY-MM-DD'
+  /** 그 날짜 수업의 시작/종료 시각. 스냅샷이 아니라 그날 세션 값이다. */
+  sessionStart: string | null;
+  sessionEnd: string | null;
+  /** direction에 맞춰 이미 고른 위치(하원=등원 동일 옵션까지 반영). */
+  place: ShuttleRosterPlace;
+  placeLabel: string;
+};
+
+export type ShuttleRosterDatePlan = {
+  origin: ShuttleRosterSource;
+  date: string | null;
+  direction: "PICKUP" | "DROPOFF";
+  /** 운행일 후보(셔틀 대상자가 한 명이라도 등원하는 날짜). */
+  availableDates: { date: string; dow: number }[];
+  riders: ShuttleRosterRider[];
+  classStart: string | null;
+  classEnd: string | null;
+};
+
+// ────────────────────────────────────────────────────────────────
+// 내부 유틸
+// ────────────────────────────────────────────────────────────────
+
+/** raw SQL 한 행. 컬럼 이름이 SQL 문자열에 있어 정적 타입을 붙일 수 없다(PgBouncer 때문에 $queryRawUnsafe 고정). */
+type RawRow = Record<string, unknown>;
+
+function dt(v: unknown): Date | null {
+  if (v == null) return null;
+  const d = v instanceof Date ? v : new Date(String(v));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function num(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function str(v: unknown): string | null {
+  if (v == null) return null;
+  const t = String(v).trim();
+  return t ? t : null;
+}
+
+function weekdayList(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => String(x)).filter(Boolean);
+}
+
+/**
+ * 킬 스위치 확인. 원장이 재배포 없이 되돌릴 수 있어야 해서 DB에 둔다.
+ *   true         → 확정 명단을 쓴다
+ *   false / NULL → 끔. 확정본을 무시하고 항상 원본 폴백(= 전환 이전과 완전히 동일한 동작)
+ *
+ * 기본값이 "꺼짐"인 이유: 아무도 아무것도 안 해도 화면이 오늘과 1도 달라지지 않아야 하기 때문이다.
+ * 3단계에서 원장이 확정 버튼을 누르는 순간 켜진다.
+ *
+ * ⚠️ getAcademySettings()는 unstable_cache(5분)라 킬 스위치로 쓸 수 없다(끄고 5분을 기다릴 수 없다).
+ *    그래서 여기서는 캐시를 거치지 않고 직접 읽는다.
+ * ⚠️ 문자열('false')로 저장된 환경도 있을 수 있어 boolean·문자열 양쪽을 다 받는다.
+ */
+async function confirmedModeEnabled(): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+      `SELECT "shuttleRosterConfirmedMode" AS mode FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`,
+    );
+    const mode = rows[0]?.mode;
+    if (mode === true) return true;
+    if (typeof mode === "string") return ["TRUE", "ON", "1"].includes(mode.trim().toUpperCase());
+    return false;
+  } catch {
+    // 컬럼이 아직 없는 환경(구버전 DB)에서는 폴백으로 동작한다. 화면이 비는 것보다 안전하다.
+    return false;
+  }
+}
+
+/** 시즌 범위 WHERE 절. seasonId를 주면 그 시즌만, 안 주면 보관되지 않은 시즌 전부. */
+function seasonScope(alias: { roster?: string; application?: string; season: string }, seasonId?: string | null) {
+  const params: unknown[] = [];
+  if (seasonId) {
+    params.push(seasonId);
+    const col = alias.roster ? `${alias.roster}."seasonId"` : `${alias.application}."seasonId"`;
+    return { where: `${col} = $1`, params };
+  }
+  // '가장 최근 시즌 1개'로 좁히지 않는 이유: 다음 방학 시즌을 미리 만들어 두는 순간
+  // 운영 중인 이번 시즌 명단이 기사님 화면에서 통째로 사라진다. 그게 더 큰 사고다.
+  return { where: `${alias.season}.status <> 'ARCHIVED'`, params };
+}
+
+function place(r: RawRow, prefix: "pickup" | "dropoff"): ShuttleRosterPlace {
+  const p = (suffix: string) => r[`${prefix}${suffix}`];
+  return {
+    location: str(p("Location")),
+    address: str(p("Address")),
+    roadAddress: str(p("RoadAddress")),
+    latitude: num(p("Latitude")),
+    longitude: num(p("Longitude")),
+    placeId: str(p("PlaceId")),
+    source: str(p("LocationSource")),
+    accuracyMeters: num(p("AccuracyMeters")),
+    confirmedAt: dt(p("ConfirmedAt")),
+  };
+}
+
+/** 확정본 행과 폴백 행을 같은 모양으로 맞춘다. 두 경로가 어긋나면 그 자체가 사고다. */
+function toEntry(r: RawRow, origin: ShuttleRosterSource): ShuttleRosterEntry {
+  return {
+    origin,
+    rosterId: origin === "CONFIRMED" ? String(r.rosterId) : null,
+    seasonId: String(r.seasonId),
+    shuttleRequestId: String(r.shuttleRequestId),
+    applicationId: str(r.applicationId),
+    applicationItemId: str(r.applicationItemId),
+    studentId: str(r.studentId),
+    ride: r.ride === true,
+    studentName: String(r.studentName ?? ""),
+    childGrade: str(r.childGrade),
+    childGender: str(r.childGender),
+    childPhone: str(r.childPhone),
+    parentName: str(r.parentName),
+    parentPhone: str(r.parentPhone),
+    offeringId: str(r.offeringId),
+    offeringTitle: str(r.offeringTitle),
+    weekdays: weekdayList(r.weekdays),
+    classStart: str(r.classStart),
+    classEnd: str(r.classEnd),
+    pickup: place(r, "pickup"),
+    pickupTime: str(r.pickupTime),
+    dropoff: place(r, "dropoff"),
+    dropoffSameAsPickup: r.dropoffSameAsPickup === true,
+    note: str(r.note),
+    requestCreatedAt: dt(r.requestCreatedAt),
+  };
+}
+
+// 폴백 SELECT 목록. 확정본 컬럼명과 1:1로 맞춰 두 경로의 결과 모양을 강제로 같게 만든다.
+const FALLBACK_COLUMNS = `
+        a."seasonId"                AS "seasonId",
+        r.id                        AS "shuttleRequestId",
+        r."applicationId"           AS "applicationId",
+        r."applicationItemId"       AS "applicationItemId",
+        -- 학생 전환이 끝난 경우에만 자녀와 이어 붙인다(학부모 화면의 기존 조건과 동일).
+        CASE WHEN it."conversionStatus" = 'COMPLETED' THEN a."convertedStudentId" ELSE NULL END AS "studentId",
+        a."childName"               AS "studentName",
+        a."childGrade"              AS "childGrade",
+        a."childGender"             AS "childGender",
+        a."childPhone"              AS "childPhone",
+        a."parentName"              AS "parentName",
+        a."parentPhone"             AS "parentPhone",
+        it."offeringId"             AS "offeringId",
+        COALESCE(it."titleSnapshot", o.title) AS "offeringTitle",
+        a."selectedWeekdays"        AS "weekdays",
+        (SELECT to_char(min(sd."startsAt") AT TIME ZONE 'Asia/Seoul','HH24:MI')
+           FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = o.id) AS "classStart",
+        (SELECT to_char(min(sd."endsAt")   AT TIME ZONE 'Asia/Seoul','HH24:MI')
+           FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = o.id) AS "classEnd",
+        r."pickupLocation", r."pickupAddress", r."pickupRoadAddress",
+        r."pickupLatitude", r."pickupLongitude", r."pickupPlaceId",
+        r."pickupLocationSource", r."pickupAccuracyMeters", r."pickupConfirmedAt", r."pickupTime",
+        r."dropoffLocation", r."dropoffAddress", r."dropoffRoadAddress",
+        r."dropoffLatitude", r."dropoffLongitude", r."dropoffPlaceId",
+        r."dropoffLocationSource", r."dropoffAccuracyMeters", r."dropoffConfirmedAt",
+        COALESCE(r."dropoffSameAsPickup", false) AS "dropoffSameAsPickup",
+        r.note                      AS "note",
+        r."createdAt"               AS "requestCreatedAt",
+        r.status                    AS "requestStatus"`;
+
+// 확정본 SELECT 목록. 컬럼 별칭을 폴백과 똑같이 맞춘다.
+const CONFIRMED_COLUMNS = `
+        sr.id                       AS "rosterId",
+        sr."seasonId"               AS "seasonId",
+        sr."shuttleRequestId"       AS "shuttleRequestId",
+        req."applicationId"         AS "applicationId",
+        sr."applicationItemId"      AS "applicationItemId",
+        sr."studentIdSnapshot"      AS "studentId",
+        sr.ride                     AS "ride",
+        sr."studentNameSnapshot"    AS "studentName",
+        sr."childGradeSnapshot"     AS "childGrade",
+        sr."childGenderSnapshot"    AS "childGender",
+        sr."childPhoneSnapshot"     AS "childPhone",
+        sr."parentNameSnapshot"     AS "parentName",
+        sr."parentPhoneSnapshot"    AS "parentPhone",
+        sr."offeringIdSnapshot"     AS "offeringId",
+        sr."offeringTitleSnapshot"  AS "offeringTitle",
+        sr."weekdaysSnapshot"       AS "weekdays",
+        sr."classStartSnapshot"     AS "classStart",
+        sr."classEndSnapshot"       AS "classEnd",
+        sr."pickupLocation", sr."pickupAddress", sr."pickupRoadAddress",
+        sr."pickupLatitude", sr."pickupLongitude", sr."pickupPlaceId",
+        sr."pickupLocationSource", sr."pickupAccuracyMeters", sr."pickupConfirmedAt", sr."pickupTime",
+        sr."dropoffLocation", sr."dropoffAddress", sr."dropoffRoadAddress",
+        sr."dropoffLatitude", sr."dropoffLongitude", sr."dropoffPlaceId",
+        sr."dropoffLocationSource", sr."dropoffAccuracyMeters", sr."dropoffConfirmedAt",
+        sr."dropoffSameAsPickup",
+        sr.note                     AS "note",
+        sr."requestCreatedAtSnapshot" AS "requestCreatedAt"`;
+
+/**
+ * 확정 시점 원본 값의 지문(md5). 4단계 "변동 감지"가 이 값을 다시 계산해 비교한다.
+ * 기사님이 물리적으로 찾아가는 값(주소·좌표)과 사람 정보, 그리고 상태값을 모두 포함한다.
+ * ⚠️ 여기 목록을 바꾸면 기존 확정본의 지문과 어긋나 전원이 '변동됨'으로 뜬다. 함부로 고치지 말 것.
+ */
+const SOURCE_FINGERPRINT_SQL = `md5(concat_ws('|',
+              a."childName", a."childGrade", a."childGender", a."childPhone", a."parentName", a."parentPhone",
+              it."offeringId", COALESCE(it."titleSnapshot", o.title), array_to_string(a."selectedWeekdays", ','),
+              r."pickupLocation", r."pickupAddress", r."pickupRoadAddress",
+              r."pickupLatitude"::text, r."pickupLongitude"::text, r."pickupTime",
+              r."dropoffLocation", r."dropoffAddress", r."dropoffRoadAddress",
+              r."dropoffLatitude"::text, r."dropoffLongitude"::text,
+              COALESCE(r."dropoffSameAsPickup", false)::text,
+              r.status, a.status, it.status, o.status))`;
+
+// 명단 기본 정렬: 탑승자 먼저 → 수업 시작 시각 → 이름.
+// 기존 통합 명단 화면의 ORDER BY와 글자 하나까지 같은 기준이다(순서가 바뀌면 그것도 회귀다).
+const ROSTER_ORDER = `ORDER BY "ride" DESC, "classStart" NULLS LAST, "studentName" ASC`;
+
+// ────────────────────────────────────────────────────────────────
+// 노출 함수 1 — 시즌 확정 명단
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * 시즌 셔틀 확정 명단. 미탑승(ride=false) 행도 함께 돌려준다.
+ * 미탑승 행을 지우면 "역시 태워주세요" 연락이 왔을 때 되돌릴 방법이 사라지기 때문이다.
+ * 탑승자만 필요한 화면은 `rows.filter((row) => row.ride)`로 거른다.
+ */
+export async function getConfirmedShuttleRoster(seasonId?: string | null): Promise<ShuttleRosterEntry[]> {
+  if (await confirmedModeEnabled()) {
+    const scope = seasonScope({ roster: "sr", season: "s" }, seasonId);
+    const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+      `SELECT ${CONFIRMED_COLUMNS}
+         FROM "SeasonalShuttleRoster" sr
+         JOIN "SpecialProgramSeason" s ON s.id = sr."seasonId"
+         LEFT JOIN "SpecialProgramShuttleRequest" req ON req.id = sr."shuttleRequestId"
+        WHERE sr."removedAt" IS NULL
+          AND ${scope.where}
+        ${ROSTER_ORDER}`,
+      ...scope.params,
+    );
+    // 확정본이 한 행이라도 있으면 그것이 정본이다. 원본을 섞지 않는다(섞으면 확정의 의미가 사라진다).
+    if (rows.length > 0) return rows.map((r) => toEntry(r, "CONFIRMED"));
+  }
+  return fallbackSeasonRoster(seasonId);
+}
+
+/**
+ * 폴백 — 아직 아무도 확정 버튼을 누르지 않았을 때 원본에서 그대로 뽑는다.
+ * 전환 이전 화면과 **완전히 같은 결과**를 내는 것이 이 함수의 유일한 목표다.
+ * 셔틀 상태(r.status)는 SQL에서 거르지 않고 ride 값으로만 표시한다.
+ */
+async function fallbackSeasonRoster(seasonId?: string | null): Promise<ShuttleRosterEntry[]> {
+  const scope = seasonScope({ application: "a", season: "s" }, seasonId);
+  const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+    `SELECT * FROM (
+       SELECT ${FALLBACK_COLUMNS},
+              ${ridingShuttleStatusSql("r")} AS "ride"
+         FROM "SpecialProgramShuttleRequest" r
+         JOIN "SpecialProgramApplication" a ON a.id = r."applicationId"
+         JOIN "SpecialProgramSeason" s ON s.id = a."seasonId"
+         LEFT JOIN "SpecialProgramApplicationItem" it ON it.id = r."applicationItemId"
+         LEFT JOIN "SpecialProgramOffering" o ON o.id = it."offeringId"
+        WHERE ${scope.where}
+          AND ${seasonalShuttleEligibilitySql({ application: "a", item: "it", offering: "o" })}
+     ) t
+     ${ROSTER_ORDER}`,
+    ...scope.params,
+  );
+  return rows.map((r) => toEntry({ ...r, ride: isRidingShuttleStatus(r.requestStatus) }, "FALLBACK"));
+}
+
+// ────────────────────────────────────────────────────────────────
+// 노출 함수 2 — 날짜별 운행 명단 (확정본 × 그 날짜 좌석)
+// ────────────────────────────────────────────────────────────────
+
+/** 방향에 맞는 위치 한 벌을 고른다. '하원=등원 동일'이면 등원 값을 그대로 쓴다. */
+function placeForDirection(entry: ShuttleRosterEntry, direction: "PICKUP" | "DROPOFF") {
+  if (direction === "PICKUP") return entry.pickup;
+  if (entry.dropoffSameAsPickup) return entry.pickup;
+  // 하원 좌표가 비어 있으면 등원 좌표로 폴백한다(기존 자동 배차와 같은 규칙).
+  return entry.dropoff.latitude != null && entry.dropoff.longitude != null ? entry.dropoff : {
+    ...entry.dropoff,
+    location: entry.dropoff.location ?? entry.pickup.location,
+    latitude: entry.pickup.latitude,
+    longitude: entry.pickup.longitude,
+    source: entry.pickup.source,
+    confirmedAt: entry.pickup.confirmedAt,
+  };
+}
+
+/**
+ * 그 날짜에 실제로 태울 사람.
+ *
+ * 날짜별 명단을 따로 저장하지 않는 이유(원장 승인): 15운행일 × 2방향 = 30번 확정은 운영이 불가능하다.
+ * 대신 **시즌 확정본 × 그날 좌석(SpecialProgramEnrollmentDate.status='SCHEDULED')**으로 파생한다.
+ * 그날 수업이 취소되면 좌석이 SCHEDULED가 아니게 되므로 **그날 노선에서만 자동으로 빠지고**,
+ * 시즌 명단에는 그대로 남는다. 이게 이 구조를 고른 핵심 이유다.
+ *
+ * `date`가 null이면 운행일 후보만 채워 돌려준다(첫 진입 시 드롭다운 채우기용).
+ */
+export async function getConfirmedShuttleRosterForDate(
+  date: string | null,
+  direction: "PICKUP" | "DROPOFF",
+): Promise<ShuttleRosterDatePlan> {
+  // 시즌 명단을 먼저 얻는다(확정본이든 폴백이든 여기서 이미 판정이 끝난다).
+  const roster = await getConfirmedShuttleRoster();
+  const riding = roster.filter((row) => row.ride);
+  const byItemId = new Map<string, ShuttleRosterEntry>();
+  for (const row of riding) if (row.applicationItemId) byItemId.set(row.applicationItemId, row);
+
+  const origin: ShuttleRosterSource = roster[0]?.origin ?? "FALLBACK";
+  const base: ShuttleRosterDatePlan = {
+    origin, date: null, direction, availableDates: [], riders: [], classStart: null, classEnd: null,
+  };
+  if (byItemId.size === 0) return base;
+
+  // 좌석(날짜 계층)은 스냅샷 대상이 아니다. 명단에 든 수강항목의 좌석만 날짜별로 읽는다.
+  const itemIds = [...byItemId.keys()];
+  const seats = await prisma.$queryRawUnsafe<RawRow[]>(
+    `SELECT e."applicationItemId" AS "itemId",
+            (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date::text AS "serviceDate",
+            EXTRACT(DOW FROM (sd."startsAt" AT TIME ZONE 'Asia/Seoul'))::int AS "dow",
+            to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul','HH24:MI') AS "sessionStart",
+            to_char(sd."endsAt"   AT TIME ZONE 'Asia/Seoul','HH24:MI') AS "sessionEnd"
+       FROM "SpecialProgramEnrollmentDate" e
+       JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
+      WHERE e.status = 'SCHEDULED'
+        AND e."applicationItemId" = ANY($1::text[])
+      ORDER BY "serviceDate" ASC, "sessionStart" ASC`,
+    itemIds,
+  );
+
+  const dateMap = new Map<string, number>();
+  for (const seat of seats) dateMap.set(String(seat.serviceDate), Number(seat.dow));
+  const availableDates = [...dateMap.entries()]
+    .map(([d, dow]) => ({ date: d, dow }))
+    .sort((left, right) => left.date.localeCompare(right.date));
+
+  const selected = date && dateMap.has(date) ? date : (availableDates[0]?.date ?? null);
+  if (!selected) return { ...base, availableDates };
+
+  const riders: ShuttleRosterRider[] = [];
+  const seen = new Set<string>();
+  for (const seat of seats) {
+    if (String(seat.serviceDate) !== selected) continue;
+    const entry = byItemId.get(String(seat.itemId));
+    if (!entry) continue;
+    // 같은 날 같은 신청이 두 번 잡히면(세션 중복) 한 명으로 센다. 기존 쿼리의 DISTINCT와 같은 역할.
+    if (seen.has(entry.shuttleRequestId)) continue;
+    seen.add(entry.shuttleRequestId);
+    const chosen = placeForDirection(entry, direction);
+    riders.push({
+      ...entry,
+      serviceDate: selected,
+      sessionStart: str(seat.sessionStart),
+      sessionEnd: str(seat.sessionEnd),
+      place: chosen,
+      placeLabel: chosen.location ?? entry.pickup.location ?? "(위치 미지정)",
+    });
+  }
+
+  // 기존 배차 쿼리와 같은 정렬: 수업 시작 시각 → 이름.
+  riders.sort((left, right) =>
+    (left.sessionStart ?? "").localeCompare(right.sessionStart ?? "") ||
+    left.studentName.localeCompare(right.studentName, "ko"),
+  );
+
+  // 그 날의 기준 시각. "첫 학생 것"을 쓰면 같은 날 시간대가 다른 반이 생기는 순간 무너진다.
+  // 등원은 **가장 먼저 시작하는 반**(늦으면 지각), 하원은 **가장 늦게 끝나는 반**(일찍 가면 못 태움) 기준이어야 한다.
+  // 현재 데이터는 전 일자 09:30~10:50 단일 시간대라 결과는 첫 학생 기준과 완전히 같다(실측 확인).
+  const classStart = riders.reduce<string | null>(
+    (acc, r) => (r.sessionStart && (acc === null || r.sessionStart < acc) ? r.sessionStart : acc), null);
+  const classEnd = riders.reduce<string | null>(
+    (acc, r) => (r.sessionEnd && (acc === null || r.sessionEnd > acc) ? r.sessionEnd : acc), null);
+
+  return { origin, date: selected, direction, availableDates, riders, classStart, classEnd };
+}
+
+// ────────────────────────────────────────────────────────────────
+// 확정 · 수정 · 제외 (원장 전용)
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * 확정·수정은 원장(ADMIN)만 할 수 있다. 부원장(VICE_ADMIN)도 막는다.
+ * "확정 = 사람이 눈으로 확인했다"는 뜻이라 책임자가 명확해야 하기 때문이다.
+ * requireOwner()를 쓰지 않는 이유: 확정자(confirmedByUserId)로 남길 앱 계정 id가 필요하다.
+ */
+async function requireRosterOwner() {
+  const admin = await requireAdmin();
+  if (admin.appUserRole !== "ADMIN") {
+    throw new Error("셔틀 명단 확정은 원장(ADMIN)만 할 수 있습니다.");
+  }
+  return admin;
+}
+
+/**
+ * 시즌 셔틀 명단을 확정한다(원본 → 확정본 복제).
+ *
+ * ⚠️ 자동으로 부르지 마라. 원장이 화면에서 버튼을 눌렀을 때만 실행한다.
+ *    자동 백필하면 "사람이 확인했다"는 확정의 의미가 사라진다.
+ * 이미 확정된 행은 건드리지 않는다(ON CONFLICT DO NOTHING) — 원장이 손으로 고쳐 둔 값이
+ * 재확정 한 번에 원본으로 되돌아가면 안 되기 때문이다. 변동 반영은 4단계에서 별도로 만든다.
+ */
+export async function confirmSeasonalShuttleRoster(seasonId?: string | null): Promise<{ inserted: number }> {
+  const admin = await requireRosterOwner();
+  const scope = seasonScope({ application: "a", season: "s" }, seasonId);
+  const userParam = `$${scope.params.length + 1}`;
+
+  const inserted = await prisma.$executeRawUnsafe(
+    `INSERT INTO "SeasonalShuttleRoster" (
+        "seasonId", "shuttleRequestId", "applicationItemId",
+        "studentIdSnapshot", "studentNameSnapshot", "childGradeSnapshot", "childGenderSnapshot",
+        "childPhoneSnapshot", "parentNameSnapshot", "parentPhoneSnapshot",
+        "offeringIdSnapshot", "offeringTitleSnapshot", "weekdaysSnapshot",
+        "classStartSnapshot", "classEndSnapshot", "requestCreatedAtSnapshot", "ride",
+        "pickupLocation", "pickupAddress", "pickupRoadAddress", "pickupLatitude", "pickupLongitude",
+        "pickupPlaceId", "pickupLocationSource", "pickupAccuracyMeters", "pickupConfirmedAt", "pickupTime",
+        "dropoffLocation", "dropoffAddress", "dropoffRoadAddress", "dropoffLatitude", "dropoffLongitude",
+        "dropoffPlaceId", "dropoffLocationSource", "dropoffAccuracyMeters", "dropoffConfirmedAt",
+        "dropoffSameAsPickup",
+        "sourceFingerprint", "confirmedByUserId"
+     )
+     SELECT a."seasonId", r.id, r."applicationItemId",
+            CASE WHEN it."conversionStatus" = 'COMPLETED' THEN a."convertedStudentId" ELSE NULL END,
+            a."childName", a."childGrade", a."childGender",
+            a."childPhone", a."parentName", a."parentPhone",
+            it."offeringId", COALESCE(it."titleSnapshot", o.title), to_jsonb(a."selectedWeekdays"),
+            (SELECT to_char(min(sd."startsAt") AT TIME ZONE 'Asia/Seoul','HH24:MI')
+               FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = o.id),
+            (SELECT to_char(min(sd."endsAt") AT TIME ZONE 'Asia/Seoul','HH24:MI')
+               FROM "SpecialProgramSessionDate" sd WHERE sd."offeringId" = o.id),
+            r."createdAt",
+            ${ridingShuttleStatusSql("r")},
+            r."pickupLocation", r."pickupAddress", r."pickupRoadAddress", r."pickupLatitude", r."pickupLongitude",
+            r."pickupPlaceId", r."pickupLocationSource", r."pickupAccuracyMeters", r."pickupConfirmedAt", r."pickupTime",
+            r."dropoffLocation", r."dropoffAddress", r."dropoffRoadAddress", r."dropoffLatitude", r."dropoffLongitude",
+            r."dropoffPlaceId", r."dropoffLocationSource", r."dropoffAccuracyMeters", r."dropoffConfirmedAt",
+            COALESCE(r."dropoffSameAsPickup", false),
+            ${SOURCE_FINGERPRINT_SQL},
+            ${userParam}
+       FROM "SpecialProgramShuttleRequest" r
+       JOIN "SpecialProgramApplication" a ON a.id = r."applicationId"
+       JOIN "SpecialProgramSeason" s ON s.id = a."seasonId"
+       JOIN "SpecialProgramApplicationItem" it ON it.id = r."applicationItemId"
+       JOIN "SpecialProgramOffering" o ON o.id = it."offeringId"
+      WHERE ${scope.where}
+        AND ${seasonalShuttleEligibilitySql({ application: "a", item: "it", offering: "o" })}
+     ON CONFLICT ("seasonId", "shuttleRequestId") DO NOTHING`,
+    ...scope.params,
+    admin.appUserId,
+  );
+
+  // 확정본이 실제로 생겼을 때만 킬 스위치를 켠다.
+  // 이건 자동 백필이 아니다 — 원장이 확정 버튼을 누른 그 순간에만 실행된다.
+  if (inserted > 0) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "AcademySettings" SET "shuttleRosterConfirmedMode" = true, "updatedAt" = now() WHERE id = 'singleton'`,
+    );
+  }
+  return { inserted };
+}
+
+export type ConfirmedRosterPatch = {
+  ride?: boolean;
+  pickupLocation?: string | null;
+  pickupTime?: string | null;
+  dropoffLocation?: string | null;
+  dropoffSameAsPickup?: boolean;
+  note?: string | null;
+};
+
+/** 확정본 한 행 수정. 원본(SpecialProgramShuttleRequest)은 건드리지 않는다. */
+export async function updateConfirmedShuttleRosterRow(rosterId: string, patch: ConfirmedRosterPatch) {
+  await requireRosterOwner();
+  if (!rosterId) throw new Error("rosterId required");
+
+  const sets: string[] = [];
+  const args: unknown[] = [rosterId];
+  const push = (col: string, val: unknown) => { args.push(val); sets.push(`"${col}" = $${args.length}`); };
+  if (patch.ride !== undefined) push("ride", patch.ride === true);
+  if (patch.pickupLocation !== undefined) push("pickupLocation", str(patch.pickupLocation));
+  if (patch.pickupTime !== undefined) push("pickupTime", str(patch.pickupTime));
+  if (patch.dropoffLocation !== undefined) push("dropoffLocation", str(patch.dropoffLocation));
+  if (patch.dropoffSameAsPickup !== undefined) push("dropoffSameAsPickup", patch.dropoffSameAsPickup === true);
+  if (patch.note !== undefined) push("note", str(patch.note));
+  if (sets.length === 0) return { ok: true, changed: 0 };
+
+  const changed = await prisma.$executeRawUnsafe(
+    `UPDATE "SeasonalShuttleRoster" SET ${sets.join(", ")}, "updatedAt" = now() WHERE id = $1`,
+    ...args,
+  );
+  return { ok: true, changed };
+}
+
+/**
+ * 확정 명단에서 제외(soft remove). 하드 DELETE는 절대 하지 않는다 —
+ * "왜 이 학생이 명단에서 사라졌나"를 나중에 되짚을 수 없게 되기 때문이다.
+ */
+export async function removeConfirmedShuttleRosterRow(rosterId: string, reason?: string | null) {
+  await requireRosterOwner();
+  if (!rosterId) throw new Error("rosterId required");
+  const changed = await prisma.$executeRawUnsafe(
+    `UPDATE "SeasonalShuttleRoster"
+        SET "removedAt" = now(), "removedReason" = $2, "updatedAt" = now()
+      WHERE id = $1 AND "removedAt" IS NULL`,
+    rosterId,
+    str(reason),
+  );
+  return { ok: true, changed };
+}
+
+/** 되돌리기(제외 취소). 원장이 실수로 뺐을 때 복구용. */
+export async function restoreConfirmedShuttleRosterRow(rosterId: string) {
+  await requireRosterOwner();
+  if (!rosterId) throw new Error("rosterId required");
+  const changed = await prisma.$executeRawUnsafe(
+    `UPDATE "SeasonalShuttleRoster"
+        SET "removedAt" = NULL, "removedReason" = NULL, "updatedAt" = now()
+      WHERE id = $1`,
+    rosterId,
+  );
+  return { ok: true, changed };
+}

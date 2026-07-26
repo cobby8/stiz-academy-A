@@ -18,7 +18,9 @@ test("관리자 미배정 카드와 배정 모달에 학부모 희망시간을 �
 });
 
 test("희망시간은 이미 서버에서 내려오므로 조회 코드를 건드리지 않는다", () => {
-    assert.match(service, /pickupTime: request\.pickupTime/);
+    // 대상자를 게이트웨이에서 읽도록 바뀌면서 변수명이 request → entry 가 됐다.
+    // 지켜야 할 것은 "희망시간을 조회에서 잃지 않는다"이지 변수 이름이 아니다.
+    assert.match(service, /pickupTime: \w+\.pickupTime/);
 });
 
 // ② 기사 앱에 확정시간이 보여야 한다.

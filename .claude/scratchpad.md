@@ -705,6 +705,7 @@ sanitize-html 2.17.5 실제 소스(index.js L409~442, naughtyHref L734~744)를 �
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-26 | 이용약관 개정 초안 → **완성본** 갱신(`.Codex/drafts/terms-revision-2026-07.md`) — ★이월 계산식 오류 수정(`÷4` → `해당 월 수강료 ÷ 그 달 총 수업 횟수`, 주2회 반 2배 과다차감 방지) + 빈칸 5건 확정 채움(휴원·퇴원 신청마감=수강 시작일 전 / 최대 휴원 2개월 / 자리 보장·같은 반 복귀 / 셔틀비 미이용분 반환 / 시행일은 게시일 기입 안내). 형제할인 조항은 2-B 별도 상자로 분리해 ⏸️ 게시보류 표시(정규반 자동적용 완료 후). 자동퇴원 조문은 완곡 문구+`[원장님 확인 필요]`. 환불 규정·기존 문장 무변경. DB·소스 무수정 | 문서 완료(남은 확인 2건: 자동퇴원·시행일) |
 | 2026-07-06 | 공지 리치에디터 7단계 검증(tester, 통합) — tsc/build EXIT=0(전체 라우트 컴파일). 붙여넣기 정제 happy-dom 격리검증 **30/30 PASS**(제거: style/script/조건부주석/o:p·mso/class·on*·빈span, 보존: 서식/링크/img/표/data-pm-slice). 공지500 재발경로無(DOMParser만·sanitize.ts 무변경 확인). 이미지붙여넣기 무충돌(handlePaste 선처리). 제출잠금 이중가드. onUploadingChange 옵셔널 설정페이지 무영향. 회귀無. 11/12통과·1미실시(로그인벽)·0실패. ★1~7 전체완료 확인 | 검증통과(커밋OK) |
 | 2026-07-06 | 공지 리치에디터 7단계 리뷰(붙여넣기정제+제출잠금) — 정제로직 견고(스냅샷순회·빈span언랩·중첩안전), 공지500 재발경로無(DOMParser만·SSR미호출·sanitize무변경), 이미지붙여넣기 무충돌(handlePaste 선처리), 제출가드 이중(handleSubmit+disabled) 우회불가, onUploadingChange 하위호환. 정제실패 원본반환도 Link protocols+sanitize 2중방어로 안전. 치명0·권장0·사소3(href스킴 미검증이나 무해). ★1~7 전체 리뷰통과 | 리뷰통과(커밋OK) |
 | 2026-07-06 | 공지 리치에디터 7단계(마지막) 구현 — 외부 붙여넣기 정제 transformPastedHTML(브라우저 DOMParser, jsdom無: style/script/조건부주석/o:p·mso/class·빈span 제거, 지원서식+data-pm-slice 보존, handlePaste이미지와 무충돌) + 6단계 리스크보강(본문이미지 업로드중 제출잠금 onUploadingChange). tsc/build EXIT=0, 정제 단위 23/23(happy-dom 격리검증). ★리치에디터 강화 1~7 전체완료 | 구현완료(tester대기) |

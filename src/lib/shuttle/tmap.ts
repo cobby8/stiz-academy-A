@@ -90,12 +90,33 @@ function extractSummary(value: unknown) {
   };
 }
 
+// T맵 경유지 최적화는 startTime(출발 예정시각, yyyyMMddHHmm)이 필수다. 없으면 400(9401)로 거절된다.
+// 교통량 예측 기준 시각일 뿐이라 현재 시각(학원 시간대)을 넣는다.
+function tmapStartTime(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date());
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${g("year")}${g("month")}${g("day")}${g("hour")}${g("minute")}`;
+}
+
 export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimizationInput): Promise<TmapRouteOptimizationResult> {
   const appKey = process.env.TMAP_APP_KEY?.trim();
   if (!appKey) throw new TmapApiError("TMAP_APP_KEY 환경변수가 설정되지 않았습니다.", 500);
   if (!input.waypoints.length) {
     return { provider: "TMAP", orderedWaypointIds: [], rawSummary: undefined };
   }
+
+  // ⚠️ T맵은 viaPointId "0"을 "값 없음"으로 취급해 400(9401)을 낸다(호출부가 인덱스 0을 쓰면 항상 실패).
+  //    내부용 안전 id(wpN)로 바꿔 보내고, 응답 순서를 호출부가 준 원래 id로 되돌린다.
+  const originalBySafe = new Map<string, string>();
+  const safeById = new Map<string, string>();
+  input.waypoints.forEach((point, index) => {
+    const safe = `wp${index}`;
+    originalBySafe.set(safe, point.id);
+    safeById.set(point.id, safe);
+  });
 
   let response: Response;
   let body: unknown = null;
@@ -111,10 +132,11 @@ export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimization
       body: JSON.stringify({
         reqCoordType: "WGS84GEO",
         resCoordType: "WGS84GEO",
+        startTime: tmapStartTime(),
         ...pointPayload(input.start, "start"),
         ...pointPayload(input.end, "end"),
         viaPoints: input.waypoints.map((point) => ({
-          viaPointId: point.id,
+          viaPointId: safeById.get(point.id),
           viaPointName: point.name,
           viaX: String(point.longitude),
           viaY: String(point.latitude),
@@ -141,15 +163,16 @@ export async function optimizeWaypointOrderWithTmap(input: TmapRouteOptimization
     throw new TmapApiError("T맵 경유지 최적화 요청이 실패했습니다.");
   }
 
-  const knownIds = new Set(input.waypoints.map((point) => point.id));
-  const orderedWaypointIds = collectWaypointIds(body, knownIds);
-  if (orderedWaypointIds.length !== input.waypoints.length) {
+  const knownSafeIds = new Set(originalBySafe.keys());
+  const orderedSafeIds = collectWaypointIds(body, knownSafeIds);
+  if (orderedSafeIds.length !== input.waypoints.length) {
     throw new TmapApiError("T맵 응답에서 경유지 추천 순서를 확인하지 못했습니다.");
   }
 
   return {
     provider: "TMAP",
-    orderedWaypointIds,
+    // 내부 안전 id → 호출부가 준 원래 id로 되돌린다.
+    orderedWaypointIds: orderedSafeIds.map((safe) => originalBySafe.get(safe) as string),
     rawSummary: extractSummary(body),
   };
 }

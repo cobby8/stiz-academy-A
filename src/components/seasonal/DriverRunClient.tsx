@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
 
 // 기사님 운행 화면(모바일) — 그 날 등원 → 하원 타임라인. 각 구간에서 정차 순서대로 학생을 보고 탑승/미탑승을 탭으로 체크한다.
 // 로그인 없이 토큰으로 접근하며, 체크는 즉시 서버에 저장한다(구간=방향별).
 // ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼으로 고정한다(dark: 스타일 미사용).
 
 export type DriverStudent = { requestId: string; name: string; grade: string | null; parentPhone: string | null; childPhone: string | null };
-export type DriverStop = { label: string; isHub: boolean; etaLabel: string | null; students: DriverStudent[] };
+export type DriverStop = { label: string; isHub: boolean; etaLabel: string | null; lat: number | null; lng: number | null; students: DriverStudent[] };
 export type DriverVehicle = { vehicleName: string; tripLabel: string | null; departTime: string | null; arriveTime: string | null; depotTime: string | null; stops: DriverStop[] };
 export type DriverSection = { direction: "PICKUP" | "DROPOFF"; time: string | null; startName: string; endName: string; vehicles: DriverVehicle[] };
 type Status = "BOARDED" | "NOSHOW";
@@ -100,6 +101,10 @@ export default function DriverRunClient({
                           <span className="min-w-0 flex-1 text-[18px] font-black leading-tight text-gray-900">{s.label}</span>
                           {s.etaLabel && <span className="shrink-0 text-[16px] font-black text-blue-600">{s.etaLabel}</span>}
                         </div>
+                        {(() => {
+                          const url = tmapNavigationCoordinateUrl({ latitude: s.lat, longitude: s.lng, name: s.label });
+                          return url ? <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-[16px] font-black text-white active:bg-blue-700">🧭 T맵 길안내</a> : null;
+                        })()}
                         {s.isHub && s.students.length === 0 && <p className="mt-1.5 text-[15px] font-bold text-green-700">무료 거점(워크인, 정원 별도)</p>}
                         <div className="mt-2.5 space-y-2.5">
                           {s.students.map((st) => {

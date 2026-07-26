@@ -65,8 +65,24 @@ export default function DispatchClient({ initialPickup, initialDropoff }: { init
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "링크 생성 실패");
       const url = `${window.location.origin}${j.path}`;
-      try { await navigator.clipboard.writeText(url); setMsg("기사님 링크를 복사했습니다(그 날 등원·하원 전체)"); }
+      try { await navigator.clipboard.writeText(url); setMsg("긴급 하루 링크를 복사했습니다(선택한 날짜)"); }
       catch { setMsg(`기사님 링크: ${url}`); }
+    } catch (e: any) { setErr(e?.message || "링크를 만들지 못했습니다."); }
+  }
+
+  // 기사 폰/태블릿에 고정하는 링크 — 매일 열면 '오늘' 운행이 뜬다.
+  async function copyRollingLink() {
+    setErr(null); setMsg(null);
+    try {
+      const r = await fetch("/api/admin/seasonal/dispatch/run-link", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rolling: true }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "링크 생성 실패");
+      const url = `${window.location.origin}${j.path}`;
+      try { await navigator.clipboard.writeText(url); setMsg("기사 고정 링크를 복사했습니다(매일 열면 오늘 운행)"); }
+      catch { setMsg(`기사 고정 링크: ${url}`); }
     } catch (e: any) { setErr(e?.message || "링크를 만들지 못했습니다."); }
   }
 
@@ -115,7 +131,8 @@ export default function DispatchClient({ initialPickup, initialDropoff }: { init
               {availableDates.map((d) => <option key={d.date} value={d.date}>{d.label}</option>)}
             </select>
           </label>
-          <button onClick={copyRunLink} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200">🔗 기사님 링크 복사</button>
+          <button onClick={copyRunLink} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-600 dark:text-gray-200">🔗 긴급 하루 링크</button>
+          <button onClick={copyRollingLink} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">📌 기사 고정 링크</button>
           <button onClick={() => window.print()} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-600 dark:border-gray-600 dark:text-gray-200">🖨 인쇄</button>
         </div>
 

@@ -4,6 +4,7 @@ import MyPageClient from "./MyPageClient";
 import Link from "next/link";
 import { requireVerifiedParent } from "@/lib/auth-guard";
 import { getParentShuttleOverview, getShuttleDriverContact } from "@/lib/shuttle/parent";
+import { getPendingSeasonalChildren } from "@/lib/seasonal/parent-pending";
 
 export const dynamic = "force-dynamic";
 
@@ -65,5 +66,9 @@ export default async function MyPageDashboard() {
         getShuttleDriverContact(),
     ]);
 
-    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} myRequests={myRequests} feedbacks={feedbacks} parentShuttleOverview={shuttleOverview} shuttleDriverContact={driverContact} />;
+    // 방학특강만 신청하고 아직 정식 학생으로 전환되지 않은 자녀(대시보드에 안 뜨는 자녀).
+    // studentIds 를 넘겨 이미 전환된 신청은 제외 → 정식 카드와 중복 노출되지 않게 한다.
+    const pendingSeasonalChildren = await getPendingSeasonalChildren(parentAuth.appUserId, studentIds);
+
+    return <MyPageClient data={data} gallery={gallery} notices={notices} notifications={notifications} unreadCount={unreadCount} myRequests={myRequests} feedbacks={feedbacks} parentShuttleOverview={shuttleOverview} shuttleDriverContact={driverContact} pendingSeasonalChildren={pendingSeasonalChildren} />;
 }

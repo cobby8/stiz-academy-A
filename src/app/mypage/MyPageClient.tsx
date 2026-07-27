@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { markNotificationRead, markAllNotificationsRead, createParentRequest } from "@/app/actions/admin";
 import type { ParentShuttleOverviewItem } from "@/lib/shuttle/parent";
+import type { PendingSeasonalChild } from "@/lib/seasonal/pendingSeasonalChildren";
 // "오늘/이번주 우리 아이" 요약 카드용 순수 로직(표시 전용, 기존 데이터 재조합).
 import { getKstNow, getKstDateStr, computeNextClass, nextClassWhenLabel, filterTodayShuttle } from "@/lib/mypage/summary";
 
@@ -216,7 +217,7 @@ function formatShuttleTime(value: string | null): string {
     return date.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [], parentShuttleOverview = [], shuttleDriverContact = null }: {
+export default function MyPageClient({ data, gallery = [], notices = [], notifications = [], unreadCount = 0, myRequests = [], feedbacks = [], parentShuttleOverview = [], shuttleDriverContact = null, pendingSeasonalChildren = [] }: {
     data: MyPageData;
     gallery?: GalleryItem[];
     notices?: NoticeItem[];
@@ -226,6 +227,8 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
     feedbacks?: FeedbackItem[];
     parentShuttleOverview?: ParentShuttleOverviewItem[];
     shuttleDriverContact?: { name: string; phone: string } | null;
+    // 방학특강만 신청하고 아직 정식 학생으로 전환되지 않은 자녀(별도 섹션에 표시)
+    pendingSeasonalChildren?: PendingSeasonalChild[];
 }) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -481,6 +484,54 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                 </span>
                             </button>
                         )}
+                    </div>
+                </section>
+            )}
+
+            {/* 방학특강 신청 자녀(전환 대기중) — 정식 학생으로 아직 전환되지 않아
+                위 대시보드에 안 뜨는 자녀를 별도 섹션으로 안내한다. 목록이 비면 통째로 숨김. */}
+            {pendingSeasonalChildren.length > 0 && (
+                <section aria-labelledby="pending-seasonal-heading" className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <div className="mb-4">
+                        <div className="flex items-center gap-2">
+                            <SymbolIcon name="hourglass_top" size={20} className="text-amber-600 dark:text-amber-300" />
+                            <h2 id="pending-seasonal-heading" className="font-bold text-gray-900 dark:text-white">방학특강 신청 자녀 (전환 대기중)</h2>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            정규 수강·수납 정보는 학생 등록(전환) 후 표시됩니다.
+                        </p>
+                    </div>
+                    <div className="space-y-3">
+                        {pendingSeasonalChildren.map((c, idx) => (
+                            <div key={`${c.childName}-${idx}`} className="rounded-xl border border-amber-200 bg-white p-4 dark:border-amber-900/40 dark:bg-gray-800">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="font-bold text-gray-900 dark:text-white">
+                                        {c.childName}
+                                        {c.childGrade && (
+                                            <span className="ml-2 text-xs font-medium text-gray-500 dark:text-gray-400">{c.childGrade}</span>
+                                        )}
+                                    </div>
+                                    {c.upcomingCount > 0 && (
+                                        <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                                            예정 {c.upcomingCount}회
+                                        </span>
+                                    )}
+                                </div>
+                                {c.offeringTitles.length > 0 && (
+                                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                                        <span className="text-gray-500 dark:text-gray-400">신청 특강: </span>
+                                        {c.offeringTitles.join(", ")}
+                                    </p>
+                                )}
+                                <Link
+                                    href="/mypage/seasonal"
+                                    className="mt-3 inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500"
+                                >
+                                    방학특강 결석 신고 / 보강
+                                    <SymbolIcon name="arrow_forward" size={16} />
+                                </Link>
+                            </div>
+                        ))}
                     </div>
                 </section>
             )}

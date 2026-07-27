@@ -29,6 +29,7 @@ type FormState = {
 
 type ShuttleDraft = {
   enabled: boolean;
+  useFreeHub: boolean; // true=무료 탑승 거점(1호점)에서 타고 내림 / false=집앞(지도 핀)
   pickupLocation: string;
   pickupTime: string;
   dropoffLocation: string;
@@ -136,7 +137,14 @@ function remainingText(item: SeasonalClass) {
 }
 
 function emptyShuttle(): ShuttleDraft {
-  return { enabled: false, pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "", dropoffSameAsPickup: true };
+  return { enabled: false, useFreeHub: false, pickupLocation: "", pickupTime: "", dropoffLocation: "", note: "", dropoffSameAsPickup: true };
+}
+
+// 무료 거점 이용 학생은 셔틀비를 받지 않는다(planning.isFreeHubShuttle과 같은 취지). 거점 탑승이면 fee 0.
+function shuttleFeeForDraft(offering: SeasonalClass | undefined, draft?: ShuttleDraft) {
+  if (!offering?.shuttleAvailable || !hasShuttle(draft) || !hasShuttleLocation(draft)) return 0;
+  if (draft?.useFreeHub) return 0;
+  return offering.shuttleFee ?? 0;
 }
 
 function statusText(status: string) {
@@ -199,7 +207,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
   // 신청자가 고른 회원 구분과 서버의 가격 스냅샷 기준을 화면에서도 동일하게 맞춘다.
   const tuitionTotal = selectionPlans.reduce((sum, plan) => sum + applicantPrice(plan.offering ?? plan.base, applicantType), 0);
   const shuttleTotal = selectionPlans.reduce((sum, { base, offering }) => (
-    sum + (offering?.shuttleAvailable && hasShuttle(shuttle[base.id]) && hasShuttleLocation(shuttle[base.id]) ? offering.shuttleFee ?? 0 : 0)
+    sum + shuttleFeeForDraft(offering ?? base, shuttle[base.id])
   ), 0);
   const totalPrice = tuitionTotal + shuttleTotal;
   const hasMapSelection = selectionPlans.some(({ base, offering }) => (
@@ -259,6 +267,36 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
       ...current,
       [offeringId]: { ...(current[offeringId] ?? emptyShuttle()), [key]: value },
     }));
+  }
+
+  // 무료 거점 탑승 on/off. on이면 탑승=거점(1호점), 하차=거점 하차(길 건너)를 좌표까지 자동 채운다.
+  //   pickupLocation 텍스트에 '무료탑승'을 넣어 서버(배차·셔틀비 로직)가 거점 이용으로 인식하게 한다.
+  function setHubMode(offeringId: string, on: boolean) {
+    const hub = program?.shuttleHub;
+    setShuttle((current) => {
+      const draft = current[offeringId] ?? emptyShuttle();
+      if (!on) {
+        // 거점 해제 → 좌표·라벨 비우고 집앞(지도 핀) 모드로 되돌린다.
+        return { ...current, [offeringId]: { ...draft, useFreeHub: false, pickupLocation: "", dropoffLocation: "", pickupLocationData: undefined, dropoffLocationData: undefined, dropoffSameAsPickup: true } };
+      }
+      const toPin = (p: { name: string; lat: number; lng: number }): MapLocationData => ({
+        latitude: p.lat, longitude: p.lng, address: p.name, roadAddress: p.name, placeName: p.name, source: "MAP_PIN",
+      });
+      const pickup = hub?.pickup ? toPin(hub.pickup) : undefined;
+      const dropoff = hub?.dropoff ? toPin(hub.dropoff) : pickup; // 하차 거점 미설정 시 탑승 거점과 동일 처리
+      return {
+        ...current,
+        [offeringId]: {
+          ...draft,
+          useFreeHub: true,
+          dropoffSameAsPickup: false,
+          pickupLocation: `${hub?.pickup?.name ?? "무료 탑승 거점"}(무료탑승)`,
+          dropoffLocation: hub?.dropoff?.name ?? hub?.pickup?.name ?? "무료 탑승 거점",
+          pickupLocationData: pickup,
+          dropoffLocationData: dropoff,
+        },
+      };
+    });
   }
 
   function saveMapLocation(target: LocationPickerTarget, value: MapLocationData) {
@@ -421,7 +459,7 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                       <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black dark:border-gray-700 dark:bg-gray-800">
                         <span>셔틀 이용 신청</span>
                         <span className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
-                          {formatWon(priceItem.shuttleFee ?? 0)} 추가
+                          {shuttle[item.id]?.useFreeHub ? "무료(거점)" : `${formatWon(priceItem.shuttleFee ?? 0)} 추가`}
                           <input
                             type="checkbox"
                             checked={shuttle[item.id]?.enabled === true}
@@ -431,19 +469,39 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                         </span>
                       </label>
                       {shuttle[item.id]?.enabled && <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <LocationField label="탑승(등원) 위치" value={shuttle[item.id]?.pickupLocation ?? ""} mapValue={shuttle[item.id]?.pickupLocationData} onChange={(value) => updateLocationText(item.id, "pickup", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "pickup" })} />
-                        <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
-                        {/* 하원=등원 동일 토글 — 대부분 같으므로 기본 켜짐. 켜지면 하차 위치 입력을 숨긴다. */}
-                        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 sm:col-span-2">
-                          <input type="checkbox" checked={shuttle[item.id]?.dropoffSameAsPickup ?? true} onChange={(e) => updateShuttle(item.id, "dropoffSameAsPickup", e.target.checked)} className="h-5 w-5 accent-brand-orange-500 dark:accent-brand-neon-lime" />
-                          하원(하차)은 등원과 동일
-                          <span className="ml-auto text-xs font-medium text-gray-400">다르면 체크 해제</span>
-                        </label>
-                        {!(shuttle[item.id]?.dropoffSameAsPickup ?? true) && (
-                          <LocationField label="하차(하원) 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} mapValue={shuttle[item.id]?.dropoffLocationData} onChange={(value) => updateLocationText(item.id, "dropoff", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "dropoff" })} />
+                        {/* 탑승 방식 선택 — 무료 거점이 설정돼 있을 때만 노출. */}
+                        {program?.shuttleHub?.pickup && (
+                          <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                            <button type="button" onClick={() => setHubMode(item.id, true)} className={`min-h-11 rounded-xl border px-3 text-sm font-black ${shuttle[item.id]?.useFreeHub ? "border-green-500 bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-200" : "border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-300"}`}>🆓 무료 거점에서 탑승</button>
+                            <button type="button" onClick={() => setHubMode(item.id, false)} className={`min-h-11 rounded-xl border px-3 text-sm font-black ${!shuttle[item.id]?.useFreeHub ? "border-brand-orange-500 bg-orange-50 text-brand-orange-700 dark:bg-orange-950/30 dark:text-brand-orange-300" : "border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-300"}`}>📍 집 앞에서 탑승</button>
+                          </div>
                         )}
-                        <TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} />
-                        {!hasShuttleLocation(shuttle[item.id]) && <p role="alert" className="text-xs font-bold text-amber-700 dark:text-amber-300 sm:col-span-2">🚌 셔틀 신청 시 지도에서 등원 위치를 반드시 선택해 주세요. (텍스트 설명만으로는 신청되지 않습니다)</p>}
+                        {shuttle[item.id]?.useFreeHub ? (
+                          // 무료 거점 모드 — 탑승/하차 거점 위치를 안내하고, 셔틀비 무료를 표시한다.
+                          <div className="sm:col-span-2 rounded-xl border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950/30">
+                            <p className="text-sm font-black text-green-800 dark:text-green-200">🆓 무료 탑승 거점 이용 · 셔틀비 무료</p>
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {program?.shuttleHub?.pickup && <HubPointCard label="등원 탑승" point={program.shuttleHub.pickup} />}
+                              {(program?.shuttleHub?.dropoff ?? program?.shuttleHub?.pickup) && <HubPointCard label="하원 하차" point={(program?.shuttleHub?.dropoff ?? program?.shuttleHub?.pickup)!} />}
+                            </div>
+                            <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
+                            <div className="mt-2"><TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} /></div>
+                          </div>
+                        ) : <>
+                          <LocationField label="탑승(등원) 위치" value={shuttle[item.id]?.pickupLocation ?? ""} mapValue={shuttle[item.id]?.pickupLocationData} onChange={(value) => updateLocationText(item.id, "pickup", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "pickup" })} />
+                          <TextInput label="희망 시간" value={shuttle[item.id]?.pickupTime ?? ""} onChange={(value) => updateShuttle(item.id, "pickupTime", value)} />
+                          {/* 하원=등원 동일 토글 — 대부분 같으므로 기본 켜짐. 켜지면 하차 위치 입력을 숨긴다. */}
+                          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 sm:col-span-2">
+                            <input type="checkbox" checked={shuttle[item.id]?.dropoffSameAsPickup ?? true} onChange={(e) => updateShuttle(item.id, "dropoffSameAsPickup", e.target.checked)} className="h-5 w-5 accent-brand-orange-500 dark:accent-brand-neon-lime" />
+                            하원(하차)은 등원과 동일
+                            <span className="ml-auto text-xs font-medium text-gray-400">다르면 체크 해제</span>
+                          </label>
+                          {!(shuttle[item.id]?.dropoffSameAsPickup ?? true) && (
+                            <LocationField label="하차(하원) 위치" value={shuttle[item.id]?.dropoffLocation ?? ""} mapValue={shuttle[item.id]?.dropoffLocationData} onChange={(value) => updateLocationText(item.id, "dropoff", value)} onOpenMap={() => setLocationPicker({ offeringId: item.id, kind: "dropoff" })} />
+                          )}
+                          <TextInput label="셔틀 메모" value={shuttle[item.id]?.note ?? ""} onChange={(value) => updateShuttle(item.id, "note", value)} />
+                          {!hasShuttleLocation(shuttle[item.id]) && <p role="alert" className="text-xs font-bold text-amber-700 dark:text-amber-300 sm:col-span-2">🚌 셔틀 신청 시 지도에서 등원 위치를 반드시 선택해 주세요. (텍스트 설명만으로는 신청되지 않습니다)</p>}
+                        </>}
                       </div>}
                     </div>
                   )}
@@ -547,7 +605,11 @@ export default function SeasonalApplyClient({ slug }: { slug: string }) {
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{selectedWeekdays.map((weekday) => WEEKDAY_OPTIONS.find((option) => option.value === weekday)?.label).filter(Boolean).join("·") || "요일 미선택"} · {item.startTime}~{item.endTime}</p>
                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold">
                     <span>수강료 {formatWon(applicantPrice(item, applicantType))}</span>
-                    {hasShuttle(shuttle[plan.base.id]) && hasShuttleLocation(shuttle[plan.base.id]) && <span className="text-blue-700 dark:text-blue-300">셔틀비 +{formatWon(item.shuttleFee ?? 0)}</span>}
+                    {hasShuttle(shuttle[plan.base.id]) && hasShuttleLocation(shuttle[plan.base.id]) && (
+                      shuttle[plan.base.id]?.useFreeHub
+                        ? <span className="text-green-700 dark:text-green-300">셔틀비 무료(거점)</span>
+                        : <span className="text-blue-700 dark:text-blue-300">셔틀비 +{formatWon(shuttleFeeForDraft(item, shuttle[plan.base.id]))}</span>
+                    )}
                   </div>
                   {item.sessionDates.length > 1 && <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">총 {item.sessionDates.length}회 · {item.sessionDates.map((session) => `${session.dateLabel}(${session.dayLabel})`).join(", ")}</p>}
                   {isFull(item) && <p className="mt-1 text-xs font-bold text-amber-600 dark:text-amber-300">대기 접수로 신청됩니다.</p>}
@@ -645,6 +707,18 @@ function DoneView({ slug, result, offerings, message }: { slug: string; result: 
         </div>
       </section>
     </main>
+  );
+}
+
+// 무료 거점 위치 안내 카드 — 주소·좌표와 카카오맵 링크(위치 확인)를 보여준다.
+function HubPointCard({ label, point }: { label: string; point: { name: string; lat: number; lng: number } }) {
+  const mapHref = `https://map.kakao.com/link/map/${encodeURIComponent(point.name)},${point.lat},${point.lng}`;
+  return (
+    <div className="rounded-lg border border-green-200 bg-white p-2.5 dark:border-green-800 dark:bg-gray-900">
+      <p className="text-[11px] font-black text-green-700 dark:text-green-300">{label}</p>
+      <p className="mt-0.5 text-[13px] font-bold text-gray-900 dark:text-white">{point.name}</p>
+      <a href={mapHref} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[12px] font-bold text-brand-orange-600 hover:underline dark:text-brand-neon-lime">🗺 지도에서 위치 확인</a>
+    </div>
   );
 }
 

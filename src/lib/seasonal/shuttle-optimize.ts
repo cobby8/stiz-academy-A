@@ -28,12 +28,13 @@ export type DispatchDirection = "PICKUP" | "DROPOFF";
 type Pt = { lat: number; lng: number };
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
-export async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; hub: Geo | null }> {
+export async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; hub: Geo | null; hubDropoff: Geo | null }> {
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>(
       `SELECT "academyLatitude" AS alat, "academyLongitude" AS alng, "academyAddress" AS aaddr,
               "shuttleDepotLatitude" AS dlat, "shuttleDepotLongitude" AS dlng, "shuttleDepotAddress" AS daddr,
-              "shuttleHubLatitude" AS hlat, "shuttleHubLongitude" AS hlng, "shuttleHubName" AS hname
+              "shuttleHubLatitude" AS hlat, "shuttleHubLongitude" AS hlng, "shuttleHubName" AS hname,
+              "shuttleHubDropoffLatitude" AS xlat, "shuttleHubDropoffLongitude" AS xlng, "shuttleHubDropoffName" AS xname, "shuttleHubDropoffAddress" AS xaddr
          FROM "AcademySettings" LIMIT 1`,
     );
     const r = rows[0] ?? {};
@@ -47,8 +48,11 @@ export async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; 
     const hlat = Number(r.hlat), hlng = Number(r.hlng);
     const hub: Geo | null = Number.isFinite(hlat) && Number.isFinite(hlng)
       ? { lat: hlat, lng: hlng, name: (r.hname && String(r.hname)) || "무료 탑승 거점" } : null;
-    return { academy, depot, hub };
-  } catch { return { academy: ACADEMY_FALLBACK, depot: null, hub: null }; }
+    const xlat = Number(r.xlat), xlng = Number(r.xlng);
+    const hubDropoff: Geo | null = Number.isFinite(xlat) && Number.isFinite(xlng)
+      ? { lat: xlat, lng: xlng, name: (r.xname && String(r.xname)) || (r.xaddr && String(r.xaddr)) || "거점 하차 지점" } : null;
+    return { academy, depot, hub, hubDropoff };
+  } catch { return { academy: ACADEMY_FALLBACK, depot: null, hub: null, hubDropoff: null }; }
 }
 
 function haversineKm(a: Pt, b: Pt): number {

@@ -491,10 +491,14 @@ model AcademySettings {
   shuttleDepotAddress         String? // 셔틀 차고지 주소(하루 운행 시작/종료 지점)
   shuttleDepotLatitude        Float?
   shuttleDepotLongitude       Float?
-  shuttleHubName              String? // 무료 탑승 거점(예: 1호점) — 최적 경로가 항상 경유
+  shuttleHubName              String? // 무료 탑승 거점(예: 1호점) — 등원 탑승 지점
   shuttleHubAddress           String?
   shuttleHubLatitude          Float?
   shuttleHubLongitude         Float?
+  shuttleHubDropoffName       String? // 무료 거점 하차 지점(길 건너 버스정류장 등, 탑승 거점과 다름)
+  shuttleHubDropoffAddress    String?
+  shuttleHubDropoffLatitude   Float?
+  shuttleHubDropoffLongitude  Float?
   // 셔틀 확정 명단 킬 스위치. true=확정 명단 사용 / false·NULL=끔(항상 원본 조회, 전환 이전과 동일).
   // 원장이 재배포 없이 되돌릴 수 있어야 해서 환경변수가 아니라 DB에 둔다.
   shuttleRosterConfirmedMode  Boolean?

@@ -10,6 +10,7 @@ const COLS: Record<string, { lat: string; lng: string; addr: string; name?: stri
   academy: { lat: "academyLatitude", lng: "academyLongitude", addr: "academyAddress" },
   depot: { lat: "shuttleDepotLatitude", lng: "shuttleDepotLongitude", addr: "shuttleDepotAddress" },
   hub: { lat: "shuttleHubLatitude", lng: "shuttleHubLongitude", addr: "shuttleHubAddress", name: "shuttleHubName" },
+  hubDropoff: { lat: "shuttleHubDropoffLatitude", lng: "shuttleHubDropoffLongitude", addr: "shuttleHubDropoffAddress", name: "shuttleHubDropoffName" },
 };
 
 export async function POST(request: Request) {

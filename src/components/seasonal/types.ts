@@ -48,7 +48,11 @@ export type SeasonalProgram = {
   refundPolicy?: string;
   classes: SeasonalClass[];
   offerings?: SeasonalClass[];
+  shuttleHub?: ShuttleHubInfo;
 };
+
+export type ShuttleHubPoint = { name: string; lat: number; lng: number };
+export type ShuttleHubInfo = { pickup: ShuttleHubPoint | null; dropoff: ShuttleHubPoint | null };
 
 export type SeasonalListResponse = { programs?: unknown[]; seasons?: unknown[] } | unknown[];
 
@@ -87,7 +91,19 @@ export function normalizeProgram(value: unknown): SeasonalProgram {
     operationStart: stringOrUndefined(row.startsAt ?? row.operationStart), operationEnd: stringOrUndefined(row.endsAt ?? row.operationEnd),
     location: stringOrUndefined(row.location), shuttleNotice: stringOrUndefined(row.shuttleNotice),
     refundPolicy: stringOrUndefined(row.cancellationPolicy ?? row.refundPolicy), classes: offerings, offerings,
+    shuttleHub: normalizeHub(row.shuttleHub),
   };
+}
+
+function normalizeHub(value: unknown): SeasonalProgram["shuttleHub"] {
+  const h = value as { pickup?: unknown; dropoff?: unknown } | undefined;
+  if (!h) return undefined;
+  const point = (v: unknown): ShuttleHubPoint | null => {
+    const p = v as { name?: unknown; lat?: unknown; lng?: unknown } | null;
+    const lat = Number(p?.lat), lng = Number(p?.lng);
+    return p && Number.isFinite(lat) && Number.isFinite(lng) ? { name: String(p.name ?? ""), lat, lng } : null;
+  };
+  return { pickup: point(h.pickup), dropoff: point(h.dropoff) };
 }
 
 function normalizeOffering(row: ApiRecord): SeasonalClass {

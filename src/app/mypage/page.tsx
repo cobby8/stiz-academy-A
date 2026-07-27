@@ -27,8 +27,10 @@ export default async function MyPageDashboard() {
         );
     }
 
-    const data = await getMyPageData(user.email!);
+    // 인증 게이트가 검증한 부모 User.id(appUserId)를 자녀 조회 기준으로 사용한다.
+    // (이메일 매칭은 소셜/이메일 불일치 시 자녀를 못 찾는 버그가 있었다)
     const parentAuth = await requireVerifiedParent();
+    const data = await getMyPageData(parentAuth.appUserId);
 
     if (!data || data.children.length === 0) {
         return (

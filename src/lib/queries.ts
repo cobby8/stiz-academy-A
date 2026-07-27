@@ -1048,14 +1048,17 @@ export const getUnpaidPayments = cache(async () => {
     }
 });
 
-/** 마이페이지: 학부모(User)의 자녀 목록 + 수강/출결/수납 요약 */
-export async function getMyPageData(userEmail: string) {
+/** 마이페이지: 학부모(User)의 자녀 목록 + 수강/출결/수납 요약
+ *  ⚠️ 반드시 인증 게이트(requireVerifiedParent)가 검증한 부모 User.id(appUserId)를 넘길 것.
+ *  이전에는 이메일로 부모를 찾았는데, 소셜 로그인 이메일 ≠ 학원 등록 이메일이면
+ *  부모를 못 찾아 "자녀 없음"으로 표시되는 버그가 있었다. → id 기준으로 통일. */
+export async function getMyPageData(parentUserId: string) {
     try {
         await ensurePaymentInfrastructure();
-        // 학부모 User 조회
+        // 학부모 User 조회 (게이트가 검증한 부모 User.id로 직접 조회 — 이메일 매칭 제거)
         const users = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, name, email, phone FROM "User" WHERE email = $1 LIMIT 1`,
-            userEmail
+            `SELECT id, name, email, phone FROM "User" WHERE id = $1 LIMIT 1`,
+            parentUserId
         );
         if (!users[0]) return null;
         const parent = users[0];

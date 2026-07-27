@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { getSkillCategories, getStudentSkills, getSkillHistory } from "@/lib/queries";
+import { requireVerifiedParent } from "@/lib/auth-guard";
 import Link from "next/link";
 import SkillRadarChart from "@/components/SkillRadarChart";
 import { notMergedStudent } from "@/lib/studentVisibility";
@@ -38,19 +39,10 @@ export default async function MyPageSkillsPage() {
         );
     }
 
-    // DB에서 학부모 정보 조회 (parentId 매칭 보안)
-    const parents = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
-        user.email,
-    );
-    if (!parents[0]) {
-        return (
-            <div className="py-20 text-center text-gray-400">
-                등록된 학부모 정보가 없습니다.
-            </div>
-        );
-    }
-    const parentId = parents[0].id;
+    // 인증 게이트가 검증한 부모 User.id(appUserId)를 자녀 조회 기준으로 사용
+    // (이메일 매칭 제거 — 소셜/이메일 불일치 시 자녀를 못 찾던 버그 수정)
+    const parentAuth = await requireVerifiedParent();
+    const parentId = parentAuth.appUserId;
 
     // 해당 학부모의 자녀 목록 조회
     const children = await prisma.$queryRawUnsafe<any[]>(

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getStudentReports } from "@/lib/queries";
-import { prisma } from "@/lib/prisma";
+import { requireVerifiedParent } from "@/lib/auth-guard";
 import Link from "next/link";
 
 // 학부모 리포트 목록은 실시간 데이터 필요 (자녀 보안 체크)
@@ -32,12 +32,10 @@ export default async function ParentReportsPage() {
         );
     }
 
-    // DB에서 학부모 ID 조회 (이메일 기반)
-    const userRows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
-        user.email
-    );
-    const parentId = userRows[0]?.id;
+    // 인증 게이트가 검증한 부모 User.id(appUserId)를 조회 기준으로 사용
+    // (이메일 매칭 제거 — 소셜/이메일 불일치 시 자녀를 못 찾던 버그 수정)
+    const parentAuth = await requireVerifiedParent();
+    const parentId = parentAuth.appUserId;
     if (!parentId) {
         return (
             <div className="flex flex-col items-center justify-center py-20 text-center">

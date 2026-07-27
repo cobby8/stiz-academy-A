@@ -4,6 +4,8 @@ import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { markNotificationRead, markAllNotificationsRead, createParentRequest } from "@/app/actions/admin";
 import type { ParentShuttleOverviewItem } from "@/lib/shuttle/parent";
+// "오늘/이번주 우리 아이" 요약 카드용 순수 로직(표시 전용, 기존 데이터 재조합).
+import { getKstNow, getKstDateStr, computeNextClass, nextClassWhenLabel, filterTodayShuttle } from "@/lib/mypage/summary";
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
@@ -300,6 +302,25 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
     const pendingPayments = child.payments.filter((p) => p.status === "PENDING" || p.status === "OVERDUE");
 
+    // ── "오늘/이번주 우리 아이" 요약 카드 계산 (표시 전용, 선택 자녀 기준) ──
+    // 렌더 시점의 실제 시각을 KST로 환산해 사용한다(자녀 전환 시 자동 재계산됨).
+    const now = new Date();
+    const kstNow = getKstNow(now);
+    const todayStr = getKstDateStr(now);
+    // 1) 다음 수업: 수강 반의 요일/시작시각으로 가장 가까운 향후 1건.
+    const nextClass = computeNextClass(child.enrollments, kstNow);
+    // 2) 오늘 셔틀: 오늘 날짜 운행 항목만.
+    const todayShuttles = filterTodayShuttle(childShuttleOverview, todayStr);
+    // 4) 새 소식 배지: 이번 화면에 온 리포트/피드백 개수(있는 데이터 범위). 링크로 해당 섹션 이동.
+    const feedbackCount = feedbacks.length;
+    // 요약에 표시할 항목이 하나라도 있는지(전부 없으면 카드 자체를 숨긴다).
+    const hasSummary = Boolean(nextClass) || todayShuttles.length > 0 || pendingPayments.length > 0 || feedbackCount > 0;
+
+    // 요약 항목 클릭 시 해당 상세 섹션으로 부드럽게 스크롤(중복 정보지만 진입 단축).
+    function scrollToSection(id: string) {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     // 정규수업 결석 경로: 요청 폼을 '정규수업 결석' 유형으로 열고 폼 위치로 스크롤한다.
     function openRegularAbsenceForm() {
         setShowRequests(false);
@@ -369,8 +390,103 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </div>
             </div>
 
+            {/* ── "오늘/이번주 우리 아이" 한눈 요약 카드 (표시 전용·상단 배치) ──
+                반/출결/셔틀/미납/피드백으로 흩어진 정보를 선택 자녀 기준으로 재조합해 보여준다.
+                각 줄은 값이 있을 때만 렌더하고, 전부 없으면 카드 자체를 숨긴다. */}
+            {hasSummary && (
+                <section aria-labelledby="mypage-summary-heading" className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-800">
+                    <div className="mb-3 flex items-center gap-2">
+                        <div className="rounded-full bg-brand-orange-50 p-1.5 dark:bg-brand-neon-lime/10">
+                            <SymbolIcon name="today" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" />
+                        </div>
+                        <h2 id="mypage-summary-heading" className="font-bold text-gray-900 dark:text-white">
+                            {child.name} 학생 한눈에 보기
+                        </h2>
+                    </div>
+
+                    <div className="space-y-2">
+                        {/* 1) 다음 수업 */}
+                        {nextClass && (
+                            <button
+                                type="button"
+                                onClick={() => scrollToSection("mypage-enrollments")}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100 dark:bg-gray-900/60 dark:hover:bg-gray-900"
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <SymbolIcon name="event" size={18} className="text-brand-navy-900 dark:text-gray-200" />
+                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">다음 수업</span>
+                                </span>
+                                <span className="min-w-0 text-right text-sm font-bold text-gray-900 dark:text-white">
+                                    {nextClassWhenLabel(nextClass, kstNow)} {nextClass.startTime}
+                                    <span className="ml-1 truncate font-normal text-gray-500 dark:text-gray-400">· {nextClass.className}</span>
+                                </span>
+                            </button>
+                        )}
+
+                        {/* 2) 오늘 셔틀 */}
+                        {todayShuttles.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => scrollToSection("mypage-shuttle")}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100 dark:bg-gray-900/60 dark:hover:bg-gray-900"
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <SymbolIcon name="airport_shuttle" size={18} className="text-blue-600 dark:text-blue-300" />
+                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">오늘 셔틀</span>
+                                </span>
+                                <span className="text-right text-sm font-bold text-gray-900 dark:text-white">
+                                    {/* 확정 승·하차 시각이 있으면 요약, 없으면 방향/상태만 */}
+                                    {[
+                                        todayShuttles.map((s) => s.pickupEtaLabel).find(Boolean)
+                                            ? `등원 ${todayShuttles.map((s) => s.pickupEtaLabel).find(Boolean)}`
+                                            : null,
+                                        todayShuttles.map((s) => s.dropoffEtaLabel).find(Boolean)
+                                            ? `하원 ${todayShuttles.map((s) => s.dropoffEtaLabel).find(Boolean)}`
+                                            : null,
+                                    ].filter(Boolean).join(" · ") || `운행 ${todayShuttles.length}건`}
+                                </span>
+                            </button>
+                        )}
+
+                        {/* 3) 미납 알림 */}
+                        {pendingPayments.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => scrollToSection("mypage-payment-alert")}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-left transition hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20"
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <SymbolIcon name="credit_card" size={18} className="text-red-600 dark:text-red-300" />
+                                    <span className="text-sm font-medium text-red-700 dark:text-red-200">미납 안내</span>
+                                </span>
+                                <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white">
+                                    미납 {pendingPayments.length}건
+                                </span>
+                            </button>
+                        )}
+
+                        {/* 4) 새 소식 배지 — 학습 피드백 */}
+                        {feedbackCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => scrollToSection("mypage-feedback")}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-left transition hover:bg-gray-100 dark:bg-gray-900/60 dark:hover:bg-gray-900"
+                            >
+                                <span className="flex items-center gap-2.5">
+                                    <SymbolIcon name="star" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" />
+                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">학습 피드백</span>
+                                </span>
+                                <span className="rounded-full bg-brand-orange-500 px-2.5 py-1 text-xs font-bold text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">
+                                    {feedbackCount}건
+                                </span>
+                            </button>
+                        )}
+                    </div>
+                </section>
+            )}
+
             {childShuttleOverview.length > 0 && (
-                <section aria-labelledby="parent-shuttle-heading" className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-blue-900/50 dark:bg-gray-800">
+                <section id="mypage-shuttle" aria-labelledby="parent-shuttle-heading" className="scroll-mt-4 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm dark:border-blue-900/50 dark:bg-gray-800">
                     <div className="mb-4 flex items-start justify-between gap-3">
                         <div>
                             <div className="flex items-center gap-2">
@@ -747,7 +863,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
             {/* Payment Alert */}
             {pendingPayments.length > 0 && (
-                <div className="space-y-3">
+                <div id="mypage-payment-alert" className="scroll-mt-4 space-y-3">
                     {pendingPayments.map((p) => (
                         <div key={p.id} className="rounded-2xl border border-red-100 bg-red-50 p-4 shadow-sm dark:border-red-500/30 dark:bg-red-500/10">
                             <div className="flex items-start justify-between gap-3">
@@ -791,7 +907,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
             {/* 수강 중인 반 — 카드 호버 효과 추가 (디자인 토큰 통일) */}
             {child.enrollments.length > 0 && (
-                <div>
+                <div id="mypage-enrollments" className="scroll-mt-4">
                     <h2 className="font-bold text-brand-navy-900 mb-3 px-1">수강 중인 반</h2>
                     <div className="space-y-2">
                         {child.enrollments.map((e) => (
@@ -1023,7 +1139,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
             {/* 학습 피드백 섹션 - 코치가 작성한 자녀 피드백 표시 */}
             {feedbacks.length > 0 && (
-                <div>
+                <div id="mypage-feedback" className="scroll-mt-4">
                     <div className="flex items-center justify-between mb-3 px-1">
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
                             <SymbolIcon name="star" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 학습 피드백

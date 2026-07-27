@@ -4,6 +4,7 @@ import {
   isAssignableResolution,
   canConfirm,
   perSessionAmount,
+  computeCreditDecision,
   RESOLUTION_LABEL,
 } from "../src/lib/seasonal/adminAbsenceRules.ts";
 
@@ -46,4 +47,50 @@ test("RESOLUTION_LABEL — 4개 처리방식 한국어 라벨", () => {
   assert.equal(RESOLUTION_LABEL.MAKEUP, "보강");
   assert.equal(RESOLUTION_LABEL.CARRYOVER, "이월");
   assert.equal(RESOLUTION_LABEL.REFUND, "환불");
+});
+
+// ── computeCreditDecision (Step 4 크레딧 게이트) ────────────────────────────
+test("computeCreditDecision — 확정+이월+결제 = 적립(ACTIVE)", () => {
+  const d = computeCreditDecision({ status: "CONFIRMED", resolution: "CARRYOVER", paid: true, amount: 15000 });
+  assert.equal(d.present, true);
+  assert.equal(d.amount, 15000);
+  assert.equal(d.creditStatus, "ACTIVE");
+  assert.equal(d.note, null); // 이월은 note 없음
+});
+
+test("computeCreditDecision — 확정+환불+결제 = 적립 + '환불 대상' 표기", () => {
+  const d = computeCreditDecision({ status: "CONFIRMED", resolution: "REFUND", paid: true, amount: 20000 });
+  assert.equal(d.present, true);
+  assert.equal(d.amount, 20000);
+  assert.equal(d.creditStatus, "ACTIVE");
+  assert.equal(d.note, "환불 대상"); // 자동 송금 금지 — 기록만
+});
+
+test("computeCreditDecision — 보강(MAKEUP)은 확정·결제여도 크레딧 없음", () => {
+  const d = computeCreditDecision({ status: "CONFIRMED", resolution: "MAKEUP", paid: true, amount: 15000 });
+  assert.equal(d.present, false);
+  assert.equal(d.amount, 0);
+});
+
+test("computeCreditDecision — 미결제면 이월/환불이어도 skip", () => {
+  const d = computeCreditDecision({ status: "CONFIRMED", resolution: "CARRYOVER", paid: false, amount: 15000 });
+  assert.equal(d.present, false);
+});
+
+test("computeCreditDecision — 미확정(REPORTED)이면 크레딧 없음(되돌리기 동기화)", () => {
+  const d = computeCreditDecision({ status: "REPORTED", resolution: "CARRYOVER", paid: true, amount: 15000 });
+  assert.equal(d.present, false);
+  const d2 = computeCreditDecision({ status: "REPORTED", resolution: "REFUND", paid: true, amount: 15000 });
+  assert.equal(d2.present, false);
+});
+
+test("computeCreditDecision — 금액 계산 불가/0 이하이면 적립 안 함", () => {
+  assert.equal(computeCreditDecision({ status: "CONFIRMED", resolution: "CARRYOVER", paid: true, amount: null }).present, false);
+  assert.equal(computeCreditDecision({ status: "CONFIRMED", resolution: "CARRYOVER", paid: true, amount: 0 }).present, false);
+  assert.equal(computeCreditDecision({ status: "CONFIRMED", resolution: "REFUND", paid: true, amount: -5 }).present, false);
+});
+
+test("computeCreditDecision — PENDING/잘못된 resolution 은 크레딧 없음", () => {
+  assert.equal(computeCreditDecision({ status: "CONFIRMED", resolution: "PENDING", paid: true, amount: 15000 }).present, false);
+  assert.equal(computeCreditDecision({ status: "CONFIRMED", resolution: "FOO", paid: true, amount: 15000 }).present, false);
 });

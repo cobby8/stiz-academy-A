@@ -48,3 +48,49 @@ export function perSessionAmount(
   if (!Number.isFinite(rounds) || rounds <= 0) return null;
   return Math.round(price / rounds);
 }
+
+// ── 이월 크레딧 적립 판정(Step 4) ───────────────────────────────────────────
+// "이 결석 건에 크레딧이 존재해야 하는가?"를 순수하게 판정한다(DB 접근 0).
+// 크레딧은 오직 아래 3조건을 모두 만족할 때만 존재한다:
+//   ① status === 'CONFIRMED'(관리자 확정)
+//   ② resolution ∈ {CARRYOVER(이월), REFUND(환불)}  ← 보강(MAKEUP)/미정(PENDING)은 크레딧 없음
+//   ③ 그 신청항목이 결제됨(paid === true)             ← 미결제면 "결제 후" 처리, 크레딧 skip
+// 금액은 회차 1회분(perSessionAmount). 계산 불가(null)·0 이하이면 적립하지 않는다.
+//
+// 이 판정을 resolve/confirm/revert 모든 경로에서 재사용하면,
+// resolution을 보강/미정으로 되돌리거나 확정을 취소하는 순간 present=false 가 되어
+// 크레딧이 자동으로 삭제된다(되돌리기 동기화).
+export type CreditDecision = {
+  present: boolean; // 크레딧이 존재해야 하는가
+  amount: number; // 적립 금액(원). present=false 면 0
+  creditStatus: string; // 'ACTIVE' (이월·환불 모두 재사용/환불대상으로 활성)
+  note: string | null; // 환불 대상 표기 등
+};
+
+export function computeCreditDecision(input: {
+  status: string | null | undefined;
+  resolution: string | null | undefined;
+  paid: boolean;
+  amount: number | null | undefined; // = perSessionAmount 결과
+}): CreditDecision {
+  const status = input.status;
+  const resolution = input.resolution;
+  const amount = input.amount;
+
+  // 3조건 + 금액 유효성 게이트
+  const gate =
+    status === "CONFIRMED" &&
+    (resolution === "CARRYOVER" || resolution === "REFUND") &&
+    input.paid === true &&
+    amount != null &&
+    Number.isFinite(amount) &&
+    Number(amount) > 0;
+
+  if (!gate) {
+    return { present: false, amount: 0, creditStatus: "ACTIVE", note: null };
+  }
+
+  // 환불은 자동 송금 금지 — 기록만 남기고 실제 지급은 수기 처리("환불 대상" 표기).
+  const note = resolution === "REFUND" ? "환불 대상" : null;
+  return { present: true, amount: Math.round(Number(amount)), creditStatus: "ACTIVE", note };
+}

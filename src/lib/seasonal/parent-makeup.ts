@@ -26,7 +26,22 @@ export async function getParentSeasonalContext(parentUserId: string) {
        JOIN "SpecialProgramApplicationItem" it ON it.id = e."applicationItemId"
        JOIN "SpecialProgramApplication" a ON a.id = it."applicationId"
        JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
-      WHERE e.kind = 'REGULAR' AND e."attendanceStatus" = 'ABSENT' AND e.status <> 'CANCELLED'
+      WHERE e.kind = 'REGULAR' AND e.status <> 'CANCELLED'
+        -- 보강 후보 = ①선생님 출결에서 결석(ABSENT) 처리된 좌석
+        --           + ②학부모가 '보강' 사유로 사전 신고한 좌석(EXCUSED + Absence.resolution='MAKEUP')
+        --   ※ 질병·부상(=CARRYOVER 이월)은 보강 후보 아님 → resolution='MAKEUP' 조건으로 자연 제외.
+        AND (
+          e."attendanceStatus" = 'ABSENT'
+          OR (
+            e."attendanceStatus" = 'EXCUSED'
+            AND EXISTS (
+              SELECT 1 FROM "SpecialProgramAbsence" ab
+               WHERE ab."enrollmentDateId" = e.id
+                 AND ab.resolution = 'MAKEUP'
+                 AND ab.status <> 'CANCELLED'
+            )
+          )
+        )
         AND regexp_replace(a."parentPhone", '[^0-9]', '', 'g') = $1
         AND NOT EXISTS (
           SELECT 1 FROM "SpecialProgramMakeup" m

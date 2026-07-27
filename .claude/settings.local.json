@@ -115,7 +115,8 @@
       "Bash(python3:*)",
       "Bash(iconv -f utf-8 -t utf-8)",
       "Read(//c/Users/cobby/**)",
-      "Bash(npx tsx -e \":*)"
+      "Bash(npx tsx -e \":*)",
+      "mcp__b198f2b7-0f9c-4b20-8af6-112a9db988ee__execute_sql"
     ]
   }
 }

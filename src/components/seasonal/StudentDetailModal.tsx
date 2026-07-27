@@ -77,6 +77,23 @@ export default function StudentDetailModal({ applicationId, onClose, save, onCha
     finally { setSavingPin(false); }
   }
 
+  // 셔틀 이용/미이용 토글(배정 취소·복원). ride=false면 그 학생은 배차에서 빠진다.
+  async function saveRide(ride: boolean) {
+    if (!save || savingPin) return;
+    if (!ride && typeof window !== "undefined" && !window.confirm("이 학생을 셔틀 미이용으로 바꿀까요? 배차 명단에서 빠집니다.")) return;
+    setSavingPin(true); setErr(null);
+    try {
+      const target = save.rosterId ? { rosterId: save.rosterId } : { requestId: save.requestId };
+      const r = await fetch("/api/admin/seasonal/shuttle-roster", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...target, patch: { ride } }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "저장 실패");
+      load(); onChanged?.();
+    } catch (e: any) { setErr(e?.message || "셔틀 이용 여부를 저장하지 못했습니다."); }
+    finally { setSavingPin(false); }
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
@@ -138,8 +155,15 @@ export default function StudentDetailModal({ applicationId, onClose, save, onCha
               </section>
 
               <section className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
-                <h3 className="mb-2 text-[13px] font-black text-gray-900 dark:text-white">셔틀 · 승하차 위치</h3>
-                {!sh || !sh.ride ? <p className="text-[12px] text-gray-400">셔틀 미이용</p> : (
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-[13px] font-black text-gray-900 dark:text-white">셔틀 · 승하차 위치</h3>
+                  {canEdit && sh && (
+                    sh.ride
+                      ? <button onClick={() => saveRide(false)} disabled={savingPin} className="shrink-0 rounded-lg border border-red-300 px-2.5 py-1.5 text-[11px] font-bold text-red-600 disabled:opacity-50 dark:border-red-500/40 dark:text-red-300">🚫 셔틀 미이용(배정 취소)</button>
+                      : <button onClick={() => saveRide(true)} disabled={savingPin} className="shrink-0 rounded-lg border border-green-300 px-2.5 py-1.5 text-[11px] font-bold text-green-700 disabled:opacity-50 dark:border-green-500/40 dark:text-green-300">🚌 셔틀 이용으로 변경</button>
+                  )}
+                </div>
+                {!sh || !sh.ride ? <p className="text-[12px] text-gray-400">셔틀 미이용{canEdit && sh ? " · 위 버튼으로 이용으로 바꿀 수 있습니다" : ""}</p> : (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2 rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900/50">
                       <div className="min-w-0">

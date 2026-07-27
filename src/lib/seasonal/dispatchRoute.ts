@@ -201,3 +201,14 @@ export async function saveDispatchRoute(input: {
   );
   return { savedAt: isoOrNull(rows[0]?.updatedAt) };
 }
+
+/** 저장된 노선을 삭제한다(그 날짜·방향). 삭제 후에는 자동 제안이 다시 기준이 된다. 원장/관리자만. */
+export async function deleteDispatchRoute(date: string, direction: string): Promise<{ deleted: number }> {
+  await requireAdmin();
+  const d = normDate(date), dir = normDir(direction);
+  if (!d || !dir) throw new Error("날짜 또는 방향이 올바르지 않습니다.");
+  const n = await prisma.$executeRawUnsafe(
+    `DELETE FROM "SeasonalDispatchRoute" WHERE "serviceDate" = $1 AND "direction" = $2`, d, dir,
+  );
+  return { deleted: Number(n) || 0 };
+}

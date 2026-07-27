@@ -4,6 +4,8 @@ import { NOT_MERGED_STUDENT } from "@/lib/studentVisibility";
 import { getConfirmedShuttleRoster } from "@/lib/seasonal/shuttleRoster";
 // 방학특강 셔틀의 확정 승/하차 시각은 저장된 배차 노선(SeasonalDispatchRoute)에서 읽는다(T3).
 import { getConfirmedDispatchEtas } from "@/lib/seasonal/dispatchRoute";
+// 정규 셔틀의 확정 승/하차 시각은 저장된 정규 배차 노선(RegularDispatchRoute, 요일×방향)에서 읽는다(Phase 3).
+import { getConfirmedRegularDispatchEtas, regularEtaKey } from "@/lib/regular/regularDispatchRoute";
 
 export type ParentShuttleOverviewItem = {
   id: string;
@@ -93,7 +95,7 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
         sessionId: true,
         locationKind: true,
         rideStatus: true,
-        session: { select: { classId: true, class: { select: { name: true } } } },
+        session: { select: { classId: true, class: { select: { name: true, dayOfWeek: true } } } },
         routePlan: {
           select: {
             routeKey: true,
@@ -177,8 +179,23 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
     regularByRoute.set(key, preferRouteVersion(current, passenger));
   }
 
-  const regularItems = [...regularByRoute.values()].map<ParentShuttleOverviewItem>((passenger) => {
+  const regularRoutePassengers = [...regularByRoute.values()];
+  // 정규 확정 승/하차 시각(저장된 정규 배차 노선 기준). 본인 자녀 studentId × 반 요일 쌍만 넘긴다(IDOR 안전).
+  // 요일이 없는(예외) 승객은 조회에서 자연 제외되고, 미배차/미저장이면 null 로 남아 종전과 동일하게 보인다.
+  const regularEtaPairs = regularRoutePassengers
+    .filter((passenger) => passenger.studentId && passenger.session?.class.dayOfWeek)
+    .map((passenger) => ({ studentId: passenger.studentId!, dayOfWeek: passenger.session!.class.dayOfWeek! }));
+  const regularEtaByKey = regularEtaPairs.length
+    ? await getConfirmedRegularDispatchEtas(regularEtaPairs)
+    : new Map<string, { pickupEtaLabel: string | null; dropoffEtaLabel: string | null }>();
+
+  const regularItems = regularRoutePassengers.map<ParentShuttleOverviewItem>((passenger) => {
     const isDraft = passenger.routePlan.status === "DRAFT";
+    // 이 승객(자녀×반 요일)의 확정시각을 붙인다. 없으면 둘 다 null.
+    const dayOfWeek = passenger.session?.class.dayOfWeek ?? null;
+    const eta = passenger.studentId && dayOfWeek
+      ? regularEtaByKey.get(regularEtaKey(passenger.studentId, dayOfWeek))
+      : undefined;
     return {
       id: passenger.id,
       studentId: passenger.studentId!,
@@ -194,6 +211,8 @@ export async function getParentShuttleOverview(appUserId: string): Promise<Paren
       plannedAt: isDraft ? null : dateTime(passenger.stop.plannedAt),
       vehicleName: isDraft ? null : (passenger.routePlan.vehicle?.name ?? null),
       rideStatus: isDraft ? null : passenger.rideStatus,
+      pickupEtaLabel: eta?.pickupEtaLabel ?? null,
+      dropoffEtaLabel: eta?.dropoffEtaLabel ?? null,
     };
   });
 

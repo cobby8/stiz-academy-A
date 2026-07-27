@@ -87,8 +87,8 @@ export default function SeasonalMakeupClient({ initial }: { initial: any }) {
 
   return (
     <div className="mx-auto max-w-lg p-4">
-      <h1 className="mb-1 text-lg font-black">🏀 방학특강 보강 신청</h1>
-      <p className="mb-4 text-xs font-bold text-gray-500">결석한 수업을 다른 날짜로 보강 신청할 수 있어요. (결석일로부터 2개월 이내)</p>
+      <h1 className="mb-1 text-lg font-black">🏀 방학특강 결석 신고 · 보강</h1>
+      <p className="mb-4 text-xs font-bold text-gray-500">앞으로 못 오는 회차는 <b>미리 결석 신고</b>(셔틀 자동 제외), 이미 결석한 회차는 <b>보강 신청</b>을 할 수 있어요. (보강은 결석일로부터 2개월 이내)</p>
 
       {msg && <div className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm font-bold text-green-700 dark:bg-green-950 dark:text-green-300">{msg}</div>}
       {err && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:bg-red-950 dark:text-red-300">{err}</div>}

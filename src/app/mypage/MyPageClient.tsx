@@ -165,7 +165,9 @@ type MyPageData = {
 };
 
 const REQUEST_TYPES = [
-    { value: "ABSENCE", label: "결석 신청" },
+    // '결석 신청'은 정규수업 결석을 학원에 자유텍스트로 접수하는 경로다.
+    // 방학특강 사전 결석 신고(셔틀 자동제외)와 혼동되지 않도록 '정규수업 결석'으로 명칭을 구분한다.
+    { value: "ABSENCE", label: "정규수업 결석" },
     { value: "SHUTTLE", label: "셔틀 변경" },
     { value: "EARLY_LEAVE", label: "조퇴 요청" },
     { value: "OTHER", label: "기타 요청" },
@@ -297,6 +299,17 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
         .join(", ");
 
     const pendingPayments = child.payments.filter((p) => p.status === "PENDING" || p.status === "OVERDUE");
+
+    // 정규수업 결석 경로: 요청 폼을 '정규수업 결석' 유형으로 열고 폼 위치로 스크롤한다.
+    function openRegularAbsenceForm() {
+        setShowRequests(false);
+        setReqType("ABSENCE");
+        setShowRequestForm(true);
+        // 폼이 렌더된 뒤 스크롤(다음 프레임)
+        setTimeout(() => {
+            document.getElementById("parent-request-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
+    }
 
     return (
         <div className="space-y-6">
@@ -613,6 +626,18 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                                 </button>
                             ))}
                         </div>
+
+                        {/* 정규수업 결석 안내: 자유텍스트 접수이며 셔틀은 자동 제외되지 않음(학원 수기 처리).
+                            방학특강 결석은 셔틀 자동제외되는 별도 구조화 신고 경로로 안내한다. */}
+                        {reqType === "ABSENCE" && (
+                            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                                정규수업 결석은 학원에 접수되어 <b>담당자가 직접 확인·처리</b>합니다. 셔틀은 자동으로 제외되지 않으니 셔틀 관련 사항도 함께 적어주세요.
+                                <br />
+                                방학특강 결석은{" "}
+                                <Link href="/mypage/seasonal" className="font-bold underline">방학특강 결석 신고</Link>
+                                에서 신고하면 <b>그날 셔틀 배차에서 자동 제외</b>됩니다.
+                            </div>
+                        )}
 
                         {/* 자녀 선택 (여러 명일 때) */}
                         {data.children.length > 1 && (
@@ -933,22 +958,49 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </div>
             </Link>
 
-            {/* 방학특강 보강 신청 바로가기 */}
-            <Link
-                href="/mypage/seasonal"
-                className="block bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition mb-4"
-            >
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">sports_basketball</span>
-                        <div>
-                            <p className="font-bold text-brand-navy-900">방학특강 보강 신청</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">결석한 특강 수업을 다른 날짜로 보강 신청하세요</p>
-                        </div>
-                    </div>
-                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+            {/* 결석 미리 알리기 허브 — 결석 경로 혼동을 없애기 위한 단일 진입점.
+                방학특강(구조화 신고·셔틀 자동제외)과 정규수업(요청 접수·수기 처리)을 명확히 구분해 안내한다. */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm mb-4">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className="material-symbols-outlined text-xl text-brand-orange-500 dark:text-brand-neon-lime">event_busy</span>
+                    <p className="font-bold text-brand-navy-900">결석 미리 알리기</p>
                 </div>
-            </Link>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">수업 종류에 따라 알리는 방법이 달라요. 아래에서 맞는 곳을 선택하세요.</p>
+
+                {/* 경로 ① 방학특강 — 구조화 신고(셔틀 자동제외) */}
+                <Link
+                    href="/mypage/seasonal"
+                    className="block rounded-xl border border-gray-100 dark:border-gray-700 p-3 mb-2 hover:border-brand-orange-200 dark:hover:border-brand-neon-lime transition"
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">sports_basketball</span>
+                            <div>
+                                <p className="font-bold text-brand-navy-900">방학특강 결석 신고 · 보강</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">사전 신고하면 그날 셔틀 배차에서 자동 제외돼요. 결석한 회차 보강 신청도 여기서.</p>
+                            </div>
+                        </div>
+                        <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                    </div>
+                </Link>
+
+                {/* 경로 ② 정규수업 — 자유텍스트 요청 접수(학원 수기 처리) */}
+                <button
+                    onClick={openRegularAbsenceForm}
+                    className="block w-full text-left rounded-xl border border-gray-100 dark:border-gray-700 p-3 hover:border-brand-orange-200 dark:hover:border-brand-neon-lime transition"
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-2xl text-gray-400 dark:text-gray-300">edit_calendar</span>
+                            <div>
+                                <p className="font-bold text-brand-navy-900">정규수업 결석 알리기</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">학원에 요청으로 접수돼 담당자가 직접 처리해요. (셔틀 자동제외 아님)</p>
+                            </div>
+                        </div>
+                        <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                    </div>
+                </button>
+            </div>
 
             {/* 학습 피드백 섹션 - 코치가 작성한 자녀 피드백 표시 */}
             {feedbacks.length > 0 && (

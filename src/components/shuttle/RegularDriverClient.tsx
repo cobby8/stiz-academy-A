@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
 import DriverDateNav from "@/components/shuttle/DriverDateNav";
+import GpsShareBar from "@/components/shuttle/GpsShareBar";
 
 // 정규 셔틀 기사님 운행 화면 — 로그인 없이 토큰으로 접근. 오늘 요일의 수업별 등원·하원 타임라인.
 // ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼(dark: 미사용). 탭 한 번으로 즉시 저장.
@@ -129,6 +130,9 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
         <p className="text-[20px] font-black text-gray-900">🚌 스티즈 정규 셔틀</p>
         <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 체크 {boarded}/{allRows.length}</p>
       </header>
+
+      {/* GPS 위치 공유 바 */}
+      <GpsShareBar token={token} label="정규 셔틀 기사님" />
 
       {/* 날짜 이동 네비 — 달력일 ±1(상시 운행이라 항상 이동 가능) */}
       <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />

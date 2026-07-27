@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
 import DriverDateNav from "@/components/shuttle/DriverDateNav";
+import GpsShareBar from "@/components/shuttle/GpsShareBar";
 
 // 기사님 운행 화면(모바일) — 그 날 등원 → 하원 타임라인. 각 구간에서 정차 순서대로 학생을 보고 탑승/미탑승을 탭으로 체크한다.
 // 로그인 없이 토큰으로 접근하며, 체크는 즉시 서버에 저장한다(구간=방향별).
@@ -74,6 +75,9 @@ export default function DriverRunClient({
         <p className="text-[20px] font-black text-gray-900">🚌 스티즈 셔틀 운행</p>
         <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 등원 → 하원</p>
       </header>
+
+      {/* GPS 위치 공유 바 — label은 첫 번째 차량 이름으로 자동 추출 */}
+      <GpsShareBar token={token} label={sections[0]?.vehicles[0]?.vehicleName ?? "방학특강 기사님"} />
 
       {/* 날짜 이동 네비 — 운행 가능일 기준 이전/다음 */}
       <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />

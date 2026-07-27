@@ -60,16 +60,12 @@ export default async function ShuttleRunPage({
   const sp = await searchParams;
   const requestedDate = sp?.date && isValidDate(sp.date) ? sp.date : null;
 
-  // 기본 날짜: 고정(ROLLING) 링크는 오늘(또는 가장 가까운 운행일), 특정일 링크는 run.date.
+  // 기본 날짜: ROLLING(상시) 링크는 "항상 오늘"(현재 KST 기준). 오늘 운행이 없으면
+  // 어제로 떨어지지 않고 오늘을 그대로 띄우고, 운행일 이동은 이전/다음 네비로 한다.
+  // 특정일 링크는 run.date.
   let effectiveDate: string | null = requestedDate;
   if (!effectiveDate) {
-    if (run.date === "ROLLING") {
-      effectiveDate = availableDates.includes(today)
-        ? today
-        : (availableDates.filter((d) => d >= today)[0] ?? availableDates[availableDates.length - 1] ?? null);
-    } else {
-      effectiveDate = run.date;
-    }
+    effectiveDate = run.date === "ROLLING" ? today : run.date;
   }
   if (!effectiveDate) return lightError("오늘은 운행이 없습니다", "다음 운행일에 다시 열어주세요.");
 

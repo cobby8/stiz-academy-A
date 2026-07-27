@@ -24,7 +24,8 @@
 |------|------|
 | 셔틀 확정 명단 0~3단계(게이트웨이·확정 UI·확정본 편집·핀) | 완료·배포 |
 | 4a-1 결석→그날 배차 자동 제외 | 완료·커밋(b04fdf8, 미푸시) |
-| 4a-2 학부모 마이페이지 사전 결석 신고 | 대기 |
+| 4a-2 학부모 마이페이지 사전 결석 신고 | 완료(Step1~4: 스키마·학부모UI·관리자처리·크레딧적립/보강후보연동) |
+| 정규 결석→보강 Phase 4 MVP(MakeupSession 재사용·관리자 지정·학부모 조회) | 완료(tsc EXIT=0, 스키마무변경, PM 검증대기·미커밋) |
 | 4b 시즌 격리(R-7②) / 4c 추가 확정 / 4d 변동 배지 | 대기 |
 | 승차위치 아파트/건물명 표시(카카오 장소명) | 완료·커밋(수동검증 대기) |
 | 자동배차 무료탑승 드래그 지정 | 완료·커밋(수동검증 대기) |
@@ -38,10 +39,292 @@
 | 증분 재배차 cheapest-insertion(Phase 2b, 순서보존) | 완료·검증(tsc EXIT=0, 유닛 13/13) |
 | 기사님 운행 화면(전용 링크·탑승 체크) | 완료·배포(테이블 2개) |
 | 셔틀 확정 명단 4~5단계(변동 감지·재발 방지 가드) | 대기 |
+| 정규 셔틀 동적배차 Phase 0(라이더 명단 정합·A안 신청서좌표) | 완료(tsc EXIT=0, 유닛 8/8, 미커밋·PM검증대기) |
+| 정규 셔틀 동적배차 Phase 1(방학특강 배차엔진 재사용·computeRegularDispatch) | 완료(tsc EXIT=0, 유닛 40/40, 미커밋·PM검증대기) |
 | 정규반 형제할인 자동화 | 대기(시트 수동 10% 이중적용 위험 확인 필요) |
+| 마이페이지 소셜/이메일 불일치 자녀 안보임 버그 | 완료(tsc EXIT=0, PM 검증 대기·미커밋) |
+| 대시보드 방학특강 미전환 자녀 별도 섹션(#1 B안) | 완료(tsc EXIT=0, 유닛 10/10, PM 검증 대기·미커밋) |
 | 미푸시 커밋 | 1개 (b04fdf8) |
 
 ## 구현 기록 (developer)
+
+### 구현 기록 — 기사 운행화면 날짜 넘기기(이전/다음) (2026-07-27)
+📝 방학특강·정규 두 기사 화면(무로그인 토큰)에 날짜 이동 네비 추가. 기존 "오늘 고정" → ?date= 쿼리로 다른 날 운행 조회.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/components/shuttle/DriverDateNav.tsx | 공용 날짜 네비(‹이전·[날짜(요일)]·다음›+오늘로), Link 라우팅 | 신규 |
+| src/app/shuttle/run/[token]/page.tsx | searchParams.date 검증·기본값, availableDates 기준 이전/다음(adjacentRunDates) | 수정 |
+| src/app/shuttle/regular/[token]/page.tsx | searchParams.date 검증, 달력일 ±1(addDays), 빈날 early-return 제거 | 수정 |
+| src/components/seasonal/DriverRunClient.tsx | prev/next/today prop + 네비 + 빈 배차 안내 | 수정 |
+| src/components/shuttle/RegularDriverClient.tsx | prev/next/today prop + 네비, 빈날 문구 조정 | 수정 |
+
+- 방학특강: 운행 가능일(availableDates)끼리 ±1 이동, 범위 밖 버튼 비활성. 임의날 무운행이면 안내.
+- 정규: 상시 운행이라 달력일 ±1 상시 이동, 명단 없는 날도 네비 유지.
+- 서버에서 date 정규식+달력 유효성 검증(클라 입력 불신). 탑승체크/결석/배차 저장 로직 무변경.
+- tsc --noEmit EXIT=0. git commit 미실행(PM 검증 대기).
+
+### 구현 기록 — 정규 정류장 좌표 채우기 1회용 패널 (2026-07-27)
+📝 좌표(latitude null)가 없어 정규 동적배차가 못 도는 정류장 56곳(실측 distinct 56/행 252)을 원장이 프로덕션에서 카카오 keywordSearch로 일괄 지오코딩→검토→저장하는 1회용 패널. 기존 /admin/shuttle/regular 의 단순 자동채우기와 별개(무변경), 검토 테이블·지역힌트·다산밖 경고 추가.
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/shuttle/regularImport.ts | `getRegularStopsWithoutCoords()` — latitude IS NULL distinct stopName(빈값 제외) 조회 | 수정 |
+| src/components/shuttle/RegularStopGeocodePanel.tsx | 카카오 JS SDK keywordSearch(x/y) 순차 지오코딩(~200ms), 지역힌트 `"${name} 남양주 다산"`→폴백 name, 결과 테이블(장소명/주소/좌표/상태), 다산밖(37.5~37.7·127.1~127.2) 경고·체크해제, 확정 저장(regular-geocode 재사용), 못찾음 목록, 진행률 N/56 | 신규 |
+| src/app/admin/shuttle/regular-dispatch/page.tsx | getRegularStopsWithoutCoords 병렬 조회→배차 상단에 패널 마운트 | 수정 |
+💡 tester: /admin/shuttle/regular-dispatch 상단 amber 패널 → [지오코딩 시작]→진행률→테이블→[선택 저장]. 저장은 requireAdmin(saveRegularStopCoords 재사용). 카카오 키/도메인 프로덕션만 등록(localhost 미등록). tsc EXIT=0.
+⚠️ reviewer: 스키마 무변경·읽기+좌표저장만. keywordSearch 결과 x=경도/y=위도. 기존 정규셔틀/배차 로직 무변경. hex 0(brand토큰·의미색+dark). ★git 미커밋(PM 검증 후).
+
+
+### 구현 기록 — 정규 셔틀 라이더 소스 전환: 신청서 → RegularShuttleStop(지오코딩 시트) (2026-07-27)
+
+📝 구현: `getRegularShuttleRiders` / `getRegularShuttleWeekdays` 의 명단 소스를 EnrollmentApplication 좌표에서 **RegularShuttleStop(구글시트 이관본)** 으로 단순 교체(하이브리드 아님). 반환 shape(RegularShuttleRosterResult) 무변경 → Phase1/2/3·reconcile 그대로 소비.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/regular/shuttleRoster.ts | SQL 소스 RegularShuttleStop 로 교체, 학생 best-effort 매칭, 시트→RawRider 매핑 | 수정 |
+
+매핑 규칙:
+- 요일: RegularShuttleStop.weekday(0=일…6=토) ↔ DOW_NAMES 인덱스(=Class.dayOfWeek). regularSheet WD 매핑과 일치 확인.
+- 방향: BOARD(승차)=PICKUP(등원), ALIGHT(하차)=DROPOFF(하원). PIVOT('하차/승차'=학원경유)·RETURN(복귀)은 학생 라이더 아니라 제외.
+- 좌표: 정차 행 latitude/longitude 를 pickup·dropoff 양쪽에 담음(방향별 이미 필터). placeLabel=stopName. 좌표 null 행 → buildRegularShuttleRoster 가 unassigned 로 분리(배차 안전).
+- 학생매칭: studentName(공백·대소문자 무시) → Student(mergedIntoStudentId IS NULL). 학부모전화(User/Guardian, 숫자만) 일치 학생 우선 tiebreaker.
+- studentId: 매칭 성공=실제 Student.id, 실패=`'stop:'+행id`(하위 배차·reconcile 식별키 유일성 보존, 실제 uuid와 절대 충돌 안 함 → 학부모 ETA 오매칭 0). ★task 는 "실패시 null" 이었으나, studentId 는 Phase1(shuttleRequestId 슬롯)·reconcile Set/Map 의 식별키라 null 이면 미매칭 라이더끼리 충돌·소실. shape(studentId:string) 유지+유일성 위해 stop-id fallback 채택. 실측 79/79 이름매칭이라 방어적 처리.
+
+💡 tester 참고:
+- tsc --noEmit EXIT=0. 기존 순수로직 테스트(node --test shuttleRosterLogic.test.ts) 8/8 통과(로직 무변경).
+- 정상: 좌표 채워진 시트 요일이면 배차화면에 라이더 표시. 좌표 전무(지오코딩 전)면 전원 unassigned(빈 배차지만 크래시 없음).
+- 주의입력: 동명이인+학부모전화 유무, PIVOT/RETURN 행(제외돼야), studentName 공백/빈값(제외).
+
+⚠️ reviewer 참고: SQL LATERAL 매칭 서브쿼리(정규식 정규화)·studentId fallback 접두사 규칙 중점.
+
+### 구현 기록 — 정규 신청 승인 정원경고 + 학생매칭 생년강화 (2026-07-27)
+📝 `approveEnrollApplication`(admin.ts)에 두 보강. Class에 `capacity`(Int, 비null) 있음 확인 → A 적용.
+- **A. 정원 초과 소프트게이트**: `data.force?:boolean` 추가(기본 false). 트랜잭션 진입 전 읽기만으로 각 classId의 ACTIVE 인원(병합제외) vs capacity 비교. `current>=capacity`면 DB 변경 0으로 `{ok:false,code:'CAPACITY_WARNING',classes:[{classId,name,current,capacity}]}` 반환. UI는 confirm 후 force:true 재호출.
+- **B. 학생매칭 생년강화(중복방지)**: ①생년 있으면 name+parentId+birthDate 정확매칭 우선 ②폴백 name+parentId → 정확히 1명이면 기존 단일학생 재사용(회귀없음·생년 null/불일치여도 유지) + 그 학생 birthDate 비었으면 COALESCE로 채움(덮어쓰기X) ③2명↑(동명형제)면 자동선택/생성 금지, `ApprovalAbort` 던져 롤백 후 `{ok:false,code:'STUDENT_AMBIGUOUS',candidates}` 반환 ④0명이면 신규 INSERT(생년포함). 관리자 지정용 `data.resolvedStudentId?`(보호자소속·미병합 검증)도 지원.
+- 트랜잭션·FOR UPDATE·생성순서(Parent→Student→Guardian→Enrollment→셔틀)·Payment 미생성 전부 보존. 방학특강 무변경.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/app/actions/admin.ts | ApprovalAbort 센티넬 클래스, force 게이트(트랜잭션 전 읽기), 학생 4분기 매칭, birthDate COALESCE, catch에서 ApprovalAbort→payload 반환 | 수정 |
+| src/app/admin/apply/ApplyAdminModals.tsx | handleApprove(force인자) — CAPACITY_WARNING confirm 재호출·STUDENT_AMBIGUOUS 안내, 반환 union 타입 명시 | 수정 |
+
+💡 tester 참고:
+- tsc --noEmit EXIT=0.
+- 정상: 정원 여유 반은 기존과 동일 즉시승인. 단일 동명 학생은 그대로 재사용(신규 생성 안 됨).
+- 주의 입력: 정원 꽉 찬 반(경고→확인 시 배정), 동명 형제(모호 안내), 생년 비어있던 기존학생(승인 시 생년 채워짐).
+⚠️ reviewer: 회귀 핵심 = 폴백 1명 재사용(중복 생성 0)·기존 성공 반환형태 `{approved,sms}` 유지.
+
+### 구현 기록 — 정규 결석→보강(makeup) Phase 4 MVP (2026-07-27)
+📝 정규 결석(RegularAbsence)에 대해 관리자가 보강을 지정/일정하고, 학부모가 자녀 예정 보강을 확인. **택한 방식=(A) 레거시 MakeupSession 재사용 + 스키마 변경 0**. 결석↔보강을 자연키(studentId+originalClassId=classId+originalDate::date=date)로 연결. 크레딧/환불/정원스케줄러 없음(MVP). 조사결과: MakeupSession은 살아있고 `/admin/makeup`+admin.ts(book/cancel/updateMakeupStatus)가 실사용, 정규 보강 컬럼이 그대로 맞음 → 신규 컬럼/테이블 불필요.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/regular/admin-regular-absence.ts | getRegularAbsences에 studentId/classId + MakeupSession 자연키 매칭(활성 보강) 필드 추가, getMakeupClassOptions() 신규(전체 반+프로그램명), MakeupClassOption 타입 | 수정 |
+| src/app/actions/regular-absence-admin.ts | scheduleMakeupForAbsence(결석 서버조회+자연키 중복거부→bookMakeupSession 재사용)·cancelMakeupForAbsence·updateMakeupStatusForAbsence(레거시 cancel/updateMakeupStatus 재사용, 화이트리스트 내장). 전부 requireAdmin | 수정 |
+| src/app/admin/absence/page.tsx | getMakeupClassOptions 병렬조회→client에 makeupClasses 전달 | 수정 |
+| src/app/admin/absence/RegularAbsenceAdminClient.tsx | 행마다 보강 영역: 미지정→[보강 지정] 폼(반+날짜), 지정됨→상태select(예약/출석/노쇼)+[보강 취소] | 수정 |
+| src/lib/regular/parent-regular-makeup.ts | getRegularMakeupsForParent(appUserId) — Student.parentId 조인(IDOR), 오늘이후·취소제외, 읽기전용. 테이블부재 try/catch→[] | 신규 |
+| src/app/mypage/regular-absence/{page.tsx,RegularAbsenceClient.tsx} | 예정 보강 병렬조회→"예정 보강" 읽기전용 섹션(자녀·보강반·날짜·상태·결석출처). 변경은 문의 안내 | 수정 |
+
+💡 tester: 관리자 /admin/absence → 결석 행 [보강 지정](반 드롭다운+보강일)→지정 후 파란 "보강 예약" 배지·상태변경·[보강 취소]. 중복 지정 시 "이미 지정된 보강" 거부. 학부모 /mypage/regular-absence 상단 "예정 보강" 섹션(관리자 지정건, 읽기전용). `npx tsc --noEmit` EXIT=0.
+⚠️ reviewer: ★스키마 무변경(MakeupSession 재사용, 자연키 매칭). 관리자 액션 전부 requireAdmin. scheduleMakeup은 결석 원본을 서버에서 재조회해 student/class/date 확정(클라 불신뢰)+자연키 중복거부. 학부모 조회 IDOR=Student.parentId=appUserId 조인만(클라 입력 없음, 쓰기 0). MakeupSession 테이블 부재 대비 조회 try/catch. 방학특강 보강/정규 결석신고(Step B)/셔틀·배차 무변경(연결만 추가). hex 0(brand-accent·의미색+dark). ★git 미커밋·DB적용 없음(스키마 변경 자체가 없음, PM 검증 후).
+
+
+### 구현 기록 — 정규 셔틀 동적배차 Phase 3: 학부모 마이페이지 정규 확정 승·하차 시각 노출 (2026-07-27)
+
+📝 정규 셔틀 이용 자녀에게도 방학특강처럼 확정 승/하차 시각(예 "08:53 승차")을 마이페이지에 표시. 읽기 전용.
+
+| 파일 | 변경 내용 | 신규/수정 |
+|------|----------|----------|
+| src/lib/regular/regularDispatchRoute.ts | getConfirmedRegularDispatchEtas + regularEtaKey 신규(요일×방향 저장본에서 studentId 매칭, extractEtaByRequestId 재사용) | 수정 |
+| src/lib/shuttle/parent.ts | 정규 승객 select에 class.dayOfWeek 추가, 정규 항목에 pickup/dropoffEtaLabel 부착 | 수정 |
+| src/app/mypage/MyPageClient.tsx | 확정시각 표시 조건 SPECIAL_PROGRAM 한정 해제(정규 공통) | 수정 |
+
+💡 tester 참고: 정규 배차가 저장된 요일(RegularDispatchRoute payload에 학생 studentId 정차 존재)인 자녀 로그인 시 카드에 "확정 시각: 등원 HH:MM 승차 · 하원 HH:MM 하차" 표시. 미배차/미저장 요일이면 종전대로 시각 없음(안전). IDOR: 본인 자녀 studentId×요일만 조회. tsc EXIT=0.
+
+### 구현 기록 — 정규 셔틀 동적배차 Phase 2b: 배차 관리자 화면 + 저장/불러오기 + reconcile (2026-07-27)
+📝 방학특강 배차 UI/저장/reconcile 을 **요일 기준**으로 재사용해 정규 셔틀 동적배차 관리자 화면 완성. computeRegularDispatch(Phase1)로 자동제안 → 순서/출발/정차시각 조정 → (요일×방향) 저장 → 저장본 reconcile-on-read.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/regular/shuttleRoster.ts | `getRegularShuttleWeekdays()` 추가 — 셔틀 이용 학생 있는 요일 목록(Mon→Sun) | 수정 |
+| src/lib/regular/regularDispatchRoute.ts | `getSavedRegularDispatchRoute`(공용 reconcileSavedVehicles·diffSavedRoute 재사용, 유효 라이더=getRegularShuttleRiders studentId 집합) + `saveRegularDispatchRoute`(ON CONFLICT dayOfWeek,direction) + `getRegularDispatchForView`(저장본 우선·없으면 computeRegularDispatch) | 신규 |
+| src/app/api/admin/regular/dispatch/route.ts | POST 자동제안(requireAdmin, body.date=요일) | 신규 |
+| src/app/api/admin/regular/dispatch/saved/route.ts | GET/POST 저장·불러오기 | 신규 |
+| src/app/api/admin/regular/dispatch/reroute/route.ts | POST 순서고정 T맵 재계산(seasonal reroute 동일 기하) | 신규 |
+| src/components/seasonal/RouteSection.tsx | `apiBase`(기본 seasonal)·`rosterEditable`(기본 true) prop 추가. fetch 4곳 apiBase화. 학생상세모달·무료탑승드래그를 rosterEditable로 게이트 | 수정 |
+| src/app/admin/shuttle/regular-dispatch/{page.tsx,RegularDispatchClient.tsx} | 요일 네비(Mon~) + 등원/하원 RouteSection(apiBase=정규, rosterEditable=false) | 신규 |
+| src/app/admin/shuttle/ShuttleSectionTabs.tsx | "정규 배차" 탭 추가(regular-dispatch 접두 우선 판정) | 수정 |
+
+- **재사용 방식**: RouteSection 파라미터화(apiBase/rosterEditable) — seasonal 기본값 유지해 기존 DispatchClient 호출 무영향. reconcile/diff 는 공용 순수함수 그대로(유효집합만 정규 명단). computeRegularDispatch(Phase1) 그대로 소비.
+- **seasonal 회귀없음 근거**: RouteSection 신규 prop 전부 seasonal 기본값 → DispatchClient(무인자 호출) 동일 동작. seasonal API/lib 무변경. tsc EXIT=0, 방학특강 유닛(increment·eta·reconcile) 40/40 통과.
+- 💡 tester: 관리자 셔틀 관리 → "정규 배차" 탭 → 요일 선택 → 등원/하원 자동제안·순서 드래그·저장·재로드(reconcile). 저장 후 새로고침해도 저장 노선 유지. `npx tsc --noEmit` EXIT=0, `node --test tests/seasonal-dispatch-*.test.mjs tests/seasonal-shuttle-eta.test.mjs src/lib/regular/shuttleRosterLogic.test.ts` 40/40. (실동작은 관리자 인증+T맵/카카오 키 필요.)
+- ⚠️ reviewer: 스키마 무변경(2a RegularDispatchRoute 소비). requireAdmin(제안/저장/재계산). $queryRawUnsafe·ON CONFLICT 멱등. 구글시트 정규 셔틀(/admin/shuttle/regular)·기사화면 무변경(병행). rosterEditable=false 로 정규가 seasonal 전용 명단편집 엔드포인트를 호출하지 않음. ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 정규 셔틀 동적배차 Phase 1: 방학특강 배차엔진 재사용 (2026-07-27)
+📝 Phase 0 정규 명단(getRegularShuttleRiders)을 방학특강 배차 코어에 태워 정규 배차 제안(차량·정차·T맵 실도로·시각) 계산. **재사용 방식=(a) 코어 파라미터화**: shuttle-optimize.ts에서 "명단→차량·정차·경로·시각" 부분을 명단 소스 독립 코어 `buildDispatchFromRiders(riders,...)`로 추출해 seasonal·regular가 공유. (b 복제안 대비 두 벌 유지 회귀위험이 커서 a 선택.)
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/shuttle-optimize.ts | 배차 코어를 `buildDispatchFromRiders(input)`로 추출·export + `DispatchRiderInput` 계약 export. computeDispatch는 방학특강 명단만 준비해 코어 호출로 축소(로직 이동뿐, 동작 동일). planRun/nnOrder/getSettings/ShuttleVehicle/ETA 전부 코어에 잔류 | 수정 |
+| src/lib/regular/shuttle-dispatch.ts | `computeRegularDispatch({direction,dayOfWeek?/date?,localOnly?})` 신규. getRegularShuttleRiders→RegularShuttleRider를 DispatchRiderInput로 어댑트(shuttleRequestId←studentId·rosterId=null·source=null)→buildDispatchFromRiders. 코어 date게이트 통과용 date=날짜?? 요일명, 앵커=최이른시작·최늦종료(반별 상이 대비), 좌표없는 이용자도 코어에 넘겨 unassigned로 분리 | 신규 |
+
+- **반환 shape**: 방학특강과 동일 `DispatchSuggestion`(vehicles→stops→students, path·etaLabel·etaMinutes·provider, unassigned, totalRiders, vehicleFleet 등) → Phase 2 화면/저장이 방학특강 뷰 재사용 가능.
+- **seasonal 회귀없음 근거**: computeDispatch는 기존과 동일 데이터(availableDates·date·dow·plan.riders·classStart/End)를 준비해 코어에 전달만. 코어 내부는 기존 stop/run/planRun 코드 그대로 이동. ShuttleRosterRider가 DispatchRiderInput를 구조적으로 만족(place.source 포함). 기존 seasonal 유닛(increment·eta·reconcile) 40/40 통과, tsc EXIT=0.
+- **Phase 2 연결지점**: computeRegularDispatch 결과를 관리자 화면/저장 roster에 연결. T맵은 방학특강과 동일 "편집/계산 시에만"(localOnly=true면 미호출). 정규는 요일 상시운행이라 availableDates=[](Phase2 요일네비). 반별 수업시각 상이 → 단일앵커 근사(Phase2 반별 분리 여지).
+
+💡 tester: 계산 함수까지 범위(화면 없음). `npx tsc --noEmit` EXIT=0. `node --test --experimental-strip-types tests/seasonal-dispatch-increment.test.mjs tests/seasonal-shuttle-eta.test.mjs tests/seasonal-dispatch-reconcile.test.mjs src/lib/regular/shuttleRosterLogic.test.ts` 40/40. 서버함수는 DB 필요(읽기전용·쓰기0).
+⚠️ reviewer: 스키마 무변경(계산만). $queryRawUnsafe 유지. computeDispatch/suggestDispatch/getDispatchForView/incrementalDispatch 시그니처 무변경(외부 호출부 6곳 무영향). ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 정규 셔틀 동적배차 Phase 0: 라이더 명단 정합(A안) (2026-07-27)
+📝 정규 셔틀을 방학특강식 동적배차로 올리기 위한 첫 단계. 좌표 SSOT=신청서(EnrollmentApplication) 지오코딩 + Student 연결(convertedStudentId). 구글시트 텍스트 명단이 아니라 "학생 계정에 붙은 정합 명단" roster 조회 함수까지. 읽기 전용·스키마/기존 셔틀 무변경(새 정합 소스만 추가).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/regular/shuttleRosterLogic.ts | 순수 로직(prisma無): 방향별 좌표선택(하원 없으면 등원 폴백·라벨 하원우선)·hasCoords·unassigned 분리·정렬(시작시각→이름)·요일매핑(date→"Mon") | 신규 |
+| src/lib/regular/shuttleRoster.ts | 서버 getRegularShuttleRiders({direction,dayOfWeek?/date?}): $queryRawUnsafe로 ACTIVE Enrollment×요일일치 Class×셔틀이용자(LATERAL 최근신청1건, shuttleNeeded OR 등원좌표). 방학특강 ShuttleRosterRider 유사 shape | 신규 |
+| src/lib/regular/shuttleRosterLogic.test.ts | node:test 유닛 8종(요일·좌표선택·폴백·분리·정렬) | 신규 |
+
+💡 tester 참고: `node --test src/lib/regular/shuttleRosterLogic.test.ts` (8/8 통과). tsc EXIT=0. 서버함수는 DB 필요(읽기전용).
+- 판정: 셔틀이용자 = shuttleNeeded=true OR 등원좌표 존재. 미전환 신청(convertedStudentId=null)은 Student join 안돼 자연 제외. 좌표없는 이용자는 result.unassigned로 분리.
+- 방향: PICKUP=등원좌표, DROPOFF=하원좌표(없으면 등원 폴백).
+⚠️ reviewer 참고: LATERAL로 학생당 신청서 1건 선택(FK 아닌 convertedStudentId 문자열 매칭, 최근 createdAt). Phase1 연결지점=result.riders를 배차 엔진 입력으로. IDOR 무관(내부 roster).
+
+### 구현 기록 — 정규 수업 사전 결석 MVP: 학부모 신고 + 관리자 확정 (#3 Step B) (2026-07-27)
+📝 Step A의 RegularAbsence 테이블 소비. 방학특강 4a-2 패턴을 정규(Student.parentId 기준)로 이식. 좌석 레코드가 없어 Class 요일/시각으로 "향후 4주 수업일"을 계산해 신고받음. 크레딧/셔틀연동 없음(MVP). 정규는 **새 경로**로만 추가, 기존 방학특강/요청 무변경.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/regular/regularAbsenceRules.ts | 순수 로직(의존성0): 사유5종·요일인덱스(Mon=1..)·ymd유틸(UTC고정)·computeUpcomingDates(오늘이후 N주, 오늘요일이면 다음주부터)·isReportableDate(미래+요일일치) | 신규 |
+| src/lib/regular/parent-regular-absence.ts | getUpcomingRegularClassDates(부모 ACTIVE Enrollment→반요일 향후4주+기존신고 조인)·reportRegularAbsence·cancelRegularAbsence. 3대 가드. $queryRawUnsafe/$executeRawUnsafe | 신규 |
+| src/app/api/mypage/regular-absence/route.ts | GET(목록)·POST(action=report/cancel), 에러코드→한국어 | 신규 |
+| src/app/mypage/regular-absence/page.tsx + RegularAbsenceClient.tsx | 자녀→반→다가오는날짜 카드, 사유선택 신고·신고됨배지·취소·확정잠금. 셔틀연동 "준비 중" 안내(과장없이) | 신규 |
+| src/lib/regular/admin-regular-absence.ts | getRegularAbsences(날짜/반 필터)·getRegularAbsenceClasses(필터옵션). CANCELLED 제외 | 신규 |
+| src/app/actions/regular-absence-admin.ts | requireAdmin 4액션: loadRegularAbsences·confirmRegularAbsence(REPORTED→CONFIRMED)·revertRegularAbsence(→REPORTED)·cancelRegularAbsenceByAdmin(→CANCELLED) | 신규 |
+| src/app/admin/absence/page.tsx + RegularAbsenceAdminClient.tsx | "정규 수업 결석" 목록 + 반필터 + [확정]/[확정취소]/[취소]. 방학특강과 혼동없게 명확 | 신규 |
+| src/app/mypage/MyPageClient.tsx | ②-A 허브 정규분기 자유텍스트버튼 → /mypage/regular-absence Link로 교체. 미사용 openRegularAbsenceForm 제거 | 수정 |
+| src/app/admin/AdminShellClient.tsx | 출결관리 아래 "정규 결석 신고"(/admin/absence) 진입점 추가 | 수정 |
+| tests/regular-absence-rules.test.mjs | 순수 로직 유닛 8개(사유·요일·날짜산술·미래·다가오는날짜·오늘제외·잘못된입력·isReportable) | 신규 |
+
+- **3대 가드**: ①IDOR — studentId가 부모 자녀+classId가 그 학생 ACTIVE Enrollment인지 SQL 재검증(verifyOwnershipAndClass), 클라값 불신뢰. cancel도 DELETE...USING Student WHERE parentId 로 소유권 강제. ②확정건 보호 — INSERT ON CONFLICT DO UPDATE WHERE status<>'CONFIRMED', 학부모 cancel은 status='REPORTED'만. ③미래+요일 — isReportableDate로 서버 재검증(반 dayOfWeek 대조).
+- 💡 tester: 학부모 /mypage → "결석 미리 알리기" → "정규수업 결석 신고" → /mypage/regular-absence. 자녀·반별 다가오는 4주 날짜, 사유선택 신고→배지, 취소. 관리자 /admin/absence(사이드바 "정규 결석 신고") → 목록·반필터·[확정]→확정후 학부모 취소잠김·[확정취소]/[취소]. `node --test --experimental-strip-types tests/regular-absence-rules.test.mjs` 8/8, tsc EXIT=0.
+- ⚠️ reviewer: 스키마 무변경(Step A 테이블 소비). IDOR·확정보호·미래+요일 가드 필수 유지. 크레딧/셔틀제외(Step C)·교사 출결시딩 범위밖. hex 0(brand토큰·의미색+dark, admin은 var(--brand-accent)). 기존 정규/방학특강/요청 무변경. ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 학부모 대시보드 방학특강 미전환 자녀 별도 섹션(#1, B안) (2026-07-27)
+📝 getMyPageData(Student 테이블 기반)로는 안 보이는 "방학특강만 신청·미전환 자녀"를 phone 기반 독립 조회해 **별도 섹션**으로 표시. 기존 children/타입/로직 무변경(추가만), 표시 전용.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/pendingSeasonalChildren.ts | 순수 로직(의존성0) `groupPendingChildren(rows, studentIds)` — 좌석행→자녀(이름+학년)별 그룹, 특강명 dedup·예정/지난 회차·출결 집계. **중복제거**: conversionStatus='COMPLETED' 또는 convertedStudentId∈studentIds 행 제외, 이름 없으면 제외 | 신규 |
+| src/lib/seasonal/parent-pending.ts | `getPendingSeasonalChildren(parentUserId, studentIds)` — 게이트 검증 parentUserId로 User.phone 조회→SpecialProgramApplication phone 매칭(APPROVED item, 좌석 LEFT JOIN). phone 없으면 빈배열. $queryRawUnsafe. groupPendingChildren 위임 | 신규 |
+| src/app/mypage/page.tsx | studentIds 뽑아 getPendingSeasonalChildren 호출 → MyPageClient에 pendingSeasonalChildren prop 전달 | 수정 |
+| src/app/mypage/MyPageClient.tsx | prop 추가(optional 기본 []) + 셔틀 섹션 위에 "방학특강 신청 자녀(전환 대기중)" 섹션(이름·학년·신청특강·예정N회·[결석신고/보강→ /mypage/seasonal]·"전환 후 표시" 안내). 목록 비면 숨김. 기존 섹션·children 무변경 | 수정 |
+| tests/pending-seasonal-children.test.mjs | 순수 로직 유닛 10개(그룹핑·dedup·전환제외·과거미래·출결·이름학년키·빈이름·좌석없음) | 신규 |
+
+💡 tester: 방학특강만 신청하고 미전환인 자녀가 있는 학부모 계정 /mypage → 셔틀 위 amber 섹션에 자녀 카드. 이미 전환(정식 학생)된 자녀는 안 뜸(정식 카드에만). 미전환 자녀 없으면 섹션 숨김. `node --test --experimental-strip-types tests/pending-seasonal-children.test.mjs` 10/10, tsc EXIT=0.
+⚠️ reviewer: IDOR — 클라 phone 안 씀, 게이트 appUserId로 User.phone 직접 조회 후 그 phone만 매칭(getUpcomingSeasonalSeats 패턴 재사용). dedup 이중(conversionStatus+convertedStudentId∈studentIds)로 정식카드와 중복노출 방지. 표시전용·백엔드 쓰기 0·스키마 무변경. hex 0(amber 토큰+dark). ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 학부모 마이페이지 출결·수납 전체 히스토리(#2) (2026-07-27)
+📝 마이페이지 출결(이번 달만)·수납(최근 5건)에 더해 **전체 기록**을 보는 별도 화면 신설. 표시/조회 전용, 백엔드 쓰기 무변경. 기존 요약 섹션은 그대로 두고 "전체 보기" 링크로 진입.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/queries.ts | `getMyPageHistory(parentUserId)` 신규 — 게이트 검증 appUserId로 부모 조회(이메일 매칭 없음)→Student.parentId로 자녀→자녀별 출결 전체(월필터 제거·Class JOIN 반이름·최신순)·수납 전체(LIMIT 제거·최신순)+누적 출석률(rate). $queryRawUnsafe, 읽기전용 | 수정 |
+| src/app/mypage/history/page.tsx | 서버 페이지(force-dynamic). requireVerifiedParent→appUserId로 getMyPageHistory. ?child= 진입 자녀. 미로그인/자녀없음 빈 상태 | 신규 |
+| src/app/mypage/history/HistoryClient.tsx | 자녀 선택(2명+)+출결/수납 탭. 출결(요약카드 출석률·날짜·상태·반)·수납(청구·금액·상태·기한·영수증·납부). 빈 상태 안전. hex 0·다크모드 | 신규 |
+| src/app/mypage/MyPageClient.tsx | "이번 달 출결"·"최근 수납" 섹션 헤더에 "전체 보기" 링크(→/mypage/history?child=<id>) 추가. 기존 요약 로직 무변경 | 수정 |
+
+💡 tester: 학부모 계정 /mypage → 출결/수납 섹션 "전체 보기" → /mypage/history. 자녀 전환·출결/수납 탭 전환. 출결 전체(월 무관)·수납 전체(5건 초과분 포함) 표시. 자녀 여러 명 시 ?child= 진입 자녀 선택됨. `npx tsc --noEmit` EXIT=0.
+⚠️ reviewer: IDOR — 항상 게이트 appUserId만 사용, ?child=는 이미 부모 소유로 조회된 자녀 목록 내 매칭용(범위 밖 id는 findIndex -1→첫 자녀 폴백, 남의 데이터 조회 불가). mypage/layout이 requireVerifiedParent 게이트. 읽기전용·스키마 무변경·$queryRawUnsafe. ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 학부모 마이페이지 "한눈 요약 카드"(④) (2026-07-27)
+📝 선택 자녀 기준으로 반/셔틀/미납/피드백을 상단 한 카드에 요약. **표시 전용**(기존 데이터 재조합, 새 쿼리 0). 자녀 카드 바로 아래·셔틀 섹션 위 배치. 자녀 전환 시 자동 재계산(child 파생값).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/mypage/summary.ts | 순수 로직(의존성0): getKstNow·getKstDateStr(Intl 기반 KST 환산)·computeNextClass(가장 가까운 향후 수업, 지난 오늘수업→다음주)·nextClassWhenLabel(오늘/내일/N요일/다음주)·filterTodayShuttle(오늘 운행 매칭, serviceDate 앞10자리) | 신규 |
+| src/app/mypage/MyPageClient.tsx | import 추가 + 요약 계산값(nextClass·todayShuttles·pendingPayments·feedbackCount·hasSummary) + 요약 카드 JSX(학생카드 아래) + scrollToSection. 스크롤 타깃 id 부여: mypage-enrollments/mypage-shuttle/mypage-payment-alert/mypage-feedback(속성 추가만, 섹션 이동·제거 없음) | 수정 |
+| tests/mypage-summary.test.mjs | 순수 로직 유닛 9개(KST환산·자정경계·다음수업 정렬/지난수업/내일/빈값/이상값·오늘셔틀 매칭) | 신규 |
+
+- **계산 방식**: 다음수업=enrollments의 dayOfWeek→요일인덱스, startTime→분, (요일차*1440+시작-현재분), 오늘 이미 지났으면 +7일 → 최소값 1건. 오늘셔틀=childShuttleOverview 중 serviceDate(앞10자리)==KST 오늘. 미납=기존 pendingPayments 재사용. 피드백=feedbacks.length.
+- **빈 상태**: 각 줄 데이터 없으면 그 줄만 생략, 4개 전부 없으면 `hasSummary=false`로 카드 미표시.
+- **표시 전용 확인**: getMyPageData·shuttle/parent 등 백엔드 무변경. UI 계산만. 각 줄 클릭=해당 상세 섹션으로 scrollIntoView(중복이지만 진입 단축).
+- 💡 tester: 학부모 계정 /mypage 상단 요약 카드 — 다음수업 요일/시각, 오늘 셔틀(확정 승·하차 시각 or 운행 N건), 미납 N건, 피드백 N건. 자녀 전환 시 요약 갱신. 각 줄 클릭→상세 섹션 스크롤. `node --test tests/mypage-summary.test.mjs` 9/9, tsc EXIT=0.
+- ⚠️ reviewer: 하드코딩 hex 0(brand/gray/red/blue 토큰+dark). 기존 섹션 로직 무변경(id·scroll-mt 속성만 추가). KST 환산은 마이페이지 기존 정책(Asia/Seoul)과 동일. ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 학부모 마이페이지 소셜/이메일 불일치 시 자녀 안 보이는 버그 수정 (2026-07-27)
+📝 인증 게이트(requireVerifiedParent)는 계정ID(authUserId)로 검증해 부모 User.id(appUserId)를 주는데, 데이터 조회는 이메일 매칭이라 소셜 로그인 이메일 ≠ 학원 등록 email이면 부모를 못 찾아 "자녀 없음"으로 뜨던 버그. **자녀 조회 기준을 email → appUserId(부모 User.id)로 통일.**
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/queries.ts | `getMyPageData(userEmail)` → `getMyPageData(parentUserId)` 시그니처 변경. 부모 조회 `WHERE email=$1` → `WHERE id=$1`(이메일 매칭 제거). 자녀 조회(Student.parentId=parent.id)·반환구조·notMergedStudent 무변경 | 수정 |
+| src/app/mypage/page.tsx | requireVerifiedParent()를 먼저 호출하고 `getMyPageData(parentAuth.appUserId)`로 호출(기존엔 user.email 전달) | 수정 |
+| src/app/mypage/reports/page.tsx | 이메일 기반 prisma 부모조회 제거 → `requireVerifiedParent().appUserId`를 parentId로 사용. prisma import 제거, auth-guard import 추가 | 수정 |
+| src/app/mypage/reports/[sessionId]/page.tsx | 동일 — 자녀 보안 체크 parentId를 appUserId로. auth-guard import 추가 | 수정 |
+| src/app/mypage/skills/page.tsx | 동일 — 이메일 부모조회 제거, appUserId를 parentId로. 자녀/스킬 쿼리는 그대로 | 수정 |
+
+💡 tester: 소셜 로그인 이메일과 학원 등록 email이 다른 학부모 계정으로 /mypage, /mypage/reports, /mypage/reports/[id], /mypage/skills 접속 → 자녀·출결·리포트·스킬이 정상 표시되는지. 이메일 일치 계정은 회귀 없이 동일 동작. `npx tsc --noEmit` EXIT=0.
+⚠️ reviewer: ①정상케이스(이메일 일치) 회귀 없음 — id 조회는 게이트가 찾은 그 부모와 동일 User → 같은 자녀. ②남의 자녀 노출 금지 — 항상 게이트 검증값 appUserId만 사용, 클라 입력·이메일 신뢰 안 함. ③mypage layout이 이미 requireVerifiedParent로 게이트(미인증 redirect). $queryRawUnsafe 유지. ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 방학특강 결석 크레딧 적립 + 보강후보 연동 (4a-2, Step 4) (2026-07-27)
+📝 ①이월/환불 확정 시 크레딧 적립(결제 게이트·멱등·되돌리기 동기화) ②사전 결석(보강 사유)을 학부모 보강 후보에 연동.
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/adminAbsenceRules.ts | 순수함수 `computeCreditDecision({status,resolution,paid,amount})` 추가 — "확정+이월/환불+결제+금액>0"만 present=true, REFUND는 note='환불 대상'. present/amount/creditStatus/note 반환 | 수정 |
+| src/app/actions/seasonal-absence-admin.ts | 헬퍼 `syncSeasonalCredit(absenceId,adminUserId)` — 상태/처리방식/결제/회차금액 재조회→computeCreditDecision→present면 `INSERT ON CONFLICT(sourceAbsenceId) DO UPDATE`(멱등), 아니면 `DELETE`. resolve/confirm/revert 3액션 끝에서 호출 | 수정 |
+| src/lib/seasonal/parent-makeup.ts | 보강 후보 쿼리 WHERE 확장: 기존 ABSENT에 더해 `EXCUSED + Absence.resolution='MAKEUP' + status<>'CANCELLED'` 좌석 포함(EXISTS). 나머지 makeup 로직·소유권 가드 무변경 | 수정 |
+| tests/seasonal-admin-absence-rules.test.mjs | computeCreditDecision 유닛 7개 추가(총 12) | 수정 |
+
+💡 tester: 관리자 `/admin/seasonal/absence`에서 결제된 신청건을 이월/환불로 지정 후 [확정] → SpecialProgramCredit 1건 적립(이월 note=null·환불 note='환불 대상'). [확정취소]/보강·미정 변경/미결제건 → 크레딧 삭제·skip. 학부모 마이페이지: '보강' 사유 사전 신고(EXCUSED)한 좌석이 보강 후보에 뜸(질병=이월은 안 뜸). `node --test --experimental-strip-types tests/seasonal-admin-absence-rules.test.mjs` 12/12, tsc EXIT=0.
+⚠️ reviewer: 크레딧은 requireAdmin 3액션에서만 존재조건으로 수렴(불변식). sourceAbsenceId 유니크+ON CONFLICT=멱등, 중복적립 불가. 자동 환불 송금 없음(기록만). 보강후보 확장은 parent-makeup 전화번호 소유권 가드 그대로. 스키마 무변경(Step1 테이블 소비). ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 방학특강 관리자 결석 신고 처리 (4a-2, Step 3) (2026-07-27)
+📝 학부모 사전 결석 신고(Step2)를 관리자가 검토·처리방식(보강/이월/환불) 협의 변경·확정하는 화면/액션. 좌석 attendanceStatus(EXCUSED)는 무변경 — 신고 status/resolution만 관리(셔틀 결석제외 그대로).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/adminAbsenceRules.ts | 순수규칙(의존성0): RESOLUTION_LABEL·ABSENCE_STATUS_LABEL·isAssignableResolution·canConfirm·perSessionAmount | 신규 |
+| src/lib/seasonal/admin-absence.ts | getSeasonalAbsenceSeasons·getSeasonalAbsences(seasonId?) — 학생·회차·사유·resolution·status·신고일 + 결제여부(admin-overview 패턴) + 회차금액(priceSnapshot÷회차수). $queryRawUnsafe, CANCELLED 제외 | 신규 |
+| src/app/actions/seasonal-absence-admin.ts | requireAdmin 액션 4개: loadSeasonalAbsences(조회)·resolveSeasonalAbsence(resolution MAKEUP/CARRYOVER/REFUND, REPORTED+CONFIRMED 모두 허용, resolvedByUserId)·confirmSeasonalAbsence(REPORTED→CONFIRMED, PENDING이면 거부 ★Step4 크레딧 훅 자리)·revertSeasonalAbsenceConfirm(CONFIRMED→REPORTED) | 신규 |
+| src/app/admin/seasonal/absence/page.tsx | 서버 페이지(force-dynamic) — 시즌·목록·보강뱃지 병렬 조회 | 신규 |
+| src/app/admin/seasonal/absence/SeasonalAbsenceAdminClient.tsx | 목록 카드 + 시즌필터 + resolution 드롭다운 + [확정]/[확정취소] + 미결제 경고. 다크모드·hex 0 | 신규 |
+| src/app/admin/seasonal/SeasonalSectionTabs.tsx | "결석 신고 처리" 탭 추가 + 활성판정 | 수정 |
+| tests/seasonal-admin-absence-rules.test.mjs | 순수규칙 유닛 5개 | 신규 |
+
+💡 tester: 관리자 `/admin/seasonal/absence`(탭 "결석 신고 처리"). 학부모 신고건 목록 → 결제여부·회차금액 표시, resolution 드롭다운 변경, [확정](PENDING이면 비활성), 확정 후 [확정취소]. 확정 시 학부모 취소 자동 잠김(Step2가 REPORTED만 취소 허용). `node --test --experimental-strip-types tests/seasonal-admin-absence-rules.test.mjs` 5/5, tsc EXIT=0.
+⚠️ reviewer: requireAdmin 게이트 전 액션. 좌석 attendanceStatus·셔틀·Step2 학부모데이터 무변경. confirm 액션 분리(Step4 크레딧 훅 자리 주석 명시). 미결제는 확정 허용하되 경고만(크레딧 게이트는 Step4). 스키마 무변경(Step1 테이블 소비). ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 방학특강 학부모 사전 결석 신고 (4a-2, Step 2) (2026-07-27)
+📝 학부모가 자녀의 미래 특강 회차를 사유와 함께 사전 결석 신고/취소. 신고 시 좌석 attendanceStatus='EXCUSED' → 셔틀 배차 자동 제외(4a-1 연동, 추가 배선 없음).
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| src/lib/seasonal/parentAbsenceRules.ts | 순수 규칙(의존성0): isValidReason·defaultResolution·REASON_LABEL·VALID_REASONS | 신규 |
+| src/lib/seasonal/parent-absence.ts | getUpcomingSeasonalSeats(미래·SCHEDULED 좌석+출결+결석신고)·reportSeasonalAbsence·cancelSeasonalAbsence. 3대 가드+원자적 UPDATE/DELETE. $queryRawUnsafe/$executeRawUnsafe | 신규 |
+| src/app/api/mypage/seasonal-absence/route.ts | GET(목록)·POST(action=report/cancel), 에러코드→한국어 | 신규 |
+| src/app/mypage/seasonal/SeasonalMakeupClient.tsx | "예정 회차·결석 미리 신고" 섹션(사유 드롭다운·안내문·신고/취소·상태배지). 로드 후 /seasonal-absence로 별도 조회 | 수정 |
+| tests/seasonal-parent-absence-rules.test.mjs | 순수 규칙 유닛 4개 | 신규 |
+
+- **3대 가드**: ①IDOR — parentPhone regexp_replace 조인 소유권 재검증(NOT_OWNER), 클라 enrollmentDateId 불신뢰. ②선생님 확정 보호 — report는 `attendanceStatus IS NULL`인 좌석만 원자적 UPDATE, cancel은 `DELETE WHERE status='REPORTED'`(CONFIRMED 차단). ③미래만 — `sd.startsAt > now()`.
+- **사유별 기본 resolution**: ILLNESS_INJURY→CARRYOVER, 그 외→MAKEUP. Absence INSERT ON CONFLICT(enrollmentDateId) DO UPDATE WHERE status<>'CONFIRMED'.
+- 💡 tester: 방학특강 셔틀 학부모 계정 /mypage/seasonal → "예정 회차" 카드. 결석 신고→'결석 신고됨·사유' 배지+셔틀 제외, 취소→복귀. 이미 출결 확정 좌석은 '출결 확정됨'(신고불가). `node --test --experimental-strip-types tests/seasonal-parent-absence-rules.test.mjs` 4/4, tsc EXIT=0.
+- ⚠️ reviewer: 스키마 무변경(Step1 테이블 소비만). 하드코딩 hex 0(brand-accent·amber/gray 의미색+dark). 관리자 확정/크레딧(Step3·4) 범위 밖(resolution 기본값만). ★git 미커밋(PM 검증 대기).
+
+### 구현 기록 — 방학특강 결석신고+크레딧 데이터 모델(Step 1, ADD-only) (2026-07-27)
+📝 방학특강 "사전 결석 신고 + 보강/이월/환불 + 이월 크레딧" 스키마 2테이블 추가. **ADD-only, 운영 Supabase(gpjdtkumqxzfgkixjamp) 직접 적용 완료. 기존 테이블/컬럼 무변경.**
+
+| 파일 | 변경 | 신규/수정 |
+|------|------|----------|
+| prisma/schema.prisma | SpecialProgramAbsence·SpecialProgramCredit 모델 추가. EnrollmentDate에 `absence?`, ApplicationItem에 `credits[]` back-relation 추가(가상 필드, 컬럼변경 0) | 수정 |
+| prisma/migrations/20260727130000_add_seasonal_absence_credit/migration.sql | 멱등 CREATE TABLE/INDEX IF NOT EXISTS DDL | 신규 |
+
+- **enum 미사용**: 기존 컨벤션(status/attendanceStatus 등 TEXT+앱검증) 따름 → reason/resolution/status 모두 TEXT+주석, DB CHECK 없음.
+- **ID**: `(gen_random_uuid())::text` 기존 SpecialProgram* 전부와 동일.
+- **FK**: Absence.enrollmentDateId→EnrollmentDate(CASCADE, @unique 좌석당1건), Credit.applicationItemId→ApplicationItem(CASCADE), Credit.sourceAbsenceId→Absence(SET NULL, @unique).
+- 적용 후 검증: 2테이블·인덱스7·FK3 생성 확인. `prisma generate` OK, `tsc --noEmit` EXIT=0. `migrate resolve --applied` 완료.
+
+💡 tester/PM 참고: 스키마 추가만 — 소비 코드(UI/액션) 없음. 회귀 테스트 불필요(기존 무변경). ★git commit/push 대기(PM 검증 후). 후속 = 학부모 UI·관리자·크레딧 로직(다음 단계).
 
 ### 구현 기록 — 방학특강 통합 진행화면 로스터·출결 좌석 기준 전원화 (A) (2026-07-27)
 📝 방학특강 통합 수업진행 화면이 전환(Student 변환) 여부와 무관하게 **APPROVED 신청항목 전원(=좌석)**을 로스터·출결하도록 변경. 기존엔 `convertedStudentId IS NOT NULL`로 걸러 미전환자가 명단에서 빠졌음. 이제 출결 정본 = 좌석(SpecialProgramEnrollmentDate.attendanceStatus), 전환된 학생만 정규 Attendance 병행.
@@ -516,6 +799,10 @@
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-07-27 | **정규 신청 승인 정원경고+생년매칭강화(developer)** — approveEnrollApplication(admin.ts). A)정원 소프트게이트: `data.force?` 추가, 트랜잭션 전 읽기로 각 classId ACTIVE(병합제외) vs Class.capacity 비교, current>=capacity면 DB변경0 `{ok:false,code:'CAPACITY_WARNING',classes}` 반환→UI confirm 후 force재호출. B)학생매칭: ①name+parentId+birthDate 정확 ②폴백 name+parentId 1명이면 기존단일 재사용(회귀0)+birthDate COALESCE 채움 ③2명↑ 동명형제 `ApprovalAbort` 롤백→`{ok:false,code:'STUDENT_AMBIGUOUS',candidates}` ④0명 신규INSERT. resolvedStudentId 지정 지원. 트랜잭션·생성순서·Payment미생성 보존, 방학특강 무변경. ApplyAdminModals.tsx UI 분기+union 타입명시. tsc EXIT=0 | 구현완료(PM 검증대기·미커밋) |
+| 2026-07-27 | **정규 결석→보강 Phase 4 MVP(developer)** — 방식(A) 레거시 MakeupSession 재사용·스키마 변경 0(결석↔보강 자연키 studentId+classId+date 매칭). 관리자 /admin/absence 행에 [보강 지정](반+날짜)·상태변경·취소(admin-regular-absence getMakeupClassOptions·makeup 필드 / regular-absence-admin scheduleMakeupForAbsence[결석 서버재조회+중복거부→bookMakeupSession 재사용]·cancel·updateStatus). 학부모 /mypage/regular-absence 상단 "예정 보강" 읽기전용 섹션(parent-regular-makeup, IDOR=Student.parentId 조인). MakeupSession 부재 try/catch→빈. 크레딧/환불/정원 없음. 방학특강·결석신고·셔틀 무변경. 파일 6개(신규1). tsc EXIT=0 | 구현완료(PM 검증대기) |
+| 2026-07-27 | **학부모 마이페이지 한눈 요약 카드(④, developer)** — 선택 자녀 기준 다음수업/오늘셔틀/미납/피드백을 상단 1카드로 요약(표시 전용, 새 쿼리 0). 순수로직 src/lib/mypage/summary.ts(KST환산·다음수업·오늘셔틀 매칭) + MyPageClient에 카드 JSX·스크롤 id. 빈줄 생략·전부없으면 카드숨김. 각 줄 클릭→상세 섹션 스크롤. 유닛 9/9, tsc EXIT=0. 파일 3개(summary.ts 신규·MyPageClient 수정·테스트 신규) | 구현완료(PM 검증대기) |
+| 2026-07-27 | **학부모 결석 경로 UX 통합(②-A, developer)** — 결석 "신청/신고" 혼동 제거(UX·문구·라우팅만, 백엔드 무변경). ①명칭 일원화: 자유텍스트 REQUEST_TYPES `ABSENCE` 라벨 "결석 신청"→"정규수업 결석", seasonal 페이지 제목 "방학특강 보강 신청"→"방학특강 결석 신고·보강". ②단일 진입점: 마이페이지 seasonal 카드를 "결석 미리 알리기" 허브로 교체—경로①방학특강(→/mypage/seasonal, 셔틀 자동제외 구조화 신고)·경로②정규수업(→요청폼 ABSENCE 프리셋+스크롤, 수기 처리). ③요청폼 ABSENCE 선택 시 "셔틀 자동제외 아님·학원 수기 처리" 안내박스+방학특강 링크. ④seasonal 부제에 사전 결석 신고(셔틀 자동제외) 명시로 4a-2 발견성↑. ★MyPageData에 방학특강 플래그 없어 자녀별 조건부 숨김은 미적용(허브 항상 노출, 목적지 빈상태 안전). ParentRequest·4a-2 동작 무변경. 파일 2개(MyPageClient.tsx·SeasonalMakeupClient.tsx). tsc EXIT=0 | 구현완료(PM 검증대기) |
 | 2026-07-27 | **세션 마무리(pm)** — 오늘 다수 배포(수강생 상세 재설계+편집 / 셔틀 위치 placeName 전역통일 / 저장배차노선 reconcile·증분재배차·라벨자가갱신 / 정차 확정시간 실T맵+편집+기사·학부모노출 / 방학특강 선생님 화면 정규 통합흐름 개편[로스터 전원화·좌석출결·수업시작 취소·void 핫픽스·UI] / 관리자→선생님 진입점). 각 tsc EXIT=0, 병렬세션과 반복 머지. **미푸시 0.** 개발서버 종료. 이월: 셔틀4단계 4a-2/4b/4c/4d, 미전환자 학부모알림, (참고)카카오맵 키는 localhost만 미등록·프로덕션 정상 | 마무리·배포완료 |
 | 2026-07-27 | **수업 시작 취소(되돌리기) 추가(developer)** — 스태프 진행 화면에서 실수/테스트로 시작한 수업을 PLANNED로 되돌림. 서버액션 `cancelClassSession({sessionId})`(staff-sessions.ts): requireSessionAccess 권한게이트, IN_PROGRESS 아니면 거부, `UPDATE Session SET status='PLANNED',startedAt=NULL,startedByUserId=NULL WHERE id=$1 AND status='IN_PROGRESS'`($executeRawUnsafe, 0행이면 안전통과), **출결/사진/메모 무변경**, revalidatePath. 정규·특강 공통. StaffSessionDetail 타입에 sessionDateId 노출(쿼리는 이미 반환). SessionInProgressClient에 종료바 하단 보조버튼(회색 테두리·undo아이콘)+window.confirm+성공시 router.replace(seasonal?'/staff/seasonal':'/staff'). tsc EXIT=0 | 구현완료(PM 검증대기) |
 | 2026-07-27 | **특강 명단 버그 #2·#3 수정(developer)** — (#3) `getTodayStaffClasses` seasonal 쿼리가 CANCELLED offering을 안 걸러 취소반(중등부·초등저학년)이 학생0명으로 노출 → 메인 WHERE `o.status<>'CANCELLED'` + access_o EXISTS 서브쿼리 `access_o.status<>'CANCELLED'` 추가(반+시간 GROUP BY라 OPEN 하나라도 있으면 유지·전부취소면 제거). (#2) `/staff/seasonal`이 offering별 getSeasonalDatesForStaff로 주n회 쪼개짐 → 홈과 동일한 반 단위 `getTodayStaffClasses`(SEASONAL 필터)로 데이터소스 교체. getTodayStaffClasses에 날짜 파라미터 추가(기본=오늘, 홈 무영향). page.tsx·StaffSeasonalClient(필드 매핑 StaffTodayClass)·api/staff/seasonal route(GET date 분기) 수정. 홈/정규/startClassSession 무변경. tsc EXIT=0 | 구현완료(PM 검증대기) |
@@ -523,9 +810,6 @@
 | 2026-07-27 | **planRun ETA를 T맵 구간별 실제시간으로 교체(developer)** — 기존 routeFixedOrder(총시간)+segMin 비율배분(부정확) → routeSegmentsWithTmapRetry로 정차 사이 구간별 실측시간 받아 stop ETA를 실측 누적 계산. 순수함수 `segmentMinutes`/`nodeTimesFromSegments`를 무의존 모듈 `shuttle-eta.ts`로 분리(테스트 직접 import). 실패 구간만 segMin 폴백, 전체실패는 전 구간 segMin+경로 prev복원(mergeTmapRoute). stop.etaMinutes(분 숫자, T2 확정편집 기준값) 추가. keepOrder(증분)·일반자동 둘 다 경유, localOnly·정차0/1 회귀없음(fallbackMin=종전 segMin과 동일). 미사용 routeFixedOrder 래퍼 제거. 유닛 8개+tsc EXIT=0. (admin-shuttle-compat 실패 1건은 무관 stale) | 구현완료(PM 검증대기) |
 | 2026-07-27 | **배차 정차 라벨 reconcile-on-read 갱신(developer)** — 명단 placeLabel 수정이 저장 배차 노선의 얼어붙은 라벨에도 읽을 때 반영(재배차·좌표변경 없이 텍스트만·자가치유). `reconcileSavedVehicles`에 옵셔널 `labelByRequestId`(requestId→placeLabel) 3번째 인자 추가: 살아남은 학생 pickupLabel + 비허브 정차 label만 갱신, isHub 라벨·좌표·시각·순서·path 전부 불변, 맵 없으면 기존 유지(하위호환). `getSavedDispatchRoute`가 riders로 맵 만들어 전달. 유닛 11개(라벨 5케이스 추가)+tsc EXIT=0 | 구현완료(PM 검증대기) |
 | 2026-07-27 | **저장 노선 변동 감지 + 관리자 배너(Phase 2a, developer)** — reconcile(제거)의 반대. 순수함수 `diffSavedRoute(vehicles, riders)` 추가(dispatchReconcile.ts): savedIds·requestId→정차좌표 맵으로 added(∉savedIds=신규·복귀)/locationChanged(좌표Δ>1e-5, null스킵) 산출, requestId만 매칭·불변. `getSavedDispatchRoute`가 reconcile 후 diff 반환(SavedDispatchRoute·DispatchSuggestion에 added/locationChanged 필드 추가, getDispatchForView 저장분기 전달). RouteSection 관리자 배너("⚠️ 저장 노선 이후 변동…"+이름목록)+[🔄 자동배차 다시 실행] 버튼(현재 generate, Phase 2b TODO 주석). 기사화면 미노출(run/[token] 수동매핑이 필드 안 읽음). 저장 payload·순서·시각·좌표 무변경(순수읽기). 유닛 8개+tsc EXIT=0 | 구현완료(tester 대기) |
-| 2026-07-27 | **저장 배차 노선 reconcile-on-read(developer)** — 저장 payload를 DB에서 안 바꾸고 **읽을 때** 그날 유효하지 않은 학생(결석·수강취소·폐강)만 필터(자가치유). 순수함수 `reconcileSavedVehicles`를 무의존 모듈 `dispatchReconcile.ts`로 분리(shuttleRosterEdit 패턴, 실행 테스트 가능), `getSavedDispatchRoute`가 date 있으면 `getConfirmedShuttleRosterForDate`로 validIds 만들어 vehicles 교체. requestId(shuttleRequestId)만 매칭, isHub 정차 유지, passengers/over 재계산, 순서·etaLabel·시각·path 보존. 순환import 없음. 유닛 6개+tsc EXIT=0 | 구현완료(tester 대기) |
-| 2026-07-27 | **셔틀 장소명 저장경로 유실 버그 수정(G3, developer)** — (1)정규반 신청→학생 전환의 `StudentShuttleLocation` INSERT가 `name`을 NULL 하드코딩하던 버그 수정: 라벨 컬럼(`app.shuttlePickup`→PICKUP, `app.shuttleDropoff`→DROPOFF)에서 장소명 읽어 파라미터화($12), ON CONFLICT에 `name=EXCLUDED.name` 추가, 폴백 `roadAddress ?? address`. 좌표/주소/placeId/source 무변경. (2)방학특강 확정본은 확인만—`confirmSeasonalShuttleRoster` INSERT…SELECT가 원본 `pickupLocation/dropoffLocation` 라벨을 그대로 복사, 편집경로도 라벨 저장 → **변경 불필요**. 스키마 변경 없음. tsc EXIT=0 | 구현완료(tester 대기) |
-| 2026-07-27 | **셔틀 라벨에 장소명 우선 저장(G2, developer)** — 지도 선택 장소명을 라벨 컬럼에 `name ?? 주소`로 저장(스키마 변경 없음, 라벨 컬럼 재활용). 방학특강: contracts.ts `name?` 파싱 + service.ts 저장부 `pickup?.name ?? 텍스트라벨` + SeasonalApplyClient 라벨 매핑. 정규반: EnrollLaterSteps onConfirm + public.ts `EnrollmentShuttleLocationData.name?` 정규화 + INSERT/UPDATE 라벨($17/$19) name 우선. 좌표/주소/placeId 무변경(운행 기준 보존), name 없으면 주소 폴백(하위호환). **정규반 name→`shuttlePickup`/`shuttleDropoff` 컬럼 저장(G3 참고)**. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-26 | **수강생 상세 반 추가·삭제(E3, developer)** — `/admin/students/[id]` 개요 탭 "현재 수강 반"에 [반 추가](프로그램별·수강중 제외 선택)+행별 빨간 휴지통 하드삭제(강한 확인창). 기존 `enrollStudent`/`deleteEnrollment` 호출만(서버 무변경). 클래스목록=`getClasses()` 재사용, page.tsx가 getStudentActivity와 Promise.all 병렬조회해 classes prop 신규전달(getStudentActivity 무변경). E1/E2·loadData·데이터계약 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-26 | **수강생 상세 수납 탭 결제 상태 변경(E2, developer)** — `/admin/students/[id]` "청구·납부(시스템)" 각 건에 ✏️→4-세그먼트(완납/대기/연체/취소) 상태 변경. E1 패턴 답습(async 핸들러+loadData+피드백). 기존 `updatePaymentStatus` 호출만(서버 무변경). 취소만 window.confirm, 성공 "변경됨" 2초, 권한 실패 시 서버메시지 표면화(조용한 실패 없음). "장부 수납(시트원장)" 무변경. tsc EXIT=0 | 구현완료(tester 대기) |
 | 2026-07-26 | **정규반 수강생 상세 페이지 UI 재설계(developer)** — `/admin/students/[id]` 시안대로 UI만 교체(데이터·API·서버액션·로직 100% 보존). 새 레이아웃: 정체성 헤더 → KPI 4칸(출석률 미니도넛·수강중·이번달수납·미납) → 좌 320px sticky 레일(연락처·셔틀·메모) + 우 5탭(개요/수강출결/수납/월별히스토리/사진). 기존 "운영 요약" 카드는 KPI로 흡수, 셔틀을 월별히스토리→좌레일로 승격, 테이블→카드리스트, 수납 시스템/시트원장 2출처 분리, 월별히스토리 `<details>`+반뱃지 전체노출. 3핸들러(saveMemo/changeEnrollmentStatus/loadData)·`StudentActivityData` 계약·media-consent 라우트 무변경. 하드코딩 hex 0, Material Symbols만. tsc EXIT=0, eslint 0 error(경고 1=기존 갤러리 img) | 구현완료(tester 대기) |

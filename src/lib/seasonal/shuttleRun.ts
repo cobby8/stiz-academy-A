@@ -12,7 +12,8 @@ function normDir(v: unknown): "PICKUP" | "DROPOFF" | null {
   return v === "PICKUP" || v === "DROPOFF" ? v : null;
 }
 
-export type BoardingStatus = "BOARDED" | "NOSHOW";
+// SELF = 자차(부모 차)로 등·하원 — 셔틀 미탑승이지만 결석은 아님(구분용). 등원/하원 여부는 direction으로 판단.
+export type BoardingStatus = "BOARDED" | "NOSHOW" | "SELF";
 
 // 날짜 단위 링크는 방향을 'ALL'로 저장한다(그 날 등원·하원 전체를 한 링크로).
 const ALL_DIRECTION = "ALL";
@@ -76,7 +77,8 @@ export async function getBoardingMap(date: string, direction: string): Promise<R
     const out: Record<string, BoardingStatus> = {};
     for (const r of rows) {
       const id = r.shuttleRequestId as string;
-      const st = r.status === "NOSHOW" ? "NOSHOW" : r.status === "BOARDED" ? "BOARDED" : null;
+      // 저장된 status 문자열을 그대로 3종으로 해석(그 외 값은 무시).
+      const st = r.status === "NOSHOW" ? "NOSHOW" : r.status === "SELF" ? "SELF" : r.status === "BOARDED" ? "BOARDED" : null;
       if (id && st) out[id] = st;
     }
     return out;
@@ -98,7 +100,8 @@ export async function setBoarding(input: {
     );
     return { ok: true };
   }
-  const status = input.status === "NOSHOW" ? "NOSHOW" : "BOARDED";
+  // 화이트리스트: NOSHOW/SELF/BOARDED 중 하나로만 저장(그 외 입력은 BOARDED로 수렴).
+  const status = input.status === "NOSHOW" ? "NOSHOW" : input.status === "SELF" ? "SELF" : "BOARDED";
   await prisma.$executeRawUnsafe(
     `INSERT INTO "ShuttleBoarding" ("serviceDate","direction","shuttleRequestId","studentName","status","checkedVia","checkedAt")
      VALUES ($1,$2,$3,$4,$5,$6, now())

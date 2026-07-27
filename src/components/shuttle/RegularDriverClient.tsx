@@ -110,7 +110,8 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
     try {
       const r = await fetch("/api/shuttle/regular-boarding", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, rowId, status: target, studentName: name }),
+        // 화면이 표시 중인 날짜(date)를 함께 보내, 그 날짜에 저장·조회되도록 한다(날짜 네비 이동 시 어긋남 방지).
+        body: JSON.stringify({ token, rowId, status: target, studentName: name, date }),
       });
       if (!r.ok) throw new Error();
     } catch {

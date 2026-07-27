@@ -4,15 +4,24 @@ import { isRegularRunToken, setRegularBoarding, type BoardingStatus } from "@/li
 export const dynamic = "force-dynamic";
 
 // 정규 셔틀 탑승/미탑승 체크(기사님 화면). 로그인 없이 토큰으로 접근하므로, 유효한 정규 토큰인지 먼저 확인한다.
-// 날짜는 서버가 '오늘(KST)'로 정한다(클라이언트 조작 방지).
+// 날짜는 화면이 표시 중인 날짜(date)에 맞춰 저장한다. 없으면 서버 '오늘(KST)'로 폴백.
 function todayKST(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+// 클라가 보낸 date(YYYY-MM-DD)는 신뢰하지 않고 서버에서 형식+달력 유효성을 검증한다.
+// 토큰이 관리자 인증을 대신하므로, 유효한 날짜면 어떤 날이든 허용한다.
+function validDate(s: unknown): string | null {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T12:00:00+09:00`);
+  const ok = !Number.isNaN(d.getTime()) &&
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d) === s;
+  return ok ? s : null;
 }
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => null)) as
-      | { token?: string; rowId?: string; status?: BoardingStatus | null; studentName?: string | null }
+      | { token?: string; rowId?: string; status?: BoardingStatus | null; studentName?: string | null; date?: string | null }
       | null;
     const token = typeof body?.token === "string" ? body.token : "";
     const rowId = typeof body?.rowId === "string" ? body.rowId : "";
@@ -21,7 +30,9 @@ export async function POST(request: Request) {
     // 허용값 확장: BOARDED/NOSHOW/SELF(자차) + null(대기). 그 외는 null로 수렴.
     const status =
       body?.status === "BOARDED" || body?.status === "NOSHOW" || body?.status === "SELF" ? body.status : null;
-    await setRegularBoarding({ date: todayKST(), rowId, status, studentName: body?.studentName ?? null });
+    // 화면이 표시하는 날짜(date)에 저장한다. 유효하면 그 날, 없으면 오늘(KST)로 폴백.
+    const date = validDate(body?.date) ?? todayKST();
+    await setRegularBoarding({ date, rowId, status, studentName: body?.studentName ?? null });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[regular-boarding POST]", e);

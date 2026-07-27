@@ -54,7 +54,8 @@ export default function DriverRunClient({
     try {
       const r = await fetch("/api/shuttle/boarding", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, direction, shuttleRequestId: reqId, status: target, studentName: name }),
+        // 화면이 표시 중인 날짜(date)를 함께 보내, 그 날짜에 저장·조회되도록 한다(링크 날짜와 어긋남 방지).
+        body: JSON.stringify({ token, direction, shuttleRequestId: reqId, status: target, studentName: name, date }),
       });
       if (!r.ok) throw new Error();
     } catch {

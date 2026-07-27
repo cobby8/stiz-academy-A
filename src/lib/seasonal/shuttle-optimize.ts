@@ -302,7 +302,9 @@ export async function buildDispatchFromRiders(input: {
   localOnly: boolean;
 }): Promise<DispatchSuggestion> {
   const { direction, date, dow, availableDates, localOnly } = input;
-  const { academy, depot, hub } = await getSettings();
+  const { academy, depot, hub, hubDropoff } = await getSettings();
+  // 등원은 탑승 거점, 하원은 하차 거점(없으면 탑승 거점으로 폴백)
+  const effectiveHub = direction === "DROPOFF" ? (hubDropoff ?? hub) : hub;
 
   const vehRows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT name, "plateNumber" AS plate, capacity FROM "ShuttleVehicle" WHERE "isActive" = true ORDER BY name ASC`,
@@ -311,7 +313,7 @@ export async function buildDispatchFromRiders(input: {
   const vehicleFleet = fleet.length ? fleet : [{ name: "미등록 차량", plate: null, capacity: 9 }];
 
   const base: DispatchSuggestion = {
-    direction, date, dow, classStart: null, classEnd: null, academy, depot, hub,
+    direction, date, dow, classStart: null, classEnd: null, academy, depot, hub: effectiveHub,
     vehicles: [], unassigned: [], availableDates, totalRiders: 0, vehicleFleet, routingProvider: "LOCAL",
   };
   if (!date) return base;
@@ -325,8 +327,8 @@ export async function buildDispatchFromRiders(input: {
 
   const unassigned: { name: string; label: string | null }[] = [];
   const stopMap = new Map<string, Stop>();
-  // 무료 탑승 거점(1호점 등). 거점에서 타는 학생이 있을 때만 노선에 넣는다(빈 거점은 아래에서 제외).
-  const hubStop: Stop | null = hub ? { lat: hub.lat, lng: hub.lng, label: hub.name, students: [], approx: false, isHub: true } : null;
+  // 무료 탑승 거점(1호점 등). 거점에서 타는/내리는 학생이 있을 때만 노선에 넣는다(빈 거점은 아래에서 제외).
+  const hubStop: Stop | null = effectiveHub ? { lat: effectiveHub.lat, lng: effectiveHub.lng, label: effectiveHub.name, students: [], approx: false, isHub: true } : null;
   for (const r of riders) {
     const student: StopStudent = {
       name: r.studentName, grade: r.childGrade, parentPhone: r.parentPhone, childPhone: r.childPhone,

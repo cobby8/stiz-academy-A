@@ -15,9 +15,10 @@ export async function GET(request: Request) {
     const direction = url.searchParams.get("direction") ?? "PICKUP";
     const saved = await getSavedDispatchRoute(date, direction);
     if (saved && saved.vehicles.length) {
-      const { hub } = await getSettings();
-      if (hub?.name) {
-        const hubName = hub.name;
+      const { hub, hubDropoff } = await getSettings();
+      const effectiveHub = direction === "DROPOFF" ? (hubDropoff ?? hub) : hub;
+      if (effectiveHub?.name) {
+        const hubName = effectiveHub.name;
         saved.vehicles = (saved.vehicles as Record<string, unknown>[]).map((v) => ({
           ...v,
           stops: (Array.isArray(v.stops) ? v.stops : []).map((s: Record<string, unknown>) =>

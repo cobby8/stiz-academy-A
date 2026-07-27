@@ -120,23 +120,17 @@ export async function getTodayStaffClasses(dateKey: string = getKoreaDateKey()):
               sd."endsAt",
               COALESCE(MIN(sd.location), MIN(o.location), c.location) AS location,
               (ARRAY_AGG(sd.id ORDER BY CASE WHEN existing_s.id IS NULL THEN 1 ELSE 0 END, sd.id))[1] AS "sessionDateId",
-              COUNT(DISTINCT a."convertedStudentId")::int AS "studentCount"
+              -- 학생 수 = 그날 실제 좌석(SCHEDULED) 수. 전환 여부·요일이 아니라 좌석이 정본이다
+              -- (미전환 신청자도 좌석이 있으면 포함, 취소 좌석은 제외 → 출석부와 숫자가 일치한다).
+              COUNT(DISTINCT ed.id)::int AS "studentCount"
          FROM "SpecialProgramSessionDate" sd
          JOIN "SpecialProgramOffering" o ON o.id = sd."offeringId"
          JOIN "Class" c ON c.id = o."linkedClassId"
          LEFT JOIN "Session" existing_s ON existing_s."specialProgramSessionDateId" = sd.id
          LEFT JOIN "SpecialProgramApplicationItem" i
            ON i."offeringId" = o.id AND i.status = 'APPROVED'
-             AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
-         LEFT JOIN "SpecialProgramApplication" a
-           ON a.id = i."applicationId" AND a."convertedStudentId" IS NOT NULL
-            AND (
-              COALESCE(cardinality(a."selectedWeekdays"), 0) = 0
-              OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
-                WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
-                WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
-              END = ANY(a."selectedWeekdays")
-            )
+         LEFT JOIN "SpecialProgramEnrollmentDate" ed
+           ON ed."applicationItemId" = i.id AND ed."sessionDateId" = sd.id AND ed.status = 'SCHEDULED'
         WHERE (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date = $1::date
           -- 버그#3: 취소(CANCELLED)된 offering 회차는 명단에서 제외한다.
           -- 반+시간으로 GROUP BY 하므로, 한 반의 offering이 전부 취소면 그 반은 사라지고
@@ -208,7 +202,7 @@ export async function getStaffSessionDetail(sessionId: string): Promise<StaffSes
             s."startedAt", s."endedAt",
             s."specialProgramSessionDateId" AS "sessionDateId",
             CASE WHEN sd.id IS NOT NULL
-              THEN COUNT(DISTINCT app."convertedStudentId")
+              THEN COUNT(DISTINCT ed.id)
               ELSE COUNT(DISTINCT e.id)
             END::int AS "studentCount"
      FROM "Session" s
@@ -229,16 +223,9 @@ export async function getStaffSessionDetail(sessionId: string): Promise<StaffSes
       )
      LEFT JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id
        AND i.status = 'APPROVED'
-       AND i."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
-     LEFT JOIN "SpecialProgramApplication" app ON app.id = i."applicationId"
-       AND app."convertedStudentId" IS NOT NULL
-       AND (
-         COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
-         OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
-           WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
-           WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
-         END = ANY(app."selectedWeekdays")
-       )
+     -- 학생 수 = 그날 실제 좌석(SCHEDULED) 수(전환·요일 아님, 좌석이 정본 → 출석부와 일치).
+     LEFT JOIN "SpecialProgramEnrollmentDate" ed
+       ON ed."applicationItemId" = i.id AND ed."sessionDateId" = matched_sd.id AND ed.status = 'SCHEDULED'
      LEFT JOIN "Enrollment" e ON e."classId" = c.id AND e.status = 'ACTIVE'
      WHERE s.id = $1
      GROUP BY s.id, c.id, sd.id, anchor_o.id

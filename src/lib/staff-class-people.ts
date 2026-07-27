@@ -99,7 +99,13 @@ export async function getStaffClassPeople(
   const rows = effectiveSessionDateId
     ? await prisma.$queryRawUnsafe<StaffClassPersonRow[]>(
       `WITH active_students AS (
-         SELECT DISTINCT s.id, s.name, s.school, s.grade, s.memo, s.phone, s."parentId"
+         SELECT DISTINCT
+                COALESCE(st.id, 'item:' || item.id) AS id,
+                st.id AS "studentId",
+                COALESCE(st.name, app."childName") AS name,
+                st.school, st.grade, st.memo,
+                COALESCE(st.phone, app."childPhone") AS phone,
+                st."parentId"
            FROM "SpecialProgramSessionDate" anchor_sd
            JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
            JOIN "SpecialProgramSessionDate" sd
@@ -114,19 +120,12 @@ export async function getStaffClassPeople(
                 AND o."seasonId" = anchor_o."seasonId"
               )
             )
-           JOIN "SpecialProgramApplicationItem" item ON item."offeringId" = o.id
-            AND item.status = 'APPROVED'
-            AND item."conversionStatus" IN ('COMPLETED', 'INVOICE_RETRY_REQUIRED')
+           -- 좌석(SCHEDULED) 기준 명단. 미전환 신청자도 childName으로 포함하고, 취소 좌석은 제외 → 출석부와 동일.
+           JOIN "SpecialProgramApplicationItem" item ON item."offeringId" = o.id AND item.status = 'APPROVED'
+           JOIN "SpecialProgramEnrollmentDate" seat
+             ON seat."applicationItemId" = item.id AND seat."sessionDateId" = sd.id AND seat.status = 'SCHEDULED'
            JOIN "SpecialProgramApplication" app ON app.id = item."applicationId"
-            AND app."convertedStudentId" IS NOT NULL
-            AND (
-              COALESCE(cardinality(app."selectedWeekdays"), 0) = 0
-              OR CASE EXTRACT(ISODOW FROM sd."startsAt" AT TIME ZONE 'Asia/Seoul')::int
-                WHEN 1 THEN 'MON' WHEN 2 THEN 'TUE' WHEN 3 THEN 'WED' WHEN 4 THEN 'THU'
-                WHEN 5 THEN 'FRI' WHEN 6 THEN 'SAT' ELSE 'SUN'
-              END = ANY(app."selectedWeekdays")
-            )
-           JOIN "Student" s ON s.id = app."convertedStudentId" AND ${notMergedStudent("s")}
+           LEFT JOIN "Student" st ON st.id = app."convertedStudentId" AND ${notMergedStudent("st")}
           WHERE anchor_sd.id = $1
             AND anchor_o."linkedClassId" = $2
        ), recent_attendance AS (
@@ -175,7 +174,7 @@ export async function getStaffClassPeople(
                 'unpaidAmount', COALESCE(bs."unpaidAmount", 0)
               ) AS billing
          FROM active_students s
-         JOIN "User" parent ON parent.id = s."parentId"
+         LEFT JOIN "User" parent ON parent.id = s."parentId"
          LEFT JOIN LATERAL (
            SELECT jsonb_agg(
                     jsonb_build_object(
@@ -190,25 +189,25 @@ export async function getStaffClassPeople(
              FROM (
                SELECT g.id, g.name, g.relation, g.phone, g."isPrimary"
                  FROM "Guardian" g
-                WHERE g."studentId" = s.id
+                WHERE g."studentId" = s."studentId"
                UNION ALL
                SELECT NULL::text, parent.name, '보호자', parent.phone, true
-                WHERE NOT EXISTS (
+                WHERE parent.id IS NOT NULL AND NOT EXISTS (
                   SELECT 1
                     FROM "Guardian" g
-                   WHERE g."studentId" = s.id
+                   WHERE g."studentId" = s."studentId"
                      AND NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), '')
                          = NULLIF(regexp_replace(parent.phone, '[^0-9]', '', 'g'), '')
                 )
              ) contacts
          ) guardian_data ON true
-         LEFT JOIN recent_attendance ra ON ra."studentId" = s.id
-         LEFT JOIN billing_summary bs ON bs."studentId" = s.id
+         LEFT JOIN recent_attendance ra ON ra."studentId" = s."studentId"
+         LEFT JOIN billing_summary bs ON bs."studentId" = s."studentId"
          LEFT JOIN LATERAL (
            SELECT a.status
              FROM "Attendance" a
              JOIN "Session" se ON se.id = a."sessionId"
-            WHERE a."studentId" = s.id
+            WHERE a."studentId" = s."studentId"
               AND se."classId" = $2
               AND (($3::text IS NOT NULL AND se.id = $3) OR ($3::text IS NULL AND se."specialProgramSessionDateId" = $1))
             ORDER BY se."startedAt" DESC NULLS LAST, se."createdAt" DESC

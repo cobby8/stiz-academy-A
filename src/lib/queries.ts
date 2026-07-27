@@ -1171,6 +1171,110 @@ export async function getMyPageData(parentUserId: string) {
     }
 }
 
+/** 마이페이지 히스토리: 학부모(User)의 자녀별 "출결 전체 + 수납 전체" 조회 (표시/조회 전용)
+ *  - getMyPageData가 "이번 달 출결 / 최근 5건 수납"만 보여주는 것과 달리,
+ *    지난 기록까지 전부 추적할 수 있도록 월 필터·LIMIT 없이 최신순 전체를 반환한다.
+ *  - ⚠️ 반드시 인증 게이트(requireVerifiedParent)가 검증한 부모 User.id(appUserId)를 넘길 것.
+ *    자녀는 Student.parentId = 부모.id 로만 조회 → 남의 자녀 조회 불가(IDOR 안전).
+ *  - 쓰기 없음(읽기 전용). $queryRawUnsafe 사용(PgBouncer 트랜잭션 모드 대응). */
+export async function getMyPageHistory(parentUserId: string) {
+    try {
+        await ensurePaymentInfrastructure();
+        // 부모 User 조회 (게이트가 검증한 id로 직접 조회 — 이메일 매칭 없음)
+        const users = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name FROM "User" WHERE id = $1 LIMIT 1`,
+            parentUserId
+        );
+        if (!users[0]) return null;
+        const parent = users[0];
+
+        // 자녀 목록 (부모 소유 자녀만)
+        const students = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, name, "birthDate", gender FROM "Student" s
+             WHERE s."parentId" = $1 AND ${notMergedStudent("s")}
+             ORDER BY s."createdAt" ASC`,
+            parent.id
+        );
+
+        const children = await Promise.all(
+            students.map(async (s: any) => {
+                const studentId = s.id;
+
+                // 출결 전체 (월 필터 제거 · 반 이름 포함 · 최신순)
+                const attendances = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT a.status, se.date, c.name AS class_name
+                     FROM "Attendance" a
+                     JOIN "Session" se ON a."sessionId" = se.id
+                     LEFT JOIN "Class" c ON se."classId" = c.id
+                     WHERE a."studentId" = $1
+                     ORDER BY se.date DESC`,
+                    studentId
+                );
+
+                // 수납 전체 (LIMIT 제거 · 최신순)
+                const payments = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT p.id, p.amount, p.status, p."dueDate", p."paidDate",
+                            p.type, p.description, p.method, p."receiptUrl",
+                            i.id AS invoice_id, i."invoiceNo", i.status AS invoice_status,
+                            i."checkoutUrl" AS invoice_checkout_url
+                     FROM "Payment" p
+                     LEFT JOIN "PaymentInvoice" i ON i."paymentId" = p.id
+                     WHERE p."studentId" = $1
+                     ORDER BY p."dueDate" DESC`,
+                    studentId
+                );
+
+                // 누적 출석률 요약 (표시용 계산 — present/(present+absent+late), 0건이면 null)
+                const present = attendances.filter((a: any) => a.status === "PRESENT").length;
+                const absent = attendances.filter((a: any) => a.status === "ABSENT").length;
+                const late = attendances.filter((a: any) => a.status === "LATE").length;
+                const attTotal = attendances.length;
+                const attendanceRate = attTotal > 0 ? Math.round((present / attTotal) * 100) : null;
+
+                return {
+                    id: studentId,
+                    name: s.name,
+                    attendance: {
+                        total: attTotal,
+                        present,
+                        absent,
+                        late,
+                        rate: attendanceRate, // null = 기록 없음
+                        records: attendances.map((a: any) => ({
+                            status: a.status,
+                            date: a.date,
+                            className: a.class_name ?? null,
+                        })),
+                    },
+                    payments: payments.map((p: any) => ({
+                        id: p.id,
+                        amount: Number(p.amount),
+                        status: p.status,
+                        dueDate: p.dueDate ?? p.duedate,
+                        paidDate: p.paidDate ?? p.paiddate ?? null,
+                        type: p.type ?? "MONTHLY",
+                        description: p.description ?? null,
+                        method: p.method ?? null,
+                        receiptUrl: p.receiptUrl ?? p.receipturl ?? null,
+                        invoiceId: p.invoice_id ?? null,
+                        invoiceNo: p.invoiceNo ?? p.invoiceno ?? null,
+                        invoiceStatus: p.invoice_status ?? null,
+                        invoiceCheckoutUrl: p.invoice_checkout_url ?? null,
+                    })),
+                };
+            })
+        );
+
+        return {
+            parent: { id: parent.id, name: parent.name },
+            children,
+        };
+    } catch (e) {
+        console.error("[getMyPageHistory] failed:", e);
+        return null;
+    }
+}
+
 // ── 갤러리 조회 ──────────────────────────────────────────────────────────────
 export const getGalleryPosts = cache(async (options?: { limit?: number; offset?: number; publicOnly?: boolean }) => {
     const limit = options?.limit ?? 50;

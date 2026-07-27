@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
+import DriverDateNav from "@/components/shuttle/DriverDateNav";
 
 // 정규 셔틀 기사님 운행 화면 — 로그인 없이 토큰으로 접근. 오늘 요일의 수업별 등원·하원 타임라인.
 // ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼(dark: 미사용). 탭 한 번으로 즉시 저장.
@@ -75,8 +76,9 @@ function StopList({ stops, token, boarding, setStatus }: {
   );
 }
 
-export default function RegularDriverClient({ token, date, classes, initialBoarding }: {
+export default function RegularDriverClient({ token, date, classes, initialBoarding, prevDate, nextDate, today }: {
   token: string; date: string; classes: DriverClass[]; initialBoarding: Record<string, Status>;
+  prevDate: string; nextDate: string; today: string; // 정규는 달력일 ±1(항상 이동 가능)
 }) {
   const [boarding, setBoarding] = useState<Record<string, Status>>(initialBoarding);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -110,7 +112,10 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
         <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 체크 {boarded}/{allRows.length}</p>
       </header>
 
-      {classes.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">오늘은 운행이 없습니다.</p>}
+      {/* 날짜 이동 네비 — 달력일 ±1(상시 운행이라 항상 이동 가능) */}
+      <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />
+
+      {classes.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">이 날은 운행이 없습니다.</p>}
 
       {classes.map((c) => (
         <section key={c.classTime} className="mb-6">

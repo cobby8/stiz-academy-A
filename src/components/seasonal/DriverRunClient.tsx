@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
+import DriverDateNav from "@/components/shuttle/DriverDateNav";
 
 // 기사님 운행 화면(모바일) — 그 날 등원 → 하원 타임라인. 각 구간에서 정차 순서대로 학생을 보고 탑승/미탑승을 탭으로 체크한다.
 // 로그인 없이 토큰으로 접근하며, 체크는 즉시 서버에 저장한다(구간=방향별).
@@ -23,12 +24,15 @@ function fmtDate(iso: string): string {
 }
 
 export default function DriverRunClient({
-  token, date, sections, initialBoarding,
+  token, date, sections, initialBoarding, prevDate, nextDate, today,
 }: {
   token: string;
   date: string;
   sections: DriverSection[];
   initialBoarding: BoardingByDir;
+  prevDate: string | null; // 운행 가능일 기준 이전 날짜(없으면 비활성)
+  nextDate: string | null; // 운행 가능일 기준 다음 날짜
+  today: string;
 }) {
   const [boarding, setBoarding] = useState<BoardingByDir>(initialBoarding);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -67,6 +71,14 @@ export default function DriverRunClient({
         <p className="text-[20px] font-black text-gray-900">🚌 스티즈 셔틀 운행</p>
         <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 등원 → 하원</p>
       </header>
+
+      {/* 날짜 이동 네비 — 운행 가능일 기준 이전/다음 */}
+      <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />
+
+      {/* 선택한 날짜에 배차가 아예 없으면 안내(운행 가능일끼리 넘기도록) */}
+      {sections.every((s) => s.vehicles.length === 0) && (
+        <p className="mb-3 rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">이 날짜는 운행이 없습니다.<br />‹ 이전 · 다음 › 으로 운행일을 넘겨보세요.</p>
+      )}
 
       {sections.map((sec) => {
         const isPickup = sec.direction === "PICKUP";

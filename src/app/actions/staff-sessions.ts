@@ -385,41 +385,47 @@ export async function completeClassSession(input: { sessionId: string }) {
 
   // 종료 안내는 결석 여부와 관계없이 이 수업의 전체 재원생 학부모에게 보냅니다.
   // 수업 종료 저장은 학부모 알림보다 우선입니다. 알림 장애가 이미 끝난 수업을 실패로 되돌리지 않게 격리합니다.
+  // ★ 알림 발송은 NotificationDelivery 큐에 먼저 기록되고 push-outbox 크론(매분)이 재발송을 보장하므로,
+  //   여기서 발송 완료를 끝까지 기다리지 않는다. 발송이 느리면(푸시·SMS 지연) 응답이 막혀 화면이 "종료 처리 중"에서
+  //   멈추던 문제가 있었다 → 짧은 예산(budget) 안에서만 즉시 시도하고, 초과분은 크론이 처리한다.
   let notificationWarning:
     | { code: "PARENT_NOTIFICATION_FAILED"; failedCount: number }
     | undefined;
+  const NOTIFY_BUDGET_MS = 3500;
   try {
-    const recipients = await getSessionParentRecipients(session);
-    const results = await Promise.allSettled(recipients.map((recipient) => deliverParentNotification({
-    eventType: "CLASS_COMPLETED",
-    dedupeKey: `session:${input.sessionId}:completed:student:${recipient.studentId}:user:${recipient.userId}`,
-    recipient,
-    title: `${session.className} 수업 종료`,
-    message: `${recipient.studentName} 학생의 수업이 종료되었습니다.`,
-    linkUrl: "/parent/sessions",
-    sessionId: input.sessionId,
-    })));
-    const failedCount = results.reduce((count, result) => {
-      if (result.status === "rejected") return count + 1;
-      if (result.value.duplicate || !result.value.push) return count;
-      return count + (result.value.push.failedCount || (result.value.push.status === "FAILED" ? 1 : 0));
-    }, 0);
-    if (failedCount > 0) {
-      notificationWarning = { code: "PARENT_NOTIFICATION_FAILED", failedCount };
-      console.error("[completeClassSession] Parent notification delivery failed", {
+    const notifyWork = (async () => {
+      const recipients = await getSessionParentRecipients(session);
+      const results = await Promise.allSettled(recipients.map((recipient) => deliverParentNotification({
+        eventType: "CLASS_COMPLETED",
+        dedupeKey: `session:${input.sessionId}:completed:student:${recipient.studentId}:user:${recipient.userId}`,
+        recipient,
+        title: `${session.className} 수업 종료`,
+        message: `${recipient.studentName} 학생의 수업이 종료되었습니다.`,
+        linkUrl: "/parent/sessions",
         sessionId: input.sessionId,
-        classId: session.classId,
-        failedCount,
-        recipientCount: recipients.length,
-      });
-    }
+      })));
+      const failedCount = results.reduce((count, result) => {
+        if (result.status === "rejected") return count + 1;
+        if (result.value.duplicate || !result.value.push) return count;
+        return count + (result.value.push.failedCount || (result.value.push.status === "FAILED" ? 1 : 0));
+      }, 0);
+      if (failedCount > 0) {
+        notificationWarning = { code: "PARENT_NOTIFICATION_FAILED", failedCount };
+        console.error("[completeClassSession] Parent notification delivery failed", {
+          sessionId: input.sessionId, classId: session.classId, failedCount, recipientCount: recipients.length,
+        });
+      }
+    })();
+    // 예산 시간 안에 끝나면 결과(경고)를 반영하고, 초과하면 응답을 먼저 돌려준다(큐+크론이 마저 발송).
+    await Promise.race([
+      notifyWork.catch((error) => {
+        notificationWarning = { code: "PARENT_NOTIFICATION_FAILED", failedCount: 1 };
+        console.error("[completeClassSession] Parent notification lookup failed", { sessionId: input.sessionId, classId: session.classId, error });
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, NOTIFY_BUDGET_MS)),
+    ]);
   } catch (error) {
-    notificationWarning = { code: "PARENT_NOTIFICATION_FAILED", failedCount: 1 };
-    console.error("[completeClassSession] Parent notification lookup failed", {
-      sessionId: input.sessionId,
-      classId: session.classId,
-      error,
-    });
+    console.error("[completeClassSession] Parent notification dispatch error", { sessionId: input.sessionId, error });
   }
   return {
     ok: true as const,

@@ -18,7 +18,9 @@ export async function POST(request: Request) {
     const rowId = typeof body?.rowId === "string" ? body.rowId : "";
     if (!token || !rowId) return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     if (!(await isRegularRunToken(token))) return NextResponse.json({ error: "유효하지 않은 링크입니다." }, { status: 403 });
-    const status = body?.status === "BOARDED" || body?.status === "NOSHOW" ? body.status : null;
+    // 허용값 확장: BOARDED/NOSHOW/SELF(자차) + null(대기). 그 외는 null로 수렴.
+    const status =
+      body?.status === "BOARDED" || body?.status === "NOSHOW" || body?.status === "SELF" ? body.status : null;
     await setRegularBoarding({ date: todayKST(), rowId, status, studentName: body?.studentName ?? null });
     return NextResponse.json({ ok: true });
   } catch (e) {

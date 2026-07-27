@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
+import DriverDateNav from "@/components/shuttle/DriverDateNav";
 
 // 정규 셔틀 기사님 운행 화면 — 로그인 없이 토큰으로 접근. 오늘 요일의 수업별 등원·하원 타임라인.
 // ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼(dark: 미사용). 탭 한 번으로 즉시 저장.
@@ -9,7 +10,8 @@ import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
 export type DriverRow = { rowId: string; name: string; parentPhone: string | null; studentPhone: string | null; absent?: boolean };
 export type DriverStop = { label: string; arriveTime: string | null; lat: number | null; lng: number | null; direction: "BOARD" | "ALIGHT"; rows: DriverRow[] };
 export type DriverClass = { classTime: string; board: DriverStop[]; alight: DriverStop[] };
-type Status = "BOARDED" | "NOSHOW";
+// SELF = 자차(부모 차) 등·하원. 셔틀 미탑승이지만 결석(사전 신고)과는 구분한다.
+type Status = "BOARDED" | "NOSHOW" | "SELF";
 
 function digits(p: string | null): string | null { if (!p) return null; const d = p.replace(/[^0-9]/g, ""); return d.length >= 9 ? d : null; }
 function fmtDate(iso: string): string {
@@ -23,7 +25,8 @@ function StopList({ stops, token, boarding, setStatus }: {
   stops: DriverStop[]; token: string; boarding: Record<string, Status>;
   setStatus: (rowId: string, name: string, next: Status) => void;
 }) {
-  const busyKey = (id: string) => id;
+  // '미탑승'을 누르면 그 행에만 사유 선택(결석/자차)이 펼쳐진다. 열린 행의 rowId를 보관.
+  const [menuKey, setMenuKey] = useState<string | null>(null);
   return (
     <ol className="space-y-2.5">
       {stops.map((s, si) => {
@@ -41,28 +44,44 @@ function StopList({ stops, token, boarding, setStatus }: {
               {s.rows.map((st) => {
                 const status = boarding[st.rowId] ?? null;
                 const parent = digits(st.parentPhone), child = digits(st.studentPhone);
+                const selfLabel = isPickup ? "자차등원" : "자차하원"; // 방향에 따라 자차 라벨 결정
                 return (
-                  <div key={st.rowId} className={`flex items-center gap-2 rounded-xl p-2.5 ${st.absent ? "bg-red-50 dark:bg-red-950/30" : "bg-gray-50"}`}>
-                    <div className="min-w-0 flex-1">
-                      <span className={`text-[19px] font-black ${st.absent ? "text-gray-400 line-through" : "text-gray-900"}`}>{st.name}</span>
-                      {st.absent && <span className="ml-2 rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white align-middle">오늘 결석</span>}
-                      {!st.absent && (
-                        <div className="mt-1 flex gap-3">
-                          {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
-                          {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
-                        </div>
+                  <div key={st.rowId} className={`rounded-xl p-2.5 ${st.absent ? "bg-red-50 dark:bg-red-950/30" : "bg-gray-50"}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className={`text-[19px] font-black ${st.absent ? "text-gray-400 line-through" : "text-gray-900"}`}>{st.name}</span>
+                        {/* 사전 결석 신고 배지(당일 기사 체크와 별개) */}
+                        {st.absent && <span className="ml-2 rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white align-middle">오늘 결석</span>}
+                        {/* 기사 체크 상태 배지 */}
+                        {!st.absent && status === "NOSHOW" && <span className="ml-2 rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white align-middle">결석</span>}
+                        {!st.absent && status === "SELF" && <span className="ml-2 rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white align-middle">{selfLabel}</span>}
+                        {!st.absent && (
+                          <div className="mt-1 flex gap-3">
+                            {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
+                            {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
+                          </div>
+                        )}
+                      </div>
+                      {st.absent ? (
+                        // 사전 결석 신고된 학생 — 태우지 않는다. 탑승 체크 버튼 대신 안내만 표시.
+                        <span className="rounded-xl border-2 border-red-300 px-3 py-2 text-[15px] font-black text-red-500">미{isPickup ? "탑승" : "하차"}(결석)</span>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => { setMenuKey(null); setStatus(st.rowId, st.name, "BOARDED"); }}
+                            className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
+                          <button type="button" onClick={() => setMenuKey(menuKey === st.rowId ? null : st.rowId)}
+                            className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                        </>
                       )}
                     </div>
-                    {st.absent ? (
-                      // 결석 신고된 학생 — 태우지 않는다. 탑승 체크 버튼 대신 안내만 표시.
-                      <span className="rounded-xl border-2 border-red-300 px-3 py-2 text-[15px] font-black text-red-500">미{isPickup ? "탑승" : "하차"}(결석)</span>
-                    ) : (
-                      <>
-                        <button type="button" onClick={() => setStatus(st.rowId, st.name, "BOARDED")}
-                          className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
-                        <button type="button" onClick={() => setStatus(st.rowId, st.name, "NOSHOW")}
-                          className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
-                      </>
+                    {!st.absent && menuKey === st.rowId && (
+                      // 사유 선택 — 같은 항목을 다시 누르면 setStatus가 대기로 되돌린다
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" onClick={() => { setStatus(st.rowId, st.name, "NOSHOW"); setMenuKey(null); }}
+                          className={`flex-1 rounded-xl py-3 text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>❌ 결석(안 옴)</button>
+                        <button type="button" onClick={() => { setStatus(st.rowId, st.name, "SELF"); setMenuKey(null); }}
+                          className={`flex-1 rounded-xl py-3 text-[16px] font-black ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-violet-300 text-violet-700"}`}>🚗 {selfLabel}</button>
+                      </div>
                     )}
                   </div>
                 );
@@ -75,8 +94,9 @@ function StopList({ stops, token, boarding, setStatus }: {
   );
 }
 
-export default function RegularDriverClient({ token, date, classes, initialBoarding }: {
+export default function RegularDriverClient({ token, date, classes, initialBoarding, prevDate, nextDate, today }: {
   token: string; date: string; classes: DriverClass[]; initialBoarding: Record<string, Status>;
+  prevDate: string; nextDate: string; today: string; // 정규는 달력일 ±1(항상 이동 가능)
 }) {
   const [boarding, setBoarding] = useState<Record<string, Status>>(initialBoarding);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -110,7 +130,10 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
         <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 체크 {boarded}/{allRows.length}</p>
       </header>
 
-      {classes.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">오늘은 운행이 없습니다.</p>}
+      {/* 날짜 이동 네비 — 달력일 ±1(상시 운행이라 항상 이동 가능) */}
+      <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />
+
+      {classes.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">이 날은 운행이 없습니다.</p>}
 
       {classes.map((c) => (
         <section key={c.classTime} className="mb-6">

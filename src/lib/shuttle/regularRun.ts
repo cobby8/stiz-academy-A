@@ -5,7 +5,8 @@ import { requireAdmin } from "@/lib/auth-guard";
 // 정규 셔틀 기사님 링크(토큰) + 탑승/미탑승 기록. 방학특강(shuttleRun.ts)과 테이블은 공유하되,
 // direction 값을 'REGULAR'로 구분해 섞이지 않게 한다. PgBouncer 때문에 $queryRawUnsafe 고정.
 
-export type BoardingStatus = "BOARDED" | "NOSHOW";
+// SELF = 자차(부모 차)로 등·하원 — 셔틀 미탑승이지만 결석은 아님. 등원/하원 여부는 화면 맥락으로 판단.
+export type BoardingStatus = "BOARDED" | "NOSHOW" | "SELF";
 
 const ROLLING_DATE = "ROLLING";   // '오늘'을 따라가는 고정 링크
 const REGULAR_DIR = "REGULAR";    // 정규 셔틀 표식(방학특강의 ALL/PICKUP/DROPOFF와 구분)
@@ -53,7 +54,8 @@ export async function getRegularBoardingMap(date: string): Promise<Record<string
     const out: Record<string, BoardingStatus> = {};
     for (const r of rows) {
       const id = r.shuttleRequestId as string;
-      const st = r.status === "NOSHOW" ? "NOSHOW" : r.status === "BOARDED" ? "BOARDED" : null;
+      // 저장된 status 문자열을 그대로 3종으로 해석(그 외 값은 무시).
+      const st = r.status === "NOSHOW" ? "NOSHOW" : r.status === "SELF" ? "SELF" : r.status === "BOARDED" ? "BOARDED" : null;
       if (id && st) out[id] = st;
     }
     return out;
@@ -95,7 +97,8 @@ export async function setRegularBoarding(input: {
     );
     return { ok: true };
   }
-  const status = input.status === "NOSHOW" ? "NOSHOW" : "BOARDED";
+  // 화이트리스트: NOSHOW/SELF/BOARDED 중 하나로만 저장(그 외 입력은 BOARDED로 수렴).
+  const status = input.status === "NOSHOW" ? "NOSHOW" : input.status === "SELF" ? "SELF" : "BOARDED";
   await prisma.$executeRawUnsafe(
     `INSERT INTO "ShuttleBoarding" ("serviceDate","direction","shuttleRequestId","studentName","status","checkedVia","checkedAt")
      VALUES ($1,$2,$3,$4,$5,$6, now())

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
+import DriverDateNav from "@/components/shuttle/DriverDateNav";
 
 // 기사님 운행 화면(모바일) — 그 날 등원 → 하원 타임라인. 각 구간에서 정차 순서대로 학생을 보고 탑승/미탑승을 탭으로 체크한다.
 // 로그인 없이 토큰으로 접근하며, 체크는 즉시 서버에 저장한다(구간=방향별).
@@ -11,7 +12,8 @@ export type DriverStudent = { requestId: string; name: string; grade: string | n
 export type DriverStop = { label: string; isHub: boolean; etaLabel: string | null; lat: number | null; lng: number | null; students: DriverStudent[] };
 export type DriverVehicle = { vehicleName: string; tripLabel: string | null; departTime: string | null; arriveTime: string | null; depotTime: string | null; stops: DriverStop[] };
 export type DriverSection = { direction: "PICKUP" | "DROPOFF"; time: string | null; startName: string; endName: string; vehicles: DriverVehicle[] };
-type Status = "BOARDED" | "NOSHOW";
+// SELF = 자차(부모 차) 등·하원. 셔틀엔 안 탔지만 결석(안 옴)과는 구분한다.
+type Status = "BOARDED" | "NOSHOW" | "SELF";
 type BoardingByDir = { PICKUP: Record<string, Status>; DROPOFF: Record<string, Status> };
 
 function digits(p: string | null): string | null { if (!p) return null; const d = p.replace(/[^0-9]/g, ""); return d.length >= 9 ? d : null; }
@@ -23,15 +25,20 @@ function fmtDate(iso: string): string {
 }
 
 export default function DriverRunClient({
-  token, date, sections, initialBoarding,
+  token, date, sections, initialBoarding, prevDate, nextDate, today,
 }: {
   token: string;
   date: string;
   sections: DriverSection[];
   initialBoarding: BoardingByDir;
+  prevDate: string | null; // 운행 가능일 기준 이전 날짜(없으면 비활성)
+  nextDate: string | null; // 운행 가능일 기준 다음 날짜
+  today: string;
 }) {
   const [boarding, setBoarding] = useState<BoardingByDir>(initialBoarding);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  // '미탑승'을 누르면 그 학생 행에만 사유 선택(결석/자차)이 펼쳐진다. 열린 행의 키(방향:reqId)를 보관.
+  const [menuKey, setMenuKey] = useState<string | null>(null);
 
   async function toggle(direction: "PICKUP" | "DROPOFF", reqId: string, name: string, next: Status) {
     const key = `${direction}:${reqId}`;
@@ -68,19 +75,28 @@ export default function DriverRunClient({
         <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 등원 → 하원</p>
       </header>
 
+      {/* 날짜 이동 네비 — 운행 가능일 기준 이전/다음 */}
+      <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />
+
+      {/* 선택한 날짜에 배차가 아예 없으면 안내(운행 가능일끼리 넘기도록) */}
+      {sections.every((s) => s.vehicles.length === 0) && (
+        <p className="mb-3 rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">이 날짜는 운행이 없습니다.<br />‹ 이전 · 다음 › 으로 운행일을 넘겨보세요.</p>
+      )}
+
       {sections.map((sec) => {
         const isPickup = sec.direction === "PICKUP";
         const map = boarding[sec.direction];
         const all = sec.vehicles.flatMap((v) => v.stops.flatMap((s) => s.students));
         const boarded = all.filter((s) => map[s.requestId] === "BOARDED").length;
         const noshow = all.filter((s) => map[s.requestId] === "NOSHOW").length;
+        const self = all.filter((s) => map[s.requestId] === "SELF").length; // 자차 등·하원 수
         let seq = 0;
         return (
           <section key={sec.direction} className="mb-6">
             {/* 구간 헤더: 시간 · 방향 */}
             <div className={`sticky top-[68px] z-[5] -mx-1 mb-3 flex items-center justify-between gap-2 rounded-2xl px-4 py-3 ${isPickup ? "bg-blue-600" : "bg-orange-600"} text-white`}>
               <span className="text-[19px] font-black">{isPickup ? "⬆" : "⬇"} {sec.time ?? "-"} · {isPickup ? "등원" : "하원"}</span>
-              <span className="text-[16px] font-black">{boarded}/{all.length} 탑승{noshow > 0 ? ` · 미탑승 ${noshow}` : ""}</span>
+              <span className="text-[16px] font-black">{boarded}/{all.length} 탑승{noshow > 0 ? ` · 결석 ${noshow}` : ""}{self > 0 ? ` · 자차 ${self}` : ""}</span>
             </div>
 
             {sec.vehicles.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-5 text-center text-[16px] font-bold text-gray-400">이 구간에 배차된 학생이 없습니다.</p>}
@@ -110,22 +126,41 @@ export default function DriverRunClient({
                           {s.students.map((st) => {
                             const status = map[st.requestId] ?? null;
                             const parent = digits(st.parentPhone), child = digits(st.childPhone);
+                            const rowKey = `${sec.direction}:${st.requestId}`;
+                            const isBusy = busy[rowKey];
+                            const selfLabel = isPickup ? "자차등원" : "자차하원"; // 방향에 따라 자차 라벨 결정
                             return (
-                              <div key={st.requestId} className="flex items-center gap-2 rounded-xl bg-gray-50 p-2.5">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-baseline gap-1.5">
-                                    <span className="text-[19px] font-black text-gray-900">{st.name}</span>
-                                    {st.grade && <span className="text-[14px] text-gray-500">{st.grade}</span>}
+                              <div key={st.requestId} className="rounded-xl bg-gray-50 p-2.5">
+                                <div className="flex items-center gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-baseline gap-1.5">
+                                      <span className="text-[19px] font-black text-gray-900">{st.name}</span>
+                                      {st.grade && <span className="text-[14px] text-gray-500">{st.grade}</span>}
+                                      {/* 현재 상태 배지 — 미탑승 사유를 한눈에 구분 */}
+                                      {status === "NOSHOW" && <span className="rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white">결석</span>}
+                                      {status === "SELF" && <span className="rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white">{selfLabel}</span>}
+                                    </div>
+                                    <div className="mt-1 flex gap-3">
+                                      {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
+                                      {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
+                                    </div>
                                   </div>
-                                  <div className="mt-1 flex gap-3">
-                                    {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
-                                    {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
-                                  </div>
+                                  {/* 탑승 버튼은 그대로(즉시 토글) */}
+                                  <button type="button" disabled={isBusy} onClick={() => { setMenuKey(null); toggle(sec.direction, st.requestId, st.name, "BOARDED"); }}
+                                    className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
+                                  {/* 미탑승 버튼은 누르면 사유 선택을 펼친다(결석/자차) */}
+                                  <button type="button" onClick={() => setMenuKey(menuKey === rowKey ? null : rowKey)}
+                                    className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
                                 </div>
-                                <button type="button" disabled={busy[`${sec.direction}:${st.requestId}`]} onClick={() => toggle(sec.direction, st.requestId, st.name, "BOARDED")}
-                                  className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
-                                <button type="button" disabled={busy[`${sec.direction}:${st.requestId}`]} onClick={() => toggle(sec.direction, st.requestId, st.name, "NOSHOW")}
-                                  className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                                {menuKey === rowKey && (
+                                  // 사유 선택 — 같은 항목을 다시 누르면 toggle이 대기로 되돌린다
+                                  <div className="mt-2 flex gap-2">
+                                    <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "NOSHOW"); setMenuKey(null); }}
+                                      className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>❌ 결석(안 옴)</button>
+                                    <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "SELF"); setMenuKey(null); }}
+                                      className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-violet-300 text-violet-700"}`}>🚗 {selfLabel}</button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

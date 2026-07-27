@@ -9,6 +9,22 @@ const PREFIX = /^(STIZ 다산점 · |차고지 · )/;
 function todayKST(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
+// YYYY-MM-DD 형식+달력 유효성 검증. 클라가 보낸 date 쿼리는 신뢰하지 않고 서버에서 확인.
+function isValidDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T12:00:00+09:00`);
+  return !Number.isNaN(d.getTime()) &&
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d) === s;
+}
+// 운행 가능일(정렬됨) 기준으로 현재 날짜의 이전/다음 운행일을 구한다.
+// 현재 날짜가 운행일 목록에 있으면 인덱스 ±1, 없으면(임의 날짜) 가장 가까운 이전/다음 운행일.
+function adjacentRunDates(dates: string[], current: string): { prev: string | null; next: string | null } {
+  const idx = dates.indexOf(current);
+  if (idx >= 0) return { prev: dates[idx - 1] ?? null, next: dates[idx + 1] ?? null };
+  const prev = dates.filter((d) => d < current).pop() ?? null;
+  const next = dates.find((d) => d > current) ?? null;
+  return { prev, next };
+}
 
 function lightError(title: string, sub: string) {
   return (
@@ -25,20 +41,36 @@ function lightError(title: string, sub: string) {
 }
 
 // 기사님 전용 운행 화면 — 로그인 없이 토큰으로 접근. 그 날(또는 고정 링크면 '오늘') 등원 → 하원 타임라인.
-export default async function ShuttleRunPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function ShuttleRunPage({
+  params, searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ date?: string }>;
+}) {
   const { token } = await params;
   const run = await resolveRunToken(token);
   if (!run) return lightError("유효하지 않은 링크입니다", "원장님께 새 링크를 요청해주세요.");
 
-  // 고정(rolling) 링크는 '오늘' 운행을 본다. 오늘이 운행일이 아니면 가장 가까운 다음 운행일.
-  let effectiveDate: string | null = run.date === "ROLLING" ? null : run.date;
-  if (run.date === "ROLLING") {
-    const probe = await computeDispatch({ direction: "PICKUP", date: null, localOnly: true });
-    const dates = probe.availableDates.map((d) => d.date).sort();
-    const today = todayKST();
-    effectiveDate = dates.includes(today) ? today : (dates.filter((d) => d >= today)[0] ?? dates[dates.length - 1] ?? null);
+  // 운행 가능일 목록(정렬) — 이전/다음 이동 계산과 기본 날짜 산정에 쓴다.
+  const probe = await computeDispatch({ direction: "PICKUP", date: null, localOnly: true });
+  const availableDates = probe.availableDates.map((d) => d.date).sort();
+  const today = todayKST();
+
+  // date 쿼리가 유효한 YYYY-MM-DD면 그 날짜를 우선 사용(클라 입력은 서버에서 검증).
+  const sp = await searchParams;
+  const requestedDate = sp?.date && isValidDate(sp.date) ? sp.date : null;
+
+  // 기본 날짜: ROLLING(상시) 링크는 "항상 오늘"(현재 KST 기준). 오늘 운행이 없으면
+  // 어제로 떨어지지 않고 오늘을 그대로 띄우고, 운행일 이동은 이전/다음 네비로 한다.
+  // 특정일 링크는 run.date.
+  let effectiveDate: string | null = requestedDate;
+  if (!effectiveDate) {
+    effectiveDate = run.date === "ROLLING" ? today : run.date;
   }
   if (!effectiveDate) return lightError("오늘은 운행이 없습니다", "다음 운행일에 다시 열어주세요.");
+
+  // 운행 가능일 기준 이전/다음(범위 밖이면 null → 버튼 비활성).
+  const { prev: prevDate, next: nextDate } = adjacentRunDates(availableDates, effectiveDate);
 
   const directions: ("PICKUP" | "DROPOFF")[] = ["PICKUP", "DROPOFF"];
   const sections: DriverSection[] = await Promise.all(directions.map(async (d) => {
@@ -71,6 +103,9 @@ export default async function ShuttleRunPage({ params }: { params: Promise<{ tok
         date={effectiveDate}
         sections={sections}
         initialBoarding={{ PICKUP: pickupBoarding, DROPOFF: dropoffBoarding } as { PICKUP: Record<string, BoardingStatus>; DROPOFF: Record<string, BoardingStatus> }}
+        prevDate={prevDate}
+        nextDate={nextDate}
+        today={today}
       />
     </div>
   );

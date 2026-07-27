@@ -64,11 +64,8 @@ export function reconcileSavedVehicles(
       return { ...(s as object), students: kept };
     });
 
-    // 2) 빈 정차 제거 — 단 무료탑승 거점(isHub)은 승객 0명이어도 항상 경유하므로 유지한다.
-    const stops = filteredStops.filter((s) => {
-      const isHub = (s as ReconcileStop).isHub === true;
-      return (s.students as unknown[]).length > 0 || isHub;
-    });
+    // 2) 빈 정차 제거 — 무료탑승 거점(isHub)도 그날 타는 학생이 0명이면 노선에서 뺀다.
+    const stops = filteredStops.filter((s) => (s.students as unknown[]).length > 0);
 
     // 3) 인원·정원초과 재계산(순서·시각은 그대로 두고 숫자만 갱신).
     const passengers = stops.reduce((acc, s) => acc + (s.students as unknown[]).length, 0);

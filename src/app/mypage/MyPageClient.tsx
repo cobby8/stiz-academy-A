@@ -933,7 +933,16 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {/* 이번 달 출결 기록 — 섹션 타이틀 색상 통일 */}
             {child.attendance.records.length > 0 && (
                 <div>
-                    <h2 className="font-bold text-brand-navy-900 mb-3 px-1">이번 달 출결 기록</h2>
+                    {/* 헤더: 제목 + 전체 히스토리 진입 링크(선택 자녀 넘김) */}
+                    <div className="mb-3 flex items-center justify-between px-1">
+                        <h2 className="font-bold text-brand-navy-900">이번 달 출결 기록</h2>
+                        <Link
+                            href={`/mypage/history?child=${child.id}`}
+                            className="text-xs font-bold text-brand-orange-500 hover:underline dark:text-brand-neon-lime"
+                        >
+                            전체 보기
+                        </Link>
+                    </div>
                     <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         <div className="divide-y divide-gray-50">
                             {child.attendance.records.map((r, i) => (
@@ -956,7 +965,16 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             {/* 최근 수납 내역 — 섹션 타이틀 색상 통일 */}
             {child.payments.length > 0 && (
                 <div>
-                    <h2 className="font-bold text-brand-navy-900 dark:text-white mb-3 px-1">최근 수납 내역</h2>
+                    {/* 헤더: 제목 + 전체 히스토리 진입 링크(선택 자녀 넘김) */}
+                    <div className="mb-3 flex items-center justify-between px-1">
+                        <h2 className="font-bold text-brand-navy-900 dark:text-white">최근 수납 내역</h2>
+                        <Link
+                            href={`/mypage/history?child=${child.id}`}
+                            className="text-xs font-bold text-brand-orange-500 hover:underline dark:text-brand-neon-lime"
+                        >
+                            전체 보기
+                        </Link>
+                    </div>
                     <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         <div className="divide-y divide-gray-50">
                             {child.payments.map((p) => {

@@ -4845,6 +4845,17 @@ export async function recordSkillAssessment(
 // ── 수강 신청서 관리 (Phase C) ─────────────────────────────────────────────────
 
 /**
+ * 승인 흐름 중단용 신호(sentinel).
+ * 이유: 트랜잭션 도중 '학생 모호(동명 형제)'를 발견하면, 이미 만든 학부모 레코드까지 되돌려야(rollback) 안전하다.
+ *       일반 return으로는 트랜잭션이 커밋되므로, 특수 예외를 던져 롤백시키고 catch에서 그 payload를 그대로 반환한다.
+ */
+class ApprovalAbort extends Error {
+    constructor(public payload: { ok: false; code: string; [k: string]: unknown }) {
+        super("APPROVAL_ABORT");
+    }
+}
+
+/**
  * 수강 신청서 승인 — 핵심 비즈니스 로직
  * 1. EnrollmentApplication 조회
  * 2. User SELECT (parentPhone 기준) → 없으면 INSERT (role=PARENT)
@@ -4859,9 +4870,43 @@ export async function approveEnrollApplication(
     data: {
         classIds: string[];       // 배정할 반 ID 배열
         processedNote?: string;   // 관리자 메모
+        force?: boolean;          // A. 정원 초과 경고를 무시하고 강행할지(관리자 재확인 후 true)
+        resolvedStudentId?: string; // B. 동명 형제로 학생이 모호할 때 관리자가 지정한 학생 id
     }
 ) {
     await requireAdmin();
+
+    // ── A. 정원 초과 소프트 게이트 ──────────────────────────────────
+    // 이유: 정원을 넘겨 배정하는 실수를 막되, 관리자 재량(대기 없이 추가)은 허용해야 한다.
+    //       그래서 '하드 차단'이 아니라 '경고 후 재확인(force)' 방식으로 처리한다.
+    //       ★ 트랜잭션 진입 전에 '읽기만' 수행 → DB 변경 0(부작용 없이 되돌릴 수 있음).
+    if (data.force !== true && Array.isArray(data.classIds) && data.classIds.length > 0) {
+        const overCapacity: { classId: string; name: string; current: number; capacity: number }[] = [];
+        for (const classId of data.classIds) {
+            // 각 반의 정원(capacity)과 '현재 ACTIVE 수강 인원' 조회(병합된 학생은 제외).
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT c.name AS name, c.capacity AS capacity,
+                        (SELECT COUNT(*) FROM "Enrollment" e
+                         JOIN "Student" s ON s.id = e."studentId"
+                         WHERE e."classId" = c.id AND e.status = 'ACTIVE' AND ${notMergedStudent("s")}
+                        )::int AS current
+                 FROM "Class" c WHERE c.id = $1 LIMIT 1`,
+                classId,
+            );
+            if (rows.length === 0) continue;
+            const capacity = Number(rows[0].capacity ?? rows[0].CAPACITY);
+            const current = Number(rows[0].current ?? rows[0].CURRENT);
+            // 이미 정원을 채운(current >= capacity) 반에 한 명 더 넣으면 초과 → 경고 대상.
+            if (Number.isFinite(capacity) && Number.isFinite(current) && current >= capacity) {
+                overCapacity.push({ classId, name: rows[0].name ?? "", current, capacity });
+            }
+        }
+        // 초과 반이 하나라도 있으면 아무 것도 바꾸지 않고 경고만 반환 → UI가 재확인 후 force:true로 재호출.
+        if (overCapacity.length > 0) {
+            return { ok: false as const, code: "CAPACITY_WARNING" as const, classes: overCapacity };
+        }
+    }
+
     let smsResult = {
         parentSent: false,
         parentFailed: false,
@@ -4972,30 +5017,74 @@ export async function approveEnrollApplication(
             parentId = newUsers[0].id;
         }
 
-        // 3. Student 조회/생성 — 동일 이름 + 동일 보호자의 기존 원생이 있으면 재사용
+        // 3. Student 조회/생성 — 동명 형제 오매칭·중복 생성 방지를 위해 '생년(childBirthDate)'을 매칭에 강화한다.
+        //    핵심 원칙: 기존에 잘 매칭되던 '단일 학생'은 그대로 재사용(회귀 없음). 생년은 '동명 다수'를 가릴 때만 결정적으로 쓴다.
         const childName = app.childName ?? app.childname;
         const childBirthDate = app.childBirthDate ?? app.childbirthdate;
-        let studentId: string;
+        let studentId: string | null = null;
 
-        const existingStudents = await tx.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "Student" s
-             WHERE ${notMergedStudent("s")} AND s.name = $1 AND s."parentId" = $2 LIMIT 1`,
-            childName, parentId
-        );
+        // (0) 관리자가 모호성 해소를 위해 특정 학생을 지정했으면(resolvedStudentId) 그 학생을 우선 사용.
+        //     단, 이 보호자 소속이고 병합되지 않은 학생인지 검증(엉뚱한 학생 지정 방지).
+        if (data.resolvedStudentId) {
+            const picked = await tx.$queryRawUnsafe<any[]>(
+                `SELECT id FROM "Student" s
+                 WHERE ${notMergedStudent("s")} AND s.id = $1 AND s."parentId" = $2 LIMIT 1`,
+                data.resolvedStudentId, parentId,
+            );
+            if (picked.length === 0) throw new Error("지정한 학생을 찾을 수 없습니다. 다시 확인해주세요.");
+            studentId = picked[0].id;
+        }
 
-        if (existingStudents.length > 0) {
-            // 기존 원생 업데이트 (최신 정보로 갱신)
-            studentId = existingStudents[0].id;
+        // (1) 신청서 생년이 있으면 → name + parentId + birthDate 정확 매칭 우선.
+        if (!studentId && childBirthDate) {
+            const exact = await tx.$queryRawUnsafe<any[]>(
+                `SELECT id FROM "Student" s
+                 WHERE ${notMergedStudent("s")} AND s.name = $1 AND s."parentId" = $2
+                   AND s."birthDate" = $3::timestamptz LIMIT 1`,
+                childName, parentId, childBirthDate,
+            );
+            if (exact.length > 0) studentId = exact[0].id;
+        }
+
+        // (2) 못 찾으면 → name + parentId 폴백 조회.
+        if (!studentId) {
+            const fallback = await tx.$queryRawUnsafe<any[]>(
+                `SELECT id, name, "birthDate" FROM "Student" s
+                 WHERE ${notMergedStudent("s")} AND s.name = $1 AND s."parentId" = $2`,
+                childName, parentId,
+            );
+            if (fallback.length === 1) {
+                // 정확히 1명 → 기존 단일 학생 보존(생년 null/불일치여도 깨지 않고 재사용). ★중복 생성 방지의 핵심.
+                studentId = fallback[0].id;
+            } else if (fallback.length >= 2) {
+                // 2명 이상(동명 형제) → 자동 선택/자동 생성 금지. 관리자가 지정하도록 후보를 돌려주고 중단(롤백).
+                throw new ApprovalAbort({
+                    ok: false,
+                    code: "STUDENT_AMBIGUOUS",
+                    candidates: fallback.map((s) => ({
+                        id: s.id,
+                        name: s.name,
+                        birthDate: s.birthDate ?? s.birthdate ?? null,
+                    })),
+                });
+            }
+            // 0명이면 studentId는 null 유지 → 아래에서 신규 INSERT.
+        }
+
+        if (studentId) {
+            // 기존 원생 업데이트 (최신 정보로 갱신). 생년이 비어있고 신청서 생년이 있으면 COALESCE로 채움(덮어쓰기 금지).
             await tx.$executeRawUnsafe(
                 `UPDATE "Student" SET
-                    gender = COALESCE($1, gender),
-                    grade = COALESCE($2, grade),
-                    school = COALESCE($3, school),
-                    phone = COALESCE($4, phone),
-                    address = COALESCE($5, address),
-                    "referralSource" = COALESCE($6, "referralSource"),
+                    "birthDate" = COALESCE("birthDate", $1::timestamptz),
+                    gender = COALESCE($2, gender),
+                    grade = COALESCE($3, grade),
+                    school = COALESCE($4, school),
+                    phone = COALESCE($5, phone),
+                    address = COALESCE($6, address),
+                    "referralSource" = COALESCE($7, "referralSource"),
                     "updatedAt" = NOW()
-                 WHERE id = $7`,
+                 WHERE id = $8`,
+                childBirthDate ?? null,
                 app.childGender ?? app.childgender ?? null,
                 app.childGrade ?? app.childgrade ?? null,
                 app.childSchool ?? app.childschool ?? null,
@@ -5126,6 +5215,10 @@ export async function approveEnrollApplication(
         }
         }, { timeout: 15_000 });
     } catch (e) {
+        // 학생 모호(STUDENT_AMBIGUOUS) 등 '중단 신호'는 에러가 아니라 정상 반환값으로 돌려준다(트랜잭션은 롤백됨).
+        if (e instanceof ApprovalAbort) {
+            return e.payload;
+        }
         console.error("Failed to approve enrollment application:", e);
         throw new Error((e as Error).message || "수강 신청 승인 실패");
     }

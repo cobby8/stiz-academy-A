@@ -168,7 +168,7 @@ const DEFAULT_TEMPLATES: [string, string, string, string, string, string][] = [
     ["SPECIAL_APPLICATION_WAITLISTED_PARENT", "특강 대기 접수", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강은 대기 접수되었습니다.\n대기순번: {{waitlistOrder}}\n자리 발생 시 안내드리겠습니다.", "특강 대기 상태 안내", '["childName","offeringTitle","waitlistOrder","academyPhone"]'],
     ["SPECIAL_APPLICATION_REJECTED_PARENT", "특강 신청 반려", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 승인되지 않았습니다.\n문의: {{academyPhone}}", "특강 신청 반려 안내", '["childName","offeringTitle","academyPhone"]'],
     ["SPECIAL_APPLICATION_CANCELLED_PARENT", "특강 신청 취소", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 신청이 취소되었습니다.\n문의: {{academyPhone}}", "특강 신청 취소 안내", '["childName","offeringTitle","academyPhone"]'],
-    ["SPECIAL_ACCOUNT_ACTIVATION_PARENT", "특강 보호자 계정 활성화", "PARENT", "[STIZ] {{childName}} 학생의 특강 확인을 위해 보호자 계정을 활성화해 주세요.\n{{activationUrl}}\n이 링크는 다른 사람에게 전달하지 마세요.", "신규 보호자의 일회용 계정 활성화 링크", '["childName","activationUrl"]'],
+    ["SPECIAL_ACCOUNT_ACTIVATION_PARENT", "특강 입학 가입 안내", "PARENT", "[STIZ] {{childName}} 학생의 특강 신청이 확정되었습니다.\n수강 확인과 결제를 위해 아래 링크에서 보호자 가입을 완료해 주세요.\n{{activationUrl}}\n링크는 본인만 사용해 주세요.", "신규 보호자 입학(가입) 안내 링크", '["childName","activationUrl"]'],
     ["SPECIAL_PAYMENT_REQUEST_PARENT", "특강 결제 요청", "PARENT", "[STIZ] {{childName}} 학생의 {{offeringTitle}} 특강 결제를 확인해 주세요.\n금액: {{amount}}원\n납부기한: {{dueDate}}\n{{paymentUrl}}", "특강 청구서 결제 안내", '["childName","offeringTitle","amount","dueDate","paymentUrl"]'],
     [
         "SHUTTLE_ROUTE_CONFIRMED_PARENT",

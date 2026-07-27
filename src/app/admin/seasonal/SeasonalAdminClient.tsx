@@ -1187,23 +1187,23 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
           body: JSON.stringify({ resource: "accountActivation", id: item.id, data: { action: "reissue" } }),
         });
         const body = (await response.json().catch(() => ({}))) as NotificationMutationResponse & { activationUrl?: string; error?: string };
-        if (!response.ok || !body.activationUrl) throw new Error(body.error || "보호자 계정 활성화 링크를 만들지 못했습니다.");
+        if (!response.ok || !body.activationUrl) throw new Error(body.error || "보호자 가입 안내 링크를 만들지 못했습니다.");
         const absoluteHref = toAbsoluteHref(body.activationUrl);
         const notificationFailed = notificationMutationFailed(body);
         try {
           await navigator.clipboard.writeText(absoluteHref);
           setNotice(notificationFailed
             ? `${item.className} 링크 재발급 완료 / 문자 안내 실패, 재발송이 필요합니다.`
-            : `${item.className} 보호자 계정 활성화 링크를 복사했습니다.`);
+            : `${item.className} 보호자 가입 안내 링크를 복사했습니다.`);
         } catch {
           window.open(absoluteHref, "_blank", "noopener,noreferrer");
           setNotice(notificationFailed
             ? "링크 재발급 완료 / 문자 안내 실패. 복사 대신 새 창으로 열었습니다."
-            : "브라우저가 복사를 막아 보호자 계정 활성화 링크를 새 창으로 열었습니다.");
+            : "브라우저가 복사를 막아 보호자 가입 안내 링크를 새 창으로 열었습니다.");
         }
         await load();
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "보호자 계정 활성화 링크를 만들지 못했습니다.");
+        setError(caught instanceof Error ? caught.message : "보호자 가입 안내 링크를 만들지 못했습니다.");
       }
       return;
     }
@@ -2274,7 +2274,7 @@ function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendin
   const href = getItemInvoiceHref(item);
   const activationRequired = Boolean(item.invoice?.accountActivationRequired);
   const defaultTrigger = activationRequired ? "SPECIAL_ACCOUNT_ACTIVATION_PARENT" : "SPECIAL_PAYMENT_REQUEST_PARENT";
-  const notificationLabel = activationRequired ? "계정 활성화·결제 안내" : "결제 요청 안내";
+  const notificationLabel = activationRequired ? "가입 안내·결제" : "결제 요청 안내";
   const currentNotificationSummary = item.invoice?.notificationSummary?.trigger === defaultTrigger ? item.invoice.notificationSummary : null;
   return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2289,7 +2289,7 @@ function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendin
       </div>
       <div className="flex shrink-0 gap-2">
         {href && <a href={href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200">청구서 열기</a>}
-        <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">{activationRequired ? "활성화 링크 재발급·복사" : "결제 링크 복사"}</button>
+        <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">{activationRequired ? "가입 링크 재발급·복사" : "결제 링크 복사"}</button>
       </div>
     </div>
     <NotificationActionRow label={notificationLabel} summary={currentNotificationSummary} sending={sendingNotificationKey === `invoice:${item.id}:${defaultTrigger}`} onSend={() => void onRetryNotification("invoice", item.id, defaultTrigger)} />

@@ -101,6 +101,7 @@ model Student {
   shuttleRoutePassengers ShuttleRoutePassenger[]
   shuttleLocations    StudentShuttleLocation[]
   teamRosterEntries   StudentTeamRosterEntry[]
+  regularAbsences     RegularAbsence[] // 정규 수업 사전 결석 신고(back-relation)
   parent              User                        @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
@@ -152,6 +153,7 @@ model Class {
   program      Program      @relation(fields: [programId], references: [id])
   enrollments  Enrollment[]
   sessions     Session[]
+  regularAbsences RegularAbsence[] // 정규 수업 사전 결석 신고(back-relation)
 
   @@index([programId])
   @@index([instructorId])
@@ -2206,6 +2208,33 @@ model SpecialProgramCredit {
 
   @@index([applicationItemId], map: "SpecialProgramCredit_applicationItem_idx")
   @@index([status], map: "SpecialProgramCredit_status_idx")
+}
+
+// 정규 수업 "사전 결석 신고" — 정규반은 미래 회차 좌석(SpecialProgramEnrollmentDate 같은)이 없어,
+//   결석 신고 자체를 (학생 × 반 × 날짜) 레코드로 둔다.
+//   방학특강 결석(SpecialProgramAbsence)과 동일한 reason 코드값을 쓰되, resolution(보강/이월/환불) 개념은
+//   MVP 범위 밖이라 넣지 않는다(추후 확장). enum 대신 기존 컨벤션(TEXT + 앱검증)을 따른다.
+//     reason: ILLNESS_INJURY | PERSONAL | FAMILY_TRIP | SCHOOL_EVENT | ETC
+//     status: REPORTED(기본) | CONFIRMED | CANCELLED
+// DDL: prisma/migrations/20260727140000_add_regular_absence/migration.sql (prisma migrate dev 금지 — 운영은 직접 적용)
+model RegularAbsence {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId        String   // 결석 학생
+  classId          String   // 결석 반(정규)
+  date             DateTime @db.Date // 결석 날짜(날짜 단위 — 시간 없음)
+  reason           String   // ILLNESS_INJURY | PERSONAL | FAMILY_TRIP | SCHOOL_EVENT | ETC
+  status           String   @default("REPORTED") // REPORTED | CONFIRMED | CANCELLED
+  note             String?
+  reportedByUserId String?  // 신고한 학부모 앱 계정
+  resolvedByUserId String?  // 처리한 관리자
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class            Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classId, date]) // 학생·반·날짜당 신고 1건
+  @@index([classId, date], map: "RegularAbsence_classId_date_idx") // 기사/관리자 날짜별 조회
+  @@index([status], map: "RegularAbsence_status_idx")
 }
 
 // 저장된 배차 노선 — 원장이 자동 제안을 손으로 조정한 뒤 저장한 결과(날짜×방향 1행).

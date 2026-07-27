@@ -1,23 +1,43 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import type { RegularAbsenceRow, RegularAbsenceClassOption } from "@/lib/regular/admin-regular-absence";
+import type {
+  RegularAbsenceRow,
+  RegularAbsenceClassOption,
+  MakeupClassOption,
+} from "@/lib/regular/admin-regular-absence";
 import {
   confirmRegularAbsence,
   revertRegularAbsence,
   cancelRegularAbsenceByAdmin,
   loadRegularAbsences,
+  scheduleMakeupForAbsence,
+  cancelMakeupForAbsence,
+  updateMakeupStatusForAbsence,
 } from "@/app/actions/regular-absence-admin";
+
+// 요일 한글 라벨(보강 반 표시용).
+const DAY_KO: Record<string, string> = {
+  Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
+};
 
 export default function RegularAbsenceAdminClient({
   initial,
 }: {
-  initial: { rows: RegularAbsenceRow[]; classes: RegularAbsenceClassOption[] };
+  initial: {
+    rows: RegularAbsenceRow[];
+    classes: RegularAbsenceClassOption[];
+    makeupClasses: MakeupClassOption[];
+  };
 }) {
   const [rows, setRows] = useState<RegularAbsenceRow[]>(initial.rows);
   const [classId, setClassId] = useState<string>(""); // "" = 전체 반
   const [busyId, setBusyId] = useState<string>("");
   const [err, setErr] = useState("");
+  // 보강 지정 폼: 열린 결석 id + 입력값(반/날짜).
+  const [makeupOpenId, setMakeupOpenId] = useState<string>("");
+  const [makeupClassId, setMakeupClassId] = useState<string>("");
+  const [makeupDate, setMakeupDate] = useState<string>("");
 
   const reload = useCallback(async (cid: string) => {
     setErr("");
@@ -43,6 +63,66 @@ export default function RegularAbsenceAdminClient({
       setBusyId(id);
       try {
         await fn({ id });
+        await reload(classId);
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setBusyId("");
+      }
+    },
+    [reload, classId],
+  );
+
+  // 보강 지정 폼 열기(반/날짜 입력 초기화).
+  const openMakeupForm = useCallback((absenceId: string) => {
+    setErr("");
+    setMakeupOpenId(absenceId);
+    setMakeupClassId("");
+    setMakeupDate("");
+  }, []);
+
+  // 보강 지정 실행.
+  const submitMakeup = useCallback(
+    async (absenceId: string) => {
+      setErr("");
+      setBusyId(absenceId);
+      try {
+        await scheduleMakeupForAbsence({ absenceId, makeupClassId, makeupDate });
+        setMakeupOpenId("");
+        await reload(classId);
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setBusyId("");
+      }
+    },
+    [makeupClassId, makeupDate, reload, classId],
+  );
+
+  // 보강 취소.
+  const cancelMakeup = useCallback(
+    async (absenceId: string, makeupId: string) => {
+      setErr("");
+      setBusyId(absenceId);
+      try {
+        await cancelMakeupForAbsence({ makeupId });
+        await reload(classId);
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setBusyId("");
+      }
+    },
+    [reload, classId],
+  );
+
+  // 보강 상태 변경(출석/노쇼 등).
+  const changeMakeupStatus = useCallback(
+    async (absenceId: string, makeupId: string, status: string) => {
+      setErr("");
+      setBusyId(absenceId);
+      try {
+        await updateMakeupStatusForAbsence({ makeupId, status });
         await reload(classId);
       } catch (e) {
         setErr((e as Error).message);
@@ -163,6 +243,103 @@ export default function RegularAbsenceAdminClient({
                       취소
                     </button>
                   </div>
+                </div>
+
+                {/* ── 보강(Makeup) 영역 ─────────────────────────────────── */}
+                <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                  {r.makeupId ? (
+                    // 이미 지정된 보강 표시 + 상태 변경 + 취소
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                          <span className="material-symbols-outlined text-sm">event_repeat</span>
+                          보강 {r.makeupStatusLabel}
+                        </span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">{r.makeupClassName ?? "반 미지정"}</span>
+                        {r.makeupDateLabel && (
+                          <span className="text-gray-500 dark:text-gray-400">· {r.makeupDateLabel}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={r.makeupStatus ?? "BOOKED"}
+                          disabled={busy}
+                          onChange={(e) => changeMakeupStatus(r.id, r.makeupId!, e.target.value)}
+                          className="min-h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                          aria-label="보강 상태"
+                        >
+                          <option value="BOOKED">예약</option>
+                          <option value="ATTENDED">출석</option>
+                          <option value="NO_SHOW">노쇼</option>
+                        </select>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => cancelMakeup(r.id, r.makeupId!)}
+                          className="inline-flex min-h-9 items-center rounded-lg border border-gray-300 px-3 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-950/40"
+                        >
+                          보강 취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : makeupOpenId === r.id ? (
+                    // 보강 지정 폼(반 + 날짜)
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="flex flex-col gap-1 text-xs font-bold text-gray-600 dark:text-gray-300">
+                        보강 반
+                        <select
+                          value={makeupClassId}
+                          onChange={(e) => setMakeupClassId(e.target.value)}
+                          className="min-h-9 min-w-56 rounded-lg border border-gray-200 bg-white px-2 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                        >
+                          <option value="">-- 반 선택 --</option>
+                          {initial.makeupClasses.map((c) => (
+                            <option key={c.classId} value={c.classId}>
+                              {c.className}
+                              {` (${DAY_KO[c.dayOfWeek] ?? c.dayOfWeek} ${c.startTime})`}
+                              {c.programName ? ` · ${c.programName}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs font-bold text-gray-600 dark:text-gray-300">
+                        보강일
+                        <input
+                          type="date"
+                          value={makeupDate}
+                          onChange={(e) => setMakeupDate(e.target.value)}
+                          className="min-h-9 rounded-lg border border-gray-200 bg-white px-2 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={busy || !makeupClassId || !makeupDate}
+                        onClick={() => submitMakeup(r.id)}
+                        className="inline-flex min-h-9 items-center rounded-lg bg-[var(--brand-accent)] px-3 text-xs font-black text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        보강 지정
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setMakeupOpenId("")}
+                        className="inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  ) : (
+                    // 보강 미지정 → "보강 지정" 버튼
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => openMakeupForm(r.id)}
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-black text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950"
+                    >
+                      <span className="material-symbols-outlined text-base">event_repeat</span>
+                      보강 지정
+                    </button>
+                  )}
                 </div>
               </div>
             );

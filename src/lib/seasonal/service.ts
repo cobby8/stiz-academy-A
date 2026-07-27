@@ -9,7 +9,7 @@ import {
 import { notifyAdmins } from "@/lib/notification";
 import { prisma } from "@/lib/prisma";
 import { SeasonalError, type SeasonalApplicationInput, type SeasonalWeekday } from "./contracts";
-import { decideApplicantType, hasSeasonalShuttleSelection, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning";
+import { decideApplicantType, hasSeasonalShuttleSelection, isFreeHubShuttle, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning";
 import { syncSeasonSiblingDiscounts } from "./sibling-discount-sync";
 
 const OCCUPYING_ITEM_STATUSES = ["PENDING", "APPROVED"];
@@ -469,6 +469,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
         const shuttleFeeSnapshot = resolveShuttleFee(
           assignment.offering,
           hasSeasonalShuttleSelection(input.items[index]?.shuttle),
+          isFreeHubShuttle(input.items[index]?.shuttle),
         );
         itemPlans.push({
           requested: input.items[index],

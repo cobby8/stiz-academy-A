@@ -324,17 +324,6 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
         document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    // 정규수업 결석 경로: 요청 폼을 '정규수업 결석' 유형으로 열고 폼 위치로 스크롤한다.
-    function openRegularAbsenceForm() {
-        setShowRequests(false);
-        setReqType("ABSENCE");
-        setShowRequestForm(true);
-        // 폼이 렌더된 뒤 스크롤(다음 프레임)
-        setTimeout(() => {
-            document.getElementById("parent-request-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 50);
-    }
-
     return (
         <div className="space-y-6">
             {/* 학생 카드 — navy 배경 유지, 장식 도형 추가 (about 히어로 패턴과 통일) */}
@@ -1188,22 +1177,22 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                     </div>
                 </Link>
 
-                {/* 경로 ② 정규수업 — 자유텍스트 요청 접수(학원 수기 처리) */}
-                <button
-                    onClick={openRegularAbsenceForm}
-                    className="block w-full text-left rounded-xl border border-gray-100 dark:border-gray-700 p-3 hover:border-brand-orange-200 dark:hover:border-brand-neon-lime transition"
+                {/* 경로 ② 정규수업 — 구조화 사전 결석 신고(다가오는 수업일·사유 선택) */}
+                <Link
+                    href="/mypage/regular-absence"
+                    className="block rounded-xl border border-gray-100 dark:border-gray-700 p-3 hover:border-brand-orange-200 dark:hover:border-brand-neon-lime transition"
                 >
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <span className="material-symbols-outlined text-2xl text-gray-400 dark:text-gray-300">edit_calendar</span>
                             <div>
-                                <p className="font-bold text-brand-navy-900">정규수업 결석 알리기</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">학원에 요청으로 접수돼 담당자가 직접 처리해요. (셔틀 자동제외 아님)</p>
+                                <p className="font-bold text-brand-navy-900">정규수업 결석 신고</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">다가오는 수업 날짜를 골라 사유와 함께 미리 신고해요. 학원에서 확인 후 처리합니다.</p>
                             </div>
                         </div>
                         <span className="material-symbols-outlined text-gray-300">chevron_right</span>
                     </div>
-                </button>
+                </Link>
             </div>
 
             {/* 학습 피드백 섹션 - 코치가 작성한 자녀 피드백 표시 */}

@@ -60,14 +60,10 @@ export default async function ShuttleRunPage({
   const sp = await searchParams;
   const requestedDate = sp?.date && isValidDate(sp.date) ? sp.date : null;
 
-  // 기본 날짜: ROLLING(상시) 링크는 "항상 오늘"(현재 KST 기준). 오늘 운행이 없으면
-  // 어제로 떨어지지 않고 오늘을 그대로 띄우고, 운행일 이동은 이전/다음 네비로 한다.
-  // 특정일 링크는 run.date.
-  let effectiveDate: string | null = requestedDate;
-  if (!effectiveDate) {
-    effectiveDate = run.date === "ROLLING" ? today : run.date;
-  }
-  if (!effectiveDate) return lightError("오늘은 운행이 없습니다", "다음 운행일에 다시 열어주세요.");
+  // 기본 날짜: 기사 링크는 어떤 링크든(ROLLING이든 특정일 고정이든) **항상 오늘**(현재 KST)로 연다.
+  // 기사님은 늘 '당일 운행'을 보므로, 링크에 박힌 날짜는 무시하고 오늘을 기본으로 한다.
+  // 오늘 운행이 없어도 어제로 떨어지지 않고 오늘을 띄우며, 다른 날은 이전/다음 네비/?date=로 본다.
+  const effectiveDate: string = requestedDate ?? today;
 
   // 운행 가능일 기준 이전/다음(범위 밖이면 null → 버튼 비활성).
   const { prev: prevDate, next: nextDate } = adjacentRunDates(availableDates, effectiveDate);

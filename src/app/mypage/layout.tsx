@@ -4,14 +4,7 @@ import { redirect } from "next/navigation";
 import { logout } from "@/app/actions/auth";
 import { requireVerifiedParent } from "@/lib/auth-guard";
 import AppBackButton from "@/components/AppBackButton";
-
-function SymbolIcon({ name }: { name: string }) {
-    return (
-        <span className="material-symbols-outlined leading-none" style={{ fontSize: "24px" }} aria-hidden="true">
-            {name}
-        </span>
-    );
-}
+import MyPageBottomNav from "./MyPageBottomNav";
 
 export default async function MyPageLayout({
     children,
@@ -70,22 +63,9 @@ export default async function MyPageLayout({
                 {children}
             </main>
 
-            {/* 모바일 하단 네비게이션 — 기존 동작 100% 유지, 배경만 통일 */}
-            <nav className="md:hidden fixed bottom-0 w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-around items-center h-16 pb-safe z-50">
-                <NavItem href="/mypage" iconName="home" label="홈" />
-                <NavItem href="/schedule" iconName="calendar_month" label="시간표" />
-                <NavItem href="/programs" iconName="credit_card" label="프로그램" />
-                <NavItem href="/" iconName="person" label="홈페이지" />
-            </nav>
+            {/* 모바일 하단 네비게이션 — 자녀 핵심 기능(리포트·스킬·방학특강) 중심으로 재구성.
+                활성 경로 하이라이트를 위해 클라이언트 컴포넌트(MyPageBottomNav)로 분리. */}
+            <MyPageBottomNav />
         </div>
-    );
-}
-
-function NavItem({ href, iconName, label, active }: { href: string; iconName: string; label: string; active?: boolean }) {
-    return (
-        <Link href={href} className={`flex flex-col items-center justify-center w-full h-full gap-1 ${active ? 'text-brand-orange-500 dark:text-brand-neon-lime' : 'text-gray-400'}`}>
-            <SymbolIcon name={iconName} />
-            <span className="text-[10px] font-bold">{label}</span>
-        </Link>
     );
 }

@@ -958,6 +958,25 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </div>
             </Link>
 
+            {/* 스킬 성장 바로가기 — 자녀의 스킬 레이더/성장 이력 페이지(/mypage/skills).
+                기존엔 링크가 없어 URL 직접 입력해야만 도달하던 고아 페이지를 노출한다.
+                수업 리포트 카드와 톤/구조를 동일하게 맞춰 일관성 유지. */}
+            <Link
+                href="/mypage/skills"
+                className="block bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition mb-4"
+            >
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">trending_up</span>
+                        <div>
+                            <p className="font-bold text-brand-navy-900">스킬 성장</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{child.name} 학생의 스킬 레이더와 성장 이력을 확인하세요</p>
+                        </div>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                </div>
+            </Link>
+
             {/* 결석 미리 알리기 허브 — 결석 경로 혼동을 없애기 위한 단일 진입점.
                 방학특강(구조화 신고·셔틀 자동제외)과 정규수업(요청 접수·수기 처리)을 명확히 구분해 안내한다. */}
             <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm mb-4">

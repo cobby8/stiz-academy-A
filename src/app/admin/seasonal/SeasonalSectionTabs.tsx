@@ -10,11 +10,13 @@ const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> =
   { key: "applications", href: "/admin/seasonal?tab=applications", label: "신청 관리", icon: "assignment_ind" },
   { key: "attendance", href: "/admin/seasonal/attendance", label: "출석 관리", icon: "fact_check" },
   { key: "makeup", href: "/admin/seasonal/attendance?view=makeup", label: "보강 관리", icon: "cached" },
+  { key: "absence", href: "/admin/seasonal/absence", label: "결석 신고 처리", icon: "event_busy" },
 ];
 
 // 활성 탭 판정 — 경로(pathname) + ?view 쿼리 조합. 기존 판정 결과와 동일하다.
 function resolveActiveKey(pathname: string, view: string | null): string {
   if (pathname.startsWith("/admin/seasonal/attendance")) return view === "makeup" ? "makeup" : "attendance";
+  if (pathname.startsWith("/admin/seasonal/absence")) return "absence";
   return "";
 }
 

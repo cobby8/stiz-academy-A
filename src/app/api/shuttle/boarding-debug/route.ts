@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveRunToken, getBoardingMap } from "@/lib/seasonal/shuttleRun";
+import { getDispatchForView } from "@/lib/seasonal/shuttle-optimize";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -30,10 +31,28 @@ export async function GET(request: Request) {
     rawRows = [{ error: String(e) }];
   }
 
+  // dispatch에서 실제로 반환하는 학생 requestId 확인
+  let dispatchStudents: unknown[] = [];
+  try {
+    const [pickupSug, dropoffSug] = await Promise.all([
+      getDispatchForView(date, "PICKUP", true),
+      getDispatchForView(date, "DROPOFF", true),
+    ]);
+    const extract = (sug: Awaited<ReturnType<typeof getDispatchForView>>, dir: string) =>
+      (sug.vehicles as {stops?: {students?: {requestId: string; name: string}[]}[]}[])
+        .flatMap((v) => v.stops ?? [])
+        .flatMap((s) => s.students ?? [])
+        .map((st) => ({ dir, name: st.name, requestId: st.requestId, inBoardingMap: dir === "PICKUP" ? pickup[st.requestId] ?? null : dropoff[st.requestId] ?? null }));
+    dispatchStudents = [...extract(pickupSug, "PICKUP"), ...extract(dropoffSug, "DROPOFF")];
+  } catch (e) {
+    dispatchStudents = [{ error: String(e) }];
+  }
+
   return NextResponse.json({
     run,
     queriedDate: date,
     boardingMap: { PICKUP: pickup, DROPOFF: dropoff },
+    dispatchStudents,
     rawRows,
   });
 }

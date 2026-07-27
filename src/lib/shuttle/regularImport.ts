@@ -38,6 +38,23 @@ export async function importRegularShuttleFromSheet(sheetUrl: string): Promise<{
   return { imported: stops.length, title };
 }
 
+/** 좌표(latitude)가 아직 없는 '고유 정류장 이름' 목록을 돌려준다(빈 이름 제외). 1회용 좌표 채우기 화면용. */
+export async function getRegularStopsWithoutCoords(): Promise<string[]> {
+  try {
+    // latitude 가 null 인 행들의 정류장 이름을 중복 없이(대소문자·공백 유지) 조회.
+    const rows = await prisma.$queryRawUnsafe<{ stopName: string }[]>(
+      `SELECT DISTINCT "stopName"
+         FROM "RegularShuttleStop"
+        WHERE "latitude" IS NULL AND COALESCE(TRIM("stopName"), '') <> ''
+        ORDER BY "stopName" ASC`,
+    );
+    return rows.map((r) => String(r.stopName ?? "").trim()).filter(Boolean);
+  } catch {
+    // 테이블이 없거나 조회 실패 시 빈 목록(화면은 "채울 정류장 없음"으로 안전 처리).
+    return [];
+  }
+}
+
 /** 정류장 이름별 좌표를 저장한다. 같은 이름의 모든 행에 동일 좌표를 채운다(원장 전용). */
 export async function saveRegularStopCoords(
   entries: { stopName: string; latitude: number; longitude: number }[],

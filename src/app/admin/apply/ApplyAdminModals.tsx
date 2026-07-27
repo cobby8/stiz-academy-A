@@ -266,14 +266,57 @@ export default function ApplyAdminModals({
 }: ApplyAdminModalsProps) {
     const [busy, setBusy] = useState(false);
 
-    async function handleApprove(classIds: string[], note: string) {
+    async function handleApprove(classIds: string[], note: string, force = false) {
         if (!approveApp) return;
         setBusy(true);
         try {
-            const result = await approveEnrollApplication(approveApp.id, {
+            // 반환값은 3가지 형태(성공 / 정원경고 / 학생모호) 중 하나 — 형태를 명시해 안전하게 분기한다.
+            const result = (await approveEnrollApplication(approveApp.id, {
                 classIds,
                 processedNote: note,
-            });
+                force,
+            })) as
+                | { approved: true; sms: { parentFailed: boolean; adminFailed: number; coachFailed: number; errors: string[] } }
+                | { ok: false; code: "CAPACITY_WARNING"; classes: { classId: string; name: string; current: number; capacity: number }[] }
+                | { ok: false; code: "STUDENT_AMBIGUOUS"; candidates: { id: string; name: string; birthDate: string | null }[] };
+
+            // A. 정원 초과 경고 — 하드 차단이 아니라 관리자에게 재확인 후 강행(force) 여부를 묻는다.
+            if (result && "ok" in result && result.ok === false && result.code === "CAPACITY_WARNING") {
+                const lines = (result.classes ?? [])
+                    .map((c) => `· ${c.name} (${c.current}/${c.capacity})`)
+                    .join("\n");
+                const proceed = window.confirm(
+                    `다음 반은 이미 정원을 채웠습니다.\n${lines}\n\n그래도 계속 배정할까요?`,
+                );
+                setBusy(false);
+                if (proceed) {
+                    // 관리자가 확인했으므로 force:true로 재호출.
+                    await handleApprove(classIds, note, true);
+                }
+                return;
+            }
+
+            // B. 학생 모호(동명 형제) — 자동 선택이 위험하므로, 관리자에게 생년으로 구분하도록 안내만 한다.
+            if (result && "ok" in result && result.ok === false && result.code === "STUDENT_AMBIGUOUS") {
+                const lines = (result.candidates ?? [])
+                    .map((c) => {
+                        const b = c.birthDate ? new Date(c.birthDate).toLocaleDateString("ko-KR") : "생년 미상";
+                        return `· ${c.name} (${b})`;
+                    })
+                    .join("\n");
+                onFeedback(
+                    "error",
+                    `같은 이름의 자녀가 여러 명이라 어느 학생인지 확정할 수 없습니다.\n${lines}\n원생/수강 등록 메뉴에서 생년을 확인해 정리한 뒤 다시 승인해주세요.`,
+                );
+                setBusy(false);
+                return;
+            }
+
+            // 여기부터는 승인 성공 경로(기존 동작 그대로). 위에서 모든 ok:false 분기를 처리했으므로 안전.
+            if ("ok" in result) {
+                return;
+            }
+
             onCloseApprove();
             await onSaved();
             if (result.sms.parentFailed || result.sms.adminFailed > 0 || result.sms.coachFailed > 0) {

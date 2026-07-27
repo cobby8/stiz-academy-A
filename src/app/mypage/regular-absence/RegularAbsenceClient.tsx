@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import type { UpcomingChild, UpcomingClassDate } from "@/lib/regular/parent-regular-absence";
+import type { RegularMakeupRow } from "@/lib/regular/parent-regular-makeup";
 
 // 결석 사유 선택지(정규 5종). 방학특강과 동일 집합.
 const REASONS: { value: string; label: string }[] = [
@@ -18,7 +19,13 @@ function dateKey(d: UpcomingClassDate) {
   return `${d.studentId}|${d.classId}|${d.date}`;
 }
 
-export default function RegularAbsenceClient({ initial }: { initial: UpcomingChild[] }) {
+export default function RegularAbsenceClient({
+  initial,
+  makeups = [],
+}: {
+  initial: UpcomingChild[];
+  makeups?: RegularMakeupRow[];
+}) {
   const [children, setChildren] = useState<UpcomingChild[]>(initial);
   const [openKey, setOpenKey] = useState<string>(""); // 신고 폼이 열린 날짜 키
   const [reason, setReason] = useState<Record<string, string>>({}); // 날짜별 선택 사유
@@ -126,6 +133,44 @@ export default function RegularAbsenceClient({ initial }: { initial: UpcomingChi
         다가오는 정규수업 날짜를 골라 미리 결석을 알려주세요. 학원에서 확인 후 처리합니다.
         정규 결석 신고 시 그날 정규 셔틀에서 자동으로 제외되도록 준비 중입니다(다음 단계에서 연동 예정).
       </p>
+
+      {/* 예정 보강(읽기 전용) — 관리자가 지정한 자녀의 보강 일정 */}
+      {makeups.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-950 dark:bg-blue-950/30">
+          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-black text-blue-800 dark:text-blue-300">
+            <span className="material-symbols-outlined text-lg">event_repeat</span>
+            예정 보강
+          </h2>
+          <div className="space-y-2">
+            {makeups.map((m) => (
+              <div
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 dark:bg-gray-900"
+              >
+                <div className="text-sm">
+                  <span className="font-black text-gray-900 dark:text-gray-100">{m.studentName}</span>
+                  <span className="ml-2 text-gray-500 dark:text-gray-400">
+                    {m.makeupClassName ?? "보강 반"}
+                    {m.makeupDateLabel ? ` · ${m.makeupDateLabel}` : ""}
+                  </span>
+                  {(m.originalClassName || m.originalDateLabel) && (
+                    <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
+                      (결석: {m.originalClassName ?? ""}
+                      {m.originalDateLabel ? ` ${m.originalDateLabel}` : ""})
+                    </span>
+                  )}
+                </div>
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                  {m.statusLabel}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+            보강 일정은 학원에서 지정합니다. 변경이 필요하면 학원으로 문의해 주세요.
+          </p>
+        </div>
+      )}
 
       {msg && (
         <div className="mb-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300">

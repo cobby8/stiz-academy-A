@@ -651,6 +651,68 @@ function applicationClassInfo(items: { className: string }[]): { bases: string[]
   for (const it of items) { const p = parseClassParts(it.className); if (p.base) bases.add(p.base); if (p.freq) freqs.add(p.freq); }
   return { bases: [...bases], freqs: [...freqs] };
 }
+// 결제 상태를 3버킷으로: 청구전(청구서 없음)·미납(PENDING/OVERDUE 등)·결제완료(PAID).
+function paymentBucket(status?: string | null): "청구전" | "미납" | "결제완료" {
+  const s = (status ?? "").toUpperCase();
+  if (!s) return "청구전";
+  if (s.includes("PAID") || s.includes("완료")) return "결제완료";
+  return "미납";
+}
+function shuttleBucket(needed?: boolean): "이용" | "미이용" { return needed ? "이용" : "미이용"; }
+
+// 구글시트식 열 헤더 — 제목 + 필터/정렬 아이콘. 클릭하면 팝오버(정렬 버튼 + 값 체크박스)가 뜬다.
+// excluded 모델: 체크 해제한 값만 selected(=excluded)에 담는다. 비어 있으면 전체 표시.
+function ColHeader({
+  title, open, onToggleOpen, active,
+  sortDir, onSort,
+  options, excluded, onToggleValue, onAll, onNone, alignRight,
+}: {
+  title: string; open: boolean; onToggleOpen: () => void; active: boolean;
+  sortDir?: "asc" | "desc" | null; onSort?: (dir: "asc" | "desc") => void;
+  options?: string[]; excluded?: Set<string>;
+  onToggleValue?: (v: string) => void; onAll?: () => void; onNone?: () => void; alignRight?: boolean;
+}) {
+  return (
+    <div className="relative inline-flex items-center gap-1">
+      <span className="font-bold">{title}</span>
+      {sortDir && <span className="text-[10px] text-[var(--brand-accent)]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+      <button type="button" aria-label={`${title} 필터`} onClick={onToggleOpen}
+        className={`grid h-5 w-5 place-items-center rounded ${active ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>
+        <span className="material-symbols-outlined text-[16px]">filter_list</span>
+      </button>
+      {open && (
+        <>
+          <button type="button" aria-hidden className="fixed inset-0 z-40 cursor-default" onClick={onToggleOpen} />
+          <div className={`absolute top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white p-2 text-gray-700 shadow-xl dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 ${alignRight ? "right-0" : "left-0"}`} onClick={(e) => e.stopPropagation()}>
+            {onSort && (
+              <div className="mb-1 flex gap-1">
+                <button type="button" onClick={() => onSort("asc")} className={`flex-1 rounded-lg px-2 py-1.5 text-[12px] font-bold ${sortDir === "asc" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "hover:bg-gray-100 dark:hover:bg-gray-800"}`}>▲ 오름차순</button>
+                <button type="button" onClick={() => onSort("desc")} className={`flex-1 rounded-lg px-2 py-1.5 text-[12px] font-bold ${sortDir === "desc" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "hover:bg-gray-100 dark:hover:bg-gray-800"}`}>▼ 내림차순</button>
+              </div>
+            )}
+            {options && excluded && (
+              <div>
+                <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-gray-400">
+                  <button type="button" onClick={onAll} className="hover:text-[var(--brand-accent)]">모두 선택</button>
+                  <button type="button" onClick={onNone} className="hover:text-[var(--brand-accent)]">모두 해제</button>
+                </div>
+                <div className="max-h-56 space-y-0.5 overflow-auto">
+                  {options.length === 0 && <p className="px-1 py-2 text-[12px] text-gray-400">값 없음</p>}
+                  {options.map((o) => (
+                    <label key={o} className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-[12.5px] font-semibold hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <input type="checkbox" checked={!excluded.has(o)} onChange={() => onToggleValue?.(o)} className="h-4 w-4 rounded border-gray-300 accent-[var(--brand-accent)]" />
+                      {o}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function paymentReviewLabel(value?: string | null) {
   if (!value || value === "PAYMENT_PENDING" || value === "UNPAID") return "결제 확인 전";
@@ -1611,25 +1673,38 @@ function ApplicationsView({
 }) {
   const visibleItemCount = applications.reduce((sum, application) => sum + application.items.length, 0);
 
-  // ── 목록 정렬·헤더 필터(클라이언트) ─────────────────────────────
+  // ── 목록 정렬·헤더 필터(구글시트식, 클라이언트) ────────────────────
   // 한 시즌 신청이 한 페이지에 다 들어와(≤pageSize) 클라이언트 정렬·필터가 정확하다.
-  const [sortAsc, setSortAsc] = useState(true); // 이름 기본 오름차순
-  const [fType, setFType] = useState("ALL");     // 구분: 기존/신규
-  const [fBase, setFBase] = useState("ALL");     // 수업(반 이름)
-  const [fFreq, setFFreq] = useState("ALL");     // 횟수(주N회)
+  const [openCol, setOpenCol] = useState<string | null>(null); // 열려 있는 팝오버 열
+  const [sort, setSort] = useState<{ key: "name" | "parent" | "createdAt"; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
+  // 각 열의 '제외한 값' 집합. 비어 있으면 전체 표시.
+  const [exType, setExType] = useState<Set<string>>(new Set());
+  const [exBase, setExBase] = useState<Set<string>>(new Set());
+  const [exFreq, setExFreq] = useState<Set<string>>(new Set());
+  const [exPay, setExPay] = useState<Set<string>>(new Set());
+  const [exShuttle, setExShuttle] = useState<Set<string>>(new Set());
+  const typeOptions = ["기존", "신규"];
+  const payOptions = ["청구전", "미납", "결제완료"];
+  const shuttleOptions = ["이용", "미이용"];
   const baseOptions = useMemo(() => [...new Set(applications.flatMap((a) => applicationClassInfo(a.items).bases))].sort((x, y) => x.localeCompare(y, "ko")), [applications]);
   const freqOptions = useMemo(() => [...new Set(applications.flatMap((a) => applicationClassInfo(a.items).freqs))].sort((x, y) => x.localeCompare(y, "ko")), [applications]);
+  const typeToLabel = (t?: string | null) => (t === "NEW" ? "신규" : t === "EXISTING" ? "기존" : "");
+  const toggleEx = (setter: Dispatch<SetStateAction<Set<string>>>) => (v: string) => setter((prev) => { const n = new Set(prev); if (n.has(v)) n.delete(v); else n.add(v); return n; });
   const displayApplications = useMemo(() => {
     const filtered = applications.filter((a) => {
       const info = applicationClassInfo(a.items);
-      if (fType !== "ALL" && (a.applicantType ?? "") !== fType) return false;
-      if (fBase !== "ALL" && !info.bases.includes(fBase)) return false;
-      if (fFreq !== "ALL" && !info.freqs.includes(fFreq)) return false;
+      if (exType.has(typeToLabel(a.applicantType))) return false;
+      if (info.bases.length > 0 && info.bases.every((b) => exBase.has(b))) return false;
+      if (info.freqs.length > 0 && info.freqs.every((f) => exFreq.has(f))) return false;
+      if (exPay.has(paymentBucket(a.paymentStatus))) return false;
+      if (exShuttle.has(shuttleBucket(a.shuttleNeeded))) return false;
       return true;
     });
-    return [...filtered].sort((a, b) => (a.childName || "").localeCompare(b.childName || "", "ko") * (sortAsc ? 1 : -1));
-  }, [applications, fType, fBase, fFreq, sortAsc]);
-  const thFilterCls = "mt-1 w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] font-bold text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200";
+    const val = (a: Application) => sort.key === "parent" ? (a.parentName || "") : sort.key === "createdAt" ? (a.createdAt || "") : (a.childName || "");
+    return [...filtered].sort((a, b) => val(a).localeCompare(val(b), "ko") * (sort.dir === "asc" ? 1 : -1));
+  }, [applications, exType, exBase, exFreq, exPay, exShuttle, sort]);
+  const toggleOpen = (col: string) => setOpenCol((c) => (c === col ? null : col));
+  const sortFor = (key: "name" | "parent" | "createdAt") => (dir: "asc" | "desc") => { setSort({ key, dir }); setOpenCol(null); };
 
   return <div className="space-y-4">
     <div className="print:hidden inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900" aria-label="신청 관리 보기">
@@ -1702,29 +1777,37 @@ function ApplicationsView({
               />
             </th>
             <th className="px-4 py-3">
-              <button type="button" onClick={() => setSortAsc((v) => !v)} className="inline-flex items-center gap-1 font-bold hover:text-gray-700 dark:hover:text-gray-200">학생 <span className="text-[11px]">{sortAsc ? "▲" : "▼"}</span></button>
+              <ColHeader title="학생" open={openCol === "name"} onToggleOpen={() => toggleOpen("name")} active={sort.key === "name"}
+                sortDir={sort.key === "name" ? sort.dir : null} onSort={sortFor("name")} />
             </th>
-            <th className="px-4 py-3">구분
-              <select aria-label="구분 필터" value={fType} onChange={(e) => setFType(e.target.value)} className={thFilterCls}>
-                <option value="ALL">전체</option><option value="EXISTING">기존강생</option><option value="NEW">신규가입</option>
-              </select>
+            <th className="px-4 py-3">
+              <ColHeader title="구분" open={openCol === "type"} onToggleOpen={() => toggleOpen("type")} active={exType.size > 0}
+                options={typeOptions} excluded={exType} onToggleValue={toggleEx(setExType)} onAll={() => setExType(new Set())} onNone={() => setExType(new Set(typeOptions))} />
             </th>
-            <th className="px-4 py-3">수업
-              <select aria-label="수업 필터" value={fBase} onChange={(e) => setFBase(e.target.value)} className={thFilterCls}>
-                <option value="ALL">전체</option>
-                {baseOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
+            <th className="px-4 py-3">
+              <ColHeader title="수업" open={openCol === "base"} onToggleOpen={() => toggleOpen("base")} active={exBase.size > 0}
+                options={baseOptions} excluded={exBase} onToggleValue={toggleEx(setExBase)} onAll={() => setExBase(new Set())} onNone={() => setExBase(new Set(baseOptions))} />
             </th>
-            <th className="px-4 py-3">횟수
-              <select aria-label="횟수 필터" value={fFreq} onChange={(e) => setFFreq(e.target.value)} className={thFilterCls}>
-                <option value="ALL">전체</option>
-                {freqOptions.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
+            <th className="px-4 py-3">
+              <ColHeader title="횟수" open={openCol === "freq"} onToggleOpen={() => toggleOpen("freq")} active={exFreq.size > 0}
+                options={freqOptions} excluded={exFreq} onToggleValue={toggleEx(setExFreq)} onAll={() => setExFreq(new Set())} onNone={() => setExFreq(new Set(freqOptions))} />
             </th>
-            <th className="px-4 py-3">학부모</th>
-            <th className="px-4 py-3">결제</th>
-            <th className="px-4 py-3">셔틀</th>
-            <th className="px-4 py-3">접수일</th>
+            <th className="px-4 py-3">
+              <ColHeader title="학부모" open={openCol === "parent"} onToggleOpen={() => toggleOpen("parent")} active={sort.key === "parent"}
+                sortDir={sort.key === "parent" ? sort.dir : null} onSort={sortFor("parent")} />
+            </th>
+            <th className="px-4 py-3">
+              <ColHeader title="결제" open={openCol === "pay"} onToggleOpen={() => toggleOpen("pay")} active={exPay.size > 0}
+                options={payOptions} excluded={exPay} onToggleValue={toggleEx(setExPay)} onAll={() => setExPay(new Set())} onNone={() => setExPay(new Set(payOptions))} />
+            </th>
+            <th className="px-4 py-3">
+              <ColHeader title="셔틀" open={openCol === "shuttle"} onToggleOpen={() => toggleOpen("shuttle")} active={exShuttle.size > 0} alignRight
+                options={shuttleOptions} excluded={exShuttle} onToggleValue={toggleEx(setExShuttle)} onAll={() => setExShuttle(new Set())} onNone={() => setExShuttle(new Set(shuttleOptions))} />
+            </th>
+            <th className="px-4 py-3">
+              <ColHeader title="접수일" open={openCol === "createdAt"} onToggleOpen={() => toggleOpen("createdAt")} active={sort.key === "createdAt"} alignRight
+                sortDir={sort.key === "createdAt" ? sort.dir : null} onSort={sortFor("createdAt")} />
+            </th>
             <th className="px-4 py-3"><span className="sr-only">상세</span></th>
           </tr>
         </thead>
@@ -1752,7 +1835,7 @@ function ApplicationsView({
                   {selectedCount > 0 && <p className="mt-1 text-xs font-black text-[var(--brand-accent)]">{selectedCount}/{itemIds.length}개 선택</p>}
                 </td>
                 <td className="px-4 py-4 align-top">
-                  <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-black ${application.applicantType === "NEW" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200" : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200"}`}>{application.applicantType === "NEW" ? "신규가입" : application.applicantType === "EXISTING" ? "기존강생" : "미확인"}</span>
+                  <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-black ${application.applicantType === "NEW" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200" : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200"}`}>{application.applicantType === "NEW" ? "신규" : application.applicantType === "EXISTING" ? "기존" : "-"}</span>
                 </td>
                 <td className="px-4 py-4 align-top">
                   <div className="space-y-0.5 font-bold">
@@ -1777,7 +1860,11 @@ function ApplicationsView({
                   <span className={badge(application.paymentStatus)}>{STATUS_LABEL[application.paymentStatus || ""] ?? application.paymentStatus ?? "청구 전"}</span>
                   <p className="mt-1 text-xs">{(application.totalAmount ?? 0).toLocaleString()}원</p>
                 </td>
-                <td className="px-4 py-4 align-top">{application.shuttleNeeded ? <span className={badge(application.shuttleStatus || "UNASSIGNED")}>{STATUS_LABEL[application.shuttleStatus || "UNASSIGNED"]}</span> : "미이용"}</td>
+                <td className="px-4 py-4 align-top">
+                  {application.shuttleNeeded
+                    ? <span className="inline-flex min-h-7 items-center rounded-full bg-green-100 px-2.5 text-xs font-black text-green-700 dark:bg-green-900/40 dark:text-green-200">🚌 이용</span>
+                    : <span className="inline-flex min-h-7 items-center rounded-full bg-gray-100 px-2.5 text-xs font-black text-gray-500 dark:bg-gray-700 dark:text-gray-300">미이용</span>}
+                </td>
                 <td className="px-4 py-4 align-top text-gray-500">{formatDate(application.createdAt)}</td>
                 <td className="px-4 py-4 align-top"><button type="button" onClick={() => onSelect(application)} className="inline-flex min-h-10 items-center rounded-lg border border-gray-200 px-3 font-bold dark:border-gray-700">상세</button></td>
               </tr>

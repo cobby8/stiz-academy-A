@@ -92,8 +92,20 @@ export default async function ShuttleRunPage({
 
   const [pickupBoarding, dropoffBoarding] = await Promise.all([getBoardingMap(effectiveDate, "PICKUP"), getBoardingMap(effectiveDate, "DROPOFF")]);
 
+  // ⚠️ 임시 디버그 — 확인 후 삭제
+  const debugInfo = {
+    effectiveDate,
+    today,
+    pickupCount: Object.keys(pickupBoarding).length,
+    dropoffCount: Object.keys(dropoffBoarding).length,
+    pickupKeys: Object.keys(pickupBoarding),
+  };
+
   return (
     <div className="min-h-screen bg-white py-2" style={{ colorScheme: "light" }}>
+      <pre style={{ background: "#fee", padding: "8px", fontSize: "11px", wordBreak: "break-all", margin: "0 12px 8px" }}>
+        {JSON.stringify(debugInfo, null, 2)}
+      </pre>
       <DriverRunClient
         token={token}
         date={effectiveDate}

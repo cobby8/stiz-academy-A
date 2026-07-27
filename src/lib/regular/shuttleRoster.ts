@@ -149,3 +149,27 @@ export async function getRegularShuttleRiders(
   const raw = rows.map(toRawRider);
   return buildRegularShuttleRoster(raw, opts.direction, dayOfWeek);
 }
+
+/**
+ * 정규 셔틀 이용자가 존재하는 요일 목록(Class.dayOfWeek)을 돌려준다(요일 네비용).
+ * 판정 기준은 getRegularShuttleRiders 와 동일(ACTIVE Enrollment × 셔틀 이용자 신청서).
+ * 방향 무관하게 "그 요일에 셔틀 학생이 하나라도 있는가"만 본다(등원/하원 둘 다 이 목록 안에서 관리).
+ */
+export async function getRegularShuttleWeekdays(): Promise<string[]> {
+  const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+    `SELECT DISTINCT c."dayOfWeek" AS "dayOfWeek"
+       FROM "Enrollment" e
+       JOIN "Class" c   ON c.id = e."classId"
+       JOIN "Student" s ON s.id = e."studentId"
+       WHERE e.status = 'ACTIVE'
+         AND EXISTS (
+           SELECT 1 FROM "EnrollmentApplication" ea
+            WHERE ea."convertedStudentId" = s.id
+              AND (ea."shuttleNeeded" = true OR ea."shuttlePickupLatitude" IS NOT NULL)
+         )`,
+  );
+  // 월(Mon)~일(Sun) 순으로 정렬해 돌려준다(요일 탭 표시 순서).
+  const ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const present = new Set(rows.map((r) => String(r.dayOfWeek)));
+  return ORDER.filter((d) => present.has(d));
+}

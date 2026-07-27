@@ -255,23 +255,42 @@ export async function getDispatchForView(date: string | null, direction: Dispatc
   return allowTmap ? computeDispatch({ direction, date: resolvedDate, localOnly: false }) : base;
 }
 
-// 인증 없이 노선을 계산한다. 관리자 경로는 suggestDispatch(requireAdmin)로만 부르고,
-// 기사님 전용 링크는 유효 토큰을 확인한 뒤 이 함수를 직접 부른다(토큰이 관리자 인증을 대신함).
-export async function computeDispatch(opts: { direction: DispatchDirection; date?: string | null; localOnly?: boolean }): Promise<DispatchSuggestion> {
-  const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
-  const localOnly = opts.localOnly === true; // true면 T맵 미호출(직선 추정) — 조회·기사님 화면에서 제공량 절약
-  const { academy, depot, hub } = await getSettings();
+// 배차 코어가 입력으로 받는 "라이더 1명"의 최소 계약(shape).
+// 방학특강 ShuttleRosterRider 와 정규 RegularShuttleRider(어댑터 경유)가 모두 이 형태를 만족한다.
+// 코어는 이 필드들만 읽으므로, 명단 소스가 무엇이든(방학특강/정규) 같은 엔진을 태울 수 있다.
+export type DispatchRiderInput = {
+  studentName: string;
+  childGrade: string | null;
+  parentPhone: string | null;
+  childPhone: string | null;
+  rosterId: string | null;          // 확정본 행 id(정규는 없음 → null)
+  shuttleRequestId: string;         // 정차-학생 식별 키(정규는 studentId 를 대입)
+  applicationId: string | null;     // 학생 상세 모달 키
+  placeLabel: string;               // 승·하차 위치 라벨
+  place: { latitude: number | null; longitude: number | null; source: string | null };
+};
 
-  // ⚠️ 태울 학생은 게이트웨이 한 곳으로만 읽는다.
-  // 여기서 SQL을 새로 쓸 때마다 취소자·폐강 반 필터가 빠지는 사고가 반복됐다(5회).
-  // 운행일 후보와 그날 명단을 한 번에 받아 오므로 이 파일에는 대상자 쿼리가 아예 없다.
-  const plan = await getConfirmedShuttleRosterForDate(opts.date ?? null, direction);
-  const availableDates = plan.availableDates.map((x) => {
-    const [, mm, dd] = x.date.split("-");
-    return { date: x.date, label: `${Number(mm)}/${Number(dd)} (${DOW_KO[x.dow]})` };
-  });
-  const date = plan.date;
-  const dow = date ? (availableDates.find((x) => x.date === date)?.label.match(/\((.)\)/)?.[1] ?? null) : null;
+/**
+ * 배차 코어(명단 → 차량·정차·경로·시각) — 명단 소스에 독립적인 순수 재사용부.
+ *
+ * 방학특강(computeDispatch)·정규(computeRegularDispatch)가 **명단만 각자 준비**해 이 함수에 태운다.
+ * 차량(ShuttleVehicle)·학원/차고지/거점 좌표(AcademySettings)·정차 묶기·NN 정렬·정원 배차·
+ * planRun(T맵 실도로/직선 폴백)·ETA 계산은 전부 여기서 공유한다(회귀 방지: 기존 seasonal 로직 그대로 이동).
+ *
+ * date 는 "운행이 성립하는 날/요일"의 식별자다. null 이면 스켈레톤(base)만 돌려준다(종전 동작 유지).
+ */
+export async function buildDispatchFromRiders(input: {
+  direction: DispatchDirection;
+  date: string | null;
+  dow: string | null;
+  availableDates: { date: string; label: string }[];
+  classStart: string | null;
+  classEnd: string | null;
+  riders: DispatchRiderInput[];
+  localOnly: boolean;
+}): Promise<DispatchSuggestion> {
+  const { direction, date, dow, availableDates, localOnly } = input;
+  const { academy, depot, hub } = await getSettings();
 
   const vehRows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT name, "plateNumber" AS plate, capacity FROM "ShuttleVehicle" WHERE "isActive" = true ORDER BY name ASC`,
@@ -285,12 +304,12 @@ export async function computeDispatch(opts: { direction: DispatchDirection; date
   };
   if (!date) return base;
 
-  // 그날 태울 사람. 방향에 맞는 위치(하원=등원 동일 옵션 포함)는 게이트웨이가 이미 골라 준다.
-  const riders = plan.riders;
+  // 방향에 맞는 위치(하원=등원 동일 옵션 포함)는 명단 준비 단계에서 이미 골라져 place 로 들어온다.
+  const riders = input.riders;
   if (riders.length === 0) return base;
 
-  const classStart = plan.classStart;
-  const classEnd = plan.classEnd;
+  const classStart = input.classStart;
+  const classEnd = input.classEnd;
 
   const unassigned: { name: string; label: string | null }[] = [];
   const stopMap = new Map<string, Stop>();
@@ -345,6 +364,32 @@ export async function computeDispatch(opts: { direction: DispatchDirection; date
     totalRiders: riders.length - unassigned.length, vehicleFleet,
     routingProvider: runs.some((r) => r.provider === "TMAP") ? "TMAP" : "LOCAL",
   };
+}
+
+// 인증 없이 노선을 계산한다. 관리자 경로는 suggestDispatch(requireAdmin)로만 부르고,
+// 기사님 전용 링크는 유효 토큰을 확인한 뒤 이 함수를 직접 부른다(토큰이 관리자 인증을 대신함).
+export async function computeDispatch(opts: { direction: DispatchDirection; date?: string | null; localOnly?: boolean }): Promise<DispatchSuggestion> {
+  const direction = opts.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
+  const localOnly = opts.localOnly === true; // true면 T맵 미호출(직선 추정) — 조회·기사님 화면에서 제공량 절약
+
+  // ⚠️ 태울 학생은 게이트웨이 한 곳으로만 읽는다.
+  // 여기서 SQL을 새로 쓸 때마다 취소자·폐강 반 필터가 빠지는 사고가 반복됐다(5회).
+  // 운행일 후보와 그날 명단을 한 번에 받아 오므로 이 파일에는 대상자 쿼리가 아예 없다.
+  const plan = await getConfirmedShuttleRosterForDate(opts.date ?? null, direction);
+  const availableDates = plan.availableDates.map((x) => {
+    const [, mm, dd] = x.date.split("-");
+    return { date: x.date, label: `${Number(mm)}/${Number(dd)} (${DOW_KO[x.dow]})` };
+  });
+  const date = plan.date;
+  const dow = date ? (availableDates.find((x) => x.date === date)?.label.match(/\((.)\)/)?.[1] ?? null) : null;
+
+  // 명단만 방학특강 게이트웨이에서 준비하고, 나머지(차량·좌표·경로·시각)는 공유 코어에 위임한다.
+  return buildDispatchFromRiders({
+    direction, date, dow, availableDates,
+    classStart: plan.classStart, classEnd: plan.classEnd,
+    riders: plan.riders, // ShuttleRosterRider 는 DispatchRiderInput 계약을 이미 만족한다(place.source 포함).
+    localOnly,
+  });
 }
 
 /**

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getSavedDispatchRoute, saveDispatchRoute } from "@/lib/seasonal/dispatchRoute";
+import { getSavedDispatchRoute, saveDispatchRoute, deleteDispatchRoute } from "@/lib/seasonal/dispatchRoute";
 
 export const dynamic = "force-dynamic";
 
@@ -38,5 +38,22 @@ export async function POST(request: Request) {
     const msg = String((e as { message?: string })?.message ?? "");
     const status = /원장|권한|로그인|인증|Unauthorized|Forbidden/i.test(msg) ? 403 : 500;
     return NextResponse.json({ error: status === 403 ? msg : "노선을 저장하지 못했습니다." }, { status });
+  }
+}
+
+// 저장 노선 삭제 — 그 날짜·방향의 저장본을 지운다. 이후엔 자동 제안이 기준이 된다.
+export async function DELETE(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const date = url.searchParams.get("date");
+    const direction = url.searchParams.get("direction") ?? "PICKUP";
+    if (!date) return NextResponse.json({ error: "날짜가 필요합니다." }, { status: 400 });
+    const { deleted } = await deleteDispatchRoute(date, direction);
+    return NextResponse.json({ ok: true, deleted });
+  } catch (e) {
+    console.error("[dispatch/saved DELETE]", e);
+    const msg = String((e as { message?: string })?.message ?? "");
+    const status = /원장|권한|로그인|인증|Unauthorized|Forbidden/i.test(msg) ? 403 : 500;
+    return NextResponse.json({ error: status === 403 ? msg : "노선을 삭제하지 못했습니다." }, { status });
   }
 }

@@ -51,6 +51,7 @@ type SeasonalClass = {
 };
 
 type ShuttleRequest = {
+  id?: string | null;
   pickupLocation?: string | null;
   pickupAddress?: string | null;
   pickupRoadAddress?: string | null;
@@ -1393,7 +1394,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
         <SeasonsView seasons={data.seasons} selected={selectedSeason} coaches={coachOptions} assigningInstructorClassId={assigningInstructorClassId} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onOpenRoster={(klass, weekday) => openRosterForClass(klass, { weekday })} onOpenTodayRoster={(klass) => openRosterForClass(klass, { date: todayDateInputValue() })} onAssignInstructor={assignClassInstructor} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} pagination={applicationsPagination} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} appTab={appTab} onAppTab={setAppTab} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onPage={(page) => { setSelectedItemIds([]); void load({ includeApplications: true, page }); }} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
-      {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} />}
+      {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} onShuttleChanged={() => { void load({ includeApplications: true }); }} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
       {modal === "class" && selectedSeason && <ClassForm seasonId={selectedSeason.id} initial={editingClass} coaches={coachOptions} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingClass ? "PATCH" : "POST", editingClass ? { resource: "offering", id: editingClass.id, data: payload } : { resource: "offering", data: { ...payload, seasonId: selectedSeason.id } }, editingClass ? "특강 반을 수정했습니다." : "특강 반을 추가했습니다."); setModal(null); }} />}
     </main>
@@ -2022,6 +2023,7 @@ function ApplicationDrawer({
   onUpdateApplicationStatus,
   updatingApplicationStatus,
   convertingItemId,
+  onShuttleChanged,
 }: {
   application: Application;
   seasons: Season[];
@@ -2040,6 +2042,7 @@ function ApplicationDrawer({
   onUpdateApplicationStatus: (applicationId: string, status: ApplicationCloseStatus) => Promise<void>;
   updatingApplicationStatus: string;
   convertingItemId: string;
+  onShuttleChanged?: () => void;
 }) {
   const totalAmount = application.totalAmount ?? application.items.reduce((sum, item) => sum + (item.amount ?? 0), 0);
   const parentPhoneHref = application.parentPhone ? `tel:${application.parentPhone}` : undefined;
@@ -2144,6 +2147,7 @@ function ApplicationDrawer({
               onRetryNotification={onRetryNotification}
               sendingNotificationKey={sendingNotificationKey}
               converting={convertingItemId === item.id}
+              onShuttleChanged={onShuttleChanged}
             />
           ))}
         </div>
@@ -2324,6 +2328,7 @@ function ApplicationItemCard({
   onRetryNotification,
   sendingNotificationKey,
   converting,
+  onShuttleChanged,
 }: {
   application: Application;
   offerings: SeasonalClass[];
@@ -2338,6 +2343,7 @@ function ApplicationItemCard({
   onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>;
   sendingNotificationKey: string;
   converting: boolean;
+  onShuttleChanged?: () => void;
 }) {
   const quickStatuses: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
   const statusNotification = itemNotification(item.status);
@@ -2373,7 +2379,7 @@ function ApplicationItemCard({
     {statusNotification && <NotificationActionRow label={statusNotification.label} summary={currentNotificationSummary} sending={sendingNotificationKey === `item:${item.id}:${statusNotification.trigger}`} onSend={() => void onRetryNotification("item", item.id, statusNotification.trigger)} />}
     <ConversionReadinessBox item={item} onConvertItem={onConvertItem} converting={converting} />
     {item.invoice && <InvoiceActionBox item={item} onCopyInvoiceLink={onCopyInvoiceLink} onRetryNotification={onRetryNotification} sendingNotificationKey={sendingNotificationKey} />}
-    {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} />}
+    {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} onChanged={onShuttleChanged} />}
   </article>;
 }
 
@@ -2625,22 +2631,50 @@ function ShuttleLocationCard({ point }: { point: ShuttlePoint }) {
   </article>;
 }
 
-function ShuttleRequestBox({ request }: { request: ShuttleRequest }) {
-  return <div className="mt-4 min-w-0 rounded-xl bg-blue-50 p-3 text-sm dark:bg-blue-950/30">
+function ShuttleRequestBox({ request, onChanged }: { request: ShuttleRequest; onChanged?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const cancelled = request.status === "CANCELLED";
+  async function toggleRide(ride: boolean) {
+    if (busy || !request.id) return;
+    if (!ride && typeof window !== "undefined" && !window.confirm("이 학생의 셔틀 신청을 취소(미이용)할까요? 배차 명단에서 빠집니다.")) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch("/api/admin/seasonal/shuttle-roster", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: request.id, patch: { ride } }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "저장 실패");
+      onChanged?.();
+    } catch (e: any) { setErr(e?.message || "셔틀 상태를 바꾸지 못했습니다."); }
+    finally { setBusy(false); }
+  }
+  // 취소(미이용) 상태면 회색 톤 + 상세 카드를 접어, 실제로 신청이 빠졌음을 한눈에 알 수 있게 한다.
+  return <div className={`mt-4 min-w-0 rounded-xl p-3 text-sm ${cancelled ? "bg-gray-100 dark:bg-gray-800/50" : "bg-blue-50 dark:bg-blue-950/30"}`}>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h4 className="font-black text-blue-900 dark:text-blue-100">셔틀 요청</h4>
-      <span className={badge(request.status || "REQUESTED")}>{STATUS_LABEL[request.status || "REQUESTED"]}</span>
+      <h4 className={`font-black ${cancelled ? "text-gray-500 line-through dark:text-gray-400" : "text-blue-900 dark:text-blue-100"}`}>셔틀 요청</h4>
+      <div className="flex items-center gap-2">
+        <span className={badge(request.status || "REQUESTED")}>{STATUS_LABEL[request.status || "REQUESTED"]}</span>
+        {cancelled
+          ? <button type="button" disabled={busy} onClick={() => toggleRide(true)} className="rounded-lg border border-green-300 px-2.5 py-1 text-[11px] font-black text-green-700 disabled:opacity-50">{busy ? "처리 중…" : "🚌 셔틀 이용으로 변경"}</button>
+          : <button type="button" disabled={busy} onClick={() => toggleRide(false)} className="rounded-lg border border-red-300 px-2.5 py-1 text-[11px] font-black text-red-600 disabled:opacity-50">{busy ? "처리 중…" : "🚫 셔틀 신청 취소"}</button>}
+      </div>
     </div>
-    <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
-      <ShuttleLocationCard point={shuttlePoint(request, "pickup")} />
-      <ShuttleLocationCard point={shuttlePoint(request, "dropoff")} />
-    </div>
-    <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-      <Info label="희망 시간">{request.pickupTime || "미입력"}</Info>
-      <Info label="배정">{request.assignedRouteId || request.assignedStopId ? [request.assignedRouteId, request.assignedStopId].filter(Boolean).join(" · ") : "미배정"}</Info>
-      {request.locationConsentVersion && <Info label="위치정보 동의">버전 {request.locationConsentVersion}</Info>}
-    </dl>
-    {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
+    {err && <p className="mt-1 text-[11px] font-bold text-red-600">⚠ {err}</p>}
+    {cancelled ? (
+      <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">🚫 셔틀 미이용 처리됨 — 배차 명단에서 제외되었습니다. 다시 태우려면 위 버튼을 누르세요.</p>
+    ) : <>
+      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
+        <ShuttleLocationCard point={shuttlePoint(request, "pickup")} />
+        <ShuttleLocationCard point={shuttlePoint(request, "dropoff")} />
+      </div>
+      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Info label="희망 시간">{request.pickupTime || "미입력"}</Info>
+        <Info label="배정">{request.assignedRouteId || request.assignedStopId ? [request.assignedRouteId, request.assignedStopId].filter(Boolean).join(" · ") : "미배정"}</Info>
+        {request.locationConsentVersion && <Info label="위치정보 동의">버전 {request.locationConsentVersion}</Info>}
+      </dl>
+      {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
+    </>}
   </div>;
 }
 

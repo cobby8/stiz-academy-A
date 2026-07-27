@@ -645,6 +645,41 @@ export async function removeConfirmedShuttleRosterRow(rosterId: string, reason?:
   return { ok: true, changed };
 }
 
+/**
+ * 확정본을 shuttleRequestId(원본 신청서 id)로 빼거나 되돌린다.
+ *
+ * 왜 필요한가: 신청관리 드로어는 확정본 rosterId를 모른 채 원본 신청서(shuttleRequest)만 들고 있다.
+ * 확정된 학생을 그 화면에서 "셔틀 신청 취소"하려면 requestId → 확정본 행을 서버가 직접 찾아 처리해야 한다.
+ *
+ * @param ride false = 명단에서 제외(soft remove), true = 복구.
+ * @returns changed = 실제로 바뀐 행 수(0이면 확정본에 해당 학생이 없었다는 뜻).
+ */
+export async function setConfirmedShuttleRideByRequestId(shuttleRequestId: string, ride: boolean) {
+  await requireRosterOwner();
+  if (!shuttleRequestId) throw new Error("shuttleRequestId required");
+  const changed = ride
+    ? await prisma.$executeRawUnsafe(
+        `UPDATE "SeasonalShuttleRoster"
+            SET "removedAt" = NULL, "removedReason" = NULL, "updatedAt" = now()
+          WHERE "shuttleRequestId" = $1 AND "removedAt" IS NOT NULL`,
+        shuttleRequestId,
+      )
+    : await prisma.$executeRawUnsafe(
+        `UPDATE "SeasonalShuttleRoster"
+            SET "removedAt" = now(), "removedReason" = '신청관리에서 취소', "updatedAt" = now()
+          WHERE "shuttleRequestId" = $1 AND "removedAt" IS NULL`,
+        shuttleRequestId,
+      );
+  // 원본 신청서 status도 함께 맞춰 화면(신청관리 드로어)이 취소 상태를 일관되게 보이도록 한다.
+  //   드라이버 명단은 확정본 removedAt이 진실이므로, status 변경은 UI 신호용이다.
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SpecialProgramShuttleRequest" SET "status" = $2, "updatedAt" = now() WHERE id = $1`,
+    shuttleRequestId,
+    ride ? "REQUESTED" : "CANCELLED",
+  );
+  return { ok: true, changed };
+}
+
 /** 되돌리기(제외 취소). 원장이 실수로 뺐을 때 복구용. */
 export async function restoreConfirmedShuttleRosterRow(rosterId: string) {
   await requireRosterOwner();

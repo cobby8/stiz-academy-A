@@ -171,8 +171,11 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
       setSug((cur) => ({ ...cur, date: forDate, vehicles: fixed, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd, added: saved.added ?? [], locationChanged: [] }));
       setSavedAt(saved.savedAt); setLoadedFromSaved(true); setDepartPinned({}); setErr(null); setSaveMsg(null);
       setRelocatedCount(changes.filter((c) => !c.isHub && c.lat != null && c.lng != null).length);
-      // 좌표가 바뀐 차량만 T맵 경로 재계산 예약(순서·배정은 그대로).
-      reroute.forEach((vi) => scheduleReroute(vi));
+      // 좌표가 바뀐 차량 + reconcile로 경로(path)가 무효화된 차량(취소 학생 등)을 T맵 재계산 예약.
+      // (path가 비면 지도는 직선으로 그려지므로, 재계산으로 실도로 경로를 복구한다.)
+      const need = new Set<number>(reroute);
+      fixed.forEach((v, vi) => { if (!v.path && v.stops.length > 0) need.add(vi); });
+      need.forEach((vi) => scheduleReroute(vi));
       return true;
     } catch { return false; }
   }
@@ -201,6 +204,21 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
       if (!r.ok) throw new Error(j?.error || "저장 실패");
       setSavedAt(j.savedAt ?? null); setLoadedFromSaved(true); setSaveMsg("저장했습니다"); setRelocatedCount(0);
     } catch (e: any) { setErr(e?.message || "노선을 저장하지 못했습니다."); }
+    finally { setSaving(false); }
+  }
+
+  // 저장된 노선 삭제 — 그 요일/방향 저장본을 지우고 자동 제안으로 되돌린다.
+  async function deleteRoute() {
+    if (saving || !sug.date) return;
+    if (typeof window !== "undefined" && !window.confirm("이 요일의 저장된 노선을 삭제할까요? 삭제하면 자동 제안이 다시 기준이 됩니다.")) return;
+    setSaving(true); setSaveMsg(null); setErr(null);
+    try {
+      const r = await fetch(`${apiBase}/saved?date=${encodeURIComponent(sug.date)}&direction=${direction}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "삭제 실패");
+      setSavedAt(null); setLoadedFromSaved(false); setSaveMsg("저장 노선을 삭제했습니다");
+      await generate(sug.date ?? date); // 자동 제안으로 되돌림
+    } catch (e: any) { setErr(e?.message || "노선을 삭제하지 못했습니다."); }
     finally { setSaving(false); }
   }
 
@@ -400,6 +418,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
         <div className="flex items-center gap-1.5 print:hidden">
           <button onClick={() => { setLoadedFromSaved(false); setSaveMsg(null); void generate(date); }} disabled={loading} className="rounded-lg bg-brand-navy-900 px-2.5 py-1.5 text-[12px] font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{loading ? "계산 중…" : "⚡ 자동 제안"}</button>
           <button onClick={saveRoute} disabled={saving || sug.vehicles.length === 0} className="rounded-lg bg-brand-orange-500 px-2.5 py-1.5 text-[12px] font-black text-white disabled:opacity-50">{saving ? "저장 중…" : "💾 저장"}</button>
+          {loadedFromSaved && <button onClick={deleteRoute} disabled={saving} className="rounded-lg border border-red-300 px-2.5 py-1.5 text-[12px] font-black text-red-600 disabled:opacity-50 dark:border-red-500/40 dark:text-red-300">🗑 노선 삭제</button>}
         </div>
       </div>
 

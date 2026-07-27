@@ -7,6 +7,7 @@ import {
   restoreConfirmedShuttleRosterRow,
   shuttleRosterConfirmationInfo,
   isShuttleRequestConfirmed,
+  setConfirmedShuttleRideByRequestId,
   type ConfirmedRosterPatch,
   type ConfirmedRosterPin,
 } from "@/lib/seasonal/shuttleRoster";
@@ -118,6 +119,12 @@ export async function PATCH(request: Request) {
     //   원본 신청서가 수정되고 화면엔 "저장됨"이 뜨지만 기사님 명단(확정본)은 그대로다.
     //   = 아이가 옛 주소에서 기다린다. 그래서 원본을 고치기 직전에 서버가 직접 확인한다.
     if (await isShuttleRequestConfirmed(body.requestId)) {
+      // 확정본 학생: ride 토글(취소/복구)은 확정본 행을 직접 손대 처리한다.
+      //   그 외 필드 수정은 확정 후엔 확정본 편집기(rosterId)로만 허용 → 409로 안내.
+      if (body.patch.ride !== undefined) {
+        await setConfirmedShuttleRideByRequestId(body.requestId, body.patch.ride === true);
+        return NextResponse.json({ ok: true });
+      }
       return NextResponse.json(
         { error: "명단이 확정되었습니다. 새로고침 후 다시 시도해주세요.", confirmed: true },
         { status: 409 },

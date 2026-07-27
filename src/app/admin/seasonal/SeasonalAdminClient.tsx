@@ -2649,27 +2649,32 @@ function ShuttleRequestBox({ request, onChanged }: { request: ShuttleRequest; on
     } catch (e: any) { setErr(e?.message || "셔틀 상태를 바꾸지 못했습니다."); }
     finally { setBusy(false); }
   }
-  return <div className="mt-4 min-w-0 rounded-xl bg-blue-50 p-3 text-sm dark:bg-blue-950/30">
+  // 취소(미이용) 상태면 회색 톤 + 상세 카드를 접어, 실제로 신청이 빠졌음을 한눈에 알 수 있게 한다.
+  return <div className={`mt-4 min-w-0 rounded-xl p-3 text-sm ${cancelled ? "bg-gray-100 dark:bg-gray-800/50" : "bg-blue-50 dark:bg-blue-950/30"}`}>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h4 className="font-black text-blue-900 dark:text-blue-100">셔틀 요청</h4>
+      <h4 className={`font-black ${cancelled ? "text-gray-500 line-through dark:text-gray-400" : "text-blue-900 dark:text-blue-100"}`}>셔틀 요청</h4>
       <div className="flex items-center gap-2">
         <span className={badge(request.status || "REQUESTED")}>{STATUS_LABEL[request.status || "REQUESTED"]}</span>
         {cancelled
-          ? <button type="button" disabled={busy} onClick={() => toggleRide(true)} className="rounded-lg border border-green-300 px-2.5 py-1 text-[11px] font-black text-green-700 disabled:opacity-50">🚌 셔틀 이용으로 변경</button>
-          : <button type="button" disabled={busy} onClick={() => toggleRide(false)} className="rounded-lg border border-red-300 px-2.5 py-1 text-[11px] font-black text-red-600 disabled:opacity-50">🚫 셔틀 신청 취소</button>}
+          ? <button type="button" disabled={busy} onClick={() => toggleRide(true)} className="rounded-lg border border-green-300 px-2.5 py-1 text-[11px] font-black text-green-700 disabled:opacity-50">{busy ? "처리 중…" : "🚌 셔틀 이용으로 변경"}</button>
+          : <button type="button" disabled={busy} onClick={() => toggleRide(false)} className="rounded-lg border border-red-300 px-2.5 py-1 text-[11px] font-black text-red-600 disabled:opacity-50">{busy ? "처리 중…" : "🚫 셔틀 신청 취소"}</button>}
       </div>
     </div>
     {err && <p className="mt-1 text-[11px] font-bold text-red-600">⚠ {err}</p>}
-    <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
-      <ShuttleLocationCard point={shuttlePoint(request, "pickup")} />
-      <ShuttleLocationCard point={shuttlePoint(request, "dropoff")} />
-    </div>
-    <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-      <Info label="희망 시간">{request.pickupTime || "미입력"}</Info>
-      <Info label="배정">{request.assignedRouteId || request.assignedStopId ? [request.assignedRouteId, request.assignedStopId].filter(Boolean).join(" · ") : "미배정"}</Info>
-      {request.locationConsentVersion && <Info label="위치정보 동의">버전 {request.locationConsentVersion}</Info>}
-    </dl>
-    {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
+    {cancelled ? (
+      <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">🚫 셔틀 미이용 처리됨 — 배차 명단에서 제외되었습니다. 다시 태우려면 위 버튼을 누르세요.</p>
+    ) : <>
+      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
+        <ShuttleLocationCard point={shuttlePoint(request, "pickup")} />
+        <ShuttleLocationCard point={shuttlePoint(request, "dropoff")} />
+      </div>
+      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Info label="희망 시간">{request.pickupTime || "미입력"}</Info>
+        <Info label="배정">{request.assignedRouteId || request.assignedStopId ? [request.assignedRouteId, request.assignedStopId].filter(Boolean).join(" · ") : "미배정"}</Info>
+        {request.locationConsentVersion && <Info label="위치정보 동의">버전 {request.locationConsentVersion}</Info>}
+      </dl>
+      {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
+    </>}
   </div>;
 }
 

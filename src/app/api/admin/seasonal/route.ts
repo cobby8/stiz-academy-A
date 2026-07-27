@@ -10,7 +10,7 @@ import { issueParentAccountClaim } from "@/lib/parent-account-claim";
 import { randomUUID } from "node:crypto";
 import { expireStaleSmsDeliveries } from "@/lib/notification";
 import { getSeasonalAdminOverview } from "@/lib/seasonal/admin-overview";
-import { resyncEnrollmentDatesForApplicationSafe, syncEnrollmentDatesForItemSafe } from "@/lib/seasonal/enrollment-dates";
+import { resyncEnrollmentDatesForApplicationSafe, syncEnrollmentDatesForItemSafe, cancelEnrollmentDatesForItemSafe } from "@/lib/seasonal/enrollment-dates";
 import { resolveOfferingPrice, resolveShuttleFee, type ApplicantType } from "@/lib/seasonal/planning";
 import { syncSeasonSiblingDiscounts } from "@/lib/seasonal/sibling-discount-sync";
 import {
@@ -189,7 +189,12 @@ function seasonalApplicationWhere(params: URLSearchParams) {
   const where: Prisma.SpecialProgramApplicationWhereInput = {};
 
   if (seasonId) where.seasonId = seasonId;
-  if (status && status !== "ALL") {
+  // 취소자 탭 전용 값: ACTIVE = 취소 아닌 신청(진행), CANCELLED_ONLY = 완전 취소된 신청만.
+  if (status === "ACTIVE") {
+    where.status = { not: "CANCELLED" };
+  } else if (status === "CANCELLED_ONLY") {
+    where.status = "CANCELLED";
+  } else if (status && status !== "ALL") {
     const statusOr = [
       ...(APPLICATION_STATUSES.has(status) ? [{ status }] : []),
       ...(ITEM_STATUSES.has(status) ? [{ items: { some: { status } } }] : []),
@@ -1217,6 +1222,8 @@ export async function PATCH(request: NextRequest) {
           );
           // 승인 확정 후(트랜잭션 커밋 뒤) 날짜별 출석 슬롯을 채운다. 실패해도 승인은 유지된다.
           if (changed.item.status === "APPROVED") await syncEnrollmentDatesForItemSafe(itemId);
+          // 취소·반려 등 승인 해제 시 그 항목의 좌석을 소프트취소 → 출석부·명단에서 제거(출결 찍힌 좌석은 보존).
+          else if (changed.changed) await cancelEnrollmentDatesForItemSafe(itemId);
           const notification = await notifyItemStatus(changed);
           results.push({
             itemId,
@@ -1501,6 +1508,8 @@ export async function PATCH(request: NextRequest) {
       );
       // 승인 확정 후(트랜잭션 커밋 뒤) 날짜별 출석 슬롯을 채운다. 실패해도 승인은 유지된다.
       if (changed.item.status === "APPROVED") await syncEnrollmentDatesForItemSafe(id);
+      // 취소·반려 등 승인 해제 시 그 항목의 좌석을 소프트취소 → 출석부·명단에서 제거(출결 찍힌 좌석은 보존).
+      else if (changed.changed) await cancelEnrollmentDatesForItemSafe(id);
       const notification = await notifyItemStatus(changed);
       return NextResponse.json({
         item: changed.item,

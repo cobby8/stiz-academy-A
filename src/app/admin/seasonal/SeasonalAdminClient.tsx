@@ -727,6 +727,10 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  // 신청 관리 상단 탭: 진행 중(취소 제외) / 취소자(완전 취소만). 취소자를 본 목록에서 분리해 관리 편의를 높인다.
+  const [appTab, setAppTab] = useState<"active" | "cancelled">("active");
+  // 서버로 보낼 실제 상태값: 취소자 탭이면 CANCELLED_ONLY, 진행 탭이면 드롭다운(전체=ACTIVE로 취소 제외).
+  const effectiveStatus = appTab === "cancelled" ? "CANCELLED_ONLY" : (statusFilter === "ALL" ? "ACTIVE" : statusFilter);
   const [applicationsPagination, setApplicationsPagination] = useState<ApplicationsPagination>({
     page: 1,
     pageSize: 30,
@@ -776,7 +780,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       if (includeApplications) {
         const requestedPage = options?.page ?? applicationsPagination.page;
         const nextSearch = options?.search ?? search;
-        const nextStatus = options?.status ?? statusFilter;
+        const nextStatus = options?.status ?? effectiveStatus;
         applicationsQueryKey = `${requestedPage}|${nextSearch.trim()}|${nextStatus}`;
         params.set("includeApplications", "true");
         params.set("page", String(requestedPage));
@@ -868,7 +872,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "방학특강 정보를 불러오지 못했습니다.");
     } finally { setLoading(false); }
-  }, [applicationsPagination.page, applicationsPagination.pageSize, search, statusFilter]);
+  }, [applicationsPagination.page, applicationsPagination.pageSize, search, effectiveStatus]);
 
   useEffect(() => {
     if (initialData || requestedInitialLoad.current) return;
@@ -897,14 +901,14 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
 
   useEffect(() => {
     if (tab !== "applications" || !applicationsLoaded || applicationsMode !== "applications") return;
-    const queryKey = `1|${search.trim()}|${statusFilter}`;
+    const queryKey = `1|${search.trim()}|${effectiveStatus}`;
     if (applicationsQueryKeyRef.current === queryKey) return;
     const timer = window.setTimeout(() => {
       setSelectedItemIds([]);
-      void load({ includeApplications: true, page: 1, search, status: statusFilter });
+      void load({ includeApplications: true, page: 1, search, status: effectiveStatus });
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [applicationsLoaded, applicationsMode, load, search, statusFilter, tab]);
+  }, [applicationsLoaded, applicationsMode, load, search, effectiveStatus, tab]);
 
   useEffect(() => {
     if (tab !== "applications" || applicationsMode !== "roster") return;
@@ -1310,7 +1314,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
         <SeasonsView seasons={data.seasons} selected={selectedSeason} coaches={coachOptions} assigningInstructorClassId={assigningInstructorClassId} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onOpenRoster={(klass, weekday) => openRosterForClass(klass, { weekday })} onOpenTodayRoster={(klass) => openRosterForClass(klass, { date: todayDateInputValue() })} onAssignInstructor={assignClassInstructor} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
-      ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} pagination={applicationsPagination} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onPage={(page) => { setSelectedItemIds([]); void load({ includeApplications: true, page }); }} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
+      ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} pagination={applicationsPagination} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} appTab={appTab} onAppTab={setAppTab} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onPage={(page) => { setSelectedItemIds([]); void load({ includeApplications: true, page }); }} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
 
       {selectedApplication && <ApplicationDrawer application={selectedApplication} seasons={data.seasons} onClose={() => { setSelectedApplication(null); setItemUpdateErrors({}); }} onUpdateItem={updateItem} updatingItemIds={updatingItemIds} itemUpdateErrors={itemUpdateErrors} onSaveAssignment={saveAssignment} assigningKey={assigningKey} onConvertItem={convertItem} onCopyInvoiceLink={copyInvoiceLink} onRetryNotification={retryNotification} sendingNotificationKey={sendingNotificationKey} onResolveReview={resolveApplicationReview} resolvingReview={resolvingReview} onUpdateApplicationStatus={updateApplicationStatus} updatingApplicationStatus={updatingApplicationStatus} convertingItemId={convertingItemId} />}
       {modal === "season" && <SeasonForm initial={editingSeason} onClose={() => setModal(null)} onSubmit={async (payload) => { await mutate(editingSeason ? "PATCH" : "POST", editingSeason ? { resource: "season", id: editingSeason.id, data: payload } : { resource: "season", data: payload }, editingSeason ? "시즌 정보를 수정했습니다." : "새 시즌을 만들었습니다."); setModal(null); setTab("seasons"); }} />}
@@ -1543,6 +1547,8 @@ function ApplicationsView({
   bulkProcessingStatus,
   bulkConverting,
   mode,
+  appTab,
+  onAppTab,
   roster,
   rosterFilters,
   rosterLoading,
@@ -1571,6 +1577,8 @@ function ApplicationsView({
   bulkProcessingStatus: ItemStatus | "";
   bulkConverting: boolean;
   mode: ApplicationsMode;
+  appTab: "active" | "cancelled";
+  onAppTab: (tab: "active" | "cancelled") => void;
   roster: RosterPayload;
   rosterFilters: RosterFilters;
   rosterLoading: boolean;
@@ -1594,15 +1602,23 @@ function ApplicationsView({
       <button type="button" onClick={() => onMode("roster")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${mode === "roster" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>반별 명단</button>
     </div>
     {mode === "roster" ? <RosterView seasons={seasons} applications={allApplications} roster={roster} filters={rosterFilters} loading={rosterLoading} error={rosterError} onFilters={onRosterFilters} onSelect={onSelect} /> : <Panel title="신청 목록" icon="assignment_ind">
+    {/* 진행 중 / 취소자 탭 — 취소자를 본 목록에서 분리해 관리 편의를 높인다. */}
+    <div className="mb-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900" aria-label="신청 진행 상태 탭">
+      <button type="button" onClick={() => onAppTab("active")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${appTab === "active" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>진행 중</button>
+      <button type="button" onClick={() => onAppTab("cancelled")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${appTab === "cancelled" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" : "text-gray-500"}`}>취소자</button>
+    </div>
     <div className="mb-4 flex flex-col gap-3 sm:flex-row">
       <label className="relative flex-1">
         <Icon name="search" className="absolute left-3 top-3 text-xl text-gray-400" />
         <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="학생·학부모·전화번호 검색" className="min-h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-3 dark:border-gray-700 dark:bg-gray-800" />
       </label>
-      <select aria-label="신청 상태" value={status} onChange={(event) => onStatus(event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800">
-        <option value="ALL">전체 상태</option>
-        {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option value={value} key={value}>{STATUS_LABEL[value]}</option>)}
-      </select>
+      {/* 상태 세부 필터는 '진행 중' 탭에서만. 취소자 탭은 취소만 보이므로 필터 불필요. */}
+      {appTab === "active" && (
+        <select aria-label="신청 상태" value={status} onChange={(event) => onStatus(event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800">
+          <option value="ALL">전체 상태(취소 제외)</option>
+          {["PENDING","APPROVED","WAITLISTED","REJECTED"].map((value) => <option value={value} key={value}>{STATUS_LABEL[value]}</option>)}
+        </select>
+      )}
     </div>
 
     {selectedItemCount > 0 && (

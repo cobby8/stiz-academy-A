@@ -8,6 +8,7 @@ import {
   shuttleRosterConfirmationInfo,
   isShuttleRequestConfirmed,
   setConfirmedShuttleRideByRequestId,
+  placeStudentAtFreeHub,
   type ConfirmedRosterPatch,
   type ConfirmedRosterPin,
 } from "@/lib/seasonal/shuttleRoster";
@@ -91,6 +92,12 @@ export async function PATCH(request: Request) {
       rosterId?: string; requestId?: string; patch?: Record<string, unknown>;
       action?: string; reason?: string;
     } | null;
+
+    // 무료 거점 직접 배치 — rosterId/requestId 어느 쪽이든 받는다. 서버가 거점 설정을 읽어 처리한다.
+    if (body?.action === "placeAtHub") {
+      await placeStudentAtFreeHub({ rosterId: body.rosterId ?? null, requestId: body.requestId ?? null });
+      return NextResponse.json({ ok: true });
+    }
 
     // ── 확정 후: 확정본 행만 손댄다. 원본 신청서(SpecialProgramShuttleRequest)는 절대 건드리지 않는다. ──
     if (body?.rosterId) {

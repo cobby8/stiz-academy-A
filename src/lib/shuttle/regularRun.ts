@@ -60,6 +60,27 @@ export async function getRegularBoardingMap(date: string): Promise<Record<string
   } catch { return {}; }
 }
 
+/** 그 날 결석 신고된 학생 목록(이름 + 학부모 전화). 셔틀 명단과 이름·전화로 근사 매칭하는 데 쓴다.
+ *  status IN (REPORTED, CONFIRMED) 만 — CANCELLED 제외, REPORTED 도 즉시 제외(방학특강과 일관).
+ *  인증 없음(기사님 화면이 읽는다). 테이블/조회 실패 시 빈 배열(안전). */
+export async function getRegularAbsentPeople(date: string): Promise<{ name: string; phone: string | null }[]> {
+  const d = normDate(date);
+  if (!d) return [];
+  try {
+    const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+      `SELECT s."name" AS "name", u."phone" AS "phone"
+         FROM "RegularAbsence" ra
+         JOIN "Student" s ON s."id" = ra."studentId"
+         LEFT JOIN "User" u ON u."id" = s."parentId"
+        WHERE ra."date" = $1::date AND ra."status" IN ('REPORTED','CONFIRMED')`,
+      d,
+    );
+    return rows
+      .map((r) => ({ name: String(r.name ?? "").trim(), phone: (r.phone as string | null) ?? null }))
+      .filter((r) => r.name.length > 0);
+  } catch { return []; }
+}
+
 /** 정규 셔틀 탑승 상태 저장. status가 없으면(대기) 행을 지운다. 인증 없음 — 호출부가 유효 토큰을 먼저 확인한다. */
 export async function setRegularBoarding(input: {
   date: string; rowId: string; status: BoardingStatus | null; studentName?: string | null;

@@ -6,7 +6,7 @@ import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
 // 정규 셔틀 기사님 운행 화면 — 로그인 없이 토큰으로 접근. 오늘 요일의 수업별 등원·하원 타임라인.
 // ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼(dark: 미사용). 탭 한 번으로 즉시 저장.
 
-export type DriverRow = { rowId: string; name: string; parentPhone: string | null; studentPhone: string | null };
+export type DriverRow = { rowId: string; name: string; parentPhone: string | null; studentPhone: string | null; absent?: boolean };
 export type DriverStop = { label: string; arriveTime: string | null; lat: number | null; lng: number | null; direction: "BOARD" | "ALIGHT"; rows: DriverRow[] };
 export type DriverClass = { classTime: string; board: DriverStop[]; alight: DriverStop[] };
 type Status = "BOARDED" | "NOSHOW";
@@ -42,18 +42,28 @@ function StopList({ stops, token, boarding, setStatus }: {
                 const status = boarding[st.rowId] ?? null;
                 const parent = digits(st.parentPhone), child = digits(st.studentPhone);
                 return (
-                  <div key={st.rowId} className="flex items-center gap-2 rounded-xl bg-gray-50 p-2.5">
+                  <div key={st.rowId} className={`flex items-center gap-2 rounded-xl p-2.5 ${st.absent ? "bg-red-50 dark:bg-red-950/30" : "bg-gray-50"}`}>
                     <div className="min-w-0 flex-1">
-                      <span className="text-[19px] font-black text-gray-900">{st.name}</span>
-                      <div className="mt-1 flex gap-3">
-                        {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
-                        {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
-                      </div>
+                      <span className={`text-[19px] font-black ${st.absent ? "text-gray-400 line-through" : "text-gray-900"}`}>{st.name}</span>
+                      {st.absent && <span className="ml-2 rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white align-middle">오늘 결석</span>}
+                      {!st.absent && (
+                        <div className="mt-1 flex gap-3">
+                          {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
+                          {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
+                        </div>
+                      )}
                     </div>
-                    <button type="button" onClick={() => setStatus(st.rowId, st.name, "BOARDED")}
-                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
-                    <button type="button" onClick={() => setStatus(st.rowId, st.name, "NOSHOW")}
-                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                    {st.absent ? (
+                      // 결석 신고된 학생 — 태우지 않는다. 탑승 체크 버튼 대신 안내만 표시.
+                      <span className="rounded-xl border-2 border-red-300 px-3 py-2 text-[15px] font-black text-red-500">미{isPickup ? "탑승" : "하차"}(결석)</span>
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => setStatus(st.rowId, st.name, "BOARDED")}
+                          className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
+                        <button type="button" onClick={() => setStatus(st.rowId, st.name, "NOSHOW")}
+                          className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                      </>
+                    )}
                   </div>
                 );
               })}

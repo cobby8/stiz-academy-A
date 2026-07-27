@@ -207,6 +207,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="신청 관리" />
                             <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
                             <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
+                            <NavItem href="/admin/absence" active={pathname.startsWith("/admin/absence")} icon="🙅" label="정규 결석 신고" />
                             <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/청구" />
                             <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal") && !isShuttlePath(pathname)} icon="🏀" label="방학특강" />
                             <NavItem href="/admin/seasonal/dispatch" active={isShuttlePath(pathname)} icon="🚌" label="셔틀 관리" />

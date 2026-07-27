@@ -2253,6 +2253,23 @@ model SeasonalDispatchRoute {
   @@unique([serviceDate, direction])
 }
 
+// 정규 배차 "저장된 노선" — 방학특강 SeasonalDispatchRoute의 요일판.
+// 정규는 상시 요일 운영이라 특정 날짜가 아니라 '요일(Mon~Sun) × 방향' 단위로 1행 저장한다.
+// 상세 근거는 prisma/migrations/20260727120000_add_regular_dispatch_route/migration.sql 참고.
+model RegularDispatchRoute {
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  dayOfWeek     String // 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun'
+  direction     String // 'PICKUP' | 'DROPOFF'
+  payload       Json // 조정된 vehicles 스냅샷(정차 순서·시각·경로 포함)
+  classStart    String? // SeasonalDispatchRoute와 동일 String
+  classEnd      String? // SeasonalDispatchRoute와 동일 String
+  savedByUserId String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([dayOfWeek, direction]) // 요일·방향당 저장 1건
+}
+
 // 기사님 전용 링크 — 토큰 → (날짜×방향). 상세: prisma/migrations/20260727000000_add_shuttle_run_link_and_boarding
 model ShuttleRunLink {
   id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))

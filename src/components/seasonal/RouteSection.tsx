@@ -111,7 +111,11 @@ function relocateInPlace(
   return { vehicles: vs, reroute: [...reroute] };
 }
 
-export default function RouteSection({ initial, date, refreshKey }: { initial: DispatchSuggestion; date: string; refreshKey: number }) {
+// apiBase: 배차 제안·저장·재계산 API 접두 경로. 기본은 방학특강(seasonal) — 기존 호출부 무영향.
+//   정규 셔틀은 "/api/admin/regular/dispatch" 를 주입해 같은 UI 를 재사용한다.
+// rosterEditable: 명단 편집(무료탑승 드래그·학생 상세 모달) 허용 여부. 방학특강만 true(기본).
+//   정규는 명단 편집 엔드포인트/상세 모달이 방학특강 전용이라 false 로 끈다(회귀 방지).
+export default function RouteSection({ initial, date, refreshKey, apiBase = "/api/admin/seasonal/dispatch", rosterEditable = true }: { initial: DispatchSuggestion; date: string; refreshKey: number; apiBase?: string; rosterEditable?: boolean }) {
   const direction = initial.direction;
   const isPickup = direction === "PICKUP";
   const [sug, setSug] = useState<DispatchSuggestion>(initial);
@@ -141,7 +145,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
   async function generate(forDate: string) {
     setLoading(true); setErr(null);
     try {
-      const r = await fetch("/api/admin/seasonal/dispatch", {
+      const r = await fetch(apiBase, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ direction, date: forDate || null }),
       });
@@ -156,7 +160,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
 
   async function loadAndApplySaved(forDate: string): Promise<boolean> {
     try {
-      const r = await fetch(`/api/admin/seasonal/dispatch/saved?date=${encodeURIComponent(forDate)}&direction=${direction}`, { cache: "no-store" });
+      const r = await fetch(`${apiBase}/saved?date=${encodeURIComponent(forDate)}&direction=${direction}`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || !j?.saved) return false;
       const saved = j.saved as { vehicles: DispatchSuggestion["vehicles"]; classStart: string | null; classEnd: string | null; savedAt: string | null; added?: DispatchChange[]; locationChanged?: DispatchChange[] };
@@ -189,7 +193,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
     if (saving || !sug.date) return;
     setSaving(true); setSaveMsg(null); setErr(null);
     try {
-      const r = await fetch("/api/admin/seasonal/dispatch/saved", {
+      const r = await fetch(`${apiBase}/saved`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles, classStart: sug.classStart, classEnd: sug.classEnd }),
       });
@@ -233,7 +237,7 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
     const startPt = isPickup ? (cur.depot ?? cur.academy) : cur.academy;
     const endPt = isPickup ? cur.academy : (cur.depot ?? cur.academy);
     try {
-      const r = await fetch("/api/admin/seasonal/dispatch/reroute", {
+      const r = await fetch(`${apiBase}/reroute`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ start: { lat: startPt.lat, lng: startPt.lng }, end: { lat: endPt.lat, lng: endPt.lng }, waypoints: v.stops.map((s) => ({ lat: s.lat, lng: s.lng })) }),
       });
@@ -502,14 +506,15 @@ export default function RouteSection({ initial, date, refreshKey }: { initial: D
                       <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11.5px] text-gray-500">
                         {s.isHub ? (
                           <>
-                            {s.students.map((st, i) => { const t = tel(st.parentPhone); return <span key={i} className="font-bold text-green-800 dark:text-green-200"><button type="button" onClick={() => st.applicationId && setOpenStu({ applicationId: st.applicationId, rosterId: st.rosterId, requestId: st.requestId })} className={st.applicationId ? "underline decoration-dotted underline-offset-2 hover:text-green-600" : ""}>{st.name}{st.grade ? `·${st.grade}` : ""}</button>{t && <a href={t} draggable={false} className="ml-0.5 text-green-600">📞</a>}</span>; })}
+                            {s.students.map((st, i) => { const t = tel(st.parentPhone); const canOpen = rosterEditable && !!st.applicationId; return <span key={i} className="font-bold text-green-800 dark:text-green-200"><button type="button" onClick={() => canOpen && setOpenStu({ applicationId: st.applicationId!, rosterId: st.rosterId, requestId: st.requestId })} className={canOpen ? "underline decoration-dotted underline-offset-2 hover:text-green-600" : ""}>{st.name}{st.grade ? `·${st.grade}` : ""}</button>{t && <a href={t} draggable={false} className="ml-0.5 text-green-600">📞</a>}</span>; })}
                             <span className="text-green-700 dark:text-green-300">학생을 여기로 끌어다 놓으면 무료 거점 {isPickup ? "탑승" : "하차"}으로 지정됩니다 · 워크인 정원 별도</span>
                           </>
                         ) : (
                           s.students.map((st, i) => {
                             const t = tel(st.parentPhone);
-                            return <span key={i} draggable onDragStart={(e) => { setStuDrag({ v: vIdx, s: sIdx, i }); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setStuDrag(null)} title="드래그해서 무료 거점으로 이동 · 이름 클릭 시 상세" className="cursor-grab select-none rounded px-0.5 hover:bg-lime-100 dark:hover:bg-lime-900/30">
-                              <button type="button" draggable={false} onClick={() => st.applicationId && setOpenStu({ applicationId: st.applicationId, rosterId: st.rosterId, requestId: st.requestId })} className={st.applicationId ? "font-bold underline decoration-dotted underline-offset-2 hover:text-brand-orange-600" : "font-bold"}>{st.name}{st.grade ? `·${st.grade}` : ""}</button>{t && <a href={t} draggable={false} className="ml-0.5 font-bold text-green-600">📞</a>}</span>;
+                            const canOpen = rosterEditable && !!st.applicationId;
+                            return <span key={i} draggable={rosterEditable} onDragStart={(e) => { if (!rosterEditable) return; setStuDrag({ v: vIdx, s: sIdx, i }); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setStuDrag(null)} title={rosterEditable ? "드래그해서 무료 거점으로 이동 · 이름 클릭 시 상세" : undefined} className={rosterEditable ? "cursor-grab select-none rounded px-0.5 hover:bg-lime-100 dark:hover:bg-lime-900/30" : "select-none rounded px-0.5"}>
+                              <button type="button" draggable={false} onClick={() => canOpen && setOpenStu({ applicationId: st.applicationId!, rosterId: st.rosterId, requestId: st.requestId })} className={canOpen ? "font-bold underline decoration-dotted underline-offset-2 hover:text-brand-orange-600" : "font-bold"}>{st.name}{st.grade ? `·${st.grade}` : ""}</button>{t && <a href={t} draggable={false} className="ml-0.5 font-bold text-green-600">📞</a>}</span>;
                           })
                         )}
                       </div>

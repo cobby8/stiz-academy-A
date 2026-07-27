@@ -28,12 +28,13 @@ export type DispatchDirection = "PICKUP" | "DROPOFF";
 type Pt = { lat: number; lng: number };
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
-export async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; hub: Geo | null }> {
+export async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; hub: Geo | null; hubDropoff: Geo | null }> {
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>(
       `SELECT "academyLatitude" AS alat, "academyLongitude" AS alng, "academyAddress" AS aaddr,
               "shuttleDepotLatitude" AS dlat, "shuttleDepotLongitude" AS dlng, "shuttleDepotAddress" AS daddr,
-              "shuttleHubLatitude" AS hlat, "shuttleHubLongitude" AS hlng, "shuttleHubName" AS hname
+              "shuttleHubLatitude" AS hlat, "shuttleHubLongitude" AS hlng, "shuttleHubName" AS hname,
+              "shuttleHubDropoffLatitude" AS xlat, "shuttleHubDropoffLongitude" AS xlng, "shuttleHubDropoffName" AS xname, "shuttleHubDropoffAddress" AS xaddr
          FROM "AcademySettings" LIMIT 1`,
     );
     const r = rows[0] ?? {};
@@ -47,8 +48,11 @@ export async function getSettings(): Promise<{ academy: Geo; depot: Geo | null; 
     const hlat = Number(r.hlat), hlng = Number(r.hlng);
     const hub: Geo | null = Number.isFinite(hlat) && Number.isFinite(hlng)
       ? { lat: hlat, lng: hlng, name: (r.hname && String(r.hname)) || "무료 탑승 거점" } : null;
-    return { academy, depot, hub };
-  } catch { return { academy: ACADEMY_FALLBACK, depot: null, hub: null }; }
+    const xlat = Number(r.xlat), xlng = Number(r.xlng);
+    const hubDropoff: Geo | null = Number.isFinite(xlat) && Number.isFinite(xlng)
+      ? { lat: xlat, lng: xlng, name: (r.xname && String(r.xname)) || (r.xaddr && String(r.xaddr)) || "거점 하차 지점" } : null;
+    return { academy, depot, hub, hubDropoff };
+  } catch { return { academy: ACADEMY_FALLBACK, depot: null, hub: null, hubDropoff: null }; }
 }
 
 function haversineKm(a: Pt, b: Pt): number {
@@ -313,7 +317,7 @@ export async function buildDispatchFromRiders(input: {
 
   const unassigned: { name: string; label: string | null }[] = [];
   const stopMap = new Map<string, Stop>();
-  // 무료 탑승 거점(1호점 등)은 등록 인원과 무관하게 항상 경유한다. 지정 학생이 없으면 워크인만 태우는 빈 정류장으로 남는다.
+  // 무료 탑승 거점(1호점 등). 거점에서 타는 학생이 있을 때만 노선에 넣는다(빈 거점은 아래에서 제외).
   const hubStop: Stop | null = hub ? { lat: hub.lat, lng: hub.lng, label: hub.name, students: [], approx: false, isHub: true } : null;
   for (const r of riders) {
     const student: StopStudent = {
@@ -331,7 +335,8 @@ export async function buildDispatchFromRiders(input: {
   }
 
   const allStops: Stop[] = [...stopMap.values()];
-  if (hubStop) allStops.push(hubStop);
+  // 거점에 실제로 타는 학생이 있을 때만 경유한다. 아무도 없으면 노선에서 뺀다(빈 거점 제외).
+  if (hubStop && hubStop.students.length > 0) allStops.push(hubStop);
 
   // 정원 배차: 차고지(등원)/학원(하원) 기준 최근접순으로 채운 뒤, 정원 초과 시 같은 차량 추가 운행
   const fillFrom: Pt = direction === "PICKUP" ? (depot ?? academy) : academy;

@@ -7,15 +7,17 @@ import LocationPickerModal, { type MapLocationData } from "@/components/maps/Loc
 // 배차·정규셔틀 지도의 출발/도착·거점 기준이 되는 공용 설정이라, '차량 관리'에 둔다.
 
 type Geo = { lat: number; lng: number; name: string } | null;
-type GeoKind = "academy" | "depot" | "hub";
+type GeoKind = "academy" | "depot" | "hub" | "hubDropoff";
+type GeoState = Record<GeoKind, Geo>;
 const GEO_META: Record<GeoKind, { title: string; icon: string }> = {
   academy: { title: "학원", icon: "🏫" },
   depot: { title: "차고지", icon: "🚏" },
-  hub: { title: "1호점(무료 탑승)", icon: "🆓" },
+  hub: { title: "1호점 거점(탑승)", icon: "🆓" },
+  hubDropoff: { title: "거점 하차(길 건너)", icon: "🚏" },
 };
 
-export default function ShuttleGeoEditor({ initial }: { initial: { academy: Geo; depot: Geo; hub: Geo } }) {
-  const [geo, setGeo] = useState<{ academy: Geo; depot: Geo; hub: Geo }>(initial);
+export default function ShuttleGeoEditor({ initial }: { initial: GeoState }) {
+  const [geo, setGeo] = useState<GeoState>(initial);
   const [editKind, setEditKind] = useState<GeoKind | null>(null);
   const [savingGeo, setSavingGeo] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -45,7 +47,7 @@ export default function ShuttleGeoEditor({ initial }: { initial: { academy: Geo;
       <h3 className="text-base font-black text-gray-900 dark:text-white">🚐 셔틀 기준 위치</h3>
       <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">배차·정규셔틀 지도의 출발·도착 지점과 무료 탑승 거점 기준입니다.</p>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {(Object.keys(GEO_META) as GeoKind[]).map((kind) => {
           const g = geoOf(kind); const m = GEO_META[kind];
           return (

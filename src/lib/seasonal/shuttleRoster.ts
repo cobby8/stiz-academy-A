@@ -680,6 +680,83 @@ export async function setConfirmedShuttleRideByRequestId(shuttleRequestId: strin
   return { ok: true, changed };
 }
 
+/**
+ * 학생을 무료 탑승 거점(1호점)으로 직접 배치한다(관리자용).
+ *
+ * 하는 일:
+ *   1) 탑승 위치 = 거점(1호점) 좌표·라벨('무료탑승' 포함 → 배차/셔틀비 로직이 거점으로 인식).
+ *   2) 하차 위치 = 하차 거점(길 건너, 미설정 시 탑승 거점과 동일).
+ *   3) 셔틀 이용 상태(REQUESTED)로 켜고, 확정본에서 빠져 있었으면 되돌린다.
+ *   4) 아직 청구 전(paymentId 없음)이면 그 신청 항목의 셔틀비를 0원으로 내리고 합계를 다시 계산한다.
+ *
+ * hub 설정은 순환 import를 피하려 AcademySettings에서 직접 읽는다.
+ */
+export async function placeStudentAtFreeHub(target: { rosterId?: string | null; requestId?: string | null }) {
+  await requireRosterOwner();
+  let requestId = target.requestId ?? null;
+  if (!requestId && target.rosterId) {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT "shuttleRequestId" AS rid FROM "SeasonalShuttleRoster" WHERE id = $1`, target.rosterId,
+    );
+    requestId = rows[0]?.rid ? String(rows[0].rid) : null;
+  }
+  if (!requestId) throw new Error("셔틀 신청을 찾을 수 없습니다.");
+
+  const s = (await prisma.$queryRawUnsafe<any[]>(
+    `SELECT "shuttleHubName" AS pname, "shuttleHubLatitude" AS plat, "shuttleHubLongitude" AS plng,
+            "shuttleHubDropoffName" AS dname, "shuttleHubDropoffLatitude" AS dlat, "shuttleHubDropoffLongitude" AS dlng
+       FROM "AcademySettings" LIMIT 1`,
+  ))[0] ?? {};
+  const plat = Number(s.plat), plng = Number(s.plng);
+  if (!Number.isFinite(plat) || !Number.isFinite(plng)) {
+    throw new Error("무료 탑승 거점이 설정되지 않았습니다. 차량 관리에서 먼저 지정하세요.");
+  }
+  const pname = (s.pname && String(s.pname)) || "무료 탑승 거점";
+  const label = `${pname}(무료탑승)`;
+  const dlat = Number(s.dlat), dlng = Number(s.dlng);
+  const hasDrop = Number.isFinite(dlat) && Number.isFinite(dlng);
+  const dLat = hasDrop ? dlat : plat, dLng = hasDrop ? dlng : plng;
+  const dName = (hasDrop && s.dname && String(s.dname)) || pname;
+
+  // 1~2) 원본 신청서의 탑승/하차를 거점으로 덮어쓴다.
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SpecialProgramShuttleRequest" SET
+        "status" = 'REQUESTED', "dropoffSameAsPickup" = false,
+        "pickupLocation" = $2, "pickupLatitude" = $3, "pickupLongitude" = $4,
+        "pickupAddress" = $5, "pickupRoadAddress" = $5, "pickupLocationSource" = 'MAP_PIN', "pickupConfirmedAt" = now(),
+        "dropoffLocation" = $6, "dropoffLatitude" = $7, "dropoffLongitude" = $8,
+        "dropoffAddress" = $9, "dropoffRoadAddress" = $9, "dropoffLocationSource" = 'MAP_PIN', "dropoffConfirmedAt" = now(),
+        "locationConsentVersion" = COALESCE("locationConsentVersion", '2026-07-21'), "updatedAt" = now()
+      WHERE id = $1`,
+    requestId, label, plat, plng, pname, dName, dLat, dLng, dName,
+  );
+
+  // 3) 확정본에서 빠져 있었으면 되돌린다(이용 상태로).
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SeasonalShuttleRoster" SET "removedAt" = NULL, "removedReason" = NULL, "updatedAt" = now()
+      WHERE "shuttleRequestId" = $1 AND "removedAt" IS NOT NULL`,
+    requestId,
+  );
+
+  // 4) 청구 전(paymentId NULL)이면 셔틀비 0원 + 항목가·신청 합계 재계산.
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SpecialProgramApplicationItem"
+        SET "shuttleFeeSnapshot" = 0, "priceSnapshot" = "tuitionPriceSnapshot", "updatedAt" = now()
+      WHERE id = (SELECT "applicationItemId" FROM "SpecialProgramShuttleRequest" WHERE id = $1)
+        AND "paymentId" IS NULL`,
+    requestId,
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE "SpecialProgramApplication" a
+        SET "totalPriceSnapshot" = (SELECT COALESCE(SUM(i."priceSnapshot"), 0) FROM "SpecialProgramApplicationItem" i WHERE i."applicationId" = a.id),
+            "updatedAt" = now()
+      WHERE a.id = (SELECT it."applicationId" FROM "SpecialProgramApplicationItem" it
+                      JOIN "SpecialProgramShuttleRequest" r ON r."applicationItemId" = it.id WHERE r.id = $1)`,
+    requestId,
+  );
+  return { ok: true };
+}
+
 /** 되돌리기(제외 취소). 원장이 실수로 뺐을 때 복구용. */
 export async function restoreConfirmedShuttleRosterRow(rosterId: string) {
   await requireRosterOwner();

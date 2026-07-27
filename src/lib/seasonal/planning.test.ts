@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { decideApplicantType, hasSeasonalShuttleSelection, planApplicationItems, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning.ts";
+import { decideApplicantType, hasSeasonalShuttleSelection, isFreeHubShuttle, planApplicationItems, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning.ts";
 
 test("server prices are copied to immutable application snapshots", () => {
   const plans = planApplicationItems(
@@ -40,6 +40,16 @@ test("shuttle fee is charged once per selected offering and preserved separately
 test("shuttle fee is not charged when shuttle is unavailable or not selected", () => {
   assert.equal(resolveShuttleFee({ id: "a", capacity: 10, price: 1, shuttleAvailable: false, shuttleFee: 15000, title: "A" }, true), 0);
   assert.equal(resolveShuttleFee({ id: "b", capacity: 10, price: 1, shuttleAvailable: true, shuttleFee: 15000, title: "B" }, false), 0);
+});
+
+test("free hub riders are not charged a shuttle fee even when shuttle is selected", () => {
+  const offering = { id: "camp-a", capacity: 10, price: 150000, shuttleAvailable: true, shuttleFee: 15000, title: "특강" };
+  assert.equal(resolveShuttleFee(offering, true, true), 0);
+  assert.equal(resolveShuttleFee(offering, true, false), 15000);
+  // 무료 거점 판정: 탑승 위치 라벨에 '무료탑승'이 들어가면 true (띄어쓰기 무시).
+  assert.equal(isFreeHubShuttle({ pickupLocation: "1호점 (무료 탑승)" }), true);
+  assert.equal(isFreeHubShuttle({ pickupLocation: "다산동 123" }), false);
+  assert.equal(isFreeHubShuttle(undefined), false);
 });
 
 test("an empty shuttle payload is not treated as a shuttle selection", () => {

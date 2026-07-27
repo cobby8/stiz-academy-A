@@ -9,7 +9,8 @@ import {
 import { notifyAdmins } from "@/lib/notification";
 import { prisma } from "@/lib/prisma";
 import { SeasonalError, type SeasonalApplicationInput, type SeasonalWeekday } from "./contracts";
-import { decideApplicantType, hasSeasonalShuttleSelection, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning";
+import { decideApplicantType, hasSeasonalShuttleSelection, isFreeHubShuttle, resolveOfferingPrice, resolveShuttleFee, totalSnapshot, weekdayInSeoul } from "./planning";
+import { getSettings } from "./shuttle-optimize";
 import { syncSeasonSiblingDiscounts } from "./sibling-discount-sync";
 
 const OCCUPYING_ITEM_STATUSES = ["PENDING", "APPROVED"];
@@ -199,7 +200,10 @@ export async function getPublishedSeason(slug: string) {
     },
   });
   if (!season) throw new SeasonalError("모집 중인 방학특강을 찾을 수 없습니다.", 404, "SEASON_NOT_FOUND");
-  return publicSeason(season);
+  // 무료 탑승 거점(탑승/하차 지점)을 함께 내려 부모 신청 폼에서 "거점 탑승"을 고를 수 있게 한다.
+  const settings = await getSettings();
+  const toHub = (g: { lat: number; lng: number; name: string } | null) => g ? { name: g.name, lat: g.lat, lng: g.lng } : null;
+  return { ...publicSeason(season), shuttleHub: { pickup: toHub(settings.hub), dropoff: toHub(settings.hubDropoff) } };
 }
 
 async function existingApplication(seasonId: string, idempotencyKey: string) {
@@ -469,6 +473,7 @@ export async function submitSeasonalApplication(slug: string, input: SeasonalApp
         const shuttleFeeSnapshot = resolveShuttleFee(
           assignment.offering,
           hasSeasonalShuttleSelection(input.items[index]?.shuttle),
+          isFreeHubShuttle(input.items[index]?.shuttle),
         );
         itemPlans.push({
           requested: input.items[index],

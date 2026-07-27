@@ -40,9 +40,17 @@ export function resolveOfferingPrice(offering: CapacityOffering, applicantType?:
   return offering.price;
 }
 
-export function resolveShuttleFee(offering: CapacityOffering, shuttleRequested: boolean) {
+export function resolveShuttleFee(offering: CapacityOffering, shuttleRequested: boolean, isFreeHub = false) {
   if (!shuttleRequested || !offering.shuttleAvailable) return 0;
+  // 무료 탑승 거점(1호점) 이용 학생은 셔틀 목록엔 포함되지만 셔틀비를 받지 않는다.
+  if (isFreeHub) return 0;
   return Math.max(0, offering.shuttleFee ?? 0);
+}
+
+// 무료 탑승 거점 이용 여부 — 탑승 위치 라벨에 '무료탑승'이 들어가면 거점 이용으로 본다.
+//   (배차 로직 isFreeHubLabel과 같은 기준. 순환 import 회피 위해 규칙을 여기에도 둔다.)
+export function isFreeHubShuttle(shuttle: { pickupLocation?: string | null } | undefined | null): boolean {
+  return (shuttle?.pickupLocation ?? "").replace(/\s/g, "").includes("무료탑승");
 }
 
 export function hasSeasonalShuttleSelection(shuttle: {

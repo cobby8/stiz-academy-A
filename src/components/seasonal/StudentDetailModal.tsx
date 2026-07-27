@@ -94,6 +94,23 @@ export default function StudentDetailModal({ applicationId, onClose, save, onCha
     finally { setSavingPin(false); }
   }
 
+  // 무료 거점으로 직접 배치(관리자). 서버가 거점 좌표·라벨·셔틀비(청구 전 0원)를 한 번에 처리한다.
+  async function placeAtHub() {
+    if (!save || savingPin) return;
+    if (typeof window !== "undefined" && !window.confirm("이 학생을 무료 탑승 거점(1호점)으로 배치할까요?\n탑승·하차가 거점으로 바뀌고, 청구 전이면 셔틀비가 0원이 됩니다.")) return;
+    setSavingPin(true); setErr(null);
+    try {
+      const target = save.rosterId ? { rosterId: save.rosterId } : { requestId: save.requestId };
+      const r = await fetch("/api/admin/seasonal/shuttle-roster", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...target, action: "placeAtHub" }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "배치 실패");
+      load(); onChanged?.();
+    } catch (e: any) { setErr(e?.message || "거점으로 배치하지 못했습니다."); }
+    finally { setSavingPin(false); }
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
@@ -103,6 +120,7 @@ export default function StudentDetailModal({ applicationId, onClose, save, onCha
 
   const c = detail?.child;
   const sh = detail?.shuttle;
+  const shIsHub = (sh?.pickupLocation ?? "").replace(/\s/g, "").includes("무료탑승");
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 sm:items-center sm:p-4" role="dialog" aria-modal="true" onClick={onClose}>
@@ -157,11 +175,17 @@ export default function StudentDetailModal({ applicationId, onClose, save, onCha
               <section className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h3 className="text-[13px] font-black text-gray-900 dark:text-white">셔틀 · 승하차 위치</h3>
-                  {canEdit && sh && (
-                    sh.ride
-                      ? <button onClick={() => saveRide(false)} disabled={savingPin} className="shrink-0 rounded-lg border border-red-300 px-2.5 py-1.5 text-[11px] font-bold text-red-600 disabled:opacity-50 dark:border-red-500/40 dark:text-red-300">🚫 셔틀 미이용(배정 취소)</button>
-                      : <button onClick={() => saveRide(true)} disabled={savingPin} className="shrink-0 rounded-lg border border-green-300 px-2.5 py-1.5 text-[11px] font-bold text-green-700 disabled:opacity-50 dark:border-green-500/40 dark:text-green-300">🚌 셔틀 이용으로 변경</button>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {canEdit && sh && sh.ride && !shIsHub && (
+                      <button onClick={placeAtHub} disabled={savingPin} className="rounded-lg border border-green-300 px-2.5 py-1.5 text-[11px] font-bold text-green-700 disabled:opacity-50 dark:border-green-500/40 dark:text-green-300">🆓 무료 거점 배치</button>
+                    )}
+                    {shIsHub && <span className="rounded-lg bg-green-100 px-2 py-1 text-[11px] font-black text-green-700 dark:bg-green-900/40 dark:text-green-300">🆓 거점 배치됨</span>}
+                    {canEdit && sh && (
+                      sh.ride
+                        ? <button onClick={() => saveRide(false)} disabled={savingPin} className="rounded-lg border border-red-300 px-2.5 py-1.5 text-[11px] font-bold text-red-600 disabled:opacity-50 dark:border-red-500/40 dark:text-red-300">🚫 셔틀 미이용(배정 취소)</button>
+                        : <button onClick={() => saveRide(true)} disabled={savingPin} className="rounded-lg border border-green-300 px-2.5 py-1.5 text-[11px] font-bold text-green-700 disabled:opacity-50 dark:border-green-500/40 dark:text-green-300">🚌 셔틀 이용으로 변경</button>
+                    )}
+                  </div>
                 </div>
                 {!sh || !sh.ride ? <p className="text-[12px] text-gray-400">셔틀 미이용{canEdit && sh ? " · 위 버튼으로 이용으로 바꿀 수 있습니다" : ""}</p> : (
                   <div className="space-y-2">

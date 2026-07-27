@@ -637,6 +637,21 @@ function applicantTypeLabel(value?: string | null) {
   return value || "구분 미확인";
 }
 
+// 수업 반 이름("초등 고학년 주 2회")을 [반 이름, 횟수]로 나눈다. 방학특강은 횟수(주N회)별로 반이 나뉜다.
+function parseClassParts(name: string): { base: string; freq: string | null } {
+  const raw = name || "";
+  const m = raw.match(/주\s*(\d+)\s*회/);
+  const freq = m ? `주${m[1]}회` : null;
+  const base = raw.replace(/주\s*\d+\s*회/g, "").replace(/\s{2,}/g, " ").trim() || raw;
+  return { base, freq };
+}
+// 한 신청의 반 이름·횟수 목록(중복 제거). 신청이 여러 반이면 각각 표시/필터에 쓴다.
+function applicationClassInfo(items: { className: string }[]): { bases: string[]; freqs: string[] } {
+  const bases = new Set<string>(); const freqs = new Set<string>();
+  for (const it of items) { const p = parseClassParts(it.className); if (p.base) bases.add(p.base); if (p.freq) freqs.add(p.freq); }
+  return { bases: [...bases], freqs: [...freqs] };
+}
+
 function paymentReviewLabel(value?: string | null) {
   if (!value || value === "PAYMENT_PENDING" || value === "UNPAID") return "결제 확인 전";
   return STATUS_LABEL[value] ?? value;
@@ -1596,6 +1611,26 @@ function ApplicationsView({
 }) {
   const visibleItemCount = applications.reduce((sum, application) => sum + application.items.length, 0);
 
+  // ── 목록 정렬·헤더 필터(클라이언트) ─────────────────────────────
+  // 한 시즌 신청이 한 페이지에 다 들어와(≤pageSize) 클라이언트 정렬·필터가 정확하다.
+  const [sortAsc, setSortAsc] = useState(true); // 이름 기본 오름차순
+  const [fType, setFType] = useState("ALL");     // 구분: 기존/신규
+  const [fBase, setFBase] = useState("ALL");     // 수업(반 이름)
+  const [fFreq, setFFreq] = useState("ALL");     // 횟수(주N회)
+  const baseOptions = useMemo(() => [...new Set(applications.flatMap((a) => applicationClassInfo(a.items).bases))].sort((x, y) => x.localeCompare(y, "ko")), [applications]);
+  const freqOptions = useMemo(() => [...new Set(applications.flatMap((a) => applicationClassInfo(a.items).freqs))].sort((x, y) => x.localeCompare(y, "ko")), [applications]);
+  const displayApplications = useMemo(() => {
+    const filtered = applications.filter((a) => {
+      const info = applicationClassInfo(a.items);
+      if (fType !== "ALL" && (a.applicantType ?? "") !== fType) return false;
+      if (fBase !== "ALL" && !info.bases.includes(fBase)) return false;
+      if (fFreq !== "ALL" && !info.freqs.includes(fFreq)) return false;
+      return true;
+    });
+    return [...filtered].sort((a, b) => (a.childName || "").localeCompare(b.childName || "", "ko") * (sortAsc ? 1 : -1));
+  }, [applications, fType, fBase, fFreq, sortAsc]);
+  const thFilterCls = "mt-1 w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] font-bold text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200";
+
   return <div className="space-y-4">
     <div className="print:hidden inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900" aria-label="신청 관리 보기">
       <button type="button" onClick={() => onMode("applications")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${mode === "applications" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>신청별</button>
@@ -1653,9 +1688,9 @@ function ApplicationsView({
     )}
 
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[940px] text-left text-sm">
+      <table className="w-full min-w-[1080px] text-left text-sm">
         <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800">
-          <tr>
+          <tr className="align-top">
             <th className="w-12 px-4 py-3">
               <input
                 type="checkbox"
@@ -1666,9 +1701,27 @@ function ApplicationsView({
                 className="h-5 w-5 rounded border-gray-300 accent-[var(--brand-accent)]"
               />
             </th>
-            <th className="px-4 py-3">학생</th>
+            <th className="px-4 py-3">
+              <button type="button" onClick={() => setSortAsc((v) => !v)} className="inline-flex items-center gap-1 font-bold hover:text-gray-700 dark:hover:text-gray-200">학생 <span className="text-[11px]">{sortAsc ? "▲" : "▼"}</span></button>
+            </th>
+            <th className="px-4 py-3">구분
+              <select aria-label="구분 필터" value={fType} onChange={(e) => setFType(e.target.value)} className={thFilterCls}>
+                <option value="ALL">전체</option><option value="EXISTING">기존강생</option><option value="NEW">신규가입</option>
+              </select>
+            </th>
+            <th className="px-4 py-3">수업
+              <select aria-label="수업 필터" value={fBase} onChange={(e) => setFBase(e.target.value)} className={thFilterCls}>
+                <option value="ALL">전체</option>
+                {baseOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </th>
+            <th className="px-4 py-3">횟수
+              <select aria-label="횟수 필터" value={fFreq} onChange={(e) => setFFreq(e.target.value)} className={thFilterCls}>
+                <option value="ALL">전체</option>
+                {freqOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </th>
             <th className="px-4 py-3">학부모</th>
-            <th className="px-4 py-3">신청 반</th>
             <th className="px-4 py-3">결제</th>
             <th className="px-4 py-3">셔틀</th>
             <th className="px-4 py-3">접수일</th>
@@ -1676,10 +1729,11 @@ function ApplicationsView({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-          {applications.map((application) => {
+          {displayApplications.map((application) => {
             const itemIds = application.items.map((item) => item.id);
             const selectedCount = itemIds.filter((itemId) => selectedItemIdSet.has(itemId)).length;
             const checked = itemIds.length > 0 && selectedCount === itemIds.length;
+            const classInfo = applicationClassInfo(application.items);
             return (
               <tr key={application.id} className={checked ? "bg-[var(--brand-accent-soft)]/60 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}>
                 <td className="px-4 py-4 align-top">
@@ -1698,16 +1752,26 @@ function ApplicationsView({
                   {selectedCount > 0 && <p className="mt-1 text-xs font-black text-[var(--brand-accent)]">{selectedCount}/{itemIds.length}개 선택</p>}
                 </td>
                 <td className="px-4 py-4 align-top">
-                  <p className="font-bold">{application.parentName}</p>
-                  <a href={`tel:${application.parentPhone}`} className="text-xs text-[var(--brand-accent)] hover:underline">{application.parentPhone}</a>
-                  <NotificationSummaryText summary={latestApplicationNotification(application)} />
+                  <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-black ${application.applicantType === "NEW" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200" : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200"}`}>{application.applicantType === "NEW" ? "신규가입" : application.applicantType === "EXISTING" ? "기존강생" : "미확인"}</span>
                 </td>
                 <td className="px-4 py-4 align-top">
-                  <p>{application.items.length}개 반</p>
+                  <div className="space-y-0.5 font-bold">
+                    {classInfo.bases.length ? classInfo.bases.map((b) => <p key={b}>{b}</p>) : <p className="text-gray-400">-</p>}
+                  </div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {application.items.slice(0,2).map((item) => <span key={item.id} className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>)}
                     {application.items.length > 2 && <span className="inline-flex min-h-7 items-center rounded-full bg-gray-100 px-2.5 text-xs font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-200">+{application.items.length - 2}</span>}
                   </div>
+                </td>
+                <td className="px-4 py-4 align-top">
+                  <div className="flex flex-wrap gap-1">
+                    {classInfo.freqs.length ? classInfo.freqs.map((f) => <span key={f} className="inline-flex min-h-7 items-center rounded-full bg-[var(--brand-accent-soft)] px-2.5 text-xs font-black text-[var(--brand-accent)]">{f}</span>) : <span className="text-gray-400">-</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-4 align-top">
+                  <p className="font-bold">{application.parentName}</p>
+                  <a href={`tel:${application.parentPhone}`} className="text-xs text-[var(--brand-accent)] hover:underline">{application.parentPhone}</a>
+                  <NotificationSummaryText summary={latestApplicationNotification(application)} />
                 </td>
                 <td className="px-4 py-4 align-top">
                   <span className={badge(application.paymentStatus)}>{STATUS_LABEL[application.paymentStatus || ""] ?? application.paymentStatus ?? "청구 전"}</span>
@@ -1719,7 +1783,7 @@ function ApplicationsView({
               </tr>
             );
           })}
-          {!applications.length && <tr><td colSpan={8}><Empty text="조건에 맞는 신청이 없습니다." /></td></tr>}
+          {!displayApplications.length && <tr><td colSpan={10}><Empty text="조건에 맞는 신청이 없습니다." /></td></tr>}
         </tbody>
       </table>
     </div>

@@ -165,6 +165,32 @@ export async function syncEnrollmentDatesForItemSafe(applicationItemId: string):
   }
 }
 
+/**
+ * 신청 항목이 취소·반려 등 'APPROVED 아님'으로 바뀌면 그 항목의 좌석(SCHEDULED)을 소프트 취소한다.
+ * → 취소자가 선생님 출석부·학생 수(좌석 기준)에서 사라진다. resync는 APPROVED 항목만 다루므로 취소는 여기서 처리한다.
+ * 절대 규칙: 출결이 이미 찍힌 좌석(attendanceStatus IS NOT NULL)은 기록 보존을 위해 건드리지 않는다.
+ */
+export async function cancelEnrollmentDatesForItem(applicationItemId: string): Promise<number> {
+  const affected = await prisma.$executeRawUnsafe(
+    `UPDATE "SpecialProgramEnrollmentDate"
+        SET status='CANCELLED', "updatedAt"=now()
+      WHERE "applicationItemId" = $1
+        AND kind = 'REGULAR'
+        AND status <> 'CANCELLED'
+        AND "attendanceStatus" IS NULL`,
+    applicationItemId,
+  );
+  return Number(affected) || 0;
+}
+export async function cancelEnrollmentDatesForItemSafe(applicationItemId: string): Promise<number> {
+  try {
+    return await cancelEnrollmentDatesForItem(applicationItemId);
+  } catch (error) {
+    console.error("[seasonal enrollment-dates cancel]", applicationItemId, error);
+    return 0;
+  }
+}
+
 /* ------------------------------------------------------------------------- *
  * 반 이동·요일 변경 재동기화 (resync)
  *

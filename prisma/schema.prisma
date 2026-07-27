@@ -1627,6 +1627,7 @@ model SpecialProgramApplicationItem {
   offering SpecialProgramOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   shuttleRequest SpecialProgramShuttleRequest?
   auditLogs SpecialProgramAuditLog[]
+  credits SpecialProgramCredit[] // 이월 크레딧 원장(back-relation, 추가 전용)
 
   @@unique([applicationId, offeringId])
   @@index([offeringId, status])
@@ -2053,6 +2054,7 @@ model SpecialProgramEnrollmentDate {
   attendanceCheckedByUserId String?
   createdAt         DateTime @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  absence           SpecialProgramAbsence? // 사전 결석 신고(back-relation, 좌석당 1건)
 
   @@unique([applicationItemId, sessionDateId])
   @@index([sessionDateId, status])
@@ -2159,6 +2161,51 @@ model SpecialProgramMakeup {
   @@index([applicationItemId])
   @@index([studentId])
   @@index([status, requestedAt])
+}
+
+// 방학특강 사전 결석 신고 — 좌석(SpecialProgramEnrollmentDate) 당 1건(@unique).
+// 학부모 앱/관리자가 결석을 미리 신고하고, 관리자가 보강/이월/환불로 처리한다.
+// enum 대신 기존 컨벤션(String 컬럼 + 주석 + 앱검증)을 따른다(attendanceStatus·status 등과 동일).
+//   사유(reason):     ILLNESS_INJURY | PERSONAL | FAMILY_TRIP | SCHOOL_EVENT | ETC
+//   처리(resolution): PENDING | MAKEUP | CARRYOVER | REFUND
+//   상태(status):     REPORTED | CONFIRMED | CANCELLED
+// DDL: prisma/migrations/20260727130000_add_seasonal_absence_credit (prisma migrate dev 금지 — 운영은 직접 적용)
+model SpecialProgramAbsence {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  enrollmentDateId String   @unique // 좌석당 신고 1건
+  reason           String   // ILLNESS_INJURY | PERSONAL | FAMILY_TRIP | SCHOOL_EVENT | ETC
+  resolution       String   @default("PENDING")  // PENDING | MAKEUP | CARRYOVER | REFUND
+  status           String   @default("REPORTED") // REPORTED | CONFIRMED | CANCELLED
+  note             String?
+  reportedByUserId String?  // 신고한 학부모 앱 계정
+  resolvedByUserId String?  // 처리한 관리자
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  enrollmentDate   SpecialProgramEnrollmentDate @relation(fields: [enrollmentDateId], references: [id], onDelete: Cascade)
+  credit           SpecialProgramCredit? // 이월 처리 시 파생된 크레딧(back-relation)
+
+  @@index([status], map: "SpecialProgramAbsence_status_idx")
+}
+
+// 방학특강 이월 크레딧 원장 — 결석을 '이월(CARRYOVER)'로 처리할 때 발생하는 금액 원장.
+// 어느 수강 항목(applicationItem)에 얼마(amount, 원)가 쌓였고, 어느 결석에서 나왔는지(sourceAbsence) 추적.
+//   상태(status): ACTIVE(사용가능) | USED(사용됨) | REFUNDED(환불됨)
+// DDL: prisma/migrations/20260727130000_add_seasonal_absence_credit (prisma migrate dev 금지 — 운영은 직접 적용)
+model SpecialProgramCredit {
+  id                String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  applicationItemId String   // 크레딧이 귀속되는 수강 항목
+  amount            Int      // 금액(원, KRW)
+  sourceAbsenceId   String?  @unique // 이 크레딧이 파생된 결석(있으면). 결석 1건당 크레딧 1건
+  status            String   @default("ACTIVE") // ACTIVE | USED | REFUNDED
+  note              String?
+  createdByUserId   String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  applicationItem   SpecialProgramApplicationItem @relation(fields: [applicationItemId], references: [id], onDelete: Cascade)
+  sourceAbsence     SpecialProgramAbsence?        @relation(fields: [sourceAbsenceId], references: [id], onDelete: SetNull)
+
+  @@index([applicationItemId], map: "SpecialProgramCredit_applicationItem_idx")
+  @@index([status], map: "SpecialProgramCredit_status_idx")
 }
 
 // 저장된 배차 노선 — 원장이 자동 제안을 손으로 조정한 뒤 저장한 결과(날짜×방향 1행).

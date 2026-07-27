@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { requireVerifiedParent } from "@/lib/auth-guard";
 import { notFound } from "next/navigation";
 import { notMergedStudent } from "@/lib/studentVisibility";
 import Link from "next/link";
@@ -44,12 +45,10 @@ export default async function ParentReportDetailPage({
         );
     }
 
-    // ── 2. 학부모 ID 조회 ──
-    const userRows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
-        user.email
-    );
-    const parentId = userRows[0]?.id;
+    // ── 2. 학부모 ID 조회 (인증 게이트가 검증한 appUserId 사용) ──
+    // 이메일 매칭 제거 — 소셜/이메일 불일치 시 자녀를 못 찾던 버그 수정
+    const parentAuth = await requireVerifiedParent();
+    const parentId = parentAuth.appUserId;
     if (!parentId) notFound();
 
     // ── 3. 세션이 발행 상태인지 확인 ──

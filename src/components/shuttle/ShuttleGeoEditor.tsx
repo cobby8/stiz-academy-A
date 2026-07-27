@@ -32,11 +32,11 @@ export default function ShuttleGeoEditor({ initial }: { initial: GeoState }) {
     try {
       const r = await fetch("/api/admin/seasonal/shuttle-settings", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, latitude: loc.latitude, longitude: loc.longitude, address: loc.roadAddress ?? loc.address }),
+        body: JSON.stringify({ kind, latitude: loc.latitude, longitude: loc.longitude, address: loc.roadAddress ?? loc.address, name: loc.placeName ?? undefined }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "저장 실패");
-      setGeo((g) => ({ ...g, [kind]: { lat: loc.latitude, lng: loc.longitude, name: loc.roadAddress ?? loc.address } }));
+      setGeo((g) => ({ ...g, [kind]: { lat: loc.latitude, lng: loc.longitude, name: loc.placeName || loc.roadAddress || loc.address } }));
       setEditKind(null);
     } catch (e: any) { setErr(e?.message || "저장 실패"); }
     finally { setSavingGeo(false); }

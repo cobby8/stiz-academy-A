@@ -244,9 +244,17 @@ export async function getDispatchForView(date: string | null, direction: Dispatc
   const canonicalDate = resolvedDate ? firstDateOfSameWeekday(base.availableDates, resolvedDate) : null;
   const saved = canonicalDate ? await getSavedDispatchRoute(canonicalDate, direction) : null;
   if (saved && Array.isArray(saved.vehicles) && saved.vehicles.length) {
+    // hub stop label을 현재 DB 거점 이름으로 실시간 교체 — 거점 이름 변경 시 재계산 없이도 반영된다.
+    const currentHubName = base.hub?.name;
+    const vehicles = (currentHubName
+      ? (saved.vehicles as DispatchSuggestion["vehicles"]).map((v) => ({
+          ...v,
+          stops: (v.stops ?? []).map((s) => (s.isHub ? { ...s, label: currentHubName } : s)),
+        }))
+      : saved.vehicles) as DispatchSuggestion["vehicles"];
     return {
       ...base,
-      vehicles: saved.vehicles as DispatchSuggestion["vehicles"],
+      vehicles,
       classStart: saved.classStart ?? base.classStart,
       classEnd: saved.classEnd ?? base.classEnd,
       routingProvider: "TMAP",

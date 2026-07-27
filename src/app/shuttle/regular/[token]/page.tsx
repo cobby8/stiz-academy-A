@@ -1,5 +1,6 @@
 import { getRegularShuttleStops } from "@/lib/shuttle/regularImport";
-import { isRegularRunToken, getRegularBoardingMap } from "@/lib/shuttle/regularRun";
+import { isRegularRunToken, getRegularBoardingMap, getRegularAbsentPeople } from "@/lib/shuttle/regularRun";
+import { matchAbsentee, type AbsentPerson } from "@/lib/regular/regularAbsenceMatch";
 import RegularDriverClient, { type DriverClass, type DriverStop } from "@/components/shuttle/RegularDriverClient";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
 
@@ -28,7 +29,8 @@ function lightError(title: string, sub: string) {
 }
 
 // 같은 정류장(이름)끼리 학생 행을 묶어 정차 하나로. 시트 순서(sortOrder) 유지.
-function groupDriverStops(rows: RegularShuttleStop[], direction: "BOARD" | "ALIGHT"): DriverStop[] {
+// absentees: 오늘 결석 신고된 사람(이름+학부모전화) — 명단 승객과 근사 매칭해 결석 표식을 단다.
+function groupDriverStops(rows: RegularShuttleStop[], direction: "BOARD" | "ALIGHT", absentees: AbsentPerson[]): DriverStop[] {
   const order: string[] = [];
   const map = new Map<string, DriverStop>();
   for (const r of rows) {
@@ -37,7 +39,9 @@ function groupDriverStops(rows: RegularShuttleStop[], direction: "BOARD" | "ALIG
     if (!g) { g = { label: r.stopName, arriveTime: r.arriveTime, lat: r.latitude ?? null, lng: r.longitude ?? null, direction, rows: [] }; map.set(r.stopName, g); order.push(r.stopName); }
     if (g.lat == null && r.latitude != null) { g.lat = r.latitude; g.lng = r.longitude ?? null; }
     if (!g.arriveTime && r.arriveTime) g.arriveTime = r.arriveTime;
-    g.rows.push({ rowId: r.id, name: r.studentName, parentPhone: r.parentPhone, studentPhone: r.studentPhone });
+    // 결석 매칭: 이름(+가능하면 학부모 전화)으로 오늘 결석자와 이어 붙인다(best-effort).
+    const absent = matchAbsentee({ name: r.studentName, phone: r.parentPhone }, absentees) !== null;
+    g.rows.push({ rowId: r.id, name: r.studentName, parentPhone: r.parentPhone, studentPhone: r.studentPhone, absent });
   }
   return order.map((k) => map.get(k)!);
 }
@@ -56,10 +60,13 @@ export default async function RegularRunPage({ params }: { params: Promise<{ tok
 
   if (dayRows.length === 0) return lightError("오늘은 운행이 없습니다", "다음 운행일에 다시 열어주세요.");
 
+  // 오늘 결석 신고자(이름+학부모전화)를 미리 뽑아 명단 행에 결석 표식을 단다.
+  const absentees = await getRegularAbsentPeople(today);
+
   const classTimes = [...new Set(dayRows.map((s) => s.classTime).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b));
   const classes: DriverClass[] = classTimes.map((ct) => {
     const rows = dayRows.filter((s) => s.classTime === ct);
-    return { classTime: ct, board: groupDriverStops(rows, "BOARD"), alight: groupDriverStops(rows, "ALIGHT") };
+    return { classTime: ct, board: groupDriverStops(rows, "BOARD", absentees), alight: groupDriverStops(rows, "ALIGHT", absentees) };
   });
 
   const boarding = await getRegularBoardingMap(today);

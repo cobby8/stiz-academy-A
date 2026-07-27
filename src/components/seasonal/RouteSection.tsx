@@ -171,8 +171,11 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
       setSug((cur) => ({ ...cur, date: forDate, vehicles: fixed, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd, added: saved.added ?? [], locationChanged: [] }));
       setSavedAt(saved.savedAt); setLoadedFromSaved(true); setDepartPinned({}); setErr(null); setSaveMsg(null);
       setRelocatedCount(changes.filter((c) => !c.isHub && c.lat != null && c.lng != null).length);
-      // 좌표가 바뀐 차량만 T맵 경로 재계산 예약(순서·배정은 그대로).
-      reroute.forEach((vi) => scheduleReroute(vi));
+      // 좌표가 바뀐 차량 + reconcile로 경로(path)가 무효화된 차량(취소 학생 등)을 T맵 재계산 예약.
+      // (path가 비면 지도는 직선으로 그려지므로, 재계산으로 실도로 경로를 복구한다.)
+      const need = new Set<number>(reroute);
+      fixed.forEach((v, vi) => { if (!v.path && v.stops.length > 0) need.add(vi); });
+      need.forEach((vi) => scheduleReroute(vi));
       return true;
     } catch { return false; }
   }

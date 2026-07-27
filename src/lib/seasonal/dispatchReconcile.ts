@@ -74,7 +74,12 @@ export function reconcileSavedVehicles(
     const passengers = stops.reduce((acc, s) => acc + (s.students as unknown[]).length, 0);
     const capacity = typeof run.capacity === "number" ? run.capacity : 0;
 
-    return { ...(v as object), stops, passengers, over: passengers > capacity };
+    // 4) 정차가 하나라도 사라졌으면(취소 학생 등) 저장된 T맵 경로(path)는 그 정차를 계속 지나가는 '유령 경로'가 된다.
+    //    지도가 명단과 어긋나지 않도록 path를 무효화한다(클라이언트가 재계산하거나 직선으로 그린다).
+    const geometryChanged = stops.length !== rawStops.length;
+    const base = { ...(v as object), stops, passengers, over: passengers > capacity };
+    if (geometryChanged) (base as Record<string, unknown>).path = undefined;
+    return base;
   });
 }
 

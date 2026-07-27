@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
 import { getSavedDispatchRoute, saveDispatchRoute, deleteDispatchRoute } from "@/lib/seasonal/dispatchRoute";
+import { getSettings } from "@/lib/seasonal/shuttle-optimize";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,18 @@ export async function GET(request: Request) {
     const date = url.searchParams.get("date");
     const direction = url.searchParams.get("direction") ?? "PICKUP";
     const saved = await getSavedDispatchRoute(date, direction);
+    if (saved && saved.vehicles.length) {
+      const { hub } = await getSettings();
+      if (hub?.name) {
+        const hubName = hub.name;
+        saved.vehicles = (saved.vehicles as Record<string, unknown>[]).map((v) => ({
+          ...v,
+          stops: (Array.isArray(v.stops) ? v.stops : []).map((s: Record<string, unknown>) =>
+            s.isHub === true ? { ...s, label: hubName } : s,
+          ),
+        }));
+      }
+    }
     return NextResponse.json({ saved }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[dispatch/saved GET]", e);

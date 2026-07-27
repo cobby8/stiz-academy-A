@@ -4,6 +4,7 @@ import { useState } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
 import DriverDateNav from "@/components/shuttle/DriverDateNav";
 import GpsShareBar from "@/components/shuttle/GpsShareBar";
+import { useGpsShare } from "@/hooks/useGpsShare";
 
 // 기사님 운행 화면(모바일) — 그 날 등원 → 하원 타임라인. 각 구간에서 정차 순서대로 학생을 보고 탑승/미탑승을 탭으로 체크한다.
 // 로그인 없이 토큰으로 접근하며, 체크는 즉시 서버에 저장한다(구간=방향별).
@@ -38,8 +39,20 @@ export default function DriverRunClient({
 }) {
   const [boarding, setBoarding] = useState<BoardingByDir>(initialBoarding);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
-  // '미탑승'을 누르면 그 학생 행에만 사유 선택(결석/자차)이 펼쳐진다. 열린 행의 키(방향:reqId)를 보관.
   const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [runState, setRunState] = useState<"idle" | "running" | "ended">("idle");
+
+  const label = sections[0]?.vehicles[0]?.vehicleName ?? "방학특강 기사님";
+  const { state: gpsState, lastSentAt, accuracy, start: gpsStart, stop: gpsStop } = useGpsShare(token, label);
+
+  async function handleRunStart() {
+    setRunState("running");
+    gpsStart();
+  }
+  async function handleRunEnd() {
+    await gpsStop();
+    setRunState("ended");
+  }
 
   async function toggle(direction: "PICKUP" | "DROPOFF", reqId: string, name: string, next: Status) {
     const key = `${direction}:${reqId}`;
@@ -76,8 +89,34 @@ export default function DriverRunClient({
         <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 등원 → 하원</p>
       </header>
 
-      {/* GPS 위치 공유 바 — label은 첫 번째 차량 이름으로 자동 추출 */}
-      <GpsShareBar token={token} label={sections[0]?.vehicles[0]?.vehicleName ?? "방학특강 기사님"} />
+      {/* 운행 시작 전 */}
+      {runState === "idle" && (
+        <div className="mb-4 rounded-2xl border-2 border-yellow-400 bg-yellow-50 p-5 text-center">
+          <p className="mb-3 text-[15px] font-bold text-gray-700">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
+          <button type="button" onClick={handleRunStart}
+            className="h-16 w-full rounded-2xl bg-green-600 text-[20px] font-black text-white active:bg-green-700">
+            🚦 운행 시작
+          </button>
+        </div>
+      )}
+
+      {/* 운행 중 */}
+      {runState === "running" && (
+        <div className="mb-3">
+          <GpsShareBar gpsState={gpsState} lastSentAt={lastSentAt} accuracy={accuracy} />
+          <button type="button" onClick={handleRunEnd}
+            className="mt-2 h-13 w-full rounded-2xl border-2 border-red-300 bg-white py-3 text-[17px] font-black text-red-600 active:bg-red-50">
+            🏁 운행 종료
+          </button>
+        </div>
+      )}
+
+      {/* 운행 종료 후 */}
+      {runState === "ended" && (
+        <div className="mb-4 rounded-2xl bg-gray-100 px-4 py-5 text-center">
+          <p className="text-[17px] font-black text-gray-600">✅ 운행이 종료되었습니다</p>
+        </div>
+      )}
 
       {/* 날짜 이동 네비 — 운행 가능일 기준 이전/다음 */}
       <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />

@@ -2378,7 +2378,7 @@ function ApplicationItemCard({
     </label>
     {statusNotification && <NotificationActionRow label={statusNotification.label} summary={currentNotificationSummary} sending={sendingNotificationKey === `item:${item.id}:${statusNotification.trigger}`} onSend={() => void onRetryNotification("item", item.id, statusNotification.trigger)} />}
     <ConversionReadinessBox item={item} onConvertItem={onConvertItem} converting={converting} />
-    {item.invoice && <InvoiceActionBox item={item} onCopyInvoiceLink={onCopyInvoiceLink} onRetryNotification={onRetryNotification} sendingNotificationKey={sendingNotificationKey} />}
+    {item.invoice && <InvoiceActionBox item={item} onCopyInvoiceLink={onCopyInvoiceLink} onRetryNotification={onRetryNotification} sendingNotificationKey={sendingNotificationKey} onRefresh={onShuttleChanged} />}
     {item.shuttleRequest && <ShuttleRequestBox request={item.shuttleRequest} onChanged={onShuttleChanged} />}
   </article>;
 }
@@ -2394,23 +2394,23 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
   let tone = "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100";
 
   if (hasEnrollment && hasPayment) {
-    title = "수강·청구 연결 완료";
-    helper = "수강 이력과 청구가 모두 이 신청 항목에 연결되어 있습니다.";
+    title = "수강·청구 완료";
+    helper = "";
   } else if (!approved) {
-    title = "승인 후 전환 가능";
-    helper = "먼저 신청 항목을 승인하면 수강 등록과 청구 생성 대상으로 검토할 수 있습니다.";
+    title = "승인 후 청구서 발행 가능";
+    helper = "신청 항목을 승인한 뒤 청구서를 발행할 수 있습니다.";
     tone = "border-gray-200 bg-gray-50 text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
   } else if (!hasClass) {
-    title = "특강 청구 생성 가능";
-    helper = "정규반 연결이 없어도 특강 학생 정보와 청구서는 생성할 수 있습니다.";
+    title = "청구서 발행 가능";
+    helper = "";
     tone = "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-500/30 dark:bg-sky-950/30 dark:text-sky-100";
   } else if (!hasEnrollment && hasPayment) {
-    title = "수강 등록 연결 필요";
-    helper = "청구는 연결되어 있지만 수강 이력이 아직 연결되지 않았습니다.";
+    title = "수강 등록 필요";
+    helper = "";
     tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
   } else if (hasEnrollment && !hasPayment) {
-    title = "청구 생성 필요";
-    helper = "수강 이력은 연결되어 있고 청구 생성만 남았습니다.";
+    title = "청구서 발행 필요";
+    helper = "";
     tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
   }
 
@@ -2443,16 +2443,40 @@ function MiniState({ active, label }: { active: boolean; label: string }) {
   return <span className={`rounded-full px-2 py-1 text-[11px] font-black ${active ? "bg-white text-emerald-700 dark:bg-emerald-100 dark:text-emerald-900" : "bg-white/60 text-gray-500 dark:bg-gray-900/50 dark:text-gray-300"}`}>{label}</span>;
 }
 
-function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendingNotificationKey }: { item: ApplicationItem; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>; sendingNotificationKey: string }) {
+function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendingNotificationKey, onRefresh }: { item: ApplicationItem; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>; sendingNotificationKey: string; onRefresh?: () => void }) {
   const href = getItemInvoiceHref(item);
   const activationRequired = Boolean(item.invoice?.accountActivationRequired);
   const defaultTrigger = activationRequired ? "SPECIAL_ACCOUNT_ACTIVATION_PARENT" : "SPECIAL_PAYMENT_REQUEST_PARENT";
   const notificationLabel = activationRequired ? "가입 안내·결제" : "결제 요청 안내";
   const currentNotificationSummary = item.invoice?.notificationSummary?.trigger === defaultTrigger ? item.invoice.notificationSummary : null;
+  const isPaid = item.invoice?.status === "PAID" || item.invoice?.status === "COMPLETED";
+  const [paying, setPaying] = useState<"CASH" | "BANK_TRANSFER" | null>(null);
+  const [payErr, setPayErr] = useState<string | null>(null);
+
+  async function handleMarkPaid(method: "CASH" | "BANK_TRANSFER") {
+    if (!item.id) return;
+    const label = method === "CASH" ? "현금" : "계좌이체";
+    if (!window.confirm(`${label} 납부 완료로 처리할까요? 이 작업은 되돌리기 어렵습니다.`)) return;
+    setPaying(method); setPayErr(null);
+    try {
+      const r = await fetch(`/api/admin/seasonal/${item.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource: "markPaid", method }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "납부 처리에 실패했습니다.");
+      onRefresh?.();
+    } catch (e: any) { setPayErr(e?.message || "납부 처리에 실패했습니다."); }
+    finally { setPaying(null); }
+  }
+
   return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <p className="font-black text-gray-950 dark:text-white">청구서</p>
+        <div className="flex items-center gap-2">
+          <p className="font-black text-gray-950 dark:text-white">청구서</p>
+          {isPaid && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-black text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">납부 완료</span>}
+        </div>
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           {item.invoice?.invoiceNo || "청구번호 준비됨"} · {STATUS_LABEL[item.invoice?.status || ""] ?? item.invoice?.status ?? "발행"}
         </p>
@@ -2460,11 +2484,17 @@ function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendin
           {(item.invoice?.amount ?? item.amount ?? 0).toLocaleString()}원 · 납부기한 {formatDate(item.invoice?.dueDate)}
         </p>
       </div>
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
         {href && <a href={href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200">청구서 열기</a>}
-        <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">{activationRequired ? "가입 링크 재발급·복사" : "결제 링크 복사"}</button>
+        {!isPaid && <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">{activationRequired ? "가입 링크 재발급·복사" : "결제 링크 복사"}</button>}
       </div>
     </div>
+    {!isPaid && item.invoice && <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+      <p className="w-full text-xs font-bold text-gray-500 dark:text-gray-400">직접 납부 확인</p>
+      <button type="button" disabled={paying !== null} onClick={() => void handleMarkPaid("CASH")} className="inline-flex min-h-9 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-800 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50 dark:border-gray-700 dark:text-white">{paying === "CASH" ? "처리 중…" : "현금 납부 완료"}</button>
+      <button type="button" disabled={paying !== null} onClick={() => void handleMarkPaid("BANK_TRANSFER")} className="inline-flex min-h-9 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-800 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50 dark:border-gray-700 dark:text-white">{paying === "BANK_TRANSFER" ? "처리 중…" : "계좌이체 납부 완료"}</button>
+      {payErr && <p className="w-full text-xs font-bold text-red-600">⚠ {payErr}</p>}
+    </div>}
     <NotificationActionRow label={notificationLabel} summary={currentNotificationSummary} sending={sendingNotificationKey === `invoice:${item.id}:${defaultTrigger}`} onSend={() => void onRetryNotification("invoice", item.id, defaultTrigger)} />
   </div>;
 }
@@ -2617,13 +2647,6 @@ function ShuttleLocationCard({ point }: { point: ShuttlePoint }) {
 
     <p className="mt-3 break-words text-sm font-bold text-gray-900 dark:text-white">{displayAddress}</p>
     {point.location && point.location !== displayAddress && <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">상세 설명: {point.location}</p>}
-    <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-      <Info label="좌표">{hasCoordinates ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : "좌표 없음"}</Info>
-      <Info label="제출 시각">{point.confirmedAt ? formatDateTime(point.confirmedAt) : "기록 없음"}</Info>
-      {(point.source || point.placeId) && <Info label="지도 정보">{[point.source, point.placeId].filter(Boolean).join(" · ")}</Info>}
-      {accuracy !== null && <Info label="위치 정확도">약 {Math.round(accuracy)}m</Info>}
-    </dl>
-
     {(kakaoHref || naverHref) && <div className="mt-3 grid grid-cols-2 gap-2">
       {kakaoHref && <a href={kakaoHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-2 text-xs font-black text-blue-800 hover:bg-blue-50 dark:border-blue-800 dark:bg-gray-900 dark:text-blue-200 dark:hover:bg-blue-950/40"><Icon name="map" className="text-base" />카카오맵</a>}
       {naverHref && <a href={naverHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 text-xs font-black text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-gray-900 dark:text-emerald-200 dark:hover:bg-emerald-950/40"><Icon name="map" className="text-base" />네이버 지도</a>}
@@ -2668,11 +2691,9 @@ function ShuttleRequestBox({ request, onChanged }: { request: ShuttleRequest; on
         <ShuttleLocationCard point={shuttlePoint(request, "pickup")} />
         <ShuttleLocationCard point={shuttlePoint(request, "dropoff")} />
       </div>
-      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Info label="희망 시간">{request.pickupTime || "미입력"}</Info>
-        <Info label="배정">{request.assignedRouteId || request.assignedStopId ? [request.assignedRouteId, request.assignedStopId].filter(Boolean).join(" · ") : "미배정"}</Info>
-        {request.locationConsentVersion && <Info label="위치정보 동의">버전 {request.locationConsentVersion}</Info>}
-      </dl>
+      {request.pickupTime && <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Info label="희망 시간">{request.pickupTime}</Info>
+      </dl>}
       {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
     </>}
   </div>;

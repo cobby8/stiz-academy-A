@@ -383,6 +383,11 @@ export async function completeClassSession(input: { sessionId: string }) {
   );
   if (!ended[0]) return { ok: false as const, message: "수업 종료 상태를 다시 확인해 주세요." };
 
+  // 종료 즉시 캐시 무효화 — 알림 발송보다 먼저 해야 직원 화면이 날짜 이동 없이도 완료 상태로 바뀐다.
+  revalidatePath("/staff");
+  revalidatePath("/staff/seasonal");
+  revalidatePath(`/staff/sessions/${input.sessionId}`);
+
   // 종료 안내는 결석 여부와 관계없이 이 수업의 전체 재원생 학부모에게 보냅니다.
   // 수업 종료 저장은 학부모 알림보다 우선입니다. 알림 장애가 이미 끝난 수업을 실패로 되돌리지 않게 격리합니다.
   // ★ 알림 발송은 NotificationDelivery 큐에 먼저 기록되고 push-outbox 크론(매분)이 재발송을 보장하므로,

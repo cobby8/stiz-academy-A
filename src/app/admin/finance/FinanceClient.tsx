@@ -204,6 +204,19 @@ const TYPE_LABELS: Record<string, string> = {
     OTHER: "기타",
 };
 
+const METHOD_LABELS: Record<string, string> = {
+    RALLYZ: "온라인",
+    CARD: "카드",
+    CASH: "현금",
+    BANK_TRANSFER: "계좌이체",
+    UNPAID: "미납",
+};
+
+const PROVIDER_LABELS: Record<string, string> = {
+    TOSS: "토스페이먼츠",
+    MANUAL: "직접 처리",
+};
+
 const SHEET_RECONCILE_ACTION_LABELS: Record<string, string> = {
     CREATE: "생성",
     UPDATE: "수정",
@@ -864,8 +877,8 @@ export default function FinanceClient({
         Boolean(payment.invoiceId) && !payment.invoiceSentAt && ["PENDING", "OVERDUE"].includes(payment.status)
     ).length;
     const paymentProviderMissing = [
-        !paymentProvider.clientKeyConfigured ? "토스 공개키" : null,
-        !paymentProvider.secretKeyConfigured ? "토스 서버키" : null,
+        !paymentProvider.clientKeyConfigured ? "결제 클라이언트 키 미설정" : null,
+        !paymentProvider.secretKeyConfigured ? "결제 서버 키 미설정" : null,
         paymentProvider.clientKeyConfigured && paymentProvider.secretKeyConfigured && !paymentProvider.keyPairReady
             ? "테스트/실거래 키 종류 확인"
             : null,
@@ -901,7 +914,7 @@ export default function FinanceClient({
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-xs font-bold uppercase tracking-wide text-brand-orange-500 dark:text-brand-neon-lime">
-                                    Toss terminal
+                                    현장 단말기
                                 </p>
                                 <h2 id="terminal-payment-title" className="mt-1 text-lg font-extrabold text-gray-900 dark:text-white">
                                     현장 단말기 결제 반영
@@ -1621,12 +1634,12 @@ export default function FinanceClient({
                                                 {TYPE_LABELS[p.type] || p.type}
                                                 {(p.method || p.paidProvider) && (
                                                     <p className="mt-1 text-[11px] text-gray-400">
-                                                        {[p.method, p.paidProvider].filter(Boolean).join(" · ")}
+                                                        {[p.method ? (METHOD_LABELS[p.method] ?? p.method) : null, p.paidProvider ? (PROVIDER_LABELS[p.paidProvider] ?? null) : null].filter(Boolean).join(" · ")}
                                                     </p>
                                                 )}
                                                 {p.providerOrderId && (
                                                     <p className="mt-1 text-[11px] font-bold text-gray-500 dark:text-gray-300">
-                                                        승인 {p.providerOrderId}
+                                                        승인번호 {p.providerOrderId}
                                                     </p>
                                                 )}
                                                 {p.receiptUrl && (

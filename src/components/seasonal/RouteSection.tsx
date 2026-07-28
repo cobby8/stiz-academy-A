@@ -124,6 +124,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
   const [departPinned, setDepartPinned] = useState<Record<number, boolean>>({});
   const [mapVehicle, setMapVehicle] = useState<number>(0);
   const [rerouting, setRerouting] = useState(false);
+  const [recalcing, setRecalcing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -220,6 +221,21 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
       await generate(sug.date ?? date); // 자동 제안으로 되돌림
     } catch (e: any) { setErr(e?.message || "노선을 삭제하지 못했습니다."); }
     finally { setSaving(false); }
+  }
+
+  async function recalcPaths() {
+    if (rerouting || loading || recalcing) return;
+    setRecalcing(true); setErr(null);
+    try {
+      const ok = await loadAndApplySaved(sug.date ?? date);
+      if (!ok) { setErr("저장된 노선이 없습니다. 먼저 저장해주세요."); return; }
+      const cur = sugRef.current;
+      for (let vi = 0; vi < cur.vehicles.length; vi++) {
+        await rerouteVehicle(vi);
+      }
+      await saveRoute();
+    } catch (e: any) { setErr(e?.message || "경로 재계산에 실패했습니다."); }
+    finally { setRecalcing(false); }
   }
 
   function reorderStop(vIdx: number, from: number, to: number) {
@@ -418,6 +434,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
         <div className="flex items-center gap-1.5 print:hidden">
           <button onClick={() => { setLoadedFromSaved(false); setSaveMsg(null); void generate(date); }} disabled={loading} className="rounded-lg bg-brand-navy-900 px-2.5 py-1.5 text-[12px] font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{loading ? "계산 중…" : "⚡ 자동 제안"}</button>
           <button onClick={saveRoute} disabled={saving || sug.vehicles.length === 0} className="rounded-lg bg-brand-orange-500 px-2.5 py-1.5 text-[12px] font-black text-white disabled:opacity-50">{saving ? "저장 중…" : "💾 저장"}</button>
+          {loadedFromSaved && <button onClick={() => void recalcPaths()} disabled={loading || rerouting || recalcing} className="rounded-lg border border-blue-300 px-2.5 py-1.5 text-[12px] font-black text-blue-700 disabled:opacity-50 dark:border-blue-500/40 dark:text-blue-300">{recalcing ? "계산 중…" : "🗺 경로 재계산"}</button>}
           {loadedFromSaved && <button onClick={deleteRoute} disabled={saving} className="rounded-lg border border-red-300 px-2.5 py-1.5 text-[12px] font-black text-red-600 disabled:opacity-50 dark:border-red-500/40 dark:text-red-300">🗑 노선 삭제</button>}
         </div>
       </div>

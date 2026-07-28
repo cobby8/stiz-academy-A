@@ -3294,7 +3294,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
 // ── 월별 청구서 자동 생성 ────────────────────────────────────────────────────────
 // 활성 템플릿 기준으로 ACTIVE 수강생에게 청구서를 생성한다.
 // 중복 방지: 같은 학생+같은 year+month+type 조합이 이미 있으면 건너뜀
-export async function generateMonthlyInvoices(year: number, month: number) {
+export async function generateMonthlyInvoices(year: number, month: number, excludeStudentIds?: string[]) {
     await requireAdmin();
     await ensurePaymentColumns();
     await ensureBillingTemplateTable();
@@ -3304,6 +3304,11 @@ export async function generateMonthlyInvoices(year: number, month: number) {
         if (preview.activeTemplateCount === 0) {
             return { created: 0, skipped: 0, message: "활성 청구 템플릿이 없습니다." };
         }
+
+        const excluded = excludeStudentIds && excludeStudentIds.length > 0 ? excludeStudentIds : null;
+        const excludeClause = excluded
+            ? `AND "studentId" NOT IN (${excluded.map((_, i) => `$${i + 4}`).join(",")})`
+            : "";
 
         const insertResult = await prisma.$executeRawUnsafe(
             `
@@ -3318,8 +3323,6 @@ export async function generateMonthlyInvoices(year: number, month: number) {
                 "classId",
                 amount,
                 'PENDING',
-                -- 납부기한: 약관 "수강일 전까지" → 수강 개시일(그 달 1일) 전날 = 전월 말일.
-                -- 예전에는 템플릿의 "dueDay"(기본 10)로 그 달 10일에 넣었는데, 이는 수강 시작 후라 약관과 어긋났다.
                 $3::timestamp,
                 type,
                 description,
@@ -3330,10 +3333,12 @@ export async function generateMonthlyInvoices(year: number, month: number) {
                 NOW()
             FROM actions
             WHERE action = 'CREATE'
+            ${excludeClause}
             `,
             year,
             month,
             monthlyBillingDueDate(year, month),
+            ...(excluded ?? []),
         );
 
         const invoiceResult = await ensureInvoicesForMonth(year, month);

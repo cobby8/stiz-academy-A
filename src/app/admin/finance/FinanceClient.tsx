@@ -388,6 +388,7 @@ export default function FinanceClient({
     const [billingRunLoading, setBillingRunLoading] = useState(false);
     const [invoiceFilter, setInvoiceFilter] = useState<InvoicePreviewFilter>("ALL");
     const [invoiceError, setInvoiceError] = useState<string | null>(null);
+    const [excludedStudentIds, setExcludedStudentIds] = useState<Set<string>>(new Set());
     const [financeNotice, setFinanceNotice] = useState<string | null>(null);
     const [terminalTarget, setTerminalTarget] = useState<Payment | null>(null);
     const [terminalApprovalNo, setTerminalApprovalNo] = useState("");
@@ -613,22 +614,29 @@ export default function FinanceClient({
         }
     }
 
-    // 이달 청구서 생성
-    async function handleGenerateInvoices() {
+    // 이달 청구서 생성 (excludeIds: 특정 학생 제외, 미지정 시 전체 발행)
+    async function handleGenerateInvoices(excludeIds?: string[]) {
         if (!invoicePreview) {
             await handlePreviewInvoices();
             return;
         }
 
-        if (invoicePreview.createCount === 0) {
+        const excluded = excludeIds ?? Array.from(excludedStudentIds);
+        const allItems = invoicePreview.items ?? invoicePreview.samples ?? [];
+        const targetItems = allItems.filter(
+            (item) => item.action === "CREATE" && !excluded.includes(item.studentId),
+        );
+
+        if (targetItems.length === 0) {
             alert("새로 생성할 청구서가 없습니다.");
             return;
         }
 
+        const totalAmount = targetItems.reduce((sum, item) => sum + item.amount, 0);
         const confirmMessage =
-            `${year}년 ${month}월 청구서를 생성할까요?\n` +
-            `생성 예정 ${invoicePreview.createCount}건, 총 ${formatAmount(invoicePreview.createAmount)}입니다.\n` +
-            `기존 청구 ${invoicePreview.skipCount}건은 그대로 둡니다.`;
+            `${year}년 ${month}월 청구서를 발행할까요?\n` +
+            `대상 ${targetItems.length}건 · 총 ${formatAmount(totalAmount)}\n` +
+            (excluded.length > 0 ? `(${excluded.length}명 제외됨)` : "");
 
         if (!confirm(confirmMessage)) return;
 
@@ -636,10 +644,11 @@ export default function FinanceClient({
         setInvoiceError(null);
 
         try {
-            const result = await generateMonthlyInvoices(year, month);
+            const result = await generateMonthlyInvoices(year, month, excluded.length > 0 ? excluded : undefined);
             await loadMonth(year, month);
             const updatedPreview = await previewMonthlyInvoices(year, month);
             setInvoicePreview(updatedPreview);
+            setExcludedStudentIds(new Set());
             setFinanceNotice(result.message);
         } catch (err: unknown) {
             setInvoiceError(getErrorMessage(err, "청구서 생성 실패"));
@@ -1159,109 +1168,245 @@ export default function FinanceClient({
             )}
 
             {invoicePreview && (
-                <details className="mb-4 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                    <summary className="cursor-pointer text-sm font-extrabold text-gray-900 dark:text-white">
-                        청구 검수표 · 대상 {invoicePreview.targetStudentCount}명 · 생성 {invoicePreview.createCount}건 · 기존 {invoicePreview.skipCount}건 · 확인 {invoiceAttentionCount}건
-                    </summary>
+                <div className="mb-4 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                    {/* 헤더 */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                        <div>
+                            <p className="text-sm font-extrabold text-gray-900 dark:text-white">
+                                {year}년 {month}월 청구 검수
+                            </p>
+                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                대상 {invoicePreview.targetStudentCount}명 · 발행 예정 {invoicePreview.createCount}건 · 기존 유지 {invoicePreview.skipCount}건
+                                {invoiceAttentionCount > 0 && <span className="ml-1 font-bold text-amber-600 dark:text-amber-300">· 확인 필요 {invoiceAttentionCount}건</span>}
+                                {excludedStudentIds.size > 0 && <span className="ml-1 font-bold text-red-500">· {excludedStudentIds.size}명 제외</span>}
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {excludedStudentIds.size > 0 && (
+                                <button type="button" onClick={() => setExcludedStudentIds(new Set())} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 hover:border-gray-400 dark:border-gray-700 dark:text-gray-300">
+                                    전체 선택 복원
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                disabled={invoiceGenerating || invoicePreview.createCount === 0}
+                                onClick={() => void handleGenerateInvoices()}
+                                className="rounded-lg bg-brand-orange-500 px-4 py-1.5 text-xs font-extrabold text-white disabled:opacity-40 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                            >
+                                {invoiceGenerating ? "발행 중…" : excludedStudentIds.size > 0 ? `선택 ${invoicePreview.createCount - excludedStudentIds.size}건 발행` : `전체 ${invoicePreview.createCount}건 발행`}
+                            </button>
+                        </div>
+                    </div>
 
                     {invoicePreview.activeTemplateCount === 0 && (
-                        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
-                            활성 청구 템플릿이 없습니다. 먼저 청구 템플릿을 등록해야 월별 청구서를 만들 수 있습니다.
+                        <p className="px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                            활성 청구 템플릿이 없습니다. 청구 템플릿을 먼저 등록해야 월별 청구서를 발행할 수 있습니다.
                         </p>
                     )}
 
+                    {/* 필터 탭 */}
                     {invoiceItems.length > 0 && (
-                        <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                            <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-3 py-2 dark:border-gray-700">
-                                {invoiceFilterOptions.map((option) => (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => setInvoiceFilter(option.value)}
-                                        className={`rounded-full px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
-                                            ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                                            : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                                            }`}
-                                    >
-                                        {option.label} {option.count}건
-                                    </button>
-                                ))}
-                            </div>
-                            {filteredInvoiceItems.length === 0 ? (
-                                <div className="px-4 py-6 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">
-                                    선택한 조건에 해당하는 청구 대상이 없습니다.
-                                </div>
-                            ) : (
-                                <div className="max-h-[360px] overflow-auto">
-                                    <table className="min-w-[820px] w-full divide-y divide-gray-100 text-sm dark:divide-gray-700">
-                                        <thead className="sticky top-0 bg-gray-50 dark:bg-gray-950">
-                                            <tr>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학생</th>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">청구 항목</th>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">금액</th>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">기한</th>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">학부모</th>
-                                                <th className="px-3 py-2 text-left text-xs font-bold text-gray-500 dark:text-gray-400">상태</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                            {filteredInvoiceItems.map((item) => {
-                                                const statusInfo = item.existingStatus ? STATUS_LABELS[item.existingStatus] : null;
-                                                return (
-                                                    <tr key={`${item.action}-${item.studentId}-${item.templateName}-${item.type}`} className="hover:bg-gray-50 dark:hover:bg-gray-800/70">
-                                                        <td className="px-3 py-2 align-middle">
-                                                            <p className="font-bold text-gray-900 dark:text-white">{item.studentName}</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{item.className ?? "수업 미지정"}</p>
-                                                        </td>
-                                                        <td className="px-3 py-2 align-middle">
-                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{item.templateName}</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{TYPE_LABELS[item.type] ?? item.type}</p>
-                                                        </td>
-                                                        <td className="px-3 py-2 align-middle font-mono text-gray-800 dark:text-gray-100">
-                                                            {formatAmount(item.amount)}
-                                                            {item.existingAmount != null && item.existingAmount !== item.amount && (
-                                                                <p className="text-xs text-amber-600 dark:text-amber-200">
-                                                                    기존 {formatAmount(item.existingAmount)}
-                                                                </p>
-                                                            )}
-                                                        </td>
-                                                        {/* 납부기한은 약관 기준(수강 개시일 전날 = 전월 말일)으로 계산된 실제 날짜를 보여준다 */}
-                                                        <td className="px-3 py-2 align-middle text-gray-600 dark:text-gray-300">{item.dueDate}</td>
-                                                        <td className="px-3 py-2 align-middle">
-                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{item.parentName ?? "학부모 미지정"}</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{item.parentPhone || item.parentEmail || "연락처 확인 필요"}</p>
-                                                        </td>
-                                                        <td className="px-3 py-2 align-middle">
-                                                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${item.action === "CREATE"
-                                                                ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200"
-                                                                : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                                                                }`}>
-                                                                {MONTHLY_INVOICE_ACTION_LABELS[item.action] ?? item.action}
-                                                            </span>
-                                                            {statusInfo && (
-                                                                <span className={`ml-1 inline-flex rounded-full px-2 py-1 text-xs font-bold ${statusInfo.color}`}>
-                                                                    {statusInfo.label}
-                                                                </span>
-                                                            )}
-                                                            {item.existingInvoiceNo && (
-                                                                <p className="mt-1 text-[11px] font-bold text-brand-orange-500 dark:text-brand-neon-lime">
-                                                                    {item.existingInvoiceNo}
-                                                                </p>
-                                                            )}
-                                                            {item.issueReason && (
-                                                                <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">{item.issueReason}</p>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                        <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-2 dark:border-gray-800">
+                            {invoiceFilterOptions.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setInvoiceFilter(option.value)}
+                                    className={`rounded-full px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
+                                        ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                        }`}
+                                >
+                                    {option.label} {option.count}
+                                </button>
+                            ))}
                         </div>
                     )}
-                </details>
+
+                    {/* 반별 그룹 목록 */}
+                    {filteredInvoiceItems.length === 0 ? (
+                        <p className="px-4 py-8 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">
+                            선택한 조건에 해당하는 청구 대상이 없습니다.
+                        </p>
+                    ) : (() => {
+                        // 반별 그룹핑 → 학생별 그룹핑
+                        const classMap = new Map<string, MonthlyInvoicePreviewItem[]>();
+                        for (const item of filteredInvoiceItems) {
+                            const key = item.className ?? "수업 미지정";
+                            const arr = classMap.get(key) ?? [];
+                            arr.push(item);
+                            classMap.set(key, arr);
+                        }
+                        const sortedClasses = Array.from(classMap.entries()).sort(([a], [b]) => a.localeCompare(b, "ko"));
+
+                        return (
+                            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                                {sortedClasses.map(([className, classItems]) => {
+                                    const studentMap = new Map<string, MonthlyInvoicePreviewItem[]>();
+                                    for (const item of classItems) {
+                                        const arr = studentMap.get(item.studentId) ?? [];
+                                        arr.push(item);
+                                        studentMap.set(item.studentId, arr);
+                                    }
+                                    const students = Array.from(studentMap.entries()).sort(([, a], [, b]) =>
+                                        a[0].studentName.localeCompare(b[0].studentName, "ko"),
+                                    );
+                                    const classCreateStudents = students.filter(([, items]) => items.some((i) => i.action === "CREATE"));
+                                    const classTotalAmount = classItems.reduce((sum, item) => sum + item.amount, 0);
+                                    const classExcluded = classCreateStudents.every(([sid]) => excludedStudentIds.has(sid));
+                                    const classAllSelected = classCreateStudents.length > 0 && classCreateStudents.every(([sid]) => !excludedStudentIds.has(sid));
+
+                                    function toggleClass() {
+                                        setExcludedStudentIds((prev) => {
+                                            const next = new Set(prev);
+                                            if (classAllSelected) {
+                                                classCreateStudents.forEach(([sid]) => next.add(sid));
+                                            } else {
+                                                classCreateStudents.forEach(([sid]) => next.delete(sid));
+                                            }
+                                            return next;
+                                        });
+                                    }
+
+                                    return (
+                                        <div key={className}>
+                                            {/* 반 헤더 */}
+                                            <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50 px-4 py-2 dark:bg-gray-800/60">
+                                                <div className="flex items-center gap-3">
+                                                    {classCreateStudents.length > 0 && (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={classAllSelected}
+                                                            onChange={toggleClass}
+                                                            className="h-4 w-4 rounded accent-brand-orange-500"
+                                                            aria-label={`${className} 전체 선택`}
+                                                        />
+                                                    )}
+                                                    <div>
+                                                        <span className="text-sm font-extrabold text-gray-900 dark:text-white">{className}</span>
+                                                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{students.length}명 · {formatAmount(classTotalAmount)}</span>
+                                                    </div>
+                                                </div>
+                                                {classCreateStudents.length > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={invoiceGenerating || classExcluded}
+                                                        onClick={() => {
+                                                            const allStudentIds = Array.from(studentMap.keys());
+                                                            const nonClassExcluded = Array.from(excludedStudentIds).filter((id) => !allStudentIds.includes(id));
+                                                            void handleGenerateInvoices(nonClassExcluded);
+                                                        }}
+                                                        className="rounded-lg border border-brand-orange-200 px-3 py-1 text-xs font-bold text-brand-orange-600 hover:bg-brand-orange-50 disabled:opacity-40 dark:border-brand-neon-lime/30 dark:text-brand-neon-lime dark:hover:bg-brand-neon-lime/10"
+                                                    >
+                                                        이 반 발행
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* 학생 행 */}
+                                            <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                                                {students.map(([studentId, studentItems]) => {
+                                                    const first = studentItems[0];
+                                                    const hasCreate = studentItems.some((i) => i.action === "CREATE");
+                                                    const isExcluded = excludedStudentIds.has(studentId);
+                                                    const totalAmount = studentItems.reduce((sum, i) => sum + i.amount, 0);
+                                                    const hasAttention = studentItems.some(needsInvoiceAttention);
+                                                    const existingStatus = first.existingStatus ? STATUS_LABELS[first.existingStatus] : null;
+
+                                                    return (
+                                                        <div
+                                                            key={studentId}
+                                                            className={`flex flex-wrap items-start gap-3 px-4 py-3 ${isExcluded ? "opacity-40" : ""}`}
+                                                        >
+                                                            {/* 체크박스 (발행 예정인 경우만) */}
+                                                            <div className="flex w-4 shrink-0 items-center pt-0.5">
+                                                                {hasCreate ? (
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!isExcluded}
+                                                                        onChange={() => {
+                                                                            setExcludedStudentIds((prev) => {
+                                                                                const next = new Set(prev);
+                                                                                if (isExcluded) next.delete(studentId);
+                                                                                else next.add(studentId);
+                                                                                return next;
+                                                                            });
+                                                                        }}
+                                                                        className="h-4 w-4 rounded accent-brand-orange-500"
+                                                                        aria-label={`${first.studentName} 포함`}
+                                                                    />
+                                                                ) : (
+                                                                    <span className="block h-4 w-4" />
+                                                                )}
+                                                            </div>
+
+                                                            {/* 학생 정보 */}
+                                                            <div className="min-w-[100px] flex-1">
+                                                                <p className="font-bold text-gray-900 dark:text-white">{first.studentName}</p>
+                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                                                    {first.parentName ?? "학부모 미지정"} · {first.parentPhone || first.parentEmail || "연락처 확인 필요"}
+                                                                </p>
+                                                            </div>
+
+                                                            {/* 청구 항목 목록 */}
+                                                            <div className="min-w-[180px] flex-1">
+                                                                {studentItems.map((item, idx) => (
+                                                                    <div key={idx} className="flex items-center justify-between gap-2 text-sm">
+                                                                        <span className="text-gray-600 dark:text-gray-300">
+                                                                            {TYPE_LABELS[item.type] ?? item.type}
+                                                                        </span>
+                                                                        <span className="font-mono font-semibold text-gray-800 dark:text-gray-100">
+                                                                            {formatAmount(item.amount)}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                                {studentItems.length > 1 && (
+                                                                    <div className="mt-1 flex items-center justify-between gap-2 border-t border-gray-200 pt-1 text-sm dark:border-gray-700">
+                                                                        <span className="font-bold text-gray-700 dark:text-gray-200">합계</span>
+                                                                        <span className="font-mono font-extrabold text-gray-900 dark:text-white">{formatAmount(totalAmount)}</span>
+                                                                    </div>
+                                                                )}
+                                                                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">납부기한 {first.dueDate}</p>
+                                                            </div>
+
+                                                            {/* 상태 배지 */}
+                                                            <div className="flex shrink-0 flex-wrap items-center gap-1">
+                                                                {hasCreate ? (
+                                                                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 dark:bg-green-950/40 dark:text-green-200">
+                                                                        발행 예정
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                                                        기존 유지
+                                                                    </span>
+                                                                )}
+                                                                {existingStatus && (
+                                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${existingStatus.color}`}>
+                                                                        {existingStatus.label}
+                                                                    </span>
+                                                                )}
+                                                                {hasAttention && (
+                                                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                                                                        확인 필요
+                                                                    </span>
+                                                                )}
+                                                                {studentItems.some((i) => i.issueReason) && (
+                                                                    <p className="w-full text-xs text-amber-600 dark:text-amber-300">
+                                                                        {studentItems.find((i) => i.issueReason)?.issueReason}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
+                </div>
             )}
 
             {(sheetError || sheetPreview) && (

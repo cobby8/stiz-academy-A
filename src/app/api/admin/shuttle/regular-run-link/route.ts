@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   try {
     const { token } = await createOrGetRegularRunLink();
-    return NextResponse.json({ token, path: `/shuttle/regular/${token}` });
+    return NextResponse.json({ token, path: `/driver/${token}` });
   } catch (e) {
     console.error("[regular-run-link POST]", e);
     const msg = String((e as { message?: string })?.message ?? "");

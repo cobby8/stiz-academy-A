@@ -2300,6 +2300,41 @@ model ShuttleBoarding {
   @@unique([serviceDate, direction, shuttleRequestId])
 }
 
+// 기사님 → 관리자 변경 요청. 기사 화면에서 학생 제외·주소 변경·순서 고정·기타를 요청하면
+// 관리자가 배차 화면에서 승인·거절한다. 승인 시 type에 따라 자동으로 명단·노선이 수정된다.
+model DriverRequest {
+  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  token            String
+  serviceDate      String
+  type             String    // 'REMOVE' | 'LOCATION' | 'ORDER' | 'OTHER'
+  targetId         String?   // REMOVE: shuttleRequestId, ORDER: "${dir}:${vehicleIdx}"
+  targetName       String?   // 학생 or 정류장 이름 스냅샷
+  note             String?
+  payload          Json?     // ORDER: [{label,lat,lng,...}] 새 순서 배열
+  status           String    @default("PENDING") // 'PENDING' | 'APPROVED' | 'REJECTED'
+  resolvedAt       DateTime? @db.Timestamptz(6)
+  resolvedByUserId String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@index([token, serviceDate])
+}
+
+// 기사님 실시간 GPS 위치 — token당 1행(현재 위치만 유지, 히스토리 없음).
+// 기사님 화면에서 위치 공유 ON 상태일 때 10초마다 갱신한다.
+// FK는 DB 레벨(migration.sql)에만 있고 Prisma relation은 정의하지 않는다(raw query 전용).
+model DriverLocation {
+  token     String   @id
+  label     String?
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+  speed     Float?
+  heading   Float?
+  sharing   Boolean  @default(true)
+  updatedAt DateTime @db.Timestamptz(6)
+}
+
 // 정규 수업 셔틀 운행리스트(구글 시트 이관본). 요일별 하루 타임라인의 정차 하나 = 1행.
 model RegularShuttleStop {
   id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))

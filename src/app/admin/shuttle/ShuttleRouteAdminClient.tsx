@@ -137,6 +137,15 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
   const [modal, setModal] = useState<"vehicle" | "route" | "assign" | "confirm" | null>(null);
   const [showDriverLocations, setShowDriverLocations] = useState(false);
   const [showDriverRequests, setShowDriverRequests] = useState(false);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  useEffect(() => {
+    fetch("/api/admin/driver-requests")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { requests?: { status: string }[] } | null) => {
+        if (d?.requests) setPendingRequestCount(d.requests.filter((r) => r.status === "PENDING").length);
+      })
+      .catch(() => null);
+  }, []);
   const [assignRequest, setAssignRequest] = useState<ShuttleRequest | null>(null);
   const [locationPicker, setLocationPicker] = useState<LocationPickerTarget | null>(null);
   const [optimizationPreview, setOptimizationPreview] = useState<OptimizationPreview | null>(null);
@@ -354,7 +363,14 @@ export default function ShuttleRouteAdminClient({ initialData }: { initialData?:
     {/* 제목 블록은 공통 헤더(SeasonalHeader)로 옮겼다. 이 줄에는 셔틀 전용 액션 버튼만 남긴다. */}
     <div className="flex flex-wrap gap-2 sm:justify-end">
       <button type="button" onClick={() => setShowDriverLocations(true)} className="min-h-11 rounded-xl border border-gray-300 bg-white px-4 text-sm font-black dark:border-gray-700 dark:bg-gray-800">🗺 실시간 위치</button>
-      <button type="button" onClick={() => setShowDriverRequests(true)} className="min-h-11 rounded-xl border border-gray-300 bg-white px-4 text-sm font-black dark:border-gray-700 dark:bg-gray-800">📥 기사 요청</button>
+      <button type="button" onClick={() => setShowDriverRequests(true)} className="relative min-h-11 rounded-xl border border-gray-300 bg-white px-4 text-sm font-black dark:border-gray-700 dark:bg-gray-800">
+        📥 기사 요청
+        {pendingRequestCount > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-[20px] place-items-center rounded-full bg-red-500 px-1 text-[11px] font-black text-white">
+            {pendingRequestCount}
+          </span>
+        )}
+      </button>
       <button type="button" onClick={() => setModal("vehicle")} className="min-h-11 rounded-xl border border-gray-300 bg-white px-4 text-sm font-black dark:border-gray-700 dark:bg-gray-800">차량 등록</button>
       <button type="button" onClick={() => setModal("route")} disabled={!seasonId || !data.vehicles.length || !data.drivers.length} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-4 text-sm font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">노선 만들기</button>
     </div>

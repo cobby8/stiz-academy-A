@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     }
     const { token } = body?.rolling ? await createOrGetRollingRunLink() : await createOrGetRunLink(body!.date!);
-    return NextResponse.json({ token, path: `/shuttle/run/${token}` });
+    return NextResponse.json({ token, path: `/driver/${token}` });
   } catch (e) {
     console.error("[dispatch/run-link POST]", e);
     const msg = String((e as { message?: string })?.message ?? "");

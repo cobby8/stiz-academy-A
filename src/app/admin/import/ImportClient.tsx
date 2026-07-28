@@ -851,7 +851,7 @@ function ImportHistoryPanel({
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(batch.createdAt).toLocaleString("ko-KR")} · {batch.id}
+                    {new Date(batch.createdAt).toLocaleString("ko-KR")}
                   </p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs md:min-w-72">

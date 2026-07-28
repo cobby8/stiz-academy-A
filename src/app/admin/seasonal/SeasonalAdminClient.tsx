@@ -297,6 +297,14 @@ const STATUS_LABEL: Record<string, string> = {
   PAID: "결제 완료", UNPAID: "미결제", REQUESTED: "요청", ASSIGNED: "배정 완료", UNASSIGNED: "미배정",
 };
 
+const NOTIFICATION_ERROR_LABEL: Record<string, string> = {
+  FAILED_DELIVERY_UNCERTAIN: "수신 여부 불확실 — 솔라피 발송 이력을 확인해주세요.",
+  TEMPLATE_DISABLED_OR_MISSING: "문자 템플릿이 비활성화되어 있습니다. 솔라피 설정을 확인해주세요.",
+  INVALID_RECIPIENT: "수신 번호가 올바르지 않습니다.",
+  INSUFFICIENT_BALANCE: "솔라피 계정 잔액이 부족합니다.",
+  BLOCKED_NUMBER: "수신 거부 번호입니다.",
+};
+
 const TABS: Array<{ key: Tab; label: string; icon: string }> = [
   { key: "overview", label: "운영 현황", icon: "dashboard" },
   { key: "seasons", label: "시즌·반", icon: "calendar_month" },
@@ -2561,7 +2569,7 @@ function NotificationActionRow({ label, summary, sending, onSend }: { label: str
     <div className="min-w-0">
       <p className="font-black text-gray-900 dark:text-white">{label}</p>
       <p className={`mt-1 text-xs font-bold ${state.className}`}>{pending ? "발송 중" : state.text}{summary?.updatedAt ? ` · ${formatDateTime(summary.updatedAt)}` : ""}</p>
-      {summary?.status === "FAILED" && summary.errorCode && <p className="mt-1 truncate text-xs text-red-600 dark:text-red-300" title={summary.errorCode}>{summary.errorCode}</p>}
+      {summary?.status === "FAILED" && summary.errorCode && <p className="mt-1 text-xs text-red-600 dark:text-red-300">{NOTIFICATION_ERROR_LABEL[summary.errorCode] ?? "발송 오류 — 솔라피 이력을 확인해주세요."}</p>}
       {needsReview && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">중복 발송을 피하려면 발송 이력을 확인한 뒤 재시도하세요.</p>}
       {summary?.status === "SKIPPED" && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">문자 템플릿이 켜져 있는지 확인한 뒤 재시도하세요.</p>}
     </div>

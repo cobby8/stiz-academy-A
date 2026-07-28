@@ -84,6 +84,14 @@ const CHANNEL_LABELS: Record<Channel, string> = {
     RCS: "RCS",
 };
 
+const SMS_ERROR_LABEL: Record<string, string> = {
+    FAILED_DELIVERY_UNCERTAIN: "수신 여부 불확실 — 솔라피 이력 확인 필요",
+    TEMPLATE_DISABLED_OR_MISSING: "템플릿 비활성화 — 솔라피 설정 확인 필요",
+    INVALID_RECIPIENT: "수신 번호 오류",
+    INSUFFICIENT_BALANCE: "솔라피 잔액 부족",
+    BLOCKED_NUMBER: "수신 거부 번호",
+};
+
 export default function SmsClient({ coaches: initialCoaches }: { coaches?: CoachPhone[] }) {
     const [activeTab, setActiveTab] = useState<CenterTab>("automation");
 
@@ -413,7 +421,7 @@ function HistoryPanel() {
                                     <td className="px-5 py-4">{item.recipient}</td>
                                     <td className="px-5 py-4">
                                         <DeliveryBadge status={item.status} />
-                                        {item.errorCode && <span className="mt-1 block text-xs text-red-600">{item.errorCode}</span>}
+                                        {item.errorCode && <span className="mt-1 block text-xs text-red-600">{SMS_ERROR_LABEL[item.errorCode] ?? "발송 오류 — 솔라피 이력 확인 필요"}</span>}
                                     </td>
                                 </tr>
                             ))}

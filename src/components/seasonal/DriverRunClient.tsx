@@ -270,55 +270,52 @@ export default function DriverRunClient({
                           return url ? <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-[16px] font-black text-white active:bg-blue-700">🧭 T맵 길안내</a> : null;
                         })()}
                         {s.isHub && s.students.length === 0 && <p className="mt-1.5 text-[15px] font-bold text-green-700">무료 거점(워크인, 정원 별도)</p>}
-                        <div className="mt-2.5 space-y-2.5">
-                          {s.students.map((st) => {
-                            const status = map[st.requestId] ?? null;
-                            const parent = digits(st.parentPhone), child = digits(st.childPhone);
-                            const rowKey = `${sec.direction}:${st.requestId}`;
-                            const isBusy = busy[rowKey];
-                            const selfLabel = isPickup ? "자차등원" : "자차하원"; // 방향에 따라 자차 라벨 결정
-                            return (
-                              <div key={st.requestId} className="rounded-xl bg-gray-50 p-2.5">
-                                <div className="flex items-center gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-baseline gap-1.5">
-                                      <span className="text-[19px] font-black text-gray-900">{st.name}</span>
-                                      {st.grade && <span className="text-[14px] text-gray-500">{st.grade}</span>}
-                                      {/* 현재 상태 배지 — 미탑승 사유를 한눈에 구분 */}
-                                      {st.isAbsent && status !== "BOARDED" && status !== "SELF" && <span className="rounded-md bg-amber-400 px-2 py-0.5 text-[13px] font-black text-white">결석예정</span>}
-                                      {status === "NOSHOW" && <span className="rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white">결석</span>}
-                                      {status === "SELF" && <span className="rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white">{selfLabel}</span>}
+                        {s.students.length > 0 && (
+                          <div className="mt-2.5 overflow-hidden rounded-xl bg-gray-50 divide-y divide-gray-200">
+                            {s.students.map((st) => {
+                              const status = map[st.requestId] ?? null;
+                              const parent = digits(st.parentPhone), child = digits(st.childPhone);
+                              const rowKey = `${sec.direction}:${st.requestId}`;
+                              const isBusy = busy[rowKey];
+                              const selfLabel = isPickup ? "자차등원" : "자차하원";
+                              return (
+                                <div key={st.requestId} className="p-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex flex-wrap items-baseline gap-1.5">
+                                        <span className="text-[19px] font-black text-gray-900">{st.name}</span>
+                                        {st.grade && <span className="text-[14px] text-gray-500">{st.grade}</span>}
+                                        {st.isAbsent && status !== "BOARDED" && status !== "SELF" && <span className="rounded-md bg-amber-400 px-2 py-0.5 text-[13px] font-black text-white">결석예정</span>}
+                                        {status === "NOSHOW" && <span className="rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white">결석</span>}
+                                        {status === "SELF" && <span className="rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white">{selfLabel}</span>}
+                                      </div>
+                                      <div className="mt-1 flex gap-3">
+                                        {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
+                                        {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
+                                      </div>
                                     </div>
-                                    <div className="mt-1 flex gap-3">
-                                      {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
-                                      {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
-                                    </div>
+                                    <button type="button" onClick={() => setReqModal({ targetId: st.requestId, targetName: st.name, defaultType: "REMOVE" })}
+                                      className="h-14 min-w-[48px] rounded-xl border-2 border-gray-200 text-[13px] font-black text-gray-500 active:bg-gray-100">
+                                      요청
+                                    </button>
+                                    <button type="button" disabled={isBusy} onClick={() => { setMenuKey(null); toggle(sec.direction, st.requestId, st.name, "BOARDED"); }}
+                                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
+                                    <button type="button" onClick={() => setMenuKey(menuKey === rowKey ? null : rowKey)}
+                                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
                                   </div>
-                                  {/* 요청 버튼 */}
-                                  <button type="button" onClick={() => setReqModal({ targetId: st.requestId, targetName: st.name, defaultType: "REMOVE" })}
-                                    className="h-14 min-w-[48px] rounded-xl border-2 border-gray-200 text-[13px] font-black text-gray-500 active:bg-gray-100">
-                                    요청
-                                  </button>
-                                  {/* 탑승 버튼은 그대로(즉시 토글) */}
-                                  <button type="button" disabled={isBusy} onClick={() => { setMenuKey(null); toggle(sec.direction, st.requestId, st.name, "BOARDED"); }}
-                                    className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
-                                  {/* 미탑승 버튼은 누르면 사유 선택을 펼친다(결석/자차) */}
-                                  <button type="button" onClick={() => setMenuKey(menuKey === rowKey ? null : rowKey)}
-                                    className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                                  {menuKey === rowKey && (
+                                    <div className="mt-2 flex gap-2">
+                                      <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "NOSHOW"); setMenuKey(null); }}
+                                        className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>❌ 결석(안 옴)</button>
+                                      <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "SELF"); setMenuKey(null); }}
+                                        className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-violet-300 text-violet-700"}`}>🚗 {selfLabel}</button>
+                                    </div>
+                                  )}
                                 </div>
-                                {menuKey === rowKey && (
-                                  // 사유 선택 — 같은 항목을 다시 누르면 toggle이 대기로 되돌린다
-                                  <div className="mt-2 flex gap-2">
-                                    <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "NOSHOW"); setMenuKey(null); }}
-                                      className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>❌ 결석(안 옴)</button>
-                                    <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "SELF"); setMenuKey(null); }}
-                                      className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-violet-300 text-violet-700"}`}>🚗 {selfLabel}</button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </li>
                     );
                   })}

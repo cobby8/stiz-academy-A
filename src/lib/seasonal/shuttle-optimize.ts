@@ -72,7 +72,10 @@ function isFreeHubLabel(label: string | null | undefined): boolean {
 }
 
 // rosterId(확정본) 또는 requestId(원본)로 그 학생의 명단 행을 되짚는다. 화면에서 무료탑승으로 옮길 때 쓴다.
-type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null; requestId: string; pickupLabel: string; applicationId: string | null };
+// isAbsent: **저장되지 않는 파생값**. 노선을 읽을 때 그날 출결로 매번 다시 계산해 붙인다(reconcile).
+//   기사님 화면의 '결석예정' 뱃지 전용이며, 관리자 노선표·인원수·정원 판정에는 절대 쓰지 않는다.
+//   저장 시 saveDispatchRoute가 떼어낸다 — payload에 남으면 다음 주에도 결석으로 따라온다.
+type StopStudent = { name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; rosterId: string | null; requestId: string; pickupLabel: string; applicationId: string | null; isAbsent?: boolean };
 // etaMinutes: 그 정차의 승/하차 예상 시각을 '자정 기준 분'으로 담는 숫자 필드.
 // T2에서 정차별 '확정시간 편집'을 붙일 때 문자열 라벨 파싱 없이 이 숫자를 직접 쓴다.
 // etaManual: 관리자가 그 정차 시각을 손으로 고쳐 '확정'한 값(자정 기준 분). 있으면 표시·저장 기준이 되고
@@ -242,7 +245,10 @@ export async function getDispatchForView(date: string | null, direction: Dispatc
   const resolvedDate = base.date;
   // 요일별 관리: 노선은 그 요일의 '대표 날짜'(첫 운행일)에만 저장/조회한다. 같은 요일이면 모두 같은 노선.
   const canonicalDate = resolvedDate ? firstDateOfSameWeekday(base.availableDates, resolvedDate) : null;
-  const saved = canonicalDate ? await getSavedDispatchRoute(canonicalDate, direction) : null;
+  // 노선은 대표일(canonicalDate)에서 꺼내되, **결석 판정은 실제로 보고 있는 날짜(resolvedDate)** 기준이어야 한다.
+  const saved = canonicalDate
+    ? await getSavedDispatchRoute(canonicalDate, direction, { attendanceDate: resolvedDate })
+    : null;
   if (saved && Array.isArray(saved.vehicles) && saved.vehicles.length) {
     // hub stop label을 현재 DB 거점 이름으로 실시간 교체 — 거점 이름 변경 시 재계산 없이도 반영된다.
     const currentHubName = base.hub?.name;
@@ -252,9 +258,16 @@ export async function getDispatchForView(date: string | null, direction: Dispatc
           stops: (v.stops ?? []).map((s) => (s.isHub ? { ...s, label: currentHubName } : s)),
         }))
       : saved.vehicles) as DispatchSuggestion["vehicles"];
+    // ★ 헤더의 "탑승 N명"은 base(=오늘 명단 기준, 결석 제외)가 아니라 **실제로 화면에 그려지는 저장 노선**을
+    //   기준으로 세야 한다. 그러지 않으면 정차별 인원 합과 헤더 숫자가 어긋난다(결석자가 있으면 반드시 어긋남).
+    const savedRiderCount = vehicles.reduce(
+      (acc, v) => acc + (v.stops ?? []).reduce((a, s) => a + (s.students?.length ?? 0), 0),
+      0,
+    );
     return {
       ...base,
       vehicles,
+      totalRiders: savedRiderCount,
       classStart: saved.classStart ?? base.classStart,
       classEnd: saved.classEnd ?? base.classEnd,
       routingProvider: "TMAP",

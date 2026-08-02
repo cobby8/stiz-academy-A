@@ -52,9 +52,22 @@ function normDir(v: unknown): "PICKUP" | "DROPOFF" | null {
   return v === "PICKUP" || v === "DROPOFF" ? v : null;
 }
 
-/** 그 날짜·방향의 저장된 노선. 없으면 null. */
-export async function getSavedDispatchRoute(date: string | null, direction: string): Promise<SavedDispatchRoute | null> {
+/**
+ * 그 날짜·방향의 저장된 노선. 없으면 null.
+ *
+ * @param date  **노선을 꺼낼 날짜**. 노선은 요일 단위로 관리되므로 보통 그 요일의 대표일(첫 운행일)이 들어온다.
+ * @param opts.attendanceDate
+ *   **출결을 볼 날짜**(화면이 실제로 보여 주는 날짜). 생략하면 date와 같다.
+ *   노선 자체는 요일 대표일 것을 쓰지만, "오늘 누가 결석인가"는 대표일이 아니라 **오늘** 기준이어야 한다.
+ *   이 둘을 분리하지 않으면 8/10 화면에서 7/27의 결석자가 매주 결석으로 뜬다.
+ */
+export async function getSavedDispatchRoute(
+  date: string | null,
+  direction: string,
+  opts?: { attendanceDate?: string | null },
+): Promise<SavedDispatchRoute | null> {
   const d = normDate(date), dir = normDir(direction);
+  const attendanceDate = normDate(opts?.attendanceDate) ?? d;
   if (!d || !dir) return null;
   try {
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
@@ -80,10 +93,16 @@ export async function getSavedDispatchRoute(date: string | null, direction: stri
       try {
         // includeAbsent:true — 결석 포함 전체 명단으로 reconcile해야 저장 노선이 유지된다.
         // 결석 학생은 제거 대신 isAbsent:true 마킹으로 처리된다(기사 현장 판단).
+        // ★ 노선 소속(validIds)은 **요일 대표일(d)** 기준 — 결석 때문에 노선이 변형되면 안 되므로.
         const plan = await getConfirmedShuttleRosterForDate(d, dir, { includeAbsent: true });
         const validIds = new Set(plan.riders.map((rider) => rider.shuttleRequestId));
+        // ★ 결석 여부(absentIds)만 **화면이 보여 주는 실제 날짜** 기준으로 따로 읽는다.
+        //   대표일 출결을 쓰면 "오늘의 결석"이 아니라 "첫 주의 결석"이 매주 반복 표시된다.
+        const attendancePlan = attendanceDate && attendanceDate !== d
+          ? await getConfirmedShuttleRosterForDate(attendanceDate, dir, { includeAbsent: true }).catch(() => null)
+          : plan;
         const absentIds = new Set(
-          plan.riders.filter((r) => r.isAbsent).map((r) => r.shuttleRequestId),
+          (attendancePlan ?? plan).riders.filter((r) => r.isAbsent).map((r) => r.shuttleRequestId),
         );
         // requestId → 현재 명단 라벨. reconcile이 저장본의 얼어붙은 정차 라벨을 이걸로 갱신한다(텍스트만·자가치유).
         const labelByRequestId = new Map(
@@ -183,6 +202,35 @@ export async function getConfirmedDispatchEtas(
   return result;
 }
 
+/**
+ * 저장 직전 payload에서 **파생값**을 떼어낸다.
+ *
+ * `isAbsent`(그날의 결석 표시)는 화면을 그리려고 읽는 시점에 매번 새로 계산되는 값이지,
+ * 노선에 속한 성질이 아니다. 이게 payload에 섞여 저장되면 다음 주 같은 요일에도
+ * "결석"이 그대로 따라와 기사 화면과 인원수가 계속 틀어진다.
+ * 저장은 되돌리기 어려우므로, reconcile 쪽 방어와 **이중으로** 막는다.
+ */
+function stripDerivedFlags(vehicles: unknown[]): unknown[] {
+  return vehicles.map((v) => {
+    const run = (v ?? {}) as Record<string, unknown>;
+    const stops = Array.isArray(run.stops) ? run.stops : [];
+    return {
+      ...run,
+      stops: stops.map((s) => {
+        const stop = (s ?? {}) as Record<string, unknown>;
+        const students = Array.isArray(stop.students) ? stop.students : [];
+        return {
+          ...stop,
+          students: students.map((st) => {
+            const { isAbsent: _derived, ...rest } = (st ?? {}) as Record<string, unknown>;
+            return rest;
+          }),
+        };
+      }),
+    };
+  });
+}
+
 /** 조정된 노선을 저장(덮어쓰기). 원장/관리자만. */
 export async function saveDispatchRoute(input: {
   date: string; direction: string; vehicles: unknown[]; classStart?: string | null; classEnd?: string | null;
@@ -190,7 +238,7 @@ export async function saveDispatchRoute(input: {
   const admin = await requireAdmin();
   const d = normDate(input.date), dir = normDir(input.direction);
   if (!d || !dir) throw new Error("날짜 또는 방향이 올바르지 않습니다.");
-  const vehicles = Array.isArray(input.vehicles) ? input.vehicles : [];
+  const vehicles = stripDerivedFlags(Array.isArray(input.vehicles) ? input.vehicles : []);
   const payloadJson = JSON.stringify({ vehicles });
   const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
     `INSERT INTO "SeasonalDispatchRoute" ("serviceDate","direction","payload","classStart","classEnd","savedByUserId","updatedAt")

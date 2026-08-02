@@ -54,12 +54,15 @@ export function reconcileSavedVehicles(
         .map((st) => {
           const rid = (st as ReconcileStudent)?.requestId;
           const ridStr = rid != null ? String(rid) : null;
-          // 결석: 제거 대신 isAbsent:true 마킹(기사가 현장 판단, 경로 유지).
-          const isAbsent = ridStr != null && absentIds != null && absentIds.has(ridStr);
           // 라벨 갱신: 순수 표시용 텍스트만 현재 명단 라벨로 바꾼다(좌표·시각·순서 무관).
           const next = labelByRequestId && ridStr != null ? labelByRequestId.get(ridStr) : undefined;
-          const withLabel = next != null ? { ...(st as object), pickupLabel: next } : (st as object);
-          return isAbsent ? { ...withLabel, isAbsent: true } : withLabel;
+          // ⚠️ isAbsent는 "그날 하루"의 파생값이지 저장값이 아니다. 저장본에 남아 있을 수 있는
+          //    과거 플래그를 반드시 **먼저 떼고**, 오늘 기준으로만 다시 붙인다.
+          //    (붙이기만 하고 떼지 않으면 결석이 노선에 영구 각인돼 다음 주에도 결석으로 뜬다.)
+          const { isAbsent: _stale, ...rest } = (st ?? {}) as Record<string, unknown>;
+          const cleaned = next != null ? { ...rest, pickupLabel: next } : rest;
+          const isAbsentToday = ridStr != null && absentIds != null && absentIds.has(ridStr);
+          return isAbsentToday ? { ...cleaned, isAbsent: true } : cleaned;
         });
 
       // 비허브 정차의 표시 라벨을 첫 학생의 갱신된 라벨로 맞춘다. 허브는 고정명 보존이라 건드리지 않는다.
@@ -71,38 +74,21 @@ export function reconcileSavedVehicles(
       return { ...(s as object), students: kept };
     });
 
-    // 2) 빈 정차 제거 — 무료탑승 거점(isHub)도 그날 타는 학생이 0명이면 노선에서 뺀다.
-    //    단, 결석 학생만 있는 정차(isAbsent:true 만 남은 경우)는 경로 유지를 위해 남겨 둔다.
-    const stops = filteredStops.filter((s) => {
-      const sts = s.students as unknown[];
-      if (sts.length === 0) return false;
-      // 결석이 아닌(= 탑승 예정) 학생이 한 명이라도 있으면 정차를 살린다.
-      // 전원 결석인 정차도 경로 유지를 위해 남겨 둔다(기사 현장 판단).
-      return true;
-    });
+    // 2) 빈 정차 제거 — 취소·퇴원으로 학생이 0명이 된 정차만 뺀다.
+    //    결석자만 남은 정차는 유지한다(결석은 노선을 변형하지 않는다 — 기사 현장 판단).
+    const stops = filteredStops.filter((s) => (s.students as unknown[]).length > 0);
 
-    // 3) 인원·정원초과 재계산: passengers는 실제 탑승 인원(결석 제외)으로 센다.
-    const passengers = stops.reduce((acc, s) => {
-      const sts = s.students as unknown[];
-      const boarding = sts.filter((st) => !(st as Record<string, unknown>).isAbsent).length;
-      return acc + boarding;
-    }, 0);
+    // 3) 인원·정원초과 재계산 — 노선에 편성된 **전원**을 센다(결석자 포함).
+    //    노선표의 인원수는 "이 노선에 배정된 좌석 수"이지 "오늘 실제로 탄 수"가 아니다.
+    //    결석·자차등원은 기사 운행표와 출석부에서만 다룬다(사용자 확정 원칙).
+    const passengers = stops.reduce((acc, s) => acc + (s.students as unknown[]).length, 0);
     const capacity = typeof run.capacity === "number" ? run.capacity : 0;
 
-    // 4) 취소·퇴원 학생으로 정차가 진짜 사라졌을 때만 T맵 경로(path)를 무효화한다.
-    //    결석은 경로를 바꾸지 않는다 — 기사가 현장에서 판단한다.
-    const reallyRemovedStop = rawStops.some((rawStop) => {
-      const rawSts = Array.isArray((rawStop as ReconcileStop).students)
-        ? ((rawStop as ReconcileStop).students as unknown[])
-        : [];
-      // 이 정차의 원래 학생 중 validRequestIds에 없는(= 취소/퇴원) 학생이 있으면 진짜 제거된 것.
-      const hasTrulyRemoved = rawSts.some((st) => {
-        const rid = (st as ReconcileStudent)?.requestId;
-        return rid != null && !validRequestIds.has(String(rid));
-      });
-      return hasTrulyRemoved;
-    });
-    const geometryChanged = reallyRemovedStop;
+    // 4) **정차가 실제로 사라졌을 때만** 저장된 T맵 경로(path)를 무효화한다.
+    //    정차가 그대로면 지나가는 지점이 같으므로 경로는 여전히 유효하다 —
+    //    한 정차의 5명 중 1명만 취소된 경우까지 경로를 날리면 T맵을 헛되이 다시 부른다.
+    //    결석자는 애초에 제거되지 않으므로 이 조건에 걸리지 않는다(경로 보존).
+    const geometryChanged = stops.length !== rawStops.length;
     const base = { ...(v as object), stops, passengers, over: passengers > capacity };
     if (geometryChanged) (base as Record<string, unknown>).path = undefined;
     return base;

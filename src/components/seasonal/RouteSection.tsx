@@ -168,8 +168,11 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
       const changes = saved.locationChanged ?? [];
       // 위치변경 자동 반영 — 저장 노선의 좌표만 갱신(차량 배정·순서 불변). 좌표 바뀐 차량은 아래에서 경로만 재계산.
       const { vehicles: fixed, reroute } = relocateInPlace(saved.vehicles, changes);
+      // 헤더의 "탑승 N명"은 지금 화면에 그려질 저장 노선 기준으로 다시 센다.
+      // (서버가 준 totalRiders는 '오늘 명단' 기준이라 저장 노선과 어긋날 수 있다 — 정차별 합과 헤더가 달라 보인다.)
+      const shownRiders = fixed.reduce((acc, v) => acc + (v.stops ?? []).reduce((a, s) => a + (s.students?.length ?? 0), 0), 0);
       // added(신규·복귀)는 배너에서 '추천 배정'으로 쓰므로 그대로 싣고, locationChanged는 이미 반영했으니 비운다.
-      setSug((cur) => ({ ...cur, date: forDate, vehicles: fixed, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd, added: saved.added ?? [], locationChanged: [] }));
+      setSug((cur) => ({ ...cur, date: forDate, vehicles: fixed, totalRiders: shownRiders, classStart: saved.classStart ?? cur.classStart, classEnd: saved.classEnd ?? cur.classEnd, added: saved.added ?? [], locationChanged: [] }));
       setSavedAt(saved.savedAt); setLoadedFromSaved(true); setDepartPinned({}); setErr(null); setSaveMsg(null);
       setRelocatedCount(changes.filter((c) => !c.isHub && c.lat != null && c.lng != null).length);
       // 좌표가 바뀐 차량 + reconcile로 경로(path)가 무효화된 차량(취소 학생 등)을 T맵 재계산 예약.

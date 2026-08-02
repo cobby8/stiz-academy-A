@@ -1,0 +1,76 @@
+import { NextRequest, NextResponse } from "next/server";
+import { sendSmsDetailed } from "@/lib/sms";
+import { claimDue, markSent, markFailed } from "@/lib/scheduled-message";
+import {
+  reserveMessageDeliveryBatch, reserveMessageDelivery,
+  claimMessageDelivery, finalizeMessageDelivery,
+} from "@/lib/message-ledger";
+
+export const dynamic = "force-dynamic";
+
+// 예약 발송 크론 — 보낼 때가 된 문자를 **얼려 둔 그대로** 내보낸다.
+//
+// ⚠️ 실제 학부모에게 나가는 문자다. 다음을 지킨다.
+//   · 본문을 여기서 다시 만들지 않는다. 예약 시점에 원장이 검토한 본문을 그대로 보낸다.
+//   · claimDue가 PENDING → SENDING 으로 선점하므로, 크론이 겹쳐 돌아도 한 번만 나간다.
+//   · 발송 장부(MessageDelivery)에도 남겨 즉시 발송분과 같은 중복 방지·이력을 공유한다.
+
+export async function GET(req: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const due = await claimDue(50);
+  if (due.length === 0) return NextResponse.json({ success: true, processed: 0 });
+
+  let sent = 0, failed = 0, skipped = 0;
+  for (const item of due) {
+    try {
+      const body = item.body.startsWith("[STIZ]") ? item.body : `[STIZ] ${item.body}`;
+      const stableEventKey = `scheduled:${item.requestId}`;
+
+      const batchId = await reserveMessageDeliveryBatch({
+        source: "MANUAL", stableEventKey, audienceScope: "EXTERNAL",
+        trigger: "MANUAL_MESSAGE", actorUserId: item.createdBy ?? null, actorName: "예약 발송",
+        purpose: item.purpose ?? "예약 발송", reason: "관리자가 예약한 문자 자동 발송",
+        body, requestedChannel: "SMS",
+      });
+      if (!batchId) { await markFailed(item.id, item.attempts, "발송 장부를 만들지 못했습니다."); failed++; continue; }
+
+      const reserved = await reserveMessageDelivery({
+        batchId, source: "MANUAL", stableEventKey, eventType: "MANUAL_MESSAGE",
+        trigger: "MANUAL_MESSAGE", audienceScope: "EXTERNAL",
+        recipientPhone: item.recipient, body, requestedChannel: "SMS",
+      });
+      // 이미 같은 키로 나간 적이 있으면(즉시 발송 버튼 등) 다시 보내지 않는다.
+      if (!reserved.deliveryId) { await markSent(item.id); skipped++; continue; }
+
+      const claimed = await claimMessageDelivery(reserved.deliveryId);
+      if (!claimed) { await markSent(item.id); skipped++; continue; }
+
+      const res = await sendSmsDetailed(item.recipient, body);
+      // 즉시 발송(sendManualSms)과 동일한 형태로 장부를 마감한다 — 이력·집계가 갈리지 않게.
+      await finalizeMessageDelivery({
+        deliveryId: reserved.deliveryId,
+        ok: res.ok,
+        provider: res.provider,
+        requestedChannel: "SMS",
+        actualChannel: res.messageType || "SMS",
+        providerGroupId: res.groupId,
+        providerMessageId: res.messageId,
+        providerStatus: res.ok ? "ACCEPTED" : "FAILED",
+        errorCode: res.ok ? null : res.reason?.slice(0, 500),
+      });
+
+      if (res.ok) { await markSent(item.id); sent++; }
+      else { await markFailed(item.id, item.attempts, res.reason ?? "발송 실패"); failed++; }
+    } catch (e) {
+      await markFailed(item.id, item.attempts, e instanceof Error ? e.message : "알 수 없는 오류");
+      failed++;
+    }
+  }
+
+  console.log(`[cron/scheduled-messages] due=${due.length} sent=${sent} skipped=${skipped} failed=${failed}`);
+  return NextResponse.json({ success: failed === 0, processed: due.length, sent, skipped, failed });
+}

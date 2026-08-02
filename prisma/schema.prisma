@@ -2354,3 +2354,35 @@ model RegularShuttleStop {
 
   @@index([weekday, sortOrder])
 }
+
+// 예약 발송 대기열 — "보낼 문자를 미리 얼려 두는" 큐.
+//
+// 왜 문안을 통째로 저장하는가(참조가 아니라 값):
+//   발송 시각이 되었을 때 노선을 다시 읽어 문안을 만들면, 그 사이 노선이 바뀐 경우
+//   **원장이 검토한 것과 다른 문자가 학부모에게 나간다**. 회수가 불가능하므로
+//   예약을 거는 순간의 문안·수신번호를 값으로 복제해 둔다.
+model ScheduledMessage {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  // 묶음 식별자(한 번의 예약 = 여러 행). 취소·조회 단위.
+  batchKey    String
+  // 보낼 시각(UTC 저장). 크론이 이 시각을 지난 PENDING 행만 집는다.
+  sendAt      DateTime  @db.Timestamptz(6)
+  recipient   String
+  body        String
+  // 화면 표시·중복 방지용 라벨(학생 이름 등). 발송 내용에는 쓰지 않는다.
+  label       String?
+  // PENDING | SENT | FAILED | CANCELLED
+  status      String    @default("PENDING")
+  // sendManualSms에 넘길 멱등 키. 같은 행이 두 번 발송되지 않게 한다.
+  requestId   String
+  purpose     String?
+  attempts    Int       @default(0)
+  lastError   String?
+  sentAt      DateTime? @db.Timestamptz(6)
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@index([status, sendAt])
+  @@index([batchKey])
+}

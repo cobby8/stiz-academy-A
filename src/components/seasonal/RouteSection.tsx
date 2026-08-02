@@ -97,6 +97,11 @@ function relocateInPlace(
         const idx = stops[si].students.findIndex((st) => String(st.requestId) === c.requestId);
         if (idx < 0) continue;
         const stop = stops[si];
+        // ★ 이미 제자리(같은 장소)에 있으면 아무것도 하지 않는다.
+        //   예전엔 여기서 "혼자가 아니면 무조건 분리"했다. 그래서 같은 아파트를 함께 쓰는 두 학생 중
+        //   한 명의 좌표가 아주 조금 갱신되기만 해도 정차가 둘로 갈라졌다(2026-08-03 실제 사고 —
+        //   합쳐 둔 롯데낙천대 정차가 재계산 때마다 다시 쪼개졌다).
+        if (findSamePlaceIndex([stop], c.lat, c.lng) === 0) continue;
         if (stop.students.length === 1) {
           stops[si] = { ...stop, lat: c.lat, lng: c.lng, label: c.label || stop.label, approx: false };
         } else {
@@ -238,11 +243,18 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
     try {
       const ok = await loadAndApplySaved(sug.date ?? date);
       if (!ok) { setErr("저장된 노선이 없습니다. 먼저 저장해주세요."); return; }
+      // ⚠️ setSug는 비동기다. 바로 sugRef를 읽으면 **불러오기 이전의 옛 노선**이 잡힌다.
+      //   2026-08-03 실제 사고: 이 자리에서 옛 노선을 읽어 재계산하고 자동 저장까지 해버려,
+      //   무료거점 학생 한 명이 노선에서 사라지고 합쳐 둔 정차가 다시 갈라진 채 DB에 덮어써졌다.
+      //   상태가 반영될 때까지 한 틱 양보한 뒤 읽는다.
+      await new Promise((r) => setTimeout(r, 0));
       const cur = sugRef.current;
       for (let vi = 0; vi < cur.vehicles.length; vi++) {
         await rerouteVehicle(vi);
       }
-      await saveRoute();
+      // ★ 자동 저장하지 않는다. 재계산 결과를 원장이 눈으로 확인한 뒤 [저장]을 누르게 한다.
+      //   저장은 되돌릴 수 없고, 잘못된 재계산이 조용히 덮어쓰면 학생이 노선에서 사라진다(위 사고).
+      setSaveMsg("경로를 다시 계산했습니다. 내용을 확인한 뒤 [저장]을 눌러주세요.");
     } catch (e: any) { setErr(e?.message || "경로 재계산에 실패했습니다."); }
     finally { setRecalcing(false); }
   }

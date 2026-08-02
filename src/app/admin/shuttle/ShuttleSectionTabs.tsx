@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> = [
   { key: "dispatch", href: "/admin/seasonal/dispatch", label: "방학특강 배차", icon: "route" },
   { key: "roster", href: "/admin/seasonal/shuttle", label: "방학특강 명단", icon: "list_alt" },
+  { key: "notice", href: "/admin/seasonal/shuttle-notice", label: "등원시간 안내", icon: "sms" },
   { key: "regular-dispatch", href: "/admin/shuttle/regular-dispatch", label: "정규 배차", icon: "route" },
   { key: "regular", href: "/admin/shuttle/regular", label: "정규 셔틀(시트)", icon: "commute" },
   { key: "vehicle", href: "/admin/shuttle", label: "차량 관리", icon: "directions_bus" },
@@ -16,6 +17,8 @@ const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> =
 
 function resolveActiveKey(pathname: string): string {
   if (pathname.startsWith("/admin/seasonal/dispatch")) return "dispatch";
+  // 접두 충돌 주의: shuttle-notice 를 shuttle 보다 먼저 판정한다(아래 regular 쌍과 같은 이유).
+  if (pathname.startsWith("/admin/seasonal/shuttle-notice")) return "notice";
   if (pathname.startsWith("/admin/seasonal/shuttle")) return "roster";
   // 접두 충돌 주의: regular-dispatch 를 regular 보다 먼저 판정한다.
   if (pathname.startsWith("/admin/shuttle/regular-dispatch")) return "regular-dispatch";

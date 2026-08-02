@@ -1,0 +1,119 @@
+// 셔틀 등원시간 안내 문자의 **문안 생성**. 부수효과·DB 접근이 전혀 없는 순수 모듈이다.
+//
+// 왜 순수 모듈로 떼는가(dispatchReconcile.ts와 같은 이유):
+//   실제 학부모에게 나가는 문자다. 잘못 나가면 회수할 수 없으므로 node --test로
+//   **실제로 돌려 보고** 검증할 수 있어야 한다. DB에 붙어 있으면 그게 불가능하다.
+
+/** 요일 인덱스(0=일 ~ 6=토) → 한글 한 글자. */
+const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+export type NoticeTime = { dow: number; minutes: number };
+
+/** 'HH:MM 승차' / 'HH:MM' → 자정 기준 분. 못 읽으면 null. */
+export function parseEtaMinutes(label: string | null | undefined): number | null {
+  const m = /(\d{1,2}):(\d{2})/.exec(String(label ?? ""));
+  if (!m) return null;
+  const h = Number(m[1]), mi = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(mi) || h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+
+/**
+ * 5분 단위로 **내림**한다(08:56 → 08:55).
+ *
+ * 왜 내림인가: 분 단위(08:56)로 안내하면 지킬 수 없는 정확도를 약속하는 셈이다.
+ * 올림하면 학부모가 늦게 나와 차를 놓칠 수 있으므로, 반드시 실제보다 **이르게** 잡는다.
+ */
+export function floorTo5(minutes: number): number {
+  return Math.floor(minutes / 5) * 5;
+}
+
+/** 자정 기준 분 → "오전 9시 5분" / "오전 9시". */
+export function toKoreanTime(minutes: number): string {
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  const ampm = h < 12 ? "오전" : "오후";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${ampm} ${h12}시` : `${ampm} ${h12}시 ${m}분`;
+}
+
+/**
+ * 요일 목록 → "월·수" / "월~금" / "화·수·목".
+ * 3일 이상이면서 연속이면 물결(~)로 줄여 읽기 쉽게 한다.
+ */
+export function formatDays(dows: number[]): string {
+  const uniq = [...new Set(dows)].sort((a, b) => a - b);
+  if (uniq.length === 0) return "";
+  const consecutive = uniq.every((d, i) => i === 0 || d === uniq[i - 1] + 1);
+  if (uniq.length >= 3 && consecutive) return `${DOW_KO[uniq[0]]}~${DOW_KO[uniq[uniq.length - 1]]}`;
+  return uniq.map((d) => DOW_KO[d]).join("·");
+}
+
+/**
+ * 정류장 표시명을 학부모용으로 다듬는다.
+ * 내부 표기 "무료탑승 · 새봄중 버스정류장"은 그대로 보내면 어색하므로
+ * "새봄중 버스정류장 (무료 탑승)"으로 바꾼다.
+ */
+export function toParentStopLabel(label: string): string {
+  const raw = (label ?? "").trim();
+  if (!raw) return "(위치 미지정)";
+  if (!raw.replace(/\s/g, "").includes("무료탑승")) return raw;
+  const cleaned = raw
+    .replace(/무료\s*탑승/g, "")
+    // "1호점(무료탑승)" 처럼 괄호 안에 있던 경우 빈 껍데기가 남는다. 이걸 안 지우면
+    // "1호점() (무료 탑승)" 같은 문자가 학부모에게 그대로 나간다.
+    .replace(/[（(]\s*[)）]/g, "")
+    .replace(/^[\s·・.,\-]+|[\s·・.,\-]+$/g, "")
+    .trim();
+  return cleaned ? `${cleaned} (무료 탑승)` : "무료 탑승 거점";
+}
+
+/** 'YYYY-MM-DD' → "8월 10일(월)". 형식이 아니면 null. */
+export function toKoreanDate(date: string | null | undefined): string | null {
+  const s = String(date ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return `${m}월 ${d}일(${DOW_KO[dow]})`;
+}
+
+export type NoticeInput = {
+  studentName: string;
+  stopLabel: string;
+  /** 요일별 승차 시각(자정 기준 분). 같은 요일이 여러 번 들어와도 된다. */
+  times: NoticeTime[];
+  /** 아직 시작 전이면 첫 등원일('YYYY-MM-DD'). 이미 다니는 중이면 null. */
+  startsFrom?: string | null;
+};
+
+/**
+ * 한 학생의 안내 문안을 만든다. 발송부가 앞에 "[STIZ] "를 자동으로 붙이므로 여기서는 넣지 않는다.
+ *
+ * 안내 시각은 **모든 요일 중 가장 이른 시각 하나**로 통일한다.
+ *   요일마다 1~5분씩 다른 시각을 나열하면 학부모가 오히려 헷갈리고, 실제로도 그 정도 오차는
+ *   도로 상황에 묻힌다. 가장 이른 시각을 쓰면 어느 요일에도 차를 놓치지 않는다.
+ */
+export function buildNoticeBody(input: NoticeInput): string {
+  const valid = (input.times ?? []).filter((t) => Number.isFinite(t.minutes));
+  if (valid.length === 0) throw new Error(`${input.studentName}: 탑승 시각이 없습니다.`);
+
+  const earliest = Math.min(...valid.map((t) => floorTo5(t.minutes)));
+  const days = formatDays(valid.map((t) => t.dow));
+  const startLine = toKoreanDate(input.startsFrom);
+
+  return [
+    "농구교실 등원 셔틀 안내",
+    "",
+    `${input.studentName} 학부모님, 안녕하세요.`,
+    startLine
+      ? `${startLine}부터 시작하는 등원 셔틀 시간을 안내드립니다.`
+      : "등원 셔틀 탑승 시간을 안내드립니다.",
+    "",
+    `▪ 탑승 장소 : ${toParentStopLabel(input.stopLabel)}`,
+    `▪ 탑승 시간 : ${days} ${toKoreanTime(earliest)}`,
+    "",
+    "· 도로 상황에 따라 5분 정도 차이가 날 수 있으니 5분 전에 나와 기다려 주세요.",
+    "· 결석이나 자차 등원 시 미리 알려주시면 감사하겠습니다.",
+    "",
+    "STIZ 농구교실 다산점",
+  ].join("\n");
+}

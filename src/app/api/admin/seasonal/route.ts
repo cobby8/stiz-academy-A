@@ -1554,6 +1554,32 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true, activationRequired: true, activationUrl: prepared.activationUrl,
         notification: prepared.notification, ...(notificationNeedsWarning(prepared.notification) ? { notificationWarning: true } : {}) });
     }
+    if (body.resource === "markPaid") {
+      const method = (data as { method?: unknown })?.method === "CASH" ? "CASH" : "BANK_TRANSFER";
+      const rows = await prisma.$queryRawUnsafe<{ paymentId: string | null; invoiceId: string | null; amount: number | null }[]>(
+        `SELECT "paymentId", pi.id AS "invoiceId", pi.amount
+           FROM "SpecialProgramApplicationItem" ai
+           LEFT JOIN "Payment" p ON p.id = ai."paymentId"
+           LEFT JOIN "PaymentInvoice" pi ON pi."paymentId" = p.id
+          WHERE ai.id = $1 LIMIT 1`,
+        id,
+      );
+      const row = rows[0];
+      if (!row?.paymentId) throw new SeasonalError("연결된 청구서가 없습니다. 먼저 청구서를 생성하세요.");
+      const updated = await prisma.$executeRawUnsafe(
+        `UPDATE "Payment" SET status='PAID', method=$2, "paidDate"=NOW(), "paidProvider"='MANUAL', "updatedAt"=NOW()
+          WHERE id=$1 AND status NOT IN ('PAID','COMPLETED')`,
+        row.paymentId, method,
+      );
+      if (!updated) throw new SeasonalError("이미 납부 완료 처리된 청구서입니다.");
+      if (row.invoiceId) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "PaymentInvoice" SET status='PAID', "paidDate"=NOW(), "updatedAt"=NOW() WHERE id=$1`,
+          row.invoiceId,
+        );
+      }
+      return NextResponse.json({ ok: true });
+    }
     throw new SeasonalError("지원하지 않는 수정 대상입니다.");
   } catch (error) { return respondError(error); }
 }

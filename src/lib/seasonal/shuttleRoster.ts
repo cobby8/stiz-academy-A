@@ -95,6 +95,8 @@ export type ShuttleRosterRider = ShuttleRosterEntry & {
   /** direction에 맞춰 이미 고른 위치(하원=등원 동일 옵션까지 반영). */
   place: ShuttleRosterPlace;
   placeLabel: string;
+  /** 해당 날짜 결석(ABSENT) 또는 사유결석(EXCUSED). includeAbsent:true 로 조회할 때만 세팅된다. */
+  isAbsent?: boolean;
 };
 
 export type ShuttleRosterDatePlan = {
@@ -419,7 +421,9 @@ function placeForDirection(entry: ShuttleRosterEntry, direction: "PICKUP" | "DRO
 export async function getConfirmedShuttleRosterForDate(
   date: string | null,
   direction: "PICKUP" | "DROPOFF",
+  opts?: { includeAbsent?: boolean },
 ): Promise<ShuttleRosterDatePlan> {
+  const includeAbsent = opts?.includeAbsent ?? false;
   // 시즌 명단을 먼저 얻는다(확정본이든 폴백이든 여기서 이미 판정이 끝난다).
   const roster = await getConfirmedShuttleRoster();
   const riding = roster.filter((row) => row.ride);
@@ -439,14 +443,14 @@ export async function getConfirmedShuttleRosterForDate(
             (sd."startsAt" AT TIME ZONE 'Asia/Seoul')::date::text AS "serviceDate",
             EXTRACT(DOW FROM (sd."startsAt" AT TIME ZONE 'Asia/Seoul'))::int AS "dow",
             to_char(sd."startsAt" AT TIME ZONE 'Asia/Seoul','HH24:MI') AS "sessionStart",
-            to_char(sd."endsAt"   AT TIME ZONE 'Asia/Seoul','HH24:MI') AS "sessionEnd"
+            to_char(sd."endsAt"   AT TIME ZONE 'Asia/Seoul','HH24:MI') AS "sessionEnd",
+            e."attendanceStatus" AS "attendanceStatus"
        FROM "SpecialProgramEnrollmentDate" e
        JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
       WHERE e.status = 'SCHEDULED'
-        -- 그날 결석(ABSENT)·사유결석(EXCUSED)으로 미리 표시된 학생은 그날 셔틀에서만 뺀다.
-        -- 지각(LATE)은 오는 것이므로 태우고, 미확인(NULL)·출석(PRESENT)도 태운다.
-        -- 좌석 status는 SCHEDULED 그대로라 시즌 명단·정원·보강 판정에는 영향이 없다(그날 노선에서만 제외).
-        AND (e."attendanceStatus" IS NULL OR e."attendanceStatus" NOT IN ('ABSENT', 'EXCUSED'))
+        -- includeAbsent=false(기본): 결석·사유결석은 그날 노선에서 제외.
+        -- includeAbsent=true: 전체 포함(저장 노선 reconcile용). 결석 여부는 attendanceStatus로 구분.
+        ${includeAbsent ? "" : `AND (e."attendanceStatus" IS NULL OR e."attendanceStatus" NOT IN ('ABSENT', 'EXCUSED'))`}
         AND e."applicationItemId" = ANY($1::text[])
       ORDER BY "serviceDate" ASC, "sessionStart" ASC`,
     itemIds,
@@ -471,6 +475,8 @@ export async function getConfirmedShuttleRosterForDate(
     if (seen.has(entry.shuttleRequestId)) continue;
     seen.add(entry.shuttleRequestId);
     const chosen = placeForDirection(entry, direction);
+    const attendanceStatus = str(seat.attendanceStatus);
+    const isAbsent = includeAbsent && (attendanceStatus === "ABSENT" || attendanceStatus === "EXCUSED");
     riders.push({
       ...entry,
       serviceDate: selected,
@@ -478,6 +484,7 @@ export async function getConfirmedShuttleRosterForDate(
       sessionEnd: str(seat.sessionEnd),
       place: chosen,
       placeLabel: chosen.location ?? entry.pickup.location ?? "(위치 미지정)",
+      ...(isAbsent ? { isAbsent: true } : {}),
     });
   }
 

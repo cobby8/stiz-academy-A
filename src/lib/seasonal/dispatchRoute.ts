@@ -78,16 +78,22 @@ export async function getSavedDispatchRoute(date: string | null, direction: stri
     let locationChanged: SavedRouteChange[] = [];
     if (d) {
       try {
-        const plan = await getConfirmedShuttleRosterForDate(d, dir);
+        // includeAbsent:true — 결석 포함 전체 명단으로 reconcile해야 저장 노선이 유지된다.
+        // 결석 학생은 제거 대신 isAbsent:true 마킹으로 처리된다(기사 현장 판단).
+        const plan = await getConfirmedShuttleRosterForDate(d, dir, { includeAbsent: true });
         const validIds = new Set(plan.riders.map((rider) => rider.shuttleRequestId));
+        const absentIds = new Set(
+          plan.riders.filter((r) => r.isAbsent).map((r) => r.shuttleRequestId),
+        );
         // requestId → 현재 명단 라벨. reconcile이 저장본의 얼어붙은 정차 라벨을 이걸로 갱신한다(텍스트만·자가치유).
         const labelByRequestId = new Map(
           plan.riders.map((rider) => [rider.shuttleRequestId, rider.placeLabel]),
         );
-        vehicles = reconcileSavedVehicles(savedVehicles, validIds, labelByRequestId);
-        // reconcile 후(= 실제로 화면에 보이는) 노선과 그날 명단을 비교해 추가/변경만 뽑는다.
+        vehicles = reconcileSavedVehicles(savedVehicles, validIds, labelByRequestId, absentIds);
+        // diff는 결석 제외 실제 탑승 예정자 기준으로 비교한다(결석은 신규 탑승자가 아님).
         // ★ 저장 payload는 절대 바꾸지 않는다 — diff는 순수 읽기 진단이다.
-        const diff = diffSavedRoute(vehicles, plan.riders);
+        const activeRiders = plan.riders.filter((r) => !r.isAbsent);
+        const diff = diffSavedRoute(vehicles, activeRiders);
         // 좌표·라벨·학생정보로 살찌운다(화면의 추천 배정·좌표 자동 반영용). 명단에서 그 학생을 되짚어 채운다.
         const byId = new Map(plan.riders.map((rider) => [rider.shuttleRequestId, rider]));
         const enrich = (c: { requestId: string; name: string }): SavedRouteChange => {

@@ -14,7 +14,7 @@ interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void> }
 // 로그인 없이 토큰으로 접근하며, 체크는 즉시 서버에 저장한다(구간=방향별).
 // ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼으로 고정한다(dark: 스타일 미사용).
 
-export type DriverStudent = { requestId: string; name: string; grade: string | null; parentPhone: string | null; childPhone: string | null };
+export type DriverStudent = { requestId: string; name: string; grade: string | null; parentPhone: string | null; childPhone: string | null; isAbsent?: boolean };
 export type DriverStop = { label: string; isHub: boolean; etaLabel: string | null; lat: number | null; lng: number | null; students: DriverStudent[] };
 export type DriverVehicle = { vehicleName: string; tripLabel: string | null; departTime: string | null; arriveTime: string | null; depotTime: string | null; stops: DriverStop[] };
 export type DriverSection = { direction: "PICKUP" | "DROPOFF"; time: string | null; startName: string; endName: string; vehicles: DriverVehicle[] };
@@ -285,6 +285,7 @@ export default function DriverRunClient({
                                       <span className="text-[19px] font-black text-gray-900">{st.name}</span>
                                       {st.grade && <span className="text-[14px] text-gray-500">{st.grade}</span>}
                                       {/* 현재 상태 배지 — 미탑승 사유를 한눈에 구분 */}
+                                      {st.isAbsent && status !== "BOARDED" && status !== "SELF" && <span className="rounded-md bg-amber-400 px-2 py-0.5 text-[13px] font-black text-white">결석예정</span>}
                                       {status === "NOSHOW" && <span className="rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white">결석</span>}
                                       {status === "SELF" && <span className="rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white">{selfLabel}</span>}
                                     </div>

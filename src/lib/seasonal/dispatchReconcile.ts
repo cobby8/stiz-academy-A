@@ -25,13 +25,15 @@ type ReconcileRun = { stops?: unknown; capacity?: unknown };
  *   - isHub 정차 라벨은 절대 갱신하지 않는다(무료거점 고정명 보존).
  *
  * @param vehicles          저장 payload의 vehicles(Run[] 형태이나 구조만 신뢰).
- * @param validRequestIds   그날 실제로 태울 학생의 shuttleRequestId 집합.
+ * @param validRequestIds   그날 유효한 학생(탑승 + 결석 포함)의 shuttleRequestId 집합.
  * @param labelByRequestId  (옵셔널·하위호환) requestId → 현재 명단 라벨. 주어지면 텍스트 라벨만 갱신한다.
+ * @param absentIds         오늘 결석(ABSENT/EXCUSED)인 학생의 shuttleRequestId 집합. 제거 대신 isAbsent:true로 마킹한다.
  */
 export function reconcileSavedVehicles(
   vehicles: unknown[],
   validRequestIds: Set<string>,
   labelByRequestId?: Map<string, string>,
+  absentIds?: Set<string>,
 ): unknown[] {
   if (!Array.isArray(vehicles)) return [];
   return vehicles.map((v) => {
@@ -44,16 +46,21 @@ export function reconcileSavedVehicles(
       const stop = (s ?? {}) as ReconcileStop;
       const isHub = stop.isHub === true;
       const students = Array.isArray(stop.students) ? (stop.students as unknown[]) : [];
-      const kept = students.filter((st) => {
-        const rid = (st as ReconcileStudent)?.requestId;
-        return rid != null && validRequestIds.has(String(rid));
-      }).map((st) => {
-        // 라벨 갱신: 순수 표시용 텍스트만 현재 명단 라벨로 바꾼다(좌표·시각·순서 무관). 새 객체 반환(불변).
-        if (!labelByRequestId) return st;
-        const rid = (st as ReconcileStudent)?.requestId;
-        const next = rid != null ? labelByRequestId.get(String(rid)) : undefined;
-        return next != null ? { ...(st as object), pickupLabel: next } : st;
-      });
+      const kept = students
+        .filter((st) => {
+          const rid = (st as ReconcileStudent)?.requestId;
+          return rid != null && validRequestIds.has(String(rid));
+        })
+        .map((st) => {
+          const rid = (st as ReconcileStudent)?.requestId;
+          const ridStr = rid != null ? String(rid) : null;
+          // 결석: 제거 대신 isAbsent:true 마킹(기사가 현장 판단, 경로 유지).
+          const isAbsent = ridStr != null && absentIds != null && absentIds.has(ridStr);
+          // 라벨 갱신: 순수 표시용 텍스트만 현재 명단 라벨로 바꾼다(좌표·시각·순서 무관).
+          const next = labelByRequestId && ridStr != null ? labelByRequestId.get(ridStr) : undefined;
+          const withLabel = next != null ? { ...(st as object), pickupLabel: next } : (st as object);
+          return isAbsent ? { ...withLabel, isAbsent: true } : withLabel;
+        });
 
       // 비허브 정차의 표시 라벨을 첫 학생의 갱신된 라벨로 맞춘다. 허브는 고정명 보존이라 건드리지 않는다.
       if (labelByRequestId && !isHub && kept.length > 0) {
@@ -65,15 +72,37 @@ export function reconcileSavedVehicles(
     });
 
     // 2) 빈 정차 제거 — 무료탑승 거점(isHub)도 그날 타는 학생이 0명이면 노선에서 뺀다.
-    const stops = filteredStops.filter((s) => (s.students as unknown[]).length > 0);
+    //    단, 결석 학생만 있는 정차(isAbsent:true 만 남은 경우)는 경로 유지를 위해 남겨 둔다.
+    const stops = filteredStops.filter((s) => {
+      const sts = s.students as unknown[];
+      if (sts.length === 0) return false;
+      // 결석이 아닌(= 탑승 예정) 학생이 한 명이라도 있으면 정차를 살린다.
+      // 전원 결석인 정차도 경로 유지를 위해 남겨 둔다(기사 현장 판단).
+      return true;
+    });
 
-    // 3) 인원·정원초과 재계산(순서·시각은 그대로 두고 숫자만 갱신).
-    const passengers = stops.reduce((acc, s) => acc + (s.students as unknown[]).length, 0);
+    // 3) 인원·정원초과 재계산: passengers는 실제 탑승 인원(결석 제외)으로 센다.
+    const passengers = stops.reduce((acc, s) => {
+      const sts = s.students as unknown[];
+      const boarding = sts.filter((st) => !(st as Record<string, unknown>).isAbsent).length;
+      return acc + boarding;
+    }, 0);
     const capacity = typeof run.capacity === "number" ? run.capacity : 0;
 
-    // 4) 정차가 하나라도 사라졌으면(취소 학생 등) 저장된 T맵 경로(path)는 그 정차를 계속 지나가는 '유령 경로'가 된다.
-    //    지도가 명단과 어긋나지 않도록 path를 무효화한다(클라이언트가 재계산하거나 직선으로 그린다).
-    const geometryChanged = stops.length !== rawStops.length;
+    // 4) 취소·퇴원 학생으로 정차가 진짜 사라졌을 때만 T맵 경로(path)를 무효화한다.
+    //    결석은 경로를 바꾸지 않는다 — 기사가 현장에서 판단한다.
+    const reallyRemovedStop = rawStops.some((rawStop) => {
+      const rawSts = Array.isArray((rawStop as ReconcileStop).students)
+        ? ((rawStop as ReconcileStop).students as unknown[])
+        : [];
+      // 이 정차의 원래 학생 중 validRequestIds에 없는(= 취소/퇴원) 학생이 있으면 진짜 제거된 것.
+      const hasTrulyRemoved = rawSts.some((st) => {
+        const rid = (st as ReconcileStudent)?.requestId;
+        return rid != null && !validRequestIds.has(String(rid));
+      });
+      return hasTrulyRemoved;
+    });
+    const geometryChanged = reallyRemovedStop;
     const base = { ...(v as object), stops, passengers, over: passengers > capacity };
     if (geometryChanged) (base as Record<string, unknown>).path = undefined;
     return base;

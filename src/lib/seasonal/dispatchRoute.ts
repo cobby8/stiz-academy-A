@@ -71,9 +71,20 @@ export async function getSavedDispatchRoute(
   if (!d || !dir) return null;
   try {
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+      // 노선은 **요일 단위**다. 그 날짜에 저장 행이 없으면 같은 요일의 대표일(가장 이른 날) 것을 쓴다.
+      //   이게 없으면 화면에서 날짜를 바꾸는 순간(예: 8/10 월요일) 저장 행이 없다고 판단해
+      //   저장 노선을 버리고 새로 계산해 버린다 — 요일별 노선 재사용이 첫 진입 때만 동작하고,
+      //   '신규·복귀' 배너도 사라져 중간 합류자를 배정할 방법이 없어진다(2026-08-03 실측).
+      // ORDER BY: 정확히 일치하는 날짜를 최우선, 없으면 같은 요일 중 가장 이른 날.
       `SELECT "payload", "classStart", "classEnd", "updatedAt"
          FROM "SeasonalDispatchRoute"
-        WHERE "serviceDate" = $1 AND "direction" = $2
+        -- ⚠️ serviceDate 컬럼은 date가 아니라 **text**다. 캐스팅 없이 EXTRACT를 쓰면
+        --    "operator does not exist: text = date"로 쿼리가 통째로 실패하고,
+        --    바깥 try/catch가 이를 삼켜 "저장 노선 없음"으로 보인다(노선이 화면에서 사라진다).
+        WHERE "direction" = $2
+          AND ("serviceDate" = $1
+               OR EXTRACT(DOW FROM "serviceDate"::date) = EXTRACT(DOW FROM $1::date))
+        ORDER BY ("serviceDate" = $1) DESC, "serviceDate" ASC
         LIMIT 1`,
       d, dir,
     );
@@ -250,6 +261,22 @@ export async function saveDispatchRoute(input: {
   if (!d || !dir) throw new Error("날짜 또는 방향이 올바르지 않습니다.");
   const vehicles = stripDerivedFlags(Array.isArray(input.vehicles) ? input.vehicles : []);
   const payloadJson = JSON.stringify({ vehicles });
+
+  // 노선은 **요일당 한 벌**이다. 같은 요일 노선이 이미 있으면 그 행에 덮어쓴다.
+  //   8/10(월) 화면에서 저장했다고 8/10 행을 새로 만들면 월요일 노선이 7/27·8/10 두 벌로 갈라지고,
+  //   날짜마다 다른 노선이 보이기 시작한다. 요일 노선이라는 전제가 무너지므로 반드시 한 행으로 모은다.
+  const existing = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+    // serviceDate는 text 컬럼이라 EXTRACT 전에 반드시 ::date 캐스팅해야 한다.
+    `SELECT "serviceDate" AS d
+       FROM "SeasonalDispatchRoute"
+      WHERE "direction" = $2
+        AND EXTRACT(DOW FROM "serviceDate"::date) = EXTRACT(DOW FROM $1::date)
+      ORDER BY "serviceDate" ASC
+      LIMIT 1`,
+    d, dir,
+  );
+  const targetDate = normDate(existing[0]?.d) ?? d;
+
   const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
     `INSERT INTO "SeasonalDispatchRoute" ("serviceDate","direction","payload","classStart","classEnd","savedByUserId","updatedAt")
      VALUES ($1, $2, $3::jsonb, $4, $5, $6, now())
@@ -260,7 +287,7 @@ export async function saveDispatchRoute(input: {
        "savedByUserId" = EXCLUDED."savedByUserId",
        "updatedAt" = now()
      RETURNING "updatedAt"`,
-    d, dir, payloadJson,
+    targetDate, dir, payloadJson,
     input.classStart ?? null, input.classEnd ?? null, admin.appUserId ?? null,
   );
   return { savedAt: isoOrNull(rows[0]?.updatedAt) };

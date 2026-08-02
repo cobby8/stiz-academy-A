@@ -326,7 +326,9 @@ export async function getConfirmedShuttleRoster(seasonId?: string | null): Promi
          FROM "SeasonalShuttleRoster" sr
          JOIN "SpecialProgramSeason" s ON s.id = sr."seasonId"
          LEFT JOIN "SpecialProgramShuttleRequest" req ON req.id = sr."shuttleRequestId"
+         LEFT JOIN "SpecialProgramApplicationItem" ai ON ai.id = sr."applicationItemId"
         WHERE sr."removedAt" IS NULL
+          AND (ai.id IS NULL OR ai.status NOT IN ('CANCELLED', 'REJECTED'))
           AND ${scope.where}
         ${ROSTER_ORDER}`,
       ...scope.params,

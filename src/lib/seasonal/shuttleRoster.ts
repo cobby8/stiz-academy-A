@@ -505,6 +505,51 @@ export async function getConfirmedShuttleRosterForDate(
   return { origin, date: selected, direction, availableDates, riders, classStart, classEnd };
 }
 
+/**
+ * **그 요일 노선에 속한 사람**의 shuttleRequestId 집합.
+ *
+ * 왜 "하루"가 아니라 "요일"인가(2026-08-03 실제 사고):
+ *   노선은 요일 단위로 저장되고 그 요일의 대표일(첫 운행일) 한 건만 조회한다.
+ *   그런데 노선 소속 판정까지 대표일 하루로 하면, **시즌 중간에 합류한 학생은
+ *   그 요일 노선에 영원히 들어갈 수 없다** — 대표일에 좌석이 없어 '소속 아님'으로
+ *   걸러지고, 노선에 넣어도 읽을 때마다 reconcile이 다시 지운다.
+ *   실제로 8/10부터 등원하는 학생(월·수)이 7/27·8/05 좌석이 CANCELLED라
+ *   월·수 노선에 배정 자체가 불가능했다.
+ *
+ * 그래서 "그 요일에 SCHEDULED 좌석이 **하나라도** 있으면 그 요일 노선 소속"으로 본다.
+ * 중도 합류·중도 종료가 모두 자연스럽게 처리된다.
+ *
+ * ⚠️ 출결(그날 결석인가)은 이 함수가 판정하지 않는다. 소속과 출결은 별개다 —
+ *    소속이지만 그날 좌석이 없는 사람(아직 시작 전·이미 종료)은 호출부에서 결석으로 표시한다.
+ */
+export async function getWeekdayMemberRequestIds(
+  date: string,
+  direction: "PICKUP" | "DROPOFF",
+): Promise<Set<string>> {
+  const roster = await getConfirmedShuttleRoster();
+  const byItemId = new Map<string, ShuttleRosterEntry>();
+  for (const row of roster) if (row.ride && row.applicationItemId) byItemId.set(row.applicationItemId, row);
+  if (byItemId.size === 0) return new Set();
+
+  const rows = await prisma.$queryRawUnsafe<RawRow[]>(
+    `SELECT DISTINCT e."applicationItemId" AS "itemId"
+       FROM "SpecialProgramEnrollmentDate" e
+       JOIN "SpecialProgramSessionDate" sd ON sd.id = e."sessionDateId"
+      WHERE e.status = 'SCHEDULED'
+        AND EXTRACT(DOW FROM (sd."startsAt" AT TIME ZONE 'Asia/Seoul'))
+          = EXTRACT(DOW FROM $1::date)
+        AND e."applicationItemId" = ANY($2::text[])`,
+    date, [...byItemId.keys()],
+  );
+
+  const ids = new Set<string>();
+  for (const row of rows) {
+    const entry = byItemId.get(String(row.itemId));
+    if (entry) ids.add(entry.shuttleRequestId);
+  }
+  return ids;
+}
+
 // ────────────────────────────────────────────────────────────────
 // 확정 · 수정 · 제외 (원장 전용)
 // ────────────────────────────────────────────────────────────────

@@ -18,12 +18,29 @@ const schema = readFileSync(new URL("../prisma/schema.prisma", import.meta.url),
 
 // ── 노출 범위 ────────────────────────────────────────────────
 
-test("밖으로 내보내는 조회 함수는 딱 2개다", () => {
+test("밖으로 내보내는 조회 함수는 딱 3개다", () => {
     const readers = gateway.match(/export async function get\w+/g) ?? [];
     assert.deepEqual(readers.sort(), [
         "export async function getConfirmedShuttleRoster",
         "export async function getConfirmedShuttleRosterForDate",
+        // 2026-08-03 추가. "그 요일 노선에 속한 사람"을 돌려준다(요일 단위 노선 관리용).
+        // 출구가 늘었지만 게이트웨이 원칙은 지켜진다 — 아래 테스트가 그걸 강제한다.
+        "export async function getWeekdayMemberRequestIds",
     ]);
+});
+
+test("요일 소속 조회도 명단은 반드시 게이트웨이를 통해 읽는다", () => {
+    // 이 함수가 원본 4테이블을 다시 조인하면 게이트웨이를 우회하는 것이 되어
+    // 취소자·폐강반 필터가 빠지는 그 사고가 재발한다(6회 반복된 바로 그 실수).
+    // 그래서 "누가 셔틀 회원인가"는 getConfirmedShuttleRoster()로만 얻고,
+    // 자기 SQL은 **좌석 날짜(요일 판정)만** 본다.
+    const body = gateway.slice(gateway.indexOf("export async function getWeekdayMemberRequestIds"));
+    const fn = body.slice(0, body.indexOf("\n}\n") + 2);
+    assert.match(fn, /await getConfirmedShuttleRoster\(\)/, "명단은 게이트웨이로 읽어야 한다");
+    assert.doesNotMatch(fn, /"SpecialProgramShuttleRequest"/, "셔틀신청 원본을 직접 조인하면 안 된다");
+    assert.doesNotMatch(fn, /"SeasonalShuttleRoster"/, "확정본 테이블을 직접 조회하면 안 된다");
+    // 좌석 조회는 SCHEDULED만 봐야 한다(취소된 좌석이 요일 소속으로 잡히면 안 됨).
+    assert.match(fn, /e\.status = 'SCHEDULED'/);
 });
 
 test("폴백은 게이트웨이 안에만 있고 밖으로 새지 않는다", () => {

@@ -9,11 +9,16 @@ import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("../src/app/admin/shuttle/ShuttleSectionTabs.tsx", import.meta.url), "utf8");
 
-/** resolveActiveKey 본문을 그대로 떼어 내 실제로 실행해 본다(문자열 검사가 아니라 동작 검증). */
+/**
+ * resolveActiveKey 본문을 떼어 내 실제로 실행해 본다(문자열 검사가 아니라 동작 검증).
+ * new Function은 TS를 모르므로 타입 표기(`: string`)만 걷어낸다 — 본문 로직은 그대로 둔다.
+ */
 function loadResolver() {
   const start = src.indexOf("function resolveActiveKey");
   const end = src.indexOf("export default function");
-  const body = src.slice(start, end);
+  const body = src
+    .slice(start, end)
+    .replace(/function resolveActiveKey\([^)]*\)\s*:\s*\w+/, "function resolveActiveKey(pathname)");
   return new Function(`${body}; return resolveActiveKey;`)();
 }
 

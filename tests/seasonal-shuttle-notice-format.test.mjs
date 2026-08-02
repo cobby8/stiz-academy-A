@@ -1,22 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildNoticeBody, groupTimesByDay, formatDays, floorTo5, toKoreanTime, toParentStopLabel, toKoreanDate, parseEtaMinutes,
+  buildNoticeBody, groupTimesByDay, formatDays, toKoreanTime, toParentStopLabel, toKoreanDate, parseEtaMinutes,
 } from "../src/lib/seasonal/shuttleNoticeFormat.ts";
 
 // 실제 학부모에게 나가는 문자다. 잘못 나가면 회수할 수 없으므로 문안 생성을 실행해서 검증한다.
 
-test("시각은 5분 단위로 **내림**한다(늦게 안내하면 차를 놓친다)", () => {
-  assert.equal(floorTo5(8 * 60 + 56), 8 * 60 + 55);
-  assert.equal(floorTo5(8 * 60 + 52), 8 * 60 + 50);
-  assert.equal(floorTo5(9 * 60 + 0), 9 * 60);
-  // 올림이 되어 버리면 안 된다 — 09:01이 09:05로 안내되면 학부모가 늦게 나온다.
-  assert.notEqual(floorTo5(9 * 60 + 1), 9 * 60 + 5);
-  assert.equal(floorTo5(9 * 60 + 1), 9 * 60);
-});
-
 test("요일마다 시각이 다르면 **합치지 않고 나눠** 적는다 (김대후 실제 사례)", () => {
-  // 월~목 09:20 / 금 09:12. 하나로 합치면 09:10이 되어 월~목에 10분이나 일찍 나오게 된다.
+  // 월~목 09:20 / 금 09:12. 하나로 합치면 월~목이 8분이나 일찍 안내된다.
   const body = buildNoticeBody({
     studentName: "김대후",
     stopLabel: "도농초 앞 버스정류장",
@@ -27,9 +18,9 @@ test("요일마다 시각이 다르면 **합치지 않고 나눠** 적는다 (�
     ],
   });
   assert.match(body, /월~목 오전 9시 20분/);
-  assert.match(body, /금 오전 9시 10분/);
-  // ★ 회귀 방지: 전 요일이 9시 10분으로 뭉뚱그려지면 안 된다.
-  assert.doesNotMatch(body, /월~금 오전 9시 10분/);
+  assert.match(body, /금 오전 9시 12분/);
+  // ★ 회귀 방지: 전 요일을 한 시각으로 뭉뚱그리면 안 된다.
+  assert.doesNotMatch(body, /월~금 오전 9시 12분/);
 });
 
 test("탁경일: 월·금 09:00, 화~목 08:55 → 두 줄로 정확히 나뉜다", () => {
@@ -46,27 +37,31 @@ test("탁경일: 월·금 09:00, 화~목 08:55 → 두 줄로 정확히 나뉜�
   assert.match(body, /월·금 오전 9시/);
   assert.match(body, /화~목 오전 8시 55분/);
   assert.doesNotMatch(body, /월~금 오전 8시 55분/, "합쳐서 월·금을 5분 일찍 안내하면 안 된다");
+  assert.match(body, /예상 시간/, "예상 시간임을 문안에 밝힌다");
 });
 
 test("모든 요일이 같은 시각이면 한 줄로 간단히 적는다", () => {
   const body = buildNoticeBody({
     studentName: "이수연", stopLabel: "롯데낙천대아파트 관리사무소 앞",
-    times: [{ dow: 1, minutes: 9 * 60 + 17 }, { dow: 3, minutes: 9 * 60 + 15 }],
+    times: [{ dow: 1, minutes: 9 * 60 + 17 }, { dow: 3, minutes: 9 * 60 + 17 }],
   });
-  assert.match(body, /▪ 탑승 시간 : 월·수 오전 9시 15분/);
+  assert.match(body, /▪ 탑승 예상 시간 : 월·수 오전 9시 17분/);
 });
 
-test("안내 시각은 실제 시각보다 **늦지 않다**(늦으면 차를 놓친다)", () => {
-  // 무작위성 없이, 실제 노선에서 나온 시각들로 전수 확인한다.
-  const samples = [
-    8 * 60 + 52, 8 * 60 + 55, 8 * 60 + 56, 8 * 60 + 59,
-    9 * 60, 9 * 60 + 4, 9 * 60 + 5, 9 * 60 + 8, 9 * 60 + 11, 9 * 60 + 12,
-    9 * 60 + 15, 9 * 60 + 17, 9 * 60 + 20,
-  ];
+test("1분 차이도 뭉개지 않고 요일을 나눈다(정확한 시각 안내)", () => {
+  const body = buildNoticeBody({
+    studentName: "이수아", stopLabel: "e편한세상 1차 남문 맘스테이션",
+    times: [{ dow: 2, minutes: 9 * 60 + 2 }, { dow: 4, minutes: 9 * 60 + 1 }],
+  });
+  assert.match(body, /화 오전 9시 2분/);
+  assert.match(body, /목 오전 9시 1분/);
+});
+
+test("시각을 반올림하지 않고 실제 값을 그대로 안내한다", () => {
+  const samples = [8*60+52, 8*60+57, 9*60+1, 9*60+14, 9*60+19, 9*60+22];
   for (const m of samples) {
     const g = groupTimesByDay([{ dow: 1, minutes: m }]);
-    assert.ok(g[0].minutes <= m, `${m}분 → ${g[0].minutes}분: 안내가 실제보다 늦다`);
-    assert.ok(m - g[0].minutes < 5, `${m}분 → ${g[0].minutes}분: 5분 이상 일찍 안내한다`);
+    assert.equal(g[0].minutes, m, `${m}분이 그대로 유지되어야 한다`);
   }
 });
 
@@ -101,10 +96,10 @@ test("아직 시작 전인 학생은 '언제부터'가 문안에 들어간다", 
     times: [{ dow: 1, minutes: 8 * 60 + 56 }, { dow: 3, minutes: 8 * 60 + 52 }],
     startsFrom: "2026-08-10",
   });
-  assert.match(body, /8월 10일\(월\)부터 시작하는/);
-  // 월 08:56 → 08:55, 수 08:52 → 08:50. 시각이 다르므로 합치지 않고 나눠 적는다.
-  assert.match(body, /월 오전 8시 55분/);
-  assert.match(body, /수 오전 8시 50분/);
+  assert.match(body, /8월 10일\(월\)부터 시작하는 등원 셔틀 탑승 예상 시간/);
+  // 시각이 다르므로 합치지 않고 정확한 값 그대로 나눠 적는다.
+  assert.match(body, /월 오전 8시 56분/);
+  assert.match(body, /수 오전 8시 52분/);
   assert.match(body, /힐스테이트 다산/);
 });
 
@@ -114,7 +109,7 @@ test("이미 다니는 학생 문안에는 '언제부터'가 없다", () => {
     times: [{ dow: 1, minutes: 9 * 60 + 20 }], startsFrom: null,
   });
   assert.doesNotMatch(body, /부터 시작하는/);
-  assert.match(body, /등원 셔틀 탑승 시간을 안내드립니다/);
+  assert.match(body, /등원 셔틀 탑승 예상 시간을 안내드립니다/);
 });
 
 test("문안에 다른 학생 정보가 절대 섞이지 않는다(개인정보)", () => {

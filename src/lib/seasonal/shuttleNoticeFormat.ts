@@ -18,16 +18,6 @@ export function parseEtaMinutes(label: string | null | undefined): number | null
   return h * 60 + mi;
 }
 
-/**
- * 5분 단위로 **내림**한다(08:56 → 08:55).
- *
- * 왜 내림인가: 분 단위(08:56)로 안내하면 지킬 수 없는 정확도를 약속하는 셈이다.
- * 올림하면 학부모가 늦게 나와 차를 놓칠 수 있으므로, 반드시 실제보다 **이르게** 잡는다.
- */
-export function floorTo5(minutes: number): number {
-  return Math.floor(minutes / 5) * 5;
-}
-
 /** 자정 기준 분 → "오전 9시 5분" / "오전 9시". */
 export function toKoreanTime(minutes: number): string {
   const h = Math.floor(minutes / 60), m = minutes % 60;
@@ -101,11 +91,12 @@ export function groupTimesByDay(times: NoticeTime[]): { dows: number[]; minutes:
     const cur = earliestPerDow.get(t.dow);
     if (cur == null || t.minutes < cur) earliestPerDow.set(t.dow, t.minutes);
   }
+  // 시각은 **반올림하지 않고 그대로** 쓴다(원장 지시 2026-08-03).
+  //   5분 단위로 뭉개면 실제와 어긋나므로, 정확한 시각을 주고 문안에서 "예상 시간"임을 밝힌다.
   const byTime = new Map<number, number[]>();
   for (const [dow, minutes] of earliestPerDow) {
-    const key = floorTo5(minutes);
-    const list = byTime.get(key);
-    if (list) list.push(dow); else byTime.set(key, [dow]);
+    const list = byTime.get(minutes);
+    if (list) list.push(dow); else byTime.set(minutes, [dow]);
   }
   return [...byTime.entries()]
     .map(([minutes, dows]) => ({ minutes, dows: dows.sort((a, b) => a - b) }))
@@ -122,21 +113,22 @@ export function buildNoticeBody(input: NoticeInput): string {
 
   const startLine = toKoreanDate(input.startsFrom);
   const timeLines = groups.length === 1
-    ? [`▪ 탑승 시간 : ${formatDays(groups[0].dows)} ${toKoreanTime(groups[0].minutes)}`]
-    : ["▪ 탑승 시간", ...groups.map((g) => `   · ${formatDays(g.dows)} ${toKoreanTime(g.minutes)}`)];
+    ? [`▪ 탑승 예상 시간 : ${formatDays(groups[0].dows)} ${toKoreanTime(groups[0].minutes)}`]
+    : ["▪ 탑승 예상 시간", ...groups.map((g) => `   · ${formatDays(g.dows)} ${toKoreanTime(g.minutes)}`)];
 
   return [
     "농구교실 등원 셔틀 안내",
     "",
     `${input.studentName} 학부모님, 안녕하세요.`,
     startLine
-      ? `${startLine}부터 시작하는 등원 셔틀 시간을 안내드립니다.`
-      : "등원 셔틀 탑승 시간을 안내드립니다.",
+      ? `${startLine}부터 시작하는 등원 셔틀 탑승 예상 시간을 안내드립니다.`
+      : "등원 셔틀 탑승 예상 시간을 안내드립니다.",
     "",
     `▪ 탑승 장소 : ${toParentStopLabel(input.stopLabel)}`,
     ...timeLines,
     "",
-    "· 도로 상황에 따라 5분 정도 차이가 날 수 있으니 5분 전에 나와 기다려 주세요.",
+    "· 위 시각은 교통 상황에 따라 앞뒤로 달라질 수 있는 예상 시간입니다.",
+    "  5분 전에는 나와서 기다려 주세요.",
     "· 결석이나 자차 등원 시 미리 알려주시면 감사하겠습니다.",
     "",
     "STIZ 농구교실 다산점",

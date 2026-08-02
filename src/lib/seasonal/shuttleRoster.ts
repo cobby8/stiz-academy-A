@@ -522,14 +522,14 @@ export async function getConfirmedShuttleRosterForDate(
  * ⚠️ 출결(그날 결석인가)은 이 함수가 판정하지 않는다. 소속과 출결은 별개다 —
  *    소속이지만 그날 좌석이 없는 사람(아직 시작 전·이미 종료)은 호출부에서 결석으로 표시한다.
  */
-export async function getWeekdayMemberRequestIds(
+export async function getWeekdayMembers(
   date: string,
   direction: "PICKUP" | "DROPOFF",
-): Promise<Set<string>> {
+): Promise<ShuttleRosterRider[]> {
   const roster = await getConfirmedShuttleRoster();
   const byItemId = new Map<string, ShuttleRosterEntry>();
   for (const row of roster) if (row.ride && row.applicationItemId) byItemId.set(row.applicationItemId, row);
-  if (byItemId.size === 0) return new Set();
+  if (byItemId.size === 0) return [];
 
   const rows = await prisma.$queryRawUnsafe<RawRow[]>(
     `SELECT DISTINCT e."applicationItemId" AS "itemId"
@@ -542,12 +542,25 @@ export async function getWeekdayMemberRequestIds(
     date, [...byItemId.keys()],
   );
 
-  const ids = new Set<string>();
+  // 소속자는 "그 요일에 타는 사람"이지 "특정 날짜에 타는 사람"이 아니다.
+  // 그래서 세션 시각(sessionStart/End)은 채우지 않는다 — 날짜마다 다르고, 여기서는 의미가 없다.
+  const members: ShuttleRosterRider[] = [];
+  const seen = new Set<string>();
   for (const row of rows) {
     const entry = byItemId.get(String(row.itemId));
-    if (entry) ids.add(entry.shuttleRequestId);
+    if (!entry || seen.has(entry.shuttleRequestId)) continue;
+    seen.add(entry.shuttleRequestId);
+    const chosen = placeForDirection(entry, direction);
+    members.push({
+      ...entry,
+      serviceDate: date,
+      sessionStart: null,
+      sessionEnd: null,
+      place: chosen,
+      placeLabel: chosen.location ?? entry.pickup.location ?? "(위치 미지정)",
+    });
   }
-  return ids;
+  return members;
 }
 
 // ────────────────────────────────────────────────────────────────

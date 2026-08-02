@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth-guard";
 // ⚠️ 순환 import 주의: shuttleRoster.ts는 dispatchRoute를 import하지 않으므로(단방향) 여기서 가져와도 안전하다.
 //    shuttle-optimize.ts는 dispatchRoute를 import하므로, 반대로 여기서 shuttle-optimize를 import하면 순환이 된다.
 //    그래서 Run/Stop 타입을 재사용하지 않고 이 파일 안에 최소 구조 타입을 직접 정의한다.
-import { getConfirmedShuttleRosterForDate, getWeekdayMemberRequestIds } from "./shuttleRoster";
+import { getConfirmedShuttleRosterForDate, getWeekdayMembers } from "./shuttleRoster";
 // reconcile 로직은 의존성 없는 순수 모듈이 정본이다(shuttleRosterEdit.ts와 같은 이유 — 실제 실행 테스트 가능).
 import { reconcileSavedVehicles, diffSavedRoute } from "./dispatchReconcile";
 // 저장 payload에서 requestId별 확정 정차 라벨을 뽑는 순수 로직(학부모 마이페이지 확정시각 표시에 쓴다).
@@ -105,7 +105,8 @@ export async function getSavedDispatchRoute(
         // ★ 노선 소속(validIds) = **그 요일에 수업이 하나라도 있는 사람**.
         //   대표일 하루로 판정하면 시즌 중간 합류자가 그 요일 노선에 영원히 못 들어간다
         //   (대표일 좌석이 없어 걸러지고, 넣어도 reconcile이 매번 지운다 — 2026-08-03 실제 사고).
-        const validIds = await getWeekdayMemberRequestIds(d, dir);
+        const members = await getWeekdayMembers(d, dir);
+        const validIds = new Set(members.map((m) => m.shuttleRequestId));
         // 그날 실제로 타는 사람(출결·좌석 반영). 화면이 보여 주는 **실제 날짜** 기준이어야 한다 —
         // 대표일로 보면 "오늘의 결석"이 아니라 "첫 주의 결석"이 매주 반복 표시된다.
         const todayDate = attendanceDate ?? d;
@@ -130,12 +131,16 @@ export async function getSavedDispatchRoute(
         for (const rider of plan.riders) labelByRequestId.set(rider.shuttleRequestId, rider.placeLabel);
 
         vehicles = reconcileSavedVehicles(savedVehicles, validIds, labelByRequestId, absentIds);
-        // diff는 **오늘 실제로 타는 사람** 기준으로 비교한다(결석·미시작자는 신규 배정 대상이 아니다).
+        // diff(신규·복귀)는 **그 요일 소속자 전체** 기준으로 본다. "오늘 타는 사람"으로 보면 안 된다 —
+        //   노선은 요일 단위인데 배정 대상만 날짜 단위로 판정하면, 화면이 열려 있는 날짜에 마침
+        //   수업이 없는 소속자(중간 합류자 등)는 영원히 배너에 뜨지 않아 배정할 방법이 없다.
+        //   실제로 8/10부터 등원하는 학생이, 기본 화면(시즌 첫 날짜)에서는 안 보여
+        //   "월·수 노선에 넣을 수가 없는" 상태였다(2026-08-03 실측).
         // ★ 저장 payload는 절대 바꾸지 않는다 — diff는 순수 읽기 진단이다.
-        const activeRiders = plan.riders.filter((r) => !r.isAbsent);
-        const diff = diffSavedRoute(vehicles, activeRiders);
+        const diff = diffSavedRoute(vehicles, members);
         // 좌표·라벨·학생정보로 살찌운다(화면의 추천 배정·좌표 자동 반영용). 명단에서 그 학생을 되짚어 채운다.
-        const byId = new Map([...canonPlan.riders, ...plan.riders].map((rider) => [rider.shuttleRequestId, rider]));
+        // 소속자(members)를 바탕으로 하고, 그날 명단이 있으면 최신 값으로 덮는다.
+        const byId = new Map([...members, ...canonPlan.riders, ...plan.riders].map((rider) => [rider.shuttleRequestId, rider]));
         const enrich = (c: { requestId: string; name: string }): SavedRouteChange => {
           const r = byId.get(c.requestId);
           const isHub = isFreeHubLabelLocal(r?.placeLabel);

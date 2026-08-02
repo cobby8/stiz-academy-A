@@ -5,6 +5,8 @@ import { RouteMapCanvas } from "@/components/seasonal/DispatchRouteMap";
 import type { DispatchSuggestion, DispatchChange } from "@/lib/seasonal/shuttle-optimize";
 import StudentDetailModal from "@/components/seasonal/StudentDetailModal";
 import { confirmedEtaMin, etaMinToLabel, reapplyManualEtaVehicles } from "@/lib/seasonal/shuttleStopEta";
+// 정차 병합의 단일 기준(같은 장소 ≤30m). 서버(자동 제안·증분 배차)와 같은 판정을 쓴다.
+import { findSamePlaceIndex } from "@/lib/seasonal/stopMerge";
 
 // 한 방향(등원 또는 하원)의 노선 섹션 — 목록 + 지도 + 순서변경/재계산/무료탑승 드래그/출발조정/저장을 자립적으로 담는다.
 // 날짜·기준위치가 바뀌면(refreshKey) 그 방향을 다시 계산한다.
@@ -98,8 +100,12 @@ function relocateInPlace(
         if (stop.students.length === 1) {
           stops[si] = { ...stop, lat: c.lat, lng: c.lng, label: c.label || stop.label, approx: false };
         } else {
+          // 혼자가 아니면 그 학생만 떼어낸다. 단, **옮겨 갈 자리에 이미 정차가 있으면 새로 만들지 않고 합친다** —
+          // 그러지 않으면 같은 아파트에 정차가 두 개로 갈라져 기사님이 같은 곳을 두 번 들르게 된다.
           const [moved] = stop.students.splice(idx, 1);
-          stops.splice(si + 1, 0, { ...stop, lat: c.lat, lng: c.lng, label: c.label || stop.label, approx: false, isHub: false, students: [moved] });
+          const target = findSamePlaceIndex(stops, c.lat, c.lng);
+          if (target >= 0 && target !== si) stops[target] = { ...stops[target], students: [...stops[target].students, moved] };
+          else stops.splice(si + 1, 0, { ...stop, lat: c.lat, lng: c.lng, label: c.label || stop.label, approx: false, isHub: false, students: [moved] });
         }
         vs[vi] = { ...vs[vi], path: undefined };
         reroute.add(vi);
@@ -348,7 +354,6 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
     const cur = sugRef.current;
     const v = cur.vehicles[vi];
     if (!v) { setErr("배정할 차량이 없습니다."); return; }
-    const EPS = 1e-5;
     let needReroute = false;
     setSug((prev) => {
       const vehicles = prev.vehicles.map((vv) => ({ ...vv, stops: vv.stops.map((s) => ({ ...s, students: [...s.students] })) }));
@@ -360,7 +365,9 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
         if (!hub) { setErr("이 차량에 무료탑승 거점이 없습니다."); return prev; }
         hub.students.push(student);
       } else if (c.lat != null && c.lng != null) {
-        const mi = veh.stops.findIndex((s) => Math.abs(s.lat - c.lat!) <= EPS && Math.abs(s.lng - c.lng!) <= EPS);
+        // 같은 장소(≤30m)면 기존 정차에 합친다. 기준은 stopMerge.ts 하나뿐 —
+        // 예전엔 여기만 ±1e-5(약 1.1m)라, 자동 제안으로는 합쳐지던 같은 아파트가 손으로 배정하면 갈라졌다.
+        const mi = findSamePlaceIndex(veh.stops, c.lat, c.lng);
         if (mi >= 0) veh.stops[mi].students.push(student);
         else { veh.stops.splice(bestInsertK(prev, veh, { lat: c.lat, lng: c.lng }), 0, { lat: c.lat, lng: c.lng, label: c.label, students: [student], approx: false, isHub: false }); needReroute = true; }
       } else { setErr(`${c.name}: 좌표가 없어 무료탑승으로만 배정할 수 있습니다.`); return prev; }

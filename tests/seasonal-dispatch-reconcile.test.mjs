@@ -13,9 +13,9 @@ function sampleVehicle() {
     index: 1,
     vehicleName: "1호차",
     plate: "12가3456",
-    capacity: 3,
+    capacity: 4,
     tripLabel: null,
-    passengers: 3,
+    passengers: 4,
     over: false,
     provider: "TMAP",
     tmapMinutes: 20,
@@ -39,9 +39,14 @@ function sampleVehicle() {
         ],
       },
       {
-        // 무료탑승 거점(승객 0이어도 항상 유지되어야 함).
+        // 무료탑승 거점. ⚠️ 9063013 이후 사양: **탑승자 0명이면 거점도 노선에서 제외**된다
+        // (그 전에는 "isHub는 항상 유지" 예외가 있었다). 그래서 이 픽스처는 거점에도 학생을 태워 둔다 —
+        // 거점을 비워 두면 모든 테스트에서 거점이 사라져 정차 수가 줄고, 그 여파로 path까지 무효화돼
+        // "순서·경로 보존"을 검증하려던 테스트가 엉뚱한 이유로 깨진다.
         lat: 37.62, lng: 127.20, label: "무료 탑승 거점", approx: false, isHub: true, etaLabel: "09:00 승차",
-        students: [],
+        students: [
+          { name: "사아", requestId: "req-hub", rosterId: "r-hub", pickupLabel: "무료 탑승 거점" },
+        ],
       },
     ],
   };
@@ -56,14 +61,23 @@ test("(a) 유효 Set에 없는 학생은 제거된다", () => {
   assert.deepEqual(names, ["req-1"]);
 });
 
-test("(b) 학생이 0명이 된 정차는 제거하되 isHub 정차는 유지한다", () => {
+test("(b) 학생이 0명이 된 정차는 제거된다 — 무료거점(isHub)도 예외가 아니다", () => {
   const vehicles = [sampleVehicle()];
-  // req-3만 유효 → 정차A는 전원 탈락(제거), 정차B 유지, 거점(isHub)은 승객 0이어도 유지.
+  // req-3만 유효 → 정차A 전원 탈락(제거), 정차B 유지, 거점도 탑승자 0명이 되어 제거.
+  // ★ 9063013 "무료 탑승 거점 — 탑승자 0명이면 노선에서 제외"로 확정된 사양이다.
+  //   빈 거점을 노선에 남기면 기사님이 아무도 없는 정류장에 들르게 된다.
   const out = reconcileSavedVehicles(vehicles, new Set(["req-3"]));
   const labels = out[0].stops.map((s) => s.label);
   assert.ok(!labels.includes("정차A"), "빈 정차A는 제거되어야 한다");
   assert.ok(labels.includes("정차B"), "승객 있는 정차B는 유지");
-  assert.ok(labels.includes("무료 탑승 거점"), "isHub 거점은 승객 0이어도 유지");
+  assert.ok(!labels.includes("무료 탑승 거점"), "탑승자 0명인 거점은 제거되어야 한다");
+});
+
+test("(b-2) 무료거점에 탑승자가 있으면 유지된다", () => {
+  const vehicles = [sampleVehicle()];
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-3", "req-hub"]));
+  const labels = out[0].stops.map((s) => s.label);
+  assert.ok(labels.includes("무료 탑승 거점"), "탑승자 있는 거점은 유지");
 });
 
 test("(c) passengers/over가 재계산된다", () => {
@@ -82,7 +96,9 @@ test("(c) passengers/over가 재계산된다", () => {
 
 test("(d) 순서·etaLabel·departTime 등 시각·경로는 보존된다", () => {
   const vehicles = [sampleVehicle()];
-  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-3"]));
+  // 정차가 하나도 사라지지 않는 조건(각 정차에 최소 1명 생존)이어야 path 보존을 검증할 수 있다.
+  // req-2만 빠지므로 정차A는 1명으로 줄 뿐 살아남는다 → 정차 수 불변 → path 유지.
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-3", "req-hub"]));
   const run = out[0];
   // 시각·경로·제공자 정보 그대로
   assert.equal(run.departTime, "08:35");
@@ -110,10 +126,57 @@ test("DB를 바꾸지 않는다: 입력 배열/원본 학생 배열은 변형되
 
 test("전원이 다시 유효해지면 저장본이 그대로 복원된다(자가치유)", () => {
   const vehicles = [sampleVehicle()];
-  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3"]));
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3", "req-hub"]));
   assert.equal(out[0].stops.length, 3);
-  assert.equal(out[0].passengers, 3);
-  assert.equal(out[0].over, false);
+  assert.equal(out[0].passengers, 4);
+  assert.equal(out[0].over, false); // 4 === capacity(4)
+  assert.deepEqual(out[0].path, [{ lat: 37.6, lng: 127.1 }, { lat: 37.61, lng: 127.15 }], "정차가 그대로면 경로도 그대로");
+});
+
+// ────────────────────────────────────────────────────────────────
+// 결석 표시(isAbsent) — **저장되지 않는 파생값**. 읽을 때마다 그날 출결로 다시 계산한다.
+// 2026-08-03 운영 사고: 붙이기만 하고 떼지 않아 결석이 노선에 영구 각인됐고,
+// 다음 주 같은 요일에도 결석으로 따라오며 인원수까지 계속 적게 나왔다.
+// ────────────────────────────────────────────────────────────────
+
+test("(결석) 오늘 결석자는 제거되지 않고 isAbsent로 표시만 된다", () => {
+  const vehicles = [sampleVehicle()];
+  const all = new Set(["req-1", "req-2", "req-3", "req-hub"]);
+  const out = reconcileSavedVehicles(vehicles, all, undefined, new Set(["req-2"]));
+  const stopA = out[0].stops.find((s) => s.label === "정차A");
+  assert.equal(stopA.students.length, 2, "결석자도 노선에 그대로 남아야 한다");
+  const absent = stopA.students.find((st) => st.requestId === "req-2");
+  assert.equal(absent.isAbsent, true);
+  const present = stopA.students.find((st) => st.requestId === "req-1");
+  assert.equal(present.isAbsent, undefined, "결석 아닌 학생엔 플래그가 붙지 않는다");
+});
+
+test("(결석) 저장본에 남아 있던 과거 isAbsent는 반드시 제거된다", () => {
+  const vehicles = [sampleVehicle()];
+  // 지난주 결석이 payload에 각인돼 저장된 상황을 재현.
+  vehicles[0].stops[0].students[1].isAbsent = true;
+  const all = new Set(["req-1", "req-2", "req-3", "req-hub"]);
+  // 오늘은 아무도 결석이 아니다(absentIds 비어 있음).
+  const out = reconcileSavedVehicles(vehicles, all, undefined, new Set());
+  const stopA = out[0].stops.find((s) => s.label === "정차A");
+  const wasAbsent = stopA.students.find((st) => st.requestId === "req-2");
+  assert.equal(wasAbsent.isAbsent, undefined, "오늘 결석이 아니면 과거 플래그는 떨어져야 한다");
+});
+
+test("(결석) 인원수는 결석자를 포함해 전원을 센다(노선 좌석 기준)", () => {
+  const vehicles = [sampleVehicle()];
+  const all = new Set(["req-1", "req-2", "req-3", "req-hub"]);
+  const out = reconcileSavedVehicles(vehicles, all, undefined, new Set(["req-2", "req-3"]));
+  assert.equal(out[0].passengers, 4, "결석 2명이 있어도 노선 인원은 4명");
+});
+
+test("(결석) 결석은 정차를 지우지 않으므로 경로(path)도 보존된다", () => {
+  const vehicles = [sampleVehicle()];
+  const all = new Set(["req-1", "req-2", "req-3", "req-hub"]);
+  // 정차B 학생(req-3)이 결석이어도 정차B는 남아야 하고 path도 살아야 한다.
+  const out = reconcileSavedVehicles(vehicles, all, undefined, new Set(["req-3"]));
+  assert.equal(out[0].stops.length, 3);
+  assert.deepEqual(out[0].path, [{ lat: 37.6, lng: 127.1 }, { lat: 37.61, lng: 127.15 }]);
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -156,7 +219,7 @@ test("(라벨) isHub 거점 라벨은 절대 갱신되지 않는다", () => {
 test("(라벨) 좌표·시각·순서는 라벨 갱신 중에도 불변", () => {
   const vehicles = [sampleVehicle()];
   const labels = new Map([["req-1", "X"], ["req-2", "X"], ["req-3", "Y"]]);
-  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3"]), labels);
+  const out = reconcileSavedVehicles(vehicles, new Set(["req-1", "req-2", "req-3", "req-hub"]), labels);
   const run = out[0];
   assert.equal(run.departTime, "08:35");
   assert.equal(run.arriveTime, "09:20");
@@ -165,8 +228,8 @@ test("(라벨) 좌표·시각·순서는 라벨 갱신 중에도 불변", () => 
   assert.equal(stopA.lat, 37.60);
   assert.equal(stopA.lng, 127.10);
   assert.equal(stopA.etaLabel, "08:40 승차");
-  // 정차 순서 보존
-  assert.deepEqual(run.stops.map((s) => s.students.length), [2, 1, 0]);
+  // 정차 순서 보존(정차A 2명 · 정차B 1명 · 거점 1명)
+  assert.deepEqual(run.stops.map((s) => s.students.length), [2, 1, 1]);
 });
 
 test("(라벨) 라벨맵이 없으면 기존 라벨을 그대로 유지(하위호환)", () => {

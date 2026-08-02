@@ -6,6 +6,8 @@ import { routeSegmentsWithTmap, type SegmentsRouteResult } from "@/lib/shuttle/t
 import { getConfirmedShuttleRosterForDate } from "./shuttleRoster";
 import { getSavedDispatchRoute } from "./dispatchRoute";
 import { firstDateOfSameWeekday } from "./weekday";
+// 정차 병합의 단일 기준(같은 장소 판정). 자동 제안·증분 배차·화면 배정이 모두 이걸 쓴다.
+import { findSamePlaceIndex } from "./stopMerge";
 import { planIncrementalInsert, type IncrTarget } from "./dispatchIncrement";
 import { mergeTmapRoute, type RunRouteFields } from "./tmapRouteMerge";
 // 구간 실제시간 → 방향별 stop ETA 누적(순수 함수). 테스트가 prisma 없이 검증하도록 분리했다.
@@ -339,7 +341,10 @@ export async function buildDispatchFromRiders(input: {
   const classEnd = input.classEnd;
 
   const unassigned: { name: string; label: string | null }[] = [];
-  const stopMap = new Map<string, Stop>();
+  // 정차 목록. 좌표 격자 키(toFixed)가 아니라 **거리 기준**으로 병합한다 —
+  // 격자는 경계에 걸치면 1m 떨어진 두 점도 다른 정차가 돼(실제 사고) 같은 아파트가 갈라졌다.
+  // 한 노선의 정차는 많아야 수십 개라 선형 탐색으로 충분하다.
+  const builtStops: Stop[] = [];
   // 무료 탑승 거점(1호점 등). 거점에서 타는/내리는 학생이 있을 때만 노선에 넣는다(빈 거점은 아래에서 제외).
   const hubStop: Stop | null = effectiveHub ? { lat: effectiveHub.lat, lng: effectiveHub.lng, label: effectiveHub.name, students: [], approx: false, isHub: true } : null;
   for (const r of riders) {
@@ -352,12 +357,12 @@ export async function buildDispatchFromRiders(input: {
     const { latitude: lat, longitude: lng } = r.place;
     const label = r.placeLabel;
     if (lat == null || lng == null) { unassigned.push({ name: r.studentName, label }); continue; }
-    const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
-    if (!stopMap.has(key)) stopMap.set(key, { lat, lng, label, students: [], approx: !pinnedSrc(r.place.source) });
-    stopMap.get(key)!.students.push(student);
+    const hit = findSamePlaceIndex(builtStops, lat, lng);
+    if (hit >= 0) builtStops[hit].students.push(student);
+    else builtStops.push({ lat, lng, label, students: [student], approx: !pinnedSrc(r.place.source) });
   }
 
-  const allStops: Stop[] = [...stopMap.values()];
+  const allStops: Stop[] = builtStops;
   // 거점에 실제로 타는 학생이 있을 때만 경유한다. 아무도 없으면 노선에서 뺀다(빈 거점 제외).
   if (hubStop && hubStop.students.length > 0) allStops.push(hubStop);
 

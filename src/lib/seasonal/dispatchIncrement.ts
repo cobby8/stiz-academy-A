@@ -17,6 +17,11 @@ export function haversineKm(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
+// Node's type-stripping tests require the runtime extension while Next.js
+// resolves the same source module during the application build.
+// @ts-expect-error -- TypeScript runtime test compatibility
+import { findSamePlaceIndex } from "./stopMerge.ts";
+
 export type LatLng = { lat: number; lng: number };
 
 // 저장 payload의 구조 중 삽입에 필요한 최소 형태. 나머지 필드는 전개(...)로 원본 그대로 보존한다.
@@ -47,7 +52,8 @@ export type IncrTarget = {
 
 export type IncrGeo = { start: LatLng; end: LatLng };
 
-const COORD_EPSILON = 1e-5; // 동좌표 판정(부동소수 오차 흡수)
+// 동좌표(같은 장소) 판정은 stopMerge.ts 하나로 통일했다 — 이 파일이 따로 기준을 갖지 않는다.
+// stopMerge도 의존성 없는 순수 모듈이라 이 파일의 "순수 유지" 원칙을 깨지 않는다.
 
 function toNum(v: unknown): number | null {
   if (v == null || typeof v === "boolean") return null;
@@ -150,11 +156,9 @@ export function planIncrementalInsert(
       const v = vehicles[vi];
       if (passengersOf(v) + 1 > capacityOf(v)) continue; // 정원 초과 금지
 
-      // 동좌표(±1e-5) 기존 정차가 있으면 병합(비용 0). 새 정차를 만들지 않는다.
-      const mergeIdx = v.stops.findIndex((s) => {
-        const slat = toNum(s.lat), slng = toNum(s.lng);
-        return slat != null && slng != null && Math.abs(slat - S.lat) <= COORD_EPSILON && Math.abs(slng - S.lng) <= COORD_EPSILON;
-      });
+      // 같은 장소(≤30m) 기존 정차가 있으면 병합(비용 0). 새 정차를 만들지 않는다.
+      // ⚠️ 기준은 stopMerge.ts 하나뿐이다 — 예전엔 여기만 ±1e-5(약 1.1m)라 같은 아파트가 갈라졌다.
+      const mergeIdx = findSamePlaceIndex(v.stops, S.lat, S.lng);
       if (mergeIdx >= 0) {
         if (!best || 0 < best.cost) best = { vi, k: -1, mergeIdx, cost: 0 };
         continue;

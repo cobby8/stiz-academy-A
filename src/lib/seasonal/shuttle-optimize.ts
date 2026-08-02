@@ -24,7 +24,12 @@ const ACADEMY_FALLBACK: Geo = { lat: 37.6145625, lng: 127.1563125, name: "STIZ �
 
 const ROAD_FACTOR = 1.3, SPEED_KM_PER_MIN = 0.4;
 const MIN_PER_KM = ROAD_FACTOR / SPEED_KM_PER_MIN;
-const STOP_DWELL_MIN = 1.5, PICKUP_BUFFER_MIN = 10, DROPOFF_BUFFER_MIN = 5;
+// PICKUP_BUFFER_MIN: 수업 시작 **몇 분 전에 학원에 도착**시킬지. 등원 시각은 이 도착 시각에서
+//   T맵 구간시간을 거꾸로 빼며 역산되므로(planRun), 이 값이 곧 전체 등원 시간표의 기준점이다.
+//   2026-08-03 원장 지시로 10 → 5 (수업 09:30 → 학원 도착 09:25).
+//   ⚠️ 정규 셔틀도 같은 엔진(buildDispatchFromRiders)을 쓰므로 함께 5분 전 도착이 된다.
+//      이미 저장된 노선은 바뀌지 않는다 — 그 노선을 다시 계산할 때부터 적용된다.
+const STOP_DWELL_MIN = 1.5, PICKUP_BUFFER_MIN = 5, DROPOFF_BUFFER_MIN = 5;
 
 export type DispatchDirection = "PICKUP" | "DROPOFF";
 type Pt = { lat: number; lng: number };

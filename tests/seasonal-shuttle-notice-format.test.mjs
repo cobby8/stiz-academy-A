@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildNoticeBody, formatDays, floorTo5, toKoreanTime, toParentStopLabel, toKoreanDate, parseEtaMinutes,
+  buildNoticeBody, groupTimesByDay, formatDays, floorTo5, toKoreanTime, toParentStopLabel, toKoreanDate, parseEtaMinutes,
 } from "../src/lib/seasonal/shuttleNoticeFormat.ts";
 
 // 실제 학부모에게 나가는 문자다. 잘못 나가면 회수할 수 없으므로 문안 생성을 실행해서 검증한다.
@@ -15,19 +15,59 @@ test("시각은 5분 단위로 **내림**한다(늦게 안내하면 차를 놓�
   assert.equal(floorTo5(9 * 60 + 1), 9 * 60);
 });
 
-test("여러 요일 시각이 다르면 **가장 이른 시각**으로 통일한다", () => {
+test("요일마다 시각이 다르면 **합치지 않고 나눠** 적는다 (김대후 실제 사례)", () => {
+  // 월~목 09:20 / 금 09:12. 하나로 합치면 09:10이 되어 월~목에 10분이나 일찍 나오게 된다.
+  const body = buildNoticeBody({
+    studentName: "김대후",
+    stopLabel: "도농초 앞 버스정류장",
+    times: [
+      { dow: 1, minutes: 9 * 60 + 20 }, { dow: 2, minutes: 9 * 60 + 20 },
+      { dow: 3, minutes: 9 * 60 + 20 }, { dow: 4, minutes: 9 * 60 + 20 },
+      { dow: 5, minutes: 9 * 60 + 12 },
+    ],
+  });
+  assert.match(body, /월~목 오전 9시 20분/);
+  assert.match(body, /금 오전 9시 10분/);
+  // ★ 회귀 방지: 전 요일이 9시 10분으로 뭉뚱그려지면 안 된다.
+  assert.doesNotMatch(body, /월~금 오전 9시 10분/);
+});
+
+test("탁경일: 월·금 09:00, 화~목 08:55 → 두 줄로 정확히 나뉜다", () => {
   const body = buildNoticeBody({
     studentName: "탁경일",
     stopLabel: "반도유보라 메이플타운 맘스테이션",
-    // 월 09:00 / 화·수·목 08:55 / 금 09:00
     times: [
       { dow: 1, minutes: 9 * 60 }, { dow: 2, minutes: 8 * 60 + 55 },
       { dow: 3, minutes: 8 * 60 + 55 }, { dow: 4, minutes: 8 * 60 + 55 },
       { dow: 5, minutes: 9 * 60 },
     ],
   });
-  assert.match(body, /월~금 오전 8시 55분/);
-  assert.doesNotMatch(body, /9시 0분/);
+  // 같은 시각(09:00)인 월·금이 한 묶음으로, 화~목(08:55)이 다른 묶음으로 나온다.
+  assert.match(body, /월·금 오전 9시/);
+  assert.match(body, /화~목 오전 8시 55분/);
+  assert.doesNotMatch(body, /월~금 오전 8시 55분/, "합쳐서 월·금을 5분 일찍 안내하면 안 된다");
+});
+
+test("모든 요일이 같은 시각이면 한 줄로 간단히 적는다", () => {
+  const body = buildNoticeBody({
+    studentName: "이수연", stopLabel: "롯데낙천대아파트 관리사무소 앞",
+    times: [{ dow: 1, minutes: 9 * 60 + 17 }, { dow: 3, minutes: 9 * 60 + 15 }],
+  });
+  assert.match(body, /▪ 탑승 시간 : 월·수 오전 9시 15분/);
+});
+
+test("안내 시각은 실제 시각보다 **늦지 않다**(늦으면 차를 놓친다)", () => {
+  // 무작위성 없이, 실제 노선에서 나온 시각들로 전수 확인한다.
+  const samples = [
+    8 * 60 + 52, 8 * 60 + 55, 8 * 60 + 56, 8 * 60 + 59,
+    9 * 60, 9 * 60 + 4, 9 * 60 + 5, 9 * 60 + 8, 9 * 60 + 11, 9 * 60 + 12,
+    9 * 60 + 15, 9 * 60 + 17, 9 * 60 + 20,
+  ];
+  for (const m of samples) {
+    const g = groupTimesByDay([{ dow: 1, minutes: m }]);
+    assert.ok(g[0].minutes <= m, `${m}분 → ${g[0].minutes}분: 안내가 실제보다 늦다`);
+    assert.ok(m - g[0].minutes < 5, `${m}분 → ${g[0].minutes}분: 5분 이상 일찍 안내한다`);
+  }
 });
 
 test("요일 표기: 연속 3일 이상은 물결, 아니면 가운뎃점", () => {
@@ -62,7 +102,9 @@ test("아직 시작 전인 학생은 '언제부터'가 문안에 들어간다", 
     startsFrom: "2026-08-10",
   });
   assert.match(body, /8월 10일\(월\)부터 시작하는/);
-  assert.match(body, /월·수 오전 8시 50분/, "두 요일 중 이른 08:52 → 08:50");
+  // 월 08:56 → 08:55, 수 08:52 → 08:50. 시각이 다르므로 합치지 않고 나눠 적는다.
+  assert.match(body, /월 오전 8시 55분/);
+  assert.match(body, /수 오전 8시 50분/);
   assert.match(body, /힐스테이트 다산/);
 });
 

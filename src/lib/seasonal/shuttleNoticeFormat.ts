@@ -86,19 +86,44 @@ export type NoticeInput = {
 };
 
 /**
- * 한 학생의 안내 문안을 만든다. 발송부가 앞에 "[STIZ] "를 자동으로 붙이므로 여기서는 넣지 않는다.
+ * 요일별 시각을 **같은 시각끼리 묶어** 돌려준다. 예: [{days:"월~목", minutes:560}, {days:"금", minutes:550}]
  *
- * 안내 시각은 **모든 요일 중 가장 이른 시각 하나**로 통일한다.
- *   요일마다 1~5분씩 다른 시각을 나열하면 학부모가 오히려 헷갈리고, 실제로도 그 정도 오차는
- *   도로 상황에 묻힌다. 가장 이른 시각을 쓰면 어느 요일에도 차를 놓치지 않는다.
+ * ⚠️ 절대 "가장 이른 시각 하나"로 합치지 마라.
+ *   김대후는 월~목 09:20, 금 09:12다. 하나로 합치면 09:10이 되어 **월~목에 10분이나 일찍**
+ *   나와 기다리게 된다(2026-08-03 발송 직전 발견). 요일마다 시각이 다르면 반드시 나눠 적는다.
+ *
+ * 같은 요일이 여러 번 들어오면 그 요일의 **가장 이른 시각**을 그 요일 값으로 삼는다.
+ */
+export function groupTimesByDay(times: NoticeTime[]): { dows: number[]; minutes: number }[] {
+  const earliestPerDow = new Map<number, number>();
+  for (const t of times) {
+    if (!Number.isFinite(t.minutes)) continue;
+    const cur = earliestPerDow.get(t.dow);
+    if (cur == null || t.minutes < cur) earliestPerDow.set(t.dow, t.minutes);
+  }
+  const byTime = new Map<number, number[]>();
+  for (const [dow, minutes] of earliestPerDow) {
+    const key = floorTo5(minutes);
+    const list = byTime.get(key);
+    if (list) list.push(dow); else byTime.set(key, [dow]);
+  }
+  return [...byTime.entries()]
+    .map(([minutes, dows]) => ({ minutes, dows: dows.sort((a, b) => a - b) }))
+    .sort((a, b) => a.dows[0] - b.dows[0]);
+}
+
+/**
+ * 한 학생의 안내 문안을 만든다. 발송부가 앞에 "[STIZ] "를 자동으로 붙이므로 여기서는 넣지 않는다.
+ * 요일마다 시각이 다르면 줄을 나눠 적는다(합치면 실제보다 이른 시각을 안내하게 된다).
  */
 export function buildNoticeBody(input: NoticeInput): string {
-  const valid = (input.times ?? []).filter((t) => Number.isFinite(t.minutes));
-  if (valid.length === 0) throw new Error(`${input.studentName}: 탑승 시각이 없습니다.`);
+  const groups = groupTimesByDay(input.times ?? []);
+  if (groups.length === 0) throw new Error(`${input.studentName}: 탑승 시각이 없습니다.`);
 
-  const earliest = Math.min(...valid.map((t) => floorTo5(t.minutes)));
-  const days = formatDays(valid.map((t) => t.dow));
   const startLine = toKoreanDate(input.startsFrom);
+  const timeLines = groups.length === 1
+    ? [`▪ 탑승 시간 : ${formatDays(groups[0].dows)} ${toKoreanTime(groups[0].minutes)}`]
+    : ["▪ 탑승 시간", ...groups.map((g) => `   · ${formatDays(g.dows)} ${toKoreanTime(g.minutes)}`)];
 
   return [
     "농구교실 등원 셔틀 안내",
@@ -109,7 +134,7 @@ export function buildNoticeBody(input: NoticeInput): string {
       : "등원 셔틀 탑승 시간을 안내드립니다.",
     "",
     `▪ 탑승 장소 : ${toParentStopLabel(input.stopLabel)}`,
-    `▪ 탑승 시간 : ${days} ${toKoreanTime(earliest)}`,
+    ...timeLines,
     "",
     "· 도로 상황에 따라 5분 정도 차이가 날 수 있으니 5분 전에 나와 기다려 주세요.",
     "· 결석이나 자차 등원 시 미리 알려주시면 감사하겠습니다.",

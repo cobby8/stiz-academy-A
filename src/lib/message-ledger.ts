@@ -227,7 +227,11 @@ export async function claimMessageDelivery(deliveryId: string) {
  *    표시했다. 실제로는 문자가 이미 나간 뒤라, 원장이 실패로 보고 다시 눌러 **중복 발송**됐다.
  *    그래서 여기서 값을 걸러 낸다 — 장부 기록 문제가 절대 발송 판정을 흔들면 안 된다.
  */
-const ALLOWED_DELIVERY_CHANNELS = new Set(["IN_APP", "PUSH", "SMS"]);
+const ALLOWED_DELIVERY_CHANNELS = new Set([
+  "IN_APP", "PUSH",                       // 알림 계열
+  "SMS", "LMS", "ALIMTALK", "RCS",        // DeliveredMessageChannel (message-channel-policy.ts)
+  "KAKAO_ALIMTALK",                       // 저장돼 있는 구 표기. 조회 코드가 이 값을 그대로 기대한다.
+]);
 
 export async function finalizeMessageDelivery(input: {
   deliveryId: string;

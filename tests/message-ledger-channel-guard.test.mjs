@@ -20,10 +20,33 @@ const cron = readFileSync(new URL("../src/app/api/cron/scheduled-messages/route.
 
 test("① 장부는 허용 채널 목록으로 값을 거른다", () => {
   assert.match(ledger, /ALLOWED_DELIVERY_CHANNELS/);
-  // DB CHECK 제약과 같은 목록이어야 한다.
-  assert.match(ledger, /"IN_APP",\s*"PUSH",\s*"SMS"/);
   // 걸러진 값은 channel 에 들어가지 않는다.
   assert.match(ledger, /ALLOWED_DELIVERY_CHANNELS\.has\(rawChannel\)/);
+});
+
+test("① 코드의 허용 채널과 DB CHECK 제약이 정확히 일치한다", () => {
+  // 둘이 어긋나면 둘 중 하나에서 조용히 터진다.
+  //   · DB 가 좁으면 → 기록 실패(2026-08-03 LMS 사고)
+  //   · 코드가 좁으면 → 값이 조용히 버려져 이력이 비어 보인다
+  const migration = readFileSync(
+    new URL("../prisma/migrations/20260803090000_widen_delivery_channel_check/migration.sql", import.meta.url),
+    "utf8",
+  );
+  const fromDb = [...migration.matchAll(/'([A-Z_]+)'::text/g)].map((m) => m[1]);
+  const block = /const ALLOWED_DELIVERY_CHANNELS = new Set\(\[([\s\S]*?)\]\)/.exec(ledger);
+  assert.ok(block, "ALLOWED_DELIVERY_CHANNELS 선언을 찾지 못했다");
+  const fromCode = [...block[1].matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(fromCode)].sort(), [...new Set(fromDb)].sort());
+});
+
+test("① 코드 허용 목록이 실제 채널 타입을 모두 담는다", () => {
+  const policy = readFileSync(new URL("../src/lib/message-channel-policy.ts", import.meta.url), "utf8");
+  const declared = /export type MessageChannel = ([^;]+);/.exec(policy);
+  assert.ok(declared, "MessageChannel 타입 선언을 찾지 못했다");
+  const channels = [...declared[1].matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]).filter((c) => c !== "AUTO");
+  for (const ch of channels) {
+    assert.match(ledger, new RegExp(`"${ch}"`), `${ch} 가 장부 허용 목록에 없다 — 기록이 실패한다`);
+  }
 });
 
 test("① 메시지 종류는 channel 이 아니라 messageType 칸에 기록된다", () => {

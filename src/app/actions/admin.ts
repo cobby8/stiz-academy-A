@@ -3987,39 +3987,48 @@ export async function updateTrialLead(
     if (entries.length === 0) return;
 
     const previousRows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT status, "attendedSmsSentAt", "scheduledDate", "scheduledClassId"
+        `SELECT status, "attendedSmsSentAt", "scheduledDate", "scheduledClassId", "trialDate"
          FROM "TrialLead" WHERE id = $1 LIMIT 1`,
         id,
     );
     const previousLead = previousRows[0];
 
     if (data.status === "SCHEDULED") {
-        const scheduledDate = data.scheduledDate !== undefined
+        // 확정 날짜가 없으면 희망일정(trialDate)으로 자동 채움
+        const resolvedScheduledDate = data.scheduledDate !== undefined
             ? data.scheduledDate
-            : previousLead?.scheduledDate ?? previousLead?.scheduleddate;
+            : (previousLead?.scheduledDate ?? previousLead?.scheduleddate
+                ?? previousLead?.trialDate ?? previousLead?.trialdate);
         const scheduledClassId = data.scheduledClassId !== undefined
             ? data.scheduledClassId
             : previousLead?.scheduledClassId ?? previousLead?.scheduledclassid;
-        const parsedScheduledDate = new Date(scheduledDate);
+        const parsedScheduledDate = new Date(resolvedScheduledDate);
 
-        if (!scheduledDate || Number.isNaN(parsedScheduledDate.getTime())) {
+        if (!resolvedScheduledDate || Number.isNaN(parsedScheduledDate.getTime())) {
             throw new Error("체험수업 일정을 확정하려면 올바른 수업 날짜와 시간을 입력해주세요.");
         }
-        if (typeof scheduledClassId !== "string" || !scheduledClassId.trim()) {
-            throw new Error("체험수업 일정을 확정하려면 수업 반을 선택해주세요.");
+
+        // 희망일정으로 자동 채운 경우 SET절에 scheduledDate 포함
+        if (data.scheduledDate === undefined) {
+            data.scheduledDate = resolvedScheduledDate;
+            const existing = entries.find(([col]) => col === "scheduledDate");
+            if (!existing) entries.push(["scheduledDate", resolvedScheduledDate] as const);
         }
 
-        const scheduledClasses = await prisma.$queryRawUnsafe<Array<{ id: string; dayOfWeek: string | null }>>(
-            `SELECT id, "dayOfWeek" FROM "Class" WHERE id = $1 LIMIT 1`,
-            scheduledClassId.trim(),
-        );
-        if (scheduledClasses.length === 0) {
-            throw new Error("선택한 수업 반을 찾을 수 없습니다. 반을 다시 선택해주세요.");
-        }
-        const classDay = scheduledClasses[0].dayOfWeek;
-        const scheduledDay = getSeoulWeekdayKey(parsedScheduledDate);
-        if (classDay && classDay !== scheduledDay) {
-            throw new Error("선택한 날짜의 요일과 수업 반의 요일이 다릅니다. 날짜나 반을 다시 선택해주세요.");
+        // 반이 선택된 경우에만 요일 일치 검증
+        if (typeof scheduledClassId === "string" && scheduledClassId.trim()) {
+            const scheduledClasses = await prisma.$queryRawUnsafe<Array<{ id: string; dayOfWeek: string | null }>>(
+                `SELECT id, "dayOfWeek" FROM "Class" WHERE id = $1 LIMIT 1`,
+                scheduledClassId.trim(),
+            );
+            if (scheduledClasses.length === 0) {
+                throw new Error("선택한 수업 반을 찾을 수 없습니다. 반을 다시 선택해주세요.");
+            }
+            const classDay = scheduledClasses[0].dayOfWeek;
+            const scheduledDay = getSeoulWeekdayKey(parsedScheduledDate);
+            if (classDay && classDay !== scheduledDay) {
+                throw new Error("선택한 날짜의 요일과 수업 반의 요일이 다릅니다. 날짜나 반을 다시 선택해주세요.");
+            }
         }
     }
 

@@ -217,10 +217,10 @@ export function SessionPhotoUploader({
       <input ref={cameraRef} hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => void upload(event.target.files)} />
       <input ref={galleryRef} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void upload(event.target.files)} />
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" disabled={busy || subjectStudentIds.length === 0} onClick={() => cameraRef.current?.click()} className="min-h-12 rounded-xl bg-[var(--brand-accent)] px-3 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">
+        <button type="button" disabled={busy} onClick={() => cameraRef.current?.click()} className="min-h-12 rounded-xl bg-[var(--brand-accent)] px-3 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">
           사진 촬영
         </button>
-        <button type="button" disabled={busy || subjectStudentIds.length === 0} onClick={() => galleryRef.current?.click()} className="min-h-12 rounded-xl border border-gray-200 bg-white px-3 font-black disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800">
+        <button type="button" disabled={busy} onClick={() => galleryRef.current?.click()} className="min-h-12 rounded-xl border border-gray-200 bg-white px-3 font-black disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800">
           갤러리 선택
         </button>
       </div>

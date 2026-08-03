@@ -782,8 +782,9 @@ export default function TrialCrmClient({
                 return trialLeadMatchesSearch(lead, searchQuery);
             })
             .sort((a, b) => {
-                const aTrialDate = getLocalDateTime(a.trialDate);
-                const bTrialDate = getLocalDateTime(b.trialDate);
+                // 확정일정(scheduledDate) 우선, 없으면 희망일정(trialDate)으로 정렬
+                const aTrialDate = getLocalDateTime(a.scheduledDate ?? a.trialDate);
+                const bTrialDate = getLocalDateTime(b.scheduledDate ?? b.trialDate);
 
                 if (aTrialDate !== null && bTrialDate === null) return -1;
                 if (aTrialDate === null && bTrialDate !== null) return 1;

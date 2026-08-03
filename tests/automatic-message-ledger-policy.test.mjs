@@ -33,7 +33,11 @@ test("자동 발송 장부는 원문 대신 전화번호 HMAC과 본문 해시�
 
 test("공급자 결과와 실제 채널을 건별 장부와 묶음 장부에 확정한다", () => {
   assert.match(ledger, /channel = COALESCE\(\$5, channel\)/);
-  assert.match(ledger, /"messageType" = \$5/);
+  // 2026-08-03 정정: 예전엔 `"messageType" = $5` 로 **채널과 종류에 같은 값**을 넣었다.
+  //   그래서 호출부가 'LMS'를 넘기면 channel CHECK 제약(IN_APP/PUSH/SMS)에 걸려
+  //   장문 문자의 장부 기록이 전부 터졌다(→ 발송 성공이 실패로 보여 중복 발송 사고).
+  //   이제 종류는 별도 파라미터로 분리한다.
+  assert.match(ledger, /"messageType" = COALESCE\(\$13, "messageType"\)/);
   assert.match(ledger, /"providerGroupId" = \$6, "providerMessageId" = \$7/);
   assert.match(ledger, /"lockedAt" = NULL, "lockToken" = NULL/);
   assert.match(ledger, /"totalCount" = counts\.total_count/);

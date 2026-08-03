@@ -72,6 +72,13 @@ test("공급자 호출 전 SENDING으로 선점하고 확정 기록 실패는 �
   assert.match(admin, /claimMessageDelivery/);
   assert.match(service, /"UNCERTAIN"/);
   assert.match(service, /uncertain\?: boolean/);
-  assert.match(admin, /status:\s*"UNCERTAIN"/);
+  // 2026-08-03 정정: 예전엔 장부 기록이 실패하면 무조건 status "UNCERTAIN" + ok:false 로 보고했다.
+  //   문자는 이미 공급자에게 넘어간 뒤인데 화면엔 '실패'로 떠서, 원장이 다시 눌러 **중복 발송**됐다
+  //   (학부모 13명이 같은 안내를 두 통 받음). 이제 발송 성공 여부는 공급자 응답으로만 판정하고,
+  //   장부 기록 실패는 uncertain 플래그와 안내 문구로만 알린다.
+  assert.match(admin, /uncertain:\s*true/);
+  assert.match(admin, /ok:\s*sent\.ok/);
+  assert.match(admin, /다시 보내지 마세요/);
+  // 재시도는 여전히 '진짜 발송 실패'에만 걸린다.
   assert.match(admin, /retryRecipients[\s\S]+result\.status === "FAILED"/);
 });

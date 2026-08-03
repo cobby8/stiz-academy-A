@@ -6270,20 +6270,28 @@ export async function sendManualSms(
                 ok: sent.ok,
                 provider: sent.provider,
                 requestedChannel: "SMS",
-                actualChannel: sent.messageType || "SMS",
+                actualChannel: "SMS",
+                messageType: sent.messageType || "SMS",
                 providerGroupId: sent.groupId,
                 providerMessageId: sent.messageId,
                 providerStatus: sent.ok ? "ACCEPTED" : "FAILED",
                 errorCode: sent.ok ? null : sent.reason?.slice(0, 500),
             });
-        } catch {
+        } catch (ledgerError) {
+            // ⚠️ 여기 도달했다는 건 **문자는 이미 공급자에게 넘어간 뒤**라는 뜻이다.
+            //    장부 기록 실패를 '발송 실패'로 보고하면 원장이 다시 눌러 **중복 발송**된다
+            //    (2026-08-03 실제 사고: 학부모 13명이 같은 안내를 두 번 받았다).
+            //    그래서 발송 성공 여부는 공급자 응답(sent.ok)만으로 판정한다.
+            console.error("[manual-sms] 장부 기록 실패(발송은 완료됨):", ledgerError);
             results.push({
                 recipient,
                 last4: recipient.slice(-4),
-                ok: false,
-                status: "UNCERTAIN",
+                ok: sent.ok,
+                status: sent.ok ? "SENT" : "FAILED",
                 uncertain: true,
-                reason: "발송 공급자 처리 후 장부 기록을 확인해야 합니다.",
+                reason: sent.ok
+                    ? "발송은 완료됐습니다. (발송 기록 저장만 실패 — 다시 보내지 마세요)"
+                    : (sent.reason ?? "발송에 실패했습니다."),
                 provider: sent.provider,
                 providerMessageId: sent.messageId,
                 providerGroupId: sent.groupId,

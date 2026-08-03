@@ -1,0 +1,66 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+// 2026-08-03 실제 사고의 재발 방지.
+//
+// 무슨 일이 있었나:
+//   장부 함수가 **메시지 종류(LMS)를 발송 채널(channel) 칸**에 넣었다. channel 은 CHECK 제약으로
+//   IN_APP/PUSH/SMS 만 허용하므로, **장문(LMS) 문자는 전부 장부 기록이 터졌다**.
+//   그런데 호출부는 그 예외를 "발송 실패"로 표시했다 — 문자는 이미 공급자에게 넘어간 뒤였다.
+//   원장이 실패로 보고 다시 눌러 **학부모 13명이 같은 안내를 두 번 받았다**.
+//
+// 그래서 잠그는 것 두 가지:
+//   ① 장부는 허용되지 않는 channel 값을 받아도 터지지 않는다.
+//   ② 장부 기록 실패가 **발송 성공 판정을 뒤집지 않는다**(뒤집으면 중복 발송으로 이어진다).
+
+const ledger = readFileSync(new URL("../src/lib/message-ledger.ts", import.meta.url), "utf8");
+const adminActions = readFileSync(new URL("../src/app/actions/admin.ts", import.meta.url), "utf8");
+const cron = readFileSync(new URL("../src/app/api/cron/scheduled-messages/route.ts", import.meta.url), "utf8");
+
+test("① 장부는 허용 채널 목록으로 값을 거른다", () => {
+  assert.match(ledger, /ALLOWED_DELIVERY_CHANNELS/);
+  // DB CHECK 제약과 같은 목록이어야 한다.
+  assert.match(ledger, /"IN_APP",\s*"PUSH",\s*"SMS"/);
+  // 걸러진 값은 channel 에 들어가지 않는다.
+  assert.match(ledger, /ALLOWED_DELIVERY_CHANNELS\.has\(rawChannel\)/);
+});
+
+test("① 메시지 종류는 channel 이 아니라 messageType 칸에 기록된다", () => {
+  assert.match(ledger, /"messageType" = COALESCE\(\$13, "messageType"\)/);
+  // 예전처럼 같은 파라미터를 channel 과 messageType 에 함께 쓰면 안 된다.
+  assert.doesNotMatch(ledger, /channel = COALESCE\(\$5, channel\),\s*\n\s*"messageType" = \$5/);
+});
+
+test("② 수동 발송: 장부 기록이 실패해도 발송 성공은 성공으로 보고한다", () => {
+  const start = adminActions.indexOf("} catch (ledgerError) {");
+  assert.ok(start > 0, "장부 실패 처리 블록을 찾지 못했다");
+  const block = adminActions.slice(start, start + 900);
+  // 공급자 응답(sent.ok)으로 판정해야 한다. 무조건 false 로 내리면 재발송을 유발한다.
+  assert.match(block, /ok: sent\.ok/);
+  assert.doesNotMatch(block, /ok: false,\s*\n\s*status: "UNCERTAIN"/);
+  assert.match(block, /다시 보내지 마세요/, "원장이 재발송하지 않도록 문구로 알려야 한다");
+});
+
+test("② 예약 발송: 발송 판정을 장부 기록보다 **먼저** 확정한다", () => {
+  const sendIdx = cron.indexOf("await sendSmsDetailed");
+  const markIdx = cron.indexOf("await markSent(item.id)");
+  const finalizeIdx = cron.indexOf("await finalizeMessageDelivery");
+  assert.ok(sendIdx > 0 && markIdx > 0 && finalizeIdx > 0);
+  assert.ok(markIdx < finalizeIdx,
+    "markSent 가 finalizeMessageDelivery 보다 뒤에 있으면, 장부 실패 시 재시도로 중복 발송된다");
+});
+
+test("② 예약 발송: 장부 기록 실패는 따로 잡아 재시도를 유발하지 않는다", () => {
+  const finalizeIdx = cron.indexOf("await finalizeMessageDelivery");
+  const block = cron.slice(finalizeIdx - 300, finalizeIdx + 900);
+  assert.match(block, /try \{/);
+  assert.match(block, /catch \(ledgerError\)/);
+  assert.match(block, /장부 기록 실패\(발송은 완료됨\)/);
+});
+
+test("예외를 로그 없이 삼키지 않는다(원인 추적 가능)", () => {
+  // 08:00 발송이 왜 실패했는지 로그만으로는 끝내 알 수 없었던 원인.
+  assert.match(cron, /console\.error\(`\[cron\/scheduled-messages\] 처리 실패/);
+  assert.match(adminActions, /console\.error\("\[manual-sms\] 장부 기록 실패/);
+});

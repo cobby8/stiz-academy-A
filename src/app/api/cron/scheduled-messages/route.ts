@@ -50,22 +50,34 @@ export async function GET(req: NextRequest) {
       if (!claimed) { await markSent(item.id); skipped++; continue; }
 
       const res = await sendSmsDetailed(item.recipient, body);
-      // 즉시 발송(sendManualSms)과 동일한 형태로 장부를 마감한다 — 이력·집계가 갈리지 않게.
-      await finalizeMessageDelivery({
-        deliveryId: reserved.deliveryId,
-        ok: res.ok,
-        provider: res.provider,
-        requestedChannel: "SMS",
-        actualChannel: res.messageType || "SMS",
-        providerGroupId: res.groupId,
-        providerMessageId: res.messageId,
-        providerStatus: res.ok ? "ACCEPTED" : "FAILED",
-        errorCode: res.ok ? null : res.reason?.slice(0, 500),
-      });
 
+      // ★ 발송 성공 여부는 **공급자 응답만으로** 판정하고 먼저 확정한다.
+      //   장부 기록이 실패했다고 재시도하면 이미 나간 문자를 또 보내게 된다
+      //   (2026-08-03 실제 사고: 학부모 13명이 같은 안내를 두 번 받았다).
       if (res.ok) { await markSent(item.id); sent++; }
       else { await markFailed(item.id, item.attempts, res.reason ?? "발송 실패"); failed++; }
+
+      // 장부 기록은 실패해도 발송 판정을 흔들지 않는다. 로그만 남기고 넘어간다.
+      try {
+        await finalizeMessageDelivery({
+          deliveryId: reserved.deliveryId,
+          ok: res.ok,
+          provider: res.provider,
+          requestedChannel: "SMS",
+          actualChannel: "SMS",
+          messageType: res.messageType || "SMS",
+          providerGroupId: res.groupId,
+          providerMessageId: res.messageId,
+          providerStatus: res.ok ? "ACCEPTED" : "FAILED",
+          errorCode: res.ok ? null : res.reason?.slice(0, 500),
+        });
+      } catch (ledgerError) {
+        console.error(`[cron/scheduled-messages] 장부 기록 실패(발송은 완료됨) id=${item.id}:`, ledgerError);
+      }
     } catch (e) {
+      // ⚠️ 반드시 로그를 남긴다. 예전엔 조용히 삼켜서 08:00 발송이 왜 실패했는지
+      //    로그만으로는 끝내 알 수 없었다(2026-08-03).
+      console.error(`[cron/scheduled-messages] 처리 실패 id=${item.id} label=${item.label}:`, e);
       await markFailed(item.id, item.attempts, e instanceof Error ? e.message : "알 수 없는 오류");
       failed++;
     }

@@ -219,12 +219,25 @@ export async function claimMessageDelivery(deliveryId: string) {
   };
 }
 
+/**
+ * channel 컬럼이 CHECK 제약으로 허용하는 값. 여기 없는 값을 넣으면 UPDATE 자체가 터진다.
+ *
+ * ⚠️ 2026-08-03 실제 사고: 호출부가 **메시지 종류(LMS)를 channel 에 넘겼다**.
+ *    장문 문자는 전부 이 제약에 걸려 장부 기록이 실패했고, 호출부는 그 예외를 "발송 실패"로
+ *    표시했다. 실제로는 문자가 이미 나간 뒤라, 원장이 실패로 보고 다시 눌러 **중복 발송**됐다.
+ *    그래서 여기서 값을 걸러 낸다 — 장부 기록 문제가 절대 발송 판정을 흔들면 안 된다.
+ */
+const ALLOWED_DELIVERY_CHANNELS = new Set(["IN_APP", "PUSH", "SMS"]);
+
 export async function finalizeMessageDelivery(input: {
   deliveryId: string;
   ok: boolean;
   provider?: string | null;
   requestedChannel?: string | null;
+  /** 실제 전달 **채널**(IN_APP/PUSH/SMS). 메시지 종류(SMS/LMS)를 여기 넣지 말 것. */
   actualChannel?: string | null;
+  /** 메시지 **종류**(SMS/LMS 등). channel 과 별개 칸에 기록된다. */
+  messageType?: string | null;
   providerGroupId?: string | null;
   providerMessageId?: string | null;
   providerStatus?: string | null;
@@ -233,13 +246,23 @@ export async function finalizeMessageDelivery(input: {
   unitCost?: number | null;
   errorCode?: string | null;
 }) {
+  const rawChannel = input.actualChannel ?? null;
+  const safeChannel = rawChannel && ALLOWED_DELIVERY_CHANNELS.has(rawChannel) ? rawChannel : null;
+  if (rawChannel && !safeChannel) {
+    // 값을 버리되 조용히 넘기지 않는다 — 잘못된 호출을 찾을 단서를 남긴다.
+    console.warn(`[ledger] 허용되지 않는 channel 값 무시: ${rawChannel} (deliveryId=${input.deliveryId})`);
+  }
+  // messageType 을 따로 안 준 호출부는 예전처럼 actualChannel 을 종류로 쓰던 곳이다(SMS/LMS).
+  const messageType = input.messageType ?? rawChannel ?? null;
+
   await prisma.$executeRawUnsafe(
     `UPDATE "NotificationDelivery"
         SET status = $2,
             "sentAt" = CASE WHEN $2 = 'SENT' THEN NOW() ELSE NULL END,
             "failedAt" = CASE WHEN $2 = 'FAILED' THEN NOW() ELSE NULL END,
             provider = $3, "requestedChannel" = $4, channel = COALESCE($5, channel),
-            "messageType" = $5, "providerGroupId" = $6, "providerMessageId" = $7,
+            "messageType" = COALESCE($13, "messageType"),
+            "providerGroupId" = $6, "providerMessageId" = $7,
             "providerStatus" = $8, "fallbackUsed" = $9, "fallbackChannel" = $10,
             "unitCost" = $11, "errorCode" = $12, "lockedAt" = NULL, "lockToken" = NULL,
             "nextAttemptAt" = NULL, "updatedAt" = NOW()
@@ -248,7 +271,7 @@ export async function finalizeMessageDelivery(input: {
     input.ok ? "SENT" : "FAILED",
     input.provider ?? null,
     input.requestedChannel ?? null,
-    input.actualChannel ?? null,
+    safeChannel,
     input.providerGroupId ?? null,
     input.providerMessageId ?? null,
     input.providerStatus ?? (input.ok ? "ACCEPTED" : "FAILED"),
@@ -256,6 +279,7 @@ export async function finalizeMessageDelivery(input: {
     input.fallbackChannel ?? null,
     input.unitCost ?? null,
     input.errorCode ?? null,
+    messageType,
   );
 }
 

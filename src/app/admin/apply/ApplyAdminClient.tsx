@@ -872,6 +872,12 @@ export default function ApplyAdminClient({
                                                 </button>
                                                 {app.status === "PENDING" && (
                                                     <>
+                                                        {/* 승인 전에 상담 결과를 반영해 신청 내용을 고칠 수 있다.
+                                                            승인 후에는 원생/수강 등록 메뉴에서 고쳐야 하므로 PENDING 에만 노출한다. */}
+                                                        <button type="button" onClick={() => setShowEditModal(app)} className={LIST_ACTION_ITEM_CLASS}>
+                                                            <span className="material-symbols-outlined text-base">edit</span>
+                                                            수정
+                                                        </button>
                                                         <button type="button" onClick={() => setShowApproveModal(app)} className={LIST_ACTION_PRIMARY_CLASS}>
                                                             <span className="material-symbols-outlined text-base">check_circle</span>
                                                             승인

@@ -367,12 +367,12 @@ const ROSTER_STATUS_META: Record<string, { label: string; tone: string; note: st
     ACTIVE: {
         label: "재원",
         tone: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-300/10 dark:text-emerald-100",
-        note: "7월 기준 실제 수업 인원",
+        note: "장부 기준 실제 수업 인원",
     },
     PAUSED: {
         label: "휴원",
         tone: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-100",
-        note: "모든 7월 등록 행이 휴원인 학생",
+        note: "등록 행이 모두 휴원인 학생",
     },
     WITHDRAWN: {
         label: "퇴원",
@@ -467,7 +467,7 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                         {operationalStudentCount.toLocaleString()}명
                     </p>
                     <p className="mt-1 text-gray-500 dark:text-gray-400">
-                        7월 장부의 같은 학생을 하나로 합산
+                        {report.targetMonth.label} 장부의 같은 학생을 하나로 합산
                     </p>
                 </div>
                 {["ACTIVE", "PAUSED", "WITHDRAWN"].map((status) => {
@@ -488,7 +488,7 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
             </div>
 
             <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-900 dark:text-gray-300">
-                현재 7월 기준은 재원 {activeCount.toLocaleString()}명, 휴원 {pausedCount.toLocaleString()}명,
+                현재 {report.targetMonth.label} 기준은 재원 {activeCount.toLocaleString()}명, 휴원 {pausedCount.toLocaleString()}명,
                 퇴원 {withdrawnCount.toLocaleString()}명으로 계산됩니다. 한 학생이 여러 반을 들어도 학생 수는 1명으로 봅니다.
             </p>
 
@@ -1154,7 +1154,9 @@ export default function StudentManagementClient({
         setCurrentRosterError(null);
 
         try {
-            const response = await fetch("/api/admin/import-students/current-roster?month=7", {
+            // month 를 넘기지 않으면 API 가 장부에 있는 가장 최근 달을 자동으로 고른다.
+            // 예전에는 month=7 이 박혀 있어 달이 바뀌어도 계속 7월 수치를 "현재"로 보여줬다.
+            const response = await fetch("/api/admin/import-students/current-roster", {
                 cache: "no-store",
             });
             const data = await response.json();

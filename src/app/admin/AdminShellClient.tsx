@@ -229,6 +229,7 @@ export default function AdminShellClient({
                                     <NavItem href="/admin/sms" active={pathname.startsWith("/admin/sms")} icon="💬" label="문자/템플릿" compact />
                                     <NavItem href="/admin/import" active={pathname.startsWith("/admin/import")} icon="📥" label="수강생 이관" compact />
                                     <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프" compact />
+                                    <NavItem href="/admin/payment-confirmations" active={pathname.startsWith("/admin/payment-confirmations")} icon="💵" label="현장 수납 승인" compact />
                                     <div className="pt-1">
                                         <button
                                             type="button"

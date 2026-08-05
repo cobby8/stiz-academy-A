@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { requireStaff } from "@/lib/auth-guard";
 import StaffBottomNav from "./StaffBottomNav";
-import StaffInstallPrompt from "./StaffInstallPrompt";
 import StaffProfileMenu from "./StaffProfileMenu";
 import StaffHomeLink from "./StaffHomeLink";
 import AppBackButton from "@/components/AppBackButton";
@@ -35,7 +34,6 @@ export default async function StaffLayout({ children }: { children: ReactNode })
           <StaffProfileMenu staffName={staff.appUserName} staffRole={staff.appUserRole} />
         </div>
       </header>
-      <StaffInstallPrompt />
       {children}
       <StaffBottomNav staffRole={staff.appUserRole} />
     </div>

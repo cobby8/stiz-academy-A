@@ -470,7 +470,6 @@ export default function SessionInProgressClient({
         <a href="#session-photos" className="flex min-h-20 flex-col items-center justify-center rounded-2xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)] shadow-sm">
           <span className="material-symbols-outlined mb-1 text-2xl">photo_camera</span>
           사진 등록
-          <span className="mt-0.5 text-xs font-bold opacity-70">촬영 · 갤러리</span>
         </a>
         <button type="button" onClick={() => setShowPeople(true)} className="flex min-h-20 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <span className="material-symbols-outlined mb-1 text-2xl text-[var(--brand-accent)]">contacts</span>
@@ -480,7 +479,6 @@ export default function SessionInProgressClient({
         <button type="button" onClick={() => setBillingStudent(null)} className="flex min-h-20 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <span className="material-symbols-outlined mb-1 text-2xl text-[var(--brand-accent)]">receipt_long</span>
           청구 확인
-          <span className="mt-0.5 text-xs font-bold text-gray-500">납부 처리 요청</span>
         </button>
         <a href="#session-memo" className="col-span-2 flex min-h-16 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white font-black shadow-sm dark:border-gray-800 dark:bg-gray-900">
           <span className="material-symbols-outlined text-2xl text-[var(--brand-accent)]">mic</span>
@@ -509,7 +507,7 @@ export default function SessionInProgressClient({
 
       <section id="session-memo" className="scroll-mt-40 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex items-start justify-between gap-3">
-          <div><h2 className="flex items-center gap-2 font-black"><span className="material-symbols-outlined text-[var(--brand-accent)]">mic</span>수업 중 특이사항</h2><p className="mt-1 text-xs text-gray-500">말로 남기면 텍스트 메모로 바뀝니다.</p></div>
+          <h2 className="flex items-center gap-2 font-black"><span className="material-symbols-outlined text-[var(--brand-accent)]">mic</span>수업 중 특이사항</h2>
           <VoiceToTextButton
             onBusyChange={setVoiceBusy}
             onText={(text) => {
@@ -518,12 +516,11 @@ export default function SessionInProgressClient({
             }}
           />
         </div>
-        <textarea value={memo} onChange={(event) => { setMemoStatus("dirty"); setMemo(event.target.value); }} onBlur={() => void persistMemo(memoRef.current)} rows={5} placeholder="음성으로 기록하거나 직접 입력하세요." className="mt-4 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm leading-6 outline-none focus:border-[var(--brand-accent)] dark:border-gray-700 dark:bg-gray-800" />
+        <textarea value={memo} onChange={(event) => { setMemoStatus("dirty"); setMemo(event.target.value); }} onBlur={() => void persistMemo(memoRef.current)} rows={5} className="mt-4 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm leading-6 outline-none focus:border-[var(--brand-accent)] dark:border-gray-700 dark:bg-gray-800" />
         <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold" aria-live="polite">
           <span className={memoStatus === "error" ? "text-red-600" : "text-gray-500"}>
             {memoStatus === "saving" ? "저장 중…" : memoStatus === "dirty" ? "변경사항 자동 저장 대기 중" : memoStatus === "error" ? "저장 실패 · 다시 시도해 주세요" : "저장됨"}
           </span>
-          <span className="text-gray-400">입력 후 자동 저장</span>
         </div>
         <button type="button" disabled={pending || memoStatus === "saving" || !online} onClick={saveMemo} className="mt-3 min-h-12 w-full rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white disabled:opacity-50">메모 지금 저장</button>
       </section>
@@ -539,7 +536,6 @@ export default function SessionInProgressClient({
         <div className="rounded-2xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
           <button type="button" disabled={pending || voiceBusy || memoStatus === "saving" || !online} onClick={() => { setFinishError(""); setShowEndConfirm(true); }} className="min-h-14 w-full rounded-xl border-2 border-red-200 bg-white px-4 font-black text-red-700 disabled:opacity-50 dark:border-red-900 dark:bg-gray-900 dark:text-red-300"><span className="material-symbols-outlined mr-2 align-middle">stop_circle</span>수업 종료 확인</button>
           {(voiceBusy || memoStatus === "saving" || !online) && <p className="mt-1 text-center text-[11px] font-bold text-amber-700">{voiceBusy ? "음성 메모 처리 후 종료할 수 있습니다." : memoStatus === "saving" ? "메모 저장 후 종료할 수 있습니다." : "온라인 연결 후 종료할 수 있습니다."}</p>}
-          <p className="mt-1 text-center text-[11px] font-bold text-gray-500">출결을 검토한 뒤 확인 화면에서 종료됩니다.</p>
           {/* 실수/테스트로 시작한 수업 되돌리기 — 종료와 구분되는 보조(회색 테두리) 톤 */}
           <button type="button" disabled={pending || voiceBusy || memoStatus === "saving"} onClick={cancelStart} className="mt-2 min-h-11 w-full rounded-xl border border-gray-300 bg-white px-4 text-xs font-black text-gray-500 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"><span className="material-symbols-outlined mr-1 align-middle text-base">undo</span>수업 시작 취소 (시작 전으로 되돌리기)</button>
         </div>

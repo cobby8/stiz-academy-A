@@ -7,11 +7,11 @@ import { logoutStaff } from "@/app/actions/auth";
 import { prepareStaffNavigation } from "./staffNavigation";
 
 const publicItems = [
-  { href: "/", label: "홈페이지 보기", description: "학원 메인으로 이동", icon: "home" },
-  { href: "/notices", label: "공지사항", description: "학원 소식 확인", icon: "campaign" },
-  { href: "/programs", label: "프로그램", description: "수업 프로그램 확인", icon: "sports_basketball" },
-  { href: "/schedule", label: "수업시간표", description: "전체 시간표 확인", icon: "calendar_month" },
-  { href: "/gallery", label: "포토갤러리", description: "수업 사진 확인", icon: "photo_library" },
+  { href: "/", label: "홈페이지 보기", icon: "home" },
+  { href: "/notices", label: "공지사항", icon: "campaign" },
+  { href: "/programs", label: "프로그램", icon: "sports_basketball" },
+  { href: "/schedule", label: "수업시간표", icon: "calendar_month" },
+  { href: "/gallery", label: "포토갤러리", icon: "photo_library" },
 ] as const;
 
 const focusableSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -124,7 +124,6 @@ export default function StaffProfileMenu({ staffName, staffRole }: { staffName: 
             <div className="mb-3 flex min-h-12 items-center justify-between gap-3">
               <div>
                 <h2 id={titleId} className="text-lg font-black text-gray-900 dark:text-white">선생님 메뉴</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">업무 앱과 홈페이지를 오갈 수 있어요.</p>
               </div>
               <button type="button" onClick={closeAndRestoreFocus} aria-label="선생님 메뉴 닫기" className="grid size-12 shrink-0 place-items-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                 <span className="material-symbols-outlined" aria-hidden="true">close</span>
@@ -141,7 +140,7 @@ export default function StaffProfileMenu({ staffName, staffRole }: { staffName: 
               {publicItems.map((item) => (
                 <Link key={item.href} href={item.href} onClick={(event) => requestPublicNavigation(event, item.href)} className="flex min-h-14 items-center gap-3 rounded-2xl border border-gray-200 px-3 py-2 text-gray-800 transition-colors hover:border-[var(--brand-accent)] hover:bg-[color-mix(in_srgb,var(--brand-accent)_7%,transparent)] dark:border-gray-700 dark:text-gray-100">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gray-100 text-[var(--brand-accent)] dark:bg-gray-800" aria-hidden="true"><span className="material-symbols-outlined">{item.icon}</span></span>
-                  <span className="min-w-0 flex-1"><span className="block text-sm font-black">{item.label}</span><span className="block text-xs text-gray-500 dark:text-gray-400">{item.description}</span></span>
+                  <span className="min-w-0 flex-1 text-sm font-black">{item.label}</span>
                   <span className="material-symbols-outlined text-lg text-gray-400" aria-hidden="true">chevron_right</span>
                 </Link>
               ))}

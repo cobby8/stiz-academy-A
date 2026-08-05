@@ -143,9 +143,6 @@ export default function StaffShuttleDashboardClient({
           <div>
             <p className="text-sm font-bold text-white/65">셔틀 기사 앱</p>
             <h1 className="mt-1 text-2xl font-black">오늘 운행</h1>
-            <p className="mt-2 text-sm leading-6 text-white/75">
-              확정된 셔틀 노선과 정류장 순서를 확인하고 학생별 탑승 상태를 체크합니다.
-            </p>
           </div>
           <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]">
             <span className="material-symbols-outlined" aria-hidden="true">airport_shuttle</span>
@@ -165,10 +162,7 @@ export default function StaffShuttleDashboardClient({
       </section>
 
       <section className="mt-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-black text-gray-900 dark:text-white">오늘 운행</h2>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">화면이 열려 있을 때 1분마다 자동으로 갱신됩니다.</p>
-        </div>
+        <h2 className="font-black text-gray-900 dark:text-white">오늘 운행</h2>
         <button
           type="button"
           onClick={() => void refreshDashboard(true)}
@@ -201,10 +195,7 @@ export default function StaffShuttleDashboardClient({
 
       {upcomingRoutes.length > 0 && (
         <section className="mt-6">
-          <div>
-            <h2 className="font-black text-gray-900 dark:text-white">예정된 운행</h2>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">미리 확인할 수 있는 미래 확정 노선입니다.</p>
-          </div>
+          <h2 className="font-black text-gray-900 dark:text-white">예정된 운행</h2>
           <div className="mt-3 space-y-3">
             {upcomingRoutes.map((route) => (
               <RouteCard key={route.id} route={route} rideStatuses={rideStatuses} onStatusChange={handleStatusChange} />

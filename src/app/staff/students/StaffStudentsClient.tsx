@@ -12,7 +12,7 @@ export default function StaffStudentsClient({ students }: { students: StaffStude
 
   return (
     <main className="mx-auto max-w-lg space-y-4 px-4 py-5">
-      <header><p className="text-sm font-bold text-[var(--brand-accent)]">담당 수업 기준</p><h1 className="mt-1 text-2xl font-black text-brand-navy-900 dark:text-white">학생·학부모 연락</h1><p className="mt-1 text-sm text-gray-500">내가 맡은 수업의 재원생만 표시됩니다.</p></header>
+      <header><h1 className="text-2xl font-black text-brand-navy-900 dark:text-white">학생·학부모 연락</h1><p className="mt-1 text-sm text-gray-500">내가 맡은 수업의 재원생만 표시됩니다.</p></header>
       <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 focus-within:ring-2 focus-within:ring-[var(--brand-accent)] dark:border-gray-800 dark:bg-gray-900"><span aria-hidden="true" className="material-symbols-outlined text-gray-400">search</span><span className="sr-only">학생 검색</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="학생, 학부모, 수업명, 전화번호 검색" className="w-full bg-transparent text-sm outline-none" /></label>
       <p aria-live="polite" className="text-sm font-bold text-gray-500">총 {filtered.length}명</p>
       {filtered.length === 0 ? (

@@ -133,7 +133,6 @@ export default function StaffHomeClient({
         <div className="mt-1 flex items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-brand-navy-900 dark:text-white">오늘 수업</h1>
-            <p className="mt-1 text-sm text-gray-500">준비부터 종료까지 이곳에서 관리하세요.</p>
           </div>
           <span className="material-symbols-outlined rounded-2xl bg-[var(--brand-accent)] p-3 text-[var(--brand-accent-contrast)]">school</span>
         </div>
@@ -151,7 +150,6 @@ export default function StaffHomeClient({
         <div className="rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center dark:border-gray-700 dark:bg-gray-900">
           <span className="material-symbols-outlined text-5xl text-gray-400">event_available</span>
           <p className="mt-3 font-black text-gray-700 dark:text-gray-200">오늘 배정된 수업이 없습니다.</p>
-          <p className="mt-1 text-sm text-gray-500">편안한 하루 보내세요.</p>
         </div>
       ) : focusClass ? (
         <>
@@ -244,7 +242,6 @@ export default function StaffHomeClient({
             <p className="font-black dark:text-white">{startTarget.startTime}–{startTarget.endTime}</p>
             <p className="mt-1 text-gray-500">학생 {startTarget.studentCount}명 · {startTarget.location || "장소 미정"}</p>
           </div>
-          <p className="mt-3 text-sm leading-6 text-gray-500">확인하면 시작 시간이 기록되고 출석 확인으로 이동합니다.</p>
           <ErrorMessage error={error} />
           <ModalActions pending={pending} onCancel={() => setStartTarget(null)} onConfirm={startLesson} confirmLabel={pending ? "시작 중…" : "수업 시작"} />
         </Modal>
@@ -280,7 +277,7 @@ function CompactClassCard({ lesson, startLocked, onStart, onContent, onContacts,
 
 function CompactAction({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) { return <button type="button" onClick={onClick} className="flex min-h-12 flex-col items-center justify-center rounded-xl border border-gray-200 text-xs font-bold dark:border-gray-700"><span className="material-symbols-outlined text-lg text-[var(--brand-accent)]">{icon}</span>{label}</button>; }
 
-function Modal({ title, subtitle, onClose, labelledBy, scrollable = false, children }: { title: string; subtitle: string; onClose: () => void; labelledBy: string; scrollable?: boolean; children: React.ReactNode }) {
+function Modal({ title, subtitle, onClose, labelledBy, children }: { title: string; subtitle: string; onClose: () => void; labelledBy: string; children: React.ReactNode }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -288,7 +285,7 @@ function Modal({ title, subtitle, onClose, labelledBy, scrollable = false, child
   }, [onClose]);
   const closeDialog = useCallback(() => onCloseRef.current(), []);
   useStaffDialog(true, dialogRef, closeDialog);
-  return <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy}><div ref={dialogRef} className={`w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900 ${scrollable ? "max-h-[85vh] overflow-y-auto" : ""}`}><div className="flex items-start justify-between gap-3"><div><h2 id={labelledBy} className="text-xl font-black dark:text-white">{title}</h2><p className="mt-1 text-sm text-gray-500">{subtitle}</p></div><button type="button" aria-label="닫기" data-dialog-initial-focus onClick={onClose} className="min-h-11 min-w-11 rounded-full p-2"><span className="material-symbols-outlined">close</span></button></div>{children}</div></div>;
+  return <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy}><div ref={dialogRef} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900"><div className="flex items-start justify-between gap-3"><div><h2 id={labelledBy} className="text-xl font-black dark:text-white">{title}</h2><p className="mt-1 text-sm text-gray-500">{subtitle}</p></div><button type="button" aria-label="닫기" data-dialog-initial-focus onClick={onClose} className="min-h-11 min-w-11 rounded-full p-2"><span className="material-symbols-outlined">close</span></button></div>{children}</div></div>;
 }
 
 function ModalActions({ pending, onCancel, onConfirm, confirmLabel, disabled = false }: { pending: boolean; onCancel: () => void; onConfirm: () => void; confirmLabel: string; disabled?: boolean }) { return <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={pending} onClick={onCancel} className="min-h-12 rounded-xl border border-gray-200 font-bold dark:border-gray-700">취소</button><button type="button" disabled={pending || disabled} onClick={onConfirm} className="min-h-12 rounded-xl bg-[var(--brand-accent)] font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{confirmLabel}</button></div>; }

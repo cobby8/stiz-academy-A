@@ -14,6 +14,14 @@ import { uploadImagesWithProgress } from "@/lib/clientImageUpload";
 import type { SocialPostDraft } from "@/lib/socialDrafts";
 
 const LESSON_TYPES = ["정규 수업", "기초반", "심화반", "게임 수업", "특강", "대회 준비"];
+// DB enum(INSTRUCTOR/ADMIN 등)이 화면에 영문 그대로 노출되지 않도록 한글 라벨로 바꿔 준다.
+// 목록에 없는 역할은 라벨이 없으므로 아예 표시하지 않는다(정체불명 문자열 노출 방지).
+const ROLE_LABELS: Record<string, string> = {
+  INSTRUCTOR: "선생님",
+  ADMIN: "관리자",
+  VICE_ADMIN: "부원장",
+  DRIVER: "기사님",
+};
 const MAX_UPLOAD_COUNT = 10;
 type UploadProgress = { done: number; total: number };
 
@@ -57,6 +65,7 @@ export default function QuickPostClient({
   const [isPending, startTransition] = useTransition();
   const busy = isPending || isWorking;
   const canApprove = currentUser.role === "ADMIN" || currentUser.role === "VICE_ADMIN";
+  const roleLabel = ROLE_LABELS[currentUser.role];
   const isPublished = draft?.status === "PUBLISHED";
   const hasInstagramIssue = draft?.status === "FAILED";
   const hasPublishingStatus = draft?.status === "PUBLISHING";
@@ -209,7 +218,7 @@ export default function QuickPostClient({
       <div className="mx-auto max-w-md space-y-4">
         <header className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-brand-orange-600 dark:text-brand-neon-lime">{currentUser.role}</p>
+            {roleLabel && <p className="text-xs font-bold tracking-wide text-brand-orange-600 dark:text-brand-neon-lime">{roleLabel}</p>}
             <h1 className="text-2xl font-black text-brand-navy-900 dark:text-white">사진 올리기</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">{currentUser.name} 선생님</p>
           </div>
@@ -388,23 +397,10 @@ export default function QuickPostClient({
           </section>
         )}
 
-        {!draft && !busy && (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-white/70 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900/80 dark:text-gray-300">
-            <SymbolIcon name="cloud_upload" size={36} className="mx-auto mb-2 text-gray-400 dark:text-gray-500" />
-            <p className="text-sm font-bold">사진을 고르면 인스타 피드 형태로 미리보기가 만들어집니다.</p>
-            <p className="mt-1 text-xs">문구를 확인한 뒤 승인 과정 없이 바로 게시할 수 있습니다.</p>
-          </div>
-        )}
-
         {hasPublishingStatus && !busy && (
           <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
             <SymbolIcon name="progress_activity" size={18} className="mt-0.5 shrink-0 animate-spin" />
-            <div>
-              <p>인스타그램 게시를 처리 중입니다.</p>
-              <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-300">
-                홈페이지 갤러리는 이미 반영됐습니다. 실패하면 서버가 재시도합니다.
-              </p>
-            </div>
+            <p>인스타그램 게시를 처리 중입니다.</p>
           </div>
         )}
 

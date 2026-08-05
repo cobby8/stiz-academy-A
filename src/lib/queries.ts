@@ -8,6 +8,8 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { ensurePaymentInfrastructure } from "@/lib/payment-ledger";
 import { notMergedStudent, notMergedStudentOptional } from "@/lib/studentVisibility";
+// 보강 잔여석 계산은 화면·조회·저장 검증이 같은 식을 쓰도록 공용 모듈로 분리해 둔다.
+import { activeMakeupSql, computeRemainingSeats } from "@/lib/makeup/capacity";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 
 // 값을 불리언으로 안전 변환 (TEXT 컬럼에서 'false' 문자열이 올 수 있음)
@@ -3217,6 +3219,75 @@ export const getAvailableMakeupSlots = cache(
             }));
         } catch (e) {
             console.error("[getAvailableMakeupSlots] failed:", e);
+            return [];
+        }
+    },
+);
+
+/**
+ * 보강 반 + 특정 날짜의 잔여석 조회 (보강 예약 모달용)
+ *
+ * 잔여석 = 정원 − 그 반의 실제 수강 인원 − "그 날" 그 반에 이미 잡힌 활성 보강 수
+ *  - 수강 인원 판정: 출결 화면(getAttendanceByDateAndClass)과 동일하게
+ *    ACTIVE Enrollment + 통합(merge)된 학생 제외.
+ *  - 활성 보강: status <> 'CANCELLED' (기존 중복 방지 로직과 동일 판정).
+ * getAvailableMakeupSlots 와 달리 정원이 찬 반도 함께 반환한다 —
+ * 화면에서 "정원 마감"으로 보여주고 선택만 막기 위함.
+ */
+export const getMakeupSlotAvailability = cache(
+    async (programId: string, excludeClassId: string, makeupDate: string) => {
+        try {
+            // 1) 같은 프로그램의 다른 반 + 수강 인원
+            const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT c.id, c.name, c."dayOfWeek", c."startTime", c."endTime", c.capacity,
+                        (SELECT COUNT(*)::int
+                           FROM "Enrollment" e
+                           JOIN "Student" s ON s.id = e."studentId" AND ${notMergedStudent("s")}
+                          WHERE e."classId" = c.id AND e.status = 'ACTIVE') AS enrolled
+                 FROM "Class" c
+                 WHERE c."programId" = $1 AND c.id <> $2
+                 ORDER BY c.name`,
+                programId,
+                excludeClassId,
+            );
+
+            // 2) 그 날 잡힌 활성 보강 수 (반별 집계)
+            //    MakeupSession 테이블이 아직 없을 수 있어 별도 try — 없으면 보강 0건으로 본다.
+            const bookedByClass = new Map<string, number>();
+            try {
+                const makeupRows = await prisma.$queryRawUnsafe<any[]>(
+                    `SELECT ms."makeupClassId" AS "classId", COUNT(*)::int AS booked
+                       FROM "MakeupSession" ms
+                      WHERE ms."makeupDate"::date = $1::date AND ${activeMakeupSql("ms")}
+                      GROUP BY ms."makeupClassId"`,
+                    makeupDate,
+                );
+                makeupRows.forEach((r: any) => {
+                    const classId = r.classId ?? r.classid;
+                    if (classId) bookedByClass.set(classId, Number(r.booked ?? 0));
+                });
+            } catch (e) {
+                console.warn("[getMakeupSlotAvailability] makeup count skipped:", (e as Error).message);
+            }
+
+            return rows.map((r: any) => {
+                const usage = {
+                    capacity: Number(r.capacity ?? 0),
+                    enrolled: Number(r.enrolled ?? 0),
+                    bookedMakeups: bookedByClass.get(r.id) ?? 0,
+                };
+                return {
+                    id: r.id,
+                    name: r.name,
+                    dayOfWeek: r.dayOfWeek ?? r.dayofweek ?? "",
+                    startTime: r.startTime ?? r.starttime ?? "",
+                    endTime: r.endTime ?? r.endtime ?? "",
+                    ...usage,
+                    remaining: computeRemainingSeats(usage),
+                };
+            });
+        } catch (e) {
+            console.error("[getMakeupSlotAvailability] failed:", e);
             return [];
         }
     },

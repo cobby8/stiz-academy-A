@@ -22,7 +22,12 @@ import {
 } from "@/lib/googleCalendarWrite";
 import { publishGalleryPostToInstagram } from "@/lib/instagram";
 import { syncInstagramGalleryPostsToDb } from "@/lib/instagramGallerySync";
-import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings } from "@/lib/queries";
+import { ACADEMY_SETTINGS_CACHE_TAG, getAcademySettings, getMakeupSlotAvailability } from "@/lib/queries";
+import {
+    activeMakeupSql,
+    isMakeupSlotFull,
+    MAKEUP_CAPACITY_FULL_MESSAGE,
+} from "@/lib/makeup/capacity";
 import { notMergedStudent } from "@/lib/studentVisibility";
 import { createTrialEnrollShortLink } from "@/lib/enroll-short-link";
 import { SHUTTLE_LOCATION_CONSENT_VERSION } from "@/lib/seasonal/contracts";
@@ -4594,6 +4599,72 @@ export async function ensureMakeupSessionTable() {
 }
 
 /**
+ * 보강 반 잔여석 조회 — 보강 예약 모달이 "반 + 보강일" 기준으로 실제 빈자리를 확인한다.
+ * (화면이 총정원을 잔여석처럼 낙관 표시하던 문제를 막기 위한 읽기 전용 액션)
+ */
+export async function loadMakeupSlotAvailability(input: {
+    programId: string;
+    excludeClassId: string;
+    makeupDate: string; // YYYY-MM-DD
+}) {
+    await requireAdmin();
+    const programId = input?.programId?.trim();
+    const excludeClassId = input?.excludeClassId?.trim();
+    const makeupDate = input?.makeupDate?.trim();
+    // 날짜가 없으면 잔여석을 계산할 수 없다 → 빈 결과(화면은 "확인 중"을 유지)
+    if (!programId || !excludeClassId) return { ok: false, slots: [] };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(makeupDate || "")) return { ok: false, slots: [] };
+
+    const slots = await getMakeupSlotAvailability(programId, excludeClassId, makeupDate!);
+    return { ok: true, slots };
+}
+
+/**
+ * 저장 직전 정원 재검증 — 화면에서 본 잔여석과 실제 저장 시점 사이에
+ * 다른 예약이 들어올 수 있으므로 서버에서 한 번 더 확인한다.
+ * 수강 인원 판정은 출결 화면과 동일(ACTIVE Enrollment + 통합 학생 제외).
+ */
+async function assertMakeupSeatAvailable(makeupClassId: string, makeupDate: string) {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT c.capacity,
+                (SELECT COUNT(*)::int
+                   FROM "Enrollment" e
+                   JOIN "Student" s ON s.id = e."studentId" AND ${notMergedStudent("s")}
+                  WHERE e."classId" = c.id AND e.status = 'ACTIVE') AS enrolled
+           FROM "Class" c
+          WHERE c.id = $1
+          LIMIT 1`,
+        makeupClassId,
+    );
+    const row = rows[0];
+    if (!row) throw new Error("보강 반을 찾을 수 없습니다.");
+
+    // MakeupSession 테이블이 아직 없을 수 있다 → 없으면 활성 보강 0건으로 본다.
+    let bookedMakeups = 0;
+    try {
+        const booked = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*)::int AS booked
+               FROM "MakeupSession" ms
+              WHERE ms."makeupClassId" = $1
+                AND ms."makeupDate"::date = $2::date
+                AND ${activeMakeupSql("ms")}`,
+            makeupClassId,
+            makeupDate,
+        );
+        bookedMakeups = Number(booked[0]?.booked ?? 0);
+    } catch (e) {
+        console.warn("[assertMakeupSeatAvailable] makeup count skipped:", (e as Error).message);
+    }
+
+    const usage = {
+        capacity: Number(row.capacity ?? 0),
+        enrolled: Number(row.enrolled ?? 0),
+        bookedMakeups,
+    };
+    if (isMakeupSlotFull(usage)) throw new Error(MAKEUP_CAPACITY_FULL_MESSAGE);
+}
+
+/**
  * 보강 예약 — 결석한 학생에게 다른 반에서 보충 수업을 예약
  */
 export async function bookMakeupSession(data: {
@@ -4606,6 +4677,10 @@ export async function bookMakeupSession(data: {
 }) {
     await requireAdmin();
     await ensureMakeupSessionTable();
+    // 정원 초과 차단 — 모달 예약과 결석→보강 지정(scheduleMakeupForAbsence) 두 경로 모두
+    // 이 액션을 거치므로, 여기서 막으면 양쪽이 동일하게 보호된다.
+    // (try 바깥에 두어 "이미 정원이 찼습니다..." 문구가 그대로 원장에게 전달되게 한다)
+    await assertMakeupSeatAvailable(data.makeupClassId, data.makeupDate);
     try {
         await prisma.$executeRawUnsafe(
             `INSERT INTO "MakeupSession"

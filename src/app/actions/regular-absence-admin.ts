@@ -140,6 +140,8 @@ export async function scheduleMakeupForAbsence(input: {
   }
 
   // MakeupSession 생성(레거시 예약 액션 재사용 — ensureMakeupSessionTable 포함).
+  // 정원 초과 검증도 bookMakeupSession 안에서 수행된다(assertMakeupSeatAvailable).
+  //   → 보강 예약 모달 경로와 이 결석→보강 지정 경로가 동일한 기준으로 막힌다.
   await bookMakeupSession({
     studentId: ab.studentId,
     originalClassId: ab.classId,

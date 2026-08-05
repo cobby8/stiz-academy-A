@@ -4,9 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     bookMakeupSession,
     cancelMakeupSession,
+    loadMakeupSlotAvailability,
     updateMakeupStatus,
 } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
+// 잔여석 표시/판정은 서버(queries.ts)와 같은 계산식을 쓴다 — 화면만 낙관 표시하는 사고 방지
+import { formatSeatLabel, isMakeupSlotFull } from "@/lib/makeup/capacity";
 
 // ── 타입 정의 ──────────────────────────────────────────────────────────────
 type MakeupItem = {
@@ -452,6 +455,8 @@ function BookMakeupModal({
     const [availableSlots, setAvailableSlots] = useState<MakeupSlot[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState(false);
+    // 잔여석을 서버에서 실제로 받아왔는지 여부. false면 "확인 중"으로 중립 표시한다.
+    const [seatsLoaded, setSeatsLoaded] = useState(false);
 
     // 학생 검색 필터
     const [studentSearch, setStudentSearch] = useState("");
@@ -465,34 +470,72 @@ function BookMakeupModal({
         return students.filter((s) => s.name.includes(studentSearch));
     }, [students, studentSearch]);
 
-    // 빈자리 조회 — 원래 반 선택 후 같은 프로그램의 다른 반 조회
-    async function fetchSlots() {
-        if (!selectedClass?.programId || !originalClassId) return;
-        setLoading(true);
-        try {
-            // Server Action이 아닌 쿼리 함수이므로 직접 호출 불가
-            // API route를 통해 조회하거나, 이미 가진 classes 데이터로 필터링
-            // 여기서는 classes 데이터를 활용하여 같은 프로그램의 다른 반 표시
-            const sameProgram = classes.filter(
-                (c) => c.programId === selectedClass.programId && c.id !== originalClassId,
-            );
-            setAvailableSlots(
-                sameProgram.map((c) => ({
-                    id: c.id,
-                    name: c.name,
-                    dayOfWeek: c.dayOfWeek,
-                    startTime: c.startTime,
-                    endTime: c.endTime,
-                    capacity: c.capacity,
-                    enrolled: 0,
-                    bookedMakeups: 0,
-                    remaining: c.capacity, // 정확한 잔여석은 서버에서 계산 — 여기선 최대값 표시
-                })),
-            );
-        } finally {
-            setLoading(false);
+    // 보강 반 후보 목록 — 같은 프로그램의 다른 반. 잔여석은 "모름" 상태로 둔다.
+    // (예전에는 remaining 에 총정원을 넣어 빈자리인 것처럼 보여줘 정원 초과 예약이 났다)
+    const buildBaseSlots = useCallback((): MakeupSlot[] => {
+        if (!selectedClass?.programId || !originalClassId) return [];
+        return classes
+            .filter((c) => c.programId === selectedClass.programId && c.id !== originalClassId)
+            .map((c) => ({
+                id: c.id,
+                name: c.name,
+                dayOfWeek: c.dayOfWeek,
+                startTime: c.startTime,
+                endTime: c.endTime,
+                capacity: c.capacity,
+                enrolled: 0,
+                bookedMakeups: 0,
+                remaining: 0, // seatsLoaded=false 이므로 화면에는 "확인 중"으로만 표시된다
+            }));
+    }, [classes, originalClassId, selectedClass?.programId]);
+
+    // 보강일이 정해지면 그 날짜 기준 실제 잔여석을 서버에서 조회한다.
+    useEffect(() => {
+        if (step !== 2) return;
+        const programId = selectedClass?.programId;
+        if (!programId || !originalClassId) return;
+
+        // 날짜 미선택 → 잔여석을 알 수 없는 상태. 총정원을 잔여석처럼 보여주지 않는다.
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(makeupDate)) {
+            setAvailableSlots(buildBaseSlots());
+            setSeatsLoaded(false);
+            return;
         }
-    }
+
+        let aborted = false;
+        setLoading(true);
+        loadMakeupSlotAvailability({ programId, excludeClassId: originalClassId, makeupDate })
+            .then((res) => {
+                if (aborted) return;
+                if (res?.ok && Array.isArray(res.slots)) {
+                    setAvailableSlots(res.slots as MakeupSlot[]);
+                    setSeatsLoaded(true); // 실제 잔여석 확보
+                } else {
+                    setAvailableSlots(buildBaseSlots());
+                    setSeatsLoaded(false);
+                }
+            })
+            .catch((e) => {
+                if (aborted) return;
+                console.error("Failed to load makeup slot availability:", e);
+                setAvailableSlots(buildBaseSlots());
+                setSeatsLoaded(false); // 실패 시에도 낙관 표시 금지
+            })
+            .finally(() => {
+                if (!aborted) setLoading(false);
+            });
+
+        return () => {
+            aborted = true;
+        };
+    }, [step, makeupDate, originalClassId, selectedClass?.programId, buildBaseSlots]);
+
+    // 잔여석을 받아본 결과 이미 선택해 둔 반이 마감이면 선택을 해제한다.
+    useEffect(() => {
+        if (!seatsLoaded || !makeupClassId) return;
+        const picked = availableSlots.find((s) => s.id === makeupClassId);
+        if (picked && isMakeupSlotFull(picked)) setMakeupClassId("");
+    }, [seatsLoaded, availableSlots, makeupClassId]);
 
     // 다음 단계로 이동
     function goToStep2() {
@@ -500,14 +543,19 @@ function BookMakeupModal({
             alert("원생, 원래 반, 결석일을 모두 선택해주세요");
             return;
         }
-        fetchSlots();
-        setStep(2);
+        setStep(2); // 슬롯/잔여석은 위 useEffect가 채운다
     }
 
     // 예약 실행
     async function handleBook() {
         if (!makeupClassId || !makeupDate) {
             alert("보강 반과 보강일을 선택해주세요");
+            return;
+        }
+        // 마감된 반은 화면에서도 막는다(최종 판단은 서버가 다시 한다).
+        const picked = availableSlots.find((s) => s.id === makeupClassId);
+        if (seatsLoaded && picked && isMakeupSlotFull(picked)) {
+            alert("이미 정원이 찼습니다. 다른 날짜나 반을 선택해 주세요.");
             return;
         }
         setBusy(true);
@@ -666,13 +714,23 @@ function BookMakeupModal({
                                     </p>
                                 ) : (
                                     <div className="space-y-2">
-                                        {availableSlots.map((slot) => (
+                                        {!seatsLoaded && (
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                아래 &quot;보강 수업일&quot;을 선택하면 그 날짜의 실제 잔여석이 표시됩니다.
+                                            </p>
+                                        )}
+                                        {availableSlots.map((slot) => {
+                                            // 잔여석을 실제로 확인한 경우에만 마감 판정(모르면 막지 않고 서버가 최종 검증)
+                                            const full = seatsLoaded && isMakeupSlotFull(slot);
+                                            return (
                                             <label
                                                 key={slot.id}
-                                                className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
-                                                    makeupClassId === slot.id
-                                                        ? "border-blue-500 bg-blue-50"
-                                                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+                                                className={`flex items-center gap-3 p-3 border rounded-lg transition-all ${
+                                                    full
+                                                        ? "border-gray-200 dark:border-gray-700 opacity-60 cursor-not-allowed"
+                                                        : makeupClassId === slot.id
+                                                            ? "border-blue-500 bg-blue-50 cursor-pointer"
+                                                            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 cursor-pointer"
                                                 }`}
                                             >
                                                 <input
@@ -681,17 +739,23 @@ function BookMakeupModal({
                                                     value={slot.id}
                                                     checked={makeupClassId === slot.id}
                                                     onChange={() => setMakeupClassId(slot.id)}
+                                                    disabled={full}
                                                     className="accent-blue-600"
                                                 />
                                                 <div className="flex-1">
                                                     <p className="font-medium text-sm">{slot.name}</p>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400">
                                                         {DAY_LABELS[slot.dayOfWeek] ?? slot.dayOfWeek}요일 {slot.startTime}~{slot.endTime}
-                                                        {" / "}정원 {slot.capacity}명
+                                                        {" / "}
+                                                        {/* 잔여 N석 · 정원 M명 (아직 모르면 "잔여석 확인 중") */}
+                                                        <span className={full ? "font-semibold text-red-600" : ""}>
+                                                            {formatSeatLabel(slot, seatsLoaded)}
+                                                        </span>
                                                     </p>
                                                 </div>
                                             </label>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

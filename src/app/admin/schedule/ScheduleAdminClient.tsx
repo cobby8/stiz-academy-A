@@ -388,8 +388,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
 
     // Custom slot state
     const [isAddingCustom, setIsAddingCustom] = useState(false);
-    // 커스텀 슬롯 추가 시 기본 요일을 지정하기 위한 state
-    const [addCustomDayKey, setAddCustomDayKey] = useState<string>("Mon");
     const [newCustomForm, setNewCustomForm] = useState<CustomSlotForm>(defaultCustomSlotForm);
     const [editingCustomId, setEditingCustomId] = useState<string | null>(null);
     const [editCustomForm, setEditCustomForm] = useState<CustomSlotForm>(defaultCustomSlotForm);
@@ -862,7 +860,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                         <button
                             onClick={() => {
                                 // 해당 요일을 기본값으로 설정하고 추가 모달 열기
-                                setAddCustomDayKey(dayKey);
                                 setNewCustomForm({ ...defaultCustomSlotForm(), dayKey });
                                 setIsAddingCustom(true);
                             }}

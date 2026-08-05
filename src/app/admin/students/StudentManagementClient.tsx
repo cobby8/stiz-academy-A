@@ -8,7 +8,6 @@ import {
     updateStudent,
     deleteStudent,
     enrollStudent,
-    deleteEnrollment,
 } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
 import AdminQuickActionMenu from "@/components/admin/AdminQuickActionMenu";
@@ -279,12 +278,6 @@ const RELINK_KIND_LABELS: Record<RelinkKind, string> = {
     registration: "등록",
     shuttle: "차량",
     team: "대표팀",
-};
-
-// 요일 전체 라벨 (수강 등록 모달에서 사용)
-const DAY_FULL_LABELS: Record<string, string> = {
-    Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일",
-    Fri: "금요일", Sat: "토요일", Sun: "일요일",
 };
 
 /**
@@ -902,15 +895,6 @@ function toDateStr(d: Date | string | null): string {
     if (!d) return "";
     const date = typeof d === "string" ? new Date(d) : d;
     return date.toISOString().split("T")[0];
-}
-
-function calcAge(birthDate: Date | string): number {
-    const birth = typeof birthDate === "string" ? new Date(birthDate) : birthDate;
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-    return age;
 }
 
 /**

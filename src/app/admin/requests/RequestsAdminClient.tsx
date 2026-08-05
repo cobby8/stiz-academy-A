@@ -215,10 +215,6 @@ export default function RequestsAdminClient({
         void loadRequests();
     }, [hasInitialData, loadRequests]);
 
-    // 필터 적용
-    const filtered = requests;
-
-    // 상태별 카운트
     if (loading && requests.length === 0) {
         return <RequestsLoadingFallback />;
     }
@@ -260,14 +256,14 @@ export default function RequestsAdminClient({
             </div>
 
             {/* 요청 목록 */}
-            {filtered.length === 0 ? (
+            {requests.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400 shadow-sm">
                     <SymbolIcon name="forum" size={48} className="mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">요청이 없습니다</p>
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {filtered.map(req => {
+                    {requests.map(req => {
                         const typeInfo = TYPE_LABELS[req.type] || TYPE_LABELS.OTHER;
                         const statusInfo = STATUS_OPTIONS.find(s => s.value === req.status) || STATUS_OPTIONS[0];
                         const isExpanded = expandedId === req.id;

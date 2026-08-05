@@ -14,14 +14,6 @@ const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
 
-// 출석 상태 라벨 + 색상 맵
-const ATT_STATUS: Record<string, { label: string; color: string }> = {
-    PRESENT: { label: "출석", color: "bg-green-100 text-green-700" },
-    ABSENT: { label: "결석", color: "bg-red-100 text-red-700" },
-    LATE: { label: "지각", color: "bg-yellow-100 text-yellow-700" },
-    EXCUSED: { label: "사유결석", color: "bg-blue-100 text-blue-700" },
-};
-
 // 날짜를 YYYY-MM-DD 문자열로 변환하는 유틸리티 함수
 function toDateStr(d: Date | string | null): string {
     if (!d) return "-";

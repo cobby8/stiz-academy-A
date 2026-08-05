@@ -172,23 +172,6 @@ export default function SmsTemplateClient({ templates }: { templates?: SmsTempla
 
     return (
         <div className="space-y-6">
-            {/* 페이지 헤더 */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">SMS 템플릿 관리</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        상황별 자동 발송 메시지를 편집하고 ON/OFF할 수 있습니다
-                    </p>
-                </div>
-                <a
-                    href="/admin/sms"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors"
-                >
-                    <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-                    문자 발송
-                </a>
-            </div>
-
             {/* 탭 전환 */}
             <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
                 <button

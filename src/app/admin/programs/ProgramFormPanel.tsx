@@ -46,7 +46,6 @@ interface ProgramForm {
     name: string;
     targetAge: string;
     description: string;
-    price: string;
     days: string[];
     priceWeek1: string;
     priceWeek2: string;
@@ -68,7 +67,6 @@ function emptyForm(): ProgramForm {
         name: "",
         targetAge: "",
         description: "",
-        price: "",
         days: [],
         priceWeek1: "",
         priceWeek2: "",
@@ -95,7 +93,6 @@ function programToForm(p: Program): ProgramForm {
         name: p.name,
         targetAge: p.targetAge ?? "",
         description: p.description ?? "",
-        price: String(p.price || ""),
         days: savedDays,
         priceWeek1: p.priceWeek1 != null ? String(p.priceWeek1) : "",
         priceWeek2: p.priceWeek2 != null ? String(p.priceWeek2) : "",
@@ -113,7 +110,8 @@ function formToData(form: ProgramForm) {
     const priceWeek2 = form.priceWeek2 ? parseInt(form.priceWeek2) : null;
     const priceWeek3 = form.priceWeek3 ? parseInt(form.priceWeek3) : null;
     const priceDaily = form.priceDaily ? parseInt(form.priceDaily) : null;
-    const fallbackPrice = priceWeek1 ?? priceWeek2 ?? priceWeek3 ?? priceDaily ?? parseInt(form.price) ?? 0;
+    // 대표 가격(price)은 주1/2/3회·매일반 중 먼저 입력된 값을 쓴다. 폼에 별도 입력칸은 없다.
+    const fallbackPrice = priceWeek1 ?? priceWeek2 ?? priceWeek3 ?? priceDaily ?? 0;
     const weekend = isWeekendOnly(form.days);
     // 주말 전용은 예전처럼 셔틀 미운행을 강제하고, 그 외에는 토글(runsShuttle)로 결정한다.
     const runsShuttle = form.runsShuttle && !weekend;

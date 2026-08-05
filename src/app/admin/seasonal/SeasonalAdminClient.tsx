@@ -1393,7 +1393,7 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
         {TABS.map((item) => <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold ${tab === item.key ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"}`}><Icon name={item.icon} className="text-xl" />{item.label}</button>)}
         <a href="/admin/seasonal/attendance" className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"><Icon name="fact_check" className="text-xl" />출석 관리</a>
         <a href="/admin/seasonal/attendance?view=makeup" className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"><Icon name="cached" className="text-xl" />보강 관리</a>
-        <a href="/admin/shuttle" className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"><Icon name="directions_bus" className="text-xl" />셔틀 노선</a>
+        <a href="/admin/shuttle" className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"><Icon name="directions_bus" className="text-xl" />셔틀 관리</a>
       </nav>
 
       {notice && <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800"><Icon name="check_circle" />{notice}</div>}

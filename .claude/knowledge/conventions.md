@@ -2,6 +2,18 @@
 <!-- 담당: developer, reviewer | 최대 30항목 -->
 <!-- 이 프로젝트만의 코드 스타일, 네이밍 규칙, 패턴을 기록 -->
 
+### [2026-08-05] 컴포넌트 파일 삭제 전에는 src/ 가 아니라 tests/ 를 grep 해야 한다
+- **분류**: convention
+- **발견자**: developer
+- **내용**: 이 프로젝트의 회귀 테스트(`tests/*.test.mjs`, node --test)는 소스 파일을 `readFile("src/app/...")` 로 읽어 정규식 검사한다. 그래서 컴포넌트가 **import 참조 0건이어도** 테스트가 파일 경로를 문자열로 붙들고 있어, 삭제하는 순간 ENOENT 로 테스트 파일 전체가 죽는다. 실측: `ShuttleRouteAdminClient.tsx` 는 src/ 참조 0건이었지만 tests/ 7개 파일이 읽고 있었고, `EditApplicationModal` 도 `assert.match(applyModals, /function EditApplicationModal/)` 로 존재를 강제받고 있었다(신규 실패 9건 발생 → 원복). **죽은 코드 삭제 시 검색 범위는 `grep -rn "<심볼>" src/ tests/ scripts/` 로 잡는다.** 또 `npx vitest` 는 이 프로젝트 의존성이 아니라 실행하면 324개 전부 "no test suite" 로 오탐하니, 테스트는 `node --test tests/*.test.mjs` 로 돌린다.
+- **참조횟수**: 0
+
+### [2026-08-05] 라우트 파일을 지우면 .next/types/validator.ts 가 낡아 tsc 가 깨진다
+- **분류**: convention
+- **발견자**: developer
+- **내용**: `src/app/**/page.tsx` 를 삭제하면 `npx tsc --noEmit` 이 `.next/types/validator.ts(...): Cannot find module '../../src/app/.../page.js'` 로 실패한다. 소스 문제가 아니라 **이전 빌드가 남긴 생성 타입이 낡은 것**이다. `npx next build` 로 재생성하면 사라진다. 즉 라우트 삭제 작업의 검증 순서는 tsc → build 가 아니라 **build → tsc** 다.
+- **참조횟수**: 0
+
 ### [2026-03-22] 공개 페이지 서버 컴포넌트 데이터 조회 패턴
 - **분류**: convention
 - **발견자**: reviewer
@@ -60,4 +72,10 @@
 - **분류**: convention
 - **발견자**: reviewer
 - **내용**: 모든 관리자 전용 Server Action 함수는 첫 줄에 `await requireAdmin()`을 호출한다. 인증 가드 파일(auth-guard.ts)은 `"use server"` 지시자 없이 순수 서버 유틸리티로 유지한다. 학부모도 사용할 함수(알림 읽음, 요청 접수 등)는 향후 `requireAuth()`로 변경 필요.
+- **참조횟수**: 0
+
+### [2026-08-06] 에이전트를 병렬로 돌릴 때 git stash 를 쓰면 남의 작업이 사라진다
+- **분류**: convention
+- **발견자**: pm
+- **내용**: `git stash` 는 **워킹트리 전체**를 대상으로 한다. 여러 에이전트가 동시에 서로 다른 파일을 고치는 중에 한 에이전트가 "테스트 기준선을 재려고" stash 를 실행하면, **다른 에이전트의 미저장 변경까지 전부 치워진다.** 실측(2026-08-06): 문구 정리 5개 병렬 작업 중 한 에이전트의 `git stash push -- src/` 가 46개 파일을 치웠고, 그 사이 다른 에이전트가 같은 파일을 새로 써서 `git stash pop` 이 충돌로 실패했다. 파일 단위 수동 복원으로 유실 0건에 그쳤지만 복구에 많은 시간이 들었다. **기준선이 필요하면 stash 대신 `git show HEAD:<파일>` 로 개별 조회한다.** PM 은 병렬 위임 프롬프트에 stash 금지를 명시하고, 커밋 직전 `git status` 로 예상 파일 수를 대조한다. 또 작업이 끝난 뒤 `git stash list` 를 확인해 남은 stash 를 정리한다 — 남겨 두면 나중에 pop 했을 때 최신 작업을 옛 버전으로 덮어쓴다.
 - **참조횟수**: 0

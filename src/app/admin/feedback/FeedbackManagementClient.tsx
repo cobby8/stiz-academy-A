@@ -341,8 +341,9 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">학습 피드백 관리</h1>
+                    {/* 설명문구는 제거하고 실무에 쓰이는 건수 표시만 유지 */}
                     <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                        원생별 학습 피드백을 작성하고 관리합니다. (총 {feedbacks.length}건)
+                        총 {feedbacks.length}건
                     </p>
                 </div>
                 <button
@@ -487,7 +488,6 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                             type="text"
                             value={form.title}
                             onChange={(e) => setForm({ ...form, title: e.target.value })}
-                            placeholder="피드백 제목을 입력하세요"
                             className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
@@ -500,7 +500,6 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                         <textarea
                             value={form.content}
                             onChange={(e) => setForm({ ...form, content: e.target.value })}
-                            placeholder="학습 피드백 내용을 상세히 작성하세요"
                             rows={4}
                             className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         />
@@ -550,7 +549,6 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
             {feedbacks.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-12 text-center">
                     <p className="text-gray-400 text-lg">아직 작성된 피드백이 없습니다.</p>
-                    <p className="text-gray-400 text-sm mt-1">상단의 "피드백 작성" 버튼을 눌러 첫 피드백을 작성해보세요.</p>
                 </div>
             ) : (
                 <div className="space-y-3">

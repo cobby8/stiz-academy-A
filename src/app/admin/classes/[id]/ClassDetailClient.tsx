@@ -461,7 +461,6 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
                     <SymbolIcon name="menu_book" size={40} className="mx-auto mb-3 text-gray-300" />
                     <p className="text-gray-500 dark:text-gray-400">수업 기록이 없습니다</p>
-                    <p className="text-xs text-gray-400 mt-1">위 버튼으로 첫 수업을 기록해보세요</p>
                 </div>
             ) : (
                 <div className="grid gap-3">

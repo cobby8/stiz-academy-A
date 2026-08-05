@@ -558,7 +558,6 @@ function ApproveModal({
                             onChange={(event) => setNote(event.target.value)}
                             rows={2}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-                            placeholder="내부 참고용 메모 (선택사항)"
                         />
                     </div>
 
@@ -682,13 +681,11 @@ function EditApplicationModal({
 
     return (
         <AdminModal onClose={onClose} titleId="edit-application-title" panelClassName="max-w-3xl p-6">
-                <h2 id="edit-application-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                {/* 부제 문구를 없애면서 아래 폼과의 간격(mb-4)은 제목으로 옮겨 유지한다 */}
+                <h2 id="edit-application-title" className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
                     <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit</span>
                     수강신청 수정
                 </h2>
-                <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-                    승인 전 신청 내용을 상담 결과에 맞춰 정리합니다.
-                </p>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {formError && (

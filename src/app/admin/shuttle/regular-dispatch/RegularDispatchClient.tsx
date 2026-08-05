@@ -26,8 +26,9 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
     <div className="mx-auto max-w-6xl px-4 py-4">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 배차 · 하루 타임라인</h3>
+        {/* 조작 설명은 뺐다. 좌표의 출처(학생 신청서)는 데이터 출처 정보라 반드시 남긴다. */}
         <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">
-          <b>요일</b>을 고르면 그 요일의 <b>등원 → 하원</b> 노선을 함께 보여줍니다. 좌표는 <b>학생 신청서</b>에서 자동으로 가져옵니다. 순서는 드래그(⠿)로 바꾸면 지도·시각이 실시간 재계산됩니다. 조정한 노선은 <b>💾 저장</b>하면 그 요일에 고정됩니다.
+          좌표는 <b>학생 신청서</b>에서 자동으로 가져옵니다.
         </p>
 
         {/* 요일 탭 — 노선 관리 단위 */}

@@ -230,7 +230,7 @@ export default function AdminSettingsClient({
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-gray-900">
             {fetchErrorState && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-                    데이터베이스 연결에 문제가 발생했습니다. 새 스키마 동기화(db push)가 필요합니다.
+                    데이터베이스 연결에 문제가 발생했습니다. 잠시 후 다시 시도하고, 계속되면 관리자에게 문의해 주세요.
                 </div>
             )}
             {saveSuccess && (
@@ -266,7 +266,6 @@ export default function AdminSettingsClient({
                         <div className="mb-6">
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">
                                 본문 폰트
-                                <span className="text-xs text-gray-400 font-normal ml-2">일반 텍스트, 설명문</span>
                             </label>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 {BODY_FONT_OPTIONS.map(opt => (
@@ -278,7 +277,6 @@ export default function AdminSettingsClient({
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">
                                 제목 폰트
-                                <span className="text-xs text-gray-400 font-normal ml-2">H1~H3 제목에 적용</span>
                             </label>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 {HEADING_FONT_OPTIONS.map(opt => (
@@ -314,9 +312,6 @@ export default function AdminSettingsClient({
                                     원장 인사말 / 학원 소개
                                 </label>
                                 <AppliesTo pages={["홈페이지 메인 히어로 소개 문구", "학원소개 페이지 원장 인사말"]} />
-                                <p className="text-xs text-gray-400 mb-2">
-                                    굵게·기울임·색상·정렬 적용 가능. 줄바꿈은 Enter 키로 문단 구분, Shift+Enter로 줄바꿈.
-                                </p>
                                 <LazyRichTextEditor
                                     value={introText}
                                     onChange={setIntroText}
@@ -331,7 +326,7 @@ export default function AdminSettingsClient({
                         <SectionHeader title="교육 이념" />
                         <AppliesTo pages={["학원소개 페이지 (원장 인사말 아래)"]} />
                         <p className="text-xs text-gray-400 mb-2">
-                            학원의 교육 철학, 비전, 지도 방침 등을 작성합니다. 비워두면 섹션이 숨겨집니다.
+                            비워두면 섹션이 숨겨집니다.
                         </p>
                         <LazyRichTextEditor
                             value={philosophyText}
@@ -359,7 +354,7 @@ export default function AdminSettingsClient({
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">시설 사진 URL</label>
                                 <p className="text-xs text-gray-400 mb-2">
-                                    Supabase Storage 또는 외부 이미지 URL을 한 줄에 하나씩 입력합니다.
+                                    이미지 URL을 한 줄에 하나씩 입력합니다.
                                 </p>
                                 {facilityImages.map((url, i) => (
                                     <div key={i} className="flex gap-2 mb-2">
@@ -399,16 +394,10 @@ export default function AdminSettingsClient({
                         <SectionHeader title="포토 갤러리" />
                         <AppliesTo pages={["홈페이지 메인 활동 사진", "포토갤러리 페이지"]} />
                         <div className="rounded-xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/20 p-4">
-                            <p className="text-sm font-bold text-blue-900 dark:text-blue-100">
-                                사진과 영상은 전용 갤러리 관리에서 등록합니다.
-                            </p>
-                            <p className="text-xs text-blue-700 dark:text-blue-200 mt-1 leading-relaxed">
-                                메인 활동 사진과 /gallery 페이지는 모두 같은 갤러리 게시물 데이터를 사용합니다. 사진을 한 번 등록하면 메인과 갤러리에 함께 반영됩니다.
-                            </p>
                             <Link
                                 href="/admin/gallery"
                                 prefetch={false}
-                                className="inline-flex items-center justify-center mt-3 rounded-lg bg-brand-navy-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 transition"
+                                className="inline-flex items-center justify-center rounded-lg bg-brand-navy-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 transition"
                             >
                                 사진/영상 갤러리 관리로 이동
                             </Link>
@@ -519,7 +508,6 @@ export default function AdminSettingsClient({
                                         />
                                     </div>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-2">직접 입력해도 되지만, 지도에서 고르는 쪽이 정확합니다. 저장 시 대한민국 범위를 벗어난 좌표는 거부됩니다.</p>
                             </div>
                         </div>
                     </section>
@@ -588,7 +576,7 @@ export default function AdminSettingsClient({
                                         placeholder="예: 1784..."
                                         className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                     />
-                                    <p className="text-xs text-gray-400 mt-1.5">인스타그램 게시물 가져오기와 자동 업로드에 사용됩니다. 액세스 토큰은 서버 환경변수에만 저장합니다.</p>
+                                    <p className="text-xs text-gray-400 mt-1.5">인스타그램 게시물 가져오기와 자동 업로드에 사용됩니다.</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">네이버 플레이스 URL</label>
@@ -621,10 +609,9 @@ export default function AdminSettingsClient({
                                 />
                                 <span>
                                     <span className="block font-bold text-gray-700 dark:text-gray-200">갤러리 새 게시물 인스타그램 자동 업로드</span>
-                                    <span className="block text-xs text-gray-400 mt-1">켜면 관리자 갤러리에 새 공개 게시물을 만들 때 첫 번째 이미지를 인스타그램에도 발행합니다. 서버 환경변수 `INSTAGRAM_ACCESS_TOKEN`이 필요합니다.</span>
+                                    <span className="block text-xs text-gray-400 mt-1">켜면 관리자 갤러리에 새 공개 게시물을 만들 때 첫 번째 이미지를 인스타그램에도 발행합니다.</span>
                                 </span>
                             </label>
-                            <p className="text-xs text-gray-400">입력된 링크만 푸터에 표시됩니다. 유튜브 링크는 위 홍보 영상 URL을 함께 사용합니다.</p>
                         </div>
                     </section>
 

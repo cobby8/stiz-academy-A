@@ -288,9 +288,6 @@ export default function WaitlistClient({
                         <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">hourglass_top</span>
                         대기자 관리
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        반 정원 초과 시 대기열을 관리하고, 자리가 나면 학부모에게 알림을 보냅니다.
-                    </p>
                 </div>
                 <button
                     onClick={() => {

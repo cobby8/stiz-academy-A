@@ -1253,7 +1253,6 @@ function ApplicationContactModal({
                         onChange={(event) => setNote(event.target.value)}
                         rows={4}
                         className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-neon-lime"
-                        placeholder="상담 내용이나 다음에 확인할 내용을 적어주세요"
                     />
                 </label>
 

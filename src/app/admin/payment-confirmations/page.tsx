@@ -59,9 +59,6 @@ export default async function PaymentConfirmationsPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-900 dark:text-white">수납 확인 요청</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            코치가 현장에서 수납한 내역을 확인하고 승인합니다.
-          </p>
         </div>
         {rows.length > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm dark:border-amber-500/30 dark:bg-amber-950/30">

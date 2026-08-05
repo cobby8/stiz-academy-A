@@ -171,10 +171,8 @@ export default function SkillsClient({ categories: initialCategories, students: 
             {/* 페이지 헤더 */}
             <div className="flex items-center justify-between mb-6">
                 <div>
+                    {/* 설명문구 제거: 제목 + 탭 이름으로 이미 자명 */}
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">스킬 트래킹</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        원생별 기술 수준을 평가하고 성장 기록을 관리합니다.
-                    </p>
                 </div>
             </div>
 
@@ -506,7 +504,6 @@ function CategoryTab({
                                     onChange={(e) =>
                                         setForm((f) => ({ ...f, description: e.target.value }))
                                     }
-                                    placeholder="이 카테고리에 대한 간단한 설명"
                                     rows={2}
                                     className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                 />
@@ -676,9 +673,6 @@ function AssessmentTab({
                     warning
                 </span>
                 <p className="text-sm">먼저 카테고리를 추가해주세요.</p>
-                <p className="text-xs mt-1">
-                    &quot;카테고리 관리&quot; 탭에서 평가 항목을 등록한 후 스킬 평가를 진행할 수 있습니다.
-                </p>
             </div>
         );
     }
@@ -858,9 +852,8 @@ function AssessmentTab({
                             values={chartValues}
                         />
                     ) : (
-                        <div className="py-8 text-center text-gray-300 text-sm">
-                            원생을 선택하면 레이더 차트가 표시됩니다.
-                        </div>
+                        // 안내문구 제거: 원생 선택 전에는 차트 영역만 비워 둔다(높이는 유지)
+                        <div className="py-8" />
                     )}
                 </div>
 

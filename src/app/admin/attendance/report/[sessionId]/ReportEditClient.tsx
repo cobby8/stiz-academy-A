@@ -437,7 +437,6 @@ function ReportEditForm({
                         <textarea
                             value={content}
                             onChange={(e) => { setContent(e.target.value); setSaved(false); }}
-                            placeholder="오늘 수업에서 진행한 내용을 작성해주세요."
                             rows={4}
                             className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
                         />
@@ -519,7 +518,7 @@ function ReportEditForm({
                         출석 현황 및 학생별 코멘트
                     </h2>
                     <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-                        각 학생에 대한 개별 코멘트를 작성할 수 있습니다. 학부모에게 리포트 발행 시 함께 전달됩니다.
+                        학부모에게 리포트 발행 시 함께 전달됩니다.
                     </p>
                 </div>
 
@@ -580,7 +579,6 @@ function ReportEditForm({
                                     <textarea
                                         value={noteData.note}
                                         onChange={(e) => updateNote(a.studentId, e.target.value)}
-                                        placeholder="이 학생에 대한 코멘트를 작성하세요..."
                                         rows={2}
                                         className="w-full border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
                                     />

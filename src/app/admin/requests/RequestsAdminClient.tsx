@@ -226,8 +226,8 @@ export default function RequestsAdminClient({
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1">학부모 요청 관리</h1>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">학부모가 접수한 결석, 셔틀 변경 등의 요청을 관리합니다.</p>
+                {/* 설명문구 제거: 제목 + 아래 유형 배지로 이미 자명 */}
+                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">학부모 요청 관리</h1>
             </div>
 
             {/* 필터 탭 */}

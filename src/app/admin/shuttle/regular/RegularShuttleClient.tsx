@@ -276,7 +276,8 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                     </div>
                   </>
                 )}
-                <p className="mt-3 text-[11px] text-gray-400">※ 드래그(⠿)로 순서를 바꾸고 도착시각을 고친 뒤 <b>💾 저장</b>하세요. 기사님 링크·탑승 체크는 다음 단계입니다.</p>
+                {/* 안내문 제거 — 뒷문장("기사님 링크·탑승 체크는 다음 단계")이 스테일이다.
+                    링크 복사 버튼은 이 화면 위에 이미 있고 탑승 체크도 기사 앱에 구현 완료. */}
               </div>
             ) : (
             <>

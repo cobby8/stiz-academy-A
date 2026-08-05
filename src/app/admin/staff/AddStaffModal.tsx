@@ -148,7 +148,7 @@ export default function AddStaffModal({
                                 </button>
                             )}
                         </div>
-                        <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
+                        {/* 안내문구 제거: 같은 입력칸 placeholder와 중복 */}
                     </div>
                     {verifyStep === "sent" && (
                         <div>

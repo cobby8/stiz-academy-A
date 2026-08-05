@@ -166,7 +166,6 @@ export default function NoticeSocialModal({
                                 onChange={(e) => updateSocialPreview({ storyText: e.target.value })}
                                 className="w-full rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm dark:bg-gray-900 dark:text-white"
                             />
-                            <p className="text-xs text-gray-400 mt-1">스토리 자동 게시에는 첫 번째 이미지를 사용합니다. 문구는 광고/수동 보정용으로 함께 준비됩니다.</p>
                         </div>
 
                         <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">

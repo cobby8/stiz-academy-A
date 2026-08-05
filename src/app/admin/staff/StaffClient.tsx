@@ -329,8 +329,9 @@ export default function StaffClient({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">스태프 관리</h1>
+                    {/* 역할 나열 설명은 제거하고 권한 고지만 유지 */}
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        관리자, 부원장, 코치/강사, 셔틀 기사 계정을 관리합니다. (원장만 변경 가능)
+                        (원장만 변경 가능)
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -646,7 +647,6 @@ export default function StaffClient({
                         <ul className="text-xs text-emerald-700 space-y-1">
                             <li>- 셔틀 운행 화면 접근</li>
                             <li>- 오늘 운행 노선 확인</li>
-                            <li>- 탑승/하차 처리는 다음 단계 연결</li>
                         </ul>
                     </div>
                 </div>

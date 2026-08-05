@@ -145,7 +145,7 @@ export default function RegularAbsenceAdminClient({
             정규 수업 결석
           </h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            학부모가 미리 신고한 정규수업 결석을 확인하고 확정합니다. (방학특강 결석은 별도 메뉴)
+            (방학특강 결석은 별도 메뉴)
             {reportedCount > 0 && (
               <span className="ml-1 font-bold text-amber-600 dark:text-amber-400">미확정 {reportedCount}건</span>
             )}

@@ -245,8 +245,8 @@ export default function StatsClient({
         <div className="max-w-7xl mx-auto space-y-8">
             {/* 페이지 헤더 */}
             <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1">상세 운영 통계</h1>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">최근 12개월 운영 데이터를 한 눈에 확인합니다.</p>
+                {/* 설명문구 제거: 제목 + 기간 토글로 이미 자명 */}
+                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">상세 운영 통계</h1>
             </div>
 
             {/* ── KPI 요약 카드 4개 ────────────────────────────────────────── */}

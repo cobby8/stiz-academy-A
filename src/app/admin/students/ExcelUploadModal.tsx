@@ -379,7 +379,6 @@ export default function ExcelUploadModal({
                             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-300 space-y-1">
                                 <p className="font-medium text-gray-700 dark:text-gray-200">랠리즈 엑셀 파일 형식</p>
                                 <p>랠리즈에서 다운로드한 원생 목록 엑셀 파일을 그대로 업로드하세요.</p>
-                                <p>학생명, 보호자 정보, 학교, 학년, 생년월일 등이 자동으로 인식됩니다.</p>
                             </div>
                         </div>
                     )}

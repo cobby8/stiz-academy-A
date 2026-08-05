@@ -113,9 +113,9 @@ export default function SeasonalAbsenceAdminClient({
             <span className="material-symbols-outlined text-2xl text-[var(--brand-accent)]">event_busy</span>
             결석 신고 처리
           </h2>
+          {/* 설명문만 제거하고 '미확정 N건' 배지는 그대로 유지한다(처리해야 할 건수 표시) */}
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            학부모가 미리 신고한 결석을 검토하고, 처리방식(보강·이월·환불)을 정한 뒤 확정합니다.
-            {reportedCount > 0 && <span className="ml-1 font-bold text-amber-600 dark:text-amber-400">미확정 {reportedCount}건</span>}
+            {reportedCount > 0 && <span className="font-bold text-amber-600 dark:text-amber-400">미확정 {reportedCount}건</span>}
           </p>
         </div>
         <select

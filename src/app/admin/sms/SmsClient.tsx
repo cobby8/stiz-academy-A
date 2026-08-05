@@ -99,11 +99,8 @@ export default function SmsClient({ coaches: initialCoaches }: { coaches?: Coach
         <div className="mx-auto max-w-6xl space-y-6">
             <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-brand-orange-500 dark:text-brand-neon-lime">Message center</p>
+                    {/* 영문 장식문구·설명문구 제거: 아래 4개 탭이 그대로 설명 역할 */}
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">메시지 관리</h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        학원 내부와 외부 알림을 나누고, 자동 발송부터 결과 확인까지 한곳에서 관리합니다.
-                    </p>
                 </div>
                 <ChannelReadiness />
             </header>
@@ -377,7 +374,6 @@ function HistoryPanel() {
                 <div className="p-12 text-center">
                     <span className="material-symbols-outlined text-4xl text-gray-300">history</span>
                     <p className="mt-2 font-bold text-gray-700 dark:text-gray-200">발송 이력은 필요할 때만 불러옵니다.</p>
-                    <p className="mt-1 text-sm text-gray-500">최근 결과 확인이 필요할 때 조회하면 관리자 페이지 첫 반응이 더 가벼워집니다.</p>
                     <button type="button" onClick={loadHistory} className="mt-4 min-h-11 rounded-xl bg-brand-navy-900 px-5 text-sm font-bold text-white">
                         최근 50건 불러오기
                     </button>
@@ -388,7 +384,8 @@ function HistoryPanel() {
                 <div className="p-12 text-center">
                     <span className="material-symbols-outlined text-4xl text-gray-300">history</span>
                     <p className="mt-2 font-bold text-gray-700 dark:text-gray-200">표시할 발송 이력이 없습니다.</p>
-                    <p className="mt-1 text-sm text-gray-500">발송 이력 API가 연결되면 성공·실패 결과가 여기에 표시됩니다.</p>
+                    {/* 실제로는 조회가 정상 동작하고 단순히 0건인 상태이므로 사실에 맞게 표기 */}
+                    <p className="mt-1 text-sm text-gray-500">문자를 발송하면 성공·실패 결과가 여기에 표시됩니다.</p>
                 </div>
             ) : (
                 <div className="overflow-x-auto">

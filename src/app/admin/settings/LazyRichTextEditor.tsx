@@ -58,8 +58,8 @@ export default function LazyRichTextEditor({
                     onClick={() => setShouldLoad(true)}
                     className="w-full border border-gray-300 rounded-md p-4 min-h-[150px] bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-300 hover:border-brand-orange-500 dark:hover:border-brand-neon-lime transition"
                 >
-                    <span className="font-bold text-gray-700 dark:text-gray-100">편집기 준비</span>
-                    <span className="text-xs text-gray-400">클릭하거나 이 영역이 보이면 편집기를 불러옵니다.</span>
+                    {/* 지연 로딩(성능 최적화)은 그대로 두고, 사용자에게는 "내용 편집"으로만 보이게 한다 */}
+                    <span className="font-bold text-gray-700 dark:text-gray-100">내용 편집</span>
                 </button>
             )}
         </div>

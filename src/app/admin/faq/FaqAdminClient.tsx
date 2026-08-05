@@ -192,7 +192,7 @@ export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[]
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">FAQ 관리</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">자주 묻는 질문을 관리합니다 (체험신청 페이지에 표시)</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험신청 페이지에 표시</p>
                 </div>
                 <button onClick={() => { resetForm(); setShowForm(true); }}
                     className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition">

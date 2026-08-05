@@ -1420,7 +1420,7 @@ export default function FinanceClient({
                                     {sheetPreview.batch.spreadsheetTitle ? ` · ${sheetPreview.batch.spreadsheetTitle}` : ""}
                                 </p>
                             ) : (
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">완료된 원장 가져오기 기록을 기준으로 비교합니다.</p>
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">가져오기 기록 없음</p>
                             )}
                         </div>
 

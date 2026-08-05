@@ -436,12 +436,10 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
                                     placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                                     className={INPUT}
                                 />
-                                <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
                                     약력 / 소개
-                                    <span className="text-gray-400 font-normal ml-1">(경력·자격·한줄 소개 등 자유롭게 기입)</span>
                                 </label>
                                 <textarea
                                     value={addForm.description}
@@ -477,7 +475,6 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
                     <h2 className="text-base font-bold text-gray-800 dark:text-gray-100">
                         등록된 코치 <span className="text-brand-orange-500 dark:text-brand-neon-lime">{coaches.length}명</span>
                     </h2>
-                    <p className="text-xs text-gray-400">드래그로 순서를 변경할 수 있습니다</p>
                 </div>
 
                 {coaches.length === 0 && (
@@ -615,7 +612,6 @@ export default function CoachesAdminClient({ initialCoaches }: { initialCoaches?
                                                 placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                                                 className={INPUT}
                                             />
-                                            <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                                         </div>
 
                                         <div>

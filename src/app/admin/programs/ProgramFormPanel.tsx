@@ -230,7 +230,6 @@ function ProgramFormFields({
             <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                     수업 요일
-                    <span className="text-gray-400 font-normal ml-2 text-xs">(해당 요일 선택)</span>
                 </label>
                 <DaySelector selected={form.days} onChange={(days) => p({ days })} />
                 {weekend && (
@@ -310,9 +309,12 @@ function ProgramFormFields({
                     <label className={`flex items-center justify-between gap-3 ${weekend ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}>
                         <span className="text-sm text-gray-700 dark:text-gray-200">
                             <strong>셔틀 운행</strong>
-                            <span className="text-gray-400 ml-2 text-xs">
-                                {weekend ? "주말 수업은 셔틀을 운행하지 않습니다" : "이 프로그램의 셔틀버스 운행 여부"}
-                            </span>
+                            {/* 주말이라 토글이 잠기는 경우에만 이유를 안내한다 */}
+                            {weekend && (
+                                <span className="text-gray-400 ml-2 text-xs">
+                                    주말 수업은 셔틀을 운행하지 않습니다
+                                </span>
+                            )}
                         </span>
                         <span className="relative inline-flex shrink-0">
                             <input
@@ -399,7 +401,7 @@ function ProgramFormFields({
                     type="url"
                     value={form.imageUrl}
                     onChange={(e) => p({ imageUrl: e.target.value })}
-                    placeholder="https://... (Supabase Storage 또는 외부 이미지)"
+                    placeholder="https://..."
                     className={INPUT + " font-mono text-xs"}
                 />
             </div>

@@ -2005,7 +2005,7 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
     <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-emerald-50 p-3 text-emerald-800"><strong className="block text-xl">{roster.stats.confirmed}</strong><span className="text-xs font-bold">확정</span></div><div className="rounded-xl bg-amber-50 p-3 text-amber-800"><strong className="block text-xl">{roster.stats.unpaid}</strong><span className="text-xs font-bold">미결제</span></div><div className="rounded-xl bg-blue-50 p-3 text-blue-800"><strong className="block text-xl">{roster.stats.shuttle}</strong><span className="text-xs font-bold">셔틀</span></div></div>
     {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
     {loading ? <Loading /> : <section className="seasonal-roster-print mt-4" aria-label="반별 확정 명단 결과">
-      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p><p className="text-xs">출석일을 선택하면 해당 날짜에 실제 수업이 있는 신청자만 표시됩니다.</p></div>
+      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p></div>
       <div className="roster-desktop hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="px-3 py-3">번호</th><th className="px-3 py-3">요일</th><th className="px-3 py-3">운영 반</th><th className="px-3 py-3">학생</th><th className="px-3 py-3">결제</th><th className="px-3 py-3">셔틀</th><th className="px-3 py-3">출석</th><th className="px-3 py-3">메모</th></tr></thead><tbody className="divide-y divide-gray-100">{roster.rows.map((row, index) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-3 py-3">{(roster.pagination.page - 1) * roster.pagination.pageSize + index + 1}</td><td className="px-3 py-3 font-black">{row.weekday || "미정"}</td><td className="px-3 py-3 font-bold">{row.offeringName}</td><td className="px-3 py-3"><button type="button" onClick={() => openApplication(row.applicationId)} className="font-black hover:underline print:pointer-events-none">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></td><td className="px-3 py-3"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></td><td className="px-3 py-3"><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></td><td className="px-3 py-3">□</td><td className="px-3 py-3"> </td></tr>)}{!roster.rows.length && <tr><td colSpan={8}><Empty text="조건에 맞는 출석부 명단이 없습니다." /></td></tr>}</tbody></table></div>
       <div className="roster-mobile space-y-3 md:hidden">{roster.rows.map((row) => <article key={row.id} className="rounded-xl border border-gray-200 p-4"><div className="flex items-start justify-between gap-2"><div><button type="button" onClick={() => openApplication(row.applicationId)} className="min-h-11 font-black hover:underline">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></div><span className="rounded-full bg-[var(--brand-accent-soft)] px-2.5 py-1 text-xs font-black text-[var(--brand-accent)]">{row.weekday || "요일 미정"}</span></div><p className="mt-2 text-sm font-bold">{row.offeringName}</p><div className="mt-2 flex flex-wrap gap-2"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></div><button type="button" onClick={() => openApplication(row.applicationId)} className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 font-bold">신청 상세</button></article>)}</div>
     </section>}
@@ -2101,8 +2101,8 @@ function ApplicationDrawer({
       <section className="mt-7">
         <div className="flex items-end justify-between gap-3">
           <div>
+            {/* 설명문 제거 — 아래 항목마다 승인/대기/반려/취소 버튼이 그대로 보인다 */}
             <h3 className="font-black text-gray-950 dark:text-white">신청 항목별 처리</h3>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">요일별로 승인·대기·반려·취소를 따로 처리할 수 있습니다.</p>
           </div>
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
         </div>
@@ -2398,7 +2398,8 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
   const hasPayment = Boolean(item.paymentId);
   const readyToConvert = approved && (!hasEnrollment || !hasPayment);
   let title = "전환 준비됨";
-  let helper = "다음 단계에서 수강 등록과 청구 생성을 실행할 수 있습니다.";
+  // 안내문은 제목(전환 준비됨 / 승인 후 청구서 발행 가능)의 풀어쓰기라 비워 둔다 — 다른 분기와 동일하게 helper = ""
+  let helper = "";
   let tone = "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100";
 
   if (hasEnrollment && hasPayment) {
@@ -2406,7 +2407,7 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
     helper = "";
   } else if (!approved) {
     title = "승인 후 청구서 발행 가능";
-    helper = "신청 항목을 승인한 뒤 청구서를 발행할 수 있습니다.";
+    helper = "";
     tone = "border-gray-200 bg-gray-50 text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
   } else if (!hasClass) {
     title = "청구서 발행 가능";
@@ -2786,7 +2787,7 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
   const attendanceMissing = ["OPEN", "CLOSED"].includes(attendanceReadiness.status)
     ? missingAttendancePreparation(attendanceReadiness.linkedClassId, attendanceReadiness.instructorId)
     : [];
-  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId="seasonal-class-modal-title"><form onSubmit={submit} className="w-full max-w-3xl p-6"><header className="flex items-center justify-between"><div><h2 id="seasonal-class-modal-title" className="text-xl font-black">{initial ? "특강 반 수정" : "특강 반 추가"}</h2><p className="mt-1 text-xs text-gray-500">반 기본 정보와 실제 수업 회차를 함께 저장합니다.</p></div><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>
+  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId="seasonal-class-modal-title"><form onSubmit={submit} className="w-full max-w-3xl p-6"><header className="flex items-center justify-between"><div><h2 id="seasonal-class-modal-title" className="text-xl font-black">{initial ? "특강 반 수정" : "특강 반 추가"}</h2></div><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>
     {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
     <div className="mt-5 grid gap-4 sm:grid-cols-2">
       <ClassInput name="code" label="반 코드" required defaultValue={initial?.code} placeholder="예: MON-1" />

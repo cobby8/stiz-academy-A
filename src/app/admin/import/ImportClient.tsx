@@ -311,10 +311,8 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between">
         <div>
+          {/* 설명문구 제거: 제목 반복 + 개발자 용어(DB) */}
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">수강생 데이터 이관</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            구글 스프레드시트 CSV 데이터를 DB로 이관합니다.
-          </p>
         </div>
         {step !== "upload" && (
           <button
@@ -394,10 +392,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
             CSV 데이터 입력
           </h2>
 
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            구글 스프레드시트에서 전체 데이터를 복사하여 아래에 붙여넣거나,
-            CSV 파일을 업로드해주세요.
-          </p>
+          {/* 설명문구 제거: 아래 붙여넣기 placeholder + CSV 파일 선택 버튼과 중복 */}
 
           {/* 텍스트 입력 영역 */}
           <textarea
@@ -648,8 +643,9 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
           <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
             <span className="material-symbols-outlined text-5xl text-green-500">check_circle</span>
             <h2 className="text-xl font-bold text-green-800 mt-3">이관 완료</h2>
+            {/* 개발자 표현(DB 삽입)만 다듬고 성공 안내는 유지 */}
             <p className="text-sm text-green-600 mt-1">
-              데이터가 성공적으로 DB에 삽입되었습니다.
+              데이터가 성공적으로 저장되었습니다.
             </p>
           </div>
 
@@ -795,12 +791,10 @@ function ImportHistoryPanel({
     <section className="rounded-xl border bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
+          {/* 내부 조회 동작 설명 제거 */}
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
             최근 이관 기록
           </h2>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            최근 5개 배치와 확인이 필요한 이슈만 가볍게 조회합니다.
-          </p>
         </div>
         <button
           type="button"
@@ -821,11 +815,7 @@ function ImportHistoryPanel({
         </div>
       )}
 
-      {!batches && !loading ? (
-        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-          필요할 때만 기록을 불러와 관리자 화면 초기 속도를 유지합니다.
-        </p>
-      ) : null}
+      {/* 성능 최적화 설명문구 제거: 위 '최근 기록 불러오기' 버튼으로 자명 */}
 
       {batches?.length === 0 ? (
         <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">

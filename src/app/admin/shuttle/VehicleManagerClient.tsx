@@ -69,7 +69,8 @@ export default function VehicleManagerClient({ initialVehicles }: { initialVehic
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-black text-gray-900 dark:text-white">차량 관리</h3>
-            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">여기 등록한 활성 차량을 <b>자동 배차</b>가 정원에 맞춰 사용합니다. 노선 편성·기사 배정은 「자동 배차」 탭에서 합니다.</p>
+            {/* 2번째 문장 제거 — 존재하지 않는 「자동 배차」 탭을 가리키던 스테일 안내(실제 탭은 「방학특강 배차」·「정규 배차」) */}
+            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">여기 등록한 활성 차량을 <b>자동 배차</b>가 정원에 맞춰 사용합니다.</p>
           </div>
           <button onClick={() => setModal("new")} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white">＋ 차량 등록</button>
         </div>

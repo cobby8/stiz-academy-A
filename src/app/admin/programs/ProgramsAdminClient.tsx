@@ -257,14 +257,12 @@ export default function ProgramsAdminClient({
         <div className="space-y-8">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">프로그램 관리</h1>
-                    <p className="text-gray-500 dark:text-gray-400">학원에서 운영하는 교육 프로그램을 등록하고 관리합니다.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">프로그램 관리</h1>
                 </div>
                 <div className="flex items-center gap-2">
                     <a
                         href="/api/admin/export-seed"
                         download="seed-data.ts"
-                        title="현재 DB 데이터를 seed-data.ts 코드로 내보냅니다. 다운로드 후 prisma/seed-data.ts에 붙여넣고 git push 하세요."
                         className="flex-shrink-0 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 text-gray-700 dark:text-gray-200 font-semibold text-sm px-3 py-2.5 rounded-xl transition"
                     >
                         ↓ 시드 내보내기
@@ -338,7 +336,6 @@ export default function ProgramsAdminClient({
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between gap-4">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white">등록된 프로그램 목록</h2>
-                    <p className="text-xs text-gray-400">⠿ 핸들을 잡고 드래그하여 순서 변경</p>
                 </div>
                 <ul className="divide-y divide-gray-100">
                     {programs.length === 0 && (

@@ -347,9 +347,6 @@ export default function GalleryAdminClient({
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">사진/영상 갤러리</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            홈페이지 갤러리와 인스타그램 게시 흐름을 관리합니다.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
@@ -414,9 +411,6 @@ export default function GalleryAdminClient({
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                승인된 초안은 홈페이지 갤러리 등록 후 인스타그램에 바로 게시합니다.
-              </p>
               {syncResult && (
                 <p className={`mt-1 text-xs font-medium ${syncResult.ok ? "text-green-600" : "text-red-600"}`}>
                   {syncResult.message}

@@ -349,7 +349,7 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
     function getScheduleImportErrorMessage(error: unknown) {
         const message = error instanceof Error ? error.message : "";
         if (message.includes("ScheduleSlot") || message.includes("ScheduleImportBatch")) {
-            return "새 시간표 DB 테이블이 아직 적용되지 않았습니다. prisma/sql/add_schedule_slots.sql 적용 후 다시 시도해 주세요.";
+            return "새 시간표 기능이 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.";
         }
         return message || "DB 이관 검증 중 오류가 발생했습니다.";
     }
@@ -621,11 +621,12 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">수업시간표 관리</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                        {isDbScheduleSource
-                            ? "시간표는 DB 원본을 우선 사용하고, 인원은 실제 수강 등록 기준으로 계산됩니다."
-                            : "학년·인원은 구글시트 캐시에서 불러옵니다. 카드를 클릭하면 편집할 수 있습니다."}
-                    </p>
+                    {/* 구글시트에서 불러오는 경우에만 데이터 출처를 안내한다 */}
+                    {!isDbScheduleSource && (
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                            학년·인원은 구글시트 캐시에서 불러옵니다. 카드를 클릭하면 편집할 수 있습니다.
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     {/* 편집/표 뷰 토글 */}
@@ -667,9 +668,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
             {/* 표 보기 모드 — 공개 시간표 미리보기 (편집 불가) */}
             {adminViewMode === "table" && (
                 <div className="space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-                        <span className="font-bold">미리보기 모드</span> — 학부모에게 보이는 시간표와 동일한 표 형태입니다. 편집하려면 "편집" 버튼을 눌러주세요.
-                    </div>
                     <ScheduleTableView slots={mergedSlotsForTable} />
                 </div>
             )}

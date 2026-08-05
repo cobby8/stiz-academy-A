@@ -155,7 +155,7 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
-                        안내 내용 <span className="text-gray-400 font-normal ml-1">(체험수업 절차, 혜택, 대상 등)</span>
+                        안내 내용
                     </label>
                     <textarea
                         value={trialContent}
@@ -167,7 +167,7 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
-                        외부 신청 링크 <span className="text-gray-400 font-normal ml-1">(필요할 때만 입력)</span>
+                        외부 신청 링크
                     </label>
                     <input
                         type="url"
@@ -192,7 +192,7 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
-                        안내 내용 <span className="text-gray-400 font-normal ml-1">(수강신청 방법, 준비물, 수강료 납부 방법 등)</span>
+                        안내 내용
                     </label>
                     <textarea
                         value={enrollContent}
@@ -204,7 +204,7 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
-                        외부 신청 링크 <span className="text-gray-400 font-normal ml-1">(필요할 때만 입력)</span>
+                        외부 신청 링크
                     </label>
                     <input
                         type="url"

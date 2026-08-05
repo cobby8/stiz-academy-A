@@ -246,7 +246,6 @@ export default function AnnualAdminClient({
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">연간일정 관리</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">학원 연간 일정을 관리합니다. 등록된 일정은 연간일정 페이지에 표시됩니다.</p>
                 </div>
                 <button
                     onClick={() => { resetForm(); setShowForm(true); }}

@@ -205,7 +205,6 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
             <div className="mb-6 flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">출결 관리</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">날짜와 반을 선택하여 출결을 기록합니다.</p>
                 </div>
                 {/* 수업 리포트 관리 페이지로 이동하는 버튼 */}
                 <Link
@@ -258,7 +257,7 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
                         </div>
                     ) : students.length === 0 ? (
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
-                            이 반에 수강 등록된 원생이 없습니다. 먼저 원생을 수강 등록하세요.
+                            이 반에 수강 등록된 원생이 없습니다.
                         </div>
                     ) : (
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">

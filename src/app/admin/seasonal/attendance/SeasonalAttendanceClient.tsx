@@ -244,11 +244,9 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
               );
             })}
           </div>
-          {/* 두 숫자가 서로 다른 기준임을 분명히 알린다 — 13명 > 정원 12 같은 모순으로 보이지 않도록 */}
-          <p className="mt-2 px-1 text-[11px] font-bold text-gray-500">※ <b>이 반</b> = 이 반에서 그 날짜에 나오는 인원(정규+보강생)입니다.</p>
-          <p className="mt-0.5 px-1 text-[11px] font-bold text-gray-500">※ <b>코트 전체</b> = 같은 시간·같은 코트를 함께 쓰는 반(주2회·주3회 등)을 모두 합쳐 그 요일에 나오는 인원이며, 뒤의 숫자가 정원입니다. 정원을 넘으면 빨간색으로 표시됩니다.</p>
-          {/* 날짜별 인원이 반 전체보다 적은 이유를 안내 — 누락으로 오해하지 않도록 */}
-          <p className="mt-0.5 px-1 text-[11px] font-bold text-gray-500">※ 학생마다 신청한 요일이 달라 날짜별 인원이 다를 수 있습니다.</p>
+          {/* 두 숫자가 서로 다른 기준임을 분명히 알린다 — 13명 > 정원 12 같은 모순으로 보이지 않도록.
+              (3문단이던 설명을 한 줄로 압축. 정원과 비교되는 값은 '이 반'이 아니라 '코트 전체'라는 점은 반드시 남긴다.) */}
+          <p className="mt-2 px-1 text-[11px] font-bold text-gray-500">※ <b>이 반</b> = 그 날짜 이 반 인원(정규+보강생) · <b>코트 전체</b> = 같은 시간·코트를 쓰는 반을 모두 합친 인원/정원(초과 시 빨강). 학생마다 신청 요일이 달라 날짜별 인원이 다를 수 있습니다.</p>
 
           {rosterMeta && (
             <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">

@@ -248,9 +248,6 @@ export default function BillingTemplateClient({
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">청구 템플릿 설정</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                        매월 자동 청구서 생성에 사용되는 템플릿을 관리합니다.
-                    </p>
                 </div>
                 <button
                     onClick={() => { resetForm(); setShowForm(!showForm); }}
@@ -365,7 +362,7 @@ export default function BillingTemplateClient({
             {/* 템플릿 목록 */}
             {templates.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
-                    등록된 청구 템플릿이 없습니다. 위 버튼으로 추가하세요.
+                    등록된 청구 템플릿이 없습니다.
                 </div>
             ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">

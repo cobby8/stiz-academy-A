@@ -264,7 +264,7 @@ export default function TestimonialsAdminClient({
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">학부모 후기 관리</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">메인 페이지에 표시되는 학부모 후기를 관리합니다</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">메인 페이지에 표시</p>
                 </div>
                 <button
                     onClick={() => { resetForm(); setShowForm(true); }}
@@ -281,7 +281,7 @@ export default function TestimonialsAdminClient({
                     네이버 플레이스 리뷰 링크
                 </h2>
                 <p className="text-xs text-gray-400 mb-3">
-                    입력하면 메인 페이지 후기 섹션 하단에 &quot;네이버 플레이스에서 더 많은 후기 보기&quot; 버튼이 표시됩니다
+                    메인 후기 섹션 하단에 링크 버튼 표시
                 </p>
                 <div className="flex gap-2">
                     <input

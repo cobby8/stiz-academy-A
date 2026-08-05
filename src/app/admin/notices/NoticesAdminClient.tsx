@@ -327,7 +327,6 @@ export default function NoticesAdminClient({
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">공지사항 관리</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">전체 공지 또는 반별 공지를 작성하세요</p>
                 </div>
                 <button onClick={() => { resetForm(); setShowForm(true); }}
                     className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition">
@@ -360,7 +359,6 @@ export default function NoticesAdminClient({
                                     placeholder="공지 내용을 입력하세요"
                                     onUploadingChange={setEditorUploading}
                                 />
-                                <p className="text-xs text-gray-400 mt-1">굵게·색상·목록·링크·이미지·표·영상 등 다양한 서식을 사용할 수 있어요. 이미지는 본문에 직접 넣거나, 아래 &apos;첨부파일&apos;로 넣으면 본문 아래에 크게 표시됩니다.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">공지 대상</label>
@@ -396,7 +394,7 @@ export default function NoticesAdminClient({
                                     <SymbolIcon name="attach_file" size={16} /> {uploading ? "업로드 중..." : "이미지 첨부"}
                                     <input type="file" accept="image/*" className="hidden" multiple onChange={e => handleFileUpload(e.target.files)} disabled={uploading} />
                                 </label>
-                                <p className="text-xs text-gray-400 mt-1">첨부한 이미지는 공지 본문 아래에 크게 표시됩니다. (JPG·PNG·WebP·GIF, 최대 5MB)</p>
+                                <p className="text-xs text-gray-400 mt-1">JPG·PNG·WebP·GIF, 최대 5MB</p>
                                 {attachments.length > 0 && (
                                     <div className="mt-2 space-y-1">
                                         {attachments.map((a, i) => (

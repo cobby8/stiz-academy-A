@@ -157,8 +157,7 @@ export default function ClassManagementClient({
         <div className="space-y-8">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">클래스(반) 관리</h1>
-                    <p className="text-gray-500 dark:text-gray-400">각 프로그램별 요일과 시간에 맞는 실제 반을 개설합니다.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">클래스(반) 관리</h1>
                 </div>
                 <button
                     onClick={() => { setEditingClass(null); setShowForm(true); }}

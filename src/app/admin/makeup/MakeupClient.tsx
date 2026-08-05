@@ -275,7 +275,6 @@ export default function MakeupClient({
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">보강 관리</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">결석 학생의 보강 수업을 예약하고 관리합니다</p>
                 </div>
                 <button
                     onClick={() => {

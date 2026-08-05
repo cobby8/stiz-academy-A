@@ -136,7 +136,7 @@ export default function InviteStaffModal({
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-4 p-6">
                         <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
-                            선생님 또는 기사 전용 개인 가입 링크를 만들고 입력한 전화번호로 안내 문자를 보냅니다. 문자 발송이 안 되더라도 링크를 직접 복사해 전달할 수 있습니다.
+                            선생님 또는 기사 전용 개인 가입 링크를 만들고 입력한 전화번호로 안내 문자를 보냅니다.
                         </div>
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">이름 *</label>
@@ -145,7 +145,7 @@ export default function InviteStaffModal({
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">전화번호 *</label>
                             <input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: formatPhone(event.target.value) })} required inputMode="numeric" autoComplete="tel" pattern="010-[0-9]{4}-[0-9]{4}" title="010-0000-0000 형식으로 입력해 주세요." placeholder="010-1234-5678" className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-brand-navy-500 focus:ring-2 focus:ring-brand-navy-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">010-0000-0000 형식으로 입력해 주세요.</p>
+                            {/* 안내문구 제거: placeholder + input title 속성과 삼중 중복 */}
                         </div>
                         <div>
                             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">초대 역할 *</label>

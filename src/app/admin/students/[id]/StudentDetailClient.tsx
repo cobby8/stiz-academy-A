@@ -1214,7 +1214,7 @@ export default function StudentDetailClient({
                             value={memo}
                             onChange={e => { setMemo(e.target.value); setMemoSaved(false); }}
                             rows={4}
-                            placeholder="원생에 대한 메모를 입력하세요 (특이사항, 건강 이슈 등)"
+                            placeholder="특이사항·건강 이슈"
                             className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500 dark:focus:ring-brand-neon-lime"
                         />
                         {memoSaved && <p className="mt-2 text-xs font-medium text-green-600 dark:text-lime-200">저장됨</p>}
@@ -1580,7 +1580,6 @@ export default function StudentDetailClient({
                             <SectionTitle
                                 icon="history"
                                 title="월별 운영 히스토리"
-                                right={<span className="text-xs text-gray-400">최신 시트 이관 기준</span>}
                             />
                             {monthlyHistory.length === 0 ? (
                                 <EmptyState text="월별 이관 이력이 없습니다." />

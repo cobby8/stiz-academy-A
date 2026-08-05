@@ -416,8 +416,9 @@ export default function ShuttleRosterClient({
     <div className="mx-auto max-w-6xl px-4 py-4">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div>
-          <h3 className="text-base font-black text-gray-900 dark:text-white">셔틀 통합 명단 <span className="text-xs font-bold text-gray-400">· 학생을 누르면 상세 정보</span></h3>
-          <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">승·하차 위치는 지도 핀으로 지정하고, 표시는 아파트·건물명으로 관리합니다. 시간은 노선표에서 확인합니다. (탑승 {rideCount}명)</p>
+          {/* 조작 설명은 뺐다. 탑승 인원수는 대조용 숫자라 그대로 남긴다. */}
+          <h3 className="text-base font-black text-gray-900 dark:text-white">셔틀 통합 명단</h3>
+          <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">탑승 {rideCount}명</p>
         </div>
 
         {/* 확정 배너 — 이 명단이 "아직 따라 움직이는 중"인지 "고정된 명단"인지 한 줄로 알려준다. */}
@@ -524,7 +525,8 @@ export default function ShuttleRosterClient({
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] text-gray-400">● 초록=정밀 핀 · ● 노랑=자동추정(재확인 권장) · 📍 지도 핀 찍기 · 학생 이름을 누르면 상세 정보가 열립니다.</p>
+        {/* 색 범례는 색만 보고는 뜻을 알 수 없으므로 반드시 남긴다. 뒤의 조작 설명(중복)만 제거. */}
+        <p className="mt-2 text-[11px] text-gray-400">● 초록=정밀 핀 · ● 노랑=자동추정(재확인 권장)</p>
         {confirmed && (
           <p className="mt-1 text-[11px] text-gray-400">확정 후 이 표에서 고친 값(위치 이름·지도 핀·하차 설정)은 확정 명단에만 저장되고, 학부모가 낸 원본 신청서는 그대로 유지됩니다.</p>
         )}

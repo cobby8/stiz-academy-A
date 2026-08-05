@@ -291,8 +291,7 @@ export default function AdminDashboardClient({
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div>
-                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white mb-1">경영 대시보드</h1>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">스티즈농구교실 다산점의 운영 현황입니다.</p>
+                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">경영 대시보드</h1>
             </div>
 
             {loading && !data && <DashboardPrimarySkeleton />}
@@ -379,7 +378,6 @@ function DashboardContent({
                     </div>
                     <div className="flex-1">
                         <p className="font-bold text-blue-800">수강 신청 대기 {enrollStats.PENDING}건</p>
-                        <p className="text-xs text-blue-600 mt-0.5">승인 대기 중인 수강 신청서가 있습니다. 확인해주세요.</p>
                     </div>
                     <span className="text-blue-600 text-sm font-bold">처리하기 &rarr;</span>
                 </Link>
@@ -412,7 +410,6 @@ function DashboardContent({
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 출석률</p>
                     <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{extendedStats.attendanceRate}%</h3>
-                    <p className="text-xs text-gray-400 mt-1">전체 수업 기준</p>
                 </div>
                 <Link href="/admin/finance" prefetch={false} className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:border-red-200 transition">
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">미납 현황</p>
@@ -436,7 +433,6 @@ function DashboardContent({
                     <SymbolIcon name="monitoring" size={28} className="text-indigo-600" />
                     <div>
                         <p className="font-bold text-indigo-800">상세 운영 통계</p>
-                        <p className="text-xs text-indigo-600 mt-0.5">매출, 출석률, 원생 추이, 체험 전환율, 코치 워크로드를 한 눈에</p>
                     </div>
                 </div>
                 <span className="text-indigo-600 text-sm font-bold">보러가기 &rarr;</span>
@@ -737,9 +733,12 @@ function SiteOpsBotCard({
             <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                     <h3 className="font-bold text-gray-900 dark:text-white">사이트 점검 봇</h3>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        {result ? new Date(result.checkedAt).toLocaleString("ko-KR") : "필요할 때 수동 점검"}
-                    </p>
+                    {/* 마지막 점검 시각은 실제 점검 결과가 있을 때만 표시한다 */}
+                    {result && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(result.checkedAt).toLocaleString("ko-KR")}
+                        </p>
+                    )}
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${statusClass}`}>
                     {loading ? "점검 중" : statusLabel}
@@ -816,12 +815,6 @@ function SiteOpsBotCard({
                                 </div>
                             ))}
                         </div>
-                    )}
-
-                    {result.notified && (
-                        <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                            수동 조치가 필요한 항목은 관리자 알림으로도 남겼습니다.
-                        </p>
                     )}
                 </div>
             )}

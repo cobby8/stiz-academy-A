@@ -445,9 +445,6 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                             {report.targetMonth.label} 최신 원생목록 점검
                         </p>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        최신 이관 배치 기준으로 학생 연결, 이전 이력, 중복 의심 항목만 점검합니다.
-                    </p>
                 </div>
                 <span
                     className={`rounded-full px-2 py-1 text-xs font-bold ${
@@ -465,9 +462,6 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                     <p className="text-gray-500 dark:text-gray-400">현재 운영 학생</p>
                     <p className="mt-1 text-2xl font-black text-gray-950 dark:text-white">
                         {operationalStudentCount.toLocaleString()}명
-                    </p>
-                    <p className="mt-1 text-gray-500 dark:text-gray-400">
-                        {report.targetMonth.label} 장부의 같은 학생을 하나로 합산
                     </p>
                 </div>
                 {["ACTIVE", "PAUSED", "WITHDRAWN"].map((status) => {
@@ -1643,9 +1637,6 @@ export default function StudentManagementClient({
                 <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p className="text-sm font-bold text-gray-900 dark:text-white">운영 데이터 점검</p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            원생 목록은 먼저 빠르게 열고, 시트 이관 요약은 필요할 때만 불러옵니다.
-                        </p>
                         {sheetImportSummaryError && (
                             <p className="mt-2 text-xs font-semibold text-red-600 dark:text-red-300">
                                 {sheetImportSummaryError}
@@ -1781,9 +1772,6 @@ export default function StudentManagementClient({
                                         >
                                             {reconcileLoading ? "점검 중" : "차이 점검"}
                                         </button>
-                                        <span className="text-xs text-amber-800 dark:text-lime-200">
-                                            시트에 연결된 학생만 안전하게 맞춥니다.
-                                        </span>
                                     </div>
                                     {reconcileError && (
                                         <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">

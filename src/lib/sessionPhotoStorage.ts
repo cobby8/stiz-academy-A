@@ -1,33 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+// 파싱/상수는 의존성 없는 sessionPhotoEntries.ts 로 옮겼습니다(클라이언트·테스트에서도 쓰기 위함).
+// 기존 import 경로를 깨지 않도록 여기서 그대로 다시 내보냅니다.
+import { PRIVATE_SESSION_PHOTO_BUCKET, PUBLIC_GALLERY_BUCKET } from "@/lib/sessionPhotoEntries";
 
-export const PRIVATE_SESSION_PHOTO_BUCKET = "staff-session-private";
-export const PUBLIC_GALLERY_BUCKET = "uploads";
-
-export type StoredSessionPhoto = {
-  id: string;
-  type: "image";
-  url: string;
-  storageBucket: string;
-  storagePath: string;
-  visibility: "PRIVATE" | "PUBLIC";
-};
-
-export type SessionPhotoEntry = string | StoredSessionPhoto;
-
-export function parseSessionPhotoEntries(value: unknown): SessionPhotoEntry[] {
-  const parsed = typeof value === "string" ? (() => {
-    try { return JSON.parse(value); } catch { return []; }
-  })() : value;
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter((item): item is SessionPhotoEntry =>
-    (typeof item === "string" && item.length <= 2048) ||
-    (typeof item?.id === "string" && item.type === "image" && typeof item.url === "string" && typeof item.storageBucket === "string" && typeof item.storagePath === "string"),
-  );
-}
-
-export function parseStoredSessionPhotos(value: unknown): StoredSessionPhoto[] {
-  return parseSessionPhotoEntries(value).filter((item): item is StoredSessionPhoto => typeof item !== "string");
-}
+export {
+  PRIVATE_SESSION_PHOTO_BUCKET,
+  PUBLIC_GALLERY_BUCKET,
+  parseSessionPhotoEntries,
+  parseStoredSessionPhotos,
+} from "@/lib/sessionPhotoEntries";
+export type { StoredSessionPhoto, SessionPhotoEntry } from "@/lib/sessionPhotoEntries";
 
 export async function ensurePrivateSessionPhotoBucket() {
   const supabase = createAdminClient();

@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
     saveSessionReport,
     publishSessionReport,
     saveStudentSessionNotes,
 } from "@/app/actions/admin";
+// 사진 항목은 구버전(URL 문자열)과 선생님 앱이 저장한 객체가 섞여 있어 전용 파서를 씁니다.
+import {
+    appendSessionPhotoUrls,
+    removeSessionPhotoEntryAt,
+    toSessionReportPhotoViews,
+} from "@/lib/sessionPhotoEntries";
+import { compressImageForUpload } from "@/lib/clientImageCompression";
 
 // ── 타입 정의 ──────────────────────────────────────────────────────────────────
 
@@ -224,23 +231,59 @@ function ReportEditForm({
     const [saved, setSaved] = useState(false);
     const [publishing, setPublishing] = useState(false);
 
-    // 사진 URL 배열 파싱
-    let photos: string[] = [];
-    try { photos = JSON.parse(photosJSON); } catch { photos = []; }
+    // ── 사진 상태 ──
+    // photosJSON에는 URL 문자열과 선생님 앱이 저장한 사진 객체가 섞여 있습니다.
+    // 비공개 사진은 권한 검사를 거치는 프록시 경로(/api/staff/sessions/.../photos/...)로만 보입니다.
+    const photos = toSessionReportPhotoViews(photosJSON, report.id);
+    const [uploading, setUploading] = useState(false);
+    const [photoError, setPhotoError] = useState<string | null>(null);
+    // 불러오기에 실패한 사진 위치 — 빈 src로 되돌리는 대신 자리표시자를 보여주기 위함
+    const [brokenPhotoIndexes, setBrokenPhotoIndexes] = useState<number[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // 사진 URL 추가
-    const addPhotoUrl = useCallback(() => {
-        const url = prompt("사진 URL을 입력하세요:");
-        if (!url?.trim()) return;
-        const updated = [...photos, url.trim()];
-        setPhotosJSON(JSON.stringify(updated));
-    }, [photos]);
+    // 사진 업로드 (수업 기록 모달과 동일하게 /api/upload → class-logs 폴더 사용)
+    const uploadPhotos = useCallback(async (files: FileList) => {
+        setUploading(true);
+        setPhotoError(null);
+        try {
+            const uploadedUrls: string[] = [];
+            // 서버 부하를 줄이기 위해 한 장씩 순차 업로드합니다.
+            for (const file of Array.from(files)) {
+                const compressed = await compressImageForUpload(file);
+                const formData = new FormData();
+                formData.append("file", compressed);
+                formData.append("folder", "class-logs");
 
-    // 사진 URL 삭제
+                const res = await fetch("/api/upload", { method: "POST", body: formData });
+                if (!res.ok) throw new Error(`사진 업로드 실패: ${file.name}`);
+
+                const data = await res.json();
+                if (data.url) uploadedUrls.push(data.url);
+            }
+            if (uploadedUrls.length === 0) return;
+            // 기존 항목의 형태(문자열/객체)는 그대로 두고 뒤에 덧붙입니다.
+            setPhotosJSON((prev) => appendSessionPhotoUrls(prev, uploadedUrls));
+            setSaved(false);
+        } catch (err) {
+            setPhotoError(err instanceof Error ? err.message : "사진 업로드 중 오류가 발생했습니다.");
+        } finally {
+            setUploading(false);
+        }
+    }, []);
+
+    const handlePhotoFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0) void uploadPhotos(files);
+        // 같은 파일을 다시 고를 수 있도록 초기화
+        e.target.value = "";
+    }, [uploadPhotos]);
+
+    // 사진 삭제 — 문자열/객체 어느 형태든 해당 위치 항목만 제거합니다.
     const removePhoto = useCallback((index: number) => {
-        const updated = photos.filter((_, i) => i !== index);
-        setPhotosJSON(JSON.stringify(updated));
-    }, [photos]);
+        setPhotosJSON((prev) => removeSessionPhotoEntryAt(prev, index));
+        setBrokenPhotoIndexes([]);
+        setSaved(false);
+    }, []);
 
     // 학생 노트 변경
     const updateNote = (studentId: string, note: string) => {
@@ -405,20 +448,37 @@ function ReportEditForm({
                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">수업 사진</label>
                         {photos.length > 0 && (
                             <div className="flex flex-wrap gap-3 mb-3">
-                                {photos.map((url, i) => (
-                                    <div key={i} className="relative group">
-                                        <img
-                                            src={url}
-                                            alt={`수업 사진 ${i + 1}`}
-                                            className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
-                                            onError={(e) => {
-                                                (e.target as HTMLImageElement).src = "";
-                                                (e.target as HTMLImageElement).alt = "이미지 로드 실패";
-                                            }}
-                                        />
+                                {photos.map((photo, i) => (
+                                    <div key={`${photo.index}-${photo.src}`} className="relative group">
+                                        {brokenPhotoIndexes.includes(photo.index) ? (
+                                            // 로드 실패 시 빈 src로 되돌리면 현재 페이지를 다시 요청하게 되므로 자리표시자를 그립니다.
+                                            <div className="w-24 h-24 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-1 px-1 text-center">
+                                                <span className="material-symbols-outlined text-base text-gray-400">broken_image</span>
+                                                <span className="text-[10px] leading-tight text-gray-400">사진을 불러올 수 없습니다</span>
+                                            </div>
+                                        ) : (
+                                            <img
+                                                src={photo.src}
+                                                alt={`수업 사진 ${i + 1}`}
+                                                className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                                                onError={() => {
+                                                    setBrokenPhotoIndexes((prev) =>
+                                                        prev.includes(photo.index) ? prev : [...prev, photo.index]
+                                                    );
+                                                }}
+                                            />
+                                        )}
+                                        {/* 비공개(초상권 보호) 사진 표시 */}
+                                        {photo.isPrivate && (
+                                            <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] font-bold text-white">
+                                                비공개
+                                            </span>
+                                        )}
                                         <button
-                                            onClick={() => removePhoto(i)}
-                                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                                            type="button"
+                                            onClick={() => removePhoto(photo.index)}
+                                            aria-label={`수업 사진 ${i + 1} 삭제`}
+                                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
                                         >
                                             X
                                         </button>
@@ -427,12 +487,26 @@ function ReportEditForm({
                             </div>
                         )}
                         <button
-                            onClick={addPhotoUrl}
-                            className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline flex items-center gap-1"
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                            className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline flex items-center gap-1 disabled:opacity-50"
                         >
                             <span className="material-symbols-outlined text-sm">add_photo_alternate</span>
-                            사진 URL 추가
+                            {uploading ? "업로드 중..." : "사진 추가 (여러 장 선택 가능)"}
                         </button>
+                        {/* 숨겨진 파일 선택창 — 수업 기록 모달과 동일한 방식 */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handlePhotoFileChange}
+                            className="hidden"
+                        />
+                        {photoError && (
+                            <p className="mt-2 text-xs font-medium text-red-600">{photoError}</p>
+                        )}
                     </div>
                 </div>
             </div>

@@ -8,14 +8,9 @@ import {
     updateCustomSlot,
     deleteCustomSlot,
 } from "@/app/actions/schedule";
-import {
-    importLegacyScheduleSlotsToDb,
-    previewLegacyScheduleSlotImport,
-} from "@/app/actions/scheduleSlotImport";
 import { updateAcademySettings } from "@/app/actions/admin";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
 import type { SchedulePayloadSource } from "@/lib/scheduleSlotPayload";
-import type { ScheduleSlotImportIssue, ScheduleSlotImportPlan } from "@/lib/scheduleSlotImport";
 import type { MergedSlot } from "@/app/schedule/ScheduleClient";
 
 const ScheduleTableView = dynamic(() => import("@/components/ScheduleTableView"), {
@@ -118,21 +113,6 @@ interface SchedulePayload {
     programs: Program[];
     scheduleSource?: SchedulePayloadSource;
 }
-
-type ScheduleImportResult = {
-    success: boolean;
-    batchId: string | null;
-    imported: number;
-    classSync: {
-        created: number;
-        updated: number;
-        skipped: number;
-        errors: string[];
-    };
-    summary: ScheduleSlotImportPlan["summary"];
-    issues: ScheduleSlotImportIssue[];
-    message: string;
-};
 
 interface ScheduleAdminClientProps {
     slots?: SheetClassSlot[];
@@ -281,11 +261,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
     const [sheetError, setSheetError] = useState<string | null>(null);
     const [sheetSyncing, setSheetSyncing] = useState(false);
     const [sheetSyncMessage, setSheetSyncMessage] = useState<string | null>(null);
-    const [scheduleImportPreview, setScheduleImportPreview] = useState<ScheduleSlotImportPlan | null>(null);
-    const [scheduleImportResult, setScheduleImportResult] = useState<ScheduleImportResult | null>(null);
-    const [scheduleImportLoading, setScheduleImportLoading] = useState(false);
-    const [scheduleImportApplying, setScheduleImportApplying] = useState(false);
-    const [scheduleImportError, setScheduleImportError] = useState<string | null>(null);
 
     async function handleSaveSheetUrl() {
         setSheetSaving(true);
@@ -327,8 +302,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
             }
 
             setSheetSyncMessage(`${result.synced ?? 0}개 수업을 DB에 동기화했습니다.`);
-            setScheduleImportPreview(null);
-            setScheduleImportResult(null);
             await loadScheduleData();
         } catch (error: any) {
             setSheetError(error.message || "동기화 실패");
@@ -341,49 +314,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
         setSheetUrlInput(value);
         setSheetError(null);
         setSheetSyncMessage(null);
-        setScheduleImportPreview(null);
-        setScheduleImportResult(null);
-        setScheduleImportError(null);
-    }
-
-    function getScheduleImportErrorMessage(error: unknown) {
-        const message = error instanceof Error ? error.message : "";
-        if (message.includes("ScheduleSlot") || message.includes("ScheduleImportBatch")) {
-            return "새 시간표 기능이 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.";
-        }
-        return message || "DB 이관 검증 중 오류가 발생했습니다.";
-    }
-
-    async function handlePreviewScheduleSlotImport() {
-        setScheduleImportLoading(true);
-        setScheduleImportError(null);
-        setScheduleImportResult(null);
-
-        try {
-            const preview = await previewLegacyScheduleSlotImport();
-            setScheduleImportPreview(preview);
-        } catch (error) {
-            setScheduleImportError(getScheduleImportErrorMessage(error));
-        } finally {
-            setScheduleImportLoading(false);
-        }
-    }
-
-    async function handleImportScheduleSlotsToDb() {
-        setScheduleImportApplying(true);
-        setScheduleImportError(null);
-
-        try {
-            const result = await importLegacyScheduleSlotsToDb();
-            setScheduleImportResult(result);
-            if (result.success) {
-                await loadScheduleData();
-            }
-        } catch (error) {
-            setScheduleImportError(getScheduleImportErrorMessage(error));
-        } finally {
-            setScheduleImportApplying(false);
-        }
     }
 
     // Custom slot state
@@ -889,11 +819,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                     sheetError={sheetError}
                     sheetSyncing={sheetSyncing}
                     sheetSyncMessage={sheetSyncMessage}
-                    scheduleImportPreview={scheduleImportPreview}
-                    scheduleImportResult={scheduleImportResult}
-                    scheduleImportLoading={scheduleImportLoading}
-                    scheduleImportApplying={scheduleImportApplying}
-                    scheduleImportError={scheduleImportError}
                     isAddingCustom={isAddingCustom}
                     onCloseSheetSlot={() => setEditingSlotKey(null)}
                     onUpdateSlot={update}
@@ -908,8 +833,6 @@ export default function ScheduleAdminClient(props: ScheduleAdminClientProps = {}
                     onSheetUrlChange={handleSheetUrlChange}
                     onSaveSheetUrl={handleSaveSheetUrl}
                     onSyncSheet={handleSyncSheet}
-                    onPreviewScheduleImport={handlePreviewScheduleSlotImport}
-                    onImportScheduleSlots={handleImportScheduleSlotsToDb}
                     onClearSheetUrl={() => setSheetUrlInput("")}
                     onCloseAddCustom={() => setIsAddingCustom(false)}
                     onNewCustomFormChange={setNewCustomForm}

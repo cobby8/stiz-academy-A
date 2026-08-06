@@ -651,23 +651,24 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
 
           {/* 결과 카드 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* 라벨에서 DB 모델 영문명 제거: 원장에게는 한국어 명칭만 의미가 있다 */}
             <ResultCard
-              label="학부모 (User)"
+              label="학부모"
               created={importResult.created.users}
               skipped={importResult.skipped.users}
             />
             <ResultCard
-              label="학생 (Student)"
+              label="학생"
               created={importResult.created.students}
               skipped={importResult.skipped.students}
             />
             <ResultCard
-              label="수강 (Enrollment)"
+              label="수강"
               created={importResult.created.enrollments}
               skipped={importResult.skipped.enrollments}
             />
             <ResultCard
-              label="결제 (Payment)"
+              label="결제"
               created={importResult.created.payments}
               skipped={importResult.skipped.payments}
             />
@@ -685,9 +686,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
                 <span>대표팀 {(importResult.sheetImport.teamRows ?? 0).toLocaleString()}행</span>
                 <span>확인 필요 {importResult.sheetImport.issues.toLocaleString()}건</span>
               </div>
-              <p className="mt-2 text-xs text-blue-700 dark:text-blue-200">
-                배치 ID: {importResult.sheetImport.batchId}
-              </p>
+              {/* 내부 식별자(배치 ID) 표시 제거: 원장이 이 값으로 할 수 있는 조치가 없다 */}
             </div>
           )}
 

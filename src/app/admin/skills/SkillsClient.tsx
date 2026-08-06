@@ -41,6 +41,25 @@ interface Props {
     students?: Student[];
 }
 
+// ── 아이콘 프리셋 ──────────────────────────────────────────
+// 원장이 Material Symbols 아이콘 이름을 외워서 타이핑할 이유가 없다.
+// 농구교실에서 실제로 쓸 만한 것만 골라 버튼으로 고르게 한다.
+// (프로젝트 규칙: Material Symbols Outlined 만 사용)
+const ICON_PRESETS: { icon: string; label: string }[] = [
+    { icon: "sports_basketball", label: "농구" },
+    { icon: "sports", label: "경기" },
+    { icon: "fitness_center", label: "체력" },
+    { icon: "directions_run", label: "달리기" },
+    { icon: "exercise", label: "운동" },
+    { icon: "sports_score", label: "기록" },
+    { icon: "groups", label: "팀워크" },
+    { icon: "psychology", label: "이해력" },
+    { icon: "trending_up", label: "성장" },
+    { icon: "star", label: "종합" },
+    { icon: "bolt", label: "순발력" },
+    { icon: "timer", label: "스피드" },
+];
+
 function SkillsLoadingFallback() {
     return (
         <div className="space-y-6">
@@ -435,27 +454,50 @@ function CategoryTab({
                                     className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                 />
                             </div>
-                            {/* 아이콘 (Material Symbols 이름) */}
+                            {/* 아이콘 — 프리셋 버튼으로 선택 */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                    아이콘 (Material Symbols)
+                                    아이콘
                                 </label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        value={form.icon}
-                                        onChange={(e) =>
-                                            setForm((f) => ({ ...f, icon: e.target.value }))
-                                        }
-                                        placeholder="예: sports_basketball"
-                                        className="flex-1 border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                                    />
-                                    {form.icon && (
-                                        <span className="material-symbols-outlined text-[24px] text-gray-600 dark:text-gray-300">
+                                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                                    {ICON_PRESETS.map((preset) => {
+                                        const selected = form.icon === preset.icon;
+                                        return (
+                                            <button
+                                                key={preset.icon}
+                                                type="button"
+                                                onClick={() =>
+                                                    // 같은 아이콘을 다시 누르면 선택 해제(아이콘 없음)
+                                                    setForm((f) => ({
+                                                        ...f,
+                                                        icon: f.icon === preset.icon ? "" : preset.icon,
+                                                    }))
+                                                }
+                                                title={preset.label}
+                                                aria-pressed={selected}
+                                                className={`flex flex-col items-center gap-0.5 rounded-lg border px-1 py-2 transition-colors ${
+                                                    selected
+                                                        ? "border-orange-500 bg-orange-50 text-orange-700 dark:border-brand-neon-lime dark:bg-gray-900 dark:text-brand-neon-lime"
+                                                        : "border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900"
+                                                }`}
+                                            >
+                                                <span className="material-symbols-outlined text-[22px]">
+                                                    {preset.icon}
+                                                </span>
+                                                <span className="text-[11px]">{preset.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {/* 예전에 직접 입력해 둔 아이콘이 프리셋에 없어도 값은 그대로 보존된다는 것을 알린다 */}
+                                {form.icon && !ICON_PRESETS.some((p) => p.icon === form.icon) && (
+                                    <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                        <span className="material-symbols-outlined text-[18px]">
                                             {form.icon}
                                         </span>
-                                    )}
-                                </div>
+                                        현재 아이콘이 유지됩니다. 위에서 고르면 바뀝니다.
+                                    </p>
+                                )}
                             </div>
                             {/* 순서 + 최대 레벨 */}
                             <div className="grid grid-cols-2 gap-4">

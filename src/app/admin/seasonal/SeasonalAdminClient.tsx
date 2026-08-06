@@ -1410,13 +1410,21 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
 }
 
 function Overview({ stats, seasons, applications, onNavigate }: { stats: Record<string, number>; seasons: Season[]; applications: Application[]; onNavigate: (tab: Tab) => void }) {
+  // 마지막 값(clickable)은 "눌렀을 때 실제로 신청 관리 탭으로 이동하는가"를 뜻한다.
+  // false 인 카드는 이동할 곳이 없으므로 버튼이 아니라 단순 표시(div)로 그린다.
   const cards = [
-    ["승인 대기", stats.pending, "pending_actions", "신청 관리"], ["승인 완료", stats.confirmed, "verified", "신청 관리"], ["미결제", stats.unpaid, "payments", "결제 관리 예정"], ["대기자", stats.waitlisted, "hourglass_top", "신청 관리"], ["차량 미배정", stats.shuttleUnassigned, "directions_bus", "차량 관리 예정"],
+    ["승인 대기", stats.pending, "pending_actions", "신청 관리", true], ["승인 완료", stats.confirmed, "verified", "신청 관리", false], ["미결제", stats.unpaid, "payments", "결제 관리", false], ["대기자", stats.waitlisted, "hourglass_top", "신청 관리", true], ["차량 미배정", stats.shuttleUnassigned, "directions_bus", "차량 관리", false],
   ] as const;
-  return <div className="space-y-6"><section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label, count, icon, helper]) => <button type="button" key={label} onClick={() => onNavigate(label === "승인 대기" || label === "대기자" ? "applications" : "overview")} className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 dark:border-gray-700 dark:bg-gray-900"><div className="flex items-center justify-between"><Icon name={icon} className="text-2xl text-[var(--brand-accent)]" /><span className="text-xs font-bold text-gray-400">{helper}</span></div><p className="mt-4 text-3xl font-black">{count}</p><p className="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{label}</p></button>)}</section>
+  return <div className="space-y-6"><section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label, count, icon, helper, clickable]) => {
+    // 카드 내용은 클릭 가능 여부와 무관하게 동일하다 (숫자 표시는 그대로 유지)
+    const body = <><div className="flex items-center justify-between"><Icon name={icon} className="text-2xl text-[var(--brand-accent)]" /><span className="text-xs font-bold text-gray-400">{helper}</span></div><p className="mt-4 text-3xl font-black">{count}</p><p className="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{label}</p></>;
+    // 이동 대상이 없는 카드에서는 hover 들썩임(transition hover:-translate-y-0.5)을 빼서 눌리는 것처럼 보이지 않게 한다
+    return clickable
+      ? <button type="button" key={label} onClick={() => onNavigate("applications")} className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 dark:border-gray-700 dark:bg-gray-900">{body}</button>
+      : <div key={label} className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm dark:border-gray-700 dark:bg-gray-900">{body}</div>;
+  })}</section>
     <section className="grid gap-4 lg:grid-cols-2"><Panel title="운영 중인 시즌" icon="calendar_month">{seasons.length ? seasons.slice(0, 4).map((season) => <div key={season.id} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"><div><p className="font-bold">{season.name}</p><p className="text-xs text-gray-500">{formatDate(season.startsAt)} ~ {formatDate(season.endsAt)} · {season.classes.length}개 반</p></div><span className={badge(season.status)}>{STATUS_LABEL[season.status] ?? season.status}</span></div>) : <Empty text="아직 개설된 시즌이 없습니다." />}</Panel>
-    <Panel title="최근 신청" icon="person_add">{applications.length ? applications.slice(0, 5).map((application) => <div key={application.id} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"><div><p className="font-bold">{application.childName} <span className="text-xs text-gray-400">{application.childGrade}</span></p><p className="text-xs text-gray-500">{application.parentName} · {application.items.length}개 반</p></div><span className={badge(application.items[0]?.status)}>{STATUS_LABEL[application.items[0]?.status] ?? "접수"}</span></div>) : <Empty text="접수된 신청이 없습니다." />}</Panel></section>
-    <section className="grid gap-3 sm:grid-cols-3"><NextCard icon="payments" title="결제 관리" text="신청 상세에서 청구서 생성과 결제 링크 복사를 확인합니다." /><NextCard icon="directions_bus" title="차량 배차" text="셔틀 신청 여부와 승하차 위치를 신청 상세에서 확인합니다." /><NextCard icon="analytics" title="운영 통계" text="모집·승인·미납·대기 요약을 상단 카드로 확인합니다." /></section></div>;
+    <Panel title="최근 신청" icon="person_add">{applications.length ? applications.slice(0, 5).map((application) => <div key={application.id} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"><div><p className="font-bold">{application.childName} <span className="text-xs text-gray-400">{application.childGrade}</span></p><p className="text-xs text-gray-500">{application.parentName} · {application.items.length}개 반</p></div><span className={badge(application.items[0]?.status)}>{STATUS_LABEL[application.items[0]?.status] ?? "접수"}</span></div>) : <Empty text="접수된 신청이 없습니다." />}</Panel></section></div>;
 }
 
 function SeasonsView({
@@ -2086,10 +2094,13 @@ function ApplicationDrawer({
         {application.address && <div className="sm:col-span-2"><Info label="주소">{application.address}</Info></div>}
       </section>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <a href={parentPhoneHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="call" />전화</a>
-        <a href={parentSmsHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="sms" />직접 문자</a>
-      </div>
+      {/* 연락처가 없으면 눌러도 아무 일이 없는 빈 링크가 되므로, 번호가 있을 때만 버튼을 보여준다 */}
+      {parentPhoneHref && parentSmsHref && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <a href={parentPhoneHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="call" />전화</a>
+          <a href={parentSmsHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="sms" />직접 문자</a>
+        </div>
+      )}
 
       <NotificationActionRow
         label="특강 신청 접수 안내"
@@ -2837,5 +2848,4 @@ function FormModal({ title, helper, fields, onClose, onSubmit }: { title: string
 
 function Panel({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="min-w-0 max-w-full rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"><header className="flex min-w-0 flex-col justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center dark:border-gray-800"><h2 className="flex min-w-0 items-center gap-2 break-words font-black"><Icon name={icon} className="text-[var(--brand-accent)]" />{title}</h2>{action}</header><div className="min-w-0 max-w-full p-5">{children}</div></section>; }
 function Empty({ text }: { text: string }) { return <div className="py-10 text-center"><Icon name="inbox" className="text-4xl text-gray-300" /><p className="mt-2 text-sm text-gray-500">{text}</p></div>; }
-function NextCard({ icon, title, text }: { icon: string; title: string; text: string }) { return <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900"><Icon name={icon} className="text-2xl text-gray-400" /><h3 className="mt-3 font-black">{title}</h3><p className="mt-1 text-sm text-gray-500">{text}</p><span className="mt-3 inline-block text-xs font-bold text-[var(--brand-accent)]">운영 상태 확인</span></div>; }
 function Loading() { return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-36 animate-pulse rounded-2xl bg-gray-100 dark:bg-gray-800" />)}</div>; }

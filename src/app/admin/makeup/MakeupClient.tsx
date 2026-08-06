@@ -288,15 +288,12 @@ export default function MakeupClient({
                 </button>
             </div>
 
-            {/* 요약 카드 */}
+            {/* 요약 카드 — 건수만 보여주는 표시용. 필터링은 아래 상태 탭에서만 한다 (같은 기능이 두 곳에 있어 혼란스러웠음) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                     <div
                         key={key}
-                        className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                            statusFilter === key ? "ring-2 ring-blue-500 border-blue-300" : "border-gray-200 dark:border-gray-700"
-                        }`}
-                        onClick={() => setStatusFilter(statusFilter === key ? "ALL" : key)}
+                        className="p-4 rounded-xl border border-gray-200 dark:border-gray-700"
                     >
                         <p className="text-sm text-gray-500 dark:text-gray-400">{cfg.label}</p>
                         <p className="text-2xl font-bold mt-1">{statusCounts[key] ?? 0}</p>

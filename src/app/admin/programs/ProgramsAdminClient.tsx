@@ -259,14 +259,8 @@ export default function ProgramsAdminClient({
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">프로그램 관리</h1>
                 </div>
+                {/* 시드 내보내기 버튼 제거: 사이드바 백업 메뉴에 동일 기능이 이미 있다 */}
                 <div className="flex items-center gap-2">
-                    <a
-                        href="/api/admin/export-seed"
-                        download="seed-data.ts"
-                        className="flex-shrink-0 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 text-gray-700 dark:text-gray-200 font-semibold text-sm px-3 py-2.5 rounded-xl transition"
-                    >
-                        ↓ 시드 내보내기
-                    </a>
                     <button
                         onClick={() => setShowAddModal(true)}
                         className="flex-shrink-0 flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-orange-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm"
@@ -313,24 +307,7 @@ export default function ProgramsAdminClient({
                 </AdminModal>
             )}
 
-            {/* Shuttle fee reference */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <p className="text-sm font-bold text-blue-800 mb-2">🚌 셔틀버스 자동 요금 기준 (평일 수업)</p>
-                <div className="flex flex-wrap gap-3">
-                    {[
-                        { freq: "주1회", fee: "10,000원" },
-                        { freq: "주2회", fee: "15,000원" },
-                        { freq: "주3회 / 매일반", fee: "20,000원" },
-                        { freq: "주말 수업", fee: "셔틀 운행 없음" },
-                    ].map((s) => (
-                        <div key={s.freq} className="flex items-center gap-1.5 text-xs bg-white dark:bg-gray-800 border border-blue-200 rounded-lg px-3 py-1.5">
-                            <span className="font-medium text-blue-700">{s.freq}</span>
-                            <span className="text-gray-400">→</span>
-                            <span className="font-bold text-blue-900">{s.fee}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            {/* 셔틀 요금 기준 박스 제거: 같은 안내가 프로그램 등록/수정 폼 안에 이미 있어 목록 화면 상시 노출은 불필요 */}
 
             {/* Program List */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">

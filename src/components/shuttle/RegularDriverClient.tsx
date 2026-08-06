@@ -6,6 +6,10 @@ import DriverDateNav from "@/components/shuttle/DriverDateNav";
 import GpsShareBar from "@/components/shuttle/GpsShareBar";
 import { useGpsShare } from "@/hooks/useGpsShare";
 import DriverRequestModal from "@/components/shuttle/DriverRequestModal";
+// 표시 계약은 순수 모듈 한 곳에서만 정의한다(서버 조립부와 화면이 어긋나지 않게).
+import type { DriverRow, DriverStop, DriverClass } from "@/lib/shuttle/regularDriverRouteLogic";
+
+export type { DriverRow, DriverStop, DriverClass };
 
 // 정규 셔틀 기사님 운행 화면 — 로그인 없이 토큰으로 접근. 오늘 요일의 수업별 등원·하원 타임라인.
 // ★ 기사님 연세를 고려해 항상 '라이트 모드' + 큰 글자·큰 버튼(dark: 미사용). 탭 한 번으로 즉시 저장.
@@ -13,9 +17,6 @@ import DriverRequestModal from "@/components/shuttle/DriverRequestModal";
 // PWA 설치 이벤트 타입 (브라우저 전용, 표준 미포함)
 interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void> }
 
-export type DriverRow = { rowId: string; name: string; parentPhone: string | null; studentPhone: string | null; absent?: boolean };
-export type DriverStop = { label: string; arriveTime: string | null; lat: number | null; lng: number | null; direction: "BOARD" | "ALIGHT"; rows: DriverRow[] };
-export type DriverClass = { classTime: string; board: DriverStop[]; alight: DriverStop[] };
 // SELF = 자차(부모 차) 등·하원. 셔틀 미탑승이지만 결석(사전 신고)과는 구분한다.
 type Status = "BOARDED" | "NOSHOW" | "SELF";
 
@@ -250,7 +251,10 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
 
       {classes.map((c) => (
         <section key={c.classTime} className="mb-6">
-          <div className="sticky top-[68px] z-[5] -mx-1 mb-3 rounded-2xl bg-brand-navy-900 px-4 py-3 text-[18px] font-black text-white">🕒 {c.classTime} 수업</div>
+          {/* 저장 노선(원장 확정)이면 차량·회차 제목, 폴백이면 종전대로 수업시간 제목 */}
+          <div className="sticky top-[68px] z-[5] -mx-1 mb-3 rounded-2xl bg-brand-navy-900 px-4 py-3 text-[18px] font-black text-white">
+            {c.title ?? `🕒 ${c.classTime} 수업`}
+          </div>
 
           {c.board.length > 0 && (() => {
             const key = `${c.classTime}:BOARD`;
@@ -259,7 +263,11 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
             return (
               <div className="mb-3">
                 <div className="mb-1.5 flex items-center gap-1.5">
-                  <p className="flex-1 text-[16px] font-black text-blue-700">⬆ 등원(승차)</p>
+                  <p className="flex-1 text-[16px] font-black text-blue-700">
+                    ⬆ 등원(승차)
+                    {/* 원장이 아직 노선을 확정하지 않은 요일 — 시트 명단 순서라는 걸 기사님께 알린다 */}
+                    {c.pending && <span className="ml-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">임시 순서 · 확정 전</span>}
+                  </p>
                   {!isEditing && (
                     <button type="button" onClick={() => setEditSectionKey(key)}
                       className="rounded-xl border-2 border-gray-300 px-3 py-1 text-[13px] font-black text-gray-600">↕ 순서 편집</button>
@@ -293,7 +301,10 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
             return (
               <div>
                 <div className="mb-1.5 flex items-center gap-1.5">
-                  <p className="flex-1 text-[16px] font-black text-orange-700">⬇ 하원(하차)</p>
+                  <p className="flex-1 text-[16px] font-black text-orange-700">
+                    ⬇ 하원(하차)
+                    {c.pending && <span className="ml-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">임시 순서 · 확정 전</span>}
+                  </p>
                   {!isEditing && (
                     <button type="button" onClick={() => setEditSectionKey(key)}
                       className="rounded-xl border-2 border-gray-300 px-3 py-1 text-[13px] font-black text-gray-600">↕ 순서 편집</button>

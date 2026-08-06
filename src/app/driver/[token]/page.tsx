@@ -4,11 +4,10 @@
  * 기사님께는 이 URL 하나만 공유하면 된다.
  */
 
-import { isRegularRunToken, getRegularBoardingMap, getRegularAbsentPeople } from "@/lib/shuttle/regularRun";
-import { getRegularShuttleStops } from "@/lib/shuttle/regularImport";
-import { matchAbsentee, type AbsentPerson } from "@/lib/regular/regularAbsenceMatch";
-import RegularDriverClient, { type DriverClass, type DriverStop } from "@/components/shuttle/RegularDriverClient";
-import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
+import { isRegularRunToken, getRegularBoardingMap } from "@/lib/shuttle/regularRun";
+// 그날 화면에 무엇을 띄울지(원장이 확정한 저장 노선 우선 · 없으면 시트 명단 폴백)는 이 한곳에서 만든다.
+import { getRegularDriverClasses } from "@/lib/shuttle/regularDriverRoute";
+import RegularDriverClient from "@/components/shuttle/RegularDriverClient";
 
 import { resolveRunToken, getBoardingMap, type BoardingStatus } from "@/lib/seasonal/shuttleRun";
 import { computeDispatch, getDispatchForView } from "@/lib/seasonal/shuttle-optimize";
@@ -31,9 +30,6 @@ function addDays(dateIso: string, n: number): string {
   const d = new Date(`${dateIso}T12:00:00+09:00`);
   d.setUTCDate(d.getUTCDate() + n);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-}
-function weekdayOf(dateIso: string): number {
-  return new Date(`${dateIso}T12:00:00+09:00`).getUTCDay();
 }
 function adjacentRunDates(dates: string[], current: string): { prev: string | null; next: string | null } {
   const idx = dates.indexOf(current);
@@ -121,41 +117,17 @@ async function SeasonalDriverPage({ token, date, searchDate }: { token: string; 
 
 // ─── 정규 셔틀 렌더 ────────────────────────────────────────────────────────────
 
-function groupDriverStops(rows: RegularShuttleStop[], direction: "BOARD" | "ALIGHT", absentees: AbsentPerson[]): DriverStop[] {
-  const order: string[] = [];
-  const map = new Map<string, DriverStop>();
-  for (const r of rows) {
-    if (r.direction !== direction || !r.studentName || !r.id) continue;
-    let g = map.get(r.stopName);
-    if (!g) { g = { label: r.stopName, arriveTime: r.arriveTime, lat: r.latitude ?? null, lng: r.longitude ?? null, direction, rows: [] }; map.set(r.stopName, g); order.push(r.stopName); }
-    if (g.lat == null && r.latitude != null) { g.lat = r.latitude; g.lng = r.longitude ?? null; }
-    if (!g.arriveTime && r.arriveTime) g.arriveTime = r.arriveTime;
-    const absent = matchAbsentee({ name: r.studentName, phone: r.parentPhone }, absentees) !== null;
-    g.rows.push({ rowId: r.id, name: r.studentName, parentPhone: r.parentPhone, studentPhone: r.studentPhone, absent });
-  }
-  return order.map((k) => map.get(k)!);
-}
-
 async function RegularDriverPage({ token, searchDate }: { token: string; searchDate: string | null }) {
   const today = todayKST();
   const viewDate = searchDate ?? today;
   const prevDate = addDays(viewDate, -1);
   const nextDate = addDays(viewDate, 1);
 
-  const weekday = weekdayOf(viewDate);
-  const { stops } = await getRegularShuttleStops();
-  const dayRows = stops
-    .filter((s) => s.weekday === weekday && (s.direction === "BOARD" || s.direction === "ALIGHT") && s.studentName)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
-  const absentees = await getRegularAbsentPeople(viewDate);
-  const classTimes = [...new Set(dayRows.map((s) => s.classTime).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b));
-  const classes: DriverClass[] = classTimes.map((ct) => {
-    const rows = dayRows.filter((s) => s.classTime === ct);
-    return { classTime: ct, board: groupDriverStops(rows, "BOARD", absentees), alight: groupDriverStops(rows, "ALIGHT", absentees) };
-  });
-
-  const boarding = await getRegularBoardingMap(viewDate);
+  // 그 요일에 저장된 배차 노선이 있으면 그 순서·시각, 없으면 시트 명단 순서('확정 전' 표시).
+  const [classes, boarding] = await Promise.all([
+    getRegularDriverClasses(viewDate),
+    getRegularBoardingMap(viewDate),
+  ]);
 
   return (
     <div className="min-h-screen bg-white py-2" style={{ colorScheme: "light" }}>

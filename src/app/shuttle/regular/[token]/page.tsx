@@ -1,17 +1,12 @@
-import { getRegularShuttleStops } from "@/lib/shuttle/regularImport";
-import { isRegularRunToken, getRegularBoardingMap, getRegularAbsentPeople } from "@/lib/shuttle/regularRun";
-import { matchAbsentee, type AbsentPerson } from "@/lib/regular/regularAbsenceMatch";
-import RegularDriverClient, { type DriverClass, type DriverStop } from "@/components/shuttle/RegularDriverClient";
-import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
+import { isRegularRunToken, getRegularBoardingMap } from "@/lib/shuttle/regularRun";
+// 그날 화면에 무엇을 띄울지(원장이 확정한 저장 노선 우선 · 없으면 시트 명단 폴백)는 이 한곳에서 만든다.
+import { getRegularDriverClasses } from "@/lib/shuttle/regularDriverRoute";
+import RegularDriverClient from "@/components/shuttle/RegularDriverClient";
 
 export const dynamic = "force-dynamic";
 
 function todayKST(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
-// KST 날짜의 요일(0=일..6=토). 정오 기준으로 계산해 UTC 변환 시 날짜가 밀리지 않게 한다.
-function weekdayOf(dateIso: string): number {
-  return new Date(`${dateIso}T12:00:00+09:00`).getUTCDay();
 }
 // YYYY-MM-DD 형식 검증(달력 유효성까지). 클라가 보낸 date 쿼리는 신뢰하지 않고 서버에서 확인.
 function isValidDate(s: string): boolean {
@@ -41,24 +36,6 @@ function lightError(title: string, sub: string) {
   );
 }
 
-// 같은 정류장(이름)끼리 학생 행을 묶어 정차 하나로. 시트 순서(sortOrder) 유지.
-// absentees: 오늘 결석 신고된 사람(이름+학부모전화) — 명단 승객과 근사 매칭해 결석 표식을 단다.
-function groupDriverStops(rows: RegularShuttleStop[], direction: "BOARD" | "ALIGHT", absentees: AbsentPerson[]): DriverStop[] {
-  const order: string[] = [];
-  const map = new Map<string, DriverStop>();
-  for (const r of rows) {
-    if (r.direction !== direction || !r.studentName || !r.id) continue;
-    let g = map.get(r.stopName);
-    if (!g) { g = { label: r.stopName, arriveTime: r.arriveTime, lat: r.latitude ?? null, lng: r.longitude ?? null, direction, rows: [] }; map.set(r.stopName, g); order.push(r.stopName); }
-    if (g.lat == null && r.latitude != null) { g.lat = r.latitude; g.lng = r.longitude ?? null; }
-    if (!g.arriveTime && r.arriveTime) g.arriveTime = r.arriveTime;
-    // 결석 매칭: 이름(+가능하면 학부모 전화)으로 오늘 결석자와 이어 붙인다(best-effort).
-    const absent = matchAbsentee({ name: r.studentName, phone: r.parentPhone }, absentees) !== null;
-    g.rows.push({ rowId: r.id, name: r.studentName, parentPhone: r.parentPhone, studentPhone: r.studentPhone, absent });
-  }
-  return order.map((k) => map.get(k)!);
-}
-
 // 정규 셔틀 기사님 운행 화면 — 토큰으로 접근. 오늘 요일의 수업별 등원·하원 타임라인 + 탑승 체크.
 export default async function RegularRunPage({
   params, searchParams,
@@ -77,23 +54,12 @@ export default async function RegularRunPage({
   const prevDate = addDays(viewDate, -1);
   const nextDate = addDays(viewDate, 1);
 
-  const weekday = weekdayOf(viewDate);
-  const { stops } = await getRegularShuttleStops();
-  const dayRows = stops
-    .filter((s) => s.weekday === weekday && (s.direction === "BOARD" || s.direction === "ALIGHT") && s.studentName)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
   // 명단 없는 날(주말 등)도 빈 화면 + 네비로 계속 넘길 수 있게 early-return 하지 않는다.
-  // 선택 날짜의 결석 신고자를 미리 뽑아 명단 행에 결석 표식을 단다.
-  const absentees = await getRegularAbsentPeople(viewDate);
-
-  const classTimes = [...new Set(dayRows.map((s) => s.classTime).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b));
-  const classes: DriverClass[] = classTimes.map((ct) => {
-    const rows = dayRows.filter((s) => s.classTime === ct);
-    return { classTime: ct, board: groupDriverStops(rows, "BOARD", absentees), alight: groupDriverStops(rows, "ALIGHT", absentees) };
-  });
-
-  const boarding = await getRegularBoardingMap(viewDate);
+  // 그 요일에 저장된 배차 노선이 있으면 그 순서·시각, 없으면 시트 명단 순서('확정 전' 표시).
+  const [classes, boarding] = await Promise.all([
+    getRegularDriverClasses(viewDate),
+    getRegularBoardingMap(viewDate),
+  ]);
 
   return (
     <div className="min-h-screen bg-white py-2" style={{ colorScheme: "light" }}>

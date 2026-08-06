@@ -96,6 +96,8 @@ function toRawRider(r: RawRow): RegularShuttleRawRider {
   const { start, end } = splitClassTime(r.classTime);
   return {
     studentId: String(r.studentId), // 실제 Student.id 또는 'stop:'+행id (SQL 에서 COALESCE)
+    // 이 라이더를 만든 시트 정차행 id — 기사님 화면이 저장 노선을 탑승체크 키로 되돌릴 때 쓴다.
+    stopRowId: str(r.stopRowId),
     studentName: String(r.studentName ?? ""),
     childGrade: str(r.childGrade),
     childPhone: str(r.childPhone),
@@ -140,6 +142,7 @@ export async function getRegularShuttleRiders(
         -- 매칭된 Student.id, 없으면 정차 행 id 에 접두사('stop:')를 붙여 유일한 식별키를 보장한다.
         -- (접두사 덕분에 실제 Student.id(uuid)와 절대 충돌하지 않아 학부모 ETA 오매칭이 없다.)
         COALESCE(st."id", 'stop:' || rss."id") AS "studentId",
+        rss."id"                                AS "stopRowId",
         rss."studentName"                       AS "studentName",
         st."grade"                              AS "childGrade",
         COALESCE(rss."studentPhone", st."phone") AS "childPhone",

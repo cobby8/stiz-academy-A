@@ -23,6 +23,9 @@ export type RegularShuttlePlace = {
 /** 서버가 SQL로 뽑아 넘겨 주는 원시 라이더 1행(등원/하원 위치를 둘 다 들고 있다). */
 export type RegularShuttleRawRider = {
   studentId: string;
+  /** 이 라이더를 만든 시트 정차행 id(RegularShuttleStop.id). 정규 셔틀 탑승체크 키와 같은 값이라,
+   *  저장 배차 노선(식별키=studentId)을 탑승체크 키로 되돌릴 때 쓴다. 소스가 시트가 아니면 null. */
+  stopRowId?: string | null;
   studentName: string;
   childGrade: string | null;
   childPhone: string | null;

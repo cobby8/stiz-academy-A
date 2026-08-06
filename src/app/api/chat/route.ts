@@ -71,8 +71,7 @@ const getCachedSettings = unstable_cache(
                 "trialTitle", "trialContent", "trialFormUrl",
                 "enrollContent", "shuttleInfoText", "termsOfService",
                 "introductionTitle", "introductionText",
-                "philosophyText", "facilitiesText", "youtubeUrl",
-                "useBuiltInTrialForm", "useBuiltInEnrollForm"
+                "philosophyText", "facilitiesText", "youtubeUrl"
          FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
       );
       if (rows[0]) {
@@ -99,9 +98,6 @@ const getCachedSettings = unstable_cache(
           facilitiesText: r.facilitiesText ?? r.facilitiestext ?? "",
           // 유튜브 채널 URL
           youtubeUrl: r.youtubeUrl ?? r.youtubeurl ?? "",
-          // 자체 폼 ON/OFF 플래그
-          useBuiltInTrialForm: r.useBuiltInTrialForm ?? r.usebuiltintrialform ?? false,
-          useBuiltInEnrollForm: r.useBuiltInEnrollForm ?? r.usebuiltinenrollform ?? false,
         };
       }
     } catch (e) {
@@ -121,8 +117,6 @@ const getCachedSettings = unstable_cache(
       philosophyText: "",
       facilitiesText: "",
       youtubeUrl: "",
-      useBuiltInTrialForm: false,
-      useBuiltInEnrollForm: false,
     };
   },
   ["chat-settings"],
@@ -863,7 +857,7 @@ ${settings.trialContent ? `- 체험수업 상세: ${settings.trialContent}` : ""
 ${settings.enrollContent ? `- 수강신청 안내: ${settings.enrollContent}` : ""}
 
 ## 신청 안내 규칙
-- 체험수업이나 수강신청을 안내할 때, 구글폼 URL을 직접 보여주지 마세요.
+- 체험수업이나 수강신청을 안내할 때, 신청 폼 URL을 직접 보여주지 마세요.
 - 대신 "아래 버튼을 눌러 신청 페이지로 이동하시면 됩니다"라고 안내하세요.
 - 체험수업 신청 안내 시: 응답 맨 끝에 [ACTION:TRIAL] 태그를 반드시 포함하세요.
 - 수강신청 안내 시: 응답 맨 끝에 [ACTION:ENROLL] 태그를 반드시 포함하세요.
@@ -1026,10 +1020,9 @@ export async function POST(request: NextRequest) {
     let actions: Array<{ label: string; url: string }> | undefined;
     let cleanReply = reply;
 
-    // 자체 폼 ON/OFF에 따라 ACTION 버튼 URL을 결정
-    // useBuiltIn*가 true이면 자체 폼 페이지, false이면 /apply 페이지(카드 섹션)로 이동
-    const trialUrl = settings.useBuiltInTrialForm ? "/apply/trial" : "/apply#trial";
-    const enrollUrl = settings.useBuiltInEnrollForm ? "/apply/enroll" : "/apply#enroll";
+    // 신청은 항상 자체 폼을 쓰므로 ACTION 버튼 URL도 자체 신청 페이지로 고정
+    const trialUrl = "/apply/trial";
+    const enrollUrl = "/apply/enroll";
 
     if (reply.includes("[ACTION:BOTH]")) {
       // 체험수업 + 수강신청 둘 다 안내하는 경우

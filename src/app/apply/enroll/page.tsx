@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { getAcademySettings } from "@/lib/queries";
 import { getAvailableTrialSlots, getTrialLeadForEnrollByAccessCode } from "@/app/actions/public";
 import PublicPageLayout from "@/components/PublicPageLayout";
@@ -29,10 +28,7 @@ export default async function EnrollApplyPage({
         getAcademySettings() as Promise<any>,
     ]);
 
-    if (!settings?.useBuiltInEnrollForm) {
-        redirect(settings?.enrollFormUrl || "/apply");
-    }
-
+    // 수강신청은 항상 자체 신청 폼을 사용한다(외부 폼으로 리다이렉트하지 않는다).
     const phone = settings?.contactPhone || "010-0000-0000";
 
     return (

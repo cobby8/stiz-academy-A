@@ -15,18 +15,15 @@ type FaqItem = { id: string; question: string; answer: string };
 interface ApplyPageClientProps {
     trialTitle: string;
     trialContentHtml: string | null;
-    trialFormUrl: string | null;
-    useBuiltInTrialForm: boolean;
     enrollTitle: string;
     enrollContentHtml: string | null;
-    enrollFormUrl: string | null;
-    useBuiltInEnrollForm: boolean;
+    // 유니폼 신청만 외부 폼(모달)을 계속 사용한다. 체험/수강신청은 자체 폼 고정.
     uniformFormUrl: string | null;
     // DB에서 가져온 FAQ 데이터 (없으면 기본 FAQ 표시)
     faqData?: FaqItem[];
 }
 
-// --- FormModal: 기존 코드 그대로 유지 (절대 변경 금지) ---
+// --- FormModal: 유니폼 신청 외부 폼 전용 (기존 코드 그대로 유지) ---
 function FormModal({
     title,
     formUrl,
@@ -168,17 +165,13 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 export default function ApplyPageClient({
     trialTitle,
     trialContentHtml,
-    trialFormUrl,
-    useBuiltInTrialForm,
     enrollTitle,
     enrollContentHtml,
-    enrollFormUrl,
-    useBuiltInEnrollForm,
     uniformFormUrl,
     faqData,
 }: ApplyPageClientProps) {
-    // 모달 상태 — trial/enroll/uniform 중 하나 또는 null
-    const [modal, setModal] = useState<"trial" | "enroll" | "uniform" | null>(null);
+    // 모달 상태 — 유니폼 신청 폼에서만 사용한다
+    const [modal, setModal] = useState<"uniform" | null>(null);
     // DB FAQ가 있으면 사용, 없으면 기본 FAQ fallback
     // DB에 FAQ가 있으면 DB 데이터 사용, 없으면 기본 데이터 fallback
     const displayFaqs = faqData && faqData.length > 0 ? faqData : DEFAULT_FAQ_DATA;
@@ -213,27 +206,14 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {/* 체험수업 신청 — 자체 폼 모드이면 내부 신청 페이지로 이동 */}
-                                    {useBuiltInTrialForm ? (
-                                        <Link
-                                            href="/apply/trial"
-                                            data-tour-target="trial-apply-btn"
-                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
-                                        >
-                                            체험수업 신청하기
-                                        </Link>
-                                    ) : trialFormUrl ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => setModal("trial")}
-                                            data-tour-target="trial-apply-btn"
-                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
-                                        >
-                                            체험수업 신청하기
-                                        </button>
-                                    ) : (
-                                        <p className="text-sm text-gray-400 italic">신청 폼이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
-                                    )}
+                                    {/* 체험수업 신청 — 항상 자체 신청 페이지(/apply/trial)로 이동 */}
+                                    <Link
+                                        href="/apply/trial"
+                                        data-tour-target="trial-apply-btn"
+                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white hover:bg-brand-orange-600 dark:hover:bg-lime-400 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                    >
+                                        체험수업 신청하기
+                                    </Link>
                                     {/* 약관 안내 — 독립 이용약관 페이지로 링크 */}
                                     <p className="mt-3 text-xs text-gray-400">
                                         신청 시{" "}
@@ -269,25 +249,13 @@ export default function ApplyPageClient({
                                 )}
 
                                 <div className="mt-6">
-                                    {/* 수강신청 — 자체 폼 모드이면 내부 신청 페이지로 이동 */}
-                                    {useBuiltInEnrollForm ? (
-                                        <Link
-                                            href="/apply/enroll"
-                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
-                                        >
-                                            수강신청하기
-                                        </Link>
-                                    ) : enrollFormUrl ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => setModal("enroll")}
-                                            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
-                                        >
-                                            수강신청하기
-                                        </button>
-                                    ) : (
-                                        <p className="text-sm text-gray-400 italic">신청 폼이 설정되지 않았습니다. 관리자에게 문의하세요.</p>
-                                    )}
+                                    {/* 수강신청 — 항상 자체 신청 페이지(/apply/enroll)로 이동 */}
+                                    <Link
+                                        href="/apply/enroll"
+                                        className="inline-flex items-center justify-center px-6 py-3 text-base font-medium bg-brand-navy-900 text-white hover:bg-brand-navy-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] focus:ring-2 focus:ring-brand-navy-500/50 focus:ring-offset-2 rounded-xl transition-all duration-200"
+                                    >
+                                        수강신청하기
+                                    </Link>
                                 </div>
                             </div>
                         </Card>
@@ -343,21 +311,7 @@ export default function ApplyPageClient({
                 </AnimateOnScroll>
             </SectionLayout>
 
-            {/* Google Form 모달 — 구글폼 모드일 때 플로팅으로 표시 */}
-            {modal === "trial" && trialFormUrl && (
-                <FormModal
-                    title="체험수업 신청"
-                    formUrl={trialFormUrl}
-                    onClose={() => setModal(null)}
-                />
-            )}
-            {modal === "enroll" && enrollFormUrl && (
-                <FormModal
-                    title="수강신청"
-                    formUrl={enrollFormUrl}
-                    onClose={() => setModal(null)}
-                />
-            )}
+            {/* 유니폼 신청 외부 폼 모달 — 유니폼 링크가 설정된 경우에만 표시 */}
             {modal === "uniform" && uniformFormUrl && (
                 <FormModal
                     title="유니폼 신청"

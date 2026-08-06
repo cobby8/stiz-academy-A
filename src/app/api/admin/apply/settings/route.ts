@@ -24,8 +24,6 @@ export async function GET() {
                     enrollContent: settings?.enrollContent || null,
                     enrollFormUrl: settings?.enrollFormUrl || null,
                     uniformFormUrl: settings?.uniformFormUrl || null,
-                    useBuiltInTrialForm: settings?.useBuiltInTrialForm ?? false,
-                    useBuiltInEnrollForm: settings?.useBuiltInEnrollForm ?? false,
                 },
             },
             {

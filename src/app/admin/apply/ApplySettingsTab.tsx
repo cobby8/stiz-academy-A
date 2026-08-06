@@ -11,8 +11,6 @@ type ApplySettings = {
     enrollContent: string | null;
     enrollFormUrl: string | null;
     uniformFormUrl: string | null;
-    useBuiltInTrialForm: boolean;
-    useBuiltInEnrollForm: boolean;
 };
 
 interface ApplySettingsTabProps {
@@ -27,8 +25,6 @@ const DEFAULT_SETTINGS: ApplySettings = {
     enrollContent: null,
     enrollFormUrl: null,
     uniformFormUrl: null,
-    useBuiltInTrialForm: false,
-    useBuiltInEnrollForm: false,
 };
 
 const INPUT = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm dark:text-white bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500 dark:border-brand-neon-lime transition";
@@ -43,8 +39,6 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
     const [enrollContent, setEnrollContent] = useState(settings.enrollContent || "");
     const [enrollFormUrl, setEnrollFormUrl] = useState(settings.enrollFormUrl || "");
     const [uniformFormUrl, setUniformFormUrl] = useState(settings.uniformFormUrl || "");
-    const [useBuiltInTrialForm, setUseBuiltInTrialForm] = useState(settings.useBuiltInTrialForm);
-    const [useBuiltInEnrollForm, setUseBuiltInEnrollForm] = useState(settings.useBuiltInEnrollForm);
     const [loading, setLoading] = useState(!initialSettings);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -59,8 +53,6 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
         setEnrollContent(nextSettings.enrollContent || "");
         setEnrollFormUrl(nextSettings.enrollFormUrl || "");
         setUniformFormUrl(nextSettings.uniformFormUrl || "");
-        setUseBuiltInTrialForm(nextSettings.useBuiltInTrialForm);
-        setUseBuiltInEnrollForm(nextSettings.useBuiltInEnrollForm);
     }, []);
 
     const loadSettings = useCallback(async () => {
@@ -99,8 +91,6 @@ export default function ApplySettingsTab({ initialSettings }: ApplySettingsTabPr
                 enrollContent: enrollContent.trim() || undefined,
                 enrollFormUrl: enrollFormUrl.trim() || undefined,
                 uniformFormUrl: uniformFormUrl.trim() || undefined,
-                useBuiltInTrialForm,
-                useBuiltInEnrollForm,
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);

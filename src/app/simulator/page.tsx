@@ -23,9 +23,6 @@ export default async function SimulatorPage() {
     ]);
 
     const phone = (settings as any).contactPhone || "010-0000-0000";
-    // CTA 버튼용 구글폼 URL (DB에 저장된 값)
-    const trialFormUrl = (settings as any).trialFormUrl as string | null | undefined;
-    const enrollFormUrl = (settings as any).enrollFormUrl as string | null | undefined;
 
     const scheduleData = dbScheduleData ?? await (async () => {
         const [cachedSlots, overridesList, customSlotsList] = await Promise.all([
@@ -71,10 +68,6 @@ export default async function SimulatorPage() {
                 allSlots={allSlots}
                 programs={programList}
                 phone={phone}
-                trialFormUrl={trialFormUrl || null}
-                enrollFormUrl={enrollFormUrl || null}
-                useBuiltInTrialForm={(settings as any).useBuiltInTrialForm ?? false}
-                useBuiltInEnrollForm={(settings as any).useBuiltInEnrollForm ?? false}
             />
         </PublicPageLayout>
     );

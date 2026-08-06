@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveRunToken, getBoardingMap, setBoarding, type BoardingStatus } from "@/lib/seasonal/shuttleRun";
+// 기사님 화면이 하나로 합쳐져(그날 특강+정규 한 목록), 정규 링크로 열어도 특강 행을 체크할 수 있어야 한다.
+import { isRegularRunToken } from "@/lib/shuttle/regularRun";
 
 export const dynamic = "force-dynamic";
 
@@ -36,14 +38,18 @@ export async function POST(request: Request) {
       token?: string; direction?: string; shuttleRequestId?: string; status?: string | null; studentName?: string | null; date?: string | null;
     } | null;
     const run = await resolveRunToken(body?.token ?? "");
-    if (!run) return NextResponse.json({ error: "유효하지 않은 링크입니다." }, { status: 404 });
+    // 정규 기사 링크로 통합 화면을 열었을 때도 특강 행을 체크할 수 있어야 한다.
+    // 이때는 링크에 날짜가 없으므로(정규는 고정 링크) 화면이 보낸 date 가 반드시 유효해야 한다.
+    const regularOk = run ? false : await isRegularRunToken(body?.token ?? "");
+    if (!run && !regularOk) return NextResponse.json({ error: "유효하지 않은 링크입니다." }, { status: 404 });
     const direction = dir(body?.direction);
     if (!direction || !body?.shuttleRequestId) return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     // 허용값 확장: BOARDED/NOSHOW/SELF(자차) + null(대기). 그 외는 null로 수렴.
     const status: BoardingStatus | null =
       body.status === "BOARDED" ? "BOARDED" : body.status === "NOSHOW" ? "NOSHOW" : body.status === "SELF" ? "SELF" : null;
     // 화면이 표시하는 날짜(effectiveDate)에 저장한다. 클라가 보낸 date가 유효하면 그 날, 없으면 링크 날짜(run.date)로 폴백.
-    const date = validDate(body?.date) ?? run.date;
+    const date = validDate(body?.date) ?? run?.date ?? null;
+    if (!date) return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     await setBoarding({
       date, direction, shuttleRequestId: body.shuttleRequestId,
       status, studentName: body.studentName ?? null, via: "driver",

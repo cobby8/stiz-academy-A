@@ -1,143 +1,12 @@
-/**
- * 기사님 전용 통합 URL: /driver/[token]
- * 토큰 타입을 자동 감지(정규 → 방학특강 순서로 확인)해 올바른 운행 화면을 렌더링한다.
- * 기사님께는 이 URL 하나만 공유하면 된다.
- */
-
-import { isRegularRunToken, getRegularBoardingMap } from "@/lib/shuttle/regularRun";
-// 그날 화면에 무엇을 띄울지(원장이 확정한 저장 노선 우선 · 없으면 시트 명단 폴백)는 이 한곳에서 만든다.
-import { getRegularDriverClasses } from "@/lib/shuttle/regularDriverRoute";
-import RegularDriverClient from "@/components/shuttle/RegularDriverClient";
-
-import { resolveRunToken, getBoardingMap, type BoardingStatus } from "@/lib/seasonal/shuttleRun";
-import { computeDispatch, getDispatchForView } from "@/lib/seasonal/shuttle-optimize";
-import DriverRunClient, { type DriverSection } from "@/components/seasonal/DriverRunClient";
+import UnifiedDriverRunPage, { isValidRunDate } from "@/components/shuttle/UnifiedDriverRunPage";
 
 export const dynamic = "force-dynamic";
 
-// ─── 공통 유틸 ────────────────────────────────────────────────────────────────
-
-function todayKST(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
-function isValidDate(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(`${s}T12:00:00+09:00`);
-  return !Number.isNaN(d.getTime()) &&
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d) === s;
-}
-function addDays(dateIso: string, n: number): string {
-  const d = new Date(`${dateIso}T12:00:00+09:00`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-}
-function adjacentRunDates(dates: string[], current: string): { prev: string | null; next: string | null } {
-  const idx = dates.indexOf(current);
-  if (idx >= 0) return { prev: dates[idx - 1] ?? null, next: dates[idx + 1] ?? null };
-  const prev = dates.filter((d) => d < current).pop() ?? null;
-  const next = dates.find((d) => d > current) ?? null;
-  return { prev, next };
-}
-
-function LightError({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="min-h-screen bg-white text-gray-900" style={{ colorScheme: "light" }}>
-      <div className="mx-auto grid min-h-[80dvh] max-w-md place-items-center px-6 text-center">
-        <div>
-          <p className="text-5xl">🚌</p>
-          <h1 className="mt-3 text-xl font-black text-gray-900">{title}</h1>
-          <p className="mt-1 text-base text-gray-500">{sub}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── 방학특강 렌더 ─────────────────────────────────────────────────────────────
-
-const PREFIX = /^(STIZ 다산점 · |차고지 · )/;
-
-type DispatchVehicleLike = {
-  vehicleName: string; tripLabel?: string | null;
-  departTime?: string | null; arriveTime?: string | null; depotTime?: string | null;
-  stops?: {
-    label: string; isHub?: boolean; etaLabel?: string | null; lat?: number; lng?: number;
-    students?: { requestId: string; name: string; grade?: string | null; parentPhone?: string | null; childPhone?: string | null }[];
-  }[];
-};
-
-async function SeasonalDriverPage({ token, date, searchDate }: { token: string; date: string | "ROLLING"; searchDate: string | null }) {
-  const probe = await computeDispatch({ direction: "PICKUP", date: null, localOnly: true });
-  const availableDates = probe.availableDates.map((d) => d.date).sort();
-  const today = todayKST();
-
-  let effectiveDate: string | null = searchDate;
-  if (!effectiveDate) effectiveDate = date === "ROLLING" ? today : date;
-  if (!effectiveDate) return <LightError title="오늘은 운행이 없습니다" sub="다음 운행일에 다시 열어주세요." />;
-
-  const { prev: prevDate, next: nextDate } = adjacentRunDates(availableDates, effectiveDate);
-
-  const directions: ("PICKUP" | "DROPOFF")[] = ["PICKUP", "DROPOFF"];
-  const sections: DriverSection[] = await Promise.all(directions.map(async (d) => {
-    const sug = await getDispatchForView(effectiveDate, d, false);
-    const vraw = sug.vehicles as DispatchVehicleLike[];
-    const isPickup = d === "PICKUP";
-    return {
-      direction: d,
-      time: (isPickup ? sug.classStart : sug.classEnd) ?? null,
-      startName: (isPickup ? (sug.depot?.name ?? "차고지") : sug.academy.name).replace(PREFIX, ""),
-      endName: (isPickup ? sug.academy.name : (sug.depot?.name ?? "차고지")).replace(PREFIX, ""),
-      vehicles: vraw.map((v) => ({
-        vehicleName: v.vehicleName, tripLabel: v.tripLabel ?? null,
-        departTime: v.departTime ?? null, arriveTime: v.arriveTime ?? null, depotTime: v.depotTime ?? null,
-        stops: (v.stops ?? []).map((s) => ({
-          label: s.label, isHub: Boolean(s.isHub), etaLabel: s.etaLabel ?? null,
-          lat: typeof s.lat === "number" ? s.lat : null, lng: typeof s.lng === "number" ? s.lng : null,
-          students: (s.students ?? []).map((st) => ({ requestId: st.requestId, name: st.name, grade: st.grade ?? null, parentPhone: st.parentPhone ?? null, childPhone: st.childPhone ?? null })),
-        })),
-      })),
-    };
-  }));
-
-  const [pickupBoarding, dropoffBoarding] = await Promise.all([
-    getBoardingMap(effectiveDate, "PICKUP"),
-    getBoardingMap(effectiveDate, "DROPOFF"),
-  ]);
-
-  return (
-    <div className="min-h-screen bg-white py-2" style={{ colorScheme: "light" }}>
-      <DriverRunClient
-        token={token} date={effectiveDate} sections={sections}
-        initialBoarding={{ PICKUP: pickupBoarding, DROPOFF: dropoffBoarding } as { PICKUP: Record<string, BoardingStatus>; DROPOFF: Record<string, BoardingStatus> }}
-        prevDate={prevDate} nextDate={nextDate} today={today}
-      />
-    </div>
-  );
-}
-
-// ─── 정규 셔틀 렌더 ────────────────────────────────────────────────────────────
-
-async function RegularDriverPage({ token, searchDate }: { token: string; searchDate: string | null }) {
-  const today = todayKST();
-  const viewDate = searchDate ?? today;
-  const prevDate = addDays(viewDate, -1);
-  const nextDate = addDays(viewDate, 1);
-
-  // 그 요일에 저장된 배차 노선이 있으면 그 순서·시각, 없으면 시트 명단 순서('확정 전' 표시).
-  const [classes, boarding] = await Promise.all([
-    getRegularDriverClasses(viewDate),
-    getRegularBoardingMap(viewDate),
-  ]);
-
-  return (
-    <div className="min-h-screen bg-white py-2" style={{ colorScheme: "light" }}>
-      <RegularDriverClient token={token} date={viewDate} classes={classes} initialBoarding={boarding} prevDate={prevDate} nextDate={nextDate} today={today} />
-    </div>
-  );
-}
-
-// ─── 진입점 — 토큰 타입 자동 감지 ─────────────────────────────────────────────
-
+/**
+ * 기사님 전용 통합 URL: /driver/[token]
+ * 방학특강 토큰이든 정규 토큰이든 같은 통합 운행 화면을 연다.
+ * 기사님께는 링크 하나만 공유하면 그날 운행이 전부 시각순으로 보인다.
+ */
 export default async function DriverUnifiedPage({
   params, searchParams,
 }: {
@@ -146,19 +15,7 @@ export default async function DriverUnifiedPage({
 }) {
   const { token } = await params;
   const sp = await searchParams;
-  const searchDate = sp?.date && isValidDate(sp.date) ? sp.date : null;
-
-  // 1. 정규 셔틀 토큰인지 먼저 확인 (DB 조회 1회)
-  if (await isRegularRunToken(token)) {
-    return <RegularDriverPage token={token} searchDate={searchDate} />;
-  }
-
-  // 2. 방학특강 토큰 확인
-  const run = await resolveRunToken(token);
-  if (run) {
-    return <SeasonalDriverPage token={token} date={run.date} searchDate={searchDate} />;
-  }
-
-  // 3. 둘 다 아니면 에러
-  return <LightError title="유효하지 않은 링크입니다" sub="원장님께 새 링크를 요청해주세요." />;
+  // date 쿼리는 클라 입력이므로 서버에서 형식·달력 유효성을 확인한 뒤에만 쓴다.
+  const searchDate = sp?.date && isValidRunDate(sp.date) ? sp.date : null;
+  return <UnifiedDriverRunPage token={token} searchDate={searchDate} />;
 }

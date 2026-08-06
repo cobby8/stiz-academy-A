@@ -158,15 +158,22 @@ test("확정 시각 라벨은 수동확정 → 자동값 순으로 HH:MM 을 뽑
   assert.equal(savedStopTimeLabel({}), null);
 });
 
-test("기사님 화면 2곳이 저장 노선 게이트웨이를 쓰고, 탑승 체크 경로는 그대로다", async () => {
-  const unified = await readFile("src/app/driver/[token]/page.tsx", "utf8");
-  const regular = await readFile("src/app/shuttle/regular/[token]/page.tsx", "utf8");
-  for (const src of [unified, regular]) {
-    assert.match(src, /getRegularDriverClasses/);
-    assert.match(src, /getRegularBoardingMap/);
-    // 화면이 시트 명단을 직접 정렬해 그리던 옛 경로는 남아 있으면 안 된다(중복 판정 방지).
-    assert.doesNotMatch(src, /groupDriverStops/);
+test("기사님 화면이 저장 노선 게이트웨이를 쓰고, 탑승 체크 경로는 그대로다", async () => {
+  // 기사님 화면 3개 진입점은 통합 화면 하나로 위임한다(같은 화면을 세 벌 유지하지 않는다).
+  for (const page of [
+    "src/app/driver/[token]/page.tsx",
+    "src/app/shuttle/regular/[token]/page.tsx",
+    "src/app/shuttle/run/[token]/page.tsx",
+  ]) {
+    const src = await readFile(page, "utf8");
+    assert.match(src, /UnifiedDriverRunPage/);
   }
+  // 그날 무엇을 띄울지는 게이트웨이 한곳에서만 만든다.
+  const loader = await readFile("src/lib/shuttle/unifiedDriverRun.ts", "utf8");
+  assert.match(loader, /getRegularDriverClasses/);
+  assert.match(loader, /getRegularBoardingMap/);
+  // 화면이 시트 명단을 직접 정렬해 그리던 옛 경로는 남아 있으면 안 된다(중복 판정 방지).
+  assert.doesNotMatch(loader, /groupDriverStops/);
   const runSrc = await readFile("src/lib/shuttle/regularRun.ts", "utf8");
   assert.match(runSrc, /"shuttleRequestId"/);
   assert.match(runSrc, /REGULAR_DIR = "REGULAR"/);

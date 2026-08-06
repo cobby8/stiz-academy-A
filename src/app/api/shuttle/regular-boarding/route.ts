@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { isRegularRunToken, setRegularBoarding, type BoardingStatus } from "@/lib/shuttle/regularRun";
+import { setRegularBoarding, type BoardingStatus } from "@/lib/shuttle/regularRun";
+// 기사님 화면이 하나로 합쳐져(그날 특강+정규 한 목록), 어느 쪽 링크로 열어도 정규 행을 체크할 수 있어야 한다.
+// 판정 함수 자체는 기존 것(isRegularRunToken / resolveRunToken)을 그대로 쓴다.
+import { isAnyDriverRunToken } from "@/lib/shuttle/driverToken";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +29,7 @@ export async function POST(request: Request) {
     const token = typeof body?.token === "string" ? body.token : "";
     const rowId = typeof body?.rowId === "string" ? body.rowId : "";
     if (!token || !rowId) return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
-    if (!(await isRegularRunToken(token))) return NextResponse.json({ error: "유효하지 않은 링크입니다." }, { status: 403 });
+    if (!(await isAnyDriverRunToken(token))) return NextResponse.json({ error: "유효하지 않은 링크입니다." }, { status: 403 });
     // 허용값 확장: BOARDED/NOSHOW/SELF(자차) + null(대기). 그 외는 null로 수렴.
     const status =
       body?.status === "BOARDED" || body?.status === "NOSHOW" || body?.status === "SELF" ? body.status : null;

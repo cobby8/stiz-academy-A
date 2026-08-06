@@ -47,12 +47,26 @@ export async function enqueueMediaRevocationsForStudent(
   `, studentId, consentId);
 }
 
+/** 관리자 화면용 목록 — UUID 대신 사람이 읽을 수 있는 학생 이름/반 이름/초안 제목을 함께 실어 준다. */
+export type MediaRevocationJobListItem = Pick<
+  MediaRevocationJob,
+  "id" | "studentId" | "draftId" | "channel" | "resourceId" | "resourceUrl" | "status" | "attempts" | "lastError" | "createdAt" | "updatedAt"
+> & { studentName: string | null; className: string | null; draftTitle: string | null };
+
 export async function listMediaRevocationJobs(limit = 100) {
-  return prisma.$queryRawUnsafe<MediaRevocationJob[]>(`
-    SELECT id, "studentId", "draftId", channel, "resourceId", "resourceUrl", status, attempts,
-           "lastError", "createdAt", "updatedAt"
-      FROM "MediaRevocationJob"
-     ORDER BY CASE status WHEN 'MANUAL_REQUIRED' THEN 0 WHEN 'FAILED' THEN 1 ELSE 2 END, "createdAt" DESC
+  return prisma.$queryRawUnsafe<MediaRevocationJobListItem[]>(`
+    SELECT j.id, j."studentId", j."draftId", j.channel, j."resourceId", j."resourceUrl", j.status, j.attempts,
+           j."lastError", j."createdAt", j."updatedAt",
+           s.name AS "studentName",
+           -- 이미 삭제된 학생이면 LEFT JOIN 결과가 NULL 이므로 화면에서 "학생 정보 없음"으로 처리한다.
+           (SELECT c.name FROM "Enrollment" e JOIN "Class" c ON c.id = e."classId"
+             WHERE e."studentId" = j."studentId" AND e.status = 'ACTIVE'
+             ORDER BY e."updatedAt" DESC LIMIT 1) AS "className",
+           d.title AS "draftTitle"
+      FROM "MediaRevocationJob" j
+      LEFT JOIN "Student" s ON s.id = j."studentId"
+      LEFT JOIN "SocialPostDraft" d ON d.id = j."draftId"
+     ORDER BY CASE j.status WHEN 'MANUAL_REQUIRED' THEN 0 WHEN 'FAILED' THEN 1 ELSE 2 END, j."createdAt" DESC
      LIMIT $1
   `, Math.max(1, Math.min(limit, 200)));
 }

@@ -230,6 +230,8 @@ export default function AdminShellClient({
                                     <NavItem href="/admin/import" active={pathname.startsWith("/admin/import")} icon="📥" label="수강생 이관" compact />
                                     <NavItem href="/admin/staff" active={pathname.startsWith("/admin/staff")} icon="👥" label="스태프" compact />
                                     <NavItem href="/admin/payment-confirmations" active={pathname.startsWith("/admin/payment-confirmations")} icon="💵" label="현장 수납 승인" compact />
+                                    {/* 사진 사용 동의 철회 처리 화면 — 링크가 없어 URL 직접 입력으로만 접근되던 문제를 해결 */}
+                                    <NavItem href="/admin/media-revocations" active={pathname.startsWith("/admin/media-revocations")} icon="🔐" label="사진 공개 회수" compact />
                                     <div className="pt-1">
                                         <button
                                             type="button"

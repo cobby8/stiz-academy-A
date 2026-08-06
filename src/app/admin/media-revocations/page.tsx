@@ -28,10 +28,15 @@ export default async function MediaRevocationsPage() {
           </tr></thead>
           <tbody>{jobs.map((job) => <tr key={job.id} className="border-t border-gray-100 dark:border-gray-800">
             <td className="p-3 font-bold">{statusLabel[job.status] ?? job.status}</td><td className="p-3">{job.channel}</td>
-            <td className="p-3 font-mono text-xs">{job.studentId}</td><td className="p-3 font-mono text-xs">{job.draftId}</td>
+            {/* 원장이 "어느 학생인지" 바로 알아볼 수 있게 이름/반을 표시하고, UUID는 화면에서 뺀다 */}
+            <td className="p-3">
+              <span className="block font-bold text-gray-900 dark:text-white">{job.studentName ?? "학생 정보 없음"}</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400">{job.className ?? (job.studentName ? "반 미배정" : "삭제된 학생")}</span>
+            </td>
+            <td className="p-3 text-xs text-gray-700 dark:text-gray-200">{job.draftTitle?.trim() || "제목 없는 게시 초안"}</td>
             <td className="p-3">{job.attempts}</td><td className="max-w-xs p-3 text-xs text-gray-600 dark:text-gray-300">
               <span className="block">{job.lastError ?? "-"}</span>
-              {job.resourceId && <span className="mt-1 block font-mono">리소스: {job.resourceId}</span>}
+              {job.resourceId && <span className="mt-1 block font-mono text-[11px] text-gray-400 dark:text-gray-500">리소스: {job.resourceId}</span>}
             </td>
             <td className="p-3">{job.status === "MANUAL_REQUIRED" ? <form action={confirmInstagramMediaRemoved} className="space-y-2">
               <input type="hidden" name="jobId" value={job.id} />

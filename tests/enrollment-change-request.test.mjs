@@ -1,0 +1,132 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import ts from "typescript";
+
+// 반·요일 변경 / 휴원 / 퇴원 신청 → 원장 승인 → 적용일에 반영.
+// 원장 결정(2026-08-09): 세 종류 모두 받는다 · 적용은 다음 달 1일 · 만석 반도 대기로 받는다.
+
+const rulesSource = await readFile("src/lib/enrollment/changeRequestRules.ts", "utf8");
+const transpiled = ts.transpileModule(rulesSource, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const { nextMonthStart, validateChangeRequest, isYmd, CHANGE_KINDS } = await import(
+  `data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`
+);
+
+const parentLib = await readFile("src/lib/enrollment/parent-change-request.ts", "utf8");
+const adminLib = await readFile("src/lib/enrollment/admin-change-request.ts", "utf8");
+const cron = await readFile("src/app/api/cron/enrollment-changes/route.ts", "utf8");
+const vercel = JSON.parse(await readFile("vercel.json", "utf8"));
+
+test("적용일은 언제나 다음 달 1일이다", () => {
+  assert.equal(nextMonthStart("2026-08-09"), "2026-09-01");
+  assert.equal(nextMonthStart("2026-08-31"), "2026-09-01");
+  // 12월 → 다음 해 1월. 여기서 틀리면 한 해에 한 번 크게 터진다.
+  assert.equal(nextMonthStart("2026-12-15"), "2027-01-01");
+  assert.equal(nextMonthStart("2026-01-01"), "2026-02-01");
+});
+
+test("달력에 없는 날짜는 거른다", () => {
+  assert.equal(isYmd("2026-02-30"), false);
+  assert.equal(isYmd("2026-13-01"), false);
+  assert.equal(isYmd("2026-2-1"), false);
+  assert.equal(isYmd("2026-02-28"), true);
+});
+
+test("세 종류를 모두 받는다", () => {
+  assert.deepEqual([...CHANGE_KINDS], ["CLASS_CHANGE", "PAUSE", "WITHDRAW"]);
+});
+
+test("반 변경은 옮길 반이 있어야 하고, 같은 반은 막는다", () => {
+  const context = { currentClassId: "c1", effectiveFrom: "2026-09-01" };
+  assert.equal(validateChangeRequest({ kind: "CLASS_CHANGE" }, context).error, "TO_CLASS_REQUIRED");
+  // 같은 반을 고르면 아무것도 안 바뀌는데 원장은 승인 판단을 해야 한다.
+  assert.equal(validateChangeRequest({ kind: "CLASS_CHANGE", toClassId: "c1" }, context).error, "SAME_CLASS");
+  assert.equal(validateChangeRequest({ kind: "CLASS_CHANGE", toClassId: "c2" }, context).ok, true);
+});
+
+test("휴원·퇴원에 반이 붙어 오면 조용히 무시하지 않는다", () => {
+  const context = { currentClassId: "c1", effectiveFrom: "2026-09-01" };
+  for (const kind of ["PAUSE", "WITHDRAW"]) {
+    assert.equal(validateChangeRequest({ kind, toClassId: "c2" }, context).error, "TO_CLASS_NOT_ALLOWED");
+    assert.equal(validateChangeRequest({ kind }, context).ok, true);
+  }
+});
+
+test("복귀일은 휴원 시작일보다 뒤여야 한다", () => {
+  const context = { currentClassId: "c1", effectiveFrom: "2026-09-01" };
+  assert.equal(validateChangeRequest({ kind: "PAUSE", resumeOn: "2026-08-20" }, context).error, "RESUME_BEFORE_START");
+  assert.equal(validateChangeRequest({ kind: "PAUSE", resumeOn: "2026-09-01" }, context).error, "RESUME_BEFORE_START");
+  assert.equal(validateChangeRequest({ kind: "PAUSE", resumeOn: "2026-11-01" }, context).ok, true);
+});
+
+test("엉뚱한 종류와 지나치게 긴 사유를 거른다", () => {
+  const context = { currentClassId: "c1", effectiveFrom: "2026-09-01" };
+  assert.equal(validateChangeRequest({ kind: "DELETE_ALL" }, context).error, "INVALID_KIND");
+  assert.equal(validateChangeRequest({ kind: "PAUSE", reason: "가".repeat(501) }, context).error, "REASON_TOO_LONG");
+});
+
+test("적용일을 클라이언트가 정하지 못한다", () => {
+  // 믿으면 이번 달로 앞당겨 이미 청구된 달의 반을 바꿀 수 있다.
+  assert.match(parentLib, /const effectiveFrom = nextMonthStart\(kstTodayYmd\(\)\)/);
+  assert.doesNotMatch(parentLib, /effectiveFrom = (input|body)\./);
+});
+
+test("본인 자녀의 지금 다니는 반만 신청할 수 있다", () => {
+  assert.match(parentLib, /s\."parentId" = \$2 AND e\.status = 'ACTIVE'/);
+  assert.match(parentLib, /본인 자녀의 수강만/);
+});
+
+test("진행 중인 신청은 한 건만 둔다", () => {
+  assert.match(parentLib, /status = 'PENDING' LIMIT 1/);
+  assert.match(parentLib, /이미 검토 중인 신청이 있습니다/);
+});
+
+test("만석 반도 대기로 받되 표시는 남긴다", () => {
+  assert.match(parentLib, /waitlisted = Number\(target\[0\]\.enrolled \?\? 0\) >= Number\(target\[0\]\.capacity \?\? 0\)/);
+  assert.doesNotMatch(parentLib, /정원이 찼습니다[\s\S]{0,40}return \{ ok: false/);
+});
+
+test("취소는 아직 결정 안 된 건만 가능하다", () => {
+  assert.match(parentLib, /r\.status = 'PENDING'/);
+  assert.match(parentLib, /이미 처리된 신청은 취소할 수 없습니다/);
+});
+
+test("승인은 예약이고 적용은 적용일에 일어난다", () => {
+  assert.match(adminLib, /r\."effectiveFrom" <= \(now\(\) AT TIME ZONE 'Asia\/Seoul'\)::date/);
+  // 이미 반영한 건은 건너뛰어야 두 번 실행돼도 안전하다.
+  assert.match(adminLib, /r\."appliedAt" IS NULL/);
+  assert.match(adminLib, /SET "appliedAt" = now\(\)/);
+});
+
+test("같은 결정을 두 번 눌러도 두 번 반영되지 않는다", () => {
+  assert.match(adminLib, /WHERE id = \$1 AND status = 'PENDING'/);
+  assert.match(adminLib, /이미 처리된 신청입니다/);
+});
+
+test("한 건이 실패해도 나머지는 반영한다", () => {
+  // 한 건 때문에 전체가 멈추면 그날 모든 변경이 밀린다.
+  assert.match(adminLib, /for \(const row of due\)[\s\S]{0,2400}catch \(error\)/);
+});
+
+test("반 변경이 학생·반 유일 제약과 부딪히지 않는다", () => {
+  // 그 반에 예전 등록 이력이 있으면 classId 를 바꾸는 UPDATE 가 충돌한다.
+  assert.match(adminLib, /SELECT id FROM "Enrollment" WHERE "studentId" = \$1 AND "classId" = \$2/);
+});
+
+test("크론이 매일 돌고 아무나 부를 수 없다", () => {
+  assert.match(cron, /CRON_SECRET/);
+  assert.match(cron, /applyDueEnrollmentChanges/);
+  const job = vercel.crons.find((item) => item.path === "/api/cron/enrollment-changes");
+  assert.ok(job, "vercel.json 에 크론이 등록돼야 합니다.");
+  assert.equal(job.schedule, "10 15 * * *"); // KST 00:10
+});
+
+test("신청·결정이 사람에게 전달된다", () => {
+  assert.match(parentLib, /notifyAdmins\("ENROLLMENT_CHANGE"/);
+  assert.match(adminLib, /notifyParentsOfStudents\(\[input\.studentId\]/);
+  // 알림 실패가 신청·승인을 되돌리면 안 된다.
+  assert.match(parentLib, /console\.error\("\[parent-change-request\] 원장 알림 실패/);
+  assert.match(adminLib, /console\.error\("\[admin-change-request\] 학부모 알림 실패/);
+});

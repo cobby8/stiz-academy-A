@@ -109,6 +109,7 @@ model Student {
   shuttleLocations    StudentShuttleLocation[]
   teamRosterEntries   StudentTeamRosterEntry[]
   regularAbsences     RegularAbsence[] // 정규 수업 사전 결석 신고(back-relation)
+  enrollmentChangeRequests EnrollmentChangeRequest[]
   parent              User                        @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
@@ -161,6 +162,8 @@ model Class {
   enrollments  Enrollment[]
   sessions     Session[]
   regularAbsences RegularAbsence[] // 정규 수업 사전 결석 신고(back-relation)
+  changeRequestsFrom EnrollmentChangeRequest[] @relation("EnrollmentChangeFromClass")
+  changeRequestsTo   EnrollmentChangeRequest[] @relation("EnrollmentChangeToClass")
 
   @@index([programId])
   @@index([instructorId])
@@ -175,11 +178,52 @@ model Enrollment {
   updatedAt DateTime @updatedAt
   class     Class    @relation(fields: [classId], references: [id])
   student   Student  @relation(fields: [studentId], references: [id])
+  changeRequests EnrollmentChangeRequest[]
 
   @@unique([studentId, classId])
   @@index([classId, status])
   @@index([createdAt])
   @@index([status, updatedAt])
+}
+
+/// 학부모의 수강 변경 신청(반 변경·휴원·퇴원) → 원장 승인 → 실제 반영.
+/// 예전에는 "학원에 요청하기" 메모로 받아 사람이 손으로 처리했다.
+/// 참고: "진행 중(PENDING)은 수강 등록당 한 건"은 DB 쪽 부분 유니크 인덱스로 막는다.
+/// Prisma 로는 부분 인덱스를 표현할 수 없어 여기에 적지 않는다(적으면 반대로 어긋난다).
+model EnrollmentChangeRequest {
+  id                String      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId         String
+  /// 대상 수강 등록. 반 변경·휴원·퇴원 모두 "지금 다니는 반"이 출발점이다.
+  enrollmentId      String?
+  /// 승인 시점에 반이 바뀌어 있어도 신청 당시를 알 수 있게 남기는 스냅샷.
+  fromClassId       String?
+  /// 반 변경일 때만 채운다.
+  toClassId         String?
+  kind              String // CLASS_CHANGE | PAUSE | WITHDRAW
+  effectiveFrom     DateTime    @db.Date
+  /// 휴원 복귀 예정일(선택).
+  resumeOn          DateTime?   @db.Date
+  reason            String?
+  status            String      @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELED
+  /// 신청 당시 희망 반이 만석이었는지. 원장이 대기 건을 알아볼 수 있게 남긴다.
+  waitlisted        Boolean     @default(false)
+  requestedByUserId String
+  decidedByUserId   String?
+  decidedAt         DateTime?   @db.Timestamptz(6)
+  decisionNote      String?
+  /// 실제로 반이 옮겨진 시각. 승인은 "예약"이고 적용일이 되어야 크론이 반영한다.
+  /// 참고: "적용할 것"을 찾는 DB 인덱스는 부분 인덱스라 여기에 적지 않는다.
+  appliedAt         DateTime?   @db.Timestamptz(6)
+  createdAt         DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime    @default(now()) @updatedAt @db.Timestamptz(6)
+
+  student    Student     @relation(fields: [studentId], references: [id])
+  enrollment Enrollment? @relation(fields: [enrollmentId], references: [id])
+  fromClass  Class?      @relation("EnrollmentChangeFromClass", fields: [fromClassId], references: [id])
+  toClass    Class?      @relation("EnrollmentChangeToClass", fields: [toClassId], references: [id])
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([studentId])
 }
 
 model Session {

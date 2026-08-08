@@ -35,6 +35,10 @@
       "schedule": "20 18 * * *"
     },
     {
+      "path": "/api/cron/enrollment-changes",
+      "schedule": "10 15 * * *"
+    },
+    {
       "path": "/api/cron/site-ops-bot",
       "schedule": "0 17 * * *"
     }

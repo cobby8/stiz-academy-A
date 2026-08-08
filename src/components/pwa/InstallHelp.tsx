@@ -3,8 +3,11 @@
 import { useState } from "react";
 import {
   buildKakaoExternalUrl,
+  getAndroidBrowserLabel,
+  getAndroidInstallSteps,
   getInAppBrowserLabel,
   getInAppEscapeSteps,
+  type AndroidBrowserKind,
   type InAppBrowserKind,
   type InstallPlatform,
 } from "@/lib/pwa/installEnvironment";
@@ -68,6 +71,32 @@ export function SafariShareIllustration() {
         화면 아래쪽(또는 위쪽) 가운데의 공유 버튼이에요.
       </figcaption>
     </figure>
+  );
+}
+
+type AndroidInstallStepsProps = {
+  androidBrowser: AndroidBrowserKind;
+};
+
+/**
+ * 안드로이드 수동 설치 3단계 안내.
+ * 왜 공용으로 빼나: 삼성 인터넷(갤럭시 기본 브라우저)은 메뉴 이름이 크롬과 달라서
+ * 두 설치 화면이 각자 문구를 들고 있으면 한쪽만 고쳐지는 사고가 난다.
+ * 모양은 기존 iOS 3단계 안내와 동일하게 맞춘다(번호 + 아이콘 + 짧은 라벨).
+ */
+export function AndroidInstallSteps({ androidBrowser }: AndroidInstallStepsProps) {
+  const steps = getAndroidInstallSteps(androidBrowser);
+
+  return (
+    <ol className="mt-5 space-y-3" aria-label={`${getAndroidBrowserLabel(androidBrowser)} 설치 순서`}>
+      {steps.map(({ icon, label }, index) => (
+        <li key={label} className="flex min-h-11 items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-gray-800">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-navy-900 text-sm font-black text-white">{index + 1}</span>
+          <span className="material-symbols-outlined text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
+          <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{label}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

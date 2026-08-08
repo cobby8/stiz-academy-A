@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  AndroidInstallSteps,
   CopyAddressButton,
   InAppBrowserEscapeCard,
   SafariShareIllustration,
@@ -10,6 +11,8 @@ import {
 // 기기·인앱 브라우저 판별은 두 설치 화면이 공유하는 순수 모듈 한 곳에서만 한다.
 import {
   detectInstallEnvironment,
+  getAndroidInstallHint,
+  type AndroidBrowserKind,
   type InAppBrowserKind,
   type InstallDeviceState,
   type InstallPlatform,
@@ -31,6 +34,8 @@ export default function ParentAppInstallClient() {
   const [deviceState, setDeviceState] = useState<DeviceState>("checking");
   // 인앱 브라우저 여부는 기기 종류와 별개다(안드로이드 카카오톡도 있다). 상태를 따로 둔다.
   const [inAppBrowser, setInAppBrowser] = useState<InAppBrowserKind | null>(null);
+  // 삼성 인터넷은 설치 메뉴 이름이 크롬과 달라서 안내 문구를 따로 골라야 한다.
+  const [androidBrowser, setAndroidBrowser] = useState<AndroidBrowserKind>("other");
   const [platform, setPlatform] = useState<InstallPlatform>("other");
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -53,6 +58,7 @@ export default function ParentAppInstallClient() {
       });
       setDeviceState(environment.deviceState);
       setInAppBrowser(environment.inAppBrowser);
+      setAndroidBrowser(environment.androidBrowser ?? "other");
       setPlatform(environment.platform);
     }
 
@@ -188,7 +194,8 @@ export default function ParentAppInstallClient() {
                 <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
                   {deviceState === "ios-safari" && "공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요."}
                   {deviceState === "ios-browser" && "아이폰은 Safari에서만 홈 화면에 추가할 수 있어요."}
-                  {deviceState === "android" && !installPrompt && "Chrome 오른쪽 위 메뉴에서 ‘홈 화면에 추가’를 선택하세요."}
+                  {/* 브라우저마다 메뉴 이름이 다르다 — 실제 메뉴에 적힌 그대로 안내한다. */}
+                  {deviceState === "android" && !installPrompt && getAndroidInstallHint(androidBrowser)}
                   {/* PC라도 설치 프롬프트가 잡혀 있으면 바로 설치할 수 있다고 알린다. */}
                   {deviceState === "other" && installPrompt && "이 브라우저에 설치할 수 있어요. 위 ‘지금 앱 설치하기’를 눌러주세요."}
                   {deviceState === "other" && !installPrompt && "휴대폰에서 이 링크를 열면 기기에 맞는 방법을 바로 안내해 드려요."}
@@ -232,21 +239,9 @@ export default function ParentAppInstallClient() {
               </>
             )}
 
-            {/* Android(Chrome) 3단계 안내 — 설치 프롬프트가 안 뜨는 기기 대비 */}
+            {/* Android 3단계 안내 — 설치 프롬프트가 안 뜨는 기기 대비. 삼성 인터넷은 메뉴 이름이 다르다. */}
             {deviceState === "android" && !installPrompt && (
-              <ol className="mt-5 space-y-3" aria-label="Android 설치 순서">
-                {[
-                  ["more_vert", "Chrome 오른쪽 위 메뉴 누르기"],
-                  ["add_to_home_screen", "‘홈 화면에 추가’ 선택하기"],
-                  ["add", "‘설치’ 또는 ‘추가’ 누르기"],
-                ].map(([icon, label], index) => (
-                  <li key={label} className="flex min-h-11 items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-gray-800">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-navy-900 text-sm font-black text-white">{index + 1}</span>
-                    <span className="material-symbols-outlined text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
-                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{label}</span>
-                  </li>
-                ))}
-              </ol>
+              <AndroidInstallSteps androidBrowser={androidBrowser} />
             )}
           </section>
         )}

@@ -12,9 +12,12 @@ const transpiled = ts.transpileModule(moduleSource, {
 const {
   detectInAppBrowser,
   detectInstallEnvironment,
+  detectAndroidBrowser,
   buildKakaoExternalUrl,
   getInAppBrowserLabel,
   getInAppEscapeSteps,
+  getAndroidInstallSteps,
+  getAndroidInstallHint,
 } = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`);
 
 const parentInstallSource = await readFile("src/app/parent-app/ParentAppInstallClient.tsx", "utf8");
@@ -33,6 +36,9 @@ const UA = {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 Mobile/15E148 Safari/604.1",
   androidChrome:
     "Mozilla/5.0 (Linux; Android 14; SM-S926N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.71 Mobile Safari/537.36",
+  // 삼성 인터넷(갤럭시 기본 브라우저) — UA에 Chrome 과 Safari 토큰이 둘 다 들어 있다.
+  samsungInternet:
+    "Mozilla/5.0 (Linux; Android 13; SM-S908N) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/21.0 Chrome/110.0.5481.154 Mobile Safari/537.36",
   desktopChrome:
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   naverIos:
@@ -99,6 +105,68 @@ test("안드로이드 크롬은 안드로이드이고 인앱이 아니다", () =
   assert.equal(env.platform, "android");
   assert.equal(env.inAppBrowser, null);
   assert.equal(env.deviceState, "android");
+});
+
+/* ---------------- 삼성 인터넷 (갤럭시 기본 브라우저) ---------------- */
+
+test("삼성 인터넷은 안드로이드·인앱 아님으로 보고 브라우저 종류를 samsung으로 판정한다", () => {
+  const env = detectInstallEnvironment({ userAgent: UA.samsungInternet });
+  assert.equal(env.platform, "android");
+  // 삼성 인터넷은 정식 브라우저다. 인앱으로 오판하면 엉뚱한 탈출 안내가 뜬다.
+  assert.equal(env.inAppBrowser, null);
+  assert.equal(env.deviceState, "android");
+  assert.equal(env.androidBrowser, "samsung");
+  assert.equal(detectAndroidBrowser(UA.samsungInternet), "samsung");
+});
+
+test("안드로이드 크롬은 samsung으로 오판하지 않는다", () => {
+  assert.equal(detectAndroidBrowser(UA.androidChrome), "other");
+  assert.equal(detectInstallEnvironment({ userAgent: UA.androidChrome }).androidBrowser, "other");
+  // 안드로이드가 아니면 브라우저 종류를 고를 필요가 없다.
+  assert.equal(detectInstallEnvironment({ userAgent: UA.iosSafari }).androidBrowser, null);
+});
+
+test("삼성 인터넷 UA는 Safari·Chrome 토큰이 있어도 iOS로 오판하지 않는다", () => {
+  const env = detectInstallEnvironment({ userAgent: UA.samsungInternet });
+  assert.notEqual(env.platform, "ios");
+  assert.equal(env.isIosSafari, false);
+  assert.notEqual(env.deviceState, "ios-safari");
+  assert.notEqual(env.deviceState, "ios-browser");
+});
+
+test("삼성 인터넷 안내는 실제 메뉴 이름(현재 페이지 추가)을 그대로 쓴다", () => {
+  const samsung = getAndroidInstallSteps("samsung");
+  assert.equal(samsung.length, 3);
+  const samsungText = samsung.map((step) => step.label).join(" / ");
+  // 어머님이 "앱 설치"를 찾다가 포기한 사고 재발 방지 — 삼성 메뉴 이름 그대로여야 한다.
+  assert.match(samsungText, /우측 하단/);
+  assert.match(samsungText, /현재 페이지 추가/);
+  assert.match(samsungText, /홈 화면/);
+  assert.match(getAndroidInstallHint("samsung"), /현재 페이지 추가/);
+
+  const other = getAndroidInstallSteps("other");
+  assert.equal(other.length, 3);
+  const otherText = other.map((step) => step.label).join(" / ");
+  assert.match(otherText, /우측 위/);
+  assert.match(otherText, /앱 설치|홈 화면에 추가/);
+  // 크롬 안내에 삼성 전용 메뉴 이름이 새어 나오면 안 된다.
+  assert.doesNotMatch(otherText, /현재 페이지 추가/);
+
+  // 한 손으로 보는 화면이라 단계 문구는 짧게 유지한다.
+  for (const step of [...samsung, ...other]) {
+    assert.ok(step.label.length <= 24, `너무 긴 안내: ${step.label}`);
+    assert.ok(step.icon.length > 0, "Material Symbols 아이콘 이름이 필요합니다.");
+  }
+});
+
+test("두 설치 화면은 안드로이드 안내를 공용 컴포넌트로 쓴다", () => {
+  for (const source of [parentInstallSource, staffInstallSource]) {
+    assert.match(source, /AndroidInstallSteps/);
+    assert.match(source, /androidBrowser=\{androidBrowser\}/);
+    // 화면이 메뉴 이름을 직접 들고 있으면 한쪽만 고쳐지는 사고가 난다.
+    assert.doesNotMatch(source, /현재 페이지 추가/);
+  }
+  assert.match(helpSource, /getAndroidInstallSteps/);
 });
 
 test("데스크톱 브라우저는 other이고 인앱으로 오탐하지 않는다", () => {

@@ -13,6 +13,13 @@ export type InAppBrowserKind = "kakaotalk" | "naver" | "instagram" | "facebook" 
 
 export type InstallPlatform = "ios" | "android" | "other";
 
+/**
+ * 안드로이드에서 쓰는 브라우저 종류.
+ * 왜 나누나: 삼성 인터넷은 갤럭시 기본 브라우저인데 설치 메뉴 이름이 크롬과 완전히 다르다.
+ * ("앱 설치"가 아니라 "현재 페이지 추가 → 홈 화면") 이름이 다르면 학부모가 못 찾고 포기한다.
+ */
+export type AndroidBrowserKind = "samsung" | "other";
+
 /** 안내 문구를 고르는 기준값 (설치 가능 여부와는 별개로 관리한다) */
 export type InstallDeviceState = "ios-safari" | "ios-browser" | "android" | "other";
 
@@ -21,6 +28,8 @@ export type InstallEnvironment = {
   /** iOS이면서 진짜 Safari(인앱 아님) — 홈 화면 추가가 가능한 유일한 경우 */
   isIosSafari: boolean;
   inAppBrowser: InAppBrowserKind | null;
+  /** 안드로이드일 때만 값이 있다. 안드로이드가 아니면 null (안내 문구를 고를 필요가 없다) */
+  androidBrowser: AndroidBrowserKind | null;
   deviceState: InstallDeviceState;
 };
 
@@ -71,6 +80,20 @@ export function detectInAppBrowser(userAgent: string): InAppBrowserKind | null {
   return null;
 }
 
+/**
+ * 안드로이드 브라우저 종류 판별.
+ *
+ * ⚠️ 순서가 핵심이다. 삼성 인터넷 UA에는 Chrome 토큰과 Safari 토큰이 **둘 다** 들어 있다.
+ *   예) ... SamsungBrowser/21.0 Chrome/110.0.5481.154 Mobile Safari/537.36
+ * 그래서 SamsungBrowser를 **가장 먼저** 확인한다. Chrome을 먼저 보면 크롬으로 오판한다.
+ * 인앱 브라우저 판별과는 무관하다 — 삼성 인터넷은 인앱 브라우저가 아니라 정식 브라우저다.
+ */
+export function detectAndroidBrowser(userAgent: string): AndroidBrowserKind {
+  const ua = safe(userAgent);
+  if (/samsungbrowser/i.test(ua)) return "samsung";
+  return "other";
+}
+
 /** 기기 + 브라우저 환경을 한 번에 판별한다. */
 export function detectInstallEnvironment(input: DetectInput): InstallEnvironment {
   const ua = safe(input?.userAgent);
@@ -93,7 +116,10 @@ export function detectInstallEnvironment(input: DetectInput): InstallEnvironment
       ? "android"
       : "other";
 
-  return { platform, isIosSafari, inAppBrowser, deviceState };
+  // 안드로이드일 때만 브라우저 종류를 본다. (iOS는 어차피 Safari 경로 하나뿐이라 의미가 없다)
+  const androidBrowser: AndroidBrowserKind | null = isAndroid ? detectAndroidBrowser(ua) : null;
+
+  return { platform, isIosSafari, inAppBrowser, androidBrowser, deviceState };
 }
 
 /** 사용자에게 보여줄 인앱 브라우저 이름 */
@@ -120,6 +146,42 @@ export function getInAppBrowserLabel(kind: InAppBrowserKind): string {
  */
 export function buildKakaoExternalUrl(currentUrl: string): string {
   return `kakaotalk://web/openExternal?url=${encodeURIComponent(safe(currentUrl))}`;
+}
+
+/** 안드로이드 수동 설치 단계 한 칸 (아이콘 + 짧은 라벨 — iOS 3단계 안내와 같은 모양) */
+export type AndroidInstallStep = { icon: string; label: string };
+
+/**
+ * 설치 프롬프트가 안 뜰 때 보여줄 브라우저별 수동 설치 단계.
+ * 문구는 **실제 메뉴에 적힌 그대로** 쓴다. 비슷한 말로 바꾸면 학부모가 그 항목을 못 찾는다.
+ */
+export function getAndroidInstallSteps(browser: AndroidBrowserKind): AndroidInstallStep[] {
+  if (browser === "samsung") {
+    // 삼성 인터넷은 메뉴가 우측 "하단"에 있고, 항목 이름도 "현재 페이지 추가"다.
+    return [
+      { icon: "menu", label: "우측 하단 ≡ 누르기" },
+      { icon: "add_to_home_screen", label: "‘현재 페이지 추가’ 선택" },
+      { icon: "add", label: "‘홈 화면’ 선택 후 추가" },
+    ];
+  }
+  // 크롬 등 나머지 안드로이드 브라우저 — 메뉴가 우측 "위"에 있다.
+  return [
+    { icon: "more_vert", label: "우측 위 ⋮ 누르기" },
+    { icon: "add_to_home_screen", label: "‘앱 설치’ 또는 ‘홈 화면에 추가’" },
+    { icon: "add", label: "‘설치’ 또는 ‘추가’ 누르기" },
+  ];
+}
+
+/** 카드 상단에 한 줄로 보여줄 요약 안내 (단계 목록과 같은 메뉴 이름을 쓴다) */
+export function getAndroidInstallHint(browser: AndroidBrowserKind): string {
+  return browser === "samsung"
+    ? "우측 하단 ≡ 메뉴에서 ‘현재 페이지 추가’를 선택하세요."
+    : "브라우저 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택하세요.";
+}
+
+/** 안내문에 쓰는 브라우저 이름 */
+export function getAndroidBrowserLabel(browser: AndroidBrowserKind): string {
+  return browser === "samsung" ? "삼성 인터넷" : "브라우저";
 }
 
 /** 스킴이 없는 인앱 브라우저용 — 메뉴로 빠져나가는 짧은 단계 안내 */

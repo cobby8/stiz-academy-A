@@ -1161,6 +1161,23 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         <span className="material-symbols-outlined text-gray-300">chevron_right</span>
                     </div>
                 </Link>
+
+                {/* 경로 ③ 보강 예약 — 결석으로 받은 보강권을 학부모가 직접 다른 반에 넣는다. */}
+                <Link
+                    href="/mypage/makeup"
+                    className="block rounded-xl border border-gray-100 dark:border-gray-700 p-3 hover:border-brand-orange-200 dark:hover:border-brand-neon-lime transition"
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-2xl text-gray-400 dark:text-gray-300">event_repeat</span>
+                            <div>
+                                <p className="font-bold text-brand-navy-900">보강 예약</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">결석하면 보강권이 생겨요. 학년이 맞는 다른 수업을 골라 직접 예약하세요. (결석일로부터 2개월 이내)</p>
+                            </div>
+                        </div>
+                        <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                    </div>
+                </Link>
             </div>
 
             {/* 수강 변경 신청 — 예전에는 "학원에 요청하기" 메모로 받아 사람이 손으로 처리했다.

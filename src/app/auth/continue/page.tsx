@@ -9,6 +9,7 @@ type ContinuePageProps = {
   searchParams: Promise<{
     context?: string | string[];
     redirect?: string | string[];
+    bounced?: string | string[];
   }>;
 };
 
@@ -38,7 +39,12 @@ export default async function AuthContinuePage({ searchParams }: ContinuePagePro
     const role = parseAppRole(rows[0]?.role);
     const params = await searchParams;
     const context = Array.isArray(params.context) ? params.context[0] : params.context;
-    const requestedPath = Array.isArray(params.redirect) ? params.redirect[0] : params.redirect;
+    const requestedPathParam = Array.isArray(params.redirect) ? params.redirect[0] : params.redirect;
+    // 보호 화면이 "방금 이 사용자를 거절했다"고 알려온 경우. 그 화면으로 되돌려보내면
+    // 거절 → 여기 → 그 화면 → 거절 이 끝없이 반복된다(ERR_TOO_MANY_REDIRECTS).
+    // 목적지를 버리고 역할 기본 화면으로 보내면 한 번 튕기고 끝난다.
+    const bounced = (Array.isArray(params.bounced) ? params.bounced[0] : params.bounced) === "1";
+    const requestedPath = bounced ? undefined : requestedPathParam;
 
     // An OAuth identity is not an application membership. New social users and
     // unverified parents must finish the mandatory phone onboarding first.

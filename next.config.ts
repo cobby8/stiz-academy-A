@@ -46,6 +46,12 @@ const nextConfig: NextConfig = {
         destination: "/login?mode=staff",
       },
       {
+        // 학부모 앱도 역할 판별 화면을 제 영역(/mypage) 안에 둔다.
+        // 밖으로 나가면 설치된 앱이 주소표시줄을 띄우며 브라우저로 새어 나간다.
+        source: "/mypage/continue",
+        destination: "/auth/continue",
+      },
+      {
         // 로그인 직후 역할 판별 화면도 /staff 범위 안에 둔다.
         // 선생님 앱(PWA)의 manifest scope 가 /staff 라, 여기서 벗어나면 설치된 앱이
         // 브라우저로 튕긴다. 화면 자체는 /auth/continue 와 같은 것을 쓴다.

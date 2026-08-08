@@ -40,7 +40,7 @@ export async function updateSession(request: NextRequest) {
   // 로그인 후 역할을 판별하는 중간 경로. redirect 목적지로 다시 쓰이면 순환한다.
   const isContinuePath = (path: string) => {
     const bare = path.split("?")[0];
-    return bare === "/auth/continue" || bare === "/staff/continue";
+    return bare === "/auth/continue" || bare === "/staff/continue" || bare === "/mypage/continue";
   };
   const isStaffModeLogin =
     isStaffLogin || (pathname === "/login" && request.nextUrl.searchParams.get("mode") === "staff");

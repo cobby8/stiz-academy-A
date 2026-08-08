@@ -27,7 +27,12 @@ export default async function MyPageLayout({
 }: {
     children: React.ReactNode;
 }) {
-    await requireVerifiedParent().catch(() => redirect("/auth/continue?redirect=/mypage"));
+    // bounced=1: "여기가 방금 이 사용자를 거절했다"는 표시.
+    // 이게 없으면 /auth/continue 가 다시 /mypage 로 보내고, 여기서 또 거절해 무한
+    // 리다이렉트가 된다(실제 발생: ERR_TOO_MANY_REDIRECTS).
+    // /mypage/continue 로 가는 이유: /auth/continue 는 학부모 앱의 영역(/mypage) 밖이라
+    // 설치된 앱이 주소표시줄을 띄우며 브라우저로 새어 나간다.
+    await requireVerifiedParent().catch(() => redirect("/mypage/continue?bounced=1"));
 
     return (
         // surface-warm 배경 적용 — 공개 페이지와 동일한 따뜻한 톤

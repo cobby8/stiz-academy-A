@@ -42,3 +42,23 @@
 - **내용**: `src/lib/shuttle/tmap.ts`의 `optimizeWaypointOrderWithTmap`이 T맵 routeOptimization API를 호출하는데 두 가지 필수 조건을 어겨 **항상 400(code 9401 "필수 파라메터가 없습니다")**를 받고, `planRun`의 try/catch가 이를 삼켜 조용히 LOCAL(직선 추정) 폴백. 그래서 유효한 `TMAP_APP_KEY`가 있어도 "T맵 최적경로"가 절대 활성화되지 않았다. 실측 진단(실 키로 API 직접 호출): ①`startTime`(yyyyMMddHHmm)이 **필수** — 빼면 400, 넣으면 200. ②`viaPointId "0"`을 T맵이 **값 없음으로 취급** — 호출부(shuttle-optimize)가 `String(i)`로 0부터 매기면 첫 경유지가 "0"이라 항상 400. `carType`은 불필요(넣어도 무관), `searchOption`도 무관. 기본 자동차경로/POI API는 같은 키로 200이라 키·권한 문제 아님.
 - **해결**: tmap.ts에서 (1) 요청 본문에 `startTime: tmapStartTime()`(현재 시각 Asia/Seoul) 추가, (2) 호출부 id를 그대로 보내지 말고 내부 안전 id(`wp0`,`wp1`…)로 바꿔 전송한 뒤 응답 순서를 원래 id로 되돌린다(originalBySafe 맵). 호출부 계약(id 넣고 순서 받기)은 그대로. 회귀 테스트 `tmap-route-optimization.test.mjs`에 startTime 형식·viaPointId≠"0" 단언 추가.
 - **참조횟수**: 0
+
+### [2026-08-09] scope 없는 manifest 하나가 같은 도메인의 다른 PWA 설치를 전부 막는다
+
+**증상**: 갤럭시 크롬에서 `/mypage/install` 을 열면 설치 버튼 대신 "앱이 이미
+설치되어 있습니다" 가 뜬다. 학부모 앱을 지워도 그대로. "앱 열기" 를 누르면 홈이
+아니라 **설치 안내 화면이 앱 창으로** 열리고, 주소창·뒤로가기가 없어 갇힌다.
+
+**원인**: `public/manifest.json` 에 `scope` 가 없었다. 없으면 기본값이 start_url
+기준 `/` 라서, 공식 앱이 **사이트 전체를 자기 영역으로** 잡는다. 크롬은 현재
+주소를 품는 설치된 앱을 찾으면(FindAppWithUrlInScope) manifest 의 `id` 가 달라도
+"이미 설치됨" 으로 답한다. 즉 공식 앱이 깔린 기기에서는 `/staff`·`/mypage` 앱을
+설치할 수 없다.
+
+**확인법**: 공식 앱을 지우고 새로고침 → 설치 버튼이 즉시 나타나면 이 원인이다.
+
+**해결**: 공식 앱을 설치 대상에서 제외(`display: "browser"`) + `scope` 명시.
+같은 도메인에 역할별 PWA 를 둘 이상 두려면 **넓은 scope 앱을 만들지 않는다.**
+
+**교훈**: manifest 의 빠진 필드는 "없음" 이 아니라 **기본값이 들어간다.** scope 는
+비워두면 가장 넓은 값이 되어 조용히 다른 앱을 잡아먹는다.

@@ -9,8 +9,9 @@ test("교사용 앱은 /staff 범위로 독립 설치된다", async () => {
   const manifest = JSON.parse(await readFile(manifestUrl, "utf8"));
 
   assert.equal(manifest.id, "/staff-app");
-  assert.equal(manifest.name, "STIZ 선생님");
-  assert.equal(manifest.short_name, "STIZ 교사용");
+  assert.equal(manifest.name, "스티즈 선생님");
+  // 홈 화면에 찍히는 이름. name 과 같게 두어 기기·표시 위치에 따라 이름이 갈리지 않게 한다.
+  assert.equal(manifest.short_name, "스티즈 선생님");
   assert.equal(manifest.start_url, "/staff");
   assert.equal(manifest.scope, "/staff");
   assert.equal(manifest.orientation, "portrait");

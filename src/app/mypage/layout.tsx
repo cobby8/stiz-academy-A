@@ -11,13 +11,14 @@ import MyPageBottomNav from "./MyPageBottomNav";
 // 브라우저가 "이 앱은 공식 앱이었나?" 하고 신원을 헷갈린다. 교사용(/staff)과 같은 구조로
 // 자기 manifest 를 명시한다.
 export const metadata: Metadata = {
-  title: "STIZ 학부모",
-  description: "자녀의 출결과 셔틀 시각, 결석 신고와 청구를 확인하는 STIZ 학부모용 화면",
+  title: "스티즈 학부모",
+  description: "자녀의 출결과 셔틀 시각, 결석 신고와 청구를 확인하는 스티즈 학부모 화면",
   manifest: "/manifest-parent.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "STIZ 학부모",
+    // 아이폰 홈 화면에 찍히는 이름. manifest 와 어긋나면 기기마다 다른 이름이 뜬다.
+    title: "스티즈 학부모",
   },
 };
 

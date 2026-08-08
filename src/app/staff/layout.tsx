@@ -7,13 +7,14 @@ import StaffHomeLink from "./StaffHomeLink";
 import AppBackButton from "@/components/AppBackButton";
 
 export const metadata: Metadata = {
-  title: "STIZ 선생님",
-  description: "수업, 출결, 학생 연락과 청구를 관리하는 STIZ 교사용 앱",
+  title: "스티즈 선생님",
+  description: "수업, 출결, 학생 연락과 청구를 관리하는 스티즈 선생님 앱",
   manifest: "/manifest-staff.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "STIZ 교사용",
+    // 아이폰 홈 화면에 찍히는 이름. manifest 와 어긋나면 기기마다 다른 이름이 뜬다.
+    title: "스티즈 선생님",
   },
   icons: {
     apple: [{ url: "/icon-v2-192.png", sizes: "192x192", type: "image/png" }],

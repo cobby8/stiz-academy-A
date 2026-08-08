@@ -1,7 +1,7 @@
 {
   "id": "/driver/",
-  "name": "스티즈 기사 앱",
-  "short_name": "스티즈 기사",
+  "name": "스티즈 기사님",
+  "short_name": "스티즈 기사님",
   "description": "스티즈농구교실 셔틀 기사님 전용 운행 앱",
   "start_url": "/driver/",
   "display": "standalone",

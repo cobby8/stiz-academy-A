@@ -162,7 +162,7 @@ export default function ParentAppInstallClient() {
           <div className="mt-5 text-center">
             <p className="text-sm font-bold text-white/65">스티즈농구교실 학부모용</p>
             <h1 className="mt-1 text-balance text-3xl font-black leading-tight">
-              {isInstalled ? "학부모 앱이 준비됐어요" : "STIZ 학부모 앱 설치"}
+              {isInstalled ? "학부모 앱이 준비됐어요" : "스티즈 학부모 앱 설치"}
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-balance text-sm leading-6 text-white/75">
               홈 화면에 추가하면 자녀의 출결과 셔틀 시각을 앱처럼 바로 열어볼 수 있어요.

@@ -161,7 +161,7 @@ export default function StaffAppInstallClient() {
           <div className="mt-5 text-center">
             <p className="text-sm font-bold text-white/65">가입을 마친 선생님 전용</p>
             <h1 className="mt-1 text-balance text-3xl font-black leading-tight">
-              {isInstalled ? "선생님 앱이 준비됐어요" : "STIZ 선생님 앱 설치"}
+              {isInstalled ? "선생님 앱이 준비됐어요" : "스티즈 선생님 앱 설치"}
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-balance text-sm leading-6 text-white/75">
               개인 초대 링크에서 가입을 마쳤다면, 출결 확인과 수업 관리를 홈 화면에서 바로 시작하세요.

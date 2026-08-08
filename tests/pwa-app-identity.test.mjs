@@ -54,6 +54,22 @@ test("역할 앱은 자기 영역만 차지한다", () => {
   assert.equal(loaded.parent.start_url, "/mypage");
 });
 
+test("세 앱의 이름이 홈 화면·아이폰·브라우저에서 모두 같다", async () => {
+  // 이름이 manifest·레이아웃 metadata·appleWebApp 세 군데에 흩어져 있어 쉽게 어긋난다.
+  // 어긋나면 안드로이드와 아이폰 홈 화면에 서로 다른 이름이 찍힌다.
+  const NAMES = [
+    { key: "staff", name: "스티즈 선생님", layout: "src/app/staff/layout.tsx" },
+    { key: "parent", name: "스티즈 학부모", layout: "src/app/mypage/layout.tsx" },
+    { key: "driver", name: "스티즈 기사님", layout: "src/app/driver/layout.tsx" },
+  ];
+  for (const { key, name, layout } of NAMES) {
+    assert.equal(loaded[key].name, name, `${key} manifest name`);
+    assert.equal(loaded[key].short_name, name, `${key} manifest short_name`);
+    const source = await readFile(layout, "utf8");
+    assert.match(source, new RegExp(`title: "${name}"`), `${layout} 의 제목이 앱 이름과 다릅니다.`);
+  }
+});
+
 test("공식 홈페이지 앱은 설치 대상이 아니다", () => {
   // 공식 manifest 는 scope 가 없어 사이트 전체(/)를 자기 영역으로 잡았다.
   // 그 앱이 깔려 있으면 크롬이 /mypage·/staff 도 "이미 설치된 앱 영역"으로 보고

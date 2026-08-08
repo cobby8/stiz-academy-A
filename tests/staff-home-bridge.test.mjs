@@ -8,16 +8,33 @@ const homeLinkSource = await readFile("src/app/staff/StaffHomeLink.tsx", "utf8")
 const navigationSource = await readFile("src/app/staff/staffNavigation.ts", "utf8");
 const sessionSource = await readFile("src/app/staff/sessions/[sessionId]/SessionInProgressClient.tsx", "utf8");
 const manifest = JSON.parse(await readFile("public/manifest-staff.json", "utf8"));
+const middlewareSource = await readFile("src/lib/supabase/middleware.ts", "utf8");
+const nextConfigSource = await readFile("next.config.ts", "utf8");
 
-test("교사용 상단 프로필에서 홈페이지 정보와 앱 설치 안내로 이동할 수 있다", () => {
+test("교사용 상단 프로필은 앱 설치 안내와 로그아웃만 제공한다", () => {
   assert.match(layoutSource, /<StaffProfileMenu staffName=\{staff\.appUserName\}/);
-  for (const href of ["/", "/notices", "/programs", "/schedule", "/gallery", "/staff/install"]) {
-    assert.ok(menuSource.includes(`href: "${href}"`) || menuSource.includes(`href="${href}"`), `${href} 바로가기가 있어야 합니다.`);
-  }
+  assert.ok(menuSource.includes('href="/staff/install"'), "설치 안내 바로가기가 있어야 합니다.");
   assert.match(menuSource, /action=\{logoutStaff\}/);
+  // 선생님 앱의 manifest scope 는 /staff 다. 공개 홈페이지로 나가면 설치된 앱을
+  // 벗어나 브라우저로 튕기므로 프로필 메뉴에 공개 홈페이지 링크를 두지 않는다.
+  for (const href of ["/notices", "/programs", "/schedule", "/gallery"]) {
+    assert.ok(
+      !menuSource.includes(`href="${href}"`) && !menuSource.includes(`href: "${href}"`),
+      `${href} 링크는 선생님 앱을 벗어나므로 없어야 합니다.`,
+    );
+  }
 });
 
-test("수업 중 공개 홈페이지 이동은 자동 저장 안내 확인을 거친다", () => {
+test("로그인 직후 역할 판별도 staff scope 안에서 이뤄진다", () => {
+  // /auth/continue 는 scope(/staff) 밖이라 설치된 앱이 그 순간 브라우저로 튕긴다.
+  assert.match(middlewareSource, /isStaffLogin \? "\/staff\/continue" : "\/auth\/continue"/);
+  assert.match(nextConfigSource, /source: "\/staff\/continue"/);
+  assert.match(nextConfigSource, /destination: "\/auth\/continue"/);
+  // continue 경로가 redirect 목적지로 되돌아오면 무한 리다이렉트가 된다.
+  assert.match(middlewareSource, /!isContinuePath\(requestedPath\)/);
+});
+
+test("수업 중 다른 화면으로 이동할 때 자동 저장 확인을 거친다", () => {
   assert.match(menuSource, /pathname\.startsWith\("\/staff\/sessions\/"\)/);
   assert.match(menuSource, /event\.preventDefault\(\)/);
   assert.match(menuSource, /prepareStaffNavigation/);

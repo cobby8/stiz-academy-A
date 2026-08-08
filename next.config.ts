@@ -30,6 +30,13 @@ const nextConfig: NextConfig = {
         source: "/staff/login",
         destination: "/login?mode=staff",
       },
+      {
+        // 로그인 직후 역할 판별 화면도 /staff 범위 안에 둔다.
+        // 선생님 앱(PWA)의 manifest scope 가 /staff 라, 여기서 벗어나면 설치된 앱이
+        // 브라우저로 튕긴다. 화면 자체는 /auth/continue 와 같은 것을 쓴다.
+        source: "/staff/continue",
+        destination: "/auth/continue",
+      },
     ];
   },
 

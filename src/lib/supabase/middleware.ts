@@ -37,6 +37,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isStaffLogin = pathname === "/staff/login";
+  // 로그인 후 역할을 판별하는 중간 경로. redirect 목적지로 다시 쓰이면 순환한다.
+  const isContinuePath = (path: string) => {
+    const bare = path.split("?")[0];
+    return bare === "/auth/continue" || bare === "/staff/continue";
+  };
   const isStaffModeLogin =
     isStaffLogin || (pathname === "/login" && request.nextUrl.searchParams.get("mode") === "staff");
   const isStaffInstall = pathname === "/staff/install";
@@ -63,12 +68,17 @@ export async function updateSession(request: NextRequest) {
     // page that resolves the current DB role instead of trusting stale metadata.
     const url = request.nextUrl.clone();
     const requestedPath = request.nextUrl.searchParams.get("redirect");
-    url.pathname = "/auth/continue";
+    // 선생님 앱(PWA)의 manifest scope 는 /staff 다. 로그인 직후 /auth/continue 로
+    // 나가면 설치된 앱이 그 순간 scope 를 벗어나 브라우저로 튕길 수 있다.
+    // /staff 안에 머무는 주소로 보낸다(next.config 가 /staff/continue → /auth/continue).
+    url.pathname = isStaffLogin ? "/staff/continue" : "/auth/continue";
     url.search = "";
     if (isStaffModeLogin) {
       url.searchParams.set("context", "staff");
     }
-    if (requestedPath) {
+    // redirect 가 continue 경로 자신을 가리키면 무한 리다이렉트가 된다
+    // (미인증 상태로 /staff/continue 에 직접 들어온 경우 등).
+    if (requestedPath && !isContinuePath(requestedPath)) {
       url.searchParams.set("redirect", requestedPath);
     }
     return NextResponse.redirect(url);

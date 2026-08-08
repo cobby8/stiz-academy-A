@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { syncCreditForRegularSession, syncCreditForSeasonalSeat } from "@/lib/makeup/credit-service";
 import { requireStaffClassAccess, requireStaffSeasonalSessionAccess } from "@/lib/staff-class-access";
 import { deliverParentNotification, getClassParentRecipients } from "@/lib/staff-notifications";
 import type { ParentRecipient } from "@/lib/staff-notifications";
@@ -123,6 +124,24 @@ async function saveSeasonalSeatAttendance(input: {
   }
 
   const studentId = updated[0].studentId;
+
+  // 보강권 — 결석이면 발급, 출석·지각으로 정정되면 회수(2026-08-09 개정 약관).
+  // ★ 출결 저장은 이미 끝났다. 보강권이 실패해도 출결을 되돌리지 않는다.
+  //   선생님이 수업 중에 쓰는 화면이라, 부수 기능 때문에 출결이 안 찍히면 더 큰 문제다.
+  if (studentId) {
+    try {
+      await syncCreditForSeasonalSeat({
+        enrollmentDateId: input.enrollmentDateId,
+        studentId,
+        status: input.status,
+      });
+    } catch (error) {
+      console.error("[saveStaffAttendance] 보강권 처리 실패(출결은 저장됨)", {
+        enrollmentDateId: input.enrollmentDateId, studentId, error,
+      });
+    }
+  }
+
   // 미전환(Student 없음) 좌석은 여기서 끝. 정규 Attendance/학부모 알림은 없다.
   if (!studentId) {
     return { ok: true as const, attendanceId: updated[0].id, changed };
@@ -307,6 +326,15 @@ export async function saveStaffAttendance(input: { sessionId: string; attendance
      RETURNING id`,
     input.sessionId, studentId, input.status, input.note?.trim() || null, access.staff.appUserId,
   );
+
+  // 보강권 — 결석이면 발급, 출석·지각으로 정정되면 회수. 실패해도 출결은 유지한다(위와 같은 이유).
+  try {
+    await syncCreditForRegularSession({ sessionId: input.sessionId, studentId, status: input.status });
+  } catch (error) {
+    console.error("[saveStaffAttendance] 보강권 처리 실패(출결은 저장됨)", {
+      sessionId: input.sessionId, studentId, error,
+    });
+  }
 
   if (changed && (input.status === "PRESENT" || input.status === "LATE")) {
     try {

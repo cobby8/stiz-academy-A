@@ -16,6 +16,11 @@ import {
   type InstallDeviceState,
   type InstallPlatform,
 } from "@/lib/pwa/installEnvironment";
+// 첫 1.5초 동안 무엇을 보여줄지(대기/설치버튼/수동안내)는 순수 모듈 한 곳에서만 판단한다.
+import {
+  INSTALL_PROMPT_WAIT_MS,
+  resolveInstallScreenView,
+} from "@/lib/pwa/installReadiness";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -38,6 +43,9 @@ export default function StaffAppInstallClient() {
   const [platform, setPlatform] = useState<InstallPlatform>("other");
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
+  // 크롬이 설치 신호를 1~2초 늦게 보낸다. 그 사이에 "설치 안 됨" 안내를 띄우면 선생님들이 닫아버린다.
+  // 그래서 아주 짧은 대기 창을 두고, 그 창이 끝났는지만 여기서 기억한다.
+  const [waitElapsed, setWaitElapsed] = useState(false);
 
   useEffect(() => {
     const navigatorWithStandalone = navigator as NavigatorWithStandalone;
@@ -91,7 +99,13 @@ export default function StaffAppInstallClient() {
     window.addEventListener("stiz:installed", handleInstalled);
     window.addEventListener("beforeinstallprompt", handleInstallPrompt);
     window.addEventListener("appinstalled", handleInstalled);
+
+    // 대기 창 타이머. iOS·인앱 브라우저처럼 기다릴 필요가 없는 환경은
+    // resolveInstallScreenView 가 애초에 대기로 보지 않으므로 타이머 결과와 무관하다.
+    const waitTimer = window.setTimeout(() => setWaitElapsed(true), INSTALL_PROMPT_WAIT_MS);
+
     return () => {
+      window.clearTimeout(waitTimer);
       window.removeEventListener("stiz:installprompt", adoptStoredPrompt);
       window.removeEventListener("stiz:installed", handleInstalled);
       window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
@@ -116,6 +130,13 @@ export default function StaffAppInstallClient() {
   };
 
   const isInstalled = deviceState === "installed";
+  // 지금 화면에 무엇을 보여줄지(대기 표시/설치 버튼/수동 안내)는 순수 함수가 한 번에 정한다.
+  const view = resolveInstallScreenView({
+    deviceState,
+    hasPrompt: installPrompt !== null,
+    isInAppBrowser: inAppBrowser !== null,
+    waitElapsed,
+  });
 
   return (
     <main className="min-h-screen bg-surface-warm px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))] dark:bg-gray-950">
@@ -148,7 +169,7 @@ export default function StaffAppInstallClient() {
 
           {/* 설치 전용 화면이므로 첫 화면의 행동은 '설치' 하나뿐이다. 앱으로 이동하는 버튼은 두지 않는다. */}
           {/* 브라우저 설치 프롬프트는 사용자 제스처(클릭) 안에서만 띄울 수 있어 자동 호출하지 않는다. */}
-          {installPrompt && !isInstalled && (
+          {view.showInstallButton && installPrompt && (
             <div className="mt-6">
               <button
                 type="button"
@@ -163,12 +184,27 @@ export default function StaffAppInstallClient() {
           )}
         </section>
 
+        {/* 설치 신호가 늦게 오는 1.5초 동안 보여주는 최소 표시.
+            이 자리에 곧 안내 카드가 오므로 같은 카드 껍데기를 써서 화면이 크게 출렁이지 않게 한다. */}
+        {view.showWaitingNotice && (
+          <section
+            className="mt-4 flex min-h-11 items-center gap-3 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            aria-live="polite"
+          >
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" aria-hidden="true">
+              <span className="material-symbols-outlined animate-spin">progress_activity</span>
+            </span>
+            <p className="text-sm font-bold text-gray-600 dark:text-gray-300">설치 방법을 확인하고 있어요</p>
+          </section>
+        )}
+
         {/* 카카오톡 등 인앱 브라우저에서는 홈 화면 추가 자체가 막힌다. 탈출 안내를 먼저 보여준다. */}
-        {!isInstalled && inAppBrowser && (
+        {view.showInAppEscape && inAppBrowser && (
           <InAppBrowserEscapeCard inAppBrowser={inAppBrowser} platform={platform} />
         )}
 
-        {!isInstalled && deviceState !== "checking" && !inAppBrowser && (
+        {/* 아래 조건은 view.showManualGuide 와 같은 뜻이지만, 기존 계약(테스트)이 잠근 표현이라 그대로 남긴다. */}
+        {view.showManualGuide && !isInstalled && deviceState !== "checking" && !inAppBrowser && (
           <section className="mt-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900" aria-labelledby="install-guide-title">
             <div className="flex items-start gap-3">
               <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" aria-hidden="true">

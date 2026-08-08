@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
         destination: "/teacher-app",
       },
       {
+        // 학부모에게 카카오톡·문자로 공유하는 짧은 주소를 설치 안내 화면으로 연결한다.
+        source: "/app",
+        destination: "/parent-app",
+      },
+      {
         // 설치 앱 주소는 /staff 범위에 유지하면서 공용 로그인 화면을 재사용한다.
         source: "/staff/login",
         destination: "/login?mode=staff",

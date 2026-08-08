@@ -338,7 +338,13 @@ export async function saveStaffAttendance(input: { sessionId: string; attendance
   return { ok: true as const, attendanceId: saved[0].id, changed };
 }
 
-export async function completeClassSession(input: { sessionId: string }) {
+export async function completeClassSession(input: {
+  sessionId: string;
+  /** 오늘 수업 한 줄(선택). 비워도 출결·사진만으로 리포트가 된다. */
+  report?: string;
+  /** 학부모에게 바로 보낼지. 화면에서 기본 켬. */
+  publishReport?: boolean;
+}) {
   const { session, access } = await requireSessionAccess(input.sessionId);
   if (session.status === "COMPLETED") return { ok: true as const, completed: true, resumed: true };
   if (session.status !== "IN_PROGRESS") return { ok: false as const, message: "시작한 수업만 종료할 수 있습니다." };
@@ -376,10 +382,19 @@ export async function completeClassSession(input: { sessionId: string }) {
       );
   if (Number(missing[0]?.count ?? 0) > 0) return { ok: false as const, message: "출결을 확인하지 않은 학생이 있습니다." };
 
+  // 리포트를 종료와 같은 UPDATE 로 처리한다. 지금까지는 리포트 작성·발행이 관리자
+  // 전용이라(requireAdmin) 선생님이 수업을 마쳐도 원장이 PC 에서 다시 써야 나갔고,
+  // 그래서 운영 100회차 동안 발행이 0건이었다. 선생님이 끝내면서 같이 끝내게 한다.
+  const report = (input.report ?? "").trim().slice(0, 2000) || null;
+  const publish = input.publishReport !== false;
   const ended = await prisma.$queryRawUnsafe<{ id: string }[]>(
-    `UPDATE "Session" SET status = 'COMPLETED', "endedAt" = NOW(), "endedByUserId" = $2, "updatedAt" = NOW()
-     WHERE id = $1 AND status = 'IN_PROGRESS' AND "startedAt" IS NOT NULL RETURNING id`,
-    input.sessionId, access.staff.appUserId,
+    `UPDATE "Session"
+        SET status = 'COMPLETED', "endedAt" = NOW(), "endedByUserId" = $2, "updatedAt" = NOW(),
+            content = COALESCE($3, content),
+            published = CASE WHEN $4 THEN true ELSE published END,
+            "publishedAt" = CASE WHEN $4 AND NOT published THEN NOW() ELSE "publishedAt" END
+      WHERE id = $1 AND status = 'IN_PROGRESS' AND "startedAt" IS NOT NULL RETURNING id`,
+    input.sessionId, access.staff.appUserId, report, publish,
   );
   if (!ended[0]) return { ok: false as const, message: "수업 종료 상태를 다시 확인해 주세요." };
 
@@ -406,7 +421,9 @@ export async function completeClassSession(input: { sessionId: string }) {
         recipient,
         title: `${session.className} 수업 종료`,
         message: `${recipient.studentName} 학생의 수업이 종료되었습니다.`,
-        linkUrl: "/parent/sessions",
+        // 예전 값 "/parent/sessions" 는 **없는 주소**였다(알림을 눌러도 404).
+        // 학부모 리포트 화면은 /mypage/reports/[sessionId] 다.
+        linkUrl: `/mypage/reports/${input.sessionId}`,
         sessionId: input.sessionId,
       })));
       const failedCount = results.reduce((count, result) => {

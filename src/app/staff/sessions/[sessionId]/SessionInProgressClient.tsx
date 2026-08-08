@@ -64,6 +64,10 @@ export default function SessionInProgressClient({
   const [online, setOnline] = useState(true);
   const [showPlan, setShowPlan] = useState(true);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  // 종료 화면에서 바로 남기는 수업 리포트. 기본은 "바로 보내기" 켬 —
+  // 꺼두면 지금처럼 아무도 발행하지 않아 학부모 화면이 계속 비어 있게 된다.
+  const [report, setReport] = useState("");
+  const [publishReport, setPublishReport] = useState(true);
   const [showPeople, setShowPeople] = useState(false);
   const [billingStudent, setBillingStudent] = useState<{ id: string; name: string } | null | undefined>(undefined);
   const [pending, startTransition] = useTransition();
@@ -361,7 +365,11 @@ export default function SessionInProgressClient({
           setFinishError("특이사항 메모를 저장하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
           return;
         }
-        const result = await completeClassSession({ sessionId: session.id });
+        const result = await completeClassSession({
+          sessionId: session.id,
+          report,
+          publishReport,
+        });
         if (!result.ok) {
           setFinishError(result.message);
           return;
@@ -556,6 +564,34 @@ export default function SessionInProgressClient({
               <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
                 <p className="font-black">출결 미확인 학생 {counts.UNCHECKED}명이 있어 아직 종료할 수 없습니다.</p>
                 <p className="mt-1 text-xs font-medium">출석부에서 출석·지각·결석 중 하나를 선택해 주세요.</p>
+              </div>
+            )}
+            {/* 리포트를 여기서 끝낸다. 지금까지는 원장이 PC 에서 따로 써야 나가서
+                운영 100회차 동안 발행이 0건이었다. 한 줄은 선택이고, 비워도 출결·사진이
+                리포트가 된다. */}
+            {counts.UNCHECKED === 0 && (
+              <div className="mt-4">
+                <label htmlFor="session-report" className="text-sm font-black text-gray-700 dark:text-gray-200">
+                  오늘 수업 한 줄 <span className="font-bold text-gray-400">(선택)</span>
+                </label>
+                <textarea
+                  id="session-report"
+                  value={report}
+                  onChange={(event) => setReport(event.target.value)}
+                  rows={2}
+                  maxLength={2000}
+                  placeholder="예: 드리블 기본기 연습했습니다. 다들 잘 따라왔어요."
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 p-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                />
+                <label className="mt-2 flex min-h-11 items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={publishReport}
+                    onChange={(event) => setPublishReport(event.target.checked)}
+                    className="size-5"
+                  />
+                  학부모에게 바로 보내기
+                </label>
               </div>
             )}
             {finishError && <p role="alert" aria-live="assertive" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{finishError}</p>}

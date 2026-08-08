@@ -2,14 +2,24 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+// 어디로 갈지 정하는 규칙은 순수 모듈 한 곳에서만 판단한다(분기가 네 갈래라 눈으로 못 잡는다).
+import { resolveBackAction } from "@/lib/navigation/backAction";
+import { useInstalledApp } from "@/components/pwa/useInstalledApp";
 
 type AppBackButtonProps = {
   fallbackHref?: string;
+  /**
+   * 설치된 앱 안에서 벗어나면 안 되는 범위(manifest scope). 예: "/mypage".
+   * 지정하면 **설치된 앱으로 열렸을 때만** 이 범위 밖으로 나가지 않는다.
+   * 브라우저에서는 홈페이지에서 들어온 사람도 있으므로 기존대로 동작한다.
+   */
+  scopeHref?: string;
   className?: string;
   size?: "sm" | "md";
   variant?: "header" | "floating";
   ariaLabel?: string;
 };
+
 
 function canGoBackWithinApp() {
   if (typeof window === "undefined") return false;
@@ -26,6 +36,7 @@ function canGoBackWithinApp() {
 
 export default function AppBackButton({
   fallbackHref = "/",
+  scopeHref,
   className = "",
   size = "md",
   variant = "header",
@@ -33,6 +44,18 @@ export default function AppBackButton({
 }: AppBackButtonProps) {
   const router = useRouter();
   const pathname = usePathname() || "/";
+  const isInstalledApp = useInstalledApp();
+
+  // 앱의 첫 화면이라 돌아갈 곳이 없다. 죽은 버튼을 두느니 자리만 남긴다
+  // (헤더가 격자 배치라 그냥 지우면 로고·제목이 밀린다).
+  const nothingToGoBackTo =
+    resolveBackAction({
+      hasHistory: canGoBackWithinApp(),
+      pathname,
+      fallbackHref,
+      scopeHref,
+      isInstalledApp,
+    }).type === "none";
   const sizeClass = size === "sm" ? "h-9 w-9 rounded-lg" : "h-10 w-10 rounded-xl";
   const variantClass =
     variant === "floating"
@@ -40,13 +63,20 @@ export default function AppBackButton({
       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800";
 
   const handleClick = () => {
-    if (canGoBackWithinApp()) {
-      router.back();
-      return;
-    }
-
-    router.push(fallbackHref === pathname ? "/" : fallbackHref);
+    const action = resolveBackAction({
+      hasHistory: canGoBackWithinApp(),
+      pathname,
+      fallbackHref,
+      scopeHref,
+      isInstalledApp,
+    });
+    if (action.type === "back") router.back();
+    else if (action.type === "push") router.push(action.href);
   };
+
+  if (nothingToGoBackTo) {
+    return <span aria-hidden="true" className={[sizeClass, "inline-block shrink-0", className].join(" ")} />;
+  }
 
   return (
     <button

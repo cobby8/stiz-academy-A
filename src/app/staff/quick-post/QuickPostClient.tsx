@@ -2,6 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
+// 설치된 선생님 앱은 /staff 밖으로 나가면 돌아올 길이 없다.
+import HideInInstalledApp from "@/components/pwa/HideInInstalledApp";
 import {
   createSocialPostDraft,
   publishSocialPostDraft,
@@ -231,7 +233,10 @@ export default function QuickPostClient({
               <SymbolIcon name="arrow_back" size={15} />
               이전
             </button>
-            <Link href="/" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-bold text-gray-600 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:text-brand-neon-lime">
+            {/* 선생님 앱의 "홈"은 /staff 다. 공개 홈페이지로 보내면 설치된 앱이 제 범위를
+                벗어나 주소표시줄이 뜨고 돌아올 길이 없다(프로필 메뉴에서 공개 링크를
+                모두 뺀 것과 같은 이유). */}
+            <Link href="/staff" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-bold text-gray-600 transition hover:border-brand-orange-500 hover:text-brand-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:text-brand-neon-lime">
               <SymbolIcon name="home" size={15} />
               홈
             </Link>
@@ -328,6 +333,8 @@ export default function QuickPostClient({
               )}
               {isPublished && (
                 <div className="mt-3 grid grid-cols-1 gap-2">
+                  {/* 공개 홈페이지 갤러리. 설치된 앱에서 나가면 돌아올 길이 없어 감춘다. */}
+                  <HideInInstalledApp>
                   <Link
                     href="/gallery"
                     className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-green-200 bg-white px-3 text-sm font-black text-green-700 dark:border-emerald-500/30 dark:bg-gray-900 dark:text-emerald-300"
@@ -335,6 +342,7 @@ export default function QuickPostClient({
                     홈페이지 갤러리 보기
                     <SymbolIcon name="arrow_forward" size={17} />
                   </Link>
+                  </HideInInstalledApp>
                   {draft?.instagramPermalink && (
                     <a
                       href={draft.instagramPermalink}

@@ -12,17 +12,21 @@ const mypageLayoutSource = await readFile("src/app/mypage/layout.tsx", "utf8");
 
 test("공통 뒤로가기 버튼은 앱 내부 이력 우선, 없으면 fallback으로 이동한다", () => {
   assert.match(backButtonSource, /router\.back\(\)/);
-  assert.match(backButtonSource, /router\.push\(fallbackHref === pathname \? "\/" : fallbackHref\)/);
+  assert.match(backButtonSource, /router\.push\(action\.href\)/);
   assert.match(backButtonSource, /document\.referrer/);
   assert.match(backButtonSource, /window\.history\.state\?\.idx/);
+  // 어디로 갈지 정하는 규칙은 순수 모듈로 옮겼다. 조합별 동작은 실제로 실행해서
+  // 검증한다 → tests/app-back-button-scope.test.mjs
+  assert.match(backButtonSource, /resolveBackAction/);
 });
 
 test("공개, 관리자, 스태프, 마이페이지 헤더에 뒤로가기 버튼이 배치된다", () => {
-  assert.match(publicHeaderSource, /<AppBackButton fallbackHref="\/" size="sm" \/>/);
-  assert.match(adminShellSource, /<AppBackButton fallbackHref="\/admin" \/>/);
-  assert.match(staffLayoutSource, /<AppBackButton fallbackHref="\/staff" \/>/);
-  assert.match(mypageLayoutSource, /<AppBackButton fallbackHref="\/" size="sm" \/>/);
-  assert.match(mypageLayoutSource, /<AppBackButton fallbackHref="\/" \/>/);
+  // 속성이 늘어도 깨지지 않게 fallbackHref 값만 확인한다(설치 앱용 scopeHref 등이 붙는다).
+  assert.match(publicHeaderSource, /<AppBackButton[^>]*fallbackHref="\/"[^>]*size="sm"/);
+  assert.match(adminShellSource, /<AppBackButton[^>]*fallbackHref="\/admin"/);
+  assert.match(staffLayoutSource, /<AppBackButton[^>]*fallbackHref="\/staff"/);
+  assert.match(mypageLayoutSource, /<AppBackButton[^>]*fallbackHref="\/"[^>]*size="sm"/);
+  assert.equal((mypageLayoutSource.match(/<AppBackButton/g) || []).length, 2, "모바일·데스크탑 헤더 둘 다");
 });
 
 test("헤더가 없는 단독 화면은 전역 보조 뒤로가기 버튼으로 보완한다", () => {

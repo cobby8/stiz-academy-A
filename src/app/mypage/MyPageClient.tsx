@@ -2,6 +2,10 @@
 
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
+// 설치된 학부모 앱은 /mypage 밖으로 나가면 돌아올 길이 없다.
+// 길잡이 링크는 감추고(HideInInstalledApp), 내용인 링크는 이동만 막는다(AppSafeLink).
+import HideInInstalledApp from "@/components/pwa/HideInInstalledApp";
+import AppSafeLink from "@/components/pwa/AppSafeLink";
 import { markNotificationRead, markAllNotificationsRead, createParentRequest } from "@/app/actions/admin";
 import type { ParentShuttleOverviewItem } from "@/lib/shuttle/parent";
 import type { PendingSeasonalChild } from "@/lib/seasonal/pendingSeasonalChildren";
@@ -1094,7 +1098,11 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
                             <SymbolIcon name="notifications" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 공지사항
                         </h2>
-                        <Link href="/notices" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
+                        {/* 공개 홈페이지의 공지 목록. 설치된 앱에서 나가면 돌아올 길이 없어 감춘다.
+                            아래 최근 5건은 그대로 보이므로 앱에서도 공지를 못 보는 일은 없다. */}
+                        <HideInInstalledApp>
+                            <Link href="/notices" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
+                        </HideInInstalledApp>
                     </div>
                     <div className="space-y-2">
                         {notices.slice(0, 5).map(n => (
@@ -1262,7 +1270,9 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         <h2 className="font-bold text-brand-navy-900 flex items-center gap-2">
                             <SymbolIcon name="image" size={18} className="text-brand-orange-500 dark:text-brand-neon-lime" /> 수업 사진
                         </h2>
-                        <Link href="/gallery" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
+                        <HideInInstalledApp>
+                            <Link href="/gallery" className="text-xs text-brand-orange-500 dark:text-brand-neon-lime hover:underline">전체보기</Link>
+                        </HideInInstalledApp>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                         {gallery.slice(0, 6).map(g => {
@@ -1271,14 +1281,15 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             const first = media[0];
                             if (!first) return null;
                             return (
-                                <Link key={g.id} href="/gallery"
+                                // 사진 자체가 내용이라 감추지 않는다. 설치된 앱에서는 이동만 막는다.
+                                <AppSafeLink key={g.id} href="/gallery"
                                     className="aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 relative group">
                                     {first.type === "image" ? (
                                         <img src={first.url} alt={g.title || ""} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                     ) : (
                                         <video src={first.url} className="w-full h-full object-cover" muted />
                                     )}
-                                </Link>
+                                </AppSafeLink>
                             );
                         })}
                     </div>

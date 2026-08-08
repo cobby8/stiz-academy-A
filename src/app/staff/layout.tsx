@@ -29,7 +29,9 @@ export default async function StaffLayout({ children }: { children: ReactNode })
       <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl dark:border-gray-800 dark:bg-gray-950/90">
         <div className="mx-auto flex min-h-11 max-w-lg items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <AppBackButton fallbackHref="/staff" />
+            {/* 설치된 선생님 앱에서는 /staff 밖으로 나가지 않는다.
+                (fallbackHref 가 현재 경로와 같을 때 홈페이지로 튀던 함정도 여기서 막힌다) */}
+            <AppBackButton fallbackHref="/staff" scopeHref="/staff" />
             <StaffHomeLink />
           </div>
           <StaffProfileMenu staffName={staff.appUserName} staffRole={staff.appUserRole} />

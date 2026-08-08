@@ -59,6 +59,9 @@ export type StaffSessionStudent = {
   status: "PRESENT" | "LATE" | "ABSENT" | null;
   attendanceNote: string | null;
   arrivedAt: string | null;
+  // 학부모가 미리 넣은 결석 신고. 선생님이 모르고 출석을 찍으면 신고가 헛것이 된다.
+  // 정규 수업에만 있다(방학특강은 좌석 기준 별도 흐름이라 null).
+  absenceReport: { reason: string; status: string } | null;
 };
 
 type TodayClassRow = Omit<StaffTodayClass, "startedAt" | "kind" | "scheduleKey" | "sessionDateId"> & {
@@ -341,6 +344,8 @@ export async function getStaffSessionStudents(
       status: row.status,
       attendanceNote: row.attendanceNote,
       arrivedAt: toIso(row.arrivedAt),
+      // 방학특강은 좌석(SpecialProgramAbsence) 기준의 별도 결석 흐름을 쓴다.
+      absenceReport: null,
     }));
   }
 
@@ -352,16 +357,25 @@ export async function getStaffSessionStudents(
       status: StaffSessionStudent["status"];
       attendanceNote: string | null;
       arrivedAt: Date | string | null;
+      absenceReason: string | null;
+      absenceStatus: string | null;
     }>
   >(
-    `SELECT st.id, st.name, a.status, a.note AS "attendanceNote", a."arrivedAt"
+    // 사전 결석 신고를 함께 읽는다. 이게 없으면 선생님이 신고 사실을 모른 채
+    // 출석을 찍고, 학부모가 미리 알린 의미가 사라진다.
+    `SELECT st.id, st.name, a.status, a.note AS "attendanceNote", a."arrivedAt",
+            ra.reason AS "absenceReason", ra.status AS "absenceStatus"
      FROM "Enrollment" e
      JOIN "Student" st ON st.id = e."studentId" AND ${notMergedStudent("st")}
      LEFT JOIN "Attendance" a ON a."sessionId" = $1 AND a."studentId" = st.id
+     LEFT JOIN "RegularAbsence" ra
+            ON ra."studentId" = st.id AND ra."classId" = $2 AND ra.date = $3::date
+           AND ra.status IN ('REPORTED','CONFIRMED')
      WHERE e."classId" = $2 AND e.status = 'ACTIVE'
      ORDER BY st.name`,
     sessionId,
     classId,
+    sessionKinds[0]?.date ?? null,
   );
   // 정규는 studentId 가 곧 로스터 키다(기존과 동일). attendanceKey=studentId.
   return rows.map((row) => ({
@@ -374,5 +388,8 @@ export async function getStaffSessionStudents(
     status: row.status,
     attendanceNote: row.attendanceNote,
     arrivedAt: toIso(row.arrivedAt),
+    absenceReport: row.absenceReason
+      ? { reason: row.absenceReason, status: row.absenceStatus ?? "REPORTED" }
+      : null,
   }));
 }

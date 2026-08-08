@@ -10,6 +10,8 @@ import {
   saveStaffAttendance,
 } from "@/app/actions/staff-sessions";
 import { SessionPhotoUploader } from "@/components/staff/SessionPhotoUploader";
+// 사유 라벨은 학부모 신고 화면과 같은 표를 쓴다(두 화면의 표기가 갈리면 안 된다).
+import { REASON_LABEL as ABSENCE_REASON_LABEL } from "@/lib/regular/regularAbsenceRules";
 import { VoiceToTextButton } from "@/components/staff/VoiceToTextButton";
 import { useStaffDialog } from "@/components/staff/useStaffDialog";
 import type {
@@ -424,6 +426,18 @@ export default function SessionInProgressClient({
                 <strong className="text-base dark:text-white">{student.name}</strong>
                 <span className="text-xs font-bold text-gray-500">{student.status ? STATUS_LABEL[student.status] : "미확인"}</span>
               </div>
+              {/* 학부모가 미리 넣은 결석 신고. 이게 안 보이면 선생님이 모르고 출석을 찍어
+                  학부모가 미리 알린 의미가 사라진다. 확정건은 원장이 확인한 것이라 따로 표시한다. */}
+              {student.absenceReport && (
+                <p className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-black text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                  <span className="material-symbols-outlined text-sm" aria-hidden="true">event_busy</span>
+                  학부모 결석 알림
+                  {ABSENCE_REASON_LABEL[student.absenceReport.reason]
+                    ? ` · ${ABSENCE_REASON_LABEL[student.absenceReport.reason]}`
+                    : ""}
+                  {student.absenceReport.status === "CONFIRMED" ? " · 확정" : ""}
+                </p>
+              )}
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {(["PRESENT", "LATE", "ABSENT"] as AttendanceStatus[]).map((status) => (
                   <button key={status} type="button" disabled={pending} onClick={() => updateAttendance(student.id, status)} className={`min-h-11 rounded-xl border text-sm font-black ${student.status === status ? "border-[var(--brand-accent)] bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]" : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"}`}>

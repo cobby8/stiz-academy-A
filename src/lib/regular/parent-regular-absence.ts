@@ -151,9 +151,10 @@ async function verifyOwnershipAndClass(
   parentUserId: string,
   studentId: string,
   classId: string,
-): Promise<{ dayOfWeek: string } | null> {
+): Promise<{ dayOfWeek: string; studentName: string; className: string } | null> {
   const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT c."dayOfWeek" AS "dayOfWeek"
+    // 이름은 알림 문구에만 쓴다(원장이 누구 결석인지 바로 알아야 한다).
+    `SELECT c."dayOfWeek" AS "dayOfWeek", s.name AS "studentName", c.name AS "className"
        FROM "Enrollment" e
        JOIN "Student" s ON s.id = e."studentId"
        JOIN "Class" c ON c.id = e."classId"
@@ -164,7 +165,44 @@ async function verifyOwnershipAndClass(
       LIMIT 1`,
     parentUserId, studentId, classId,
   );
-  return rows[0] ? { dayOfWeek: rows[0].dayOfWeek } : null;
+  return rows[0]
+    ? {
+        dayOfWeek: rows[0].dayOfWeek,
+        studentName: rows[0].studentName ?? rows[0].studentname ?? "",
+        className: rows[0].className ?? rows[0].classname ?? "",
+      }
+    : null;
+}
+
+/**
+ * 결석 신고·취소를 원장에게 알린다.
+ *
+ * 지금까지는 신고가 들어와도 아무 알림이 없어 원장이 /admin/absence 를 직접 열어봐야
+ * 알 수 있었다. 셔틀 명단은 자동으로 반영되지만 사람은 모르고 지나간다.
+ *
+ * 알림 실패가 신고 자체를 되돌리면 안 된다 — 학부모는 이미 신고를 마쳤다.
+ * 그래서 호출부에서 await 하되 오류는 여기서 삼킨다.
+ */
+async function notifyAdminsOfAbsenceChange(input: {
+  kind: "REPORTED" | "CANCELED";
+  studentName: string;
+  className: string;
+  date: string;
+  reason?: string;
+}) {
+  try {
+    const { notifyAdmins } = await import("@/lib/notification");
+    const reasonLabel = input.reason ? REASON_LABEL[input.reason as keyof typeof REASON_LABEL] : null;
+    const title = input.kind === "REPORTED" ? "결석 사전 신고" : "결석 신고 취소";
+    const message =
+      input.kind === "REPORTED"
+        ? `${input.studentName} 학생이 ${input.date} ${input.className} 수업에 결석 예정입니다.${reasonLabel ? ` (${reasonLabel})` : ""}`
+        : `${input.studentName} 학생의 ${input.date} ${input.className} 결석 신고가 취소되었습니다.`;
+    // 코치 SMS 는 보내지 않는다 — 건당 비용이 들고, 선생님은 출석 화면에서 바로 보인다.
+    await notifyAdmins("ABSENCE", title, message, "/admin/absence", { notifyCoaches: false });
+  } catch (error) {
+    console.error("[parent-regular-absence] 원장 알림 실패:", error);
+  }
 }
 
 // ── 2) 사전 결석 신고 ─────────────────────────────────────────────────────
@@ -204,6 +242,14 @@ export async function reportRegularAbsence(
     studentId, classId, date, reason, parentUserId,
   );
 
+  await notifyAdminsOfAbsenceChange({
+    kind: "REPORTED",
+    studentName: owned.studentName,
+    className: owned.className,
+    date,
+    reason,
+  });
+
   return { ok: true, reason };
 }
 
@@ -219,37 +265,50 @@ export async function cancelRegularAbsence(
   const classId = input?.classId?.trim();
   const date = input?.date?.trim();
 
-  let deleted: number;
+  // RETURNING 으로 지운 건의 학생·반 이름을 함께 받는다. 원장 알림 문구에 필요한데,
+  // 지운 뒤에 다시 조회하면 이미 사라져서 찾을 수 없다.
+  const returning = `RETURNING s.name AS "studentName", c.name AS "className",
+                              to_char(ra.date,'YYYY-MM-DD') AS "date"`;
+  type CanceledRow = { studentName: string; className: string; date: string };
+  let canceled: CanceledRow[];
   if (id) {
     // id 로 지목: 그 결석이 이 부모 자녀의 것이고 REPORTED 인 경우만 삭제(IDOR 방어).
-    deleted = Number(
-      await prisma.$executeRawUnsafe(
-        `DELETE FROM "RegularAbsence" ra
-          USING "Student" s
-          WHERE ra."studentId" = s.id
-            AND s."parentId" = $1
-            AND ra.id = $2
-            AND ra.status = 'REPORTED'`,
-        parentUserId, id,
-      ),
+    canceled = await prisma.$queryRawUnsafe<CanceledRow[]>(
+      `DELETE FROM "RegularAbsence" ra
+        USING "Student" s, "Class" c
+        WHERE ra."studentId" = s.id
+          AND c.id = ra."classId"
+          AND s."parentId" = $1
+          AND ra.id = $2
+          AND ra.status = 'REPORTED'
+        ${returning}`,
+      parentUserId, id,
     );
   } else {
     if (!studentId || !classId || !isYmd(date || "")) throw new Error("ABSENCE_NOT_FOUND");
-    deleted = Number(
-      await prisma.$executeRawUnsafe(
-        `DELETE FROM "RegularAbsence" ra
-          USING "Student" s
-          WHERE ra."studentId" = s.id
-            AND s."parentId" = $1
-            AND ra."studentId" = $2
-            AND ra."classId" = $3
-            AND ra.date = $4::date
-            AND ra.status = 'REPORTED'`,
-        parentUserId, studentId, classId, date,
-      ),
+    canceled = await prisma.$queryRawUnsafe<CanceledRow[]>(
+      `DELETE FROM "RegularAbsence" ra
+        USING "Student" s, "Class" c
+        WHERE ra."studentId" = s.id
+          AND c.id = ra."classId"
+          AND s."parentId" = $1
+          AND ra."studentId" = $2
+          AND ra."classId" = $3
+          AND ra.date = $4::date
+          AND ra.status = 'REPORTED'
+        ${returning}`,
+      parentUserId, studentId, classId, date,
     );
   }
 
-  if (deleted === 0) throw new Error("ABSENCE_NOT_CANCELABLE");
+  if (canceled.length === 0) throw new Error("ABSENCE_NOT_CANCELABLE");
+
+  await notifyAdminsOfAbsenceChange({
+    kind: "CANCELED",
+    studentName: canceled[0].studentName,
+    className: canceled[0].className,
+    date: canceled[0].date,
+  });
+
   return { ok: true };
 }

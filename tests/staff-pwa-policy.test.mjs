@@ -18,7 +18,9 @@ test("교사용 앱은 /staff 범위로 독립 설치된다", async () => {
     [...new Set(manifest.icons.map(({ purpose }) => purpose))].sort(),
     ["any", "maskable"],
   );
-  assert.ok(manifest.icons.every(({ src }) => src.includes("icon-v2") || src.includes("icon-maskable-v2")));
+  // 공용 아이콘(icon-v2)이 아니라 선생님 전용 아이콘을 쓴다.
+  // 공식·학부모 앱과 아이콘이 같으면 홈 화면에 나란히 깔렸을 때 구분할 수 없다.
+  assert.ok(manifest.icons.every(({ src }) => src.includes("icon-teacher")));
   assert.deepEqual(
     manifest.shortcuts.map(({ name, url }) => ({ name, url })),
     [

@@ -45,11 +45,14 @@ export async function updateSession(request: NextRequest) {
   const isStaffModeLogin =
     isStaffLogin || (pathname === "/login" && request.nextUrl.searchParams.get("mode") === "staff");
   const isStaffInstall = pathname === "/staff/install";
+  // 설치 안내는 로그인 전에 봐야 한다. 학부모 앱의 manifest scope 가 /mypage 라
+  // 안내 화면도 그 안에 있어야 브라우저가 설치를 제안한다(선생님 앱과 같은 구조).
+  const isMyPageInstall = pathname === "/mypage/install";
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
   const isStaffPath = pathname === "/staff" || pathname.startsWith("/staff/");
   const isMyPagePath = pathname === "/mypage" || pathname.startsWith("/mypage/");
   const protectedPath =
-    isAdminPath || (isStaffPath && !isStaffLogin && !isStaffInstall) || isMyPagePath;
+    isAdminPath || (isStaffPath && !isStaffLogin && !isStaffInstall) || (isMyPagePath && !isMyPageInstall);
 
   if (protectedPath && !isAuthenticated) {
     const url = request.nextUrl.clone();

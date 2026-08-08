@@ -13,6 +13,19 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  async redirects() {
+    return [
+      {
+        // 학부모에게 공유하는 짧은 주소. rewrite 가 아니라 redirect 인 이유는,
+        // 브라우저 주소가 실제로 /mypage/install 로 바뀌어야 학부모 앱의
+        // manifest scope(/mypage) 안에 들어가 설치가 제안되기 때문이다.
+        source: "/app",
+        destination: "/mypage/install",
+        permanent: false,
+      },
+    ];
+  },
+
   async rewrites() {
     return [
       {
@@ -21,8 +34,10 @@ const nextConfig: NextConfig = {
         destination: "/teacher-app",
       },
       {
-        // 학부모에게 카카오톡·문자로 공유하는 짧은 주소를 설치 안내 화면으로 연결한다.
-        source: "/app",
+        // 학부모 설치 안내도 /mypage 범위 안에 둔다.
+        // 학부모 앱의 manifest scope 가 /mypage 라, 범위 밖에서는 브라우저가 설치를
+        // 제안하지 않는다. 화면 자체는 /parent-app 과 같은 것을 쓴다.
+        source: "/mypage/install",
         destination: "/parent-app",
       },
       {

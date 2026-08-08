@@ -4,32 +4,32 @@
   "short_name": "STIZ 학부모",
   "description": "출결과 셔틀 시각, 결석 신고와 청구를 확인하는 STIZ 학부모용 앱",
   "start_url": "/mypage",
-  "scope": "/",
+  "scope": "/mypage",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#ccff00",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon-v2-192.png",
+      "src": "/icon-parent-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-v2-512.png",
+      "src": "/icon-parent-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable-v2-192.png",
+      "src": "/icon-parent-maskable-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icon-maskable-v2-512.png",
+      "src": "/icon-parent-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -40,13 +40,25 @@
       "name": "수업 리포트",
       "short_name": "리포트",
       "url": "/mypage/reports",
-      "icons": [{ "src": "/icon-v2-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/icon-parent-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "결석 신고",
       "short_name": "결석 신고",
       "url": "/mypage/regular-absence",
-      "icons": [{ "src": "/icon-v2-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/icon-parent-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

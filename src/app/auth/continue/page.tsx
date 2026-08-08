@@ -46,7 +46,10 @@ export default async function AuthContinuePage({ searchParams }: ContinuePagePro
 
     redirect(
       resolveRedirectForRole(role, requestedPath, {
+        // 브라우저에서 관리자 로그인으로 들어오면 역할 기본 화면(원장이면 /admin).
         preferRoleHome: context === "staff" && requestedPath === "/staff",
+        // 설치된 선생님 앱에서 들어오면 앱 영역(/staff) 안에 머문다.
+        stayInStaffApp: context === "staff-app",
       }),
     );
   } catch (error) {

@@ -77,7 +77,11 @@ export async function updateSession(request: NextRequest) {
     url.pathname = isStaffLogin ? "/staff/continue" : "/auth/continue";
     url.search = "";
     if (isStaffModeLogin) {
-      url.searchParams.set("context", "staff");
+      // 설치된 선생님 앱의 로그인(/staff/login)과 브라우저의 관리자 로그인(/login?mode=staff)을
+      // 구분한다. 앱에서는 앱 화면(/staff)에 머물러야 하고, 브라우저에서는 역할 기본 화면
+      // (원장이면 /admin)이 맞다. 둘을 같은 값으로 묶으면 원장이 앱을 열 때마다
+      // 관리자 화면으로 튕긴다.
+      url.searchParams.set("context", isStaffLogin ? "staff-app" : "staff");
     }
     // redirect 가 continue 경로 자신을 가리키면 무한 리다이렉트가 된다
     // (미인증 상태로 /staff/continue 에 직접 들어온 경우 등).

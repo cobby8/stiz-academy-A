@@ -132,6 +132,20 @@ export default function StaffProfileMenu({ staffName, staffRole }: { staffName: 
               </p>
             )}
 
+            {/* 원장·부원장만. 관리자 화면은 앱 영역(/staff) 밖이라 누르면 브라우저로 나간다 —
+                관리자 일은 큰 화면에서 보는 게 맞아 그대로 둔다.
+                수업 진행 중이면 다른 링크와 같이 저장 확인을 먼저 거친다. */}
+            {(staffRole === "ADMIN" || staffRole === "VICE_ADMIN") && (
+              <Link
+                href="/admin"
+                onClick={(event) => requestPublicNavigation(event, "/admin")}
+                className="mb-2 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[color-mix(in_srgb,var(--brand-accent)_14%,transparent)] text-sm font-bold text-[var(--brand-accent)] hover:bg-[color-mix(in_srgb,var(--brand-accent)_22%,transparent)]"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
+                관리자 화면
+              </Link>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               <Link href="/staff/install" onClick={(event) => requestPublicNavigation(event, "/staff/install")} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gray-100 text-sm font-bold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                 <span className="material-symbols-outlined" aria-hidden="true">install_mobile</span>설치 안내

@@ -88,6 +88,13 @@ model Student {
   hopeNote            String? // 바라는 점
   agreementsJSON      String                      @default("{}") // 개인정보/이용약관/주의사항 동의 원본
   sourceImportRowId   String? // 마지막 시트 이관 원본 행
+  // 학생 병합: 흡수된 쪽 행은 지우지 않고 여기에 대표 학생 id를 찍는다.
+  // DB에는 있는데 이 파일에 빠져 있어, ORM으로 조회하는 화면이 통째로 죽었다
+  // (2026-08-09 학부모 마이페이지). 스키마 파일은 DB의 사본이어야 한다.
+  // 참고: DB의 인덱스는 부분 인덱스(WHERE ... IS NOT NULL)라 Prisma로 표현할 수
+  // 없어 @@index를 두지 않는다. 여기에 일반 인덱스를 적으면 반대 방향으로 어긋난다.
+  mergedIntoStudentId String?
+  mergedAt            DateTime?
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
   attendances         Attendance[]

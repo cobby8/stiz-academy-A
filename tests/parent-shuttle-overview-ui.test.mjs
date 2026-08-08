@@ -23,7 +23,8 @@ test("배정 확정 또는 완료된 셔틀에만 상세 정보를 공개한다"
 });
 
 test("셔틀 변경 요청은 기존 학부모 요청 폼을 재사용한다", () => {
-  assert.match(client, /setReqType\("SHUTTLE"\)/);
+  // 유형 선택은 없앴다(전부 자유 메시지). 대신 첫 줄을 채워 무엇을 적을지 알려준다.
+  assert.match(client, /setReqContent\(\(prev\) => prev \|\| "셔틀 변경 요청: "\)/);
   assert.match(client, /setShowRequestForm\(true\)/);
   assert.match(client, />\s*변경 요청\s*</);
   assert.match(client, /min-h-11/);

@@ -171,14 +171,10 @@ type MyPageData = {
     children: ChildData[];
 };
 
-const REQUEST_TYPES = [
-    // '결석 신청'은 정규수업 결석을 학원에 자유텍스트로 접수하는 경로다.
-    // 방학특강 사전 결석 신고(셔틀 자동제외)와 혼동되지 않도록 '정규수업 결석'으로 명칭을 구분한다.
-    { value: "ABSENCE", label: "정규수업 결석" },
-    { value: "SHUTTLE", label: "셔틀 변경" },
-    { value: "EARLY_LEAVE", label: "조퇴 요청" },
-    { value: "OTHER", label: "기타 요청" },
-];
+// 요청 유형(결석·셔틀·조퇴·기타) 선택은 없앴다. 유형별로 나눠 받으면 그 유형대로
+// 처리되는 것처럼 보이는데, 실제로는 전부 사람이 읽고 손으로 처리하는 메모였다.
+// 결석처럼 진짜 기능이 있는 것은 그 기능으로 보내고, 나머지는 자유 메시지 하나로 받는다.
+// 서버는 type 을 계속 받으므로(다른 경로 호환) 여기서는 항상 "OTHER" 로 보낸다.
 
 const REQUEST_STATUS: Record<string, { label: string; color: string; iconName: string }> = {
     PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-700", iconName: "schedule" },
@@ -240,7 +236,6 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
     const [showRequests, setShowRequests] = useState(false);
     const [isPending, startTransition] = useTransition();
     // 요청 폼 상태
-    const [reqType, setReqType] = useState("ABSENCE");
     const [reqContent, setReqContent] = useState("");
     const [reqDate, setReqDate] = useState("");
     // 피드백 카드 펼치기 상태 (클릭한 피드백 ID 저장)
@@ -553,7 +548,9 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setReqType("SHUTTLE");
+                                    // 셔틀 변경은 아직 전용 기능이 없어 메시지로 받는다.
+                                    // 무엇을 적어야 할지 알 수 있게 첫 줄만 채워 준다.
+                                    setReqContent((prev) => prev || "셔틀 변경 요청: ");
                                     setShowRequestForm(true);
                                     setShowRequests(false);
                                     requestAnimationFrame(() => {
@@ -743,21 +740,21 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 )}
             </div>
 
-            {/* 학원에 요청하기 */}
+            {/* 학원에 메시지 보내기 */}
             <div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => { setShowRequestForm(!showRequestForm); setShowRequests(false); }}
                         className="flex-1 flex items-center justify-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold py-3 rounded-2xl hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition shadow-sm"
                     >
-                        <SymbolIcon name="send" size={16} /> 학원에 요청하기
+                        <SymbolIcon name="send" size={16} /> 학원에 메시지 보내기
                     </button>
                     <button
                         onClick={() => { setShowRequests(!showRequests); setShowRequestForm(false); }}
                         className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-bold px-4 py-3 rounded-2xl hover:bg-gray-50 dark:bg-gray-900 transition shadow-sm"
                     >
                         <SymbolIcon name="forum" size={16} />
-                        내 요청
+                        보낸 메시지
                         {myRequests.filter(r => r.status === "PENDING").length > 0 && (
                             <span className="bg-yellow-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                                 {myRequests.filter(r => r.status === "PENDING").length}
@@ -766,38 +763,23 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                     </button>
                 </div>
 
-                {/* 요청 접수 폼 */}
+                {/* 메시지 작성 폼 */}
                 {showRequestForm && (
                     <div id="parent-request-form" className="mt-3 scroll-mt-4 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 shadow-sm space-y-4">
-                        <h3 className="font-bold text-gray-900 dark:text-white">요청 접수</h3>
+                        <h3 className="font-bold text-gray-900 dark:text-white">학원에 메시지 보내기</h3>
 
-                        {/* 요청 유형 */}
-                        <div className="grid grid-cols-2 gap-2">
-                            {REQUEST_TYPES.map(t => (
-                                <button key={t.value}
-                                    onClick={() => setReqType(t.value)}
-                                    className={`py-2 px-3 rounded-xl text-sm font-bold border transition ${
-                                        reqType === t.value
-                                            ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white border-brand-orange-500 dark:border-brand-neon-lime"
-                                            : "bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 border-gray-200 hover:border-brand-orange-300 dark:border-brand-neon-lime"
-                                    }`}
-                                >
-                                    {t.label}
-                                </button>
-                            ))}
+                        {/* 유형 선택을 없앤 이유: 유형별로 나눠 받으면 학원이 그 유형대로 처리해 줄 것처럼
+                            보이는데, 실제로는 전부 사람이 읽고 손으로 처리하는 메모였다. 결석처럼 진짜
+                            기능이 있는 것은 그 기능으로 보내고, 나머지는 자유 메시지 하나로 받는다. */}
+                        <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                            결석은 여기 적지 마시고{" "}
+                            <Link href="/mypage/regular-absence" className="font-bold underline">결석 미리 알리기</Link>
+                            에서 신고해 주세요. <b>셔틀에서도 자동으로 빠집니다.</b>
+                            <br />
+                            방학특강 결석은{" "}
+                            <Link href="/mypage/seasonal" className="font-bold underline">방학특강 결석 신고</Link>
+                            에서 신고해 주세요.
                         </div>
-
-                        {/* 정규수업 결석 안내: 자유텍스트 접수이며 셔틀은 자동 제외되지 않음(학원 수기 처리).
-                            방학특강 결석은 셔틀 자동제외되는 별도 구조화 신고 경로로 안내한다. */}
-                        {reqType === "ABSENCE" && (
-                            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                                정규수업 결석은 학원에 접수되어 <b>담당자가 직접 확인·처리</b>합니다. 셔틀은 자동으로 제외되지 않으니 셔틀 관련 사항도 함께 적어주세요.
-                                <br />
-                                방학특강 결석은{" "}
-                                <Link href="/mypage/seasonal" className="font-bold underline">방학특강 결석 신고</Link>
-                                에서 신고하면 <b>그날 셔틀 배차에서 자동 제외</b>됩니다.
-                            </div>
-                        )}
 
                         {/* 자녀 선택 (여러 명일 때) */}
                         {data.children.length > 1 && (
@@ -818,7 +800,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         {/* 날짜 */}
                         <div>
                             <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">
-                                {reqType === "ABSENCE" ? "결석일" : reqType === "EARLY_LEAVE" ? "조퇴일" : "해당 날짜"} (선택)
+                                해당 날짜 (선택)
                             </label>
                             <input type="date" min="2020-01-01" max="2030-12-31" value={reqDate} onChange={e => setReqDate(e.target.value)}
                                 className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm" />
@@ -826,17 +808,12 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
 
                         {/* 내용 */}
                         <div>
-                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">상세 내용</label>
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">메시지</label>
                             <textarea
                                 value={reqContent}
                                 onChange={e => setReqContent(e.target.value)}
-                                placeholder={
-                                    reqType === "ABSENCE" ? "결석 사유를 입력해주세요" :
-                                    reqType === "SHUTTLE" ? "변경 희망 내용을 입력해주세요 (예: 3/25부터 A노선 → B노선)" :
-                                    reqType === "EARLY_LEAVE" ? "조퇴 사유와 픽업 시간을 입력해주세요" :
-                                    "요청 내용을 입력해주세요"
-                                }
-                                rows={3}
+                                placeholder="문의하실 내용을 편하게 적어주세요"
+                                rows={4}
                                 className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm resize-none"
                             />
                         </div>
@@ -845,14 +822,14 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                         <button
                             disabled={isPending || !reqContent.trim()}
                             onClick={() => {
-                                const typeLabel = REQUEST_TYPES.find(t => t.value === reqType)?.label || reqType;
                                 const dateLabel = reqDate ? ` (${reqDate})` : "";
                                 startTransition(async () => {
                                     await createParentRequest({
                                         userId: data.parent.id,
                                         studentId: child.id,
-                                        type: reqType,
-                                        title: `${child.name} ${typeLabel}${dateLabel}`,
+                                        // 유형을 나누지 않는다. 전부 사람이 읽고 처리하는 자유 메시지다.
+                                        type: "OTHER",
+                                        title: `${child.name} 문의${dateLabel}`,
                                         content: reqContent,
                                         date: reqDate || null,
                                     });
@@ -863,16 +840,16 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             }}
                             className="w-full bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold py-3 rounded-xl hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition disabled:opacity-50"
                         >
-                            {isPending ? "접수 중..." : "요청 접수하기"}
+                            {isPending ? "보내는 중..." : "메시지 보내기"}
                         </button>
                     </div>
                 )}
 
-                {/* 내 요청 내역 */}
+                {/* 보낸 메시지 */}
                 {showRequests && (
                     <div className="mt-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                         {myRequests.length === 0 ? (
-                            <div className="p-8 text-center text-gray-400 text-sm">요청 내역이 없습니다</div>
+                            <div className="p-8 text-center text-gray-400 text-sm">보낸 메시지가 없습니다</div>
                         ) : (
                             <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
                                 {myRequests.map(r => {
@@ -1160,7 +1137,8 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
             </Link>
 
             {/* 결석 미리 알리기 허브 — 결석 경로 혼동을 없애기 위한 단일 진입점.
-                방학특강(구조화 신고·셔틀 자동제외)과 정규수업(요청 접수·수기 처리)을 명확히 구분해 안내한다. */}
+                방학특강·정규 둘 다 구조화 신고이고, 신고하면 그날 셔틀에서 자동으로 빠진다.
+                (예전에는 정규가 '학원에 요청하기'로 들어오는 수기 처리였다) */}
             <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm mb-4">
                 <div className="flex items-center gap-2 mb-1">
                     <span className="material-symbols-outlined text-xl text-brand-orange-500 dark:text-brand-neon-lime">event_busy</span>
@@ -1195,7 +1173,7 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                             <span className="material-symbols-outlined text-2xl text-gray-400 dark:text-gray-300">edit_calendar</span>
                             <div>
                                 <p className="font-bold text-brand-navy-900">정규수업 결석 신고</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">다가오는 수업 날짜를 골라 사유와 함께 미리 신고해요. 학원에서 확인 후 처리합니다.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">다가오는 수업 날짜를 골라 사유와 함께 미리 신고해요. 그날 셔틀에서도 자동으로 빠집니다.</p>
                             </div>
                         </div>
                         <span className="material-symbols-outlined text-gray-300">chevron_right</span>

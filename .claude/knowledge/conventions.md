@@ -2,6 +2,12 @@
 <!-- 담당: developer, reviewer | 최대 30항목 -->
 <!-- 이 프로젝트만의 코드 스타일, 네이밍 규칙, 패턴을 기록 -->
 
+### [2026-08-08] 인앱 브라우저(카카오톡 등)에서는 PWA 설치가 원천 불가 — 판별은 순수 모듈 한 곳에서
+- **분류**: convention
+- **발견자**: developer
+- **내용**: 학부모가 카카오톡·문자 링크를 누르면 **인앱 브라우저**로 열려 홈 화면 추가가 아예 불가능하다. 판별 로직은 `src/lib/pwa/installEnvironment.ts`(의존성 0, 순수 함수) 한 곳에만 두고 `/app`·`/staff/install` 두 화면이 공유한다 — 화면이 UA 정규식을 각자 들고 있으면 한쪽만 고쳐지는 사고가 난다(테스트가 `iphone|ipad|ipod` 재등장을 금지). 판별 원칙은 **확실한 표식만**(KAKAOTALK / NAVER(inapp / Instagram / FBAN·FBAV / Line/ / 안드로이드 `; wv)` / iOS인데 UA에 Safari 토큰 없음) — 오탐이 미탐보다 나쁘다. 함정: **라인 iOS UA에는 `Safari` 토큰이 있어** 인앱 판정을 먼저 하지 않으면 ios-safari 로 오판한다(`isIosSafari` 는 `inAppBrowser === null` 을 반드시 포함). 탈출 경로는 카카오톡만 스킴이 있다(`kakaotalk://web/openExternal?url=<encodeURIComponent>`), 나머지는 ⋯메뉴 안내 + **주소 복사**(clipboard 실패 시 주소를 화면에 노출해 길게 눌러 복사)를 최후 수단으로 항상 붙인다. UA 판별은 문자열 매칭 테스트로 못 잡으므로 `tests/pwa-install-environment.test.mjs` 처럼 **typescript.transpileModule 로 실제 실행**해 실제 UA 문자열로 단언한다.
+- **참조횟수**: 0
+
 ### [2026-08-08] 브라우저가 "한 번만" 쏘는 이벤트는 useEffect로 못 잡는다 — head 인라인 스크립트로 선점
 - **분류**: convention
 - **내용**: `beforeinstallprompt`(PWA 설치)처럼 **페이지 로드 직후 한 번만 발생하고 재발화하지 않는** 이벤트는, React 하이드레이션 → `useEffect` 순서가 그보다 늦어 **조용히 유실**된다(설치 버튼이 영영 안 뜸). 해결 패턴: `src/app/layout.tsx` `<head>`에 인라인 스크립트를 넣어 React보다 먼저 리스너를 달고 `window.__stizInstallPrompt` 에 보관 + `stiz:installprompt` / `stiz:installed` 커스텀 이벤트로 알린다. 화면 컴포넌트는 마운트 시 **① 전역 보관값 먼저 확인 → ② 커스텀 이벤트 구독 → ③ 원본 이벤트 직접 구독(늦게 오는 경우 대비)** 3중으로 받는다. 스크립트는 `__stizInstallPromptReady` 가드로 중복 등록을 막고 전체를 try/catch로 감싼다(레이아웃은 사이트 전체에 영향). 이 프로젝트엔 CSP 가 없어 인라인 스크립트가 허용된다. 회귀 방지: 전역 변수명·이벤트명이 어긋나면 조용히 다시 버튼이 사라지므로, `tests/pwa-install-prompt-capture.test.mjs` 에서 layout.tsx 의 스크립트 원문을 정규식으로 추출해 **가짜 window(EventTarget)에 실제 실행**시켜 동작을 단언한다(문자열 매칭만으로는 동작을 못 잡는다).

@@ -2,6 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  CopyAddressButton,
+  InAppBrowserEscapeCard,
+  SafariShareIllustration,
+} from "@/components/pwa/InstallHelp";
+// 기기·인앱 브라우저 판별은 두 설치 화면이 공유하는 순수 모듈 한 곳에서만 한다.
+import {
+  detectInstallEnvironment,
+  type InAppBrowserKind,
+  type InstallDeviceState,
+  type InstallPlatform,
+} from "@/lib/pwa/installEnvironment";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -13,10 +25,13 @@ type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 // 루트 레이아웃의 인라인 스크립트가 하이드레이션 전에 잡아둔 설치 이벤트 보관 장소
 type WindowWithInstallPrompt = Window & { __stizInstallPrompt?: InstallPromptEvent | null };
 
-type DeviceState = "checking" | "installed" | "ios-safari" | "ios-browser" | "android" | "other";
+type DeviceState = "checking" | "installed" | InstallDeviceState;
 
 export default function ParentAppInstallClient() {
   const [deviceState, setDeviceState] = useState<DeviceState>("checking");
+  // 인앱 브라우저 여부는 기기 종류와 별개다(안드로이드 카카오톡도 있다). 상태를 따로 둔다.
+  const [inAppBrowser, setInAppBrowser] = useState<InAppBrowserKind | null>(null);
+  const [platform, setPlatform] = useState<InstallPlatform>("other");
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
 
@@ -31,15 +46,14 @@ export default function ParentAppInstallClient() {
       setDeviceState("installed");
     } else {
       // 기기·브라우저별로 설치 방법이 다르므로 UA로 갈라 안내 문구를 바꾼다.
-      const userAgent = navigator.userAgent;
-      const isIpadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-      const isIos = /iphone|ipad|ipod/i.test(userAgent) || isIpadOs;
-      const isSafari = /safari/i.test(userAgent) && !/crios|fxios|edgios|opios/i.test(userAgent);
-      const isAndroid = /android/i.test(userAgent);
-
-      if (isIos) setDeviceState(isSafari ? "ios-safari" : "ios-browser");
-      else if (isAndroid) setDeviceState("android");
-      else setDeviceState("other");
+      const environment = detectInstallEnvironment({
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        maxTouchPoints: navigator.maxTouchPoints,
+      });
+      setDeviceState(environment.deviceState);
+      setInAppBrowser(environment.inAppBrowser);
+      setPlatform(environment.platform);
     }
 
     const globalWindow = window as WindowWithInstallPrompt;
@@ -156,7 +170,12 @@ export default function ParentAppInstallClient() {
           </div>
         </section>
 
-        {!isInstalled && deviceState !== "checking" && (
+        {/* 카카오톡 등 인앱 브라우저에서는 홈 화면 추가 자체가 막힌다. 탈출 안내를 가장 위에 둔다. */}
+        {!isInstalled && inAppBrowser && (
+          <InAppBrowserEscapeCard inAppBrowser={inAppBrowser} platform={platform} />
+        )}
+
+        {!isInstalled && deviceState !== "checking" && !inAppBrowser && (
           <section className="mt-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900" aria-labelledby="parent-install-guide-title">
             <div className="flex items-start gap-3">
               <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" aria-hidden="true">
@@ -167,8 +186,8 @@ export default function ParentAppInstallClient() {
                   {deviceState === "ios-browser" ? "Safari에서 열어주세요" : "홈 화면에 추가하는 방법"}
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                  {deviceState === "ios-safari" && "아래쪽 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요."}
-                  {deviceState === "ios-browser" && "iPhone에서는 이 페이지를 Safari로 열어야 홈 화면에 추가할 수 있어요."}
+                  {deviceState === "ios-safari" && "공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요."}
+                  {deviceState === "ios-browser" && "아이폰은 Safari에서만 홈 화면에 추가할 수 있어요."}
                   {deviceState === "android" && !installPrompt && "Chrome 오른쪽 위 메뉴에서 ‘홈 화면에 추가’를 선택하세요."}
                   {/* PC라도 설치 프롬프트가 잡혀 있으면 바로 설치할 수 있다고 알린다. */}
                   {deviceState === "other" && installPrompt && "이 브라우저에 설치할 수 있어요. 위 ‘지금 앱 설치하기’를 눌러주세요."}
@@ -183,21 +202,34 @@ export default function ParentAppInstallClient() {
               </div>
             </div>
 
-            {/* iPhone(Safari) 3단계 안내 */}
+            {/* 아이폰 크롬·웨일 등: 애플 제한으로 설치가 불가능하다. 주소만 복사해 Safari로 옮기게 한다. */}
+            {deviceState === "ios-browser" && (
+              <div className="mt-4">
+                <CopyAddressButton />
+              </div>
+            )}
+
+            {/* iPhone(Safari) 3단계 안내 — 말로만 하면 공유 버튼을 못 찾으므로 그림을 함께 보여준다. */}
             {deviceState === "ios-safari" && (
-              <ol className="mt-5 space-y-3" aria-label="iPhone 설치 순서">
-                {[
-                  ["ios_share", "Safari의 공유 버튼 누르기"],
-                  ["add_box", "‘홈 화면에 추가’ 선택하기"],
-                  ["add", "오른쪽 위 ‘추가’ 누르기"],
-                ].map(([icon, label], index) => (
-                  <li key={label} className="flex min-h-11 items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-gray-800">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-navy-900 text-sm font-black text-white">{index + 1}</span>
-                    <span className="material-symbols-outlined text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
-                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{label}</span>
-                  </li>
-                ))}
-              </ol>
+              <>
+                <SafariShareIllustration />
+                <ol className="mt-4 space-y-3" aria-label="iPhone 설치 순서">
+                  {[
+                    ["ios_share", "Safari의 공유 버튼 누르기", "화면 아래쪽(또는 위쪽)에 있어요"],
+                    ["add_box", "‘홈 화면에 추가’ 선택하기", "목록을 조금 내리면 보여요"],
+                    ["add", "오른쪽 위 ‘추가’ 누르기", ""],
+                  ].map(([icon, label, hint], index) => (
+                    <li key={label} className="flex min-h-11 items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-gray-800">
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-navy-900 text-sm font-black text-white">{index + 1}</span>
+                      <span className="material-symbols-outlined text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-gray-800 dark:text-gray-100">{label}</span>
+                        {hint && <span className="block text-xs text-gray-500 dark:text-gray-400">{hint}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </>
             )}
 
             {/* Android(Chrome) 3단계 안내 — 설치 프롬프트가 안 뜨는 기기 대비 */}

@@ -17,5 +17,7 @@ export default async function DriverUnifiedPage({
   const sp = await searchParams;
   // date 쿼리는 클라 입력이므로 서버에서 형식·달력 유효성을 확인한 뒤에만 쓴다.
   const searchDate = sp?.date && isValidRunDate(sp.date) ? sp.date : null;
-  return <UnifiedDriverRunPage token={token} searchDate={searchDate} />;
+  // 설치된 기사님 앱의 영역이 /driver/ 다. 이 주소에서만 링크를 기기에 기억시켜,
+  // 다음부터는 홈 화면 아이콘만 눌러도 그날 운행이 열리게 한다.
+  return <UnifiedDriverRunPage token={token} searchDate={searchDate} rememberToken />;
 }

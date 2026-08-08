@@ -1,4 +1,5 @@
 import { isAnyDriverRunToken } from "@/lib/shuttle/driverToken";
+import RememberDriverToken from "./RememberDriverToken";
 import { loadUnifiedDriverRun } from "@/lib/shuttle/unifiedDriverRun";
 import UnifiedDriverClient from "./UnifiedDriverClient";
 
@@ -40,7 +41,7 @@ export function DriverLightError({ title, sub }: { title: string; sub: string })
   );
 }
 
-export default async function UnifiedDriverRunPage({ token, searchDate }: { token: string; searchDate?: string | null }) {
+export default async function UnifiedDriverRunPage({ token, searchDate, rememberToken = false }: { token: string; searchDate?: string | null; rememberToken?: boolean }) {
   // 토큰 검증은 기존 함수 그대로(방학특강 resolveRunToken · 정규 isRegularRunToken).
   if (!(await isAnyDriverRunToken(token))) {
     return <DriverLightError title="유효하지 않은 링크입니다" sub="원장님께 새 링크를 요청해주세요." />;
@@ -68,6 +69,10 @@ export default async function UnifiedDriverRunPage({ token, searchDate }: { toke
         today={today}
         driverLabel={driverLabel}
       />
+      {/* 토큰 검증을 통과한 뒤에만 기억한다. 만료된 링크를 기억하면 홈 화면
+          아이콘이 매번 "유효하지 않은 링크" 화면을 여는 꼴이 된다.
+          설치된 앱의 영역(/driver/)에 있는 주소에서만 켠다. */}
+      {rememberToken && <RememberDriverToken token={token} />}
     </div>
   );
 }

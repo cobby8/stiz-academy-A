@@ -1117,24 +1117,6 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </div>
             </Link>
 
-            {/* 스킬 성장 바로가기 — 자녀의 스킬 레이더/성장 이력 페이지(/mypage/skills).
-                기존엔 링크가 없어 URL 직접 입력해야만 도달하던 고아 페이지를 노출한다.
-                수업 리포트 카드와 톤/구조를 동일하게 맞춰 일관성 유지. */}
-            <Link
-                href="/mypage/skills"
-                className="block bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-brand-orange-200 transition mb-4"
-            >
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">trending_up</span>
-                        <div>
-                            <p className="font-bold text-brand-navy-900">스킬 성장</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{child.name} 학생의 스킬 레이더와 성장 이력을 확인하세요</p>
-                        </div>
-                    </div>
-                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
-                </div>
-            </Link>
 
             {/* 결석 미리 알리기 허브 — 결석 경로 혼동을 없애기 위한 단일 진입점.
                 방학특강·정규 둘 다 구조화 신고이고, 신고하면 그날 셔틀에서 자동으로 빠진다.
@@ -1180,6 +1162,21 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                     </div>
                 </Link>
             </div>
+
+            {/* 수강 변경 신청 — 예전에는 "학원에 요청하기" 메모로 받아 사람이 손으로 처리했다.
+                이제 신청하면 원장 승인 후 적용일에 실제로 반이 바뀐다. */}
+            <Link href="/mypage/enrollment-change" className="block mb-4">
+                <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">swap_horiz</span>
+                        <div>
+                            <p className="font-bold text-brand-navy-900">수강 변경 신청</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">반·요일 변경, 휴원, 퇴원을 신청해요. 다음 달 1일부터 적용됩니다.</p>
+                        </div>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                </div>
+            </Link>
 
             {/* 학습 피드백 섹션 - 코치가 작성한 자녀 피드백 표시 */}
             {feedbacks.length > 0 && (

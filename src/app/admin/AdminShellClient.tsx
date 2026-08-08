@@ -33,7 +33,6 @@ const OPS_PATHS = [
     "/admin/seasonal",
     "/admin/waitlist",
     "/admin/makeup",
-    "/admin/skills",
     "/admin/stats",
     "/admin/sms",
     "/admin/import",
@@ -50,7 +49,6 @@ const MORE_OPS_PATHS = [
     "/admin/feedback",
     "/admin/waitlist",
     "/admin/makeup",
-    "/admin/skills",
     "/admin/stats",
     "/admin/sms",
     "/admin/import",
@@ -208,6 +206,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />
                             <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
                             <NavItem href="/admin/absence" active={pathname.startsWith("/admin/absence")} icon="🙅" label="정규 결석 신고" />
+                            <NavItem href="/admin/enrollment-changes" active={pathname.startsWith("/admin/enrollment-changes")} icon="🔁" label="수강 변경 신청" />
                             <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/청구" />
                             <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal") && !isShuttlePath(pathname)} icon="🏀" label="방학특강" />
                             <NavItem href="/admin/seasonal/dispatch" active={isShuttlePath(pathname)} icon="🚌" label="셔틀 관리" />
@@ -224,7 +223,6 @@ export default function AdminShellClient({
                                     <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" compact />
                                     <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자" compact />
                                     <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강" compact />
-                                    <NavItem href="/admin/skills" active={pathname.startsWith("/admin/skills")} icon="📈" label="스킬" compact />
                                     <NavItem href="/admin/stats" active={pathname.startsWith("/admin/stats")} icon="📊" label="상세 통계" compact />
                                     <NavItem href="/admin/sms" active={pathname.startsWith("/admin/sms")} icon="💬" label="문자/템플릿" compact />
                                     <NavItem href="/admin/import" active={pathname.startsWith("/admin/import")} icon="📥" label="수강생 이관" compact />

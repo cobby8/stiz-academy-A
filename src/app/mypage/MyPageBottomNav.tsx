@@ -8,7 +8,6 @@ import { usePathname } from "next/navigation";
 const items = [
     { href: "/mypage", label: "홈", icon: "home", exact: true },
     { href: "/mypage/reports", label: "리포트", icon: "assignment", exact: false },
-    { href: "/mypage/skills", label: "스킬", icon: "trending_up", exact: false },
     { href: "/mypage/seasonal", label: "방학특강", icon: "sports_basketball", exact: false },
 ] as const;
 

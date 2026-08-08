@@ -37,7 +37,6 @@ import {
     getPrograms,
     getSheetSlotCache,
     getSessionsForReportList,
-    getSkillCategories,
     getSmsTemplates,
     getStaffInvitations,
     getStaffUsers,
@@ -1282,16 +1281,6 @@ export const getCachedAdminFeedbackPayload = unstable_cache(
     },
     ["admin-feedback-page-v1"],
     { revalidate: 60, tags: ["admin-feedback"] },
-);
-
-export const getCachedAdminSkillsPayload = unstable_cache(
-    async () => {
-        const categories = await getSkillCategories();
-
-        return { categories };
-    },
-    ["admin-skills-page-v1"],
-    { revalidate: 60, tags: ["admin-skills"] },
 );
 
 export function getCachedAdminReportListPayload(limit: number) {

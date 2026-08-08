@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   AndroidInstallSteps,
@@ -167,7 +168,7 @@ export default function StaffAppInstallClient() {
             </p>
           </div>
 
-          {/* 설치 전용 화면이므로 첫 화면의 행동은 '설치' 하나뿐이다. 앱으로 이동하는 버튼은 두지 않는다. */}
+          {/* 설치 전에는 행동이 '설치' 하나뿐이다. 웹으로 바로 들어가는 버튼을 두면 설치를 건너뛴다. */}
           {/* 브라우저 설치 프롬프트는 사용자 제스처(클릭) 안에서만 띄울 수 있어 자동 호출하지 않는다. */}
           {view.showInstallButton && installPrompt && (
             <div className="mt-6">
@@ -180,6 +181,21 @@ export default function StaffAppInstallClient() {
                 <span className="material-symbols-outlined" aria-hidden="true">download</span>
                 {isInstalling ? "설치 준비 중..." : "지금 앱 설치하기"}
               </button>
+            </div>
+          )}
+
+          {/* 설치가 끝나면 이 화면은 할 일이 없다. 그런데 설치된 앱으로 이 주소가 열리면
+              주소창도 뒤로가기도 없어서, 나갈 길이 없으면 사용자가 그대로 갇힌다.
+              (실제 발생: 크롬 '앱 열기'가 보고 있던 주소를 그대로 앱 창으로 열었다) */}
+          {isInstalled && (
+            <div className="mt-6">
+              <Link
+                href="/staff"
+                className="flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 text-lg font-black text-[var(--brand-accent-contrast)] shadow-md"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+                선생님 페이지 열기
+              </Link>
             </div>
           )}
         </section>

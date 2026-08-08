@@ -20,6 +20,11 @@ const loaded = Object.fromEntries(
 
 const nextConfig = await readFile("next.config.ts", "utf8");
 const middleware = await readFile("src/lib/supabase/middleware.ts", "utf8");
+const myPageLayout = await readFile("src/app/mypage/layout.tsx", "utf8");
+const INSTALL_SCREENS = [
+  { label: "학부모", path: "src/app/parent-app/ParentAppInstallClient.tsx", home: "/mypage" },
+  { label: "선생님", path: "src/app/teacher-app/StaffAppInstallClient.tsx", home: "/staff" },
+];
 
 test("네 앱의 id 가 서로 겹치지 않는다", () => {
   const ids = Object.entries(loaded).map(([key, m]) => {
@@ -48,6 +53,34 @@ test("역할 앱은 자기 영역만 차지한다", () => {
   assert.equal(loaded.parent.scope, "/mypage");
   assert.equal(loaded.parent.start_url, "/mypage");
 });
+
+test("공식 홈페이지 앱은 설치 대상이 아니다", () => {
+  // 공식 manifest 는 scope 가 없어 사이트 전체(/)를 자기 영역으로 잡았다.
+  // 그 앱이 깔려 있으면 크롬이 /mypage·/staff 도 "이미 설치된 앱 영역"으로 보고
+  // 학부모·선생님 앱 설치를 거부한다(실기기 확인, 2026-08-09).
+  // 홈페이지는 웹으로 쓰고 앱은 역할별 3개만 남긴다.
+  assert.equal(loaded.public.display, "browser");
+  // 영역을 비워두면 다시 사이트 전체를 삼키므로 명시해 둔다.
+  assert.equal(loaded.public.scope, "/");
+  // 역할 앱은 설치돼야 하므로 반대로 단언한다.
+  assert.equal(loaded.staff.display, "standalone");
+  assert.equal(loaded.parent.display, "standalone");
+});
+
+test("학부모 화면은 공용 manifest 가 아니라 자기 manifest 를 쓴다", () => {
+  // 앱의 시작 주소(/mypage)가 공용 manifest 를 내려주면 앱 신원이 흔들린다.
+  assert.match(myPageLayout, /manifest:\s*"\/manifest-parent\.json"/);
+});
+
+for (const { label, path, home } of INSTALL_SCREENS) {
+  test(`${label} 설치 화면은 설치가 끝나면 앱으로 들어가는 길을 준다`, async () => {
+    const source = await readFile(path, "utf8");
+    // 설치된 앱 창에는 주소창도 뒤로가기도 없다. 나갈 길이 없으면 사용자가 갇힌다.
+    assert.match(source, new RegExp(`isInstalled && \\([\\s\\S]{0,400}href="${home}"`));
+    // 설치 전에는 여전히 '설치' 하나뿐이어야 한다(웹으로 새면 설치를 건너뛴다).
+    assert.doesNotMatch(source, new RegExp(`showInstallButton[\\s\\S]{0,400}href="${home}"`));
+  });
+}
 
 test("설치 안내 화면은 각 앱의 scope 안에 있고 로그인 없이 열린다", () => {
   // scope 밖에서는 브라우저가 설치를 제안하지 않는다.

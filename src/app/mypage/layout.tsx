@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
@@ -5,6 +6,20 @@ import { logout } from "@/app/actions/auth";
 import { requireVerifiedParent } from "@/lib/auth-guard";
 import AppBackButton from "@/components/AppBackButton";
 import MyPageBottomNav from "./MyPageBottomNav";
+
+// 학부모 앱의 시작 주소가 /mypage 다. 여기서 공용 manifest(id "/")를 내려주면
+// 브라우저가 "이 앱은 공식 앱이었나?" 하고 신원을 헷갈린다. 교사용(/staff)과 같은 구조로
+// 자기 manifest 를 명시한다.
+export const metadata: Metadata = {
+  title: "STIZ 학부모",
+  description: "자녀의 출결과 셔틀 시각, 결석 신고와 청구를 확인하는 STIZ 학부모용 화면",
+  manifest: "/manifest-parent.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "STIZ 학부모",
+  },
+};
 
 export default async function MyPageLayout({
     children,

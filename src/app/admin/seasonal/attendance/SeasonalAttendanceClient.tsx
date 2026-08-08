@@ -74,15 +74,21 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
   const [makeups, setMakeups] = useState<any>({ pending: [], assigned: [], stats: {} });
   const [modal, setModal] = useState<any>(null); // makeup-options payload
 
-  const loadBoard = useCallback(async (oid: string) => {
+  // keepSelection: 출석을 한 명 찍을 때마다 현황판을 다시 불러오는데, 그때 날짜를 다시 고르면
+  // 보고 있던 회차가 진행중인 날(없으면 첫날)로 튄다. 갱신일 때는 보던 날짜를 그대로 둔다.
+  const loadBoard = useCallback(async (oid: string, opts?: { keepSelection?: boolean }) => {
     if (!oid) return;
     setErr(""); setBusy(true);
     try {
       const data = await getJSON(`/api/admin/seasonal/attendance?view=board&offeringId=${oid}`);
-      setBoard(data.dates || []);
-      const live = (data.dates || []).find((d: BoardDate) => d.state === "LIVE");
-      const next = live?.sessionDateId || (data.dates || [])[0]?.sessionDateId || "";
-      setSelDate(next);
+      const dates: BoardDate[] = data.dates || [];
+      setBoard(dates);
+      setSelDate((cur) => {
+        // 보던 날짜가 목록에 그대로 있으면 유지한다.
+        if (opts?.keepSelection && cur && dates.some((d) => d.sessionDateId === cur)) return cur;
+        const live = dates.find((d) => d.state === "LIVE");
+        return live?.sessionDateId || dates[0]?.sessionDateId || "";
+      });
     } catch (e) { setErr((e as Error).message); setBoard([]); } finally { setBusy(false); }
   }, []);
 
@@ -112,7 +118,7 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
     try {
       await postJSON({ action: "attendance", enrollmentDateId: row.enrollmentDateId, status: next });
       setRoster((prev) => prev.map((r) => r.enrollmentDateId === row.enrollmentDateId ? { ...r, attendanceStatus: next } : r));
-      void loadBoard(offeringId);
+      void loadBoard(offeringId, { keepSelection: true });
     } catch (e) { setErr((e as Error).message); }
   }
 
@@ -125,7 +131,7 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
     if (!modal) return;
     try {
       await postJSON({ action: "makeup-create", enrollmentDateId: modal.absence.enrollmentDateId, targetType: "SEASONAL", targetSessionDateId: sessionDateId });
-      setModal(null); void loadBoard(offeringId); void loadRoster(selDate);
+      setModal(null); void loadBoard(offeringId, { keepSelection: true }); void loadRoster(selDate);
     } catch (e) { setErr((e as Error).message); }
   }
   async function assignRegular(c: any) {
@@ -138,7 +144,7 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
   async function decide(id: string, decision: string) {
     try {
       await postJSON({ action: "makeup-decide", makeupId: id, decision });
-      void loadMakeups(); void loadBoard(offeringId);
+      void loadMakeups(); void loadBoard(offeringId, { keepSelection: true });
       // 승인·거절하면 대기 건수가 줄어드므로 상단 탭 뱃지도 즉시 갱신한다.
       router.refresh();
     }

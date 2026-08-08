@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import {
+  buildChromeIntentUrl,
   buildKakaoExternalUrl,
   getAndroidBrowserLabel,
   getAndroidInstallSteps,
   getInAppBrowserLabel,
   getInAppEscapeSteps,
+  shouldOfferChromeIntent,
   type AndroidBrowserKind,
   type InAppBrowserKind,
   type InstallPlatform,
@@ -74,6 +76,53 @@ export function SafariShareIllustration() {
   );
 }
 
+type OpenInChromeButtonProps = {
+  platform: InstallPlatform;
+  /** primary = 화면의 주 행동, secondary = 보조 권유 */
+  variant?: "primary" | "secondary";
+  label?: string;
+};
+
+/**
+ * "크롬으로 열기" 버튼 (안드로이드 전용).
+ *
+ * 왜 필요한가: 카카오톡 인앱 브라우저에서는 홈 화면 추가가 막히고,
+ * 삼성 인터넷으로 설치하면 Play 프로텍트가 "안전하지 않은 앱"으로 막는다. 크롬으로 열면 둘 다 해결된다.
+ *
+ * ⚠️ intent 스킴은 iOS에서 동작하지 않는다. 그래서 안드로이드가 아니면 **아예 렌더하지 않는다.**
+ *    (눌러도 아무 일 없는 버튼은 사용자를 더 헤매게 만든다)
+ */
+export function OpenInChromeButton({
+  platform,
+  variant = "primary",
+  label = "크롬으로 열기",
+}: OpenInChromeButtonProps) {
+  if (!shouldOfferChromeIntent(platform)) return null;
+
+  const openChrome = () => {
+    // 주소는 클릭 시점에 읽는다(서버 렌더 시 window가 없다).
+    const intentUrl = buildChromeIntentUrl(window.location.href);
+    // https가 아니면(개발용 http 등) 인텐트를 만들 수 없다 — 아무 것도 하지 않는다.
+    if (!intentUrl) return;
+    window.location.href = intentUrl;
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={openChrome}
+      className={
+        variant === "primary"
+          ? "flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] shadow-md"
+          : "flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-sm font-black text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+      }
+    >
+      <span className="material-symbols-outlined text-lg" aria-hidden="true">open_in_new</span>
+      {label}
+    </button>
+  );
+}
+
 type AndroidInstallStepsProps = {
   androidBrowser: AndroidBrowserKind;
 };
@@ -88,15 +137,34 @@ export function AndroidInstallSteps({ androidBrowser }: AndroidInstallStepsProps
   const steps = getAndroidInstallSteps(androidBrowser);
 
   return (
-    <ol className="mt-5 space-y-3" aria-label={`${getAndroidBrowserLabel(androidBrowser)} 설치 순서`}>
-      {steps.map(({ icon, label }, index) => (
-        <li key={label} className="flex min-h-11 items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-gray-800">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-navy-900 text-sm font-black text-white">{index + 1}</span>
-          <span className="material-symbols-outlined text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
-          <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{label}</span>
-        </li>
-      ))}
-    </ol>
+    <>
+      {/* 삼성 인터넷 전용 권유. 삼성 인터넷이 만든 앱은 Play 프로텍트에 막히는 경우가 있고, 이는 브라우저가
+          만드는 것이라 우리가 고칠 수 없다. 크롬은 구글 서버에서 앱을 받아오므로 경고가 없다.
+          🚫 경고를 무시하라는 안내는 절대 넣지 않는다(진짜 악성 앱도 그렇게 설치하게 된다). */}
+      {androidBrowser === "samsung" && (
+        <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+          <p className="text-sm leading-6 text-gray-700 dark:text-gray-200">
+            삼성 인터넷으로 설치하면 ‘안전하지 않은 앱’ 경고가 뜰 수 있어요.
+            <br />
+            크롬으로 열면 경고 없이 설치됩니다.
+          </p>
+          <div className="mt-3">
+            {/* 이 안내는 안드로이드에서만 그려진다(브라우저 종류가 samsung인 경우). */}
+            <OpenInChromeButton platform="android" variant="secondary" />
+          </div>
+        </div>
+      )}
+
+      <ol className="mt-5 space-y-3" aria-label={`${getAndroidBrowserLabel(androidBrowser)} 설치 순서`}>
+        {steps.map(({ icon, label }, index) => (
+          <li key={label} className="flex min-h-11 items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-gray-800">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-navy-900 text-sm font-black text-white">{index + 1}</span>
+            <span className="material-symbols-outlined text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
+            <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{label}</span>
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
 
@@ -165,7 +233,8 @@ type InAppBrowserEscapeCardProps = {
 export function InAppBrowserEscapeCard({ inAppBrowser, platform }: InAppBrowserEscapeCardProps) {
   const label = getInAppBrowserLabel(inAppBrowser);
   const steps = getInAppEscapeSteps(inAppBrowser, platform);
-  const browserName = platform === "ios" ? "Safari" : "브라우저";
+  // 안드로이드는 크롬을 콕 집어 열 수 있으므로 이름을 그대로 말해 준다("브라우저"는 무엇을 말하는지 모른다).
+  const browserName = platform === "ios" ? "Safari" : platform === "android" ? "크롬" : "브라우저";
 
   const openExternal = () => {
     // 카카오톡만 외부 브라우저를 여는 스킴을 제공한다. 이동하면 기본 브라우저로 같은 주소가 열린다.
@@ -194,7 +263,16 @@ export function InAppBrowserEscapeCard({ inAppBrowser, platform }: InAppBrowserE
         </div>
       </div>
 
-      {inAppBrowser === "kakaotalk" ? (
+      {/* 안드로이드는 인앱 브라우저 종류와 무관하게 intent 스킴으로 크롬을 직접 지정해 열 수 있다.
+          카카오톡·네이버·인스타 등 어디서 열렸든 이 버튼 하나로 빠져나간다. */}
+      {platform === "android" ? (
+        <div className="mt-4">
+          <OpenInChromeButton platform={platform} />
+        </div>
+      ) : null}
+
+      {/* iOS는 intent 스킴이 동작하지 않는다. 카카오톡이 공개한 외부 브라우저 스킴만 쓸 수 있다(기존 그대로). */}
+      {inAppBrowser === "kakaotalk" && platform !== "android" ? (
         <button
           type="button"
           onClick={openExternal}

@@ -149,6 +149,12 @@ test("삼성 인터넷 안내는 실제 메뉴 이름(현재 페이지 추가)�
   const otherText = other.map((step) => step.label).join(" / ");
   assert.match(otherText, /우측 위/);
   assert.match(otherText, /앱 설치|홈 화면에 추가/);
+  // 크롬은 버전마다 메뉴 이름이 다르다(최신 "설치 및 바로가기 만들기" / 예전 "앱 설치").
+  // 한쪽만 적으면 실기기에서 그 항목을 못 찾고 막힌다 — 두 이름이 모두 있어야 한다.
+  assert.match(otherText, /설치 및 바로가기 만들기/);
+  assert.match(otherText, /앱 설치/);
+  assert.match(getAndroidInstallHint("other"), /설치 및 바로가기 만들기/);
+  assert.match(getAndroidInstallHint("other"), /앱 설치/);
   // 크롬 안내에 삼성 전용 메뉴 이름이 새어 나오면 안 된다.
   assert.doesNotMatch(otherText, /현재 페이지 추가/);
 

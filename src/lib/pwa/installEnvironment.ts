@@ -148,6 +148,53 @@ export function buildKakaoExternalUrl(currentUrl: string): string {
   return `kakaotalk://web/openExternal?url=${encodeURIComponent(safe(currentUrl))}`;
 }
 
+/**
+ * 안드로이드 전용 — 크롬으로 같은 주소를 다시 여는 intent 주소를 만든다.
+ *
+ * 왜 필요한가 (현장에서 확인된 두 가지):
+ *  1) 카카오톡 인앱 브라우저는 홈 화면 추가가 아예 막혀 있다. 안드로이드는 메뉴 안내만으로는 대부분 포기한다.
+ *  2) 삼성 인터넷으로 설치하면 Google Play 프로텍트가 "안전하지 않은 앱"으로 막는다.
+ *     삼성 인터넷이 만든 앱 파일(WebAPK)이 낡은 기준이라 그렇고, 브라우저가 만드는 것이라 우리가 못 고친다.
+ *     크롬은 구글 서버에서 앱을 받아오므로 이 경고가 없다.
+ * → 두 경우 모두 "크롬으로 열기" 하나로 풀린다.
+ *
+ * ⚠️ S.browser_fallback_url 은 필수다. 크롬이 없는 기기에서 인텐트가 실패하면
+ *    돌아갈 주소가 없어 빈 화면이 된다.
+ * ⚠️ intent 스킴은 iOS에서 동작하지 않는다. 호출하는 쪽에서 안드로이드일 때만 쓴다.
+ *
+ * @returns https 주소가 아니면 null (잘못된 인텐트를 만들지 않는다)
+ */
+export function buildChromeIntentUrl(currentUrl: string): string | null {
+  const raw = safe(currentUrl);
+  if (!raw) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    // 주소 형식이 아니면 인텐트를 만들지 않는다.
+    return null;
+  }
+  // https가 아니면(개발용 http·기타 스킴) 인텐트를 만들지 않는다.
+  if (parsed.protocol !== "https:") return null;
+
+  // 인텐트 본문에는 스킴을 뺀 주소만 넣는다. (#Intent 뒤가 파라미터라서 해시는 못 싣는다)
+  const pathPart = `${parsed.host}${parsed.pathname}${parsed.search}`;
+  // 되돌아갈 원래 주소도 같은 범위로 맞춘다.
+  const fallback = `${parsed.origin}${parsed.pathname}${parsed.search}`;
+
+  return `intent://${pathPart}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
+}
+
+/**
+ * "크롬으로 열기" 버튼을 보여줄지 판단한다.
+ * iOS에서는 intent 스킴이 동작하지 않으므로 **버튼 자체를 렌더하지 않는다**
+ * (눌러도 아무 일이 없는 버튼은 사용자를 더 헤매게 만든다).
+ */
+export function shouldOfferChromeIntent(platform: InstallPlatform): boolean {
+  return platform === "android";
+}
+
 /** 안드로이드 수동 설치 단계 한 칸 (아이콘 + 짧은 라벨 — iOS 3단계 안내와 같은 모양) */
 export type AndroidInstallStep = { icon: string; label: string };
 
@@ -165,9 +212,11 @@ export function getAndroidInstallSteps(browser: AndroidBrowserKind): AndroidInst
     ];
   }
   // 크롬 등 나머지 안드로이드 브라우저 — 메뉴가 우측 "위"에 있다.
+  // ⚠️ 크롬은 버전마다 메뉴 이름이 다르다. 최신은 "설치 및 바로가기 만들기", 예전은 "앱 설치".
+  //    UA로 버전을 가르면 경계가 불확실해 오히려 틀린 안내가 나가므로, 두 이름을 나란히 보여준다.
   return [
     { icon: "more_vert", label: "우측 위 ⋮ 누르기" },
-    { icon: "add_to_home_screen", label: "‘앱 설치’ 또는 ‘홈 화면에 추가’" },
+    { icon: "add_to_home_screen", label: "‘설치 및 바로가기 만들기’·‘앱 설치’" },
     { icon: "add", label: "‘설치’ 또는 ‘추가’ 누르기" },
   ];
 }
@@ -176,7 +225,8 @@ export function getAndroidInstallSteps(browser: AndroidBrowserKind): AndroidInst
 export function getAndroidInstallHint(browser: AndroidBrowserKind): string {
   return browser === "samsung"
     ? "우측 하단 ≡ 메뉴에서 ‘현재 페이지 추가’를 선택하세요."
-    : "브라우저 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택하세요.";
+    // 크롬 버전에 따라 이름이 달라서 두 이름을 함께 적는다.
+    : "브라우저 메뉴에서 ‘설치 및 바로가기 만들기’ 또는 ‘앱 설치’를 선택하세요.";
 }
 
 /** 안내문에 쓰는 브라우저 이름 */

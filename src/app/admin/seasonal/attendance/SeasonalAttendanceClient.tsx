@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+// 현황판을 주간 달력으로 배치하는 계산은 순수 모듈로 분리해 테스트로 잠가 뒀다.
+import { buildAttendanceCalendar, calendarCellDateLabel } from "@/lib/seasonal/attendanceCalendar";
+
 type Offering = {
   id: string; seasonId: string; title: string; capacity: number | null;
   targetGrades: string | null; instructorName: string | null; dateCount: number; enrolledSlots: number;
@@ -160,6 +163,40 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
     const cap = capOf(d); const pct = cap ? gaugeOf(d) / cap : 0;
     return pct >= 1 ? "bg-red-500" : pct >= 0.83 ? "bg-amber-500" : "bg-[var(--brand-accent)]";
   };
+  // 회차 목록을 주간 달력(가로=요일, 세로=주차)으로 접는다. 배치 계산은 순수 함수가 담당한다.
+  const calendar = useMemo(() => buildAttendanceCalendar(board), [board]);
+
+  // 달력 셀 하나 — 날짜 / (이 반 · 코트전체/정원) / 초과 경고 / 게이지 순으로 압축해 보여준다.
+  // 시간·N일차·출결 상세는 title(마우스 올리면 보이는 설명)로 옮겼다.
+  const renderBoardCell = (d: BoardDate) => {
+    const cap = capOf(d);
+    const court = courtOf(d);                    // 그날 코트 전체 인원(형제 반 합산) — 없으면 null
+    const over = court != null && court > cap;   // 정원 초과 여부(정원과 비교되는 값은 코트 전체다)
+    const pending = d.unchecked > 0 && d.state !== "PLANNED"; // 출결 체크가 덜 끝난 날
+    const title = `${d.dateLabel}(${d.dayLabel}) · ${d.round}일차 · ${d.startTime}~${d.endTime}`
+      + ` · 이 반 ${d.scheduled}명${court != null ? ` · 코트 전체 ${court}/${cap}${over ? " ⚠ 정원 초과" : ""}` : ""}`
+      + ` · 출${d.present}/지${d.late}/결${d.absent}/보${d.makeup}${pending ? ` · 미확인 ${d.unchecked}` : ""}`;
+    return (
+      <button key={d.sessionDateId} onClick={() => setSelDate(d.sessionDateId)} title={title}
+        className={`min-w-0 rounded-lg border p-1.5 text-left ${selDate === d.sessionDateId ? "border-[var(--brand-accent)] ring-1 ring-[var(--brand-accent)]" : "border-gray-200 dark:border-gray-700"} ${d.state === "LIVE" ? "bg-orange-50 dark:bg-orange-950/40" : "bg-white dark:bg-gray-800"}`}>
+        <div className="flex items-start justify-between gap-0.5">
+          <span className="text-xs font-black leading-none">{calendarCellDateLabel(d.ymd, calendar.multiMonth)}</span>
+          {/* 미확인이 남은 날은 눈에 띄게 — 체크를 빠뜨리지 않게 하는 표시 */}
+          {pending && <span className="rounded-full bg-amber-100 px-1 text-[9px] font-black leading-4 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{d.unchecked}</span>}
+        </div>
+        {/* 앞 숫자 = 이 반 인원, 뒤 숫자 = 코트 전체/정원 (아래 ※ 설명 참고) */}
+        <div className="mt-1 truncate text-[10px] font-black leading-none">
+          <span className="text-gray-500 dark:text-gray-400">{d.scheduled}</span>
+          {court != null && <> · <span className={over ? "text-red-600 dark:text-red-400" : ""}>{court}/{cap}</span></>}
+        </div>
+        {over && <div className="mt-0.5 text-[9px] font-black leading-none text-red-600 dark:text-red-400">⚠ 초과</div>}
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+          <div className={`h-full rounded-full ${barColor(d)}`} style={{ width: `${Math.min(100, cap ? (gaugeOf(d) / cap) * 100 : 0)}%` }} />
+        </div>
+      </button>
+    );
+  };
+
   // 선택한 날짜의 코트 인원/정원 — 상단 KPI와 명단 헤더에서 함께 쓴다.
   const selCourt = selBoard ? courtOf(selBoard) : null;
   const selCourtCap = selBoard ? capOf(selBoard) : null;
@@ -210,45 +247,26 @@ export default function SeasonalAttendanceClient({ initial }: { initial: { seaso
           )}
 
           <div className="mb-1 text-sm font-black">회차(날짜)별 현황 <span className="font-bold text-gray-500">· 총 {board.length}일</span></div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {board.map((d) => {
-              const cap = capOf(d);
-              const court = courtOf(d);          // 그날 코트 전체 인원(형제 반 합산) — 없으면 null
-              const over = court != null && court > cap; // 정원 초과 여부
-              return (
-                <button key={d.sessionDateId} onClick={() => setSelDate(d.sessionDateId)}
-                  className={`rounded-xl border bg-white p-3 text-left dark:bg-gray-800 ${selDate === d.sessionDateId ? "border-[var(--brand-accent)] ring-1 ring-[var(--brand-accent)]" : "border-gray-200 dark:border-gray-700"}`}>
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-sm font-black">{d.dateLabel} ({d.dayLabel})</span>
-                    <span className="text-[11px] font-bold text-gray-400">{d.round}일차</span>
-                  </div>
-                  <div className="mt-0.5 text-[11px] font-bold text-gray-500">{d.startTime}~{d.endTime}</div>
-                  {/* 두 숫자를 나눠서 보여준다: "이 반"은 이 반에서 그날 나오는 인원, "코트 전체"는 정원과 비교되는 값 */}
-                  <div className="mt-2 flex justify-between text-[11px] font-black">
-                    <span className="text-gray-500 dark:text-gray-400">이 반</span><span>{d.scheduled}명</span>
-                  </div>
-                  {court != null && (
-                    <div className="mt-0.5 flex justify-between text-[11px] font-black">
-                      <span className="text-gray-500 dark:text-gray-400">코트 전체</span>
-                      <span className={over ? "text-red-600 dark:text-red-400" : ""}>
-                        {court}/{cap}{over && <span className="ml-1">⚠ 초과</span>}
-                      </span>
-                    </div>
-                  )}
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div className={`h-full rounded-full ${barColor(d)}`} style={{ width: `${Math.min(100, cap ? (gaugeOf(d) / cap) * 100 : 0)}%` }} />
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1 text-[11px] font-bold">
-                    <StateBadge state={d.state} />
-                    {d.present > 0 && <Pill c="green">출{d.present}</Pill>}
-                    {d.late > 0 && <Pill c="amber">지{d.late}</Pill>}
-                    {d.absent > 0 && <Pill c="red">결{d.absent}</Pill>}
-                    {d.makeup > 0 && <Pill c="blue">보{d.makeup}</Pill>}
-                    {d.unchecked > 0 && d.state !== "PLANNED" && <Pill c="gray">미확인{d.unchecked}</Pill>}
-                  </div>
-                </button>
-              );
-            })}
+          {/* 주간 달력: 가로=수업이 있는 요일, 세로=주차. 그 주에 수업이 없는 칸은 비워 날짜 간격이 보이게 한다.
+              열은 1fr로 나눠 가지므로 요일이 많아도 가로 스크롤이 생기지 않는다. */}
+          <div className="rounded-xl border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-800">
+            <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${calendar.columns.length || 1}, minmax(0, 1fr))` }}>
+              {calendar.columns.map((c) => (
+                <div key={c.key} className="pb-0.5 text-center text-[11px] font-black text-gray-500 dark:text-gray-400">{c.label}</div>
+              ))}
+              {/* 행(주차)을 한 줄로 펴서 그린다 — 열 개수가 고정이라 순서대로 채우면 주차 행이 된다. */}
+              {calendar.weeks.flatMap((w, wi) =>
+                w.cells.map((d, ci) =>
+                  d ? renderBoardCell(d)
+                    : <div key={`${w.weekStart}-${wi}-${ci}`} className="min-h-[46px] rounded-lg border border-dashed border-gray-100 dark:border-gray-700/60" />,
+                ),
+              )}
+              {board.length === 0 && <div className="col-span-full p-4 text-center text-sm text-gray-400">회차가 없습니다.</div>}
+            </div>
+            {/* 날짜 값이 이상해 달력에 못 놓은 회차가 있어도 화면에서 사라지지 않게 따로 붙인다(정상 데이터에선 비어 있음). */}
+            {calendar.unplaced.length > 0 && (
+              <div className="mt-1 grid grid-cols-3 gap-1 sm:grid-cols-6">{calendar.unplaced.map((d) => renderBoardCell(d))}</div>
+            )}
           </div>
           {/* 두 숫자가 서로 다른 기준임을 분명히 알린다 — 13명 > 정원 12 같은 모순으로 보이지 않도록.
               (3문단이던 설명을 한 줄로 압축. 정원과 비교되는 값은 '이 반'이 아니라 '코트 전체'라는 점은 반드시 남긴다.) */}
@@ -351,21 +369,7 @@ function Kpi({ n, l, c, sub }: { n: any; l: string; c?: string; sub?: string }) 
     </div>
   );
 }
-function Pill({ c, children }: { c: string; children: any }) {
-  const m: Record<string, string> = {
-    green: "text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-950",
-    amber: "text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-950",
-    red: "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-950",
-    blue: "text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-950",
-    gray: "text-gray-600 bg-gray-100 dark:text-gray-300 dark:bg-gray-700",
-  };
-  return <span className={`rounded px-1.5 py-0.5 ${m[c]}`}>{children}</span>;
-}
-function StateBadge({ state }: { state: string }) {
-  if (state === "DONE") return <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-700 dark:bg-green-950 dark:text-green-300">완료</span>;
-  if (state === "LIVE") return <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black text-orange-600 dark:bg-orange-950">진행중</span>;
-  return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black text-gray-500 dark:bg-gray-700">예정</span>;
-}
+// (달력 전환으로 카드 안 배지(Pill·StateBadge)는 셀에서 빠졌다 — 출/지/결/보 상세는 아래 명단과 셀 title에서 확인한다.)
 
 function MakeupTab({ makeups, onDecide }: { makeups: any; onDecide: (id: string, d: string) => void }) {
   return (

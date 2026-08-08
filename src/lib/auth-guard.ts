@@ -128,6 +128,11 @@ export type VerifiedParentAuthUser = Awaited<ReturnType<typeof requireAuth>> & {
 /**
  * 학부모 전용 보호 경로는 Supabase 로그인만으로 통과시키지 않는다.
  * 앱 계정이 현재 Auth ID에 직접 연결되고 휴대폰 인증까지 끝난 경우만 허용한다.
+ *
+ * 예외 하나: 학원 관계자의 자녀도 이 학원에 다닐 수 있다(원장 자녀 등).
+ * 역할이 PARENT 가 아니어도 **자기 앞으로 등록된 학생이 있으면** 통과시킨다.
+ * 이건 권한을 넓히는 게 아니라 좁히는 쪽이다 — 관리자는 이미 /admin 에서 모든
+ * 학생을 본다. 학부모 화면은 아래 appUserId 로 범위가 좁혀져 자기 자녀만 보인다.
  */
 export async function requireVerifiedParent(): Promise<VerifiedParentAuthUser> {
   const user = await requireAuth();
@@ -141,10 +146,26 @@ export async function requireVerifiedParent(): Promise<VerifiedParentAuthUser> {
     user.id,
   );
   const appUser = rows[0];
-  const isVerifiedSignup = Boolean(appUser?.phoneVerifiedAt);
-  const isDirectlyBoundLegacyParent = appUser?.username === null;
-  if (!appUser || appUser.role !== "PARENT" || (!isVerifiedSignup && !isDirectlyBoundLegacyParent)) {
+  if (!appUser) {
     throw new Error("휴대폰 인증을 완료한 학부모 계정이 필요합니다.");
+  }
+
+  if (appUser.role === "PARENT") {
+    const isVerifiedSignup = Boolean(appUser.phoneVerifiedAt);
+    const isDirectlyBoundLegacyParent = appUser.username === null;
+    if (!isVerifiedSignup && !isDirectlyBoundLegacyParent) {
+      throw new Error("휴대폰 인증을 완료한 학부모 계정이 필요합니다.");
+    }
+  } else {
+    // 직원 계정은 자기 앞으로 등록된 자녀가 있을 때만 학부모 화면을 연다.
+    // 휴대폰 인증은 다시 묻지 않는다 — 직원 계정은 초대 단계에서 이미 확인했다.
+    const ownChildren = await prisma.$queryRawUnsafe<Array<{ one: number }>>(
+      `SELECT 1 AS one FROM "Student" WHERE "parentId" = $1 LIMIT 1`,
+      appUser.id,
+    );
+    if (ownChildren.length === 0) {
+      throw new Error("휴대폰 인증을 완료한 학부모 계정이 필요합니다.");
+    }
   }
   return Object.assign(user, {
     appUserId: appUser.id,

@@ -123,7 +123,9 @@ test("OAuth completion binds the same provider and rejects an existing account c
 test("the shared verified-parent guard protects mypage and payment entry points", () => {
   assert.match(authGuard, /export async function requireVerifiedParent/);
   assert.match(authGuard, /"authUserId" = \$1 OR \("authUserId" IS NULL AND id = \$1\)/);
-  assert.match(authGuard, /appUser\?\.username === null/);
+  // 레거시로 직접 연결된 학부모(username 없음)는 휴대폰 인증 없이 통과해야 한다.
+  // (가드가 appUser 없음을 먼저 걸러내도록 바뀌어 옵셔널 체이닝은 선택 사항이다)
+  assert.match(authGuard, /appUser\??\.?username === null/);
   for (const consumer of [mypageLayout, paymentPage, checkoutRoute, confirmRoute]) {
     assert.match(consumer, /requireVerifiedParent/);
   }

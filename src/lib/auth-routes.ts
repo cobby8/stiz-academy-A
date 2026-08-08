@@ -32,7 +32,11 @@ export function isSafeInternalPath(path?: string | null) {
   }
 }
 
-export function canRoleAccessPath(role: AppRole, path?: string | null) {
+export function canRoleAccessPath(
+  role: AppRole,
+  path?: string | null,
+  options?: { hasOwnChildren?: boolean },
+) {
   if (!isSafeInternalPath(path)) return false;
   const target = new URL(path as string, "https://stiz.internal").pathname;
 
@@ -46,7 +50,10 @@ export function canRoleAccessPath(role: AppRole, path?: string | null) {
     return role === "ADMIN" || role === "VICE_ADMIN" || role === "INSTRUCTOR";
   }
   if (target === "/mypage" || target.startsWith("/mypage/")) {
-    return role === "PARENT";
+    // 학원 관계자의 자녀도 이 학원에 다닐 수 있다(원장 자녀 등).
+    // 자기 앞으로 등록된 학생이 있으면 학부모 화면을 연다. 화면·API 는 모두
+    // 본인 계정 기준으로 범위를 좁히므로 남의 자녀는 보이지 않는다.
+    return role === "PARENT" || Boolean(options?.hasOwnChildren);
   }
 
   return true;
@@ -62,13 +69,14 @@ export function isStaffScopePath(path?: string | null) {
 export function resolveRedirectForRole(
   role: AppRole,
   requestedPath?: string | null,
-  options?: { preferRoleHome?: boolean; stayInStaffApp?: boolean },
+  options?: { preferRoleHome?: boolean; stayInStaffApp?: boolean; hasOwnChildren?: boolean },
 ) {
+  const access = { hasOwnChildren: options?.hasOwnChildren };
   // 설치된 선생님 앱에서 로그인한 경우. 앱의 영역은 /staff 라 여기서 벗어나면
   // 앱이 브라우저로 튕긴다. 원장(ADMIN)도 앱 안에서는 선생님 화면을 연다 —
   // 관리자 화면은 앱 메뉴의 바로가기로 따로 나간다.
   if (options?.stayInStaffApp) {
-    if (isStaffScopePath(requestedPath) && canRoleAccessPath(role, requestedPath)) {
+    if (isStaffScopePath(requestedPath) && canRoleAccessPath(role, requestedPath, access)) {
       return requestedPath as string;
     }
     const roleHome = defaultPathForRole(role);
@@ -76,9 +84,9 @@ export function resolveRedirectForRole(
     if (isStaffScopePath(roleHome)) return roleHome;
     // 관리자는 /admin 이 기본이지만 앱 안에서는 /staff 로 연다.
     // 학부모가 선생님 앱으로 로그인한 경우처럼 /staff 를 못 쓰면 제 화면으로 보낸다.
-    return canRoleAccessPath(role, "/staff") ? "/staff" : roleHome;
+    return canRoleAccessPath(role, "/staff", access) ? "/staff" : roleHome;
   }
   if (options?.preferRoleHome) return defaultPathForRole(role);
-  if (canRoleAccessPath(role, requestedPath)) return requestedPath as string;
+  if (canRoleAccessPath(role, requestedPath, access)) return requestedPath as string;
   return defaultPathForRole(role);
 }

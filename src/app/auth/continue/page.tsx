@@ -22,9 +22,13 @@ export default async function AuthContinuePage({ searchParams }: ContinuePagePro
 
   try {
     const rows = await prisma.$queryRawUnsafe<
-      Array<{ role: string; username: string | null; phoneVerifiedAt: Date | null }>
+      Array<{ role: string; username: string | null; phoneVerifiedAt: Date | null; hasOwnChildren: boolean }>
     >(
-      `SELECT role, username, "phoneVerifiedAt" FROM "User"
+      // hasOwnChildren: 학원 관계자의 자녀도 이 학원에 다닐 수 있다. 자기 앞으로
+      // 등록된 학생이 있으면 역할이 PARENT 가 아니어도 학부모 화면으로 보낸다.
+      `SELECT role, username, "phoneVerifiedAt",
+              EXISTS (SELECT 1 FROM "Student" s WHERE s."parentId" = "User".id) AS "hasOwnChildren"
+       FROM "User"
        WHERE "authUserId" = $1 OR id = $1 OR LOWER(email) = LOWER($2)
        ORDER BY CASE WHEN "authUserId" = $1 THEN 0 WHEN id = $1 THEN 1 ELSE 2 END
        LIMIT 1`,
@@ -50,6 +54,8 @@ export default async function AuthContinuePage({ searchParams }: ContinuePagePro
         preferRoleHome: context === "staff" && requestedPath === "/staff",
         // 설치된 선생님 앱에서 들어오면 앱 영역(/staff) 안에 머문다.
         stayInStaffApp: context === "staff-app",
+        // 자녀가 등록된 직원 계정은 학부모 화면(/mypage)도 열 수 있다.
+        hasOwnChildren: Boolean(rows[0]?.hasOwnChildren),
       }),
     );
   } catch (error) {

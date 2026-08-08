@@ -33,6 +33,23 @@
   --color-brand-neon-lime: #ccff00;
   --color-brand-neon-cobalt: #0047ff;
   --color-brand-neon-pink: #ff0055;
+
+  /* === 학적부(문서형) 디자인 토큰 — 2026-08 관리자 개편 ===
+     기존 색은 하나도 건드리지 않는다. 이 계열만 새로 추가해 화면별로 점진 적용한다.
+     실제 값은 아래 :root / .dark 의 --doc-* 에 있고 여기서는 참조만 한다.
+     그래야 bg-doc-paper 같은 유틸리티를 쓰면서도 라이트/다크 전환이 자동으로 된다.
+     ⚠️ var() 참조라 투명도 수식(bg-doc-paper/50)은 쓸 수 없다. 필요하면 색을 새로 정의할 것. */
+  --color-doc-paper: var(--doc-paper);
+  --color-doc-surface: var(--doc-surface);
+  --color-doc-ink: var(--doc-ink);
+  --color-doc-ink-2: var(--doc-ink-2);
+  --color-doc-ink-3: var(--doc-ink-3);
+  --color-doc-rule: var(--doc-rule);
+  --color-doc-rule-strong: var(--doc-rule-strong);
+  --color-doc-accent: var(--doc-accent);
+  --color-doc-accent-soft: var(--doc-accent-soft);
+  --color-doc-crit: var(--doc-crit);
+  --color-doc-warn: var(--doc-warn);
 }
 
 :root {
@@ -42,6 +59,20 @@
   --brand-accent-hover: var(--color-brand-orange-600);
   --brand-accent-soft: var(--color-brand-orange-50);
   --brand-accent-contrast: #ffffff;
+
+  /* 학적부 토큰 — 라이트(종이).
+     색은 8개로 제한한다. 늘리고 싶으면 먼저 정말 필요한지 다시 본다. */
+  --doc-paper: #fcfcfb;        /* 화면 바탕 — 종이 */
+  --doc-surface: #ffffff;      /* 표·카드 표면 */
+  --doc-ink: #16181b;          /* 본문 먹 */
+  --doc-ink-2: #4a4e55;        /* 보조 글자 */
+  --doc-ink-3: #7a7e85;        /* 라벨·비활성 */
+  --doc-rule: #dcdad3;         /* 얇은 괘선 1px */
+  --doc-rule-strong: #c4c1b8;  /* 굵은 구분·테두리 */
+  --doc-accent: #1d5b47;       /* 링크·선택·주요 동작 */
+  --doc-accent-soft: #eaf1ee;  /* 강조 배경 */
+  --doc-crit: #9b2c2c;         /* 삭제·미납·오류 */
+  --doc-warn: #8a5a00;         /* 주의 */
 }
 
 .dark {
@@ -52,6 +83,21 @@
   --brand-accent-soft: color-mix(in srgb, var(--color-brand-neon-lime) 14%, var(--color-gray-950));
   --brand-accent-contrast: var(--color-brand-navy-900);
   color-scheme: dark;
+
+  /* 학적부 토큰 — 다크(먹지).
+     단순 반전이 아니다. 어두운 배경에서도 '종이에 인쇄된 문서'로 읽히도록
+     대비를 낮추고, 강조색은 어두운 바탕에서 보이게 밝은 쪽으로 올린다. */
+  --doc-paper: #15161a;
+  --doc-surface: #1b1d22;
+  --doc-ink: #e9e8e4;
+  --doc-ink-2: #b3b2ad;
+  --doc-ink-3: #82817c;
+  --doc-rule: #2c2e34;
+  --doc-rule-strong: #3d4048;
+  --doc-accent: #5fb79b;
+  --doc-accent-soft: #1b2a26;
+  --doc-crit: #e0736b;
+  --doc-warn: #d9a441;
 }
 
 /* 모바일 기본 폰트 17px — 학부모(30~40대) 스마트폰 가독성 향상 */

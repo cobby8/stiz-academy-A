@@ -2,7 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { notMergedStudent } from "@/lib/studentVisibility";
 import {
   CHANGE_REQUEST_MESSAGE,
+  MAX_EFFECTIVE_MONTHS_AHEAD,
+  addMonths,
+  isChangeKind,
   nextMonthStart,
+  resolveEffectiveFrom,
   validateChangeRequest,
   type ChangeKind,
 } from "@/lib/enrollment/changeRequestRules";
@@ -24,6 +28,13 @@ function kstTodayYmd(): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+/** 내일(YYYY-MM-DD). 말일이면 다음 달 1일이 된다. */
+function nextDay(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
 }
 
 export type ChangeableClass = {
@@ -55,7 +66,11 @@ export type ChildChangeOption = {
 };
 
 export type EnrollmentChangeOptions = {
+  /** 기본 적용일(다음 달 1일). 반 변경은 학부모가 아래 범위 안에서 바꿀 수 있다. */
   effectiveFrom: string;
+  /** 반 변경 시작일로 고를 수 있는 범위 */
+  minEffectiveFrom: string;
+  maxEffectiveFrom: string;
   children: ChildChangeOption[];
   classes: ChangeableClass[];
 };
@@ -64,7 +79,8 @@ export type EnrollmentChangeOptions = {
 const REGULAR_CLASS_FILTER = `c."dayOfWeek" <> 'Seasonal'`;
 
 export async function getEnrollmentChangeOptions(parentUserId: string): Promise<EnrollmentChangeOptions> {
-  const effectiveFrom = nextMonthStart(kstTodayYmd());
+  const today = kstTodayYmd();
+  const effectiveFrom = nextMonthStart(today);
 
   const children = await prisma.$queryRawUnsafe<any[]>(
     `SELECT s.id AS "studentId", s.name AS "studentName",
@@ -100,6 +116,9 @@ export async function getEnrollmentChangeOptions(parentUserId: string): Promise<
 
   return {
     effectiveFrom,
+    // 내일 계산이 달을 넘길 수 있어(말일) 안전하게 오늘+1일을 Date 로 구한다.
+    minEffectiveFrom: nextDay(today),
+    maxEffectiveFrom: addMonths(today, MAX_EFFECTIVE_MONTHS_AHEAD),
     children: children.map((row) => ({
       studentId: row.studentId,
       studentName: row.studentName,
@@ -134,6 +153,8 @@ export async function getEnrollmentChangeOptions(parentUserId: string): Promise<
 export type SubmitChangeInput = {
   enrollmentId?: string;
   kind?: unknown;
+  /** 반 변경일 때만. 학부모가 고른 시작일(내일 이후·3개월 이내). 비우면 다음 달 1일. */
+  effectiveFrom?: unknown;
   toClassId?: unknown;
   resumeOn?: unknown;
   reason?: unknown;
@@ -155,8 +176,19 @@ export async function submitEnrollmentChangeRequest(parentUserId: string, input:
   );
   if (!owned[0]) return { ok: false as const, message: "본인 자녀의 수강만 변경 신청할 수 있습니다." };
 
-  // 가드2: 적용일은 서버가 정한다.
-  const effectiveFrom = nextMonthStart(kstTodayYmd());
+  // 가드2: 적용일은 서버가 정한다. 학부모가 고른 날짜도 규칙(내일 이후·3개월 이내)을
+  // 통과해야 하고, 벗어나면 조용히 바꾸지 않고 거절한다.
+  if (!isChangeKind(input.kind)) {
+    return { ok: false as const, message: CHANGE_REQUEST_MESSAGE.INVALID_KIND };
+  }
+  const resolved = resolveEffectiveFrom({
+    kind: input.kind,
+    requestedFrom: input.effectiveFrom,
+    today: kstTodayYmd(),
+  });
+  if (!resolved.ok) return { ok: false as const, message: CHANGE_REQUEST_MESSAGE[resolved.error] };
+  const effectiveFrom = resolved.effectiveFrom;
+
   const checked = validateChangeRequest(input, { currentClassId: owned[0].classId, effectiveFrom });
   if (!checked.ok) return { ok: false as const, message: CHANGE_REQUEST_MESSAGE[checked.error] };
   const kind: ChangeKind = checked.kind;

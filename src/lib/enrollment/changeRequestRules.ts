@@ -50,6 +50,43 @@ export function nextMonthStart(todayYmd: string): string {
   return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
+/** 학부모가 시작일을 고를 수 있는 범위(오늘 기준). 너무 먼 날짜는 반 편성을 예측할 수 없다. */
+export const MAX_EFFECTIVE_MONTHS_AHEAD = 3;
+
+export function addMonths(ymd: string, months: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  const day = Math.min(d, lastDay); // 1/31 + 1개월 = 2/28 로 접는다
+  return `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * 적용 시작일을 정한다.
+ *
+ * 반 변경만 학부모가 날짜를 고를 수 있다(원장 지시). 휴원·퇴원은 다음 달 1일로 고정한다 —
+ * 달 중간에 멈추면 그달 요금을 어디까지 받을지 매번 판단해야 한다.
+ * 고른 날짜가 규칙을 벗어나면 조용히 바꾸지 않고 거절한다. 조용히 바꾸면 학부모가
+ * 신청한 날과 실제 적용일이 달라진다.
+ */
+export function resolveEffectiveFrom(input: {
+  kind: ChangeKind;
+  requestedFrom?: unknown;
+  today: string;
+}): { ok: true; effectiveFrom: string } | { ok: false; error: ChangeRequestError } {
+  if (input.kind !== "CLASS_CHANGE") return { ok: true, effectiveFrom: nextMonthStart(input.today) };
+
+  const requested = typeof input.requestedFrom === "string" ? input.requestedFrom.trim() : "";
+  if (!requested) return { ok: true, effectiveFrom: nextMonthStart(input.today) };
+  if (!isYmd(requested)) return { ok: false, error: "INVALID_EFFECTIVE_DATE" };
+  // 오늘·지난날은 막는다. 오늘 수업이 이미 끝났을 수 있어 어느 반 소속인지 애매해진다.
+  if (requested <= input.today) return { ok: false, error: "EFFECTIVE_DATE_TOO_SOON" };
+  if (requested > addMonths(input.today, MAX_EFFECTIVE_MONTHS_AHEAD)) {
+    return { ok: false, error: "EFFECTIVE_DATE_TOO_FAR" };
+  }
+  return { ok: true, effectiveFrom: requested };
+}
+
 export type ChangeRequestInput = {
   // 전부 unknown·선택으로 받는다. 클라이언트가 보낸 값이라 모양을 믿을 수 없다.
   kind?: unknown;
@@ -65,7 +102,10 @@ export type ChangeRequestError =
   | "SAME_CLASS"
   | "INVALID_RESUME_DATE"
   | "RESUME_BEFORE_START"
-  | "REASON_TOO_LONG";
+  | "REASON_TOO_LONG"
+  | "INVALID_EFFECTIVE_DATE"
+  | "EFFECTIVE_DATE_TOO_SOON"
+  | "EFFECTIVE_DATE_TOO_FAR";
 
 /**
  * 신청 내용이 종류에 맞는지 본다. 소유권·정원은 여기서 보지 않는다(DB 를 봐야 한다).
@@ -110,4 +150,7 @@ export const CHANGE_REQUEST_MESSAGE: Record<ChangeRequestError, string> = {
   INVALID_RESUME_DATE: "복귀 예정일을 다시 확인해 주세요.",
   RESUME_BEFORE_START: "복귀 예정일은 휴원 시작일보다 뒤여야 합니다.",
   REASON_TOO_LONG: "사유는 500자 이내로 적어 주세요.",
+  INVALID_EFFECTIVE_DATE: "변경 시작일을 다시 확인해 주세요.",
+  EFFECTIVE_DATE_TOO_SOON: "변경 시작일은 내일 이후로 선택해 주세요.",
+  EFFECTIVE_DATE_TOO_FAR: "변경 시작일은 3개월 이내로 선택해 주세요.",
 };

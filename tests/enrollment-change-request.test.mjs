@@ -67,10 +67,13 @@ test("엉뚱한 종류와 지나치게 긴 사유를 거른다", () => {
   assert.equal(validateChangeRequest({ kind: "PAUSE", reason: "가".repeat(501) }, context).error, "REASON_TOO_LONG");
 });
 
-test("적용일을 클라이언트가 정하지 못한다", () => {
-  // 믿으면 이번 달로 앞당겨 이미 청구된 달의 반을 바꿀 수 있다.
-  assert.match(parentLib, /const effectiveFrom = nextMonthStart\(kstTodayYmd\(\)\)/);
-  assert.doesNotMatch(parentLib, /effectiveFrom = (input|body)\./);
+test("적용일을 클라이언트가 마음대로 정하지 못한다", () => {
+  // 학부모가 반 변경 시작일을 고를 수 있게 됐지만, 보낸 값을 그대로 쓰면
+  // 이번 달로 앞당겨 **이미 청구된 달**의 반을 바꿀 수 있다.
+  // 반드시 규칙 함수를 거쳐 검증된 값만 저장한다.
+  assert.match(parentLib, /const resolved = resolveEffectiveFrom\(\{/);
+  assert.match(parentLib, /const effectiveFrom = resolved\.effectiveFrom/);
+  assert.doesNotMatch(parentLib, /effectiveFrom = (input|body)\.effectiveFrom/);
 });
 
 test("본인 자녀의 지금 다니는 반만 신청할 수 있다", () => {
@@ -129,4 +132,56 @@ test("신청·결정이 사람에게 전달된다", () => {
   // 알림 실패가 신청·승인을 되돌리면 안 된다.
   assert.match(parentLib, /console\.error\("\[parent-change-request\] 원장 알림 실패/);
   assert.match(adminLib, /console\.error\("\[admin-change-request\] 학부모 알림 실패/);
+});
+
+// ── 학부모가 반 변경 시작일을 고를 수 있게 한 뒤 추가된 계약 ──────────────
+const rulesModule = await import(
+  `data:text/javascript;base64,${Buffer.from(
+    ts.transpileModule(await readFile("src/lib/enrollment/changeRequestRules.ts", "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    }).outputText,
+  ).toString("base64")}`
+);
+const { resolveEffectiveFrom, addMonths } = rulesModule;
+
+test("반 변경만 학부모가 시작일을 고를 수 있다", () => {
+  // 휴원·퇴원은 달 중간에 멈추면 그달 요금을 매번 판단해야 해서 1일로 고정한다.
+  assert.equal(
+    resolveEffectiveFrom({ kind: "PAUSE", requestedFrom: "2026-08-20", today: "2026-08-09" }).effectiveFrom,
+    "2026-09-01",
+  );
+  assert.equal(
+    resolveEffectiveFrom({ kind: "CLASS_CHANGE", requestedFrom: "2026-08-20", today: "2026-08-09" }).effectiveFrom,
+    "2026-08-20",
+  );
+  // 안 고르면 기본값(다음 달 1일)
+  assert.equal(
+    resolveEffectiveFrom({ kind: "CLASS_CHANGE", today: "2026-08-09" }).effectiveFrom,
+    "2026-09-01",
+  );
+});
+
+test("오늘·지난날과 너무 먼 날짜는 조용히 바꾸지 않고 거절한다", () => {
+  // 조용히 바꾸면 학부모가 신청한 날과 실제 적용일이 달라진다.
+  assert.equal(
+    resolveEffectiveFrom({ kind: "CLASS_CHANGE", requestedFrom: "2026-08-09", today: "2026-08-09" }).error,
+    "EFFECTIVE_DATE_TOO_SOON",
+  );
+  assert.equal(
+    resolveEffectiveFrom({ kind: "CLASS_CHANGE", requestedFrom: "2026-08-01", today: "2026-08-09" }).error,
+    "EFFECTIVE_DATE_TOO_SOON",
+  );
+  assert.equal(
+    resolveEffectiveFrom({ kind: "CLASS_CHANGE", requestedFrom: "2027-01-01", today: "2026-08-09" }).error,
+    "EFFECTIVE_DATE_TOO_FAR",
+  );
+  assert.equal(
+    resolveEffectiveFrom({ kind: "CLASS_CHANGE", requestedFrom: "2026-13-01", today: "2026-08-09" }).error,
+    "INVALID_EFFECTIVE_DATE",
+  );
+});
+
+test("말일 + 개월 계산이 없는 날짜를 만들지 않는다", () => {
+  assert.equal(addMonths("2026-01-31", 1), "2026-02-28"); // 2/31 이 되면 안 된다
+  assert.equal(addMonths("2026-12-15", 3), "2027-03-15");
 });

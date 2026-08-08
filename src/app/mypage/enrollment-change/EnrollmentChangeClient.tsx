@@ -25,6 +25,8 @@ export default function EnrollmentChangeClient({ initial }: { initial: Enrollmen
   const [childIdx, setChildIdx] = useState(0);
   const [kind, setKind] = useState<ChangeKind>("CLASS_CHANGE");
   const [toClassId, setToClassId] = useState("");
+  // 반 변경만 시작일을 고를 수 있다(원장 지시). 기본값은 다음 달 1일.
+  const [effectiveFrom, setEffectiveFrom] = useState(initial.effectiveFrom);
   const [resumeOn, setResumeOn] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -60,12 +62,14 @@ export default function EnrollmentChangeClient({ initial }: { initial: Enrollmen
         enrollmentId: child.enrollmentId,
         kind,
         toClassId: kind === "CLASS_CHANGE" ? toClassId : undefined,
+        effectiveFrom: kind === "CLASS_CHANGE" ? effectiveFrom : undefined,
         resumeOn: kind === "PAUSE" ? resumeOn || undefined : undefined,
         reason,
       });
       if (!ok) return;
       setDone("신청이 접수되었습니다. 학원에서 확인 후 알려드립니다.");
       setToClassId("");
+      setEffectiveFrom(initial.effectiveFrom);
       setResumeOn("");
       setReason("");
       router.refresh();
@@ -97,7 +101,8 @@ export default function EnrollmentChangeClient({ initial }: { initial: Enrollmen
         <h1 className="text-xl font-black text-brand-navy-900 dark:text-white">수강 변경 신청</h1>
         {/* 적용일을 먼저 알린다. 언제부터 바뀌는지 모르고 신청하면 그게 곧 문의가 된다. */}
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          신청하신 내용은 <b className="text-brand-navy-900 dark:text-white">{initial.effectiveFrom}</b>부터 적용됩니다.
+          휴원·퇴원은 <b className="text-brand-navy-900 dark:text-white">{initial.effectiveFrom}</b>부터 적용됩니다.
+          반 변경은 원하시는 날짜를 고를 수 있어요.
         </p>
       </div>
 
@@ -183,6 +188,23 @@ export default function EnrollmentChangeClient({ initial }: { initial: Enrollmen
               {/* 만석이어도 신청은 받는다(원장 결정). 대신 기대를 정확히 만든다. */}
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 정원이 찬 반도 신청할 수 있어요. 자리가 나면 순서대로 배정됩니다.
+              </p>
+
+              {/* 시작일을 학부모가 고른다. 달 중간이면 그달 수강료는 회차대로 다시 계산된다. */}
+              <label htmlFor="effective-from" className="mt-4 mb-1 block text-xs font-bold text-gray-500 dark:text-gray-400">
+                언제부터 옮길까요?
+              </label>
+              <input
+                id="effective-from"
+                type="date"
+                value={effectiveFrom}
+                min={initial.minEffectiveFrom}
+                max={initial.maxEffectiveFrom}
+                onChange={(event) => setEffectiveFrom(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-gray-200 px-3 dark:border-gray-700 dark:bg-gray-900"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                달 중간부터 옮기면 그달 수강료를 수업 회차대로 다시 계산해 안내드립니다.
               </p>
             </div>
           )}

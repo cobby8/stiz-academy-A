@@ -1,9 +1,16 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import {
+  DocPage, DocSheet, DocHead, DocLabel, DocSummary, DocButton,
+  DocBadge, DocInput, DocNotice, DocEmpty, DocRow, DocModal,
+} from "@/components/doc";
 
 // 셔틀 차량 관리 — 자동 배차가 쓰는 차량(ShuttleVehicle)을 등록·수정·활성/비활성한다.
 // (옛 '노선 만들기'는 자동 배차 화면으로 대체되어, 이 화면은 차량 관리만 담당한다.)
+//
+// 2026-08 학적부 스타일 적용 — **화면 그리는 부분만** 바꿨다.
+// 상태·fetch·save·toggleActive 로직은 한 줄도 손대지 않았다.
 
 type Vehicle = { id: string; name: string; plateNumber?: string | null; capacity: number; notes?: string | null; isActive?: boolean };
 
@@ -64,70 +71,88 @@ export default function VehicleManagerClient({ initialVehicles }: { initialVehic
   const active = vehicles.filter((v) => v.isActive !== false);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-4">
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-base font-black text-gray-900 dark:text-white">차량 관리</h3>
-            {/* 2번째 문장 제거 — 존재하지 않는 「자동 배차」 탭을 가리키던 스테일 안내(실제 탭은 「방학특강 배차」·「정규 배차」) */}
-            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">여기 등록한 활성 차량을 <b>자동 배차</b>가 정원에 맞춰 사용합니다.</p>
+    <DocPage>
+      <DocSheet>
+        <DocHead
+          title="차량 관리"
+          sub="여기 등록한 활성 차량을 자동 배차가 정원에 맞춰 사용합니다."
+          right={<DocButton kind="primary" onClick={() => setModal("new")}>차량 등록</DocButton>}
+        />
+
+        <div className="mt-4">
+          <DocSummary items={[
+            { label: "활성 차량", value: `${active.length}대` },
+            { label: "전체", value: `${vehicles.length}대` },
+          ]} />
+        </div>
+
+        {(err || notice) && (
+          <div className="mt-4 space-y-2">
+            {err && <DocNotice tone="error">{err}</DocNotice>}
+            {notice && <DocNotice tone="ok">{notice}</DocNotice>}
           </div>
-          <button onClick={() => setModal("new")} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white">＋ 차량 등록</button>
+        )}
+
+        <div className="mt-6">
+          <DocLabel>등록 차량</DocLabel>
+          {vehicles.length === 0 ? (
+            <DocEmpty title="등록된 차량이 없습니다" hint="「차량 등록」으로 추가하면 자동 배차가 이 차량을 사용합니다" />
+          ) : (
+            <div style={{ borderTop: "1.5px solid var(--doc-ink)" }}>
+              {vehicles.map((v) => {
+                const on = v.isActive !== false;
+                return (
+                  <DocRow key={v.id} muted={!on} accent={on ? "var(--doc-accent)" : undefined}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[14px] font-bold" style={{ color: "var(--doc-ink)" }}>{v.name}</span>
+                        {v.plateNumber && (
+                          <span className="font-mono text-[12px] tabular-nums" style={{ color: "var(--doc-ink-2)" }}>
+                            {v.plateNumber}
+                          </span>
+                        )}
+                        <DocBadge tone="mute">{v.capacity}인승</DocBadge>
+                        {!on && <DocBadge tone="mute">비활성</DocBadge>}
+                      </div>
+                      {v.notes && (
+                        <p className="m-0 mt-1 text-[12px]" style={{ color: "var(--doc-ink-3)" }}>{v.notes}</p>
+                      )}
+                    </div>
+                    <DocButton onClick={() => setModal(v)} disabled={pending}>수정</DocButton>
+                    <DocButton
+                      kind={on ? "quiet" : "primary"}
+                      onClick={() => toggleActive(v)}
+                      disabled={pending}
+                    >
+                      {on ? "비활성화" : "활성화"}
+                    </DocButton>
+                  </DocRow>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
-        {notice && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {notice}</p>}
-
-        <p className="mt-3 text-[12px] font-bold text-gray-500">활성 차량 {active.length}대 · 전체 {vehicles.length}대</p>
-
-        <div className="mt-2 space-y-2">
-          {vehicles.length === 0 && <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">등록된 차량이 없습니다. 「차량 등록」으로 추가하세요.</div>}
-          {vehicles.map((v) => {
-            const on = v.isActive !== false;
-            return (
-              <div key={v.id} className={`flex flex-wrap items-center gap-2 rounded-xl border p-3 ${on ? "border-gray-200 dark:border-gray-700" : "border-gray-200 bg-gray-50 opacity-70 dark:border-gray-700 dark:bg-gray-900/40"}`}>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-black text-gray-900 dark:text-white">🚐 {v.name}</span>
-                    {v.plateNumber && <span className="text-[12px] font-bold text-gray-500">{v.plateNumber}</span>}
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-black text-gray-600 dark:bg-gray-700 dark:text-gray-200">{v.capacity}인승</span>
-                    {!on && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-black text-gray-500 dark:bg-gray-700">비활성</span>}
-                  </div>
-                  {v.notes && <p className="mt-0.5 text-[12px] text-gray-400">{v.notes}</p>}
-                </div>
-                <button onClick={() => setModal(v)} disabled={pending} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-bold text-gray-600 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">수정</button>
-                <button onClick={() => toggleActive(v)} disabled={pending} className={`rounded-lg border px-2.5 py-1.5 text-[12px] font-bold disabled:opacity-50 ${on ? "border-gray-200 text-gray-500 dark:border-gray-600" : "border-green-300 text-green-700 dark:border-green-500/40 dark:text-green-300"}`}>{on ? "비활성화" : "활성화"}</button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      </DocSheet>
 
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 sm:items-center sm:p-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl dark:bg-gray-800 sm:rounded-3xl">
-            <h2 className="text-lg font-black text-gray-900 dark:text-white">{editing ? "차량 수정" : "차량 등록"}</h2>
-            <form onSubmit={save} className="mt-4 space-y-3">
-              <label className="block text-sm font-bold text-gray-600 dark:text-gray-300">차량명
-                <input name="name" required autoFocus defaultValue={editing?.name ?? ""} placeholder="예: 스타리아 1호차" className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-              </label>
-              <label className="block text-sm font-bold text-gray-600 dark:text-gray-300">차량번호
-                <input name="plateNumber" defaultValue={editing?.plateNumber ?? ""} placeholder="예: 12가 3456" className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-              </label>
-              <label className="block text-sm font-bold text-gray-600 dark:text-gray-300">승차 정원
-                <input name="capacity" type="number" min="1" required defaultValue={editing?.capacity ?? ""} placeholder="예: 15" className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-              </label>
-              <label className="block text-sm font-bold text-gray-600 dark:text-gray-300">메모
-                <input name="notes" defaultValue={editing?.notes ?? ""} className="mt-1 min-h-11 w-full rounded-xl border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-              </label>
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setModal(null)} disabled={pending} className="min-h-11 rounded-xl border border-gray-300 px-5 font-bold text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">취소</button>
-                <button type="submit" disabled={pending} className="min-h-11 flex-1 rounded-xl bg-brand-orange-500 px-5 font-black text-white disabled:opacity-50">{pending ? "저장 중…" : editing ? "수정" : "등록"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <DocModal title={editing ? "차량 수정" : "차량 등록"} onClose={() => setModal(null)}>
+          <form onSubmit={save} className="space-y-3">
+            <DocInput label="차량명" name="name" required autoFocus
+                      defaultValue={editing?.name ?? ""} placeholder="예: 스타리아 1호차" />
+            <DocInput label="차량번호" name="plateNumber"
+                      defaultValue={editing?.plateNumber ?? ""} placeholder="예: 12가 3456" />
+            <DocInput label="승차 정원" name="capacity" type="number" min="1" required
+                      defaultValue={editing?.capacity ?? ""} placeholder="예: 15" />
+            <DocInput label="메모" name="notes" defaultValue={editing?.notes ?? ""} />
+            <div className="flex gap-2 pt-2">
+              <DocButton type="button" onClick={() => setModal(null)} disabled={pending}>취소</DocButton>
+              <DocButton type="submit" kind="primary" disabled={pending} className="flex-1">
+                {pending ? "저장 중…" : editing ? "수정" : "등록"}
+              </DocButton>
+            </div>
+          </form>
+        </DocModal>
       )}
-    </div>
+    </DocPage>
   );
 }

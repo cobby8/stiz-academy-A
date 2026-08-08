@@ -185,3 +185,45 @@ test("말일 + 개월 계산이 없는 날짜를 만들지 않는다", () => {
   assert.equal(addMonths("2026-01-31", 1), "2026-02-28"); // 2/31 이 되면 안 된다
   assert.equal(addMonths("2026-12-15", 3), "2027-03-15");
 });
+
+// ── 계획표 연동 + 차액 청구서 발행 ────────────────────────────────────────
+const planLib = await readFile("src/lib/enrollment/monthlyClassDates.ts", "utf8");
+
+test("일할 계산은 공개 연간일정표와 같은 함수를 쓴다", () => {
+  // 두 곳이 다른 방식으로 계산하면 학부모가 보는 일정과 청구 근거가 어긋난다.
+  assert.match(planLib, /computeClassDatesFromRange/);
+  assert.match(planLib, /getMonthClassSchedule/);
+  assert.match(planLib, /from "@\/lib\/classSchedule"/);
+  // 개강~종강 범위를 우선하고 주차 방식이 fallback (/annual 과 같은 순서).
+  assert.match(planLib, /if \(openIso && closeIso\)[\s\S]{0,200}if \(weekStarts\.length > 0\)/);
+});
+
+test("계획표를 못 읽으면 빈 배열이라 자동 계산이 멈춘다", () => {
+  // 추측한 회차로 청구하면 매달 틀린 금액이 나간다.
+  assert.match(planLib, /return \[\];/);
+  assert.match(adminLib, /loadAnnualPlanEvents\(\)\.catch\(\(\) => \[\]\)/);
+});
+
+test("차액 청구서 금액은 서버가 다시 계산한다", () => {
+  // 화면 값을 믿으면 브라우저에서 숫자를 바꿔 원하는 금액으로 청구서를 만들 수 있다.
+  assert.match(adminLib, /export async function issueProrationInvoice/);
+  assert.match(adminLib, /const proration = buildProration\(row, planEvents\)/);
+  assert.doesNotMatch(adminLib, /amount: input\.(amount|diff)/);
+});
+
+test("차액 청구서를 두 번 발행하지 않는다", () => {
+  assert.match(adminLib, /if \(row\.invoicedPaymentId\) return \{ ok: false/);
+  assert.match(adminLib, /SET "invoicedPaymentId" = \$2/);
+});
+
+test("승인 전이거나 계산 불가·마이너스면 발행하지 않는다", () => {
+  assert.match(adminLib, /row\.status !== "APPROVED"/);
+  assert.match(adminLib, /proration\.scheduleUnavailable[\s\S]{0,120}return \{ ok: false/);
+  // 원장 결정: 마이너스는 환불 청구서가 아니라 다음 달 차감.
+  assert.match(adminLib, /proration\.diff <= 0[\s\S]{0,200}다음 달 청구에서 차감/);
+});
+
+test("차액 청구서는 반에 묶지 않는다", () => {
+  // 적용일 전까지 학생은 아직 새 반 소속이 아니라 반 기준 집계에 잘못 잡힌다.
+  assert.match(adminLib, /"classId", amount[\s\S]{0,200}VALUES \(gen_random_uuid\(\)::text, \$1, NULL/);
+});

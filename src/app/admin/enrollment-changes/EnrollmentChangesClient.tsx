@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { decideEnrollmentChange } from "@/app/actions/enrollment-changes";
+import { decideEnrollmentChange, issueEnrollmentChangeInvoice } from "@/app/actions/enrollment-changes";
 import { CHANGE_STATUS_LABEL } from "@/lib/enrollment/changeRequestRules";
 import type { AdminChangeRequestRow } from "@/lib/enrollment/admin-change-request";
 
@@ -24,6 +24,18 @@ export default function EnrollmentChangesClient({
   const [pending, startTransition] = useTransition();
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+
+  function issueInvoice(requestId: string) {
+    setError("");
+    startTransition(async () => {
+      const result = await issueEnrollmentChangeInvoice(requestId);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   function decide(requestId: string, approve: boolean) {
     setError("");
@@ -99,6 +111,40 @@ export default function EnrollmentChangesClient({
                 <p className="mt-2 rounded-xl bg-green-50 p-2 text-xs font-bold text-green-800 dark:bg-green-950/30 dark:text-green-200">
                   신청 당시에는 마감이었지만 지금은 자리가 있습니다
                 </p>
+              )}
+
+              {/* 일할 계산. 근거를 보여줘야 원장이 숫자를 믿고 발행할 수 있다.
+                  금액은 발행 시 서버가 다시 계산한다(여기 숫자는 표시용). */}
+              {row.proration && row.proration.needsProration && (
+                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                  <p className="text-xs font-black text-gray-700 dark:text-gray-200">수강료 일할 계산</p>
+                  {row.proration.lines.map((line) => (
+                    <p key={line} className="mt-1 text-xs text-gray-600 dark:text-gray-300">{line}</p>
+                  ))}
+                  {!row.proration.scheduleUnavailable && (
+                    <p className="mt-2 text-sm font-black text-brand-navy-900 dark:text-white">
+                      {row.proration.diff > 0
+                        ? `추가 청구 ${row.proration.diff.toLocaleString()}원`
+                        : row.proration.diff < 0
+                          ? `${Math.abs(row.proration.diff).toLocaleString()}원은 다음 달 청구에서 차감하세요`
+                          : "차액 없음"}
+                    </p>
+                  )}
+                  {row.status === "APPROVED" && row.proration.diff > 0 && !row.proration.scheduleUnavailable && (
+                    row.invoicedPaymentId ? (
+                      <p className="mt-2 text-xs font-bold text-green-700">차액 청구서 발행됨</p>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => issueInvoice(row.id)}
+                        className="mt-2 min-h-11 w-full rounded-xl bg-brand-navy-900 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                      >
+                        차액 {row.proration.diff.toLocaleString()}원 청구서 만들기
+                      </button>
+                    )
+                  )}
+                </div>
               )}
 
               {row.reason && <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{row.reason}</p>}

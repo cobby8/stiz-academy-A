@@ -59,8 +59,9 @@ test("형제 번호 집합은 신청서 번호와 원생 보호자 번호의 합
 });
 
 test("스키마와 마이그레이션이 할인 스냅샷 컬럼을 갖는다", () => {
-  assert.match(schema, /siblingDiscountSnapshot Int @default\(0\)/);
-  assert.match(schema, /discountReasonSnapshot String\?/);
+  // prisma format 이 열을 맞추면서 공백 개수가 바뀐다. 지켜야 할 것은 필드의 존재·타입이다.
+  assert.match(schema, /siblingDiscountSnapshot\s+Int\s+@default\(0\)/);
+  assert.match(schema, /discountReasonSnapshot\s+String\?/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS "siblingDiscountSnapshot" INTEGER NOT NULL DEFAULT 0/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS "discountReasonSnapshot" TEXT/);
 });

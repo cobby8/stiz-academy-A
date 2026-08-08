@@ -9,9 +9,10 @@ const adminClientSource = await readFile("src/app/admin/shuttle/ShuttleRouteAdmi
 const staffShuttleSource = await readFile("src/app/staff/shuttle/page.tsx", "utf8");
 
 test("shuttle routes can be assigned to DRIVER users", () => {
-  assert.match(schemaSource, /driverUserId String\?/);
-  assert.match(schemaSource, /driver User\? @relation\("ShuttleRouteDriver"/);
-  assert.match(schemaSource, /drivenShuttleRoutePlans ShuttleRoutePlan\[\] @relation\("ShuttleRouteDriver"\)/);
+  // prisma format 이 열을 맞추면서 공백 개수가 바뀐다. 지켜야 할 것은 필드의 존재·타입이다.
+  assert.match(schemaSource, /driverUserId\s+String\?/);
+  assert.match(schemaSource, /driver\s+User\?\s+@relation\("ShuttleRouteDriver"/);
+  assert.match(schemaSource, /drivenShuttleRoutePlans\s+ShuttleRoutePlan\[\]\s+@relation\("ShuttleRouteDriver"\)/);
   assert.match(migrationSource, /ADD COLUMN IF NOT EXISTS "driverUserId" TEXT/);
   assert.match(migrationSource, /"ShuttleRoutePlan_driverUserId_fkey"/);
 });

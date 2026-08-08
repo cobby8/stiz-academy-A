@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
-import { decideEnrollmentChangeRequest } from "@/lib/enrollment/admin-change-request";
+import { decideEnrollmentChangeRequest, issueProrationInvoice } from "@/lib/enrollment/admin-change-request";
 
 /**
  * 수강 변경 신청 승인/거절. 원장·부원장만.
@@ -23,5 +23,17 @@ export async function decideEnrollmentChange(input: {
     note: input.note ?? null,
   });
   revalidatePath("/admin/enrollment-changes");
+  return result;
+}
+
+/**
+ * 반 변경 차액 청구서 발행. 금액은 서버가 다시 계산한다(화면 값을 믿지 않는다).
+ * 원장 결정: 자동 발행하지 않고 원장이 금액과 근거를 보고 누른다.
+ */
+export async function issueEnrollmentChangeInvoice(requestId: string) {
+  const admin = await requireAdmin();
+  const result = await issueProrationInvoice({ adminUserId: admin.appUserId, requestId });
+  revalidatePath("/admin/enrollment-changes");
+  revalidatePath("/admin/finance");
   return result;
 }

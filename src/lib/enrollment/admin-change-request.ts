@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { CHANGE_KIND_LABEL, type ChangeKind } from "@/lib/enrollment/changeRequestRules";
+import { computeClassChangeProration, describeProration, type ProrationResult } from "@/lib/enrollment/proration";
+import { getMonthlyClassDates, loadAnnualPlanEvents } from "@/lib/enrollment/monthlyClassDates";
 
 // ── 원장의 수강 변경 승인/거절 + 적용일이 된 건 반영 ────────────────────────
 //
@@ -22,6 +24,10 @@ export type AdminChangeRequestRow = {
   createdAt: string;
   appliedAt: string | null;
   decisionNote: string | null;
+  /** 반 변경일 때만. 계획표 기준 일할 계산 결과와 근거 문장. */
+  proration: (ProrationResult & { lines: string[] }) | null;
+  /** 이미 발행한 차액 청구서가 있으면 그 id. 두 번 발행을 막는다. */
+  invoicedPaymentId: string | null;
 };
 
 export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<AdminChangeRequestRow[]> {
@@ -31,7 +37,9 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
             fc.name AS "fromClassName", tc.name AS "toClassName",
             to_char(r."effectiveFrom",'YYYY-MM-DD') AS "effectiveFrom",
             to_char(r."resumeOn",'YYYY-MM-DD') AS "resumeOn",
-            r.reason, r.status, r.waitlisted, r."decisionNote",
+            r.reason, r.status, r.waitlisted, r."decisionNote", r."invoicedPaymentId",
+            r."toClassId", fc."dayOfWeek" AS "fromDay", tc."dayOfWeek" AS "toDay",
+            fp.price AS "fromFee", tp.price AS "toFee",
             to_char(r."createdAt" AT TIME ZONE 'Asia/Seoul','YYYY-MM-DD HH24:MI') AS "createdAt",
             to_char(r."appliedAt" AT TIME ZONE 'Asia/Seoul','YYYY-MM-DD HH24:MI') AS "appliedAt",
             CASE WHEN tc.id IS NULL THEN false ELSE
@@ -41,11 +49,17 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
        JOIN "Student" s ON s.id = r."studentId"
        LEFT JOIN "Class" fc ON fc.id = r."fromClassId"
        LEFT JOIN "Class" tc ON tc.id = r."toClassId"
+       LEFT JOIN "Program" fp ON fp.id = fc."programId"
+       LEFT JOIN "Program" tp ON tp.id = tc."programId"
       WHERE ($1 = 'ALL' OR r.status = $1)
       ORDER BY r."createdAt" DESC
       LIMIT 200`,
     status,
   );
+  // 계획표(구글 캘린더)는 한 번만 읽어 모든 건에 재사용한다.
+  const needsPlan = rows.some((row) => row.kind === "CLASS_CHANGE" && row.toDay && row.fromDay);
+  const planEvents = needsPlan ? await loadAnnualPlanEvents().catch(() => []) : [];
+
   return rows.map((row) => ({
     id: row.id,
     studentName: row.studentName,
@@ -62,7 +76,33 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
     createdAt: row.createdAt,
     appliedAt: row.appliedAt ?? null,
     decisionNote: row.decisionNote ?? null,
+    invoicedPaymentId: row.invoicedPaymentId ?? null,
+    proration: buildProration(row, planEvents),
   }));
+}
+
+/** 반 변경 건의 일할 계산. 계획표를 못 읽었으면 계산 불가로 표시된다(추측하지 않는다). */
+function buildProration(row: any, planEvents: any[]): (ProrationResult & { lines: string[] }) | null {
+  if (row.kind !== "CLASS_CHANGE" || !row.fromDay || !row.toDay) return null;
+  const yearMonth = String(row.effectiveFrom).slice(0, 7);
+  const result = computeClassChangeProration({
+    effectiveFrom: row.effectiveFrom,
+    from: {
+      monthlyFee: Number(row.fromFee ?? 0),
+      classDates: getMonthlyClassDates(planEvents, yearMonth, row.fromDay),
+    },
+    to: {
+      monthlyFee: Number(row.toFee ?? 0),
+      classDates: getMonthlyClassDates(planEvents, yearMonth, row.toDay),
+    },
+  });
+  return {
+    ...result,
+    lines: describeProration(result, {
+      from: row.fromClassName ?? "기존 반",
+      to: row.toClassName ?? "새 반",
+    }),
+  };
 }
 
 export async function decideEnrollmentChangeRequest(input: {
@@ -174,4 +214,63 @@ async function notifyParentOfDecision(input: {
     // 알림 실패가 승인을 되돌리면 안 된다. 원장은 이미 결정했다.
     console.error("[admin-change-request] 학부모 알림 실패:", error);
   }
+}
+
+/**
+ * 반 변경 차액 청구서를 발행한다(원장이 눌러야 발행된다 — 원장 결정).
+ *
+ * 금액은 화면이 보낸 값을 쓰지 않고 **여기서 다시 계산한다.** 화면 값을 믿으면
+ * 브라우저에서 숫자를 바꿔 원하는 금액으로 청구서를 만들 수 있다.
+ */
+export async function issueProrationInvoice(input: { adminUserId: string; requestId: string }) {
+  const rows = await prisma.$queryRawUnsafe<any[]>(
+    `SELECT r.id, r.kind, r."studentId", r."invoicedPaymentId", r.status,
+            to_char(r."effectiveFrom",'YYYY-MM-DD') AS "effectiveFrom",
+            fc.name AS "fromClassName", tc.name AS "toClassName",
+            fc."dayOfWeek" AS "fromDay", tc."dayOfWeek" AS "toDay",
+            fp.price AS "fromFee", tp.price AS "toFee"
+       FROM "EnrollmentChangeRequest" r
+       LEFT JOIN "Class" fc ON fc.id = r."fromClassId"
+       LEFT JOIN "Class" tc ON tc.id = r."toClassId"
+       LEFT JOIN "Program" fp ON fp.id = fc."programId"
+       LEFT JOIN "Program" tp ON tp.id = tc."programId"
+      WHERE r.id = $1 LIMIT 1`,
+    input.requestId,
+  );
+  const row = rows[0];
+  if (!row) return { ok: false as const, message: "신청을 찾을 수 없습니다." };
+  if (row.status !== "APPROVED") return { ok: false as const, message: "승인된 신청만 청구할 수 있습니다." };
+  // 두 번 누르면 학부모에게 같은 금액이 두 번 청구된다.
+  if (row.invoicedPaymentId) return { ok: false as const, message: "이미 차액 청구서를 발행했습니다." };
+
+  const planEvents = await loadAnnualPlanEvents().catch(() => []);
+  const proration = buildProration(row, planEvents);
+  if (!proration) return { ok: false as const, message: "반 변경 건만 차액을 청구할 수 있습니다." };
+  if (proration.scheduleUnavailable) {
+    return { ok: false as const, message: "연간 계획표에 그달 수업일이 없어 자동 계산할 수 없습니다." };
+  }
+  if (proration.diff <= 0) {
+    // 원장 결정: 마이너스는 다음 달 청구에서 차감한다. 환불 청구서를 만들지 않는다.
+    return { ok: false as const, message: "추가로 받을 금액이 없습니다. 다음 달 청구에서 차감해 주세요." };
+  }
+
+  const [year, month] = proration.yearMonth.split("-").map(Number);
+  const description =
+    `반 변경 차액 (${proration.yearMonth} · ${row.fromClassName ?? "기존 반"} → ${row.toClassName ?? "새 반"})`;
+
+  const created = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    // classId 는 비운다. 적용일 전까지 학생은 아직 새 반 소속이 아니라서
+    // 반 기준 검증·집계에 잘못 잡힌다. 어느 반 사이인지는 description 에 남긴다.
+    `INSERT INTO "Payment" (id, "studentId", "classId", amount, status, "dueDate", year, month, type, description, "createdAt", "updatedAt")
+     VALUES (gen_random_uuid()::text, $1, NULL, $2, 'PENDING', $3::timestamp, $4, $5, 'MONTHLY', $6, NOW(), NOW())
+     RETURNING id`,
+    row.studentId, proration.diff, row.effectiveFrom, year, month, description,
+  );
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "EnrollmentChangeRequest" SET "invoicedPaymentId" = $2, "updatedAt" = now() WHERE id = $1`,
+    input.requestId, created[0].id,
+  );
+
+  return { ok: true as const, paymentId: created[0].id, amount: proration.diff };
 }

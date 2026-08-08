@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   AndroidInstallSteps,
@@ -147,57 +146,21 @@ export default function StaffAppInstallClient() {
             </p>
           </div>
 
-          <div className="mt-6">
-            {installPrompt && !isInstalled ? (
+          {/* 설치 전용 화면이므로 첫 화면의 행동은 '설치' 하나뿐이다. 앱으로 이동하는 버튼은 두지 않는다. */}
+          {/* 브라우저 설치 프롬프트는 사용자 제스처(클릭) 안에서만 띄울 수 있어 자동 호출하지 않는다. */}
+          {installPrompt && !isInstalled && (
+            <div className="mt-6">
               <button
                 type="button"
                 onClick={install}
                 disabled={isInstalling}
-                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] shadow-md disabled:cursor-wait disabled:opacity-70"
+                className="flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 text-lg font-black text-[var(--brand-accent-contrast)] shadow-md disabled:cursor-wait disabled:opacity-70"
               >
                 <span className="material-symbols-outlined" aria-hidden="true">download</span>
                 {isInstalling ? "설치 준비 중..." : "지금 앱 설치하기"}
               </button>
-            ) : (
-              <Link
-                href="/staff"
-                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] shadow-md"
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">open_in_new</span>
-                선생님 앱 열기
-              </Link>
-            )}
-          </div>
-        </section>
-
-        <section className="mt-4 rounded-3xl border border-brand-orange-200 bg-orange-50 p-5 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10" aria-labelledby="teacher-signup-guide-title">
-          <div className="flex items-start gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white text-brand-orange-500 shadow-sm dark:bg-gray-900 dark:text-brand-neon-lime" aria-hidden="true">
-              <span className="material-symbols-outlined">person_add</span>
-            </span>
-            <div>
-              <h2 id="teacher-signup-guide-title" className="font-black text-brand-navy-900 dark:text-white">처음 이용하시나요?</h2>
-              <p className="mt-1 text-sm leading-6 text-brand-navy-700 dark:text-gray-200">
-                선생님 계정은 공개 가입이 아니라 원장님이 보내드린 <strong>개인 초대 링크</strong>에서 만듭니다.
-              </p>
             </div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Link
-              href="/about"
-              className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-brand-orange-200 bg-white px-3 text-sm font-bold text-brand-navy-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-            >
-              <span className="material-symbols-outlined text-lg" aria-hidden="true">support_agent</span>
-              학원에 문의하기
-            </Link>
-            <Link
-              href="/staff/login"
-              className="flex min-h-11 items-center justify-center gap-1 rounded-xl bg-brand-navy-900 px-3 text-sm font-bold text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
-            >
-              <span className="material-symbols-outlined text-lg" aria-hidden="true">login</span>
-              계정이 있어요
-            </Link>
-          </div>
+          )}
         </section>
 
         {/* 카카오톡 등 인앱 브라우저에서는 홈 화면 추가 자체가 막힌다. 탈출 안내를 먼저 보여준다. */}
@@ -270,19 +233,7 @@ export default function StaffAppInstallClient() {
           </section>
         )}
 
-        <section className="mt-4 grid grid-cols-3 gap-2" aria-label="교사용 앱 주요 기능">
-          {[
-            ["how_to_reg", "출결 확인"],
-            ["photo_camera", "수업 사진"],
-            ["receipt_long", "청구 처리"],
-          ].map(([icon, label]) => (
-            <div key={label} className="rounded-2xl bg-white px-2 py-4 text-center shadow-sm dark:bg-gray-900">
-              <span className="material-symbols-outlined text-2xl text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
-              <p className="mt-2 text-xs font-bold text-gray-700 dark:text-gray-200">{label}</p>
-            </div>
-          ))}
-        </section>
-
+        {/* 설치 못 하는 분에게 남기는 유일한 대안 안내 한 줄 */}
         <p className="mt-6 text-center text-xs leading-5 text-gray-500 dark:text-gray-400">
           설치하지 않아도 웹에서 바로 사용할 수 있습니다.
         </p>

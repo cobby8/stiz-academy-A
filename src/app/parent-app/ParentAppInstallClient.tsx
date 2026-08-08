@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   AndroidInstallSteps,
@@ -148,32 +147,21 @@ export default function ParentAppInstallClient() {
             </p>
           </div>
 
-          <div className="mt-6 space-y-2">
-            {/* 안드로이드는 브라우저가 제공하는 설치 프롬프트를 그대로 띄운다. */}
-            {installPrompt && !isInstalled && (
+          {/* 설치 전용 화면이므로 첫 화면의 행동은 '설치' 하나뿐이다. 앱으로 이동하는 버튼은 두지 않는다. */}
+          {/* 브라우저 설치 프롬프트는 사용자 제스처(클릭) 안에서만 띄울 수 있어 자동 호출하지 않는다. */}
+          {installPrompt && !isInstalled && (
+            <div className="mt-6">
               <button
                 type="button"
                 onClick={install}
                 disabled={isInstalling}
-                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] shadow-md disabled:cursor-wait disabled:opacity-70"
+                className="flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 text-lg font-black text-[var(--brand-accent-contrast)] shadow-md disabled:cursor-wait disabled:opacity-70"
               >
                 <span className="material-symbols-outlined" aria-hidden="true">download</span>
                 {isInstalling ? "설치 준비 중..." : "지금 앱 설치하기"}
               </button>
-            )}
-            {/* 설치 여부와 상관없이 마이페이지로 바로 갈 수 있게 한다. */}
-            <Link
-              href="/mypage"
-              className={
-                installPrompt && !isInstalled
-                  ? "flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-white/25 px-5 font-black text-white"
-                  : "flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] shadow-md"
-              }
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">open_in_new</span>
-              마이페이지 열기
-            </Link>
-          </div>
+            </div>
+          )}
         </section>
 
         {/* 카카오톡 등 인앱 브라우저에서는 홈 화면 추가 자체가 막힌다. 탈출 안내를 가장 위에 둔다. */}
@@ -246,21 +234,7 @@ export default function ParentAppInstallClient() {
           </section>
         )}
 
-        {/* 마이페이지에 실제로 있는 기능만 적는다. */}
-        <section className="mt-4 grid grid-cols-2 gap-2" aria-label="학부모 앱 주요 기능">
-          {[
-            ["how_to_reg", "출결 확인"],
-            ["event_busy", "결석 신고"],
-            ["directions_bus", "셔틀 시각"],
-            ["receipt_long", "청구 확인"],
-          ].map(([icon, label]) => (
-            <div key={label} className="rounded-2xl bg-white px-2 py-4 text-center shadow-sm dark:bg-gray-900">
-              <span className="material-symbols-outlined text-2xl text-[var(--brand-accent)]" aria-hidden="true">{icon}</span>
-              <p className="mt-2 text-xs font-bold text-gray-700 dark:text-gray-200">{label}</p>
-            </div>
-          ))}
-        </section>
-
+        {/* 설치 못 하는 분에게 남기는 유일한 대안 안내 한 줄 */}
         <p className="mt-6 text-center text-xs leading-5 text-gray-500 dark:text-gray-400">
           설치하지 않아도 웹에서 바로 사용할 수 있습니다.
         </p>

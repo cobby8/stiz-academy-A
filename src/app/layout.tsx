@@ -56,6 +56,18 @@ export default async function RootLayout({
                 <link rel="shortcut icon" href="/favicon-v2.ico" />
                 {/* iOS에서 홈 화면 아이콘으로 쓸 이미지 */}
                 <link rel="apple-touch-icon" href="/icon-v2-192.png" />
+                {/*
+                  PWA 설치 이벤트(beforeinstallprompt) 캡처.
+                  크롬은 페이지가 뜨자마자 이 이벤트를 한 번만 쏘는데, React 하이드레이션 후
+                  useEffect에서 리스너를 달면 그 사이에 발생한 이벤트를 놓쳐 설치 버튼이 영영 안 뜬다.
+                  그래서 React보다 먼저 실행되는 인라인 스크립트로 이벤트를 붙잡아 전역에 보관하고,
+                  설치 화면들은 마운트할 때 이 값을 읽어간다. (계약: __stizInstallPrompt / stiz:installprompt / stiz:installed)
+                */}
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `(function(){try{if(window.__stizInstallPromptReady)return;window.__stizInstallPromptReady=1;window.__stizInstallPrompt=null;window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__stizInstallPrompt=e;window.dispatchEvent(new Event("stiz:installprompt"));});window.addEventListener("appinstalled",function(){window.__stizInstallPrompt=null;window.dispatchEvent(new Event("stiz:installed"));});}catch(e){}})();`,
+                    }}
+                />
             </head>
             <body
                 className="antialiased selection:bg-brand-orange-500 selection:text-white dark:selection:bg-brand-neon-lime dark:selection:text-brand-navy-900"

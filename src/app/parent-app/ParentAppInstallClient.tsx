@@ -10,6 +10,9 @@ type InstallPromptEvent = Event & {
 
 type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
+// 루트 레이아웃의 인라인 스크립트가 하이드레이션 전에 잡아둔 설치 이벤트 보관 장소
+type WindowWithInstallPrompt = Window & { __stizInstallPrompt?: InstallPromptEvent | null };
+
 type DeviceState = "checking" | "installed" | "ios-safari" | "ios-browser" | "android" | "other";
 
 export default function ParentAppInstallClient() {
@@ -39,20 +42,40 @@ export default function ParentAppInstallClient() {
       else setDeviceState("other");
     }
 
+    const globalWindow = window as WindowWithInstallPrompt;
+
+    // 1) 이미 붙잡혀 있는 이벤트가 있으면 즉시 사용한다. (버튼이 안 뜨던 진짜 원인 수정)
+    if (globalWindow.__stizInstallPrompt) {
+      setInstallPrompt(globalWindow.__stizInstallPrompt);
+    }
+
+    // 2) 캡처 스크립트가 새로 잡았다고 알려주면 그 값을 가져온다.
+    const adoptStoredPrompt = () => {
+      setInstallPrompt(globalWindow.__stizInstallPrompt ?? null);
+    };
+
+    // 3) 캡처 스크립트가 없거나 이벤트가 늦게 오는 경우 대비 (직접 구독 유지)
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setInstallPrompt(event as InstallPromptEvent);
-      setDeviceState("android");
+      const promptEvent = event as InstallPromptEvent;
+      globalWindow.__stizInstallPrompt = promptEvent;
+      // 기기 판별은 건드리지 않는다 — PC에서도 설치할 수 있어야 하므로 설치 가능 여부와 기기를 분리한다.
+      setInstallPrompt(promptEvent);
     };
 
     const handleInstalled = () => {
+      globalWindow.__stizInstallPrompt = null;
       setInstallPrompt(null);
       setDeviceState("installed");
     };
 
+    window.addEventListener("stiz:installprompt", adoptStoredPrompt);
+    window.addEventListener("stiz:installed", handleInstalled);
     window.addEventListener("beforeinstallprompt", handleInstallPrompt);
     window.addEventListener("appinstalled", handleInstalled);
     return () => {
+      window.removeEventListener("stiz:installprompt", adoptStoredPrompt);
+      window.removeEventListener("stiz:installed", handleInstalled);
       window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
       window.removeEventListener("appinstalled", handleInstalled);
     };
@@ -66,6 +89,8 @@ export default function ParentAppInstallClient() {
       await installPrompt.userChoice;
       // 실제 설치 완료 표시는 appinstalled 이벤트에서만 전환합니다.
       // 사용자 수락은 설치 요청 승인일 뿐, 설치 완료를 보장하지 않습니다.
+      // 한 번 쓴 이벤트는 재사용할 수 없으므로 전역 보관값도 함께 비운다.
+      (window as WindowWithInstallPrompt).__stizInstallPrompt = null;
       setInstallPrompt(null);
     } finally {
       setIsInstalling(false);
@@ -145,8 +170,16 @@ export default function ParentAppInstallClient() {
                   {deviceState === "ios-safari" && "아래쪽 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요."}
                   {deviceState === "ios-browser" && "iPhone에서는 이 페이지를 Safari로 열어야 홈 화면에 추가할 수 있어요."}
                   {deviceState === "android" && !installPrompt && "Chrome 오른쪽 위 메뉴에서 ‘홈 화면에 추가’를 선택하세요."}
-                  {deviceState === "other" && "휴대폰에서 이 링크를 열면 기기에 맞는 방법을 바로 안내해 드려요."}
+                  {/* PC라도 설치 프롬프트가 잡혀 있으면 바로 설치할 수 있다고 알린다. */}
+                  {deviceState === "other" && installPrompt && "이 브라우저에 설치할 수 있어요. 위 ‘지금 앱 설치하기’를 눌러주세요."}
+                  {deviceState === "other" && !installPrompt && "휴대폰에서 이 링크를 열면 기기에 맞는 방법을 바로 안내해 드려요."}
                 </p>
+                {/* 이미 설치돼 있으면 브라우저가 설치 이벤트를 아예 보내지 않는다. 오해하지 않도록 한 줄 덧붙인다. */}
+                {!installPrompt && (deviceState === "android" || deviceState === "other") && (
+                  <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                    이미 설치돼 있으면 설치 버튼이 나타나지 않습니다.
+                  </p>
+                )}
               </div>
             </div>
 

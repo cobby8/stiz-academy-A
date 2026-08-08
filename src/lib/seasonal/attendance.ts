@@ -306,7 +306,11 @@ export async function getDateRoster(sessionDateId: string) {
         LEFT JOIN "SpecialProgramSessionDate" absd ON absd.id = mk."absentSessionDateId"
        WHERE e.status <> 'CANCELLED'
          AND it.status = 'APPROVED'
-       ORDER BY (e.kind = 'MAKEUP') ASC, o2.title ASC, a."childName" ASC`,
+       -- 원장 지시(2026-08-06): 출석부는 반·보강생으로 묶지 말고 학생 이름 오름차순 한 줄로 본다.
+       -- 반이 바뀔 때마다 이름이 처음부터 다시 시작해 "정렬이 안 된 것처럼" 보였다.
+       -- 어느 반인지는 각 행의 반 배지로 이미 구분된다.
+       -- 동명이인은 순서가 흔들리지 않게 id 로 고정한다.
+       ORDER BY a."childName" ASC, e.id ASC`,
     sessionDateId,
   );
 

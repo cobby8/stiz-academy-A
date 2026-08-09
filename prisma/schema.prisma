@@ -110,6 +110,7 @@ model Student {
   teamRosterEntries        StudentTeamRosterEntry[]
   regularAbsences          RegularAbsence[] // 정규 수업 사전 결석 신고(back-relation)
   enrollmentChangeRequests EnrollmentChangeRequest[]
+  paymentParentRequests    PaymentParentRequest[]
   parent                   User                        @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
@@ -326,6 +327,7 @@ model Payment {
   invoice            PaymentInvoice?
   transactions       PaymentTransaction[]
   auditLogs          PaymentAuditLog[]
+  parentRequests     PaymentParentRequest[]
 
   @@unique([id, classId])
   @@index([year, month])
@@ -337,6 +339,38 @@ model Payment {
   @@index([status, dueDate])
   @@index([providerOrderId])
   @@index([providerPaymentKey])
+}
+
+/// 학부모의 청구서 관련 요청: "입금했어요"(확인 요청)와 "영수증 주세요".
+/// 지금까지는 문자로 받아 원장이 통장을 확인하고 손으로 납부 처리했다.
+/// 참고: "같은 청구서·같은 종류의 대기 요청은 한 건"은 DB 부분 유니크 인덱스로 막는다.
+/// Prisma 로는 부분 인덱스를 표현할 수 없어 여기에 적지 않는다.
+model PaymentParentRequest {
+  id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  paymentId         String
+  studentId         String
+  requestedByUserId String
+  kind              String // PAYMENT_CLAIM | RECEIPT
+  /// 입금 확인용: 원장이 통장·랠리즈에서 대조할 단서
+  paidOn            DateTime? @db.Date
+  method            String? // TRANSFER | RALLYZ | CARD | CASH
+  depositorName     String?
+  /// 영수증용
+  receiptType       String? // CASH_RECEIPT | EXPENSE_PROOF
+  receiptTarget     String?
+  note              String?
+  status            String    @default("PENDING") // PENDING | DONE | REJECTED | CANCELED
+  decidedByUserId   String?
+  decidedAt         DateTime? @db.Timestamptz(6)
+  decisionNote      String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([paymentId])
 }
 
 model PaymentInvoice {

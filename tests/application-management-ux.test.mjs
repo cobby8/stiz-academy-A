@@ -187,7 +187,9 @@ test("관리자 신청 화면은 제목과 한 줄 설명만 남기고 중복 �
   assert.match(applyClient, /setShowDetailModal\(app\)/);
   assert.match(applyClient, /학생\/연락처/);
   assert.match(applyClient, /액션/);
-  assert.match(applyClient, /type TabType = "trial" \| "applications" \| "sources" \| "settings"/);
+  // 탭 목록을 그대로 단정해 두는 이유: 탭이 슬금슬금 늘어나는 것을 막는다.
+  // waitlist 는 "대기자를 신청 관리 탭으로" 옮기며 의도적으로 추가됐다(9e2bea6).
+  assert.match(applyClient, /type TabType = "trial" \| "applications" \| "waitlist" \| "sources" \| "settings"/);
   assert.match(applyClient, /유입 통계/);
   assert.doesNotMatch(applyClient, /LIST_QUICK_ACTION_CLASS/);
   assert.doesNotMatch(applyClient, /<th className="px-3 py-2(?:\.5)?">보호자<\/th>/);

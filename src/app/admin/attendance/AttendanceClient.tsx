@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { saveAttendance } from "@/app/actions/admin";
+import { DocHead, DocSheet, DocButton, DocEmpty, DocFoot, issuedAt, DOC_SERIF } from "@/components/doc";
 
 type ClassItem = {
     id: string;
@@ -36,10 +37,12 @@ const DAY_LABELS: Record<string, string> = {
     Mon: "월", Tue: "화", Wed: "수", Thu: "목", Fri: "금", Sat: "토", Sun: "일",
 };
 
+// 출결 표기는 색이 아니라 서류 관습의 기호로 한다 — 출석 ○ · 지각 △ · 결석 ✕.
+// 흑백으로 인쇄해도 그대로 읽히는 것이 학적부의 요건이다.
 const STATUS_OPTIONS = [
-    { value: "PRESENT", label: "출석", color: "bg-green-100 text-green-700 border-green-300" },
-    { value: "ABSENT", label: "결석", color: "bg-red-100 text-red-700 border-red-300" },
-    { value: "LATE", label: "지각", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
+    { value: "PRESENT", label: "출석", mark: "○" },
+    { value: "ABSENT", label: "결석", mark: "✕" },
+    { value: "LATE", label: "지각", mark: "△" },
 ] as const;
 
 function todayStr() {
@@ -201,126 +204,139 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
     }
 
     return (
-        <div className="max-w-4xl mx-auto">
-            <div className="mb-6 flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">출결 관리</h1>
-                </div>
-                {/* 수업 리포트 관리 페이지로 이동하는 버튼 */}
-                <Link
-                    href="/admin/attendance/report"
-                    prefetch={false}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold bg-brand-navy-900 text-white hover:bg-gray-800 transition"
-                >
-                    <span className="material-symbols-outlined text-base">assignment</span>
-                    수업 리포트
-                </Link>
+        <div className="mx-auto" style={{ maxWidth: "var(--page-width)" }}>
+            <DocHead
+                title="《출석부》"
+                period={date ? date.replace(/-/g, ".") : ""}
+                right={
+                    <Link
+                        href="/admin/attendance/report"
+                        prefetch={false}
+                        className="no-print rounded-[3px] px-3 py-1.5 text-[12.5px] font-bold"
+                        style={{ border: "1.5px solid var(--doc-rule-strong)", color: "var(--doc-ink)" }}
+                    >
+                        수업 리포트
+                    </Link>
+                }
+                // 요약은 화면의 실제 데이터에서 계산한다(고정 문자열 금지 — 서류와 화면이 어긋난다).
+                summary={selectedLesson && students.length > 0 ? [
+                    { label: "수강생", value: `${students.length}명` },
+                    { label: "출석", value: `${presentCount}명` },
+                    { label: "지각", value: `${lateCount}명` },
+                    { label: "결석", value: `${absentCount}명`, tone: absentCount > 0 ? "negative" as const : undefined },
+                ] : undefined}
+            />
+
+            {/* 대상 선택 */}
+            <div className="no-print mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>날짜</span>
+                    <input
+                        type="date"
+                        min="2020-01-01" max="2030-12-31"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="w-full rounded-[3px] px-3 py-2 text-[13px] tabular-nums outline-none"
+                        style={{ background: "var(--doc-surface)", border: "1px solid var(--doc-rule-strong)", color: "var(--doc-ink)" }}
+                    />
+                </label>
+                <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>반</span>
+                    <select
+                        value={selectedClass}
+                        onChange={(e) => setSelectedClass(e.target.value)}
+                        className="w-full rounded-[3px] px-3 py-2 text-[13px] outline-none"
+                        style={{ background: "var(--doc-surface)", border: "1px solid var(--doc-rule-strong)", color: "var(--doc-ink)" }}
+                    >
+                        <option value="">반을 선택하세요</option>
+                        {classes.map((c) => (
+                            <option key={lessonKeyOf(c)} value={lessonKeyOf(c)}>
+                                [{c.kind === "SEASONAL" ? "특강" : "정규"}] {c.name} ({DAY_LABELS[c.dayOfWeek] || c.dayOfWeek} {c.startTime}~{c.endTime}) — {c.program?.name}{c.coachName ? ` · ${c.coachName}` : ""}{c.kind === "SEASONAL" ? ` · ${c.studentCount ?? 0}명` : ""}
+                            </option>
+                        ))}
+                    </select>
+                </label>
             </div>
 
-            {/* Selector */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-6 shadow-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">날짜</label>
-                        <input
-                            type="date"
-                            min="2020-01-01" max="2030-12-31"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">반 선택</label>
-                        <select
-                            value={selectedClass}
-                            onChange={(e) => setSelectedClass(e.target.value)}
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
-                        >
-                            <option value="">반을 선택하세요</option>
-                            {classes.map((c) => (
-                                <option key={lessonKeyOf(c)} value={lessonKeyOf(c)}>
-                                    [{c.kind === "SEASONAL" ? "특강" : "정규"}] {c.name} ({DAY_LABELS[c.dayOfWeek] || c.dayOfWeek} {c.startTime}~{c.endTime}) — {c.program?.name}{c.coachName ? ` · ${c.coachName}` : ""}{c.kind === "SEASONAL" ? ` · ${c.studentCount ?? 0}명` : ""}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            {/* Attendance Grid */}
+            {/* 출결 명부 */}
             {selectedLesson && (
-                <>
+                <div className="mt-5">
                     {loading ? (
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
-                            불러오는 중...
-                        </div>
+                        <p className="py-12 text-center text-[12.5px]" style={{ color: "var(--doc-ink-3)" }}>불러오는 중</p>
                     ) : students.length === 0 ? (
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
-                            이 반에 수강 등록된 원생이 없습니다.
-                        </div>
+                        <DocEmpty title="기록이 없습니다." hint="이 반에 수강 등록된 원생이 없습니다." />
                     ) : (
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                            {/* Header with stats */}
-                            <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between flex-wrap gap-3">
-                                <div className="flex items-center gap-4">
-                                    <span className="text-sm font-bold text-gray-900 dark:text-white">수강생 {students.length}명</span>
-                                    {presentCount + absentCount + lateCount > 0 && (
-                                        <div className="flex gap-2 text-xs">
-                                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">출석 {presentCount}</span>
-                                            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">결석 {absentCount}</span>
-                                            <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">지각 {lateCount}</span>
-                                        </div>
-                                    )}
-                                </div>
+                        <DocSheet className="p-0">
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse" style={{ minWidth: 520 }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: "1.5px solid var(--doc-ink)" }}>
+                                            <th className="h-[30px] px-3 text-left text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>번호</th>
+                                            <th className="h-[30px] px-3 text-left text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>성명</th>
+                                            <th className="h-[30px] px-3 text-right text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>출결</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {students.map((st, idx) => (
+                                            <tr key={st.studentId}
+                                                style={{ borderBottom: "1px solid var(--doc-rule)", borderLeft: "2px solid transparent" }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.borderLeftColor = "var(--doc-accent)"; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.borderLeftColor = "transparent"; }}>
+                                                <td className="h-[34px] px-3 text-[12.5px] font-semibold tabular-nums" style={{ color: "var(--doc-ink-3)" }}>{idx + 1}</td>
+                                                <td className="h-[34px] px-3 text-[12.5px] font-medium" style={{ color: "var(--doc-ink)" }}>{st.studentName}</td>
+                                                <td className="h-[34px] px-3">
+                                                    <div className="flex justify-end gap-1.5">
+                                                        {STATUS_OPTIONS.map((opt) => {
+                                                            const on = st.status === opt.value;
+                                                            return (
+                                                                <button
+                                                                    key={opt.value}
+                                                                    onClick={() => setStatus(st.studentId, opt.value)}
+                                                                    title={opt.label}
+                                                                    className="w-9 rounded-[3px] py-1 text-[13px] font-bold transition-colors"
+                                                                    style={{
+                                                                        border: "1px solid " + (on ? "var(--doc-accent)" : "var(--doc-rule)"),
+                                                                        background: on ? "var(--doc-accent-soft)" : "transparent",
+                                                                        color: on ? "var(--doc-accent)" : "var(--doc-ink-3)",
+                                                                    }}
+                                                                >
+                                                                    {opt.mark}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="no-print flex flex-wrap items-center justify-between gap-3 px-3 py-3" style={{ borderTop: "1px solid var(--doc-rule)" }}>
                                 <button
                                     onClick={() => markAll("PRESENT")}
-                                    className="text-xs text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline"
+                                    className="text-[12px] font-bold"
+                                    style={{ color: "var(--doc-accent)" }}
                                 >
                                     전체 출석 처리
                                 </button>
+                                <div className="flex items-center gap-3">
+                                    {saved && (
+                                        <span className="text-[12px] font-bold" style={{ color: "var(--doc-accent)" }}>저장했습니다.</span>
+                                    )}
+                                    <DocButton kind="primary" onClick={handleSave} disabled={saving}>
+                                        {saving ? "저장 중" : "출결 저장"}
+                                    </DocButton>
+                                </div>
                             </div>
-
-                            {/* Student list */}
-                            <div className="divide-y divide-gray-100">
-                                {students.map((s) => (
-                                    <div key={s.studentId} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 dark:bg-gray-900 transition-colors">
-                                        <span className="font-medium text-gray-900 dark:text-white">{s.studentName}</span>
-                                        <div className="flex gap-2">
-                                            {STATUS_OPTIONS.map((opt) => (
-                                                <button
-                                                    key={opt.value}
-                                                    onClick={() => setStatus(s.studentId, opt.value)}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition
-                                                        ${s.status === opt.value
-                                                            ? opt.color + " ring-2 ring-offset-1 ring-gray-300"
-                                                            : "bg-gray-50 dark:bg-gray-900 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:bg-gray-800"
-                                                        }`}
-                                                >
-                                                    {opt.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Save button */}
-                            <div className="p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex justify-end gap-3">
-                                {saved && (
-                                    <span className="text-sm text-green-600 font-medium self-center">저장 완료</span>
-                                )}
-                                <button
-                                    onClick={handleSave}
-                                    disabled={saving}
-                                    className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50"
-                                >
-                                    {saving ? "저장 중..." : "출결 저장"}
-                                </button>
-                            </div>
-                        </div>
+                        </DocSheet>
                     )}
-                </>
+
+                    <p className="mt-2 text-[11px]" style={{ color: "var(--doc-ink-3)", fontFamily: DOC_SERIF }}>
+                        출석 ○ · 지각 △ · 결석 ✕
+                    </p>
+                    <DocFoot issued={issuedAt()} />
+                </div>
             )}
         </div>
     );

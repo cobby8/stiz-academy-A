@@ -20,7 +20,9 @@ test("신청 상태에 따라 승인·대기·반려·취소 템플릿을 선택
 
 test("청구 안내와 신규 보호자 활성화 안내를 구분한다", () => {
   assert.match(client, /activationRequired \? "SPECIAL_ACCOUNT_ACTIVATION_PARENT" : "SPECIAL_PAYMENT_REQUEST_PARENT"/);
-  assert.match(client, /activationRequired \? "계정 활성화·결제 안내" : "결제 요청 안내"/);
+  // "계정 활성화" → "가입"으로 재구성되며 라벨이 바뀌었다(07e6143).
+  // 지켜야 할 것은 두 안내가 갈라져 있다는 것이다.
+  assert.match(client, /activationRequired \? "가입 안내·결제" : "결제 요청 안내"/);
 });
 
 test("발송과 재발송은 서버 계약을 사용하고 진행 중 중복 클릭을 막는다", () => {

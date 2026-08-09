@@ -75,9 +75,13 @@ test("방학특강 신청 상세는 수강·청구 전환 준비 상태를 확�
   assert.match(adminClient, /linkedClassId:\s*item\.linkedClassId \?\? offering\?\.linkedClassId \?\? null/);
   assert.match(adminClient, /function ConversionReadinessBox/);
   assert.match(adminClient, /readyToConvert = approved && \(!hasEnrollment \|\| !hasPayment\)/);
-  assert.match(adminClient, /특강 청구 생성 가능/);
+  // "특강 청구 생성 가능" → "청구서 발행 가능"으로 문구가 바뀌었다.
+  assert.match(adminClient, /title = "청구서 발행 가능"/);
   assert.match(adminClient, /전환 준비됨/);
-  assert.match(adminClient, /수강·청구 연결 완료/);
+  // "연결 완료" → "완료"로 줄었다. 상태 이름 6종이 모두 있는지 확인한다.
+  assert.match(adminClient, /title = "수강·청구 완료"/);
+  assert.match(adminClient, /title = "수강 등록 필요"/);
+  assert.match(adminClient, /title = "청구서 발행 필요"/);
 });
 
 test("방학특강 승인 항목은 관리자 액션으로 수강 등록과 청구서를 생성한다", () => {

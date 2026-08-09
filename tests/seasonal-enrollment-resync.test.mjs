@@ -98,7 +98,9 @@ test("재동기화는 신청서 단위로 승인 항목 전체를 처리한다",
 test("거두기·되살리기 UPDATE 는 출결 없는 정규 좌석만 건드린다", () => {
   const code = stripComments(lib);
   const updates = code.match(/UPDATE "SpecialProgramEnrollmentDate"[\s\S]*?`/g) ?? [];
-  assert.equal(updates.length, 2, "거두기 1개 + 되살리기 1개");
+  // 개수를 못박지 않는다. 안전한 UPDATE 가 하나 늘었다고 실패하면(실제로 늘었다),
+  // 정작 지켜야 할 "모든 UPDATE 가 안전장치를 갖췄는가"를 아무도 안 보게 된다.
+  assert.ok(updates.length >= 2, `거두기·되살리기 UPDATE 를 찾지 못했습니다(${updates.length}개)`);
   for (const statement of updates) {
     assert.match(statement, /kind = 'REGULAR'/);
     assert.match(statement, /"attendanceStatus" IS NULL/);

@@ -13,7 +13,8 @@ test("공개 체험 신청은 같은 학생·연락처의 진행 중 신청을 �
   assert.match(publicAction, /mode: "updated" as const, duplicate: true/);
   assert.match(trialForm, /findExistingTrialApplicationForEdit/);
   assert.match(trialForm, /existingId: existingLeadId \|\| undefined/);
-  assert.match(trialForm, /기존 체험 신청서를 불러왔습니다/);
+  // "체험" → "체험수업" 으로 문구가 바뀌었다(73b69a1 한글 깨짐 복구). 기능은 그대로다.
+  assert.match(trialForm, /기존 체험수업 신청서를 불러왔습니다/);
 });
 
 test("공개 수강신청은 기존 신청서를 불러와 수정하고 승인 건은 중복 생성하지 않는다", () => {

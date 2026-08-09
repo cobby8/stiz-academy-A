@@ -23,7 +23,10 @@ test("체험 신청 폼은 실제 빈자리 슬롯의 slotKey를 서버로 넘�
   assert.match(trialForm, /availableSlots/);
   assert.match(trialForm, /function getSlotPeriod/);
   assert.match(trialForm, /selectedSlot\?\.slotKey/);
-  assert.match(trialForm, /slot\.startTime/);
+  // 시각 표시 대신 잔여 인원·마감을 보여주도록 바뀌었다.
+  // 이 테스트가 지키려는 "실제 빈자리"에는 오히려 이쪽이 맞다.
+  assert.match(trialForm, /slot\.available <= 0/);
+  assert.match(trialForm, /잔여 \$\{slot\.available\}명/);
 });
 
 test("체험 신청 완료 화면은 체험비 입금 안내와 복사/송금 흐름을 제공한다", () => {

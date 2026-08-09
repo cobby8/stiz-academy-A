@@ -38,9 +38,13 @@ test("고정 신청 버튼 주변에 미완료 항목을 안내하고 오류를 
   assert.match(apply, /order-first w-full text-xs.*sm:order-none/);
 });
 
-test("수동 주소 수정 시 기존 지도 좌표를 제거해 주소와 좌표 불일치를 막는다", () => {
+test("주소 텍스트를 고쳐도 지도 핀 좌표는 지우지 않는다", () => {
+  // 예전에는 텍스트가 주소의 정본이라, 손으로 고치면 좌표를 지워 불일치를 막았다.
+  // 지금은 반대다 — 텍스트는 "상세 설명(선택)"이고 **지도 핀이 실제 위치의 기준**이다.
+  // 여기서 좌표를 지우면 기사님이 핀을 잃는다.
   assert.match(apply, /function updateLocationText/);
-  assert.match(apply, /\[kind === "pickup" \? "pickupLocationData" : "dropoffLocationData"\]: undefined/);
+  assert.match(apply, /\[kind === "pickup" \? "pickupLocation" : "dropoffLocation"\]: value/);
+  assert.doesNotMatch(apply, /\[kind === "pickup" \? "pickupLocationData" : "dropoffLocationData"\]: undefined/);
 });
 
 test("사용자가 지도를 조작하기 전에는 기본 서울 좌표를 선택값으로 만들지 않는다", () => {
